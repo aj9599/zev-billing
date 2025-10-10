@@ -456,6 +456,4 @@ Copy each artifact's content into the corresponding file path shown above. All f
 - Scale by adding more buildings/meters/chargers as needed
 - Backup the SQLite database regularly
 
-## License
-
-Copyright © 2025 - Swiss ZEV Billing System
+Copyright © 2025 - AJ
