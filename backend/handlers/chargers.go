@@ -1,0 +1,175 @@
+package handlers
+
+import (
+	"database/sql"
+	"encoding/json"
+	"net/http"
+	"strconv"
+
+	"github.com/aj9599/zev-billing/backend/models"
+	"github.com/gorilla/mux"
+)
+
+type ChargerHandler struct {
+	db *sql.DB
+}
+
+func NewChargerHandler(db *sql.DB) *ChargerHandler {
+	return &ChargerHandler{db: db}
+}
+
+func (h *ChargerHandler) List(w http.ResponseWriter, r *http.Request) {
+	buildingID := r.URL.Query().Get("building_id")
+
+	query := `
+		SELECT id, name, brand, preset, building_id, connection_type, 
+		       connection_config, supports_priority, notes, is_active,
+		       created_at, updated_at
+		FROM chargers
+	`
+
+	var rows *sql.Rows
+	var err error
+
+	if buildingID != "" {
+		query += " WHERE building_id = ?"
+		rows, err = h.db.Query(query, buildingID)
+	} else {
+		rows, err = h.db.Query(query)
+	}
+
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	chargers := []models.Charger{}
+	for rows.Next() {
+		var c models.Charger
+		err := rows.Scan(
+			&c.ID, &c.Name, &c.Brand, &c.Preset, &c.BuildingID, &c.ConnectionType,
+			&c.ConnectionConfig, &c.SupportsPriority, &c.Notes, &c.IsActive,
+			&c.CreatedAt, &c.UpdatedAt,
+		)
+		if err != nil {
+			continue
+		}
+		chargers = append(chargers, c)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(chargers)
+}
+
+func (h *ChargerHandler) Get(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	var c models.Charger
+	err = h.db.QueryRow(`
+		SELECT id, name, brand, preset, building_id, connection_type, 
+		       connection_config, supports_priority, notes, is_active,
+		       created_at, updated_at
+		FROM chargers WHERE id = ?
+	`, id).Scan(
+		&c.ID, &c.Name, &c.Brand, &c.Preset, &c.BuildingID, &c.ConnectionType,
+		&c.ConnectionConfig, &c.SupportsPriority, &c.Notes, &c.IsActive,
+		&c.CreatedAt, &c.UpdatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		http.Error(w, "Charger not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(c)
+}
+
+func (h *ChargerHandler) Create(w http.ResponseWriter, r *http.Request) {
+	var c models.Charger
+	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	result, err := h.db.Exec(`
+		INSERT INTO chargers (
+			name, brand, preset, building_id, connection_type, 
+			connection_config, supports_priority, notes, is_active
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, c.Name, c.Brand, c.Preset, c.BuildingID, c.ConnectionType,
+		c.ConnectionConfig, c.SupportsPriority, c.Notes, c.IsActive)
+
+	if err != nil {
+		http.Error(w, "Failed to create charger", http.StatusInternalServerError)
+		return
+	}
+
+	id, _ := result.LastInsertId()
+	c.ID = int(id)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(c)
+}
+
+func (h *ChargerHandler) Update(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	var c models.Charger
+	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	_, err = h.db.Exec(`
+		UPDATE chargers SET
+			name = ?, brand = ?, preset = ?, building_id = ?, 
+			connection_type = ?, connection_config = ?, 
+			supports_priority = ?, notes = ?, is_active = ?,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, c.Name, c.Brand, c.Preset, c.BuildingID, c.ConnectionType,
+		c.ConnectionConfig, c.SupportsPriority, c.Notes, c.IsActive, id)
+
+	if err != nil {
+		http.Error(w, "Failed to update charger", http.StatusInternalServerError)
+		return
+	}
+
+	c.ID = id
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(c)
+}
+
+func (h *ChargerHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	_, err = h.db.Exec("DELETE FROM chargers WHERE id = ?", id)
+	if err != nil {
+		http.Error(w, "Failed to delete charger", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
