@@ -239,7 +239,6 @@ func (bs *BillingService) splitPowerSources(userID int, start, end time.Time) (n
 
 	// Adjust: solar can't exceed total consumption
 	if solar > normal {
-		temp := solar
 		solar = normal
 		normal = 0
 	} else {
