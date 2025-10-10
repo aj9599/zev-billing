@@ -5,7 +5,6 @@ import type { BillingSettings, Building } from '../types';
 
 export default function Settings() {
   const [buildings, setBuildings] = useState<Building[]>([]);
-  const [settings, setSettings] = useState<BillingSettings[]>([]);
   const [selectedBuilding, setSelectedBuilding] = useState<number>(0);
   const [formData, setFormData] = useState<Partial<BillingSettings>>({
     normal_power_price: 0.25,
@@ -33,12 +32,8 @@ export default function Settings() {
   }, [selectedBuilding]);
 
   const loadData = async () => {
-    const [buildingsData, settingsData] = await Promise.all([
-      api.getBuildings(),
-      api.getBillingSettings()
-    ]);
+    const buildingsData = await api.getBuildings();
     setBuildings(buildingsData);
-    setSettings(Array.isArray(settingsData) ? settingsData : []);
     
     if (buildingsData.length > 0 && selectedBuilding === 0) {
       setSelectedBuilding(buildingsData[0].id);

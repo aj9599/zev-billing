@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FileText, Plus, Eye } from 'lucide-react';
+import { Plus, Eye } from 'lucide-react';
 import { api } from '../api/client';
 import type { Invoice, Building, User } from '../types';
 
