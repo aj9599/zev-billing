@@ -153,7 +153,6 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		}
 	}()
 
-	// FIXED: Use longer timeout for the main context
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
@@ -209,15 +208,6 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 	buildings := []BuildingConsumption{}
 
 	for buildingRows.Next() {
-		select {
-		case <-ctx.Done():
-			log.Printf("Context cancelled, stopping building processing")
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(buildings)
-			return
-		default:
-		}
-
 		var buildingID int
 		var buildingName string
 		if err := buildingRows.Scan(&buildingID, &buildingName); err != nil {
@@ -233,7 +223,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			Meters:       []MeterData{},
 		}
 
-		// FIXED: Don't cancel context immediately - let it live for the duration of the query
+		// FIXED: Query meters and close immediately after reading
 		log.Printf("  Querying meters for building %d...", buildingID)
 		meterRows, err := h.db.QueryContext(ctx, `
 			SELECT m.id, m.name, m.meter_type, m.user_id
@@ -247,80 +237,87 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			buildings = append(buildings, building)
 			continue
 		}
-		// FIXED: Ensure rows are closed after we're done with them
-		defer meterRows.Close()
 
-		meterCount := 0
+		// Collect all meter info first, then close the rows immediately
+		type meterInfo struct {
+			id       int
+			name     string
+			meterType string
+			userID   sql.NullInt64
+		}
+		meterInfos := []meterInfo{}
+		
 		for meterRows.Next() {
-			meterCount++
-			var meterID int
-			var meterName, meterType string
-			var userID sql.NullInt64
-			
-			if err := meterRows.Scan(&meterID, &meterName, &meterType, &userID); err != nil {
+			var mi meterInfo
+			if err := meterRows.Scan(&mi.id, &mi.name, &mi.meterType, &mi.userID); err != nil {
 				log.Printf("  Error scanning meter row: %v", err)
 				continue
 			}
+			meterInfos = append(meterInfos, mi)
+		}
+		meterRows.Close() // CRITICAL: Close immediately after reading
+		
+		log.Printf("  Found %d meters for building %d", len(meterInfos), buildingID)
 
-			log.Printf("    Found meter ID: %d, Name: %s, Type: %s", meterID, meterName, meterType)
+		// Now process each meter without holding the meterRows open
+		for _, mi := range meterInfos {
+			log.Printf("    Processing meter ID: %d, Name: %s, Type: %s", mi.id, mi.name, mi.meterType)
 
 			userName := ""
-			if userID.Valid {
-				// Query user name without creating a new context
+			if mi.userID.Valid {
 				err := h.db.QueryRowContext(ctx, `
 					SELECT first_name || ' ' || last_name 
 					FROM users 
 					WHERE id = ?
-				`, userID.Int64).Scan(&userName)
+				`, mi.userID.Int64).Scan(&userName)
 				
-				if err != nil {
-					log.Printf("    Error getting user name for user %d: %v", userID.Int64, err)
+				if err != nil && err != sql.ErrNoRows {
+					log.Printf("    Error getting user name for user %d: %v", mi.userID.Int64, err)
 				}
 			}
 
-			// FIXED: Query readings without cancelling context prematurely
+			// Query readings and close immediately
 			dataRows, err := h.db.QueryContext(ctx, `
 				SELECT reading_time, consumption_kwh
 				FROM meter_readings
 				WHERE meter_id = ? AND reading_time >= ?
 				ORDER BY reading_time ASC
-			`, meterID, startTime)
+			`, mi.id, startTime)
 
 			meterData := MeterData{
-				MeterID:   meterID,
-				MeterName: meterName,
-				MeterType: meterType,
+				MeterID:   mi.id,
+				MeterName: mi.name,
+				MeterType: mi.meterType,
 				UserName:  userName,
 				Data:      []models.ConsumptionData{},
 			}
 
 			if err != nil {
-				log.Printf("    Error querying readings for meter %d: %v", meterID, err)
+				log.Printf("    Error querying readings for meter %d: %v", mi.id, err)
 				building.Meters = append(building.Meters, meterData)
 				continue
 			}
 
-			dataCount := 0
+			// Read all data points
 			for dataRows.Next() {
-				dataCount++
 				var timestamp time.Time
 				var consumption float64
 				if err := dataRows.Scan(&timestamp, &consumption); err == nil {
 					meterData.Data = append(meterData.Data, models.ConsumptionData{
 						Timestamp: timestamp,
 						Power:     consumption,
-						Source:    meterType,
+						Source:    mi.meterType,
 					})
 				}
 			}
-			dataRows.Close() // Close immediately after iteration
+			dataRows.Close() // CRITICAL: Close immediately after reading
 
-			log.Printf("    Meter ID: %d has %d data points", meterID, dataCount)
+			log.Printf("    Meter ID: %d has %d data points", mi.id, len(meterData.Data))
 
 			building.Meters = append(building.Meters, meterData)
 		}
 
-		log.Printf("  Building %d has %d meters", buildingID, meterCount)
+		log.Printf("  Building %d processed with %d meters", buildingID, len(building.Meters))
 		buildings = append(buildings, building)
 	}
 
