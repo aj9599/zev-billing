@@ -15,14 +15,14 @@ import (
 )
 
 type DataCollector struct {
-	db          *sql.DB
+	db           *sql.DB
 	udpListeners map[int]*net.UDPConn
-	mu          sync.Mutex
+	mu           sync.Mutex
 }
 
 func NewDataCollector(db *sql.DB) *DataCollector {
 	return &DataCollector{
-		db:          db,
+		db:           db,
 		udpListeners: make(map[int]*net.UDPConn),
 	}
 }
@@ -97,10 +97,10 @@ func (dc *DataCollector) startUDPListener(meterID int, meterName string, config 
 	dc.udpListeners[port] = conn
 	dc.mu.Unlock()
 
-	log.Printf("âœ" UDP listener started for meter '%s' on port %d", meterName, port)
+	log.Printf("UDP listener started for meter '%s' on port %d", meterName, port)
 
 	buffer := make([]byte, 1024)
-	
+
 	for {
 		n, remoteAddr, err := conn.ReadFromUDP(buffer)
 		if err != nil {
@@ -135,8 +135,8 @@ func (dc *DataCollector) startUDPListener(meterID int, meterName string, config 
 					SET last_reading = ?, last_reading_time = ?
 					WHERE id = ?
 				`, reading, time.Now(), meterID)
-				
-				log.Printf("âœ" UDP data received for meter '%s': %.2f kWh from %s", meterName, reading, remoteAddr.IP)
+
+				log.Printf("UDP data received for meter '%s': %.2f kWh from %s", meterName, reading, remoteAddr.IP)
 			}
 		}
 	}
@@ -158,7 +158,7 @@ func (dc *DataCollector) parseUDPData(data []byte, config map[string]interface{}
 
 		// Try to find power value in common field names
 		fieldNames := []string{"power_kwh", "power", "value", "kwh", "energy"}
-		
+
 		for _, field := range fieldNames {
 			if value, ok := jsonData[field]; ok {
 				switch v := value.(type) {
@@ -193,13 +193,13 @@ func (dc *DataCollector) parseUDPData(data []byte, config map[string]interface{}
 
 func (dc *DataCollector) collectAllData() {
 	log.Println("Starting data collection cycle...")
-	
+
 	// Collect meter data (HTTP and Modbus)
 	dc.collectMeterData()
-	
+
 	// Collect charger data
 	dc.collectChargerData()
-	
+
 	log.Println("Data collection cycle completed")
 }
 
@@ -258,7 +258,7 @@ func (dc *DataCollector) collectMeterData() {
 					SET last_reading = ?, last_reading_time = ?
 					WHERE id = ?
 				`, reading, time.Now(), id)
-				
+
 				log.Printf("Collected meter data: %s = %.2f kWh", name, reading)
 			}
 		}

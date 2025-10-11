@@ -126,10 +126,10 @@ func main() {
 	}
 
 	log.Printf("Server starting on %s", cfg.ServerAddress)
-	log.Println("âœ" Data collector running (15-minute intervals)")
-	log.Println("âœ" Default credentials: admin / admin123")
-	log.Println("âš ï¸  IMPORTANT: Change default password after first login!")
-	
+	log.Println("Data collector running (15-minute intervals)")
+	log.Println("Default credentials: admin / admin123")
+	log.Println("IMPORTANT: Change default password after first login!")
+
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}

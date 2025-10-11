@@ -259,7 +259,22 @@ else
 fi
 
 echo ""
-echo -e "${GREEN}Step 10: Starting services${NC}"
+echo -e "${GREEN}Step 10: Fixing permissions for nginx${NC}"
+
+# Fix permissions so nginx can access the frontend files
+# This is critical - nginx runs as www-data and needs to traverse the path
+chmod 755 "$ACTUAL_HOME"
+chmod 755 "$INSTALL_DIR"
+chmod -R 755 "$INSTALL_DIR/frontend"
+
+# Ensure backend directory is accessible too
+chmod 755 "$INSTALL_DIR/backend"
+chmod 644 "$INSTALL_DIR/backend/zev-billing.db" 2>/dev/null || true
+
+echo -e "${GREEN}Permissions fixed for nginx${NC}"
+
+echo ""
+echo -e "${GREEN}Step 11: Starting services${NC}"
 
 # Reload systemd
 systemctl daemon-reload
@@ -274,23 +289,23 @@ systemctl restart nginx
 # Check service status
 sleep 2
 if systemctl is-active --quiet zev-billing.service; then
-    echo -e "${GREEN}✓ Backend service is running${NC}"
+    echo -e "${GREEN}Backend service is running${NC}"
 else
-    echo -e "${RED}✗ Backend service failed to start${NC}"
+    echo -e "${RED}Backend service failed to start${NC}"
     echo "Checking logs..."
     journalctl -u zev-billing.service -n 20
     exit 1
 fi
 
 if systemctl is-active --quiet nginx; then
-    echo -e "${GREEN}✓ Nginx is running${NC}"
+    echo -e "${GREEN}Nginx is running${NC}"
 else
-    echo -e "${RED}✗ Nginx failed to start${NC}"
+    echo -e "${RED}Nginx failed to start${NC}"
     exit 1
 fi
 
 echo ""
-echo -e "${GREEN}Step 11: Creating management scripts${NC}"
+echo -e "${GREEN}Step 12: Creating management scripts${NC}"
 
 # Create start script
 cat > "$INSTALL_DIR/start.sh" << 'EOF'
@@ -353,6 +368,31 @@ chmod +x "$INSTALL_DIR"/*.sh
 chown "$ACTUAL_USER:$ACTUAL_USER" "$INSTALL_DIR"/*.sh
 
 echo ""
+echo -e "${GREEN}Step 13: Final verification${NC}"
+
+# Test backend API
+sleep 2
+if curl -s http://localhost:8080/api/health > /dev/null 2>&1; then
+    echo -e "${GREEN}Backend API responding correctly${NC}"
+else
+    echo -e "${YELLOW}Warning: Backend API test failed${NC}"
+fi
+
+# Test nginx proxy
+if curl -s http://localhost/api/health > /dev/null 2>&1; then
+    echo -e "${GREEN}Nginx proxy working correctly${NC}"
+else
+    echo -e "${YELLOW}Warning: Nginx proxy test failed${NC}"
+fi
+
+# Test frontend access
+if curl -s -o /dev/null -w "%{http_code}" http://localhost/ | grep -q "200\|301\|302"; then
+    echo -e "${GREEN}Frontend accessible${NC}"
+else
+    echo -e "${YELLOW}Warning: Frontend may not be accessible${NC}"
+fi
+
+echo ""
 echo -e "${GREEN}=========================================="
 echo "Installation completed successfully!"
 echo "==========================================${NC}"
@@ -380,7 +420,7 @@ echo -e "${BLUE}Default credentials:${NC}"
 echo "  Username: ${YELLOW}admin${NC}"
 echo "  Password: ${YELLOW}admin123${NC}"
 echo ""
-echo -e "${RED}⚠️  IMPORTANT: Change the default password immediately!${NC}"
+echo -e "${RED}Warning: IMPORTANT: Change the default password immediately!${NC}"
 echo ""
 echo -e "${YELLOW}Database location: $INSTALL_DIR/backend/zev-billing.db${NC}"
 echo ""
