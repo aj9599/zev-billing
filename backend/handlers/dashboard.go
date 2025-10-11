@@ -63,23 +63,71 @@ func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	today := time.Now().Format("2006-01-02")
+	startOfMonth := time.Now().AddDate(0, 0, -time.Now().Day()+1).Format("2006-01-02")
+
+	// Calculate consumption (apartment_meter + heating_meter + water_meter + gas_meter, excluding solar and total meters)
 	if err := h.db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(consumption_kwh), 0) 
-		FROM meter_readings 
-		WHERE DATE(reading_time) = ?
+		SELECT COALESCE(SUM(mr.consumption_kwh), 0) 
+		FROM meter_readings mr
+		JOIN meters m ON mr.meter_id = m.id
+		WHERE DATE(mr.reading_time) = ?
+		AND m.meter_type IN ('apartment_meter', 'heating_meter', 'water_meter', 'gas_meter')
 	`, today).Scan(&stats.TodayConsumption); err != nil {
 		log.Printf("Error getting today's consumption: %v", err)
 		stats.TodayConsumption = 0
 	}
 
-	startOfMonth := time.Now().AddDate(0, 0, -time.Now().Day()+1).Format("2006-01-02")
 	if err := h.db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(consumption_kwh), 0) 
-		FROM meter_readings 
-		WHERE reading_time >= ?
+		SELECT COALESCE(SUM(mr.consumption_kwh), 0) 
+		FROM meter_readings mr
+		JOIN meters m ON mr.meter_id = m.id
+		WHERE mr.reading_time >= ?
+		AND m.meter_type IN ('apartment_meter', 'heating_meter', 'water_meter', 'gas_meter')
 	`, startOfMonth).Scan(&stats.MonthConsumption); err != nil {
 		log.Printf("Error getting month's consumption: %v", err)
 		stats.MonthConsumption = 0
+	}
+
+	// Calculate solar generation (solar_meter)
+	if err := h.db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(mr.consumption_kwh), 0) 
+		FROM meter_readings mr
+		JOIN meters m ON mr.meter_id = m.id
+		WHERE DATE(mr.reading_time) = ?
+		AND m.meter_type = 'solar_meter'
+	`, today).Scan(&stats.TodaySolar); err != nil {
+		log.Printf("Error getting today's solar: %v", err)
+		stats.TodaySolar = 0
+	}
+
+	if err := h.db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(mr.consumption_kwh), 0) 
+		FROM meter_readings mr
+		JOIN meters m ON mr.meter_id = m.id
+		WHERE mr.reading_time >= ?
+		AND m.meter_type = 'solar_meter'
+	`, startOfMonth).Scan(&stats.MonthSolar); err != nil {
+		log.Printf("Error getting month's solar: %v", err)
+		stats.MonthSolar = 0
+	}
+
+	// Calculate car charging (charger_sessions)
+	if err := h.db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(power_kwh), 0) 
+		FROM charger_sessions
+		WHERE DATE(session_time) = ?
+	`, today).Scan(&stats.TodayCharging); err != nil {
+		log.Printf("Error getting today's charging: %v", err)
+		stats.TodayCharging = 0
+	}
+
+	if err := h.db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(power_kwh), 0) 
+		FROM charger_sessions
+		WHERE session_time >= ?
+	`, startOfMonth).Scan(&stats.MonthCharging); err != nil {
+		log.Printf("Error getting month's charging: %v", err)
+		stats.MonthCharging = 0
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -288,9 +336,9 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				}
 			}
 
-			// STEP 5: Read all readings for this meter
+			// STEP 5: Read all readings for this meter - USE power_kwh for chart display
 			dataRows, err := h.db.QueryContext(ctx, `
-				SELECT reading_time, consumption_kwh
+				SELECT reading_time, power_kwh
 				FROM meter_readings
 				WHERE meter_id = ? AND reading_time >= ?
 				ORDER BY reading_time ASC
@@ -312,11 +360,11 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 
 			for dataRows.Next() {
 				var timestamp time.Time
-				var consumption float64
-				if err := dataRows.Scan(&timestamp, &consumption); err == nil {
+				var powerKwh float64
+				if err := dataRows.Scan(&timestamp, &powerKwh); err == nil {
 					meterData.Data = append(meterData.Data, models.ConsumptionData{
 						Timestamp: timestamp,
-						Power:     consumption,
+						Power:     powerKwh,  // Use actual meter reading for chart
 						Source:    mi.meterType,
 					})
 				}

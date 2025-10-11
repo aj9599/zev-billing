@@ -112,6 +112,10 @@ export interface DashboardStats {
   active_chargers: number;
   today_consumption: number;
   month_consumption: number;
+  today_solar: number;
+  month_solar: number;
+  today_charging: number;
+  month_charging: number;
 }
 
 export interface ConsumptionData {

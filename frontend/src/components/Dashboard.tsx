@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import * as React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Users, Building, Zap, Car, Activity, TrendingUp, LayoutDashboard as DashIcon} from 'lucide-react';
+import { Users, Building, Zap, Car, Activity, TrendingUp, TrendingDown, Sun, Battery, LayoutDashboard } from 'lucide-react';
 import { api } from '../api/client';
 import type { DashboardStats } from '../types';
 
@@ -50,6 +50,7 @@ export default function Dashboard() {
   const [period, setPeriod] = useState('24h');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const loadData = React.useCallback(async () => {
     try {
@@ -123,8 +124,12 @@ export default function Dashboard() {
     { icon: Building, label: 'Buildings', value: stats?.total_buildings || 0, color: '#28a745' },
     { icon: Zap, label: 'Active Meters', value: `${stats?.active_meters}/${stats?.total_meters}`, color: '#ffc107' },
     { icon: Car, label: 'Active Chargers', value: `${stats?.active_chargers}/${stats?.total_chargers}`, color: '#6f42c1' },
-    { icon: Activity, label: 'Today', value: `${stats?.today_consumption.toFixed(2)} kWh`, color: '#fd7e14' },
-    { icon: TrendingUp, label: 'This Month', value: `${stats?.month_consumption.toFixed(2)} kWh`, color: '#20c997' },
+    { icon: Activity, label: 'Consumption Today', value: `${stats?.today_consumption.toFixed(2)} kWh`, color: '#dc3545' },
+    { icon: TrendingUp, label: 'Consumption Month', value: `${stats?.month_consumption.toFixed(2)} kWh`, color: '#e74c3c' },
+    { icon: Sun, label: 'Solar Today', value: `${stats?.today_solar.toFixed(2)} kWh`, color: '#f39c12' },
+    { icon: TrendingDown, label: 'Solar Month', value: `${stats?.month_solar.toFixed(2)} kWh`, color: '#e67e22' },
+    { icon: Battery, label: 'Charging Today', value: `${stats?.today_charging.toFixed(2)} kWh`, color: '#9b59b6' },
+    { icon: Zap, label: 'Charging Month', value: `${stats?.month_charging.toFixed(2)} kWh`, color: '#8e44ad' },
   ];
 
   return (
@@ -142,7 +147,7 @@ export default function Dashboard() {
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text'
         }}>
-          <DashIcon size={36} style={{ color: '#667eea' }} />
+          <LayoutDashboard size={36} style={{ color: '#667eea' }} />
           Dashboard
         </h1>
         <p style={{ color: '#6b7280', fontSize: '16px' }}>
@@ -203,31 +208,98 @@ export default function Dashboard() {
         marginBottom: '20px',
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'center'
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '15px'
       }}>
         <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0 }}>
           Consumption by Building
         </h2>
-        <select
-          value={period}
-          onChange={(e) => setPeriod(e.target.value)}
-          style={{
-            padding: '8px 12px',
-            border: '1px solid #ddd',
-            borderRadius: '6px',
-            fontSize: '14px'
-          }}
-        >
-          <option value="1h">Last Hour</option>
-          <option value="24h">Last 24 Hours</option>
-          <option value="7d">Last 7 Days</option>
-          <option value="30d">Last 30 Days</option>
-        </select>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <input
+            type="text"
+            placeholder="Search buildings..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid #ddd',
+              borderRadius: '6px',
+              fontSize: '14px',
+              minWidth: '200px'
+            }}
+          />
+          <select
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid #ddd',
+              borderRadius: '6px',
+              fontSize: '14px'
+            }}
+          >
+            <option value="1h">Last Hour</option>
+            <option value="24h">Last 24 Hours</option>
+            <option value="7d">Last 7 Days</option>
+            <option value="30d">Last 30 Days</option>
+          </select>
+        </div>
       </div>
 
       {buildingData.length > 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
-          {buildingData.map((building) => {
+          {(() => {
+            const filteredBuildings = buildingData.filter(building => 
+              building.building_name.toLowerCase().includes(searchQuery.toLowerCase())
+            );
+
+            if (filteredBuildings.length === 0 && searchQuery) {
+              return (
+                <div style={{
+                  backgroundColor: 'white',
+                  padding: '60px',
+                  borderRadius: '12px',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                  textAlign: 'center',
+                  color: '#9ca3af'
+                }}>
+                  <h3 style={{ marginTop: 0, color: '#6b7280' }}>No Buildings Found</h3>
+                  <p>No buildings match your search "{searchQuery}"</p>
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: '#667eea',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      marginTop: '10px'
+                    }}
+                  >
+                    Clear Search
+                  </button>
+                </div>
+              );
+            }
+
+            return (
+              <>
+                {searchQuery && (
+                  <div style={{
+                    padding: '12px 16px',
+                    backgroundColor: '#f0f9ff',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    color: '#0369a1',
+                    border: '1px solid #bae6fd'
+                  }}>
+                    Showing {filteredBuildings.length} of {buildingData.length} buildings
+                  </div>
+                )}
+                {filteredBuildings.map((building) => {
             const timeMap = new Map<string, any>();
             const meters = building.meters || [];
             
@@ -381,6 +453,9 @@ export default function Dashboard() {
               </div>
             );
           })}
+              </>
+            );
+          })()}
         </div>
       ) : (
         <div style={{

@@ -144,14 +144,18 @@ type AdminLog struct {
 }
 
 type DashboardStats struct {
-	TotalUsers      int     `json:"total_users"`
-	TotalBuildings  int     `json:"total_buildings"`
-	TotalMeters     int     `json:"total_meters"`
-	TotalChargers   int     `json:"total_chargers"`
-	ActiveMeters    int     `json:"active_meters"`
-	ActiveChargers  int     `json:"active_chargers"`
-	TodayConsumption float64 `json:"today_consumption"`
-	MonthConsumption float64 `json:"month_consumption"`
+	TotalUsers            int     `json:"total_users"`
+	TotalBuildings        int     `json:"total_buildings"`
+	TotalMeters           int     `json:"total_meters"`
+	TotalChargers         int     `json:"total_chargers"`
+	ActiveMeters          int     `json:"active_meters"`
+	ActiveChargers        int     `json:"active_chargers"`
+	TodayConsumption      float64 `json:"today_consumption"`
+	MonthConsumption      float64 `json:"month_consumption"`
+	TodaySolar            float64 `json:"today_solar"`
+	MonthSolar            float64 `json:"month_solar"`
+	TodayCharging         float64 `json:"today_charging"`
+	MonthCharging         float64 `json:"month_charging"`
 }
 
 type ConsumptionData struct {
