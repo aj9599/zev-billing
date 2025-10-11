@@ -41,13 +41,16 @@ export default function Settings() {
     <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ marginBottom: '40px' }}>
         <h1 style={{ 
-          fontSize: '36px', 
-          fontWeight: '800', 
-          marginBottom: '8px',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text'
+            fontSize: '36px', 
+            fontWeight: '800', 
+            marginBottom: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text'
         }}>
           <SettingsIcon size={36} style={{ color: '#667eea' }} />
           Settings
