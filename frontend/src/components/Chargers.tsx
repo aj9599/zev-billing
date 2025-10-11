@@ -3,6 +3,22 @@ import { Plus, Edit2, Trash2, X } from 'lucide-react';
 import { api } from '../api/client';
 import type { Charger, Building } from '../types';
 
+interface ChargerConnectionConfig {
+  // Weidmüller requires 4 endpoints
+  power_endpoint?: string;
+  state_endpoint?: string;
+  user_id_endpoint?: string;
+  mode_endpoint?: string;
+  // Modbus TCP
+  ip_address?: string;
+  port?: number;
+  power_register?: number;
+  state_register?: number;
+  user_id_register?: number;
+  mode_register?: number;
+  unit_id?: number;
+}
+
 export default function Chargers() {
   const [chargers, setChargers] = useState<Charger[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
@@ -12,6 +28,19 @@ export default function Chargers() {
     name: '', brand: 'weidmuller', preset: 'weidmuller', building_id: 0,
     connection_type: 'http', connection_config: '{}', supports_priority: true,
     notes: '', is_active: true
+  });
+  const [connectionConfig, setConnectionConfig] = useState<ChargerConnectionConfig>({
+    power_endpoint: '',
+    state_endpoint: '',
+    user_id_endpoint: '',
+    mode_endpoint: '',
+    ip_address: '',
+    port: 502,
+    power_register: 0,
+    state_register: 1,
+    user_id_register: 2,
+    mode_register: 3,
+    unit_id: 1
   });
 
   useEffect(() => {
@@ -29,11 +58,39 @@ export default function Chargers() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Build connection config based on type
+    let config: ChargerConnectionConfig = {};
+    
+    if (formData.connection_type === 'http') {
+      config = {
+        power_endpoint: connectionConfig.power_endpoint,
+        state_endpoint: connectionConfig.state_endpoint,
+        user_id_endpoint: connectionConfig.user_id_endpoint,
+        mode_endpoint: connectionConfig.mode_endpoint
+      };
+    } else if (formData.connection_type === 'modbus_tcp') {
+      config = {
+        ip_address: connectionConfig.ip_address,
+        port: connectionConfig.port,
+        power_register: connectionConfig.power_register,
+        state_register: connectionConfig.state_register,
+        user_id_register: connectionConfig.user_id_register,
+        mode_register: connectionConfig.mode_register,
+        unit_id: connectionConfig.unit_id
+      };
+    }
+    
+    const dataToSend = {
+      ...formData,
+      connection_config: JSON.stringify(config)
+    };
+
     try {
       if (editingCharger) {
-        await api.updateCharger(editingCharger.id, formData);
+        await api.updateCharger(editingCharger.id, dataToSend);
       } else {
-        await api.createCharger(formData);
+        await api.createCharger(dataToSend);
       }
       setShowModal(false);
       setEditingCharger(null);
@@ -58,6 +115,27 @@ export default function Chargers() {
   const handleEdit = (charger: Charger) => {
     setEditingCharger(charger);
     setFormData(charger);
+    
+    // Parse existing config
+    try {
+      const config = JSON.parse(charger.connection_config);
+      setConnectionConfig({
+        power_endpoint: config.power_endpoint || '',
+        state_endpoint: config.state_endpoint || '',
+        user_id_endpoint: config.user_id_endpoint || '',
+        mode_endpoint: config.mode_endpoint || '',
+        ip_address: config.ip_address || '',
+        port: config.port || 502,
+        power_register: config.power_register || 0,
+        state_register: config.state_register || 1,
+        user_id_register: config.user_id_register || 2,
+        mode_register: config.mode_register || 3,
+        unit_id: config.unit_id || 1
+      });
+    } catch (e) {
+      console.error('Failed to parse config:', e);
+    }
+    
     setShowModal(true);
   };
 
@@ -66,6 +144,19 @@ export default function Chargers() {
       name: '', brand: 'weidmuller', preset: 'weidmuller', building_id: 0,
       connection_type: 'http', connection_config: '{}', supports_priority: true,
       notes: '', is_active: true
+    });
+    setConnectionConfig({
+      power_endpoint: '',
+      state_endpoint: '',
+      user_id_endpoint: '',
+      mode_endpoint: '',
+      ip_address: '',
+      port: 502,
+      power_register: 0,
+      state_register: 1,
+      user_id_register: 2,
+      mode_register: 3,
+      unit_id: 1
     });
   };
 
@@ -147,7 +238,7 @@ export default function Chargers() {
         }}>
           <div style={{
             backgroundColor: 'white', borderRadius: '12px', padding: '30px',
-            width: '90%', maxWidth: '600px', maxHeight: '90vh', overflow: 'auto'
+            width: '90%', maxWidth: '700px', maxHeight: '90vh', overflow: 'auto'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>
@@ -174,7 +265,7 @@ export default function Chargers() {
                   <option value="weidmuller">Weidmüller</option>
                 </select>
                 <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                  Currently only Weidmüller preset is available
+                  Weidmüller chargers require 4 data points: power, state, user ID, and mode
                 </p>
               </div>
 
@@ -193,20 +284,131 @@ export default function Chargers() {
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
                   <option value="http">HTTP</option>
                   <option value="modbus_tcp">Modbus TCP</option>
-                  <option value="udp">UDP</option>
                 </select>
               </div>
 
-              <div style={{ marginTop: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                  Connection Config (JSON) *
-                </label>
-                <textarea required value={formData.connection_config} onChange={(e) => setFormData({ ...formData, connection_config: e.target.value })}
-                  placeholder='{"power_endpoint": "http://...", "state_endpoint": "http://...", "user_id_endpoint": "http://...", "mode_endpoint": "http://..."}'
-                  rows={6} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '13px' }} />
-                <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                  Weidmüller requires 4 endpoints: power_endpoint, state_endpoint, user_id_endpoint, mode_endpoint
-                </p>
+              <div style={{ marginTop: '20px', padding: '20px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>
+                  Connection Configuration (Weidmüller)
+                </h3>
+
+                {formData.connection_type === 'http' && (
+                  <>
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                        Power Consumed Endpoint *
+                      </label>
+                      <input type="url" required value={connectionConfig.power_endpoint}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, power_endpoint: e.target.value })}
+                        placeholder="http://192.168.1.100/api/power"
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                    </div>
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                        State Endpoint *
+                      </label>
+                      <input type="url" required value={connectionConfig.state_endpoint}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, state_endpoint: e.target.value })}
+                        placeholder="http://192.168.1.100/api/state"
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                    </div>
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                        User ID Endpoint *
+                      </label>
+                      <input type="url" required value={connectionConfig.user_id_endpoint}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, user_id_endpoint: e.target.value })}
+                        placeholder="http://192.168.1.100/api/user_id"
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                        Mode Endpoint *
+                      </label>
+                      <input type="url" required value={connectionConfig.mode_endpoint}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, mode_endpoint: e.target.value })}
+                        placeholder="http://192.168.1.100/api/mode"
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                        Mode endpoint returns "normal" or "priority" charging mode
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                {formData.connection_type === 'modbus_tcp' && (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          IP Address *
+                        </label>
+                        <input type="text" required value={connectionConfig.ip_address}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, ip_address: e.target.value })}
+                          placeholder="192.168.1.100"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          Port *
+                        </label>
+                        <input type="number" required value={connectionConfig.port}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, port: parseInt(e.target.value) })}
+                          placeholder="502"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          Power Register *
+                        </label>
+                        <input type="number" required value={connectionConfig.power_register}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, power_register: parseInt(e.target.value) })}
+                          placeholder="0"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          State Register *
+                        </label>
+                        <input type="number" required value={connectionConfig.state_register}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, state_register: parseInt(e.target.value) })}
+                          placeholder="1"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          User ID Register *
+                        </label>
+                        <input type="number" required value={connectionConfig.user_id_register}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, user_id_register: parseInt(e.target.value) })}
+                          placeholder="2"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          Mode Register *
+                        </label>
+                        <input type="number" required value={connectionConfig.mode_register}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, mode_register: parseInt(e.target.value) })}
+                          placeholder="3"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          Unit ID *
+                        </label>
+                        <input type="number" required value={connectionConfig.unit_id}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, unit_id: parseInt(e.target.value) })}
+                          placeholder="1"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div style={{ marginTop: '16px' }}>

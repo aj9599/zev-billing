@@ -3,6 +3,22 @@ import { Plus, Edit2, Trash2, X } from 'lucide-react';
 import { api } from '../api/client';
 import type { Meter, Building, User } from '../types';
 
+interface ConnectionConfig {
+  // HTTP
+  endpoint?: string;
+  power_field?: string;
+  // Modbus TCP
+  ip_address?: string;
+  port?: number;
+  register_address?: number;
+  register_count?: number;
+  unit_id?: number;
+  // UDP
+  listen_port?: number;
+  sender_ip?: string;
+  data_format?: string;
+}
+
 export default function Meters() {
   const [meters, setMeters] = useState<Meter[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
@@ -12,6 +28,18 @@ export default function Meters() {
   const [formData, setFormData] = useState<Partial<Meter>>({
     name: '', meter_type: 'total_meter', building_id: 0, user_id: undefined,
     connection_type: 'http', connection_config: '{}', notes: '', is_active: true
+  });
+  const [connectionConfig, setConnectionConfig] = useState<ConnectionConfig>({
+    endpoint: '',
+    power_field: 'power_kwh',
+    ip_address: '',
+    port: 502,
+    register_address: 0,
+    register_count: 2,
+    unit_id: 1,
+    listen_port: 8888,
+    sender_ip: '',
+    data_format: 'json'
   });
 
   useEffect(() => {
@@ -31,11 +59,41 @@ export default function Meters() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Build connection config based on type
+    let config: ConnectionConfig = {};
+    
+    if (formData.connection_type === 'http') {
+      config = {
+        endpoint: connectionConfig.endpoint,
+        power_field: connectionConfig.power_field
+      };
+    } else if (formData.connection_type === 'modbus_tcp') {
+      config = {
+        ip_address: connectionConfig.ip_address,
+        port: connectionConfig.port,
+        register_address: connectionConfig.register_address,
+        register_count: connectionConfig.register_count,
+        unit_id: connectionConfig.unit_id
+      };
+    } else if (formData.connection_type === 'udp') {
+      config = {
+        listen_port: connectionConfig.listen_port,
+        sender_ip: connectionConfig.sender_ip,
+        data_format: connectionConfig.data_format
+      };
+    }
+    
+    const dataToSend = {
+      ...formData,
+      connection_config: JSON.stringify(config)
+    };
+
     try {
       if (editingMeter) {
-        await api.updateMeter(editingMeter.id, formData);
+        await api.updateMeter(editingMeter.id, dataToSend);
       } else {
-        await api.createMeter(formData);
+        await api.createMeter(dataToSend);
       }
       setShowModal(false);
       setEditingMeter(null);
@@ -60,6 +118,26 @@ export default function Meters() {
   const handleEdit = (meter: Meter) => {
     setEditingMeter(meter);
     setFormData(meter);
+    
+    // Parse existing config
+    try {
+      const config = JSON.parse(meter.connection_config);
+      setConnectionConfig({
+        endpoint: config.endpoint || '',
+        power_field: config.power_field || 'power_kwh',
+        ip_address: config.ip_address || '',
+        port: config.port || 502,
+        register_address: config.register_address || 0,
+        register_count: config.register_count || 2,
+        unit_id: config.unit_id || 1,
+        listen_port: config.listen_port || 8888,
+        sender_ip: config.sender_ip || '',
+        data_format: config.data_format || 'json'
+      });
+    } catch (e) {
+      console.error('Failed to parse config:', e);
+    }
+    
     setShowModal(true);
   };
 
@@ -67,6 +145,18 @@ export default function Meters() {
     setFormData({
       name: '', meter_type: 'total_meter', building_id: 0, user_id: undefined,
       connection_type: 'http', connection_config: '{}', notes: '', is_active: true
+    });
+    setConnectionConfig({
+      endpoint: '',
+      power_field: 'power_kwh',
+      ip_address: '',
+      port: 502,
+      register_address: 0,
+      register_count: 2,
+      unit_id: 1,
+      listen_port: 8888,
+      sender_ip: '',
+      data_format: 'json'
     });
   };
 
@@ -76,12 +166,6 @@ export default function Meters() {
     { value: 'apartment_meter', label: 'Apartment Meter' },
     { value: 'heating_meter', label: 'Heating Meter' },
     { value: 'other', label: 'Other' }
-  ];
-
-  const connectionTypes = [
-    { value: 'http', label: 'HTTP' },
-    { value: 'modbus_tcp', label: 'Modbus TCP' },
-    { value: 'udp', label: 'UDP' }
   ];
 
   return (
@@ -162,7 +246,7 @@ export default function Meters() {
         }}>
           <div style={{
             backgroundColor: 'white', borderRadius: '12px', padding: '30px',
-            width: '90%', maxWidth: '600px', maxHeight: '90vh', overflow: 'auto'
+            width: '90%', maxWidth: '700px', maxHeight: '90vh', overflow: 'auto'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>
@@ -214,20 +298,133 @@ export default function Meters() {
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>Connection Type *</label>
                 <select required value={formData.connection_type} onChange={(e) => setFormData({ ...formData, connection_type: e.target.value })}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
-                  {connectionTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  <option value="http">HTTP</option>
+                  <option value="modbus_tcp">Modbus TCP</option>
+                  <option value="udp">UDP</option>
                 </select>
               </div>
 
-              <div style={{ marginTop: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                  Connection Config (JSON) *
-                </label>
-                <textarea required value={formData.connection_config} onChange={(e) => setFormData({ ...formData, connection_config: e.target.value })}
-                  placeholder='{"endpoint": "http://192.168.1.100/api/power", "power_field": "power_kwh"}'
-                  rows={4} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '13px' }} />
-                <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                  Example for HTTP: {`{"endpoint": "http://...", "power_field": "power_kwh"}`}
-                </p>
+              <div style={{ marginTop: '20px', padding: '20px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>
+                  Connection Configuration
+                </h3>
+
+                {formData.connection_type === 'http' && (
+                  <>
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                        Endpoint URL *
+                      </label>
+                      <input type="url" required value={connectionConfig.endpoint}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, endpoint: e.target.value })}
+                        placeholder="http://192.168.1.100/api/power"
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                        Power Field Name *
+                      </label>
+                      <input type="text" required value={connectionConfig.power_field}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, power_field: e.target.value })}
+                        placeholder="power_kwh"
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                        JSON field name that contains the power value in kWh
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                {formData.connection_type === 'modbus_tcp' && (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          IP Address *
+                        </label>
+                        <input type="text" required value={connectionConfig.ip_address}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, ip_address: e.target.value })}
+                          placeholder="192.168.1.100"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          Port *
+                        </label>
+                        <input type="number" required value={connectionConfig.port}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, port: parseInt(e.target.value) })}
+                          placeholder="502"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          Register Address *
+                        </label>
+                        <input type="number" required value={connectionConfig.register_address}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, register_address: parseInt(e.target.value) })}
+                          placeholder="0"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          Register Count *
+                        </label>
+                        <input type="number" required value={connectionConfig.register_count}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, register_count: parseInt(e.target.value) })}
+                          placeholder="2"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          Unit ID *
+                        </label>
+                        <input type="number" required value={connectionConfig.unit_id}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, unit_id: parseInt(e.target.value) })}
+                          placeholder="1"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {formData.connection_type === 'udp' && (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px', marginBottom: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          Listen Port *
+                        </label>
+                        <input type="number" required value={connectionConfig.listen_port}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, listen_port: parseInt(e.target.value) })}
+                          placeholder="8888"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          Sender IP Address (optional)
+                        </label>
+                        <input type="text" value={connectionConfig.sender_ip}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, sender_ip: e.target.value })}
+                          placeholder="192.168.1.100 (leave empty to accept all)"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                        Data Format *
+                      </label>
+                      <select required value={connectionConfig.data_format}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, data_format: e.target.value })}
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
+                        <option value="json">JSON</option>
+                        <option value="csv">CSV</option>
+                        <option value="raw">Raw (binary)</option>
+                      </select>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div style={{ marginTop: '16px' }}>

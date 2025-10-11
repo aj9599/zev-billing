@@ -26,12 +26,18 @@ export default function PricingSettings() {
   }, []);
 
   const loadData = async () => {
-    const [settingsData, buildingsData] = await Promise.all([
-      api.getBillingSettings(),
-      api.getBuildings()
-    ]);
-    setSettings(Array.isArray(settingsData) ? settingsData : []);
-    setBuildings(buildingsData);
+    try {
+      const [settingsData, buildingsData] = await Promise.all([
+        api.getBillingSettings(),
+        api.getBuildings()
+      ]);
+      setSettings(Array.isArray(settingsData) ? settingsData : []);
+      setBuildings(buildingsData.filter(b => !b.is_group)); // Filter out groups for cleaner list
+      console.log('Loaded buildings:', buildingsData);
+    } catch (err) {
+      console.error('Failed to load data:', err);
+      setMessage('Failed to load data');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
