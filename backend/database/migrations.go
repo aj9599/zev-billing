@@ -9,7 +9,6 @@ import (
 
 func RunMigrations(db *sql.DB) error {
 	migrations := []string{
-		// Admin users table
 		`CREATE TABLE IF NOT EXISTS admin_users (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			username TEXT UNIQUE NOT NULL,
@@ -18,7 +17,6 @@ func RunMigrations(db *sql.DB) error {
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
-		// Users table
 		`CREATE TABLE IF NOT EXISTS users (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			first_name TEXT NOT NULL,
@@ -40,7 +38,6 @@ func RunMigrations(db *sql.DB) error {
 			FOREIGN KEY (building_id) REFERENCES buildings(id)
 		)`,
 
-		// Buildings table
 		`CREATE TABLE IF NOT EXISTS buildings (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
@@ -54,7 +51,6 @@ func RunMigrations(db *sql.DB) error {
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
-		// Building groups (for multiple buildings combined)
 		`CREATE TABLE IF NOT EXISTS building_groups (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			group_id INTEGER NOT NULL,
@@ -63,7 +59,6 @@ func RunMigrations(db *sql.DB) error {
 			FOREIGN KEY (building_id) REFERENCES buildings(id)
 		)`,
 
-		// Power meters table
 		`CREATE TABLE IF NOT EXISTS meters (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
@@ -82,7 +77,6 @@ func RunMigrations(db *sql.DB) error {
 			FOREIGN KEY (user_id) REFERENCES users(id)
 		)`,
 
-		// Car chargers table
 		`CREATE TABLE IF NOT EXISTS chargers (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
@@ -99,17 +93,16 @@ func RunMigrations(db *sql.DB) error {
 			FOREIGN KEY (building_id) REFERENCES buildings(id)
 		)`,
 
-		// Meter readings (15-minute intervals)
 		`CREATE TABLE IF NOT EXISTS meter_readings (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			meter_id INTEGER NOT NULL,
 			reading_time DATETIME NOT NULL,
 			power_kwh REAL NOT NULL,
+			consumption_kwh REAL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (meter_id) REFERENCES meters(id)
 		)`,
 
-		// Charger sessions (15-minute intervals)
 		`CREATE TABLE IF NOT EXISTS charger_sessions (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			charger_id INTEGER NOT NULL,
@@ -122,7 +115,6 @@ func RunMigrations(db *sql.DB) error {
 			FOREIGN KEY (charger_id) REFERENCES chargers(id)
 		)`,
 
-		// Billing settings table
 		`CREATE TABLE IF NOT EXISTS billing_settings (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			building_id INTEGER NOT NULL,
@@ -139,7 +131,6 @@ func RunMigrations(db *sql.DB) error {
 			FOREIGN KEY (building_id) REFERENCES buildings(id)
 		)`,
 
-		// Invoices table
 		`CREATE TABLE IF NOT EXISTS invoices (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			invoice_number TEXT UNIQUE NOT NULL,
@@ -155,7 +146,6 @@ func RunMigrations(db *sql.DB) error {
 			FOREIGN KEY (building_id) REFERENCES buildings(id)
 		)`,
 
-		// Invoice items table
 		`CREATE TABLE IF NOT EXISTS invoice_items (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			invoice_id INTEGER NOT NULL,
@@ -167,7 +157,6 @@ func RunMigrations(db *sql.DB) error {
 			FOREIGN KEY (invoice_id) REFERENCES invoices(id)
 		)`,
 
-		// Admin logs table
 		`CREATE TABLE IF NOT EXISTS admin_logs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			action TEXT NOT NULL,
@@ -177,7 +166,6 @@ func RunMigrations(db *sql.DB) error {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
-		// Create indexes for performance
 		`CREATE INDEX IF NOT EXISTS idx_meter_readings_time ON meter_readings(reading_time)`,
 		`CREATE INDEX IF NOT EXISTS idx_meter_readings_meter ON meter_readings(meter_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_charger_sessions_time ON charger_sessions(session_time)`,
@@ -192,7 +180,13 @@ func RunMigrations(db *sql.DB) error {
 		}
 	}
 
-	// Create default admin user if not exists
+	// Add consumption_kwh column if it doesn't exist
+	_, err := db.Exec(`ALTER TABLE meter_readings ADD COLUMN consumption_kwh REAL DEFAULT 0`)
+	if err != nil {
+		// Column might already exist, that's okay
+		log.Printf("Note: consumption_kwh column may already exist: %v", err)
+	}
+
 	if err := createDefaultAdmin(db); err != nil {
 		return err
 	}
@@ -209,7 +203,6 @@ func createDefaultAdmin(db *sql.DB) error {
 	}
 
 	if count == 0 {
-		// Hash the default password
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
 		if err != nil {
 			return err

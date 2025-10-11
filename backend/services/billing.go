@@ -22,7 +22,6 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 
 	invoices := []models.Invoice{}
 
-	// Parse dates
 	start, err := time.Parse("2006-01-02", startDate)
 	if err != nil {
 		return nil, fmt.Errorf("invalid start date: %v", err)
@@ -32,14 +31,13 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 		return nil, fmt.Errorf("invalid end date: %v", err)
 	}
 
-	// For each building
 	for _, buildingID := range buildingIDs {
-		// Get billing settings
 		var settings models.BillingSettings
 		err := bs.db.QueryRow(`
 			SELECT id, building_id, normal_power_price, solar_power_price, 
 			       car_charging_normal_price, car_charging_priority_price, currency
-			FROM billing_settings WHERE building_id = ?
+			FROM billing_settings WHERE building_id = ? AND is_active = 1
+			LIMIT 1
 		`, buildingID).Scan(
 			&settings.ID, &settings.BuildingID, &settings.NormalPowerPrice,
 			&settings.SolarPowerPrice, &settings.CarChargingNormalPrice,
@@ -47,11 +45,10 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 		)
 
 		if err != nil {
-			log.Printf("No billing settings for building %d, skipping", buildingID)
+			log.Printf("No active billing settings for building %d, skipping: %v", buildingID, err)
 			continue
 		}
 
-		// Get users to bill
 		var usersQuery string
 		var args []interface{}
 		if len(userIDs) > 0 {
@@ -72,70 +69,69 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 			log.Printf("Error querying users: %v", err)
 			continue
 		}
-		defer userRows.Close()
 
-		// Generate invoice for each user
 		for userRows.Next() {
 			var userID int
-			var firstName, lastName, email, chargerIDs string
+			var firstName, lastName, email string
+			var chargerIDs sql.NullString
 			if err := userRows.Scan(&userID, &firstName, &lastName, &email, &chargerIDs); err != nil {
 				continue
 			}
 
-			invoice, err := bs.generateUserInvoice(userID, buildingID, start, end, settings, chargerIDs)
+			chargerIDStr := ""
+			if chargerIDs.Valid {
+				chargerIDStr = chargerIDs.String
+			}
+
+			invoice, err := bs.generateUserInvoice(userID, buildingID, start, end, settings, chargerIDStr)
 			if err != nil {
 				log.Printf("Error generating invoice for user %d: %v", userID, err)
 				continue
 			}
 
 			invoices = append(invoices, *invoice)
-			log.Printf("Generated invoice for %s %s: CHF %.2f", firstName, lastName, invoice.TotalAmount)
+			log.Printf("Generated invoice for %s %s: %s %.2f", firstName, lastName, settings.Currency, invoice.TotalAmount)
 		}
+		userRows.Close()
 	}
 
 	return invoices, nil
 }
 
 func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end time.Time, settings models.BillingSettings, chargerIDs string) (*models.Invoice, error) {
-	// Generate unique invoice number
 	invoiceNumber := fmt.Sprintf("INV-%d-%d-%s", buildingID, userID, time.Now().Format("20060102150405"))
 
-	// Calculate consumption based on Swiss ZEV standard (15-minute intervals)
 	totalAmount := 0.0
 	items := []models.InvoiceItem{}
 
-	// 1. Calculate apartment power consumption
-	apartmentConsumption, err := bs.calculateApartmentConsumption(userID, start, end)
-	if err == nil && apartmentConsumption > 0 {
-		// Swiss ZEV: Calculate based on meter type (solar vs normal power)
-		normalPower, solarPower := bs.splitPowerSources(userID, start, end)
+	// Calculate apartment power consumption using consumption_kwh
+	normalPower, solarPower := bs.calculateApartmentConsumption(userID, start, end)
 
-		if normalPower > 0 {
-			normalCost := normalPower * settings.NormalPowerPrice
-			totalAmount += normalCost
-			items = append(items, models.InvoiceItem{
-				Description: fmt.Sprintf("Normal Power Consumption (%.2f kWh)", normalPower),
-				Quantity:    normalPower,
-				UnitPrice:   settings.NormalPowerPrice,
-				TotalPrice:  normalCost,
-				ItemType:    "normal_power",
-			})
-		}
-
-		if solarPower > 0 {
-			solarCost := solarPower * settings.SolarPowerPrice
-			totalAmount += solarCost
-			items = append(items, models.InvoiceItem{
-				Description: fmt.Sprintf("Solar Power Consumption (%.2f kWh)", solarPower),
-				Quantity:    solarPower,
-				UnitPrice:   settings.SolarPowerPrice,
-				TotalPrice:  solarCost,
-				ItemType:    "solar_power",
-			})
-		}
+	if normalPower > 0 {
+		normalCost := normalPower * settings.NormalPowerPrice
+		totalAmount += normalCost
+		items = append(items, models.InvoiceItem{
+			Description: fmt.Sprintf("Normal Power Consumption (%.2f kWh)", normalPower),
+			Quantity:    normalPower,
+			UnitPrice:   settings.NormalPowerPrice,
+			TotalPrice:  normalCost,
+			ItemType:    "normal_power",
+		})
 	}
 
-	// 2. Calculate car charging costs
+	if solarPower > 0 {
+		solarCost := solarPower * settings.SolarPowerPrice
+		totalAmount += solarCost
+		items = append(items, models.InvoiceItem{
+			Description: fmt.Sprintf("Solar Power Consumption (%.2f kWh)", solarPower),
+			Quantity:    solarPower,
+			UnitPrice:   settings.SolarPowerPrice,
+			TotalPrice:  solarCost,
+			ItemType:    "solar_power",
+		})
+	}
+
+	// Calculate car charging costs
 	if chargerIDs != "" {
 		normalCharging, priorityCharging := bs.calculateChargingConsumption(chargerIDs, start, end)
 
@@ -164,7 +160,6 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 		}
 	}
 
-	// Create invoice
 	result, err := bs.db.Exec(`
 		INSERT INTO invoices (
 			invoice_number, user_id, building_id, period_start, period_end,
@@ -174,18 +169,21 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 		totalAmount, settings.Currency)
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create invoice: %v", err)
 	}
 
 	invoiceID, _ := result.LastInsertId()
 
-	// Save invoice items
 	for _, item := range items {
-		bs.db.Exec(`
+		_, err := bs.db.Exec(`
 			INSERT INTO invoice_items (
 				invoice_id, description, quantity, unit_price, total_price, item_type
 			) VALUES (?, ?, ?, ?, ?, ?)
 		`, invoiceID, item.Description, item.Quantity, item.UnitPrice, item.TotalPrice, item.ItemType)
+		
+		if err != nil {
+			log.Printf("Warning: Failed to insert invoice item: %v", err)
+		}
 	}
 
 	invoice := &models.Invoice{
@@ -205,37 +203,34 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 	return invoice, nil
 }
 
-func (bs *BillingService) calculateApartmentConsumption(userID int, start, end time.Time) (float64, error) {
-	var total float64
+func (bs *BillingService) calculateApartmentConsumption(userID int, start, end time.Time) (normal, solar float64) {
+	// Use consumption_kwh instead of power_kwh to get actual consumption
 	err := bs.db.QueryRow(`
-		SELECT COALESCE(SUM(mr.power_kwh), 0)
-		FROM meter_readings mr
-		JOIN meters m ON mr.meter_id = m.id
-		WHERE m.user_id = ? AND m.meter_type = 'apartment_meter'
-		AND mr.reading_time >= ? AND mr.reading_time <= ?
-	`, userID, start, end).Scan(&total)
-
-	return total, err
-}
-
-func (bs *BillingService) splitPowerSources(userID int, start, end time.Time) (normal, solar float64) {
-	// Calculate normal power
-	bs.db.QueryRow(`
-		SELECT COALESCE(SUM(mr.power_kwh), 0)
+		SELECT COALESCE(SUM(mr.consumption_kwh), 0)
 		FROM meter_readings mr
 		JOIN meters m ON mr.meter_id = m.id
 		WHERE m.user_id = ? AND m.meter_type IN ('apartment_meter', 'heating_meter')
 		AND mr.reading_time >= ? AND mr.reading_time <= ?
 	`, userID, start, end).Scan(&normal)
 
-	// Calculate solar power consumption (from solar meters)
-	bs.db.QueryRow(`
-		SELECT COALESCE(SUM(mr.power_kwh), 0)
+	if err != nil {
+		log.Printf("Error calculating normal consumption: %v", err)
+		normal = 0
+	}
+
+	// Calculate solar power consumption
+	err = bs.db.QueryRow(`
+		SELECT COALESCE(SUM(mr.consumption_kwh), 0)
 		FROM meter_readings mr
 		JOIN meters m ON mr.meter_id = m.id
 		WHERE m.user_id = ? AND m.meter_type = 'solar_meter'
 		AND mr.reading_time >= ? AND mr.reading_time <= ?
 	`, userID, start, end).Scan(&solar)
+
+	if err != nil {
+		log.Printf("Error calculating solar consumption: %v", err)
+		solar = 0
+	}
 
 	// Adjust: solar can't exceed total consumption
 	if solar > normal {
@@ -250,20 +245,30 @@ func (bs *BillingService) splitPowerSources(userID int, start, end time.Time) (n
 
 func (bs *BillingService) calculateChargingConsumption(chargerIDs string, start, end time.Time) (normal, priority float64) {
 	// Calculate normal charging
-	bs.db.QueryRow(`
+	err := bs.db.QueryRow(`
 		SELECT COALESCE(SUM(power_kwh), 0)
 		FROM charger_sessions
 		WHERE user_id IN (?) AND mode = 'normal'
 		AND session_time >= ? AND session_time <= ?
 	`, chargerIDs, start, end).Scan(&normal)
 
+	if err != nil {
+		log.Printf("Error calculating normal charging: %v", err)
+		normal = 0
+	}
+
 	// Calculate priority charging
-	bs.db.QueryRow(`
+	err = bs.db.QueryRow(`
 		SELECT COALESCE(SUM(power_kwh), 0)
 		FROM charger_sessions
 		WHERE user_id IN (?) AND mode = 'priority'
 		AND session_time >= ? AND session_time <= ?
 	`, chargerIDs, start, end).Scan(&priority)
+
+	if err != nil {
+		log.Printf("Error calculating priority charging: %v", err)
+		priority = 0
+	}
 
 	return normal, priority
 }

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ZEV Billing System - Automated Installation Script for Raspberry Pi
-# Fixed version with auto-start and improved error handling
+# Updated with fresh install option
 
 set -e  # Exit on any error
 
@@ -16,6 +16,21 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+
+# Check for fresh install flag
+FRESH_INSTALL=false
+if [ "$1" == "--fresh" ] || [ "$1" == "-f" ]; then
+    FRESH_INSTALL=true
+    echo -e "${YELLOW}=== FRESH INSTALL MODE ===${NC}"
+    echo -e "${YELLOW}This will DELETE the existing database and start fresh!${NC}"
+    echo ""
+    read -p "Are you sure you want to continue? (yes/no): " confirm
+    if [ "$confirm" != "yes" ]; then
+        echo "Installation cancelled."
+        exit 0
+    fi
+    echo ""
+fi
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then 
@@ -33,6 +48,39 @@ echo ""
 
 # Installation directory
 INSTALL_DIR="$ACTUAL_HOME/zev-billing"
+DB_PATH="$INSTALL_DIR/backend/zev-billing.db"
+
+# Fresh install cleanup
+if [ "$FRESH_INSTALL" = true ]; then
+    echo -e "${YELLOW}Step 0: Cleaning up for fresh install${NC}"
+    
+    # Stop services if running
+    echo "Stopping services..."
+    systemctl stop zev-billing.service 2>/dev/null || true
+    systemctl stop nginx 2>/dev/null || true
+    
+    # Backup old database if exists
+    if [ -f "$DB_PATH" ]; then
+        BACKUP_NAME="zev-billing-backup-$(date +%Y%m%d-%H%M%S).db"
+        echo "Backing up old database to $INSTALL_DIR/backups/$BACKUP_NAME"
+        mkdir -p "$INSTALL_DIR/backups"
+        cp "$DB_PATH" "$INSTALL_DIR/backups/$BACKUP_NAME"
+        rm -f "$DB_PATH"
+        rm -f "$DB_PATH-shm"
+        rm -f "$DB_PATH-wal"
+        echo -e "${GREEN}✓ Old database backed up and removed${NC}"
+    fi
+    
+    # Clean old builds
+    echo "Cleaning old builds..."
+    rm -f "$INSTALL_DIR/backend/zev-billing"
+    rm -rf "$INSTALL_DIR/frontend/dist"
+    rm -rf "$INSTALL_DIR/frontend/node_modules"
+    rm -rf "$INSTALL_DIR/backend/go.sum"
+    
+    echo -e "${GREEN}✓ Fresh install cleanup completed${NC}"
+    echo ""
+fi
 
 echo -e "${GREEN}Step 1: Installing system dependencies${NC}"
 apt-get update
@@ -47,7 +95,6 @@ else
     echo "Installing Go..."
     apt-get install -y golang-go || {
         echo -e "${YELLOW}Warning: Could not install golang-go from apt, will try alternative method${NC}"
-        # Alternative: Download Go directly
         wget -q https://go.dev/dl/go1.21.5.linux-arm64.tar.gz -O /tmp/go.tar.gz
         tar -C /usr/local -xzf /tmp/go.tar.gz
         ln -sf /usr/local/go/bin/go /usr/bin/go
@@ -61,10 +108,8 @@ if command -v node &> /dev/null && command -v npm &> /dev/null; then
     echo -e "${GREEN}npm is already installed: $(npm --version)${NC}"
 else
     echo "Installing Node.js and npm..."
-    # Remove conflicting packages if they exist
     apt-get remove -y nodejs npm nodejs-legacy libnode108 2>/dev/null || true
     
-    # Install Node.js from nodesource if not present
     if ! command -v node &> /dev/null; then
         curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
         apt-get install -y nodejs
@@ -424,6 +469,84 @@ echo "Following live logs (Ctrl+C to exit)..."
 journalctl -u zev-billing.service -f
 EOF
 
+# Create fresh install script
+cat > "$INSTALL_DIR/fresh_install.sh" << 'EOF'
+#!/bin/bash
+echo "This will perform a FRESH INSTALL with a NEW DATABASE"
+echo "All existing data will be backed up but the database will be reset"
+echo ""
+read -p "Are you sure? (yes/no): " confirm
+if [ "$confirm" != "yes" ]; then
+    echo "Cancelled."
+    exit 0
+fi
+
+cd ~
+sudo bash zev-billing/install.sh --fresh
+EOF
+
+# Create database recovery script
+cat > "$INSTALL_DIR/fix_database.sh" << 'EOF'
+#!/bin/bash
+set -e
+
+echo "=========================================="
+echo "ZEV Billing - Database Recovery"
+echo "=========================================="
+
+DB_PATH="$HOME/zev-billing/backend/zev-billing.db"
+
+if [ ! -f "$DB_PATH" ]; then
+    echo "Error: Database not found at $DB_PATH"
+    exit 1
+fi
+
+echo "Creating backup..."
+BACKUP_PATH="$HOME/zev-billing/backend/zev-billing-backup-$(date +%Y%m%d-%H%M%S).db"
+cp "$DB_PATH" "$BACKUP_PATH"
+echo "✓ Backup created: $BACKUP_PATH"
+
+echo "Stopping service..."
+sudo systemctl stop zev-billing.service
+sleep 2
+
+echo "Checking database integrity..."
+sqlite3 "$DB_PATH" "PRAGMA integrity_check;" > /tmp/integrity_check.txt
+if grep -q "ok" /tmp/integrity_check.txt; then
+    echo "✓ Database integrity OK"
+else
+    echo "✗ Database corrupted, attempting recovery..."
+    sqlite3 "$DB_PATH" .dump > /tmp/dump.sql
+    mv "$DB_PATH" "$DB_PATH.corrupted"
+    sqlite3 "$DB_PATH" < /tmp/dump.sql
+    echo "✓ Database recovered"
+fi
+
+echo "Adding consumption_kwh column if missing..."
+sqlite3 "$DB_PATH" "ALTER TABLE meter_readings ADD COLUMN consumption_kwh REAL DEFAULT 0;" 2>/dev/null || echo "Column already exists"
+
+echo "Optimizing database..."
+sqlite3 "$DB_PATH" "VACUUM;"
+sqlite3 "$DB_PATH" "REINDEX;"
+
+echo "Enabling WAL mode..."
+sqlite3 "$DB_PATH" "PRAGMA journal_mode=WAL;"
+
+echo "Starting service..."
+sudo systemctl start zev-billing.service
+sleep 3
+
+if systemctl is-active --quiet zev-billing.service; then
+    echo "✓ Service is running"
+    echo ""
+    echo "Database recovery completed!"
+else
+    echo "✗ Service failed to start"
+    echo "Check logs: journalctl -u zev-billing.service -n 50"
+    exit 1
+fi
+EOF
+
 # Make scripts executable
 chmod +x "$INSTALL_DIR"/*.sh
 chown "$ACTUAL_USER:$ACTUAL_USER" "$INSTALL_DIR"/*.sh
@@ -438,26 +561,31 @@ sleep 2
 if curl -s http://localhost:8080/api/health > /dev/null 2>&1; then
     echo -e "${GREEN}✓ Backend API responding correctly${NC}"
 else
-    echo -e "${YELLOW}⚠ Warning: Backend API test failed${NC}"
+    echo -e "${YELLOW}⚠  Warning: Backend API test failed${NC}"
 fi
 
 # Test nginx proxy
 if curl -s http://localhost/api/health > /dev/null 2>&1; then
     echo -e "${GREEN}✓ Nginx proxy working correctly${NC}"
 else
-    echo -e "${YELLOW}⚠ Warning: Nginx proxy test failed${NC}"
+    echo -e "${YELLOW}⚠  Warning: Nginx proxy test failed${NC}"
 fi
 
 # Test frontend access
 if curl -s -o /dev/null -w "%{http_code}" http://localhost/ | grep -q "200\|301\|302"; then
     echo -e "${GREEN}✓ Frontend accessible${NC}"
 else
-    echo -e "${YELLOW}⚠ Warning: Frontend may not be accessible${NC}"
+    echo -e "${YELLOW}⚠  Warning: Frontend may not be accessible${NC}"
 fi
 
 echo ""
 echo -e "${GREEN}=========================================="
-echo "Installation completed successfully!"
+if [ "$FRESH_INSTALL" = true ]; then
+    echo "FRESH INSTALLATION COMPLETED!"
+    echo "Database has been reset to defaults"
+else
+    echo "INSTALLATION COMPLETED!"
+fi
 echo "==========================================${NC}"
 echo ""
 echo -e "${GREEN}✓ System configured for auto-start on boot${NC}"
@@ -470,12 +598,14 @@ echo "  Status:  sudo systemctl status zev-billing.service"
 echo "  Logs:    journalctl -u zev-billing.service -f"
 echo ""
 echo -e "${BLUE}Convenient scripts in $INSTALL_DIR:${NC}"
-echo "  ./start.sh   - Start the system"
-echo "  ./stop.sh    - Stop the system"
-echo "  ./restart.sh - Restart the system"
-echo "  ./status.sh  - Check status and auto-start configuration"
-echo "  ./logs.sh    - Follow live logs"
-echo "  ./update.sh  - Update to latest version from Git"
+echo "  ./start.sh         - Start the system"
+echo "  ./stop.sh          - Stop the system"
+echo "  ./restart.sh       - Restart the system"
+echo "  ./status.sh        - Check status and auto-start configuration"
+echo "  ./logs.sh          - Follow live logs"
+echo "  ./update.sh        - Update to latest version from Git"
+echo "  ./fix_database.sh  - Recover corrupted database"
+echo "  ./fresh_install.sh - Reinstall with fresh database"
 echo ""
 echo -e "${BLUE}Access the application:${NC}"
 RASPBERRY_PI_IP=$(hostname -I | awk '{print $1}')
@@ -488,10 +618,18 @@ echo "  Password: ${GREEN}admin123${NC}"
 echo ""
 echo -e "${RED}⚠  IMPORTANT: Change the default password immediately after first login!${NC}"
 echo ""
-echo -e "${YELLOW}📁 Database location: $INSTALL_DIR/backend/zev-billing.db${NC}"
+if [ "$FRESH_INSTALL" = true ]; then
+    echo -e "${YELLOW}📦 Old database backed up to: $INSTALL_DIR/backups/${NC}"
+    echo ""
+fi
+echo -e "${YELLOW}🗄  Database location: $INSTALL_DIR/backend/zev-billing.db${NC}"
 echo ""
 echo -e "${BLUE}🔧 Debugging:${NC}"
-echo "  - Check Admin Logs page in the web interface for data collection status"
+echo "  - Check Admin Logs page in the web interface"
 echo "  - Use ./logs.sh to see live system logs"
-echo "  - See Setup Instructions in Meters/Chargers pages for configuration help"
+echo "  - See Setup Instructions in Meters/Chargers pages"
+echo ""
+echo -e "${BLUE}💡 To perform a fresh install later:${NC}"
+echo "  sudo bash install.sh --fresh"
+echo "  or run: ./fresh_install.sh"
 echo ""

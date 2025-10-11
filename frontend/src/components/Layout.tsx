@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, Building, Zap, Car, FileText, Settings, LogOut, Activity } from 'lucide-react';
+import { LayoutDashboard, Users, Building, Zap, Car, FileText, Settings, LogOut, Activity, DollarSign } from 'lucide-react';
 import { api } from '../api/client';
 
 interface LayoutProps {
@@ -21,20 +21,25 @@ export default function Layout({ onLogout }: LayoutProps) {
     { path: '/meters', icon: Zap, label: 'Meters' },
     { path: '/chargers', icon: Car, label: 'Chargers' },
     { path: '/billing', icon: FileText, label: 'Billing' },
-    { path: '/pricing', icon: Settings, label: 'Pricing' },
-    { path: '/settings', icon: Settings, label: 'Settings' },
+    { path: '/pricing', icon: DollarSign, label: 'Pricing' },
     { path: '/logs', icon: Activity, label: 'Logs' },
+    { path: '/settings', icon: Settings, label: 'Settings' },
   ];
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <aside style={{
+        position: 'fixed',
+        left: 0,
+        top: 0,
+        bottom: 0,
         width: '250px',
         backgroundColor: '#1a1a1a',
         color: 'white',
         padding: '20px',
         display: 'flex',
-        flexDirection: 'column'
+        flexDirection: 'column',
+        overflowY: 'auto'
       }}>
         <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '30px' }}>
           ZEV Billing
@@ -87,7 +92,8 @@ export default function Layout({ onLogout }: LayoutProps) {
             color: 'white',
             border: '1px solid #333',
             width: '100%',
-            fontSize: '14px'
+            fontSize: '14px',
+            cursor: 'pointer'
           }}
           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2a2a2a'}
           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -98,10 +104,11 @@ export default function Layout({ onLogout }: LayoutProps) {
       </aside>
 
       <main style={{
+        marginLeft: '250px',
         flex: 1,
         padding: '30px',
         backgroundColor: '#f5f5f5',
-        overflow: 'auto'
+        minHeight: '100vh'
       }}>
         <Outlet />
       </main>

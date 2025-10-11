@@ -17,6 +17,7 @@ import (
 type DataCollector struct {
 	db               *sql.DB
 	udpListeners     map[int]*net.UDPConn
+	udpBuffers       map[int]float64 // Buffer for UDP readings
 	mu               sync.Mutex
 	lastCollection   time.Time
 	udpPorts         []int
@@ -25,7 +26,6 @@ type DataCollector struct {
 func stripControlCharacters(str string) string {
 	result := ""
 	for _, char := range str {
-		// Keep only printable characters (space and above)
 		if char >= 32 && char != 127 {
 			result += string(char)
 		}
@@ -37,6 +37,7 @@ func NewDataCollector(db *sql.DB) *DataCollector {
 	return &DataCollector{
 		db:           db,
 		udpListeners: make(map[int]*net.UDPConn),
+		udpBuffers:   make(map[int]float64),
 		udpPorts:     []int{},
 	}
 }
@@ -47,16 +48,10 @@ func (dc *DataCollector) Start() {
 	log.Println("Collection Interval: 15 minutes")
 	log.Println("===================================")
 
-	// Initialize UDP listeners for all UDP meters
 	dc.initializeUDPListeners()
-
-	// Log initial status
 	dc.logSystemStatus()
-
-	// Run immediately on start
 	dc.collectAllData()
 
-	// Then run every 15 minutes
 	ticker := time.NewTicker(15 * time.Minute)
 	defer ticker.Stop()
 
@@ -84,8 +79,8 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 	dc.db.QueryRow("SELECT COUNT(*) FROM meters").Scan(&totalMeters)
 	dc.db.QueryRow("SELECT COUNT(*) FROM chargers WHERE is_active = 1").Scan(&activeChargers)
 	dc.db.QueryRow("SELECT COUNT(*) FROM chargers").Scan(&totalChargers)
-	dc.db.QueryRow(`SELECT COUNT(*) FROM admin_logs WHERE action LIKE '%error%' 
-		OR action LIKE '%failed%' AND created_at > datetime('now', '-24 hours')`).Scan(&recentErrors)
+	dc.db.QueryRow(`SELECT COUNT(*) FROM admin_logs WHERE (action LIKE '%error%' 
+		OR action LIKE '%failed%') AND created_at > datetime('now', '-24 hours')`).Scan(&recentErrors)
 
 	nextCollection := 15 - int(time.Since(dc.lastCollection).Minutes())
 	if nextCollection < 0 {
@@ -136,7 +131,7 @@ func (dc *DataCollector) initializeUDPListeners() {
 }
 
 func (dc *DataCollector) startUDPListener(meterID int, meterName string, config map[string]interface{}) {
-	port := 8888 // default
+	port := 8888
 	if p, ok := config["listen_port"].(float64); ok {
 		port = int(p)
 	}
@@ -156,9 +151,10 @@ func (dc *DataCollector) startUDPListener(meterID int, meterName string, config 
 	dc.mu.Lock()
 	dc.udpListeners[port] = conn
 	dc.udpPorts = append(dc.udpPorts, port)
+	dc.udpBuffers[meterID] = 0
 	dc.mu.Unlock()
 
-	log.Printf("SUCCESS: UDP listener started for meter '%s' on port %d (0.0.0.0:%d)", meterName, port, port)
+	log.Printf("SUCCESS: UDP listener started for meter '%s' on port %d", meterName, port)
 	dc.logToDatabase("UDP Listener Started", fmt.Sprintf("Meter: %s, Port: %d", meterName, port))
 
 	buffer := make([]byte, 1024)
@@ -170,45 +166,20 @@ func (dc *DataCollector) startUDPListener(meterID int, meterName string, config 
 			continue
 		}
 
-		// Check if sender IP matches (if specified)
 		if senderIP, ok := config["sender_ip"].(string); ok && senderIP != "" {
 			if !strings.Contains(remoteAddr.IP.String(), senderIP) {
-				log.Printf("DEBUG: Rejected UDP packet from %s (expected %s)", remoteAddr.IP.String(), senderIP)
 				continue
 			}
 		}
 
-		// Parse the received data
 		data := buffer[:n]
-		dataStr := string(data)
-		log.Printf("DEBUG: UDP packet received on port %d from %s: %s", port, remoteAddr.IP, dataStr)
-		
 		reading := dc.parseUDPData(data, config)
 
 		if reading > 0 {
-			// Save reading to database
-			_, err := dc.db.Exec(`
-				INSERT INTO meter_readings (meter_id, reading_time, power_kwh)
-				VALUES (?, ?, ?)
-			`, meterID, time.Now(), reading)
-
-			if err != nil {
-				log.Printf("ERROR: Failed to save UDP reading for meter %s: %v", meterName, err)
-				dc.logToDatabase("UDP Save Failed", fmt.Sprintf("Meter %s: %v", meterName, err))
-			} else {
-				// Update last reading
-				dc.db.Exec(`
-					UPDATE meters 
-					SET last_reading = ?, last_reading_time = ?
-					WHERE id = ?
-				`, reading, time.Now(), meterID)
-
-				log.Printf("SUCCESS: UDP data saved for meter '%s': %.2f kWh from %s", meterName, reading, remoteAddr.IP)
-				dc.logToDatabase("UDP Data Received", fmt.Sprintf("Meter: %s, Value: %.2f kWh, From: %s", meterName, reading, remoteAddr.IP))
-			}
-		} else {
-			log.Printf("WARNING: Could not parse UDP data from %s: %s", remoteAddr.IP, dataStr)
-			dc.logToDatabase("UDP Parse Warning", fmt.Sprintf("Meter: %s, Data: %s, From: %s", meterName, dataStr, remoteAddr.IP))
+			dc.mu.Lock()
+			dc.udpBuffers[meterID] = reading
+			dc.mu.Unlock()
+			log.Printf("DEBUG: UDP data buffered for meter '%s': %.2f kWh from %s", meterName, reading, remoteAddr.IP)
 		}
 	}
 }
@@ -219,56 +190,40 @@ func (dc *DataCollector) parseUDPData(data []byte, config map[string]interface{}
 		dataFormat = format
 	}
 
-	// Clean the data - remove control characters
 	cleanData := stripControlCharacters(string(data))
-	log.Printf("DEBUG: Parsing UDP data with format '%s': Raw='%s' Cleaned='%s'", dataFormat, string(data), cleanData)
 
 	switch dataFormat {
 	case "json":
 		var jsonData map[string]interface{}
 		if err := json.Unmarshal([]byte(cleanData), &jsonData); err != nil {
-			log.Printf("WARNING: Failed to parse UDP JSON: %v, Data: %s", err, cleanData)
 			return 0
 		}
 
-		// Try to find power value in common field names
 		fieldNames := []string{"power_kwh", "power", "value", "kwh", "energy"}
-
 		for _, field := range fieldNames {
 			if value, ok := jsonData[field]; ok {
 				switch v := value.(type) {
 				case float64:
-					log.Printf("DEBUG: Found power value in field '%s': %.2f", field, v)
 					return v
 				case string:
 					if f, err := strconv.ParseFloat(v, 64); err == nil {
-						log.Printf("DEBUG: Found power value in field '%s': %.2f (parsed from string)", field, f)
 						return f
 					}
 				}
 			}
 		}
-		log.Printf("WARNING: No power field found in JSON. Fields present: %v", jsonData)
 
 	case "csv":
-		// Parse CSV format: "value,timestamp" or just "value"
 		parts := strings.Split(cleanData, ",")
 		if len(parts) > 0 {
 			if value, err := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64); err == nil {
-				log.Printf("DEBUG: Parsed CSV value: %.2f", value)
 				return value
-			} else {
-				log.Printf("WARNING: Failed to parse CSV value: %v, Data: %s", err, parts[0])
 			}
 		}
 
 	case "raw":
-		// Parse as plain number - now with control characters stripped
 		if value, err := strconv.ParseFloat(cleanData, 64); err == nil {
-			log.Printf("DEBUG: Parsed raw value: %.2f", value)
 			return value
-		} else {
-			log.Printf("WARNING: Failed to parse raw value: %v, Raw: '%s', Cleaned: '%s'", err, string(data), cleanData)
 		}
 	}
 
@@ -283,17 +238,56 @@ func (dc *DataCollector) collectAllData() {
 	
 	dc.logToDatabase("Data Collection Started", "15-minute collection cycle initiated")
 
-	// Collect meter data (HTTP and Modbus)
 	dc.collectMeterData()
-
-	// Collect charger data
 	dc.collectChargerData()
+	dc.saveBufferedUDPData()
 
 	log.Println("========================================")
 	log.Println("Data collection cycle completed")
 	log.Println("========================================")
 	
 	dc.logToDatabase("Data Collection Completed", "All active devices polled")
+}
+
+func (dc *DataCollector) saveBufferedUDPData() {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
+
+	for meterID, reading := range dc.udpBuffers {
+		if reading > 0 {
+			// Get previous reading to calculate consumption
+			var prevReading float64
+			dc.db.QueryRow(`
+				SELECT power_kwh FROM meter_readings 
+				WHERE meter_id = ? 
+				ORDER BY reading_time DESC LIMIT 1
+			`, meterID).Scan(&prevReading)
+
+			consumption := reading - prevReading
+			if consumption < 0 {
+				consumption = reading // Reset case
+			}
+
+			// Save the current reading
+			_, err := dc.db.Exec(`
+				INSERT INTO meter_readings (meter_id, reading_time, power_kwh, consumption_kwh)
+				VALUES (?, ?, ?, ?)
+			`, meterID, time.Now(), reading, consumption)
+
+			if err == nil {
+				dc.db.Exec(`
+					UPDATE meters 
+					SET last_reading = ?, last_reading_time = ?
+					WHERE id = ?
+				`, reading, time.Now(), meterID)
+
+				log.Printf("SUCCESS: UDP data saved for meter ID %d: %.2f kWh (consumption: %.2f kWh)", 
+					meterID, reading, consumption)
+				dc.logToDatabase("UDP Data Saved", 
+					fmt.Sprintf("Meter ID: %d, Reading: %.2f kWh, Consumption: %.2f kWh", meterID, reading, consumption))
+			}
+		}
+	}
 }
 
 func (dc *DataCollector) collectMeterData() {
@@ -321,9 +315,8 @@ func (dc *DataCollector) collectMeterData() {
 		}
 
 		meterCount++
-		log.Printf("Processing meter [%d/%d]: '%s' (%s via %s)", meterCount, meterCount, name, meterType, connectionType)
+		log.Printf("Processing meter [%d]: '%s' (%s via %s)", meterCount, name, meterType, connectionType)
 
-		// Parse connection config
 		var config map[string]interface{}
 		if err := json.Unmarshal([]byte(connectionConfig), &config); err != nil {
 			log.Printf("ERROR: Failed to parse config for meter '%s': %v", name, err)
@@ -331,7 +324,6 @@ func (dc *DataCollector) collectMeterData() {
 			continue
 		}
 
-		// Collect data based on connection type
 		var reading float64
 		switch connectionType {
 		case "http":
@@ -343,26 +335,37 @@ func (dc *DataCollector) collectMeterData() {
 			continue
 		}
 
-		// Save reading
 		if reading > 0 {
+			// Get previous reading
+			var prevReading float64
+			dc.db.QueryRow(`
+				SELECT power_kwh FROM meter_readings 
+				WHERE meter_id = ? 
+				ORDER BY reading_time DESC LIMIT 1
+			`, id).Scan(&prevReading)
+
+			consumption := reading - prevReading
+			if consumption < 0 {
+				consumption = reading
+			}
+
 			_, err := dc.db.Exec(`
-				INSERT INTO meter_readings (meter_id, reading_time, power_kwh)
-				VALUES (?, ?, ?)
-			`, id, time.Now(), reading)
+				INSERT INTO meter_readings (meter_id, reading_time, power_kwh, consumption_kwh)
+				VALUES (?, ?, ?, ?)
+			`, id, time.Now(), reading, consumption)
 
 			if err != nil {
 				log.Printf("ERROR: Failed to save reading for meter '%s': %v", name, err)
 				dc.logToDatabase("Save Error", fmt.Sprintf("Meter: %s, Error: %v", name, err))
 			} else {
-				// Update last reading
 				dc.db.Exec(`
 					UPDATE meters 
 					SET last_reading = ?, last_reading_time = ?
 					WHERE id = ?
 				`, reading, time.Now(), id)
 
-				log.Printf("SUCCESS: Collected meter data: '%s' = %.2f kWh", name, reading)
-				dc.logToDatabase("Meter Data Collected", fmt.Sprintf("%s: %.2f kWh", name, reading))
+				log.Printf("SUCCESS: Collected meter data: '%s' = %.2f kWh (consumption: %.2f kWh)", name, reading, consumption)
+				dc.logToDatabase("Meter Data Collected", fmt.Sprintf("%s: %.2f kWh, Consumption: %.2f kWh", name, reading, consumption))
 				successCount++
 			}
 		}
@@ -396,9 +399,8 @@ func (dc *DataCollector) collectChargerData() {
 		}
 
 		chargerCount++
-		log.Printf("Processing charger [%d/%d]: '%s' (%s)", chargerCount, chargerCount, name, brand)
+		log.Printf("Processing charger [%d]: '%s' (%s)", chargerCount, name, brand)
 
-		// Parse connection config
 		var config map[string]interface{}
 		if err := json.Unmarshal([]byte(connectionConfig), &config); err != nil {
 			log.Printf("ERROR: Failed to parse config for charger '%s': %v", name, err)
@@ -406,7 +408,6 @@ func (dc *DataCollector) collectChargerData() {
 			continue
 		}
 
-		// Collect data based on preset
 		var power float64
 		var userID, mode, state string
 
@@ -414,7 +415,6 @@ func (dc *DataCollector) collectChargerData() {
 			power, userID, mode, state = dc.collectWeidmullerData(name, config)
 		}
 
-		// Save session data
 		if power > 0 {
 			_, err := dc.db.Exec(`
 				INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
@@ -444,8 +444,6 @@ func (dc *DataCollector) collectHTTPData(name string, config map[string]interfac
 		return 0
 	}
 
-	log.Printf("DEBUG: Making HTTP request to %s", endpoint)
-
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
@@ -470,32 +468,26 @@ func (dc *DataCollector) collectHTTPData(name string, config map[string]interfac
 		return 0
 	}
 
-	log.Printf("DEBUG: HTTP response from %s: %s", endpoint, string(body))
-
 	var data map[string]interface{}
 	if err := json.Unmarshal(body, &data); err != nil {
-		log.Printf("ERROR: Failed to parse HTTP response as JSON: %v, Response: %s", err, string(body))
+		log.Printf("ERROR: Failed to parse HTTP response as JSON: %v", err)
 		dc.logToDatabase("HTTP Parse Error", fmt.Sprintf("Meter: %s, Error: %v", name, err))
 		return 0
 	}
 
-	// Extract power value based on field name in config
 	fieldName, ok := config["power_field"].(string)
 	if !ok {
 		fieldName = "power_kwh"
 	}
 
 	if value, ok := data[fieldName].(float64); ok {
-		log.Printf("DEBUG: Found power value in field '%s': %.2f", fieldName, value)
 		return value
 	}
 
-	log.Printf("WARNING: Power field '%s' not found in response. Available fields: %v", fieldName, data)
 	return 0
 }
 
 func (dc *DataCollector) collectModbusData(name string, config map[string]interface{}) float64 {
-	// Placeholder for Modbus TCP implementation
 	log.Printf("INFO: Modbus TCP collection not yet implemented for meter '%s'", name)
 	dc.logToDatabase("Modbus Not Implemented", fmt.Sprintf("Meter: %s", name))
 	return 0
@@ -509,32 +501,24 @@ func (dc *DataCollector) collectWeidmullerData(name string, config map[string]in
 		"mode":    fmt.Sprintf("%v", config["mode_endpoint"]),
 	}
 
-	log.Printf("DEBUG: Collecting Weidmüller data for charger '%s'", name)
-
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
 
-	// Collect power
 	if resp, err := client.Get(endpoints["power"]); err == nil {
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
-		log.Printf("DEBUG: Power endpoint response: %s", string(body))
 		var data map[string]interface{}
 		if json.Unmarshal(body, &data) == nil {
 			if p, ok := data["power_kwh"].(float64); ok {
 				power = p
 			}
 		}
-	} else {
-		log.Printf("ERROR: Failed to get power data for charger '%s': %v", name, err)
 	}
 
-	// Collect state
 	if resp, err := client.Get(endpoints["state"]); err == nil {
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
-		log.Printf("DEBUG: State endpoint response: %s", string(body))
 		var data map[string]interface{}
 		if json.Unmarshal(body, &data) == nil {
 			if s, ok := data["state"].(string); ok {
@@ -543,11 +527,9 @@ func (dc *DataCollector) collectWeidmullerData(name string, config map[string]in
 		}
 	}
 
-	// Collect user ID
 	if resp, err := client.Get(endpoints["user_id"]); err == nil {
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
-		log.Printf("DEBUG: User ID endpoint response: %s", string(body))
 		var data map[string]interface{}
 		if json.Unmarshal(body, &data) == nil {
 			if uid, ok := data["user_id"].(string); ok {
@@ -556,11 +538,9 @@ func (dc *DataCollector) collectWeidmullerData(name string, config map[string]in
 		}
 	}
 
-	// Collect mode
 	if resp, err := client.Get(endpoints["mode"]); err == nil {
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
-		log.Printf("DEBUG: Mode endpoint response: %s", string(body))
 		var data map[string]interface{}
 		if json.Unmarshal(body, &data) == nil {
 			if m, ok := data["mode"].(string); ok {
