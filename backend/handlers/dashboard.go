@@ -177,6 +177,8 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		startTime = time.Now().Add(-24 * time.Hour)
 	}
 
+	// STEP 1: Read all buildings into memory and close cursor immediately
+	log.Printf("Step 1: Reading all buildings...")
 	buildingRows, err := h.db.QueryContext(ctx, `
 		SELECT id, name 
 		FROM buildings 
@@ -189,7 +191,24 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		json.NewEncoder(w).Encode([]interface{}{})
 		return
 	}
-	defer buildingRows.Close()
+
+	type buildingInfo struct {
+		id   int
+		name string
+	}
+	buildingInfos := []buildingInfo{}
+	
+	for buildingRows.Next() {
+		var bi buildingInfo
+		if err := buildingRows.Scan(&bi.id, &bi.name); err != nil {
+			log.Printf("Error scanning building row: %v", err)
+			continue
+		}
+		buildingInfos = append(buildingInfos, bi)
+	}
+	buildingRows.Close() // CRITICAL: Close immediately
+	
+	log.Printf("Found %d buildings to process", len(buildingInfos))
 
 	type MeterData struct {
 		MeterID   int                        `json:"meter_id"`
@@ -207,38 +226,31 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 
 	buildings := []BuildingConsumption{}
 
-	for buildingRows.Next() {
-		var buildingID int
-		var buildingName string
-		if err := buildingRows.Scan(&buildingID, &buildingName); err != nil {
-			log.Printf("Error scanning building row: %v", err)
-			continue
-		}
-
-		log.Printf("Processing building ID: %d, Name: %s", buildingID, buildingName)
+	// STEP 2: Process each building (no cursors held)
+	for _, bi := range buildingInfos {
+		log.Printf("Processing building ID: %d, Name: %s", bi.id, bi.name)
 
 		building := BuildingConsumption{
-			BuildingID:   buildingID,
-			BuildingName: buildingName,
+			BuildingID:   bi.id,
+			BuildingName: bi.name,
 			Meters:       []MeterData{},
 		}
 
-		// FIXED: Query meters and close immediately after reading
-		log.Printf("  Querying meters for building %d...", buildingID)
+		// STEP 3: Read all meters for this building into memory
+		log.Printf("  Querying meters for building %d...", bi.id)
 		meterRows, err := h.db.QueryContext(ctx, `
 			SELECT m.id, m.name, m.meter_type, m.user_id
 			FROM meters m
 			WHERE m.building_id = ? AND COALESCE(m.is_active, 1) = 1
 			ORDER BY m.meter_type, m.name
-		`, buildingID)
+		`, bi.id)
 
 		if err != nil {
-			log.Printf("  Error querying meters for building %d: %v", buildingID, err)
+			log.Printf("  Error querying meters for building %d: %v", bi.id, err)
 			buildings = append(buildings, building)
 			continue
 		}
 
-		// Collect all meter info first, then close the rows immediately
 		type meterInfo struct {
 			id       int
 			name     string
@@ -255,11 +267,11 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			}
 			meterInfos = append(meterInfos, mi)
 		}
-		meterRows.Close() // CRITICAL: Close immediately after reading
+		meterRows.Close() // CRITICAL: Close immediately
 		
-		log.Printf("  Found %d meters for building %d", len(meterInfos), buildingID)
+		log.Printf("  Found %d meters for building %d", len(meterInfos), bi.id)
 
-		// Now process each meter without holding the meterRows open
+		// STEP 4: Process each meter (no cursors held)
 		for _, mi := range meterInfos {
 			log.Printf("    Processing meter ID: %d, Name: %s, Type: %s", mi.id, mi.name, mi.meterType)
 
@@ -276,7 +288,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				}
 			}
 
-			// Query readings and close immediately
+			// STEP 5: Read all readings for this meter
 			dataRows, err := h.db.QueryContext(ctx, `
 				SELECT reading_time, consumption_kwh
 				FROM meter_readings
@@ -298,7 +310,6 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				continue
 			}
 
-			// Read all data points
 			for dataRows.Next() {
 				var timestamp time.Time
 				var consumption float64
@@ -310,14 +321,14 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					})
 				}
 			}
-			dataRows.Close() // CRITICAL: Close immediately after reading
+			dataRows.Close() // CRITICAL: Close immediately
 
 			log.Printf("    Meter ID: %d has %d data points", mi.id, len(meterData.Data))
 
 			building.Meters = append(building.Meters, meterData)
 		}
 
-		log.Printf("  Building %d processed with %d meters", buildingID, len(building.Meters))
+		log.Printf("  Building %d processed with %d meters", bi.id, len(building.Meters))
 		buildings = append(buildings, building)
 	}
 
