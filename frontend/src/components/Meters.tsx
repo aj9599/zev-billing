@@ -12,8 +12,7 @@ interface ConnectionConfig {
   register_count?: number;
   unit_id?: number;
   listen_port?: number;
-  sender_ip?: string;
-  data_format?: string;
+  data_key?: string;
 }
 
 export default function Meters() {
@@ -36,8 +35,7 @@ export default function Meters() {
     register_count: 2,
     unit_id: 1,
     listen_port: 8888,
-    sender_ip: '',
-    data_format: 'json'
+    data_key: 'power_kwh'
   });
 
   useEffect(() => {
@@ -76,8 +74,7 @@ export default function Meters() {
     } else if (formData.connection_type === 'udp') {
       config = {
         listen_port: connectionConfig.listen_port,
-        sender_ip: connectionConfig.sender_ip,
-        data_format: connectionConfig.data_format
+        data_key: connectionConfig.data_key
       };
     }
     
@@ -127,8 +124,7 @@ export default function Meters() {
         register_count: config.register_count || 2,
         unit_id: config.unit_id || 1,
         listen_port: config.listen_port || 8888,
-        sender_ip: config.sender_ip || '',
-        data_format: config.data_format || 'json'
+        data_key: config.data_key || 'power_kwh'
       });
     } catch (e) {
       console.error('Failed to parse config:', e);
@@ -172,8 +168,7 @@ export default function Meters() {
       register_count: 2,
       unit_id: 1,
       listen_port: 8888,
-      sender_ip: '',
-      data_format: 'json'
+      data_key: 'power_kwh'
     });
   };
 
@@ -205,7 +200,7 @@ export default function Meters() {
 
         <div style={{ lineHeight: '1.8', color: '#374151' }}>
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            📌 HTTP Connection (Recommended for Loxone)
+            🔌 HTTP Connection (Recommended for Loxone)
           </h3>
           <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
             <p><strong>Loxone Virtual Output Setup:</strong></p>
@@ -219,20 +214,34 @@ export default function Meters() {
           </div>
 
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            📡 UDP Connection (Alternative for Loxone)
+            📡 UDP Connection (Shared Port - RECOMMENDED!)
           </h3>
-          <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
-            <p><strong>Loxone Virtual Output UDP Setup:</strong></p>
+          <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #3b82f6' }}>
+            <p><strong>⭐ NEW: Share ONE UDP port for multiple meters!</strong></p>
             <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
-              <li>In Loxone Config, create a Virtual Output UDP</li>
-              <li>Set the destination IP to your Raspberry Pi IP</li>
-              <li>Set the port (default: 8888)</li>
-              <li>Configure data format: JSON, CSV, or Raw</li>
-              <li>For JSON format: <code style={{ backgroundColor: '#e5e7eb', padding: '2px 6px', borderRadius: '4px' }}>{"{"}"power_kwh": &lt;v&gt;{"}"}</code></li>
-              <li>For CSV format: <code style={{ backgroundColor: '#e5e7eb', padding: '2px 6px', borderRadius: '4px' }}>&lt;v&gt;,&lt;t&gt;</code></li>
+              <li>In Loxone Config, create Virtual Output UDP devices</li>
+              <li>Set ALL meters to the SAME port (e.g., 8888)</li>
+              <li>Each meter uses a UNIQUE JSON key to identify its data</li>
+              <li><strong>Example for Building A with 3 meters:</strong></li>
             </ol>
-            <p style={{ marginTop: '10px', fontSize: '14px', color: '#6b7280' }}>
-              <strong>Note:</strong> Make sure port 8888/UDP is open in your firewall
+            <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '10px', fontFamily: 'monospace', fontSize: '13px' }}>
+              <strong>Apartment Meter 1:</strong><br/>
+              Port: 8888<br/>
+              Data Key: "apart1_kwh"<br/>
+              Loxone sends: {"{"}"apart1_kwh": &lt;v&gt;{"}"}<br/><br/>
+              
+              <strong>Apartment Meter 2:</strong><br/>
+              Port: 8888 (same port!)<br/>
+              Data Key: "apart2_kwh"<br/>
+              Loxone sends: {"{"}"apart2_kwh": &lt;v&gt;{"}"}<br/><br/>
+              
+              <strong>Solar Meter:</strong><br/>
+              Port: 8888 (same port!)<br/>
+              Data Key: "solar_kwh"<br/>
+              Loxone sends: {"{"}"solar_kwh": &lt;v&gt;{"}"}
+            </div>
+            <p style={{ marginTop: '10px', fontSize: '14px', color: '#1f2937' }}>
+              <strong>Benefits:</strong> One UDP port per building instead of one per meter. Much cleaner network configuration!
             </p>
           </div>
 
@@ -243,9 +252,9 @@ export default function Meters() {
             <p><strong>Check the Admin Logs page to see:</strong></p>
             <ul style={{ marginLeft: '20px', marginTop: '10px' }}>
               <li>Data collection attempts every 15 minutes</li>
-              <li>Successful meter readings</li>
+              <li>Successful meter readings with data keys</li>
               <li>Connection errors and debugging information</li>
-              <li>UDP packet reception logs</li>
+              <li>UDP packet reception logs showing which keys were received</li>
             </ul>
           </div>
 
@@ -273,6 +282,7 @@ export default function Meters() {
               <li>Check logs: <code style={{ backgroundColor: '#fff', padding: '2px 6px', borderRadius: '4px' }}>journalctl -u zev-billing -f</code></li>
               <li>Test network: <code style={{ backgroundColor: '#fff', padding: '2px 6px', borderRadius: '4px' }}>ping YOUR_LOXONE_IP</code></li>
               <li>Monitor the Admin Logs page in real-time for debugging</li>
+              <li><strong>UDP:</strong> Make sure each meter has a UNIQUE data_key!</li>
             </ul>
           </div>
         </div>
@@ -470,8 +480,8 @@ export default function Meters() {
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>Connection Type *</label>
                 <select required value={formData.connection_type} onChange={(e) => setFormData({ ...formData, connection_type: e.target.value })}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
-                  <option value="http">HTTP (Recommended for Loxone)</option>
-                  <option value="udp">UDP (Alternative for Loxone)</option>
+                  <option value="http">HTTP (Loxone Virtual Output)</option>
+                  <option value="udp">UDP (Shared Port - Recommended!)</option>
                   <option value="modbus_tcp">Modbus TCP</option>
                 </select>
               </div>
@@ -563,7 +573,12 @@ export default function Meters() {
 
                 {formData.connection_type === 'udp' && (
                   <>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px', marginBottom: '12px' }}>
+                    <div style={{ backgroundColor: '#dbeafe', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #3b82f6' }}>
+                      <p style={{ fontSize: '13px', color: '#1e40af', margin: 0 }}>
+                        <strong>⭐ Shared UDP Port:</strong> Multiple meters can share the same port! Use unique data keys to distinguish them.
+                      </p>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
                           Listen Port *
@@ -572,28 +587,27 @@ export default function Meters() {
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, listen_port: parseInt(e.target.value) })}
                           placeholder="8888"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                        <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                          Same port for all meters in this building
+                        </p>
                       </div>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          Sender IP (optional - leave empty for all)
+                          Data Key (JSON field) *
                         </label>
-                        <input type="text" value={connectionConfig.sender_ip}
-                          onChange={(e) => setConnectionConfig({ ...connectionConfig, sender_ip: e.target.value })}
-                          placeholder="Leave empty to accept from any IP"
+                        <input type="text" required value={connectionConfig.data_key}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, data_key: e.target.value })}
+                          placeholder="apart1_kwh"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                        <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                          Unique key like: apart1_kwh, solar_kwh, etc.
+                        </p>
                       </div>
                     </div>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                        Data Format *
-                      </label>
-                      <select required value={connectionConfig.data_format}
-                        onChange={(e) => setConnectionConfig({ ...connectionConfig, data_format: e.target.value })}
-                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
-                        <option value="json">JSON - {"{"}"power_kwh": value{"}"}</option>
-                        <option value="csv">CSV - value,timestamp</option>
-                        <option value="raw">Raw - just the number</option>
-                      </select>
+                    <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '12px', fontFamily: 'monospace', fontSize: '12px', border: '1px solid #e5e7eb' }}>
+                      <strong>Loxone Configuration:</strong><br/>
+                      Virtual Output UDP to {connectionConfig.listen_port || 8888}<br/>
+                      Command: {"{"}"<span style={{ color: '#3b82f6' }}>{connectionConfig.data_key || 'YOUR_KEY'}</span>": &lt;v&gt;{"}"}
                     </div>
                   </>
                 )}

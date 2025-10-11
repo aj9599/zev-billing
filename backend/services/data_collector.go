@@ -17,11 +17,34 @@ import (
 type DataCollector struct {
 	db               *sql.DB
 	udpListeners     map[int]*net.UDPConn
-	udpBuffers       map[int]float64
+	udpMeterBuffers  map[int]float64  // meter_id -> reading
+	udpChargerBuffers map[int]ChargerData // charger_id -> data
 	mu               sync.Mutex
 	lastCollection   time.Time
 	udpPorts         []int
 	restartChannel   chan bool
+}
+
+type ChargerData struct {
+	Power  float64
+	State  string
+	UserID string
+	Mode   string
+}
+
+type UDPMeterConfig struct {
+	MeterID int
+	Name    string
+	DataKey string
+}
+
+type UDPChargerConfig struct {
+	ChargerID int
+	Name      string
+	PowerKey  string
+	StateKey  string
+	UserIDKey string
+	ModeKey   string
 }
 
 func stripControlCharacters(str string) string {
@@ -36,18 +59,18 @@ func stripControlCharacters(str string) string {
 
 func NewDataCollector(db *sql.DB) *DataCollector {
 	return &DataCollector{
-		db:             db,
-		udpListeners:   make(map[int]*net.UDPConn),
-		udpBuffers:     make(map[int]float64),
-		udpPorts:       []int{},
-		restartChannel: make(chan bool, 1),
+		db:                db,
+		udpListeners:      make(map[int]*net.UDPConn),
+		udpMeterBuffers:   make(map[int]float64),
+		udpChargerBuffers: make(map[int]ChargerData),
+		udpPorts:          []int{},
+		restartChannel:    make(chan bool, 1),
 	}
 }
 
 func (dc *DataCollector) RestartUDPListeners() {
 	log.Println("=== Restarting UDP Listeners ===")
 	
-	// Close all existing UDP listeners
 	dc.mu.Lock()
 	for port, conn := range dc.udpListeners {
 		log.Printf("Closing UDP listener on port %d", port)
@@ -57,10 +80,8 @@ func (dc *DataCollector) RestartUDPListeners() {
 	dc.udpPorts = []int{}
 	dc.mu.Unlock()
 
-	// Wait a bit for ports to be released
 	time.Sleep(500 * time.Millisecond)
 
-	// Reinitialize all UDP listeners
 	dc.initializeUDPListeners()
 	
 	log.Println("=== UDP Listeners Restarted ===")
@@ -130,7 +151,14 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 }
 
 func (dc *DataCollector) initializeUDPListeners() {
-	rows, err := dc.db.Query(`
+	// Group meters and chargers by port
+	portDevices := make(map[int]struct {
+		meters   []UDPMeterConfig
+		chargers []UDPChargerConfig
+	})
+
+	// Query UDP meters
+	meterRows, err := dc.db.Query(`
 		SELECT id, name, connection_config
 		FROM meters 
 		WHERE is_active = 1 AND connection_type = 'udp'
@@ -138,34 +166,110 @@ func (dc *DataCollector) initializeUDPListeners() {
 	if err != nil {
 		log.Printf("ERROR: Failed to query UDP meters: %v", err)
 		dc.logToDatabase("UDP Init Error", fmt.Sprintf("Failed to query UDP meters: %v", err))
-		return
+	} else {
+		defer meterRows.Close()
+		for meterRows.Next() {
+			var id int
+			var name, connectionConfig string
+			if err := meterRows.Scan(&id, &name, &connectionConfig); err != nil {
+				continue
+			}
+
+			var config map[string]interface{}
+			if err := json.Unmarshal([]byte(connectionConfig), &config); err != nil {
+				log.Printf("ERROR: Failed to parse config for meter %s: %v", name, err)
+				continue
+			}
+
+			port := 8888
+			if p, ok := config["listen_port"].(float64); ok {
+				port = int(p)
+			}
+
+			dataKey := "power_kwh"
+			if dk, ok := config["data_key"].(string); ok && dk != "" {
+				dataKey = dk
+			}
+
+			devices := portDevices[port]
+			devices.meters = append(devices.meters, UDPMeterConfig{
+				MeterID: id,
+				Name:    name,
+				DataKey: dataKey,
+			})
+			portDevices[port] = devices
+		}
 	}
-	defer rows.Close()
 
-	for rows.Next() {
-		var id int
-		var name, connectionConfig string
-		if err := rows.Scan(&id, &name, &connectionConfig); err != nil {
-			continue
+	// Query UDP chargers
+	chargerRows, err := dc.db.Query(`
+		SELECT id, name, connection_config
+		FROM chargers 
+		WHERE is_active = 1 AND connection_type = 'udp'
+	`)
+	if err != nil {
+		log.Printf("ERROR: Failed to query UDP chargers: %v", err)
+		dc.logToDatabase("UDP Init Error", fmt.Sprintf("Failed to query UDP chargers: %v", err))
+	} else {
+		defer chargerRows.Close()
+		for chargerRows.Next() {
+			var id int
+			var name, connectionConfig string
+			if err := chargerRows.Scan(&id, &name, &connectionConfig); err != nil {
+				continue
+			}
+
+			var config map[string]interface{}
+			if err := json.Unmarshal([]byte(connectionConfig), &config); err != nil {
+				log.Printf("ERROR: Failed to parse config for charger %s: %v", name, err)
+				continue
+			}
+
+			port := 8888
+			if p, ok := config["listen_port"].(float64); ok {
+				port = int(p)
+			}
+
+			powerKey := "power_kwh"
+			if pk, ok := config["power_key"].(string); ok && pk != "" {
+				powerKey = pk
+			}
+
+			stateKey := "state"
+			if sk, ok := config["state_key"].(string); ok && sk != "" {
+				stateKey = sk
+			}
+
+			userIDKey := "user_id"
+			if uk, ok := config["user_id_key"].(string); ok && uk != "" {
+				userIDKey = uk
+			}
+
+			modeKey := "mode"
+			if mk, ok := config["mode_key"].(string); ok && mk != "" {
+				modeKey = mk
+			}
+
+			devices := portDevices[port]
+			devices.chargers = append(devices.chargers, UDPChargerConfig{
+				ChargerID: id,
+				Name:      name,
+				PowerKey:  powerKey,
+				StateKey:  stateKey,
+				UserIDKey: userIDKey,
+				ModeKey:   modeKey,
+			})
+			portDevices[port] = devices
 		}
+	}
 
-		var config map[string]interface{}
-		if err := json.Unmarshal([]byte(connectionConfig), &config); err != nil {
-			log.Printf("ERROR: Failed to parse config for meter %s: %v", name, err)
-			dc.logToDatabase("Config Parse Error", fmt.Sprintf("Meter %s: %v", name, err))
-			continue
-		}
-
-		go dc.startUDPListener(id, name, config)
+	// Start one listener per port
+	for port, devices := range portDevices {
+		go dc.startUDPListener(port, devices.meters, devices.chargers)
 	}
 }
 
-func (dc *DataCollector) startUDPListener(meterID int, meterName string, config map[string]interface{}) {
-	port := 8888
-	if p, ok := config["listen_port"].(float64); ok {
-		port = int(p)
-	}
-
+func (dc *DataCollector) startUDPListener(port int, meters []UDPMeterConfig, chargers []UDPChargerConfig) {
 	addr := net.UDPAddr{
 		Port: port,
 		IP:   net.ParseIP("0.0.0.0"),
@@ -173,26 +277,33 @@ func (dc *DataCollector) startUDPListener(meterID int, meterName string, config 
 
 	conn, err := net.ListenUDP("udp", &addr)
 	if err != nil {
-		log.Printf("ERROR: Failed to start UDP listener on port %d for meter '%s': %v", port, meterName, err)
-		dc.logToDatabase("UDP Listener Failed", fmt.Sprintf("Port %d, Meter: %s, Error: %v", port, meterName, err))
+		log.Printf("ERROR: Failed to start UDP listener on port %d: %v", port, err)
+		dc.logToDatabase("UDP Listener Failed", fmt.Sprintf("Port %d, Error: %v", port, err))
 		return
 	}
 
 	dc.mu.Lock()
 	dc.udpListeners[port] = conn
 	dc.udpPorts = append(dc.udpPorts, port)
-	dc.udpBuffers[meterID] = 0
+	for _, m := range meters {
+		dc.udpMeterBuffers[m.MeterID] = 0
+	}
+	for _, c := range chargers {
+		dc.udpChargerBuffers[c.ChargerID] = ChargerData{}
+	}
 	dc.mu.Unlock()
 
-	log.Printf("SUCCESS: UDP listener started for meter '%s' on port %d", meterName, port)
-	dc.logToDatabase("UDP Listener Started", fmt.Sprintf("Meter: %s, Port: %d", meterName, port))
+	deviceCount := len(meters) + len(chargers)
+	log.Printf("SUCCESS: UDP listener started on port %d for %d devices (%d meters, %d chargers)", 
+		port, deviceCount, len(meters), len(chargers))
+	dc.logToDatabase("UDP Listener Started", 
+		fmt.Sprintf("Port: %d, Meters: %d, Chargers: %d", port, len(meters), len(chargers)))
 
 	buffer := make([]byte, 1024)
 
 	for {
 		n, remoteAddr, err := conn.ReadFromUDP(buffer)
 		if err != nil {
-			// Check if connection was closed (during restart)
 			if strings.Contains(err.Error(), "closed") {
 				log.Printf("UDP listener on port %d closed", port)
 				return
@@ -201,68 +312,86 @@ func (dc *DataCollector) startUDPListener(meterID int, meterName string, config 
 			continue
 		}
 
-		if senderIP, ok := config["sender_ip"].(string); ok && senderIP != "" {
-			if !strings.Contains(remoteAddr.IP.String(), senderIP) {
-				continue
-			}
-		}
-
 		data := buffer[:n]
-		reading := dc.parseUDPData(data, config)
+		cleanData := stripControlCharacters(string(data))
 
-		if reading > 0 {
-			dc.mu.Lock()
-			dc.udpBuffers[meterID] = reading
-			dc.mu.Unlock()
-			log.Printf("DEBUG: UDP data buffered for meter '%s': %.2f kWh from %s", meterName, reading, remoteAddr.IP)
-		}
-	}
-}
-
-func (dc *DataCollector) parseUDPData(data []byte, config map[string]interface{}) float64 {
-	dataFormat := "json"
-	if format, ok := config["data_format"].(string); ok {
-		dataFormat = format
-	}
-
-	cleanData := stripControlCharacters(string(data))
-
-	switch dataFormat {
-	case "json":
 		var jsonData map[string]interface{}
 		if err := json.Unmarshal([]byte(cleanData), &jsonData); err != nil {
-			return 0
+			log.Printf("WARNING: Failed to parse UDP JSON on port %d: %v", port, err)
+			continue
 		}
 
-		fieldNames := []string{"power_kwh", "power", "value", "kwh", "energy"}
-		for _, field := range fieldNames {
-			if value, ok := jsonData[field]; ok {
+		// Process meter data
+		for _, meter := range meters {
+			if value, ok := jsonData[meter.DataKey]; ok {
+				var reading float64
 				switch v := value.(type) {
 				case float64:
-					return v
+					reading = v
 				case string:
 					if f, err := strconv.ParseFloat(v, 64); err == nil {
-						return f
+						reading = f
 					}
+				}
+
+				if reading > 0 {
+					dc.mu.Lock()
+					dc.udpMeterBuffers[meter.MeterID] = reading
+					dc.mu.Unlock()
+					log.Printf("DEBUG: UDP data buffered for meter '%s' (key: %s): %.2f kWh from %s", 
+						meter.Name, meter.DataKey, reading, remoteAddr.IP)
 				}
 			}
 		}
 
-	case "csv":
-		parts := strings.Split(cleanData, ",")
-		if len(parts) > 0 {
-			if value, err := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64); err == nil {
-				return value
+		// Process charger data
+		for _, charger := range chargers {
+			chargerData := ChargerData{}
+			updated := false
+
+			if value, ok := jsonData[charger.PowerKey]; ok {
+				switch v := value.(type) {
+				case float64:
+					chargerData.Power = v
+					updated = true
+				case string:
+					if f, err := strconv.ParseFloat(v, 64); err == nil {
+						chargerData.Power = f
+						updated = true
+					}
+				}
+			}
+
+			if value, ok := jsonData[charger.StateKey]; ok {
+				if s, ok := value.(string); ok {
+					chargerData.State = s
+					updated = true
+				}
+			}
+
+			if value, ok := jsonData[charger.UserIDKey]; ok {
+				if u, ok := value.(string); ok {
+					chargerData.UserID = u
+					updated = true
+				}
+			}
+
+			if value, ok := jsonData[charger.ModeKey]; ok {
+				if m, ok := value.(string); ok {
+					chargerData.Mode = m
+					updated = true
+				}
+			}
+
+			if updated {
+				dc.mu.Lock()
+				dc.udpChargerBuffers[charger.ChargerID] = chargerData
+				dc.mu.Unlock()
+				log.Printf("DEBUG: UDP data buffered for charger '%s': Power=%.2f, State=%s, User=%s, Mode=%s from %s", 
+					charger.Name, chargerData.Power, chargerData.State, chargerData.UserID, chargerData.Mode, remoteAddr.IP)
 			}
 		}
-
-	case "raw":
-		if value, err := strconv.ParseFloat(cleanData, 64); err == nil {
-			return value
-		}
 	}
-
-	return 0
 }
 
 func (dc *DataCollector) collectAllData() {
@@ -288,7 +417,8 @@ func (dc *DataCollector) saveBufferedUDPData() {
 	dc.mu.Lock()
 	defer dc.mu.Unlock()
 
-	for meterID, reading := range dc.udpBuffers {
+	// Save meter data
+	for meterID, reading := range dc.udpMeterBuffers {
 		if reading > 0 {
 			var prevReading float64
 			dc.db.QueryRow(`
@@ -314,10 +444,27 @@ func (dc *DataCollector) saveBufferedUDPData() {
 					WHERE id = ?
 				`, reading, time.Now(), meterID)
 
-				log.Printf("SUCCESS: UDP data saved for meter ID %d: %.2f kWh (consumption: %.2f kWh)", 
+				log.Printf("SUCCESS: UDP meter data saved for meter ID %d: %.2f kWh (consumption: %.2f kWh)", 
 					meterID, reading, consumption)
-				dc.logToDatabase("UDP Data Saved", 
+				dc.logToDatabase("UDP Meter Data Saved", 
 					fmt.Sprintf("Meter ID: %d, Reading: %.2f kWh, Consumption: %.2f kWh", meterID, reading, consumption))
+			}
+		}
+	}
+
+	// Save charger data
+	for chargerID, data := range dc.udpChargerBuffers {
+		if data.Power > 0 {
+			_, err := dc.db.Exec(`
+				INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
+				VALUES (?, ?, ?, ?, ?, ?)
+			`, chargerID, data.UserID, time.Now(), data.Power, data.Mode, data.State)
+
+			if err == nil {
+				log.Printf("SUCCESS: UDP charger data saved for charger ID %d: %.2f kWh (user: %s, mode: %s, state: %s)", 
+					chargerID, data.Power, data.UserID, data.Mode, data.State)
+				dc.logToDatabase("UDP Charger Data Saved", 
+					fmt.Sprintf("Charger ID: %d, Power: %.2f kWh, User: %s, Mode: %s", chargerID, data.Power, data.UserID, data.Mode))
 			}
 		}
 	}
@@ -409,7 +556,7 @@ func (dc *DataCollector) collectMeterData() {
 func (dc *DataCollector) collectChargerData() {
 	rows, err := dc.db.Query(`
 		SELECT id, name, brand, preset, connection_type, connection_config, is_active
-		FROM chargers WHERE is_active = 1
+		FROM chargers WHERE is_active = 1 AND connection_type != 'udp'
 	`)
 	if err != nil {
 		log.Printf("ERROR: Failed to query chargers: %v", err)

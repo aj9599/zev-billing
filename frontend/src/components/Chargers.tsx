@@ -15,6 +15,11 @@ interface ChargerConnectionConfig {
   user_id_register?: number;
   mode_register?: number;
   unit_id?: number;
+  listen_port?: number;
+  power_key?: string;
+  state_key?: string;
+  user_id_key?: string;
+  mode_key?: string;
 }
 
 export default function Chargers() {
@@ -39,7 +44,12 @@ export default function Chargers() {
     state_register: 1,
     user_id_register: 2,
     mode_register: 3,
-    unit_id: 1
+    unit_id: 1,
+    listen_port: 8888,
+    power_key: 'charger_power',
+    state_key: 'charger_state',
+    user_id_key: 'charger_user',
+    mode_key: 'charger_mode'
   });
 
   useEffect(() => {
@@ -76,6 +86,14 @@ export default function Chargers() {
         user_id_register: connectionConfig.user_id_register,
         mode_register: connectionConfig.mode_register,
         unit_id: connectionConfig.unit_id
+      };
+    } else if (formData.connection_type === 'udp') {
+      config = {
+        listen_port: connectionConfig.listen_port,
+        power_key: connectionConfig.power_key,
+        state_key: connectionConfig.state_key,
+        user_id_key: connectionConfig.user_id_key,
+        mode_key: connectionConfig.mode_key
       };
     }
     
@@ -127,7 +145,12 @@ export default function Chargers() {
         state_register: config.state_register || 1,
         user_id_register: config.user_id_register || 2,
         mode_register: config.mode_register || 3,
-        unit_id: config.unit_id || 1
+        unit_id: config.unit_id || 1,
+        listen_port: config.listen_port || 8888,
+        power_key: config.power_key || 'charger_power',
+        state_key: config.state_key || 'charger_state',
+        user_id_key: config.user_id_key || 'charger_user',
+        mode_key: config.mode_key || 'charger_mode'
       });
     } catch (e) {
       console.error('Failed to parse config:', e);
@@ -174,7 +197,12 @@ export default function Chargers() {
       state_register: 1,
       user_id_register: 2,
       mode_register: 3,
-      unit_id: 1
+      unit_id: 1,
+      listen_port: 8888,
+      power_key: 'charger_power',
+      state_key: 'charger_state',
+      user_id_key: 'charger_user',
+      mode_key: 'charger_mode'
     });
   };
 
@@ -226,13 +254,38 @@ export default function Chargers() {
               User ID: http://charger-ip/api/user_id<br/>
               Mode: http://charger-ip/api/mode
             </div>
-            <p style={{ marginTop: '10px' }}><strong>Expected JSON responses:</strong></p>
-            <div style={{ backgroundColor: '#e5e7eb', padding: '12px', borderRadius: '6px', marginTop: '6px', fontFamily: 'monospace', fontSize: '13px' }}>
-              {"{"}"power_kwh": 12.5{"}"}<br/>
-              {"{"}"state": "charging"{"}"}<br/>
-              {"{"}"user_id": "USER_001"{"}"}<br/>
-              {"{"}"mode": "normal"{"}"} or {"{"}"mode": "priority"{"}"}
+          </div>
+
+          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
+            📡 UDP Connection (Shared Port - NEW!)
+          </h3>
+          <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #3b82f6' }}>
+            <p><strong>⭐ Share ONE UDP port for chargers and meters!</strong></p>
+            <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
+              <li>Use the SAME UDP port as your meters (e.g., 8888)</li>
+              <li>Configure 4 unique JSON keys for the charger data</li>
+              <li>Send all data in a single JSON packet or separate packets</li>
+              <li><strong>Example Configuration:</strong></li>
+            </ol>
+            <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '10px', fontFamily: 'monospace', fontSize: '13px' }}>
+              <strong>Charger 1 Config:</strong><br/>
+              Port: 8888<br/>
+              Power Key: "charger1_power"<br/>
+              State Key: "charger1_state"<br/>
+              User ID Key: "charger1_user"<br/>
+              Mode Key: "charger1_mode"<br/><br/>
+              
+              <strong>Loxone sends (all in one or separate):</strong><br/>
+              {"{"}<br/>
+              &nbsp;&nbsp;"charger1_power": &lt;v&gt;,<br/>
+              &nbsp;&nbsp;"charger1_state": "charging",<br/>
+              &nbsp;&nbsp;"charger1_user": "USER_001",<br/>
+              &nbsp;&nbsp;"charger1_mode": "priority"<br/>
+              {"}"}
             </div>
+            <p style={{ marginTop: '10px', fontSize: '14px', color: '#1f2937' }}>
+              <strong>Benefits:</strong> One UDP port for entire building - meters AND chargers!
+            </p>
           </div>
 
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
@@ -251,9 +304,6 @@ export default function Chargers() {
               <li>User ID Register (current user)</li>
               <li>Mode Register (normal/priority mode)</li>
             </ul>
-            <p style={{ marginTop: '10px', fontSize: '14px', color: '#6b7280' }}>
-              <strong>Note:</strong> Consult your charger's documentation for exact register addresses
-            </p>
           </div>
 
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
@@ -265,7 +315,8 @@ export default function Chargers() {
               <li>Check Admin Logs page every 15 minutes for collection attempts</li>
               <li>Verify all 4 data points are being collected</li>
               <li>Check for error messages in the logs</li>
-              <li>Ensure the charger IP is reachable from the Raspberry Pi</li>
+              <li>Ensure the charger IP/port is reachable from the Raspberry Pi</li>
+              <li>For UDP: Verify unique keys don't conflict with meter keys</li>
             </ul>
           </div>
 
@@ -275,11 +326,12 @@ export default function Chargers() {
           <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', border: '1px solid #f59e0b' }}>
             <ul style={{ marginLeft: '20px' }}>
               <li>Verify network connectivity: <code style={{ backgroundColor: '#fff', padding: '2px 6px', borderRadius: '4px' }}>ping charger-ip</code></li>
-              <li>Check firewall allows HTTP/Modbus traffic</li>
+              <li>Check firewall allows HTTP/Modbus/UDP traffic</li>
               <li>Test endpoints manually with curl or browser</li>
               <li>Check Admin Logs for detailed error messages</li>
               <li>Verify JSON format matches expected structure</li>
-              <li>Ensure all 4 endpoints return valid data</li>
+              <li>Ensure all 4 data points return valid data</li>
+              <li><strong>UDP:</strong> Make sure each charger has UNIQUE keys!</li>
             </ul>
           </div>
         </div>
@@ -470,6 +522,7 @@ export default function Chargers() {
                 <select required value={formData.connection_type} onChange={(e) => setFormData({ ...formData, connection_type: e.target.value })}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
                   <option value="http">HTTP</option>
+                  <option value="udp">UDP (Shared Port - Recommended!)</option>
                   <option value="modbus_tcp">Modbus TCP</option>
                 </select>
               </div>
@@ -593,6 +646,78 @@ export default function Chargers() {
                           placeholder="1"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
+                    </div>
+                  </>
+                )}
+
+                {formData.connection_type === 'udp' && (
+                  <>
+                    <div style={{ backgroundColor: '#dbeafe', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #3b82f6' }}>
+                      <p style={{ fontSize: '13px', color: '#1e40af', margin: 0 }}>
+                        <strong>⭐ Shared UDP Port:</strong> Chargers can share the same port as meters! Use unique JSON keys for the 4 data points.
+                      </p>
+                    </div>
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                        Listen Port *
+                      </label>
+                      <input type="number" required value={connectionConfig.listen_port}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, listen_port: parseInt(e.target.value) })}
+                        placeholder="8888"
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                        Same port as your meters
+                      </p>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          Power Key *
+                        </label>
+                        <input type="text" required value={connectionConfig.power_key}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, power_key: e.target.value })}
+                          placeholder="charger1_power"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          State Key *
+                        </label>
+                        <input type="text" required value={connectionConfig.state_key}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, state_key: e.target.value })}
+                          placeholder="charger1_state"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          User ID Key *
+                        </label>
+                        <input type="text" required value={connectionConfig.user_id_key}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, user_id_key: e.target.value })}
+                          placeholder="charger1_user"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          Mode Key *
+                        </label>
+                        <input type="text" required value={connectionConfig.mode_key}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, mode_key: e.target.value })}
+                          placeholder="charger1_mode"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                    </div>
+                    <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '12px', fontFamily: 'monospace', fontSize: '12px', border: '1px solid #e5e7eb' }}>
+                      <strong>Loxone Configuration:</strong><br/>
+                      Virtual Output UDP to {connectionConfig.listen_port || 8888}<br/>
+                      Command: {"{"}<br/>
+                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.power_key || 'power_key'}</span>": &lt;v&gt;,<br/>
+                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.state_key || 'state_key'}</span>": "charging",<br/>
+                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.user_id_key || 'user_key'}</span>": "USER_001",<br/>
+                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.mode_key || 'mode_key'}</span>": "normal"<br/>
+                      {"}"}
                     </div>
                   </>
                 )}
