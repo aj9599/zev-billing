@@ -335,19 +335,22 @@ export default function Settings() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {[
-              { icon: '🔐', title: 'Use Strong Passwords', desc: 'Combine letters, numbers, and symbols for maximum security' },
-              { icon: '🔄', title: 'Change Regularly', desc: 'Update your password every 3-6 months' },
-              { icon: '🚫', title: 'Never Share', desc: 'Keep your credentials private and secure' },
-              { icon: '💾', title: 'Backup Important Data', desc: 'Regularly backup your database from Pricing Settings' },
-              { icon: '📱', title: 'Monitor Activity', desc: 'Check Admin Logs regularly for suspicious activity' }
+              { icon: '🔐', title: 'Use Strong Passwords', desc: 'Combine letters, numbers, and symbols', color: '#007bff' },
+              { icon: '🔄', title: 'Change Regularly', desc: 'Update your password every 3-6 months', color: '#28a745' },
+              { icon: '🚫', title: 'Never Share', desc: 'Keep your credentials private and secure', color: '#dc3545' },
+              { icon: '💾', title: 'Backup Important Data', desc: 'Use Admin Logs page to backup database', color: '#ffc107' },
+              { icon: '📊', title: 'Monitor Activity', desc: 'Check Admin Logs for suspicious activity', color: '#6f42c1' }
             ].map((tip, idx) => (
               <div key={idx} style={{
-                padding: '20px',
+                padding: '16px',
                 backgroundColor: '#f9fafb',
                 borderRadius: '12px',
-                border: '2px solid #f3f4f6',
+                border: '1px solid #e5e7eb',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '16px',
                 transition: 'all 0.3s ease'
               }}
               onMouseEnter={(e) => {
@@ -358,21 +361,31 @@ export default function Settings() {
                 e.currentTarget.style.backgroundColor = '#f9fafb';
                 e.currentTarget.style.transform = 'translateX(0)';
               }}>
-                <div style={{ display: 'flex', gap: '16px', alignItems: 'start' }}>
-                  <span style={{ fontSize: '32px' }}>{tip.icon}</span>
-                  <div>
-                    <h3 style={{ 
-                      fontSize: '16px', 
-                      fontWeight: '600', 
-                      marginBottom: '6px',
-                      color: '#1f2937'
-                    }}>
-                      {tip.title}
-                    </h3>
-                    <p style={{ fontSize: '14px', color: '#6b7280', lineHeight: '1.5' }}>
-                      {tip.desc}
-                    </p>
-                  </div>
+                <div style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '10px',
+                  backgroundColor: tip.color + '20',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '24px',
+                  flexShrink: 0
+                }}>
+                  {tip.icon}
+                </div>
+                <div>
+                  <h3 style={{ 
+                    fontSize: '15px', 
+                    fontWeight: '600', 
+                    marginBottom: '4px',
+                    color: '#1f2937'
+                  }}>
+                    {tip.title}
+                  </h3>
+                  <p style={{ fontSize: '13px', color: '#6b7280', lineHeight: '1.5', margin: 0 }}>
+                    {tip.desc}
+                  </p>
                 </div>
               </div>
             ))}

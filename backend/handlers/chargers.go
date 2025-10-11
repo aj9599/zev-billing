@@ -3,19 +3,25 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/aj9599/zev-billing/backend/models"
+	"github.com/aj9599/zev-billing/backend/services"
 	"github.com/gorilla/mux"
 )
 
 type ChargerHandler struct {
-	db *sql.DB
+	db            *sql.DB
+	dataCollector *services.DataCollector
 }
 
-func NewChargerHandler(db *sql.DB) *ChargerHandler {
-	return &ChargerHandler{db: db}
+func NewChargerHandler(db *sql.DB, dataCollector *services.DataCollector) *ChargerHandler {
+	return &ChargerHandler{
+		db:            db,
+		dataCollector: dataCollector,
+	}
 }
 
 func (h *ChargerHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -118,6 +124,12 @@ func (h *ChargerHandler) Create(w http.ResponseWriter, r *http.Request) {
 	id, _ := result.LastInsertId()
 	c.ID = int(id)
 
+	// If it's a UDP charger, restart UDP listeners
+	if c.ConnectionType == "udp" {
+		log.Printf("New UDP charger created, restarting UDP listeners...")
+		go h.dataCollector.RestartUDPListeners()
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(c)
@@ -153,6 +165,13 @@ func (h *ChargerHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	c.ID = id
+
+	// If it's a UDP charger, restart UDP listeners
+	if c.ConnectionType == "udp" {
+		log.Printf("UDP charger updated, restarting UDP listeners...")
+		go h.dataCollector.RestartUDPListeners()
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(c)
 }
@@ -165,10 +184,20 @@ func (h *ChargerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if it's a UDP charger
+	var connectionType string
+	h.db.QueryRow("SELECT connection_type FROM chargers WHERE id = ?", id).Scan(&connectionType)
+
 	_, err = h.db.Exec("DELETE FROM chargers WHERE id = ?", id)
 	if err != nil {
 		http.Error(w, "Failed to delete charger", http.StatusInternalServerError)
 		return
+	}
+
+	// If it was a UDP charger, restart UDP listeners
+	if connectionType == "udp" {
+		log.Printf("UDP charger deleted, restarting UDP listeners...")
+		go h.dataCollector.RestartUDPListeners()
 	}
 
 	w.WriteHeader(http.StatusNoContent)

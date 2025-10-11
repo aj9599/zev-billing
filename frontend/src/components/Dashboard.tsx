@@ -12,7 +12,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 60000); // Refresh every minute
+    const interval = setInterval(loadData, 60000);
     return () => clearInterval(interval);
   }, [period]);
 
@@ -52,9 +52,22 @@ export default function Dashboard() {
 
   return (
     <div>
-      <h1 style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '30px' }}>
-        Dashboard
-      </h1>
+      <div style={{ marginBottom: '30px' }}>
+        <h1 style={{ 
+          fontSize: '36px', 
+          fontWeight: '800', 
+          marginBottom: '8px',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text'
+        }}>
+          Dashboard
+        </h1>
+        <p style={{ color: '#6b7280', fontSize: '16px' }}>
+          Real-time overview of your energy management system
+        </p>
+      </div>
 
       <div style={{
         display: 'grid',

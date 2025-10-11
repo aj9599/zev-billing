@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Eye } from 'lucide-react';
+import { Plus, Eye, FileText } from 'lucide-react';
 import { api } from '../api/client';
 import type { Invoice, Building, User } from '../types';
 
@@ -86,12 +86,31 @@ export default function Billing() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-        <h1 style={{ fontSize: '32px', fontWeight: 'bold' }}>Billing & Invoices</h1>
+        <div>
+          <h1 style={{ 
+            fontSize: '36px', 
+            fontWeight: '800', 
+            marginBottom: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text'
+          }}>
+            <FileText size={36} style={{ color: '#667eea' }} />
+            Billing & Invoices
+          </h1>
+          <p style={{ color: '#6b7280', fontSize: '16px' }}>
+            Generate and manage billing invoices
+          </p>
+        </div>
         <button
           onClick={() => setShowGenerateModal(true)}
           style={{
             display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
-            backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px'
+            backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
           }}
         >
           <Plus size={18} />
@@ -292,7 +311,7 @@ export default function Billing() {
 
             <button onClick={() => setSelectedInvoice(null)} style={{
               width: '100%', marginTop: '30px', padding: '12px', backgroundColor: '#007bff', color: 'white',
-              border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500'
+              border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
             }}>
               Close
             </button>

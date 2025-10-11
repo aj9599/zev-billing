@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Info, HelpCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Info, HelpCircle, Zap, Download } from 'lucide-react';
 import { api } from '../api/client';
 import type { Meter, Building, User } from '../types';
 
@@ -137,6 +137,27 @@ export default function Meters() {
     setShowModal(true);
   };
 
+  const handleExport = async () => {
+    try {
+      const response = await fetch('/api/billing/export?type=meters', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `meters-export-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Failed to export data');
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       name: '', meter_type: 'total_meter', building_id: 0, user_id: undefined,
@@ -184,7 +205,7 @@ export default function Meters() {
 
         <div style={{ lineHeight: '1.8', color: '#374151' }}>
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            🔌 HTTP Connection (Recommended for Loxone)
+            📌 HTTP Connection (Recommended for Loxone)
           </h3>
           <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
             <p><strong>Loxone Virtual Output Setup:</strong></p>
@@ -270,13 +291,42 @@ export default function Meters() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-        <h1 style={{ fontSize: '32px', fontWeight: 'bold' }}>Power Meters</h1>
+        <div>
+          <h1 style={{ 
+            fontSize: '36px', 
+            fontWeight: '800', 
+            marginBottom: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text'
+          }}>
+            <Zap size={36} style={{ color: '#667eea' }} />
+            Power Meters
+          </h1>
+          <p style={{ color: '#6b7280', fontSize: '16px' }}>
+            Monitor and manage power consumption meters
+          </p>
+        </div>
         <div style={{ display: 'flex', gap: '12px' }}>
+          <button
+            onClick={handleExport}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
+              backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
+            }}
+          >
+            <Download size={18} />
+            Export Data
+          </button>
           <button
             onClick={() => setShowInstructions(true)}
             style={{
               display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
-              backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px'
+              backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
             }}
           >
             <HelpCircle size={18} />
@@ -286,7 +336,7 @@ export default function Meters() {
             onClick={() => { resetForm(); setShowModal(true); }}
             style={{
               display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
-              backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px'
+              backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
             }}
           >
             <Plus size={18} />

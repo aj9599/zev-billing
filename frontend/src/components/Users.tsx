@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Users as UsersIcon } from 'lucide-react';
 import { api } from '../api/client';
 import type { User, Building } from '../types';
 
@@ -74,7 +74,26 @@ export default function Users() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-        <h1 style={{ fontSize: '32px', fontWeight: 'bold' }}>Users</h1>
+        <div>
+          <h1 style={{ 
+            fontSize: '36px', 
+            fontWeight: '800', 
+            marginBottom: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text'
+          }}>
+            <UsersIcon size={36} style={{ color: '#667eea' }} />
+            Users
+          </h1>
+          <p style={{ color: '#6b7280', fontSize: '16px' }}>
+            Manage tenants and building occupants
+          </p>
+        </div>
         <button
           onClick={() => { resetForm(); setShowModal(true); }}
           style={{
@@ -86,7 +105,8 @@ export default function Users() {
             color: 'white',
             border: 'none',
             borderRadius: '6px',
-            fontSize: '14px'
+            fontSize: '14px',
+            cursor: 'pointer'
           }}
         >
           <Plus size={18} />

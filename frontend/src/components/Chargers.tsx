@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, HelpCircle, Info } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, HelpCircle, Info, Car, Download } from 'lucide-react';
 import { api } from '../api/client';
 import type { Charger, Building } from '../types';
 
@@ -136,6 +136,27 @@ export default function Chargers() {
     setShowModal(true);
   };
 
+  const handleExport = async () => {
+    try {
+      const response = await fetch('/api/billing/export?type=chargers', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `chargers-export-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Failed to export data');
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       name: '', brand: 'weidmuller', preset: 'weidmuller', building_id: 0,
@@ -177,10 +198,10 @@ export default function Chargers() {
 
         <div style={{ lineHeight: '1.8', color: '#374151' }}>
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            🚗 WeidmÃ¼ller Charger Setup
+            🚗 Weidmüller Charger Setup
           </h3>
           <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
-            <p><strong>WeidmÃ¼ller chargers require 4 data points:</strong></p>
+            <p><strong>Weidmüller chargers require 4 data points:</strong></p>
             <ul style={{ marginLeft: '20px', marginTop: '10px' }}>
               <li><strong>Power Consumed:</strong> Current power consumption in kWh</li>
               <li><strong>State:</strong> Charging state (charging, idle, error, etc.)</li>
@@ -277,13 +298,42 @@ export default function Chargers() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-        <h1 style={{ fontSize: '32px', fontWeight: 'bold' }}>Car Chargers</h1>
+        <div>
+          <h1 style={{ 
+            fontSize: '36px', 
+            fontWeight: '800', 
+            marginBottom: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text'
+          }}>
+            <Car size={36} style={{ color: '#667eea' }} />
+            Car Chargers
+          </h1>
+          <p style={{ color: '#6b7280', fontSize: '16px' }}>
+            Manage EV charging infrastructure
+          </p>
+        </div>
         <div style={{ display: 'flex', gap: '12px' }}>
+          <button
+            onClick={handleExport}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
+              backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
+            }}
+          >
+            <Download size={18} />
+            Export Data
+          </button>
           <button
             onClick={() => setShowInstructions(true)}
             style={{
               display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
-              backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px'
+              backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
             }}
           >
             <HelpCircle size={18} />
@@ -293,7 +343,7 @@ export default function Chargers() {
             onClick={() => { resetForm(); setShowModal(true); }}
             style={{
               display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
-              backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px'
+              backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
             }}
           >
             <Plus size={18} />
@@ -325,7 +375,7 @@ export default function Chargers() {
                 </td>
                 <td style={{ padding: '16px' }}>{charger.connection_type.toUpperCase()}</td>
                 <td style={{ padding: '16px' }}>
-                  {charger.supports_priority ? '✓' : '✗'}
+                  {charger.supports_priority ? '✔' : '✗'}
                 </td>
                 <td style={{ padding: '16px' }}>
                   <span style={{
@@ -399,10 +449,10 @@ export default function Chargers() {
                   setFormData({ ...formData, brand: e.target.value, preset: e.target.value });
                 }}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
-                  <option value="weidmuller">WeidmÃ¼ller</option>
+                  <option value="weidmuller">Weidmüller</option>
                 </select>
                 <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                  WeidmÃ¼ller chargers require 4 data points: power, state, user ID, and mode
+                  Weidmüller chargers require 4 data points: power, state, user ID, and mode
                 </p>
               </div>
 
@@ -426,7 +476,7 @@ export default function Chargers() {
 
               <div style={{ marginTop: '20px', padding: '20px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
                 <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>
-                  Connection Configuration (WeidmÃ¼ller - 4 Data Points)
+                  Connection Configuration (Weidmüller - 4 Data Points)
                 </h3>
 
                 {formData.connection_type === 'http' && (

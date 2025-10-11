@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Download, Database } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, DollarSign } from 'lucide-react';
 import { api } from '../api/client';
 import type { BillingSettings, Building } from '../types';
 
@@ -32,7 +32,7 @@ export default function PricingSettings() {
         api.getBuildings()
       ]);
       setSettings(Array.isArray(settingsData) ? settingsData : []);
-      setBuildings(buildingsData.filter(b => !b.is_group)); // Filter out groups for cleaner list
+      setBuildings(buildingsData.filter(b => !b.is_group));
       console.log('Loaded buildings:', buildingsData);
     } catch (err) {
       console.error('Failed to load data:', err);
@@ -78,50 +78,6 @@ export default function PricingSettings() {
     setShowModal(true);
   };
 
-  const handleBackup = async () => {
-    try {
-      const response = await fetch('/api/billing/backup', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `zev-billing-backup-${new Date().toISOString().split('T')[0]}.db`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-      setMessage('Database backup downloaded successfully!');
-    } catch (err) {
-      setMessage('Failed to download backup');
-    }
-  };
-
-  const handleExport = async (type: 'meters' | 'chargers') => {
-    try {
-      const response = await fetch(`/api/billing/export?type=${type}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `zev-export-${type}-${new Date().toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-      setMessage(`${type === 'meters' ? 'Meter' : 'Charger'} data exported successfully!`);
-    } catch (err) {
-      setMessage('Failed to export data');
-    }
-  };
-
   const resetForm = () => {
     setFormData({
       building_id: 0,
@@ -139,37 +95,33 @@ export default function PricingSettings() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h1 style={{ fontSize: '32px', fontWeight: 'bold' }}>Pricing Settings</h1>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button onClick={handleBackup} style={{
-            display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
-            backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px'
+        <div>
+          <h1 style={{ 
+            fontSize: '36px', 
+            fontWeight: '800', 
+            marginBottom: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text'
           }}>
-            <Database size={18} />
-            Backup Database
-          </button>
-          <button onClick={() => handleExport('meters')} style={{
-            display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
-            backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px'
-          }}>
-            <Download size={18} />
-            Export Meters
-          </button>
-          <button onClick={() => handleExport('chargers')} style={{
-            display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
-            backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px'
-          }}>
-            <Download size={18} />
-            Export Chargers
-          </button>
-          <button onClick={() => { resetForm(); setShowModal(true); }} style={{
-            display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
-            backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px'
-          }}>
-            <Plus size={18} />
-            Add Pricing
-          </button>
+            <DollarSign size={36} style={{ color: '#667eea' }} />
+            Pricing Settings
+          </h1>
+          <p style={{ color: '#6b7280', fontSize: '16px' }}>
+            Configure electricity and charging rates
+          </p>
         </div>
+        <button onClick={() => { resetForm(); setShowModal(true); }} style={{
+          display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
+          backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
+        }}>
+          <Plus size={18} />
+          Add Pricing
+        </button>
       </div>
 
       {message && (
