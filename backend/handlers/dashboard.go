@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"log"
@@ -26,42 +27,43 @@ func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
 	var stats models.DashboardStats
 
-	// Get total counts with error handling
-	if err := h.db.QueryRow("SELECT COUNT(*) FROM users").Scan(&stats.TotalUsers); err != nil {
+	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users").Scan(&stats.TotalUsers); err != nil {
 		log.Printf("Error counting users: %v", err)
 		stats.TotalUsers = 0
 	}
 	
-	if err := h.db.QueryRow("SELECT COUNT(*) FROM buildings").Scan(&stats.TotalBuildings); err != nil {
+	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM buildings").Scan(&stats.TotalBuildings); err != nil {
 		log.Printf("Error counting buildings: %v", err)
 		stats.TotalBuildings = 0
 	}
 	
-	if err := h.db.QueryRow("SELECT COUNT(*) FROM meters").Scan(&stats.TotalMeters); err != nil {
+	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM meters").Scan(&stats.TotalMeters); err != nil {
 		log.Printf("Error counting meters: %v", err)
 		stats.TotalMeters = 0
 	}
 	
-	if err := h.db.QueryRow("SELECT COUNT(*) FROM chargers").Scan(&stats.TotalChargers); err != nil {
+	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM chargers").Scan(&stats.TotalChargers); err != nil {
 		log.Printf("Error counting chargers: %v", err)
 		stats.TotalChargers = 0
 	}
 	
-	if err := h.db.QueryRow("SELECT COUNT(*) FROM meters WHERE is_active = 1").Scan(&stats.ActiveMeters); err != nil {
+	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM meters WHERE is_active = 1").Scan(&stats.ActiveMeters); err != nil {
 		log.Printf("Error counting active meters: %v", err)
 		stats.ActiveMeters = 0
 	}
 	
-	if err := h.db.QueryRow("SELECT COUNT(*) FROM chargers WHERE is_active = 1").Scan(&stats.ActiveChargers); err != nil {
+	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM chargers WHERE is_active = 1").Scan(&stats.ActiveChargers); err != nil {
 		log.Printf("Error counting active chargers: %v", err)
 		stats.ActiveChargers = 0
 	}
 
-	// Get today's consumption
 	today := time.Now().Format("2006-01-02")
-	if err := h.db.QueryRow(`
+	if err := h.db.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(consumption_kwh), 0) 
 		FROM meter_readings 
 		WHERE DATE(reading_time) = ?
@@ -70,9 +72,8 @@ func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 		stats.TodayConsumption = 0
 	}
 
-	// Get this month's consumption
 	startOfMonth := time.Now().AddDate(0, 0, -time.Now().Day()+1).Format("2006-01-02")
-	if err := h.db.QueryRow(`
+	if err := h.db.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(consumption_kwh), 0) 
 		FROM meter_readings 
 		WHERE reading_time >= ?
@@ -93,6 +94,9 @@ func (h *DashboardHandler) GetConsumption(w http.ResponseWriter, r *http.Request
 		}
 	}()
 
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
 	period := r.URL.Query().Get("period")
 	if period == "" {
 		period = "24h"
@@ -112,7 +116,7 @@ func (h *DashboardHandler) GetConsumption(w http.ResponseWriter, r *http.Request
 		startTime = time.Now().Add(-24 * time.Hour)
 	}
 
-	rows, err := h.db.Query(`
+	rows, err := h.db.QueryContext(ctx, `
 		SELECT m.meter_type, mr.reading_time, mr.consumption_kwh
 		FROM meter_readings mr
 		JOIN meters m ON mr.meter_id = m.id
@@ -149,6 +153,9 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		}
 	}()
 
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
 	period := r.URL.Query().Get("period")
 	if period == "" {
 		period = "24h"
@@ -170,8 +177,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		startTime = time.Now().Add(-24 * time.Hour)
 	}
 
-	// Get all buildings
-	buildingRows, err := h.db.Query(`
+	buildingRows, err := h.db.QueryContext(ctx, `
 		SELECT id, name 
 		FROM buildings 
 		WHERE COALESCE(is_group, 0) = 0
@@ -201,9 +207,16 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 
 	buildings := []BuildingConsumption{}
 
-	buildingCount := 0
 	for buildingRows.Next() {
-		buildingCount++
+		select {
+		case <-ctx.Done():
+			log.Printf("Context cancelled, stopping building processing")
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(buildings)
+			return
+		default:
+		}
+
 		var buildingID int
 		var buildingName string
 		if err := buildingRows.Scan(&buildingID, &buildingName); err != nil {
@@ -219,16 +232,19 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			Meters:       []MeterData{},
 		}
 
-		// Get all meters for this building
-		meterRows, err := h.db.Query(`
+		meterCtx, meterCancel := context.WithTimeout(ctx, 3*time.Second)
+		
+		log.Printf("  Querying meters for building %d...", buildingID)
+		meterRows, err := h.db.QueryContext(meterCtx, `
 			SELECT m.id, m.name, m.meter_type, m.user_id
 			FROM meters m
-			WHERE m.building_id = ? AND m.is_active = 1
+			WHERE m.building_id = ? AND COALESCE(m.is_active, 1) = 1
 			ORDER BY m.meter_type, m.name
 		`, buildingID)
+		meterCancel()
 
 		if err != nil {
-			log.Printf("Error querying meters for building %d: %v", buildingID, err)
+			log.Printf("  Error querying meters for building %d: %v", buildingID, err)
 			buildings = append(buildings, building)
 			continue
 		}
@@ -241,30 +257,35 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			var userID sql.NullInt64
 			
 			if err := meterRows.Scan(&meterID, &meterName, &meterType, &userID); err != nil {
-				log.Printf("Error scanning meter row: %v", err)
+				log.Printf("  Error scanning meter row: %v", err)
 				continue
 			}
 
-			// Get user name if applicable
+			log.Printf("    Found meter ID: %d, Name: %s, Type: %s", meterID, meterName, meterType)
+
 			userName := ""
 			if userID.Valid {
-				err := h.db.QueryRow(`
+				userCtx, userCancel := context.WithTimeout(ctx, 1*time.Second)
+				err := h.db.QueryRowContext(userCtx, `
 					SELECT first_name || ' ' || last_name 
 					FROM users 
 					WHERE id = ?
 				`, userID.Int64).Scan(&userName)
+				userCancel()
+				
 				if err != nil {
-					log.Printf("Error getting user name for user %d: %v", userID.Int64, err)
+					log.Printf("    Error getting user name for user %d: %v", userID.Int64, err)
 				}
 			}
 
-			// Get consumption data for this meter
-			dataRows, err := h.db.Query(`
+			dataCtx, dataCancel := context.WithTimeout(ctx, 3*time.Second)
+			dataRows, err := h.db.QueryContext(dataCtx, `
 				SELECT reading_time, consumption_kwh
 				FROM meter_readings
 				WHERE meter_id = ? AND reading_time >= ?
 				ORDER BY reading_time ASC
 			`, meterID, startTime)
+			dataCancel()
 
 			meterData := MeterData{
 				MeterID:   meterID,
@@ -275,7 +296,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			}
 
 			if err != nil {
-				log.Printf("Error querying readings for meter %d: %v", meterID, err)
+				log.Printf("    Error querying readings for meter %d: %v", meterID, err)
 				building.Meters = append(building.Meters, meterData)
 				continue
 			}
@@ -295,13 +316,13 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			}
 			dataRows.Close()
 
-			log.Printf("  Meter ID: %d, Name: %s, Data points: %d", meterID, meterName, dataCount)
+			log.Printf("    Meter ID: %d has %d data points", meterID, dataCount)
 
 			building.Meters = append(building.Meters, meterData)
 		}
 		meterRows.Close()
 
-		log.Printf("Building %d has %d meters", buildingID, meterCount)
+		log.Printf("  Building %d has %d meters", buildingID, meterCount)
 		buildings = append(buildings, building)
 	}
 
@@ -321,12 +342,15 @@ func (h *DashboardHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
 	limit := r.URL.Query().Get("limit")
 	if limit == "" {
 		limit = "100"
 	}
 
-	rows, err := h.db.Query(`
+	rows, err := h.db.QueryContext(ctx, `
 		SELECT id, action, details, user_id, ip_address, created_at
 		FROM admin_logs
 		ORDER BY created_at DESC

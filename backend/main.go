@@ -20,7 +20,6 @@ import (
 
 var dataCollector *services.DataCollector
 
-// Panic recovery middleware
 func recoverMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
@@ -39,7 +38,6 @@ func recoverMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// Request logging middleware
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -53,29 +51,23 @@ func main() {
 	log.Println("Starting ZEV Billing System...")
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	// Load configuration
 	cfg := config.Load()
 
-	// Initialize database
 	db, err := database.InitDB(cfg.DatabasePath)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 	defer db.Close()
 
-	// Run migrations
 	if err := database.RunMigrations(db); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
-	// Initialize services
 	dataCollector = services.NewDataCollector(db)
 	billingService := services.NewBillingService(db)
 
-	// Start data collection in background
 	go dataCollector.Start()
 
-	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(db, cfg.JWTSecret)
 	userHandler := handlers.NewUserHandler(db)
 	buildingHandler := handlers.NewBuildingHandler(db)
@@ -84,59 +76,45 @@ func main() {
 	billingHandler := handlers.NewBillingHandler(db, billingService)
 	dashboardHandler := handlers.NewDashboardHandler(db)
 
-	// Setup router
 	r := mux.NewRouter()
 
-	// Apply global middlewares
 	r.Use(recoverMiddleware)
 	r.Use(loggingMiddleware)
 
-	// Public routes
 	r.HandleFunc("/api/auth/login", authHandler.Login).Methods("POST")
 	r.HandleFunc("/api/health", healthCheck).Methods("GET")
 
-	// Protected routes
 	api := r.PathPrefix("/api").Subrouter()
 	api.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 
-	// Auth routes
 	api.HandleFunc("/auth/change-password", authHandler.ChangePassword).Methods("POST")
-
-	// Debug/Status route
 	api.HandleFunc("/debug/status", debugStatusHandler).Methods("GET")
-
-	// System routes
 	api.HandleFunc("/system/reboot", rebootHandler).Methods("POST")
 
-	// User routes
 	api.HandleFunc("/users", userHandler.List).Methods("GET")
 	api.HandleFunc("/users", userHandler.Create).Methods("POST")
 	api.HandleFunc("/users/{id}", userHandler.Get).Methods("GET")
 	api.HandleFunc("/users/{id}", userHandler.Update).Methods("PUT")
 	api.HandleFunc("/users/{id}", userHandler.Delete).Methods("DELETE")
 
-	// Building routes
 	api.HandleFunc("/buildings", buildingHandler.List).Methods("GET")
 	api.HandleFunc("/buildings", buildingHandler.Create).Methods("POST")
 	api.HandleFunc("/buildings/{id}", buildingHandler.Get).Methods("GET")
 	api.HandleFunc("/buildings/{id}", buildingHandler.Update).Methods("PUT")
 	api.HandleFunc("/buildings/{id}", buildingHandler.Delete).Methods("DELETE")
 
-	// Meter routes
 	api.HandleFunc("/meters", meterHandler.List).Methods("GET")
 	api.HandleFunc("/meters", meterHandler.Create).Methods("POST")
 	api.HandleFunc("/meters/{id}", meterHandler.Get).Methods("GET")
 	api.HandleFunc("/meters/{id}", meterHandler.Update).Methods("PUT")
 	api.HandleFunc("/meters/{id}", meterHandler.Delete).Methods("DELETE")
 
-	// Charger routes
 	api.HandleFunc("/chargers", chargerHandler.List).Methods("GET")
 	api.HandleFunc("/chargers", chargerHandler.Create).Methods("POST")
 	api.HandleFunc("/chargers/{id}", chargerHandler.Get).Methods("GET")
 	api.HandleFunc("/chargers/{id}", chargerHandler.Update).Methods("PUT")
 	api.HandleFunc("/chargers/{id}", chargerHandler.Delete).Methods("DELETE")
 
-	// Billing routes
 	api.HandleFunc("/billing/settings", billingHandler.GetSettings).Methods("GET")
 	api.HandleFunc("/billing/settings", billingHandler.CreateSettings).Methods("POST")
 	api.HandleFunc("/billing/settings", billingHandler.UpdateSettings).Methods("PUT")
@@ -147,13 +125,11 @@ func main() {
 	api.HandleFunc("/billing/backup", billingHandler.BackupDatabase).Methods("GET")
 	api.HandleFunc("/billing/export", billingHandler.ExportData).Methods("GET")
 
-	// Dashboard routes
 	api.HandleFunc("/dashboard/stats", dashboardHandler.GetStats).Methods("GET")
 	api.HandleFunc("/dashboard/consumption", dashboardHandler.GetConsumption).Methods("GET")
 	api.HandleFunc("/dashboard/consumption-by-building", dashboardHandler.GetConsumptionByBuilding).Methods("GET")
 	api.HandleFunc("/dashboard/logs", dashboardHandler.GetLogs).Methods("GET")
 
-	// CORS configuration
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:5173", "http://localhost:4173", "*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -164,7 +140,6 @@ func main() {
 
 	handler := c.Handler(r)
 
-	// Start server
 	server := &http.Server{
 		Addr:         cfg.ServerAddress,
 		Handler:      handler,
@@ -206,16 +181,13 @@ func rebootHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "rebooting"})
 
-	// Restart the service after a short delay
 	go func() {
 		time.Sleep(1 * time.Second)
 		log.Println("Executing service restart...")
 		
-		// Try to restart via systemctl
 		cmd := exec.Command("systemctl", "restart", "zev-billing.service")
 		if err := cmd.Run(); err != nil {
 			log.Printf("Failed to restart via systemctl: %v", err)
-			// Fallback: exit the process, systemd will restart it
 			os.Exit(0)
 		}
 	}()

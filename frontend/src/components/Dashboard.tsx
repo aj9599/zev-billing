@@ -23,15 +23,14 @@ interface BuildingConsumption {
   meters: MeterData[];
 }
 
-// Color mapping for different meter types
 const METER_COLORS: Record<string, string> = {
-  'apartment_meter': '#10b981',    // Green
-  'heating_meter': '#f59e0b',      // Orange
-  'solar_meter': '#fbbf24',        // Yellow
-  'total_meter': '#3b82f6',        // Blue
-  'water_meter': '#06b6d4',        // Cyan
-  'gas_meter': '#8b5cf6',          // Purple
-  'default': '#6b7280'             // Gray
+  'apartment_meter': '#10b981',
+  'heating_meter': '#f59e0b',
+  'solar_meter': '#fbbf24',
+  'total_meter': '#3b82f6',
+  'water_meter': '#06b6d4',
+  'gas_meter': '#8b5cf6',
+  'default': '#6b7280'
 };
 
 function getMeterColor(meterType: string): string {
@@ -192,7 +191,6 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* Period Selector */}
       <div style={{
         backgroundColor: 'white',
         padding: '20px',
@@ -223,18 +221,13 @@ export default function Dashboard() {
         </select>
       </div>
 
-      {/* Building Consumption Charts */}
       {buildingData.length > 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
           {buildingData.map((building) => {
-            // Prepare chart data - merge all meter readings by timestamp
             const timeMap = new Map<string, any>();
-            
-            // Add null checks for meters array
             const meters = building.meters || [];
             
             meters.forEach(meter => {
-              // Add null check for data array
               const readings = meter.data || [];
               readings.forEach(reading => {
                 const time = new Date(reading.timestamp).toLocaleTimeString('de-CH', { 
@@ -275,7 +268,6 @@ export default function Dashboard() {
                   {building.building_name}
                 </h3>
 
-                {/* Legend */}
                 {meters.length > 0 && (
                   <div style={{
                     display: 'flex',

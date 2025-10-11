@@ -11,7 +11,6 @@ import (
 func InitDB(dataSourceName string) (*sql.DB, error) {
 	log.Printf("Initializing database: %s", dataSourceName)
 	
-	// Add query parameters for better concurrency handling and reliability
 	dsn := dataSourceName + "?_journal_mode=WAL&_busy_timeout=10000&_synchronous=NORMAL&_cache_size=1000&_foreign_keys=ON"
 	
 	db, err := sql.Open("sqlite3", dsn)
@@ -19,18 +18,15 @@ func InitDB(dataSourceName string) (*sql.DB, error) {
 		return nil, err
 	}
 
-	// Set connection pool settings - SQLite works best with limited connections
-	db.SetMaxOpenConns(1)  // Single writer for SQLite
+	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 	db.SetConnMaxLifetime(time.Hour)
 	db.SetConnMaxIdleTime(10 * time.Minute)
 
-	// Test connection
 	if err := db.Ping(); err != nil {
 		return nil, err
 	}
 
-	// Verify WAL mode is enabled
 	var journalMode string
 	err = db.QueryRow("PRAGMA journal_mode").Scan(&journalMode)
 	if err != nil {
@@ -39,7 +35,6 @@ func InitDB(dataSourceName string) (*sql.DB, error) {
 		log.Printf("Database journal mode: %s", journalMode)
 	}
 
-	// Verify foreign keys are enabled
 	var foreignKeys int
 	err = db.QueryRow("PRAGMA foreign_keys").Scan(&foreignKeys)
 	if err != nil {
@@ -48,7 +43,6 @@ func InitDB(dataSourceName string) (*sql.DB, error) {
 		log.Printf("Foreign keys enabled: %v", foreignKeys == 1)
 	}
 
-	// Run a simple query to ensure the database is accessible
 	var count int
 	err = db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table'").Scan(&count)
 	if err != nil {

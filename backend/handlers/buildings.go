@@ -46,7 +46,6 @@ func (h *BuildingHandler) List(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// If it's a group, load associated buildings
 		if b.IsGroup {
 			b.GroupBuildings = []int{}
 			groupRows, err := h.db.Query("SELECT building_id FROM building_groups WHERE group_id = ?", b.ID)
@@ -98,10 +97,8 @@ func (h *BuildingHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Initialize GroupBuildings
 	b.GroupBuildings = []int{}
 
-	// If it's a group, load associated buildings
 	if b.IsGroup {
 		rows, err := h.db.Query("SELECT building_id FROM building_groups WHERE group_id = ?", b.ID)
 		if err == nil {
@@ -129,13 +126,11 @@ func (h *BuildingHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Creating building: %s, is_group: %v", b.Name, b.IsGroup)
 
-	// Ensure is_group is properly set (0 or 1)
 	isGroupVal := 0
 	if b.IsGroup {
 		isGroupVal = 1
 	}
 
-	// Set defaults if empty
 	if b.AddressCountry == "" {
 		b.AddressCountry = "Switzerland"
 	}
@@ -158,12 +153,10 @@ func (h *BuildingHandler) Create(w http.ResponseWriter, r *http.Request) {
 	b.ID = int(id)
 	b.IsGroup = isGroupVal == 1
 
-	// Initialize GroupBuildings as empty array
 	if b.GroupBuildings == nil {
 		b.GroupBuildings = []int{}
 	}
 
-	// If it's a group, save building associations
 	if b.IsGroup && len(b.GroupBuildings) > 0 {
 		for _, buildingID := range b.GroupBuildings {
 			_, err := h.db.Exec("INSERT INTO building_groups (group_id, building_id) VALUES (?, ?)", b.ID, buildingID)
@@ -195,7 +188,6 @@ func (h *BuildingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ensure is_group is properly set (0 or 1)
 	isGroupVal := 0
 	if b.IsGroup {
 		isGroupVal = 1
@@ -215,7 +207,6 @@ func (h *BuildingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update building groups
 	if b.IsGroup {
 		h.db.Exec("DELETE FROM building_groups WHERE group_id = ?", id)
 		if b.GroupBuildings != nil {
@@ -224,7 +215,6 @@ func (h *BuildingHandler) Update(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else {
-		// Remove from any groups if no longer a group
 		h.db.Exec("DELETE FROM building_groups WHERE group_id = ?", id)
 	}
 
@@ -246,7 +236,6 @@ func (h *BuildingHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete building groups first
 	h.db.Exec("DELETE FROM building_groups WHERE group_id = ? OR building_id = ?", id, id)
 
 	_, err = h.db.Exec("DELETE FROM buildings WHERE id = ?", id)
