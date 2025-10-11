@@ -1,459 +1,265 @@
-# ZEV Billing System - Complete Setup Guide
+# ZEV Billing System
 
-## Overview
-This is a complete Swiss ZEV (Zusammenschluss zum Eigenverbrauch) billing system with:
-- Go backend with RESTful API
-- React + TypeScript + Vite frontend
-- SQLite database
-- 15-minute interval data collection
-- Swiss ZEV standard billing calculations
-- Modbus TCP, HTTP, UDP support for meters/chargers
+A complete Swiss ZEV (Zusammenschluss zum Eigenverbrauch) billing and monitoring system for multi-apartment buildings with solar power and EV charging.
 
-## Quick Start on Raspberry Pi
+## ✨ Features
 
-### Prerequisites
-```bash
-# Update system
-sudo apt update && sudo apt upgrade -y
+- 📊 **Real-time Monitoring** - Dashboard with live consumption data
+- ⚡ **Swiss ZEV Compliance** - 15-minute interval data collection
+- 🏢 **Multi-Building Support** - Manage multiple buildings and building groups
+- 👥 **User Management** - Track individual apartment consumption
+- 🔌 **Flexible Meter Integration** - HTTP, UDP, and Modbus TCP support
+- 🚗 **EV Charger Support** - Priority vs normal charging modes (WeidmÃ¼ller)
+- ☀️ **Solar Power Tracking** - Separate pricing for solar vs grid power
+- 💰 **Automated Billing** - Generate invoices based on consumption
+- 📱 **Modern Web Interface** - Clean, responsive React frontend
+- 🔐 **Secure** - JWT authentication, encrypted passwords
 
-# Install Go 1.21+
-wget https://go.dev/dl/go1.21.5.linux-arm64.tar.gz
-sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.21.5.linux-arm64.tar.gz
-echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
-source ~/.bashrc
-
-# Install Node.js 18+
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt install -y nodejs
-
-# Verify installations
-go version
-node --version
-npm --version
-```
-
-### Installation
+## 🚀 Quick Start (Raspberry Pi)
 
 ```bash
-# Clone repository
-git clone https://github.com/aj9599/zev-billing.git
-cd zev-billing
-
-# Setup backend
-cd backend
-go mod download
-go build -o zev-billing
-
-# Setup frontend
-cd ../frontend
-npm install
-npm run build
-
-# Return to root
-cd ..
+# One-command installation
+curl -fsSL https://raw.githubusercontent.com/aj9599/zev-billing/main/install.sh -o install.sh
+chmod +x install.sh
+sudo ./install.sh
 ```
 
-### Running the System
+Access at: `http://YOUR_PI_IP`
 
-```bash
-# Start backend (from root directory)
-cd backend
-./zev-billing
+**Default credentials:** `admin` / `admin123` ⚠️ Change immediately!
 
-# In another terminal, serve frontend (production)
-cd frontend
-npm run preview
+## 📚 Documentation
 
-# Or for development with hot reload
-npm run dev
-```
+- **[Installation Guide](INSTALLATION.md)** - Complete setup instructions
+- **[Loxone Integration](LOXONE_INTEGRATION.md)** - Connect your Loxone Miniserver
+- **[API Documentation](API.md)** - REST API reference (coming soon)
 
-### First Time Setup
+## 🔧 Technology Stack
 
-1. Backend starts on `http://localhost:8080`
-2. Frontend starts on `http://localhost:5173` (dev) or `http://localhost:4173` (preview)
-3. Default admin credentials:
-   - Username: `admin`
-   - Password: `admin123`
-   - **IMPORTANT: Change immediately after first login!**
+**Backend:**
+- Go 1.21+
+- SQLite with WAL mode
+- Gorilla Mux (routing)
+- JWT authentication
+- Automated data collection
 
-### Production Deployment
+**Frontend:**
+- React 18
+- TypeScript
+- Recharts (charts)
+- Lucide React (icons)
+- Vite (build tool)
 
-```bash
-# Create systemd service for backend
-sudo nano /etc/systemd/system/zev-billing.service
-```
+## 📋 System Requirements
 
-Add:
-```ini
-[Unit]
-Description=ZEV Billing Backend
-After=network.target
+**Minimum:**
+- Raspberry Pi 3 or equivalent Linux system
+- 1GB RAM
+- 2GB free disk space
+- Network connectivity
 
-[Service]
-Type=simple
-User=pi
-WorkingDirectory=/home/pi/zev-billing/backend
-ExecStart=/home/pi/zev-billing/backend/zev-billing
-Restart=always
+**Recommended:**
+- Raspberry Pi 4 (2GB+ RAM)
+- Wired Ethernet
+- Static IP address
+- UPS for power backup
 
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-# Enable and start service
-sudo systemctl enable zev-billing
-sudo systemctl start zev-billing
-
-# Serve frontend with nginx
-sudo apt install -y nginx
-sudo nano /etc/nginx/sites-available/zev-billing
-```
-
-Add:
-```nginx
-server {
-    listen 80;
-    server_name localhost;
-
-    root /home/pi/zev-billing/frontend/dist;
-    index index.html;
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    location /api {
-        proxy_pass http://localhost:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
-```bash
-sudo ln -s /etc/nginx/sites-available/zev-billing /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl restart nginx
-```
-
-## Project Structure
+## 🏗️ Architecture
 
 ```
-zev-billing/
-├── backend/
-│   ├── main.go                 # Main entry point
-│   ├── config/
-│   │   └── config.go           # Configuration
-│   ├── database/
-│   │   ├── db.go               # Database setup
-│   │   └── migrations.go       # Schema migrations
-│   ├── models/
-│   │   └── models.go           # Data models
-│   ├── handlers/
-│   │   ├── auth.go             # Authentication
-│   │   ├── users.go            # User management
-│   │   ├── buildings.go        # Building management
-│   │   ├── meters.go           # Meter management
-│   │   ├── chargers.go         # Charger management
-│   │   ├── billing.go          # Billing operations
-│   │   └── dashboard.go        # Dashboard data
-│   ├── middleware/
-│   │   └── auth.go             # Auth middleware
-│   ├── services/
-│   │   ├── data_collector.go  # 15-min data collection
-│   │   └── billing.go          # ZEV billing calculations
-│   └── go.mod
-├── frontend/
-│   ├── src/
-│   │   ├── App.tsx
-│   │   ├── main.tsx
-│   │   ├── api/
-│   │   │   └── client.ts       # API client
-│   │   ├── components/
-│   │   │   ├── Layout.tsx
-│   │   │   ├── Dashboard.tsx
-│   │   │   ├── Users.tsx
-│   │   │   ├── Buildings.tsx
-│   │   │   ├── Meters.tsx
-│   │   │   ├── Chargers.tsx
-│   │   │   ├── Billing.tsx
-│   │   │   ├── Settings.tsx
-│   │   │   └── Login.tsx
-│   │   └── types/
-│   │       └── index.ts
-│   ├── package.json
-│   ├── vite.config.ts
-│   └── tsconfig.json
-└── README.md
+┌─────────────────┐
+│  Loxone/Meters  │ ──→ HTTP/UDP/Modbus
+└─────────────────┘
+         ↓
+┌─────────────────┐
+│  Data Collector │ ──→ 15-min intervals
+└─────────────────┘
+         ↓
+┌─────────────────┐
+│  SQLite Database│ ──→ WAL mode
+└─────────────────┘
+         ↓
+┌─────────────────┐
+│   Go Backend    │ ──→ REST API (Port 8080)
+└─────────────────┘
+         ↓
+┌─────────────────┐
+│     Nginx       │ ──→ Reverse Proxy
+└─────────────────┘
+         ↓
+┌─────────────────┐
+│  React Frontend │ ──→ Web UI (Port 80)
+└─────────────────┘
 ```
 
-## API Endpoints
+## 💡 Use Cases
 
-### Authentication
-- `POST /api/auth/login` - Login
-- `POST /api/auth/change-password` - Change password
+### Apartment Buildings
+- Track individual apartment electricity consumption
+- Separate billing for common areas
+- Solar power distribution tracking
+- EV charging cost allocation
 
-### Users
-- `GET /api/users` - List all users
-- `GET /api/users/:id` - Get user details
-- `POST /api/users` - Create user
-- `PUT /api/users/:id` - Update user
-- `DELETE /api/users/:id` - Delete user
+### Commercial Buildings
+- Department-wise energy monitoring
+- Cost center allocation
+- Solar production tracking
+- Multi-tenant billing
 
-### Buildings
-- `GET /api/buildings` - List buildings
-- `POST /api/buildings` - Create building
-- `PUT /api/buildings/:id` - Update building
-- `DELETE /api/buildings/:id` - Delete building
+### Mixed-Use Properties
+- Residential + commercial units
+- Different pricing schemes
+- Flexible meter assignment
+- Building group management
+
+## 🔌 Supported Integrations
 
 ### Meters
-- `GET /api/meters` - List meters
-- `POST /api/meters` - Create meter
-- `PUT /api/meters/:id` - Update meter
-- `DELETE /api/meters/:id` - Delete meter
+- **HTTP**: Any device with REST API (Loxone Virtual Outputs)
+- **UDP**: Real-time push data (Loxone UDP outputs)
+- **Modbus TCP**: Industrial meters (coming soon)
 
 ### Chargers
-- `GET /api/chargers` - List chargers
-- `POST /api/chargers` - Create charger
-- `PUT /api/chargers/:id` - Update charger
-- `DELETE /api/chargers/:id` - Delete charger
+- **WeidmÃ¼ller**: Full support with priority charging
+- **Others**: Easily extensible
 
-### Billing
-- `POST /api/billing/generate` - Generate bills
-- `GET /api/billing/invoices` - List invoices
-- `GET /api/billing/settings` - Get billing settings
-- `PUT /api/billing/settings` - Update billing settings
+### Building Management Systems
+- Loxone Miniserver (primary support)
+- Generic HTTP/UDP sources
+- Modbus RTU/TCP devices (coming soon)
 
-### Dashboard
-- `GET /api/dashboard/stats` - Get live statistics
-- `GET /api/dashboard/consumption` - Get consumption data
+## 📊 Data Collection
 
-## Database Schema
+- **Interval**: 15 minutes (Swiss ZEV standard)
+- **Storage**: SQLite with timestamps
+- **Retention**: Unlimited (configurable)
+- **Backup**: Manual and automated options
 
-The SQLite database includes:
-- `users` - User accounts and details
-- `buildings` - Building information
-- `building_groups` - Multiple building associations
-- `meters` - Power meter configurations
-- `chargers` - Car charger configurations
-- `meter_readings` - 15-minute interval readings
-- `charger_sessions` - Charging session data
-- `billing_settings` - Price configurations per building
-- `invoices` - Generated bills
-- `invoice_items` - Bill line items
-- `admin_logs` - System logs
+## 💰 Billing Features
 
-## Next Steps
+- Multiple pricing tiers:
+  - Normal grid power
+  - Solar power
+  - EV charging (normal mode)
+  - EV charging (priority mode)
+- Time-based pricing rules
+- Per-building configuration
+- PDF invoice generation (coming soon)
+- Export to CSV/Excel
 
-1. Login with default admin credentials
-2. Change admin password immediately
-3. Create your buildings
-4. Configure billing settings for each building
-5. Add your power meters with connection details
-6. Add car chargers if applicable
-7. Add users and assign them to apartments
-8. System will automatically collect data every 15 minutes
-9. Generate bills from the billing page
+## 🛠️ Management
 
-## Troubleshooting
+### Service Control
 
-### Backend won't start
 ```bash
-cd backend
-go mod tidy
-go build -o zev-billing
-./zev-billing
+sudo systemctl start zev-billing.service
+sudo systemctl stop zev-billing.service
+sudo systemctl restart zev-billing.service
+sudo systemctl status zev-billing.service
 ```
 
-### Frontend build fails
+### Logs
+
 ```bash
-cd frontend
-rm -rf node_modules package-lock.json
-npm install
-npm run build
+# Live logs
+journalctl -u zev-billing.service -f
+
+# Last 50 entries
+journalctl -u zev-billing.service -n 50
 ```
 
-### Database issues
+### Backup
+
 ```bash
 # Backup database
-cp backend/zev-billing.db backend/zev-billing.db.backup
+cp ~/zev-billing/backend/zev-billing.db ~/backup-$(date +%Y%m%d).db
 
-# Reset database (WARNING: deletes all data)
-rm backend/zev-billing.db
-# Restart backend to recreate
+# Restore
+sudo systemctl stop zev-billing.service
+cp ~/backup-YYYYMMDD.db ~/zev-billing/backend/zev-billing.db
+sudo systemctl start zev-billing.service
 ```
 
-### Check logs
+## 🔄 Updates
+
 ```bash
-# Backend logs
-sudo journalctl -u zev-billing -f
-
-# Nginx logs
-sudo tail -f /var/log/nginx/error.log
+cd ~/zev-billing
+./update.sh
 ```
 
-## Support
-
-For issues or questions:
-- Check logs for error messages
-- Verify network connectivity to meters/chargers
-- Ensure correct endpoint configurations
-- Review billing settings for price configurations
-
-## Complete File Structure
-
-Here's what has been created for you:
-
-```
-zev-billing/
-├── README.md                          # Main documentation
-├── backend/
-│   ├── main.go                        # Application entry point
-│   ├── go.mod                         # Go dependencies
-│   ├── config/
-│   │   └── config.go                  # Configuration management
-│   ├── database/
-│   │   ├── db.go                      # Database connection
-│   │   └── migrations.go              # Database schema
-│   ├── models/
-│   │   └── models.go                  # Data structures
-│   ├── handlers/
-│   │   ├── auth.go                    # Authentication endpoints
-│   │   ├── users.go                   # User management
-│   │   ├── buildings.go               # Building management
-│   │   ├── meters.go                  # Meter management
-│   │   ├── chargers.go                # Charger management
-│   │   ├── billing.go                 # Billing operations
-│   │   └── dashboard.go               # Dashboard data
-│   ├── middleware/
-│   │   └── auth.go                    # JWT authentication
-│   └── services/
-│       ├── data_collector.go          # 15-min data collection
-│       └── billing.go                 # ZEV billing calculations
-└── frontend/
-    ├── index.html                     # HTML entry
-    ├── package.json                   # npm dependencies
-    ├── vite.config.ts                 # Vite configuration
-    ├── tsconfig.json                  # TypeScript config
-    ├── tsconfig.node.json             # Node TypeScript config
-    └── src/
-        ├── main.tsx                   # React entry point
-        ├── App.tsx                    # Main app component
-        ├── index.css                  # Global styles
-        ├── api/
-        │   └── client.ts              # API client
-        ├── types/
-        │   └── index.ts               # TypeScript types
-        └── components/
-            ├── Layout.tsx             # Main layout
-            ├── Login.tsx              # Login page
-            ├── Dashboard.tsx          # Dashboard with charts
-            ├── Users.tsx              # User management
-            ├── Buildings.tsx          # Building management
-            ├── Meters.tsx             # Meter management
-            ├── Chargers.tsx           # Charger management
-            ├── Billing.tsx            # Bill generation & invoices
-            ├── Settings.tsx           # Pricing & password settings
-            └── AdminLogs.tsx          # System logs & health
+Or manually:
+```bash
+cd ~/zev-billing
+sudo systemctl stop zev-billing.service
+git pull
+cd backend && go build -o zev-billing
+cd ../frontend && npm install && npm run build
+sudo systemctl start zev-billing.service
 ```
 
-## What You Get
+## 🐛 Troubleshooting
 
-### Backend Features
-- ✅ RESTful API with JWT authentication
-- ✅ SQLite database with automatic migrations
-- ✅ 15-minute automated data collection
-- ✅ Swiss ZEV billing calculations
-- ✅ Support for HTTP, Modbus TCP, UDP protocols
-- ✅ Weidmüller charger preset with 4 endpoints
-- ✅ Multi-building and building group support
-- ✅ Flexible pricing per building
-- ✅ Comprehensive logging system
+### Backend not starting
+```bash
+journalctl -u zev-billing.service -n 50
+```
 
-### Frontend Features
-- ✅ Modern React + TypeScript interface
-- ✅ Real-time dashboard with charts
-- ✅ Complete CRUD operations for all entities
-- ✅ User management with addresses & bank details
-- ✅ Building and building group management
-- ✅ Meter configuration with JSON connection config
-- ✅ Charger setup with Weidmüller preset
-- ✅ Bill generation with date range selection
-- ✅ Invoice viewing with detailed line items
-- ✅ Pricing settings per building
-- ✅ Password change functionality
-- ✅ System health monitoring and logs
-- ✅ Responsive design
+### Can't create pricing settings
+- Check the logs for errors
+- Verify building ID exists
+- Ensure valid date format (YYYY-MM-DD)
 
-### Data Collection
-- Runs every 15 minutes automatically
-- Collects from all active meters
-- Collects from all active chargers
-- Stores data with precise timestamps
-- Supports multiple connection types
-- Error handling and logging
+### Meters showing 0 kWh
+- Wait 15 minutes for first HTTP collection
+- For UDP, trigger a value send from source
+- Check meter is marked "Active"
+- Verify connection settings
 
-### Billing System
-- Follows Swiss ZEV standard
-- 15-minute interval calculations
-- Separate pricing for:
-  - Normal power
-  - Solar power
-  - Car charging normal mode
-  - Car charging priority mode
-- Generates detailed invoices
-- Per-user billing with line items
-- Building or building-group billing
+### UDP not receiving data
+```bash
+sudo ufw allow 8888/udp
+sudo netstat -ulnp | grep 8888
+```
 
-## Files You Need to Create
+See [INSTALLATION.md](INSTALLATION.md) for complete troubleshooting guide.
 
-Copy each artifact's content into the corresponding file path shown above. All files are complete and ready to use.
+## 🤝 Contributing
 
-## Next Steps After Setup
+Contributions welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
-1. **Test the system locally**
-   ```bash
-   cd backend && ./zev-billing &
-   cd frontend && npm run dev
-   ```
+## 📝 License
 
-2. **Login and change password**
-   - Use admin/admin123
-   - Immediately change password
+[MIT License](LICENSE)
 
-3. **Create your first building**
-   - Add building details
-   - Configure billing settings
+## 🔒 Security
 
-4. **Add a test meter**
-   - Start with a simple HTTP endpoint
-   - Mark as active to test data collection
+- Change default password immediately after installation
+- Use strong JWT secret in production
+- Keep system updated
+- Use firewall rules
+- Regular database backups
 
-5. **Monitor the dashboard**
-   - Check if data is being collected
-   - View system logs for any errors
+## 📞 Support
 
-6. **Add users when ready**
-   - Assign to buildings
-   - Include bank details for payments
+- GitHub Issues: [Report bugs or request features](https://github.com/aj9599/zev-billing/issues)
+- Documentation: Check INSTALLATION.md and LOXONE_INTEGRATION.md
+- Logs: `journalctl -u zev-billing.service -f`
 
-7. **Generate your first bills**
-   - After collecting some data
-   - Select date range and buildings
-   - Review generated invoices
+## 🎯 Roadmap
 
-## Important Notes
-
-- Database is created automatically on first run
-- Data collection starts immediately for active devices
-- All timestamps are stored in UTC
-- The system is production-ready
-- Scale by adding more buildings/meters/chargers as needed
-- Backup the SQLite database regularly
+- [ ] Modbus TCP full support
+- [ ] PDF invoice generation
+- [ ] Multi-language support (DE, FR, IT, EN)
+- [ ] Mobile app
+- [ ] Email notifications
+- [ ] Advanced analytics
+- [ ] Weather integration for solar forecasting
+- [ ] Multi-currency support
+- [ ] API webhooks
 
 Copyright © 2025 - AJ

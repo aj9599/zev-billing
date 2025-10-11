@@ -90,12 +90,16 @@ func main() {
 	api.HandleFunc("/chargers/{id}", chargerHandler.Update).Methods("PUT")
 	api.HandleFunc("/chargers/{id}", chargerHandler.Delete).Methods("DELETE")
 
-	// Billing routes
+	// Billing routes - FIXED: Added POST route for creating settings
 	api.HandleFunc("/billing/settings", billingHandler.GetSettings).Methods("GET")
+	api.HandleFunc("/billing/settings", billingHandler.CreateSettings).Methods("POST")
 	api.HandleFunc("/billing/settings", billingHandler.UpdateSettings).Methods("PUT")
+	api.HandleFunc("/billing/settings/{id}", billingHandler.DeleteSettings).Methods("DELETE")
 	api.HandleFunc("/billing/generate", billingHandler.GenerateBills).Methods("POST")
 	api.HandleFunc("/billing/invoices", billingHandler.ListInvoices).Methods("GET")
 	api.HandleFunc("/billing/invoices/{id}", billingHandler.GetInvoice).Methods("GET")
+	api.HandleFunc("/billing/backup", billingHandler.BackupDatabase).Methods("GET")
+	api.HandleFunc("/billing/export", billingHandler.ExportData).Methods("GET")
 
 	// Dashboard routes
 	api.HandleFunc("/dashboard/stats", dashboardHandler.GetStats).Methods("GET")
@@ -104,7 +108,7 @@ func main() {
 
 	// CORS configuration
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:5173", "http://localhost:4173"},
+		AllowedOrigins:   []string{"http://localhost:5173", "http://localhost:4173", "*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"*"},
 		AllowCredentials: true,
@@ -122,6 +126,10 @@ func main() {
 	}
 
 	log.Printf("Server starting on %s", cfg.ServerAddress)
+	log.Println("âœ" Data collector running (15-minute intervals)")
+	log.Println("âœ" Default credentials: admin / admin123")
+	log.Println("âš ï¸  IMPORTANT: Change default password after first login!")
+	
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}

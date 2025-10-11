@@ -6,20 +6,32 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
+	"strconv"
+	"strings"
+	"sync"
 	"time"
 )
 
 type DataCollector struct {
-	db *sql.DB
+	db          *sql.DB
+	udpListeners map[int]*net.UDPConn
+	mu          sync.Mutex
 }
 
 func NewDataCollector(db *sql.DB) *DataCollector {
-	return &DataCollector{db: db}
+	return &DataCollector{
+		db:          db,
+		udpListeners: make(map[int]*net.UDPConn),
+	}
 }
 
 func (dc *DataCollector) Start() {
 	log.Println("Data collector started - collecting every 15 minutes")
+
+	// Initialize UDP listeners for all UDP meters
+	dc.initializeUDPListeners()
 
 	// Run immediately on start
 	dc.collectAllData()
@@ -33,10 +45,156 @@ func (dc *DataCollector) Start() {
 	}
 }
 
+func (dc *DataCollector) initializeUDPListeners() {
+	// Get all UDP meters
+	rows, err := dc.db.Query(`
+		SELECT id, name, connection_config
+		FROM meters 
+		WHERE is_active = 1 AND connection_type = 'udp'
+	`)
+	if err != nil {
+		log.Printf("Error querying UDP meters: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		var name, connectionConfig string
+		if err := rows.Scan(&id, &name, &connectionConfig); err != nil {
+			continue
+		}
+
+		var config map[string]interface{}
+		if err := json.Unmarshal([]byte(connectionConfig), &config); err != nil {
+			log.Printf("Error parsing config for meter %s: %v", name, err)
+			continue
+		}
+
+		// Start UDP listener for this meter
+		go dc.startUDPListener(id, name, config)
+	}
+}
+
+func (dc *DataCollector) startUDPListener(meterID int, meterName string, config map[string]interface{}) {
+	port := 8888 // default
+	if p, ok := config["listen_port"].(float64); ok {
+		port = int(p)
+	}
+
+	addr := net.UDPAddr{
+		Port: port,
+		IP:   net.ParseIP("0.0.0.0"),
+	}
+
+	conn, err := net.ListenUDP("udp", &addr)
+	if err != nil {
+		log.Printf("Failed to start UDP listener on port %d for meter %s: %v", port, meterName, err)
+		return
+	}
+
+	dc.mu.Lock()
+	dc.udpListeners[port] = conn
+	dc.mu.Unlock()
+
+	log.Printf("âœ" UDP listener started for meter '%s' on port %d", meterName, port)
+
+	buffer := make([]byte, 1024)
+	
+	for {
+		n, remoteAddr, err := conn.ReadFromUDP(buffer)
+		if err != nil {
+			log.Printf("UDP read error on port %d: %v", port, err)
+			continue
+		}
+
+		// Check if sender IP matches (if specified)
+		if senderIP, ok := config["sender_ip"].(string); ok && senderIP != "" {
+			if !strings.Contains(remoteAddr.IP.String(), senderIP) {
+				continue
+			}
+		}
+
+		// Parse the received data
+		data := buffer[:n]
+		reading := dc.parseUDPData(data, config)
+
+		if reading > 0 {
+			// Save reading to database
+			_, err := dc.db.Exec(`
+				INSERT INTO meter_readings (meter_id, reading_time, power_kwh)
+				VALUES (?, ?, ?)
+			`, meterID, time.Now(), reading)
+
+			if err != nil {
+				log.Printf("Error saving UDP reading for meter %s: %v", meterName, err)
+			} else {
+				// Update last reading
+				dc.db.Exec(`
+					UPDATE meters 
+					SET last_reading = ?, last_reading_time = ?
+					WHERE id = ?
+				`, reading, time.Now(), meterID)
+				
+				log.Printf("âœ" UDP data received for meter '%s': %.2f kWh from %s", meterName, reading, remoteAddr.IP)
+			}
+		}
+	}
+}
+
+func (dc *DataCollector) parseUDPData(data []byte, config map[string]interface{}) float64 {
+	dataFormat := "json"
+	if format, ok := config["data_format"].(string); ok {
+		dataFormat = format
+	}
+
+	switch dataFormat {
+	case "json":
+		var jsonData map[string]interface{}
+		if err := json.Unmarshal(data, &jsonData); err != nil {
+			log.Printf("Failed to parse UDP JSON: %v", err)
+			return 0
+		}
+
+		// Try to find power value in common field names
+		fieldNames := []string{"power_kwh", "power", "value", "kwh", "energy"}
+		
+		for _, field := range fieldNames {
+			if value, ok := jsonData[field]; ok {
+				switch v := value.(type) {
+				case float64:
+					return v
+				case string:
+					if f, err := strconv.ParseFloat(v, 64); err == nil {
+						return f
+					}
+				}
+			}
+		}
+
+	case "csv":
+		// Parse CSV format: "value,timestamp" or just "value"
+		parts := strings.Split(strings.TrimSpace(string(data)), ",")
+		if len(parts) > 0 {
+			if value, err := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64); err == nil {
+				return value
+			}
+		}
+
+	case "raw":
+		// Try to parse as plain number
+		if value, err := strconv.ParseFloat(strings.TrimSpace(string(data)), 64); err == nil {
+			return value
+		}
+	}
+
+	return 0
+}
+
 func (dc *DataCollector) collectAllData() {
 	log.Println("Starting data collection cycle...")
 	
-	// Collect meter data
+	// Collect meter data (HTTP and Modbus)
 	dc.collectMeterData()
 	
 	// Collect charger data
@@ -48,7 +206,7 @@ func (dc *DataCollector) collectAllData() {
 func (dc *DataCollector) collectMeterData() {
 	rows, err := dc.db.Query(`
 		SELECT id, name, meter_type, connection_type, connection_config, is_active
-		FROM meters WHERE is_active = 1
+		FROM meters WHERE is_active = 1 AND connection_type != 'udp'
 	`)
 	if err != nil {
 		log.Printf("Error querying meters: %v", err)
@@ -79,8 +237,6 @@ func (dc *DataCollector) collectMeterData() {
 			reading = dc.collectHTTPData(config)
 		case "modbus_tcp":
 			reading = dc.collectModbusData(config)
-		case "udp":
-			reading = dc.collectUDPData(config)
 		default:
 			log.Printf("Unknown connection type for meter %s: %s", name, connectionType)
 			continue
@@ -166,12 +322,21 @@ func (dc *DataCollector) collectHTTPData(config map[string]interface{}) float64 
 		return 0
 	}
 
-	resp, err := http.Get(endpoint)
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	resp, err := client.Get(endpoint)
 	if err != nil {
-		log.Printf("HTTP request failed: %v", err)
+		log.Printf("HTTP request failed to %s: %v", endpoint, err)
 		return 0
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("HTTP request to %s returned status %d", endpoint, resp.StatusCode)
+		return 0
+	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -205,14 +370,8 @@ func (dc *DataCollector) collectModbusData(config map[string]interface{}) float6
 	return 0
 }
 
-func (dc *DataCollector) collectUDPData(config map[string]interface{}) float64 {
-	// Placeholder for UDP implementation
-	log.Println("UDP collection not yet implemented")
-	return 0
-}
-
 func (dc *DataCollector) collectWeidmullerData(config map[string]interface{}) (power float64, userID, mode, state string) {
-	// Weidmüller requires 4 endpoints: power_consumed, state, user_id, mode
+	// WeidmÃ¼ller requires 4 endpoints: power_consumed, state, user_id, mode
 	endpoints := map[string]string{
 		"power":   fmt.Sprintf("%v", config["power_endpoint"]),
 		"state":   fmt.Sprintf("%v", config["state_endpoint"]),
@@ -220,8 +379,12 @@ func (dc *DataCollector) collectWeidmullerData(config map[string]interface{}) (p
 		"mode":    fmt.Sprintf("%v", config["mode_endpoint"]),
 	}
 
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
 	// Collect power
-	if resp, err := http.Get(endpoints["power"]); err == nil {
+	if resp, err := client.Get(endpoints["power"]); err == nil {
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
 		var data map[string]interface{}
@@ -233,7 +396,7 @@ func (dc *DataCollector) collectWeidmullerData(config map[string]interface{}) (p
 	}
 
 	// Collect state
-	if resp, err := http.Get(endpoints["state"]); err == nil {
+	if resp, err := client.Get(endpoints["state"]); err == nil {
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
 		var data map[string]interface{}
@@ -245,7 +408,7 @@ func (dc *DataCollector) collectWeidmullerData(config map[string]interface{}) (p
 	}
 
 	// Collect user ID
-	if resp, err := http.Get(endpoints["user_id"]); err == nil {
+	if resp, err := client.Get(endpoints["user_id"]); err == nil {
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
 		var data map[string]interface{}
@@ -257,7 +420,7 @@ func (dc *DataCollector) collectWeidmullerData(config map[string]interface{}) (p
 	}
 
 	// Collect mode
-	if resp, err := http.Get(endpoints["mode"]); err == nil {
+	if resp, err := client.Get(endpoints["mode"]); err == nil {
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
 		var data map[string]interface{}
