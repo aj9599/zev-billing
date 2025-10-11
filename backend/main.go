@@ -49,7 +49,7 @@ func main() {
 	userHandler := handlers.NewUserHandler(db)
 	buildingHandler := handlers.NewBuildingHandler(db)
 	meterHandler := handlers.NewMeterHandler(db, dataCollector)
-	chargerHandler := handlers.NewChargerHandler(db)
+	chargerHandler := handlers.NewChargerHandler(db, dataCollector)
 	billingHandler := handlers.NewBillingHandler(db, billingService)
 	dashboardHandler := handlers.NewDashboardHandler(db)
 
@@ -115,6 +115,7 @@ func main() {
 	// Dashboard routes
 	api.HandleFunc("/dashboard/stats", dashboardHandler.GetStats).Methods("GET")
 	api.HandleFunc("/dashboard/consumption", dashboardHandler.GetConsumption).Methods("GET")
+	api.HandleFunc("/dashboard/consumption-by-building", dashboardHandler.GetConsumptionByBuilding).Methods("GET")
 	api.HandleFunc("/dashboard/logs", dashboardHandler.GetLogs).Methods("GET")
 
 	// CORS configuration

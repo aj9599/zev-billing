@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Lock, Key, Shield, CheckCircle } from 'lucide-react';
+import { Lock, Key, Shield, CheckCircle, RefreshCw, Ban, Database, Activity } from 'lucide-react';
 import { api } from '../api/client';
 
 export default function Settings() {
@@ -337,58 +337,60 @@ export default function Settings() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {[
-              { icon: '🔐', title: 'Use Strong Passwords', desc: 'Combine letters, numbers, and symbols', color: '#007bff' },
-              { icon: '🔄', title: 'Change Regularly', desc: 'Update your password every 3-6 months', color: '#28a745' },
-              { icon: '🚫', title: 'Never Share', desc: 'Keep your credentials private and secure', color: '#dc3545' },
-              { icon: '💾', title: 'Backup Important Data', desc: 'Use Admin Logs page to backup database', color: '#ffc107' },
-              { icon: '📊', title: 'Monitor Activity', desc: 'Check Admin Logs for suspicious activity', color: '#6f42c1' }
-            ].map((tip, idx) => (
-              <div key={idx} style={{
-                padding: '16px',
-                backgroundColor: '#f9fafb',
-                borderRadius: '12px',
-                border: '1px solid #e5e7eb',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '16px',
-                transition: 'all 0.3s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#f3f4f6';
-                e.currentTarget.style.transform = 'translateX(8px)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = '#f9fafb';
-                e.currentTarget.style.transform = 'translateX(0)';
-              }}>
-                <div style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '10px',
-                  backgroundColor: tip.color + '20',
+              { Icon: Lock, title: 'Use Strong Passwords', desc: 'Combine letters, numbers, and symbols', color: '#007bff' },
+              { Icon: RefreshCw, title: 'Change Regularly', desc: 'Update your password every 3-6 months', color: '#28a745' },
+              { Icon: Ban, title: 'Never Share', desc: 'Keep your credentials private and secure', color: '#dc3545' },
+              { Icon: Database, title: 'Backup Important Data', desc: 'Use Admin Logs page to backup database', color: '#ffc107' },
+              { Icon: Activity, title: 'Monitor Activity', desc: 'Check Admin Logs for suspicious activity', color: '#6f42c1' }
+            ].map((tip, idx) => {
+              const IconComponent = tip.Icon;
+              return (
+                <div key={idx} style={{
+                  padding: '16px',
+                  backgroundColor: '#f9fafb',
+                  borderRadius: '12px',
+                  border: '1px solid #e5e7eb',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '24px',
-                  flexShrink: 0
+                  gap: '16px',
+                  transition: 'all 0.3s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#f3f4f6';
+                  e.currentTarget.style.transform = 'translateX(8px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '#f9fafb';
+                  e.currentTarget.style.transform = 'translateX(0)';
                 }}>
-                  {tip.icon}
-                </div>
-                <div>
-                  <h3 style={{ 
-                    fontSize: '15px', 
-                    fontWeight: '600', 
-                    marginBottom: '4px',
-                    color: '#1f2937'
+                  <div style={{
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '10px',
+                    backgroundColor: tip.color + '20',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
                   }}>
-                    {tip.title}
-                  </h3>
-                  <p style={{ fontSize: '13px', color: '#6b7280', lineHeight: '1.5', margin: 0 }}>
-                    {tip.desc}
-                  </p>
+                    <IconComponent size={24} color={tip.color} strokeWidth={2} />
+                  </div>
+                  <div>
+                    <h3 style={{ 
+                      fontSize: '15px', 
+                      fontWeight: '600', 
+                      marginBottom: '4px',
+                      color: '#1f2937'
+                    }}>
+                      {tip.title}
+                    </h3>
+                    <p style={{ fontSize: '13px', color: '#6b7280', lineHeight: '1.5', margin: 0 }}>
+                      {tip.desc}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>

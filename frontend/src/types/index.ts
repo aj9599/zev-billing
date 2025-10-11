@@ -120,6 +120,21 @@ export interface ConsumptionData {
   source: string;
 }
 
+// NEW: Types for multi-building dashboard
+export interface MeterData {
+  meter_id: number;
+  meter_name: string;
+  meter_type: string;
+  user_name?: string;
+  data: ConsumptionData[];
+}
+
+export interface BuildingConsumption {
+  building_id: number;
+  building_name: string;
+  meters: MeterData[];
+}
+
 export interface AdminLog {
   id: number;
   action: string;

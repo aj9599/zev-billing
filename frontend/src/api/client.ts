@@ -1,6 +1,7 @@
 import type {
   User, Building, Meter, Charger, BillingSettings,
-  Invoice, DashboardStats, ConsumptionData, AdminLog
+  Invoice, DashboardStats, ConsumptionData, AdminLog,
+  BuildingConsumption
 } from '../types';
 
 const API_BASE = '/api';
@@ -240,6 +241,11 @@ class ApiClient {
 
   async getConsumption(period: string = '24h'): Promise<ConsumptionData[]> {
     return this.request(`/dashboard/consumption?period=${period}`);
+  }
+
+  // NEW: Get consumption data grouped by building and meter
+  async getConsumptionByBuilding(period: string = '24h'): Promise<BuildingConsumption[]> {
+    return this.request(`/dashboard/consumption-by-building?period=${period}`);
   }
 
   async getLogs(limit: number = 100): Promise<AdminLog[]> {
