@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ZEV Billing System - Automated Installation Script for Raspberry Pi
-# This script installs and configures the complete system
+# Fixed version handling Node.js dependency conflicts
 
 set -e  # Exit on any error
 
@@ -36,7 +36,43 @@ INSTALL_DIR="$ACTUAL_HOME/zev-billing"
 
 echo -e "${GREEN}Step 1: Installing system dependencies${NC}"
 apt-get update
-apt-get install -y git golang-go nodejs npm sqlite3 build-essential
+
+# Install git and build tools (these should not have conflicts)
+apt-get install -y git build-essential sqlite3
+
+# Check if Go is already installed
+if command -v go &> /dev/null; then
+    echo -e "${GREEN}Go is already installed: $(go version)${NC}"
+else
+    echo "Installing Go..."
+    apt-get install -y golang-go || {
+        echo -e "${YELLOW}Warning: Could not install golang-go from apt, will try alternative method${NC}"
+        # Alternative: Download Go directly
+        wget -q https://go.dev/dl/go1.21.5.linux-arm64.tar.gz -O /tmp/go.tar.gz
+        tar -C /usr/local -xzf /tmp/go.tar.gz
+        ln -sf /usr/local/go/bin/go /usr/bin/go
+        rm /tmp/go.tar.gz
+    }
+fi
+
+# Check if Node.js and npm are already installed
+if command -v node &> /dev/null && command -v npm &> /dev/null; then
+    echo -e "${GREEN}Node.js is already installed: $(node --version)${NC}"
+    echo -e "${GREEN}npm is already installed: $(npm --version)${NC}"
+else
+    echo "Installing Node.js and npm..."
+    # Remove conflicting packages if they exist
+    apt-get remove -y nodejs npm nodejs-legacy libnode108 2>/dev/null || true
+    
+    # Install Node.js from nodesource if not present
+    if ! command -v node &> /dev/null; then
+        curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+        apt-get install -y nodejs
+    fi
+fi
+
+# Install nginx (shouldn't have conflicts)
+apt-get install -y nginx
 
 echo ""
 echo -e "${GREEN}Step 2: Checking Go version${NC}"
@@ -47,29 +83,52 @@ if [ $? -ne 0 ]; then
 fi
 
 echo ""
-echo -e "${GREEN}Step 3: Cloning/Updating repository${NC}"
+echo -e "${GREEN}Step 3: Checking Node.js and npm${NC}"
+node --version
+npm --version
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Node.js/npm installation failed${NC}"
+    exit 1
+fi
+
+echo ""
+echo -e "${GREEN}Step 4: Cloning/Updating repository${NC}"
 if [ -d "$INSTALL_DIR" ]; then
     echo "Directory exists, pulling latest changes..."
     cd "$INSTALL_DIR"
-    sudo -u "$ACTUAL_USER" git pull
+    sudo -u "$ACTUAL_USER" git pull || {
+        echo -e "${YELLOW}Git pull failed, repository may not exist yet${NC}"
+        echo "Please push your code to GitHub first, or skip this step for manual installation"
+    }
 else
-    echo "Cloning repository..."
+    echo "Attempting to clone repository..."
     cd "$ACTUAL_HOME"
-    sudo -u "$ACTUAL_USER" git clone https://github.com/aj9599/zev-billing.git
+    sudo -u "$ACTUAL_USER" git clone https://github.com/aj9599/zev-billing.git || {
+        echo -e "${YELLOW}Repository not found on GitHub${NC}"
+        echo "Creating directory structure for manual setup..."
+        sudo -u "$ACTUAL_USER" mkdir -p "$INSTALL_DIR/backend"
+        sudo -u "$ACTUAL_USER" mkdir -p "$INSTALL_DIR/frontend"
+    }
     cd "$INSTALL_DIR"
 fi
 
 echo ""
-echo -e "${GREEN}Step 4: Building Backend${NC}"
+echo -e "${GREEN}Step 5: Building Backend${NC}"
 cd "$INSTALL_DIR/backend"
+
+if [ ! -f "main.go" ]; then
+    echo -e "${RED}main.go not found in $INSTALL_DIR/backend${NC}"
+    echo -e "${YELLOW}Please ensure your code is in the correct directory${NC}"
+    exit 1
+fi
 
 # Clean old builds
 rm -f zev-billing go.sum
 
 # Download dependencies
 echo "Downloading Go dependencies..."
-sudo -u "$ACTUAL_USER" go mod download
-sudo -u "$ACTUAL_USER" go mod tidy
+sudo -u "$ACTUAL_USER" go mod download || true
+sudo -u "$ACTUAL_USER" go mod tidy || true
 
 # Build backend
 echo "Building backend..."
@@ -77,6 +136,8 @@ sudo -u "$ACTUAL_USER" CGO_ENABLED=1 go build -o zev-billing
 
 if [ ! -f "zev-billing" ]; then
     echo -e "${RED}Backend build failed!${NC}"
+    echo "Checking for errors..."
+    sudo -u "$ACTUAL_USER" go build -o zev-billing 2>&1
     exit 1
 fi
 
@@ -86,8 +147,14 @@ chmod +x zev-billing
 echo -e "${GREEN}Backend built successfully!${NC}"
 
 echo ""
-echo -e "${GREEN}Step 5: Building Frontend${NC}"
+echo -e "${GREEN}Step 6: Building Frontend${NC}"
 cd "$INSTALL_DIR/frontend"
+
+if [ ! -f "package.json" ]; then
+    echo -e "${RED}package.json not found in $INSTALL_DIR/frontend${NC}"
+    echo -e "${YELLOW}Please ensure your code is in the correct directory${NC}"
+    exit 1
+fi
 
 # Clean old builds
 rm -rf node_modules dist package-lock.json
@@ -108,7 +175,7 @@ fi
 echo -e "${GREEN}Frontend built successfully!${NC}"
 
 echo ""
-echo -e "${GREEN}Step 6: Creating systemd service for backend${NC}"
+echo -e "${GREEN}Step 7: Creating systemd service for backend${NC}"
 
 cat > /etc/systemd/system/zev-billing.service << EOF
 [Unit]
@@ -135,39 +202,33 @@ WantedBy=multi-user.target
 EOF
 
 echo ""
-echo -e "${GREEN}Step 7: Setting up nginx for frontend${NC}"
-
-# Install nginx if not present
-apt-get install -y nginx
+echo -e "${GREEN}Step 8: Setting up nginx for frontend${NC}"
 
 # Create nginx configuration
-cat > /etc/nginx/sites-available/zev-billing << 'EOF'
+cat > /etc/nginx/sites-available/zev-billing << EOF
 server {
     listen 80;
     server_name _;
 
     # Frontend
     location / {
-        root /home/ACTUAL_USER_PLACEHOLDER/zev-billing/frontend/dist;
-        try_files $uri $uri/ /index.html;
+        root $INSTALL_DIR/frontend/dist;
+        try_files \$uri \$uri/ /index.html;
     }
 
     # Backend API
     location /api/ {
         proxy_pass http://localhost:8080;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host \$host;
+        proxy_cache_bypass \$http_upgrade;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     }
 }
 EOF
-
-# Replace placeholder with actual user home
-sed -i "s|ACTUAL_USER_PLACEHOLDER|$ACTUAL_USER|g" /etc/nginx/sites-available/zev-billing
 
 # Enable site
 ln -sf /etc/nginx/sites-available/zev-billing /etc/nginx/sites-enabled/
@@ -181,20 +242,24 @@ if [ $? -ne 0 ]; then
 fi
 
 echo ""
-echo -e "${GREEN}Step 8: Setting up firewall${NC}"
+echo -e "${GREEN}Step 9: Setting up firewall${NC}"
 
-# Install ufw if not present
-apt-get install -y ufw
-
-# Configure firewall
-ufw --force enable
-ufw allow 22/tcp   # SSH
-ufw allow 80/tcp   # HTTP
-ufw allow 443/tcp  # HTTPS (for future SSL)
-ufw allow 8080/tcp # Backend (for development)
+# Check if ufw is available
+if command -v ufw &> /dev/null; then
+    # Configure firewall
+    ufw --force enable
+    ufw allow 22/tcp   # SSH
+    ufw allow 80/tcp   # HTTP
+    ufw allow 443/tcp  # HTTPS (for future SSL)
+    ufw allow 8080/tcp # Backend (for development)
+    ufw allow 8888/udp # UDP meters (default port)
+else
+    echo -e "${YELLOW}ufw not installed, skipping firewall configuration${NC}"
+    echo "Please configure your firewall manually to allow ports: 22, 80, 443, 8080, 8888/udp"
+fi
 
 echo ""
-echo -e "${GREEN}Step 9: Starting services${NC}"
+echo -e "${GREEN}Step 10: Starting services${NC}"
 
 # Reload systemd
 systemctl daemon-reload
@@ -209,23 +274,23 @@ systemctl restart nginx
 # Check service status
 sleep 2
 if systemctl is-active --quiet zev-billing.service; then
-    echo -e "${GREEN}âœ" Backend service is running${NC}"
+    echo -e "${GREEN}✓ Backend service is running${NC}"
 else
-    echo -e "${RED}âœ— Backend service failed to start${NC}"
+    echo -e "${RED}✗ Backend service failed to start${NC}"
     echo "Checking logs..."
     journalctl -u zev-billing.service -n 20
     exit 1
 fi
 
 if systemctl is-active --quiet nginx; then
-    echo -e "${GREEN}âœ" Nginx is running${NC}"
+    echo -e "${GREEN}✓ Nginx is running${NC}"
 else
-    echo -e "${RED}âœ— Nginx failed to start${NC}"
+    echo -e "${RED}✗ Nginx failed to start${NC}"
     exit 1
 fi
 
 echo ""
-echo -e "${GREEN}Step 10: Creating management scripts${NC}"
+echo -e "${GREEN}Step 11: Creating management scripts${NC}"
 
 # Create start script
 cat > "$INSTALL_DIR/start.sh" << 'EOF'
@@ -315,7 +380,7 @@ echo -e "${BLUE}Default credentials:${NC}"
 echo "  Username: ${YELLOW}admin${NC}"
 echo "  Password: ${YELLOW}admin123${NC}"
 echo ""
-echo -e "${RED}âš ï¸  IMPORTANT: Change the default password immediately!${NC}"
+echo -e "${RED}⚠️  IMPORTANT: Change the default password immediately!${NC}"
 echo ""
 echo -e "${YELLOW}Database location: $INSTALL_DIR/backend/zev-billing.db${NC}"
 echo ""
