@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ZEV Billing System - Automated Installation Script for Raspberry Pi
-# Fixed version handling Node.js dependency conflicts
+# Fixed version with auto-start and improved error handling
 
 set -e  # Exit on any error
 
@@ -37,7 +37,7 @@ INSTALL_DIR="$ACTUAL_HOME/zev-billing"
 echo -e "${GREEN}Step 1: Installing system dependencies${NC}"
 apt-get update
 
-# Install git and build tools (these should not have conflicts)
+# Install git and build tools
 apt-get install -y git build-essential sqlite3
 
 # Check if Go is already installed
@@ -71,7 +71,7 @@ else
     fi
 fi
 
-# Install nginx (shouldn't have conflicts)
+# Install nginx
 apt-get install -y nginx
 
 echo ""
@@ -175,7 +175,7 @@ fi
 echo -e "${GREEN}Frontend built successfully!${NC}"
 
 echo ""
-echo -e "${GREEN}Step 7: Creating systemd service for backend${NC}"
+echo -e "${GREEN}Step 7: Creating systemd service for auto-start${NC}"
 
 cat > /etc/systemd/system/zev-billing.service << EOF
 [Unit]
@@ -200,6 +200,8 @@ Environment="JWT_SECRET=zev-billing-secret-change-in-production"
 [Install]
 WantedBy=multi-user.target
 EOF
+
+echo -e "${GREEN}Systemd service created${NC}"
 
 echo ""
 echo -e "${GREEN}Step 8: Setting up nginx for frontend${NC}"
@@ -253,54 +255,78 @@ if command -v ufw &> /dev/null; then
     ufw allow 443/tcp  # HTTPS (for future SSL)
     ufw allow 8080/tcp # Backend (for development)
     ufw allow 8888/udp # UDP meters (default port)
+    
+    echo -e "${GREEN}Firewall configured${NC}"
 else
     echo -e "${YELLOW}ufw not installed, skipping firewall configuration${NC}"
     echo "Please configure your firewall manually to allow ports: 22, 80, 443, 8080, 8888/udp"
 fi
 
 echo ""
-echo -e "${GREEN}Step 10: Fixing permissions for nginx${NC}"
+echo -e "${GREEN}Step 10: Fixing permissions${NC}"
 
 # Fix permissions so nginx can access the frontend files
-# This is critical - nginx runs as www-data and needs to traverse the path
 chmod 755 "$ACTUAL_HOME"
 chmod 755 "$INSTALL_DIR"
 chmod -R 755 "$INSTALL_DIR/frontend"
 
-# Ensure backend directory is accessible too
+# Ensure backend directory is accessible
 chmod 755 "$INSTALL_DIR/backend"
 chmod 644 "$INSTALL_DIR/backend/zev-billing.db" 2>/dev/null || true
 
-echo -e "${GREEN}Permissions fixed for nginx${NC}"
+# Set ownership
+chown -R "$ACTUAL_USER:$ACTUAL_USER" "$INSTALL_DIR"
+
+echo -e "${GREEN}Permissions fixed${NC}"
 
 echo ""
-echo -e "${GREEN}Step 11: Starting services${NC}"
+echo -e "${GREEN}Step 11: Enabling and starting services${NC}"
 
-# Reload systemd
+# Reload systemd to recognize new service
 systemctl daemon-reload
 
-# Enable and start backend service
+# Enable backend service for auto-start on boot
 systemctl enable zev-billing.service
+echo -e "${GREEN}✓ ZEV Billing service enabled for auto-start on boot${NC}"
+
+# Enable nginx for auto-start on boot
+systemctl enable nginx
+echo -e "${GREEN}✓ Nginx enabled for auto-start on boot${NC}"
+
+# Start backend service
 systemctl start zev-billing.service
+echo -e "${GREEN}✓ ZEV Billing service started${NC}"
 
 # Restart nginx
 systemctl restart nginx
+echo -e "${GREEN}✓ Nginx restarted${NC}"
+
+# Wait a moment for services to start
+sleep 3
 
 # Check service status
-sleep 2
+echo ""
+echo -e "${BLUE}Verifying services...${NC}"
+
 if systemctl is-active --quiet zev-billing.service; then
-    echo -e "${GREEN}Backend service is running${NC}"
+    echo -e "${GREEN}✓ Backend service is running${NC}"
+    if systemctl is-enabled --quiet zev-billing.service; then
+        echo -e "${GREEN}✓ Backend service is enabled for auto-start${NC}"
+    fi
 else
-    echo -e "${RED}Backend service failed to start${NC}"
+    echo -e "${RED}✗ Backend service failed to start${NC}"
     echo "Checking logs..."
-    journalctl -u zev-billing.service -n 20
+    journalctl -u zev-billing.service -n 20 --no-pager
     exit 1
 fi
 
 if systemctl is-active --quiet nginx; then
-    echo -e "${GREEN}Nginx is running${NC}"
+    echo -e "${GREEN}✓ Nginx is running${NC}"
+    if systemctl is-enabled --quiet nginx; then
+        echo -e "${GREEN}✓ Nginx is enabled for auto-start${NC}"
+    fi
 else
-    echo -e "${RED}Nginx failed to start${NC}"
+    echo -e "${RED}✗ Nginx failed to start${NC}"
     exit 1
 fi
 
@@ -313,7 +339,7 @@ cat > "$INSTALL_DIR/start.sh" << 'EOF'
 sudo systemctl start zev-billing.service
 sudo systemctl start nginx
 echo "ZEV Billing System started"
-systemctl status zev-billing.service
+systemctl status zev-billing.service --no-pager
 EOF
 
 # Create stop script
@@ -323,14 +349,36 @@ sudo systemctl stop zev-billing.service
 echo "ZEV Billing System stopped"
 EOF
 
+# Create restart script
+cat > "$INSTALL_DIR/restart.sh" << 'EOF'
+#!/bin/bash
+sudo systemctl restart zev-billing.service
+sudo systemctl restart nginx
+echo "ZEV Billing System restarted"
+sleep 2
+systemctl status zev-billing.service --no-pager
+EOF
+
 # Create status script
 cat > "$INSTALL_DIR/status.sh" << 'EOF'
 #!/bin/bash
 echo "=== Backend Status ==="
-systemctl status zev-billing.service
+systemctl status zev-billing.service --no-pager
 echo ""
 echo "=== Nginx Status ==="
-systemctl status nginx
+systemctl status nginx --no-pager
+echo ""
+echo "=== Auto-start Status ==="
+if systemctl is-enabled --quiet zev-billing.service; then
+    echo "✓ Backend auto-start: ENABLED"
+else
+    echo "✗ Backend auto-start: DISABLED"
+fi
+if systemctl is-enabled --quiet nginx; then
+    echo "✓ Nginx auto-start: ENABLED"
+else
+    echo "✗ Nginx auto-start: DISABLED"
+fi
 echo ""
 echo "=== Recent Logs ==="
 journalctl -u zev-billing.service -n 20 --no-pager
@@ -357,15 +405,30 @@ cd ../frontend
 npm install
 npm run build
 
+echo "Fixing permissions..."
+sudo chmod 755 ~/zev-billing/backend/zev-billing
+sudo chown -R $USER:$USER ~/zev-billing
+
 echo "Starting services..."
 sudo systemctl start zev-billing.service
 
 echo "Update completed!"
+echo ""
+./status.sh
+EOF
+
+# Create logs script
+cat > "$INSTALL_DIR/logs.sh" << 'EOF'
+#!/bin/bash
+echo "Following live logs (Ctrl+C to exit)..."
+journalctl -u zev-billing.service -f
 EOF
 
 # Make scripts executable
 chmod +x "$INSTALL_DIR"/*.sh
 chown "$ACTUAL_USER:$ACTUAL_USER" "$INSTALL_DIR"/*.sh
+
+echo -e "${GREEN}Management scripts created${NC}"
 
 echo ""
 echo -e "${GREEN}Step 13: Final verification${NC}"
@@ -373,29 +436,31 @@ echo -e "${GREEN}Step 13: Final verification${NC}"
 # Test backend API
 sleep 2
 if curl -s http://localhost:8080/api/health > /dev/null 2>&1; then
-    echo -e "${GREEN}Backend API responding correctly${NC}"
+    echo -e "${GREEN}✓ Backend API responding correctly${NC}"
 else
-    echo -e "${YELLOW}Warning: Backend API test failed${NC}"
+    echo -e "${YELLOW}⚠ Warning: Backend API test failed${NC}"
 fi
 
 # Test nginx proxy
 if curl -s http://localhost/api/health > /dev/null 2>&1; then
-    echo -e "${GREEN}Nginx proxy working correctly${NC}"
+    echo -e "${GREEN}✓ Nginx proxy working correctly${NC}"
 else
-    echo -e "${YELLOW}Warning: Nginx proxy test failed${NC}"
+    echo -e "${YELLOW}⚠ Warning: Nginx proxy test failed${NC}"
 fi
 
 # Test frontend access
 if curl -s -o /dev/null -w "%{http_code}" http://localhost/ | grep -q "200\|301\|302"; then
-    echo -e "${GREEN}Frontend accessible${NC}"
+    echo -e "${GREEN}✓ Frontend accessible${NC}"
 else
-    echo -e "${YELLOW}Warning: Frontend may not be accessible${NC}"
+    echo -e "${YELLOW}⚠ Warning: Frontend may not be accessible${NC}"
 fi
 
 echo ""
 echo -e "${GREEN}=========================================="
 echo "Installation completed successfully!"
 echo "==========================================${NC}"
+echo ""
+echo -e "${GREEN}✓ System configured for auto-start on boot${NC}"
 echo ""
 echo -e "${BLUE}Service Management:${NC}"
 echo "  Start:   sudo systemctl start zev-billing.service"
@@ -404,12 +469,13 @@ echo "  Restart: sudo systemctl restart zev-billing.service"
 echo "  Status:  sudo systemctl status zev-billing.service"
 echo "  Logs:    journalctl -u zev-billing.service -f"
 echo ""
-echo -e "${BLUE}Or use the convenience scripts:${NC}"
-echo "  cd $INSTALL_DIR"
+echo -e "${BLUE}Convenient scripts in $INSTALL_DIR:${NC}"
 echo "  ./start.sh   - Start the system"
 echo "  ./stop.sh    - Stop the system"
-echo "  ./status.sh  - Check status and logs"
-echo "  ./update.sh  - Update to latest version"
+echo "  ./restart.sh - Restart the system"
+echo "  ./status.sh  - Check status and auto-start configuration"
+echo "  ./logs.sh    - Follow live logs"
+echo "  ./update.sh  - Update to latest version from Git"
 echo ""
 echo -e "${BLUE}Access the application:${NC}"
 RASPBERRY_PI_IP=$(hostname -I | awk '{print $1}')
@@ -417,10 +483,15 @@ echo "  http://$RASPBERRY_PI_IP"
 echo "  http://localhost (if on the Pi)"
 echo ""
 echo -e "${BLUE}Default credentials:${NC}"
-echo "  Username: ${YELLOW}admin${NC}"
-echo "  Password: ${YELLOW}admin123${NC}"
+echo "  Username: ${GREEN}admin${NC}"
+echo "  Password: ${GREEN}admin123${NC}"
 echo ""
-echo -e "${RED}Warning: IMPORTANT: Change the default password immediately!${NC}"
+echo -e "${RED}⚠  IMPORTANT: Change the default password immediately after first login!${NC}"
 echo ""
-echo -e "${YELLOW}Database location: $INSTALL_DIR/backend/zev-billing.db${NC}"
+echo -e "${YELLOW}📁 Database location: $INSTALL_DIR/backend/zev-billing.db${NC}"
+echo ""
+echo -e "${BLUE}🔧 Debugging:${NC}"
+echo "  - Check Admin Logs page in the web interface for data collection status"
+echo "  - Use ./logs.sh to see live system logs"
+echo "  - See Setup Instructions in Meters/Chargers pages for configuration help"
 echo ""

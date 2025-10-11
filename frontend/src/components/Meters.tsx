@@ -1,19 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Info, HelpCircle } from 'lucide-react';
 import { api } from '../api/client';
 import type { Meter, Building, User } from '../types';
 
 interface ConnectionConfig {
-  // HTTP
   endpoint?: string;
   power_field?: string;
-  // Modbus TCP
   ip_address?: string;
   port?: number;
   register_address?: number;
   register_count?: number;
   unit_id?: number;
-  // UDP
   listen_port?: number;
   sender_ip?: string;
   data_format?: string;
@@ -24,6 +21,7 @@ export default function Meters() {
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [showModal, setShowModal] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
   const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
   const [formData, setFormData] = useState<Partial<Meter>>({
     name: '', meter_type: 'total_meter', building_id: 0, user_id: undefined,
@@ -60,7 +58,6 @@ export default function Meters() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Build connection config based on type
     let config: ConnectionConfig = {};
     
     if (formData.connection_type === 'http') {
@@ -119,7 +116,6 @@ export default function Meters() {
     setEditingMeter(meter);
     setFormData(meter);
     
-    // Parse existing config
     try {
       const config = JSON.parse(meter.connection_config);
       setConnectionConfig({
@@ -168,20 +164,135 @@ export default function Meters() {
     { value: 'other', label: 'Other' }
   ];
 
+  const InstructionsModal = () => (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', 
+      justifyContent: 'center', zIndex: 2000, padding: '20px'
+    }}>
+      <div style={{
+        backgroundColor: 'white', borderRadius: '12px', padding: '30px',
+        maxWidth: '800px', maxHeight: '90vh', overflow: 'auto', width: '100%'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>Meter Setup Instructions</h2>
+          <button onClick={() => setShowInstructions(false)} 
+            style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
+            <X size={24} />
+          </button>
+        </div>
+
+        <div style={{ lineHeight: '1.8', color: '#374151' }}>
+          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
+            🔌 HTTP Connection (Recommended for Loxone)
+          </h3>
+          <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
+            <p><strong>Loxone Virtual Output Setup:</strong></p>
+            <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
+              <li>In Loxone Config, create a Virtual Output</li>
+              <li>Set the address to: <code style={{ backgroundColor: '#e5e7eb', padding: '2px 6px', borderRadius: '4px' }}>http://YOUR_RASPBERRY_IP:8080/api/meters/data</code></li>
+              <li>In the meter configuration, set endpoint to the same URL</li>
+              <li>Set power_field to match your JSON field name (default: "power_kwh")</li>
+              <li>Loxone should send: <code style={{ backgroundColor: '#e5e7eb', padding: '2px 6px', borderRadius: '4px' }}>{"{"}"power_kwh": 123.45{"}"}</code></li>
+            </ol>
+          </div>
+
+          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
+            📡 UDP Connection (Alternative for Loxone)
+          </h3>
+          <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
+            <p><strong>Loxone Virtual Output UDP Setup:</strong></p>
+            <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
+              <li>In Loxone Config, create a Virtual Output UDP</li>
+              <li>Set the destination IP to your Raspberry Pi IP</li>
+              <li>Set the port (default: 8888)</li>
+              <li>Configure data format: JSON, CSV, or Raw</li>
+              <li>For JSON format: <code style={{ backgroundColor: '#e5e7eb', padding: '2px 6px', borderRadius: '4px' }}>{"{"}"power_kwh": &lt;v&gt;{"}"}</code></li>
+              <li>For CSV format: <code style={{ backgroundColor: '#e5e7eb', padding: '2px 6px', borderRadius: '4px' }}>&lt;v&gt;,&lt;t&gt;</code></li>
+            </ol>
+            <p style={{ marginTop: '10px', fontSize: '14px', color: '#6b7280' }}>
+              <strong>Note:</strong> Make sure port 8888/UDP is open in your firewall
+            </p>
+          </div>
+
+          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
+            🔧 Testing Your Connection
+          </h3>
+          <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '1px solid #3b82f6' }}>
+            <p><strong>Check the Admin Logs page to see:</strong></p>
+            <ul style={{ marginLeft: '20px', marginTop: '10px' }}>
+              <li>Data collection attempts every 15 minutes</li>
+              <li>Successful meter readings</li>
+              <li>Connection errors and debugging information</li>
+              <li>UDP packet reception logs</li>
+            </ul>
+          </div>
+
+          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
+            ⚡ Modbus TCP Connection
+          </h3>
+          <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
+            <p><strong>For Modbus-compatible meters:</strong></p>
+            <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
+              <li>Enter the meter's IP address</li>
+              <li>Port (default: 502)</li>
+              <li>Register address where power data is stored</li>
+              <li>Number of registers to read (typically 2 for float values)</li>
+              <li>Unit ID (slave address, typically 1)</li>
+            </ol>
+          </div>
+
+          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
+            🔍 Troubleshooting
+          </h3>
+          <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', border: '1px solid #f59e0b' }}>
+            <ul style={{ marginLeft: '20px' }}>
+              <li>Check firewall: <code style={{ backgroundColor: '#fff', padding: '2px 6px', borderRadius: '4px' }}>sudo ufw status</code></li>
+              <li>Verify service: <code style={{ backgroundColor: '#fff', padding: '2px 6px', borderRadius: '4px' }}>sudo systemctl status zev-billing</code></li>
+              <li>Check logs: <code style={{ backgroundColor: '#fff', padding: '2px 6px', borderRadius: '4px' }}>journalctl -u zev-billing -f</code></li>
+              <li>Test network: <code style={{ backgroundColor: '#fff', padding: '2px 6px', borderRadius: '4px' }}>ping YOUR_LOXONE_IP</code></li>
+              <li>Monitor the Admin Logs page in real-time for debugging</li>
+            </ul>
+          </div>
+        </div>
+
+        <button onClick={() => setShowInstructions(false)} style={{
+          width: '100%', marginTop: '24px', padding: '12px',
+          backgroundColor: '#007bff', color: 'white', border: 'none',
+          borderRadius: '6px', fontSize: '14px', fontWeight: '500'
+        }}>
+          Got it!
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <h1 style={{ fontSize: '32px', fontWeight: 'bold' }}>Power Meters</h1>
-        <button
-          onClick={() => { resetForm(); setShowModal(true); }}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
-            backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px'
-          }}
-        >
-          <Plus size={18} />
-          Add Meter
-        </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button
+            onClick={() => setShowInstructions(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
+              backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px'
+            }}
+          >
+            <HelpCircle size={18} />
+            Setup Instructions
+          </button>
+          <button
+            onClick={() => { resetForm(); setShowModal(true); }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
+              backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px'
+            }}
+          >
+            <Plus size={18} />
+            Add Meter
+          </button>
+        </div>
       </div>
 
       <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
@@ -234,10 +345,12 @@ export default function Meters() {
         </table>
         {meters.length === 0 && (
           <div style={{ padding: '60px', textAlign: 'center', color: '#999' }}>
-            No meters found. Create your first meter to start collecting data.
+            No meters found. Click "Setup Instructions" to learn how to configure your first meter.
           </div>
         )}
       </div>
+
+      {showInstructions && <InstructionsModal />}
 
       {showModal && (
         <div style={{
@@ -249,9 +362,18 @@ export default function Meters() {
             width: '90%', maxWidth: '700px', maxHeight: '90vh', overflow: 'auto'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                {editingMeter ? 'Edit Meter' : 'Add Meter'}
-              </h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                  {editingMeter ? 'Edit Meter' : 'Add Meter'}
+                </h2>
+                <button 
+                  onClick={() => setShowInstructions(true)}
+                  style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer', color: '#007bff' }}
+                  title="Show setup instructions"
+                >
+                  <Info size={20} />
+                </button>
+              </div>
               <button onClick={() => { setShowModal(false); setEditingMeter(null); }} style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
                 <X size={24} />
               </button>
@@ -298,9 +420,9 @@ export default function Meters() {
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>Connection Type *</label>
                 <select required value={formData.connection_type} onChange={(e) => setFormData({ ...formData, connection_type: e.target.value })}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
-                  <option value="http">HTTP</option>
+                  <option value="http">HTTP (Recommended for Loxone)</option>
+                  <option value="udp">UDP (Alternative for Loxone)</option>
                   <option value="modbus_tcp">Modbus TCP</option>
-                  <option value="udp">UDP</option>
                 </select>
               </div>
 
@@ -317,7 +439,7 @@ export default function Meters() {
                       </label>
                       <input type="url" required value={connectionConfig.endpoint}
                         onChange={(e) => setConnectionConfig({ ...connectionConfig, endpoint: e.target.value })}
-                        placeholder="http://192.168.1.100/api/power"
+                        placeholder="http://YOUR_LOXONE_IP/api/power"
                         style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                     </div>
                     <div>
@@ -403,11 +525,11 @@ export default function Meters() {
                       </div>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          Sender IP Address (optional)
+                          Sender IP (optional - leave empty for all)
                         </label>
                         <input type="text" value={connectionConfig.sender_ip}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, sender_ip: e.target.value })}
-                          placeholder="192.168.1.100 (leave empty to accept all)"
+                          placeholder="Leave empty to accept from any IP"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
                     </div>
@@ -418,9 +540,9 @@ export default function Meters() {
                       <select required value={connectionConfig.data_format}
                         onChange={(e) => setConnectionConfig({ ...connectionConfig, data_format: e.target.value })}
                         style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
-                        <option value="json">JSON</option>
-                        <option value="csv">CSV</option>
-                        <option value="raw">Raw (binary)</option>
+                        <option value="json">JSON - {"{"}"power_kwh": value{"}"}</option>
+                        <option value="csv">CSV - value,timestamp</option>
+                        <option value="raw">Raw - just the number</option>
                       </select>
                     </div>
                   </>

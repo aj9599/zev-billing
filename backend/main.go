@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"time"
@@ -13,6 +14,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
 )
+
+var dataCollector *services.DataCollector
 
 func main() {
 	log.Println("Starting ZEV Billing System...")
@@ -33,7 +36,7 @@ func main() {
 	}
 
 	// Initialize services
-	dataCollector := services.NewDataCollector(db)
+	dataCollector = services.NewDataCollector(db)
 	billingService := services.NewBillingService(db)
 
 	// Start data collection in background
@@ -61,6 +64,9 @@ func main() {
 
 	// Auth routes
 	api.HandleFunc("/auth/change-password", authHandler.ChangePassword).Methods("POST")
+
+	// Debug/Status route
+	api.HandleFunc("/debug/status", debugStatusHandler).Methods("GET")
 
 	// User routes
 	api.HandleFunc("/users", userHandler.List).Methods("GET")
@@ -90,7 +96,7 @@ func main() {
 	api.HandleFunc("/chargers/{id}", chargerHandler.Update).Methods("PUT")
 	api.HandleFunc("/chargers/{id}", chargerHandler.Delete).Methods("DELETE")
 
-	// Billing routes - FIXED: Added POST route for creating settings
+	// Billing routes
 	api.HandleFunc("/billing/settings", billingHandler.GetSettings).Methods("GET")
 	api.HandleFunc("/billing/settings", billingHandler.CreateSettings).Methods("POST")
 	api.HandleFunc("/billing/settings", billingHandler.UpdateSettings).Methods("PUT")
@@ -139,4 +145,10 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status":"ok"}`))
+}
+
+func debugStatusHandler(w http.ResponseWriter, r *http.Request) {
+	debugInfo := dataCollector.GetDebugInfo()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(debugInfo)
 }

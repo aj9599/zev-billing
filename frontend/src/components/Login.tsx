@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Zap } from 'lucide-react';
 import { api } from '../api/client';
 
 interface LoginProps {
@@ -32,26 +33,61 @@ export default function Login({ onLogin }: LoginProps) {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: '#f5f5f5'
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
       <div style={{
         backgroundColor: 'white',
-        padding: '40px',
-        borderRadius: '12px',
-        boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+        padding: '48px',
+        borderRadius: '20px',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
         width: '100%',
-        maxWidth: '400px'
+        maxWidth: '420px',
+        animation: 'slideUp 0.5s ease-out'
       }}>
-        <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '8px', textAlign: 'center' }}>
-          ZEV Billing System
-        </h1>
-        <p style={{ color: '#666', marginBottom: '30px', textAlign: 'center' }}>
-          Swiss ZEV Billing Management
-        </p>
+        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '80px',
+            height: '80px',
+            borderRadius: '20px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            marginBottom: '20px',
+            boxShadow: '0 10px 30px rgba(102, 126, 234, 0.4)'
+          }}>
+            <Zap size={40} color="white" />
+          </div>
+          <h1 style={{
+            fontSize: '32px',
+            fontWeight: '700',
+            marginBottom: '8px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text'
+          }}>
+            ZEV Billing System
+          </h1>
+          <p style={{
+            color: '#6b7280',
+            fontSize: '15px',
+            fontWeight: '500'
+          }}>
+            Swiss Energy Management Platform
+          </p>
+        </div>
 
         <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+          <div style={{ marginBottom: '24px' }}>
+            <label style={{
+              display: 'block',
+              marginBottom: '8px',
+              fontWeight: '600',
+              color: '#374151',
+              fontSize: '14px'
+            }}>
               Username
             </label>
             <input
@@ -61,16 +97,34 @@ export default function Login({ onLogin }: LoginProps) {
               required
               style={{
                 width: '100%',
-                padding: '12px',
-                border: '1px solid #ddd',
-                borderRadius: '6px',
-                fontSize: '14px'
+                padding: '14px 16px',
+                border: '2px solid #e5e7eb',
+                borderRadius: '12px',
+                fontSize: '15px',
+                transition: 'all 0.2s',
+                outline: 'none',
+                backgroundColor: '#f9fafb'
               }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = '#667eea';
+                e.currentTarget.style.backgroundColor = 'white';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = '#e5e7eb';
+                e.currentTarget.style.backgroundColor = '#f9fafb';
+              }}
+              placeholder="Enter your username"
             />
           </div>
 
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+          <div style={{ marginBottom: '28px' }}>
+            <label style={{
+              display: 'block',
+              marginBottom: '8px',
+              fontWeight: '600',
+              color: '#374151',
+              fontSize: '14px'
+            }}>
               Password
             </label>
             <input
@@ -80,22 +134,36 @@ export default function Login({ onLogin }: LoginProps) {
               required
               style={{
                 width: '100%',
-                padding: '12px',
-                border: '1px solid #ddd',
-                borderRadius: '6px',
-                fontSize: '14px'
+                padding: '14px 16px',
+                border: '2px solid #e5e7eb',
+                borderRadius: '12px',
+                fontSize: '15px',
+                transition: 'all 0.2s',
+                outline: 'none',
+                backgroundColor: '#f9fafb'
               }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = '#667eea';
+                e.currentTarget.style.backgroundColor = 'white';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = '#e5e7eb';
+                e.currentTarget.style.backgroundColor = '#f9fafb';
+              }}
+              placeholder="Enter your password"
             />
           </div>
 
           {error && (
             <div style={{
-              padding: '12px',
-              backgroundColor: '#fee',
-              color: '#c33',
-              borderRadius: '6px',
-              marginBottom: '20px',
-              fontSize: '14px'
+              padding: '14px 16px',
+              backgroundColor: '#fef2f2',
+              color: '#dc2626',
+              borderRadius: '12px',
+              marginBottom: '24px',
+              fontSize: '14px',
+              fontWeight: '500',
+              border: '1px solid #fee2e2'
             }}>
               {error}
             </div>
@@ -106,34 +174,57 @@ export default function Login({ onLogin }: LoginProps) {
             disabled={loading}
             style={{
               width: '100%',
-              padding: '12px',
-              backgroundColor: '#007bff',
+              padding: '16px',
+              background: loading ? '#9ca3af' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               color: 'white',
               border: 'none',
-              borderRadius: '6px',
+              borderRadius: '12px',
               fontSize: '16px',
-              fontWeight: '500',
-              opacity: loading ? 0.7 : 1
+              fontWeight: '600',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              transition: 'all 0.3s',
+              boxShadow: loading ? 'none' : '0 10px 30px rgba(102, 126, 234, 0.3)',
+              transform: loading ? 'none' : 'translateY(0)'
+            }}
+            onMouseEnter={(e) => {
+              if (!loading) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 15px 40px rgba(102, 126, 234, 0.4)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!loading) {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 10px 30px rgba(102, 126, 234, 0.3)';
+              }
             }}
           >
-            {loading ? 'Logging in...' : 'Login'}
+            {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
 
         <div style={{
-          marginTop: '30px',
-          padding: '16px',
-          backgroundColor: '#f9f9f9',
-          borderRadius: '6px',
+          marginTop: '32px',
+          textAlign: 'center',
           fontSize: '13px',
-          color: '#666'
+          color: '#6b7280'
         }}>
-          <strong>Default credentials:</strong><br />
-          Username: admin<br />
-          Password: admin123<br />
-          <em style={{ color: '#c33' }}>⚠️ Change password after first login!</em>
+          <p>Powered by AJ</p>
         </div>
       </div>
+
+      <style>{`
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }
