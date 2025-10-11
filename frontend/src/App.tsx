@@ -8,6 +8,7 @@ import Buildings from './components/Buildings';
 import Meters from './components/Meters';
 import Chargers from './components/Chargers';
 import Billing from './components/Billing';
+import PricingSettings from './components/PricingSettings';
 import Settings from './components/Settings';
 import AdminLogs from './components/AdminLogs';
 
@@ -42,6 +43,7 @@ function App() {
           <Route path="meters" element={<Meters />} />
           <Route path="chargers" element={<Chargers />} />
           <Route path="billing" element={<Billing />} />
+          <Route path="pricing" element={<PricingSettings />} />
           <Route path="settings" element={<Settings />} />
           <Route path="logs" element={<AdminLogs />} />
         </Route>

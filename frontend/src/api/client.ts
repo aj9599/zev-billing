@@ -191,11 +191,22 @@ class ApiClient {
     return this.request(`/billing/settings${query}`);
   }
 
+  async createBillingSettings(settings: Partial<BillingSettings>): Promise<BillingSettings> {
+    return this.request('/billing/settings', {
+      method: 'POST',
+      body: JSON.stringify(settings),
+    });
+  }
+
   async updateBillingSettings(settings: Partial<BillingSettings>): Promise<BillingSettings> {
     return this.request('/billing/settings', {
       method: 'PUT',
       body: JSON.stringify(settings),
     });
+  }
+
+  async deleteBillingSettings(id: number) {
+    return this.request(`/billing/settings/${id}`, { method: 'DELETE' });
   }
 
   async generateBills(data: {

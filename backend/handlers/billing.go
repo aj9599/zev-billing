@@ -3,8 +3,12 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/aj9599/zev-billing/backend/models"
 	"github.com/aj9599/zev-billing/backend/services"
@@ -32,62 +36,109 @@ type GenerateBillsRequest struct {
 
 func (h *BillingHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	buildingID := r.URL.Query().Get("building_id")
-	if buildingID == "" {
-		// Get all settings
-		rows, err := h.db.Query(`
+	
+	var query string
+	var args []interface{}
+	
+	if buildingID != "" {
+		query = `
 			SELECT id, building_id, normal_power_price, solar_power_price, 
 			       car_charging_normal_price, car_charging_priority_price, 
-			       currency, created_at, updated_at
+			       currency, valid_from, valid_to, is_active, created_at, updated_at
+			FROM billing_settings 
+			WHERE building_id = ?
+			ORDER BY valid_from DESC
+		`
+		args = append(args, buildingID)
+	} else {
+		query = `
+			SELECT id, building_id, normal_power_price, solar_power_price, 
+			       car_charging_normal_price, car_charging_priority_price, 
+			       currency, valid_from, valid_to, is_active, created_at, updated_at
 			FROM billing_settings
-		`)
-		if err != nil {
-			http.Error(w, "Database error", http.StatusInternalServerError)
-			return
-		}
-		defer rows.Close()
-
-		settings := []models.BillingSettings{}
-		for rows.Next() {
-			var s models.BillingSettings
-			err := rows.Scan(
-				&s.ID, &s.BuildingID, &s.NormalPowerPrice, &s.SolarPowerPrice,
-				&s.CarChargingNormalPrice, &s.CarChargingPriorityPrice,
-				&s.Currency, &s.CreatedAt, &s.UpdatedAt,
-			)
-			if err == nil {
-				settings = append(settings, s)
-			}
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(settings)
-		return
+			ORDER BY building_id, valid_from DESC
+		`
 	}
 
-	// Get specific building settings
-	var s models.BillingSettings
-	err := h.db.QueryRow(`
-		SELECT id, building_id, normal_power_price, solar_power_price, 
-		       car_charging_normal_price, car_charging_priority_price, 
-		       currency, created_at, updated_at
-		FROM billing_settings WHERE building_id = ?
-	`, buildingID).Scan(
-		&s.ID, &s.BuildingID, &s.NormalPowerPrice, &s.SolarPowerPrice,
-		&s.CarChargingNormalPrice, &s.CarChargingPriorityPrice,
-		&s.Currency, &s.CreatedAt, &s.UpdatedAt,
-	)
-
-	if err == sql.ErrNoRows {
-		http.Error(w, "Settings not found", http.StatusNotFound)
-		return
-	}
+	rows, err := h.db.Query(query, args...)
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
+	defer rows.Close()
+
+	settings := []models.BillingSettings{}
+	for rows.Next() {
+		var s models.BillingSettings
+		var validTo sql.NullString
+		err := rows.Scan(
+			&s.ID, &s.BuildingID, &s.NormalPowerPrice, &s.SolarPowerPrice,
+			&s.CarChargingNormalPrice, &s.CarChargingPriorityPrice,
+			&s.Currency, &s.ValidFrom, &validTo, &s.IsActive, &s.CreatedAt, &s.UpdatedAt,
+		)
+		if err == nil {
+			if validTo.Valid {
+				s.ValidTo = validTo.String
+			}
+			settings = append(settings, s)
+		}
+	}
 
 	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(settings)
+}
+
+func (h *BillingHandler) CreateSettings(w http.ResponseWriter, r *http.Request) {
+	var s models.BillingSettings
+	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	validTo := sql.NullString{}
+	if s.ValidTo != "" {
+		validTo.Valid = true
+		validTo.String = s.ValidTo
+	}
+
+	result, err := h.db.Exec(`
+		INSERT INTO billing_settings (
+			building_id, normal_power_price, solar_power_price,
+			car_charging_normal_price, car_charging_priority_price, 
+			currency, valid_from, valid_to, is_active
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, s.BuildingID, s.NormalPowerPrice, s.SolarPowerPrice,
+		s.CarChargingNormalPrice, s.CarChargingPriorityPrice,
+		s.Currency, s.ValidFrom, validTo, s.IsActive)
+
+	if err != nil {
+		http.Error(w, "Failed to create settings", http.StatusInternalServerError)
+		return
+	}
+
+	id, _ := result.LastInsertId()
+	s.ID = int(id)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(s)
+}
+
+func (h *BillingHandler) DeleteSettings(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	_, err = h.db.Exec("DELETE FROM billing_settings WHERE id = ?", id)
+	if err != nil {
+		http.Error(w, "Failed to delete settings", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *BillingHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
@@ -270,4 +321,143 @@ func (h *BillingHandler) GetInvoice(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(inv)
+}
+
+func (h *BillingHandler) BackupDatabase(w http.ResponseWriter, r *http.Request) {
+	// Create a backup of the database
+	dbPath := "./zev-billing.db"
+	backupName := fmt.Sprintf("zev-billing-backup-%s.db", time.Now().Format("20060102-150405"))
+	
+	// Read the database file
+	data, err := os.ReadFile(dbPath)
+	if err != nil {
+		http.Error(w, "Failed to read database", http.StatusInternalServerError)
+		return
+	}
+
+	// Set headers for file download
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", backupName))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
+	
+	w.Write(data)
+}
+
+func (h *BillingHandler) ExportData(w http.ResponseWriter, r *http.Request) {
+	buildingID := r.URL.Query().Get("building_id")
+	userID := r.URL.Query().Get("user_id")
+	startDate := r.URL.Query().Get("start_date")
+	endDate := r.URL.Query().Get("end_date")
+	exportType := r.URL.Query().Get("type") // "meters" or "chargers"
+
+	var query string
+	var args []interface{}
+
+	if exportType == "chargers" {
+		query = `
+			SELECT cs.session_time, c.name as charger_name, b.name as building_name, 
+			       cs.user_id, cs.power_kwh, cs.mode, cs.state
+			FROM charger_sessions cs
+			JOIN chargers c ON cs.charger_id = c.id
+			JOIN buildings b ON c.building_id = b.id
+			WHERE 1=1
+		`
+	} else {
+		query = `
+			SELECT mr.reading_time, m.name as meter_name, m.meter_type, b.name as building_name, 
+			       u.first_name, u.last_name, mr.power_kwh
+			FROM meter_readings mr
+			JOIN meters m ON mr.meter_id = m.id
+			JOIN buildings b ON m.building_id = b.id
+			LEFT JOIN users u ON m.user_id = u.id
+			WHERE 1=1
+		`
+	}
+
+	if buildingID != "" {
+		if exportType == "chargers" {
+			query += " AND c.building_id = ?"
+		} else {
+			query += " AND m.building_id = ?"
+		}
+		args = append(args, buildingID)
+	}
+
+	if userID != "" && exportType != "chargers" {
+		query += " AND m.user_id = ?"
+		args = append(args, userID)
+	}
+
+	if startDate != "" {
+		if exportType == "chargers" {
+			query += " AND cs.session_time >= ?"
+		} else {
+			query += " AND mr.reading_time >= ?"
+		}
+		args = append(args, startDate)
+	}
+
+	if endDate != "" {
+		if exportType == "chargers" {
+			query += " AND cs.session_time <= ?"
+		} else {
+			query += " AND mr.reading_time <= ?"
+		}
+		args = append(args, endDate)
+	}
+
+	if exportType == "chargers" {
+		query += " ORDER BY cs.session_time ASC"
+	} else {
+		query += " ORDER BY mr.reading_time ASC"
+	}
+
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	// Create CSV
+	var csv strings.Builder
+	
+	if exportType == "chargers" {
+		csv.WriteString("Timestamp,Charger Name,Building,User ID,Power (kWh),Mode,State\n")
+		for rows.Next() {
+			var timestamp, chargerName, buildingName, userID, mode, state string
+			var power float64
+			if err := rows.Scan(&timestamp, &chargerName, &buildingName, &userID, &power, &mode, &state); err != nil {
+				continue
+			}
+			csv.WriteString(fmt.Sprintf("%s,%s,%s,%s,%.4f,%s,%s\n", 
+				timestamp, chargerName, buildingName, userID, power, mode, state))
+		}
+	} else {
+		csv.WriteString("Timestamp,Meter Name,Meter Type,Building,User First Name,User Last Name,Power (kWh)\n")
+		for rows.Next() {
+			var timestamp, meterName, meterType, buildingName string
+			var firstName, lastName sql.NullString
+			var power float64
+			if err := rows.Scan(&timestamp, &meterName, &meterType, &buildingName, &firstName, &lastName, &power); err != nil {
+				continue
+			}
+			fnStr := ""
+			lnStr := ""
+			if firstName.Valid {
+				fnStr = firstName.String
+			}
+			if lastName.Valid {
+				lnStr = lastName.String
+			}
+			csv.WriteString(fmt.Sprintf("%s,%s,%s,%s,%s,%s,%.4f\n", 
+				timestamp, meterName, meterType, buildingName, fnStr, lnStr, power))
+		}
+	}
+
+	filename := fmt.Sprintf("zev-export-%s-%s.csv", exportType, time.Now().Format("20060102-150405"))
+	
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	w.Write([]byte(csv.String()))
 }

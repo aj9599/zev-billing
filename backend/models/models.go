@@ -102,6 +102,9 @@ type BillingSettings struct {
 	CarChargingNormalPrice    float64   `json:"car_charging_normal_price"`
 	CarChargingPriorityPrice  float64   `json:"car_charging_priority_price"`
 	Currency                  string    `json:"currency"`
+	ValidFrom                 string    `json:"valid_from"`
+	ValidTo                   string    `json:"valid_to"`
+	IsActive                  bool      `json:"is_active"`
 	CreatedAt                 time.Time `json:"created_at"`
 	UpdatedAt                 time.Time `json:"updated_at"`
 }

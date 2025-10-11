@@ -21,6 +21,7 @@ export default function Layout({ onLogout }: LayoutProps) {
     { path: '/meters', icon: Zap, label: 'Meters' },
     { path: '/chargers', icon: Car, label: 'Chargers' },
     { path: '/billing', icon: FileText, label: 'Billing' },
+    { path: '/pricing', icon: Settings, label: 'Pricing' },
     { path: '/settings', icon: Settings, label: 'Settings' },
     { path: '/logs', icon: Activity, label: 'Logs' },
   ];

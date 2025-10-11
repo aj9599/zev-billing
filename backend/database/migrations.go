@@ -131,6 +131,9 @@ func RunMigrations(db *sql.DB) error {
 			car_charging_normal_price REAL NOT NULL DEFAULT 0.30,
 			car_charging_priority_price REAL NOT NULL DEFAULT 0.40,
 			currency TEXT DEFAULT 'CHF',
+			valid_from DATE NOT NULL,
+			valid_to DATE,
+			is_active INTEGER DEFAULT 1,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (building_id) REFERENCES buildings(id)
