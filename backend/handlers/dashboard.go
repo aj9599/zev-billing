@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/aj9599/zev-billing/backend/models"
@@ -68,53 +70,99 @@ func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	todayEnd := todayStart.Add(24 * time.Hour)
 	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 
-	// Calculate consumption (apartment_meter + heating_meter + water_meter + gas_meter, excluding solar and total meters)
-	if err := h.db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(mr.consumption_kwh), 0) 
-		FROM meter_readings mr
-		JOIN meters m ON mr.meter_id = m.id
-		WHERE mr.reading_time >= ? AND mr.reading_time < ?
-		AND m.meter_type IN ('apartment_meter', 'heating_meter', 'water_meter', 'gas_meter')
-	`, todayStart, todayEnd).Scan(&stats.TodayConsumption); err != nil {
-		log.Printf("Error getting today's consumption: %v", err)
-		stats.TodayConsumption = 0
+	// Helper function to calculate consumption for a period
+	calculateConsumption := func(meterTypes []string, periodStart, periodEnd time.Time) float64 {
+		if len(meterTypes) == 0 {
+			return 0
+		}
+
+		// Build dynamic query for meter types
+		placeholders := make([]string, len(meterTypes))
+		args := make([]interface{}, len(meterTypes))
+		for i, mt := range meterTypes {
+			placeholders[i] = "?"
+			args[i] = mt
+		}
+		
+		query := fmt.Sprintf(`
+			SELECT id FROM meters 
+			WHERE meter_type IN (%s) 
+			AND COALESCE(is_active, 1) = 1
+		`, strings.Join(placeholders, ","))
+		
+		// Get all active meters of specified types
+		meterRows, err := h.db.QueryContext(ctx, query, args...)
+		
+		if err != nil {
+			log.Printf("Error querying meters: %v", err)
+			return 0
+		}
+		defer meterRows.Close()
+
+		totalConsumption := 0.0
+		
+		for meterRows.Next() {
+			var meterID int
+			if err := meterRows.Scan(&meterID); err != nil {
+				continue
+			}
+
+			// Get reading just before period start (baseline)
+			var baselineReading sql.NullFloat64
+			h.db.QueryRowContext(ctx, `
+				SELECT power_kwh FROM meter_readings 
+				WHERE meter_id = ? AND reading_time < ?
+				ORDER BY reading_time DESC LIMIT 1
+			`, meterID, periodStart).Scan(&baselineReading)
+
+			// Get latest reading in the period
+			var latestReading sql.NullFloat64
+			h.db.QueryRowContext(ctx, `
+				SELECT power_kwh FROM meter_readings 
+				WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
+				ORDER BY reading_time DESC LIMIT 1
+			`, meterID, periodStart, periodEnd).Scan(&latestReading)
+
+			// Calculate consumption for this meter
+			if latestReading.Valid {
+				if baselineReading.Valid {
+					// Normal case: we have a baseline
+					consumption := latestReading.Float64 - baselineReading.Float64
+					if consumption > 0 {
+						totalConsumption += consumption
+					}
+				} else {
+					// No baseline (first reading ever is today)
+					// Use first reading of period as baseline
+					var firstReading sql.NullFloat64
+					h.db.QueryRowContext(ctx, `
+						SELECT power_kwh FROM meter_readings 
+						WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
+						ORDER BY reading_time ASC LIMIT 1
+					`, meterID, periodStart, periodEnd).Scan(&firstReading)
+					
+					if firstReading.Valid && latestReading.Float64 > firstReading.Float64 {
+						totalConsumption += latestReading.Float64 - firstReading.Float64
+					}
+				}
+			}
+		}
+		
+		return totalConsumption
 	}
 
-	if err := h.db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(mr.consumption_kwh), 0) 
-		FROM meter_readings mr
-		JOIN meters m ON mr.meter_id = m.id
-		WHERE mr.reading_time >= ?
-		AND m.meter_type IN ('apartment_meter', 'heating_meter', 'water_meter', 'gas_meter')
-	`, startOfMonth).Scan(&stats.MonthConsumption); err != nil {
-		log.Printf("Error getting month's consumption: %v", err)
-		stats.MonthConsumption = 0
-	}
+	consumptionMeterTypes := []string{"apartment_meter", "heating_meter", "water_meter", "gas_meter"}
+	solarMeterTypes := []string{"solar_meter"}
 
-	// Calculate solar generation (solar_meter)
-	if err := h.db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(mr.consumption_kwh), 0) 
-		FROM meter_readings mr
-		JOIN meters m ON mr.meter_id = m.id
-		WHERE mr.reading_time >= ? AND mr.reading_time < ?
-		AND m.meter_type = 'solar_meter'
-	`, todayStart, todayEnd).Scan(&stats.TodaySolar); err != nil {
-		log.Printf("Error getting today's solar: %v", err)
-		stats.TodaySolar = 0
-	}
+	// Calculate consumption
+	stats.TodayConsumption = calculateConsumption(consumptionMeterTypes, todayStart, todayEnd)
+	stats.MonthConsumption = calculateConsumption(consumptionMeterTypes, startOfMonth, now)
 
-	if err := h.db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(mr.consumption_kwh), 0) 
-		FROM meter_readings mr
-		JOIN meters m ON mr.meter_id = m.id
-		WHERE mr.reading_time >= ?
-		AND m.meter_type = 'solar_meter'
-	`, startOfMonth).Scan(&stats.MonthSolar); err != nil {
-		log.Printf("Error getting month's solar: %v", err)
-		stats.MonthSolar = 0
-	}
+	// Calculate solar generation
+	stats.TodaySolar = calculateConsumption(solarMeterTypes, todayStart, todayEnd)
+	stats.MonthSolar = calculateConsumption(solarMeterTypes, startOfMonth, now)
 
-	// Calculate car charging (charger_sessions)
+	// Calculate car charging (charger_sessions - these are already consumption values, not cumulative)
 	if err := h.db.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(power_kwh), 0) 
 		FROM charger_sessions
