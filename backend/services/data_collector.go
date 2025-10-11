@@ -22,6 +22,17 @@ type DataCollector struct {
 	udpPorts         []int
 }
 
+func stripControlCharacters(str string) string {
+	result := ""
+	for _, char := range str {
+		// Keep only printable characters (space and above)
+		if char >= 32 && char != 127 {
+			result += string(char)
+		}
+	}
+	return strings.TrimSpace(result)
+}
+
 func NewDataCollector(db *sql.DB) *DataCollector {
 	return &DataCollector{
 		db:           db,
@@ -208,14 +219,15 @@ func (dc *DataCollector) parseUDPData(data []byte, config map[string]interface{}
 		dataFormat = format
 	}
 
-	dataStr := string(data)
-	log.Printf("DEBUG: Parsing UDP data with format '%s': %s", dataFormat, dataStr)
+	// Clean the data - remove control characters
+	cleanData := stripControlCharacters(string(data))
+	log.Printf("DEBUG: Parsing UDP data with format '%s': Raw='%s' Cleaned='%s'", dataFormat, string(data), cleanData)
 
 	switch dataFormat {
 	case "json":
 		var jsonData map[string]interface{}
-		if err := json.Unmarshal(data, &jsonData); err != nil {
-			log.Printf("WARNING: Failed to parse UDP JSON: %v, Data: %s", err, dataStr)
+		if err := json.Unmarshal([]byte(cleanData), &jsonData); err != nil {
+			log.Printf("WARNING: Failed to parse UDP JSON: %v, Data: %s", err, cleanData)
 			return 0
 		}
 
@@ -240,7 +252,7 @@ func (dc *DataCollector) parseUDPData(data []byte, config map[string]interface{}
 
 	case "csv":
 		// Parse CSV format: "value,timestamp" or just "value"
-		parts := strings.Split(strings.TrimSpace(string(data)), ",")
+		parts := strings.Split(cleanData, ",")
 		if len(parts) > 0 {
 			if value, err := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64); err == nil {
 				log.Printf("DEBUG: Parsed CSV value: %.2f", value)
@@ -251,12 +263,12 @@ func (dc *DataCollector) parseUDPData(data []byte, config map[string]interface{}
 		}
 
 	case "raw":
-		// Try to parse as plain number
-		if value, err := strconv.ParseFloat(strings.TrimSpace(string(data)), 64); err == nil {
+		// Parse as plain number - now with control characters stripped
+		if value, err := strconv.ParseFloat(cleanData, 64); err == nil {
 			log.Printf("DEBUG: Parsed raw value: %.2f", value)
 			return value
 		} else {
-			log.Printf("WARNING: Failed to parse raw value: %v, Data: %s", err, dataStr)
+			log.Printf("WARNING: Failed to parse raw value: %v, Raw: '%s', Cleaned: '%s'", err, string(data), cleanData)
 		}
 	}
 
