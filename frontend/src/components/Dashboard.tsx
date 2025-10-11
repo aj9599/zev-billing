@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import * as React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Users, Building, Zap, Car, Activity, TrendingUp } from 'lucide-react';
 import { api } from '../api/client';
@@ -49,30 +50,73 @@ export default function Dashboard() {
   const [buildingData, setBuildingData] = useState<BuildingConsumption[]>([]);
   const [period, setPeriod] = useState('24h');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 60000);
-    return () => clearInterval(interval);
-  }, [period]);
-
-  const loadData = async () => {
+  const loadData = React.useCallback(async () => {
     try {
+      setError(null);
       const [statsData, buildingConsumption] = await Promise.all([
         api.getDashboardStats(),
         api.getConsumptionByBuilding(period)
       ]);
       setStats(statsData);
-      setBuildingData(buildingConsumption);
+      setBuildingData(Array.isArray(buildingConsumption) ? buildingConsumption : []);
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
+      setBuildingData([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [period]);
+
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(loadData, 60000);
+    return () => clearInterval(interval);
+  }, [loadData]);
 
   if (loading) {
-    return <div style={{ padding: '20px' }}>Loading...</div>;
+    return (
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        minHeight: '400px',
+        fontSize: '18px',
+        color: '#666'
+      }}>
+        Loading dashboard...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{
+        padding: '30px',
+        backgroundColor: '#fee',
+        borderRadius: '8px',
+        color: '#c00',
+        marginBottom: '20px'
+      }}>
+        <h3 style={{ marginTop: 0 }}>Error loading dashboard</h3>
+        <p>{error}</p>
+        <button 
+          onClick={() => { setLoading(true); loadData(); }}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: '#007bff',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer'
+          }}
+        >
+          Retry
+        </button>
+      </div>
+    );
   }
 
   const statCards = [
@@ -186,8 +230,13 @@ export default function Dashboard() {
             // Prepare chart data - merge all meter readings by timestamp
             const timeMap = new Map<string, any>();
             
-            building.meters.forEach(meter => {
-              meter.data.forEach(reading => {
+            // Add null checks for meters array
+            const meters = building.meters || [];
+            
+            meters.forEach(meter => {
+              // Add null check for data array
+              const readings = meter.data || [];
+              readings.forEach(reading => {
                 const time = new Date(reading.timestamp).toLocaleTimeString('de-CH', { 
                   hour: '2-digit', 
                   minute: '2-digit' 
@@ -227,45 +276,47 @@ export default function Dashboard() {
                 </h3>
 
                 {/* Legend */}
-                <div style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: '12px',
-                  marginBottom: '20px',
-                  padding: '12px',
-                  backgroundColor: '#f9fafb',
-                  borderRadius: '8px'
-                }}>
-                  {building.meters.map(meter => (
-                    <div
-                      key={meter.meter_id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '4px 8px',
-                        backgroundColor: 'white',
-                        borderRadius: '4px',
-                        fontSize: '13px'
-                      }}
-                    >
+                {meters.length > 0 && (
+                  <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '12px',
+                    marginBottom: '20px',
+                    padding: '12px',
+                    backgroundColor: '#f9fafb',
+                    borderRadius: '8px'
+                  }}>
+                    {meters.map(meter => (
                       <div
+                        key={meter.meter_id}
                         style={{
-                          width: '12px',
-                          height: '12px',
-                          borderRadius: '2px',
-                          backgroundColor: getMeterColor(meter.meter_type)
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '4px 8px',
+                          backgroundColor: 'white',
+                          borderRadius: '4px',
+                          fontSize: '13px'
                         }}
-                      />
-                      <span style={{ fontWeight: '500' }}>
-                        {getMeterDisplayName(meter)}
-                      </span>
-                      <span style={{ color: '#6b7280', fontSize: '12px' }}>
-                        ({meter.meter_type.replace('_', ' ')})
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                      >
+                        <div
+                          style={{
+                            width: '12px',
+                            height: '12px',
+                            borderRadius: '2px',
+                            backgroundColor: getMeterColor(meter.meter_type)
+                          }}
+                        />
+                        <span style={{ fontWeight: '500' }}>
+                          {getMeterDisplayName(meter)}
+                        </span>
+                        <span style={{ color: '#6b7280', fontSize: '12px' }}>
+                          ({meter.meter_type.replace('_', ' ')})
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {chartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={400}>
@@ -296,7 +347,7 @@ export default function Dashboard() {
                       <Legend 
                         wrapperStyle={{ fontSize: '12px' }}
                       />
-                      {building.meters.map(meter => (
+                      {meters.map(meter => (
                         <Line
                           key={meter.meter_id}
                           type="monotone"
@@ -310,13 +361,25 @@ export default function Dashboard() {
                       ))}
                     </LineChart>
                   </ResponsiveContainer>
+                ) : meters.length > 0 ? (
+                  <div style={{ 
+                    textAlign: 'center', 
+                    padding: '60px', 
+                    color: '#9ca3af' 
+                  }}>
+                    No consumption data available for this building in the selected period.
+                    <br />
+                    <small>Meters are configured but haven't collected data yet.</small>
+                  </div>
                 ) : (
                   <div style={{ 
                     textAlign: 'center', 
                     padding: '60px', 
                     color: '#9ca3af' 
                   }}>
-                    No consumption data available for this building in the selected period
+                    No meters configured for this building yet.
+                    <br />
+                    <small>Add meters in the Meters page to start tracking consumption.</small>
                   </div>
                 )}
               </div>
@@ -332,7 +395,8 @@ export default function Dashboard() {
           textAlign: 'center',
           color: '#9ca3af'
         }}>
-          No consumption data available
+          <h3 style={{ marginTop: 0, color: '#6b7280' }}>No Buildings Found</h3>
+          <p>Create buildings in the Buildings page to start monitoring consumption.</p>
         </div>
       )}
     </div>

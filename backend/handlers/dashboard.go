@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -124,7 +125,10 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		ORDER BY name
 	`)
 	if err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Printf("Error querying buildings: %v", err)
+		// Return empty array instead of error
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]interface{}{})
 		return
 	}
 	defer buildingRows.Close()
@@ -149,6 +153,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		var buildingID int
 		var buildingName string
 		if err := buildingRows.Scan(&buildingID, &buildingName); err != nil {
+			log.Printf("Error scanning building row: %v", err)
 			continue
 		}
 
@@ -167,6 +172,9 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		`, buildingID)
 
 		if err != nil {
+			log.Printf("Error querying meters for building %d: %v", buildingID, err)
+			// Still add the building with empty meters
+			buildings = append(buildings, building)
 			continue
 		}
 
@@ -176,17 +184,22 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			var userID sql.NullInt64
 			
 			if err := meterRows.Scan(&meterID, &meterName, &meterType, &userID); err != nil {
+				log.Printf("Error scanning meter row: %v", err)
 				continue
 			}
 
 			// Get user name if applicable
 			userName := ""
 			if userID.Valid {
-				h.db.QueryRow(`
+				err := h.db.QueryRow(`
 					SELECT first_name || ' ' || last_name 
 					FROM users 
 					WHERE id = ?
 				`, userID.Int64).Scan(&userName)
+				if err != nil {
+					log.Printf("Error getting user name for user %d: %v", userID.Int64, err)
+					// Continue without user name
+				}
 			}
 
 			// Get consumption data for this meter
@@ -197,16 +210,19 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				ORDER BY reading_time ASC
 			`, meterID, startTime)
 
-			if err != nil {
-				continue
-			}
-
 			meterData := MeterData{
 				MeterID:   meterID,
 				MeterName: meterName,
 				MeterType: meterType,
 				UserName:  userName,
 				Data:      []models.ConsumptionData{},
+			}
+
+			if err != nil {
+				log.Printf("Error querying readings for meter %d: %v", meterID, err)
+				// Add meter with empty data
+				building.Meters = append(building.Meters, meterData)
+				continue
 			}
 
 			for dataRows.Next() {
@@ -226,10 +242,8 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		}
 		meterRows.Close()
 
-		// Only add building if it has meters with data
-		if len(building.Meters) > 0 {
-			buildings = append(buildings, building)
-		}
+		// Add building even if it has no meters (so user can see it exists)
+		buildings = append(buildings, building)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
