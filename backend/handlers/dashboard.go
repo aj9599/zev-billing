@@ -62,17 +62,20 @@ func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 		stats.ActiveChargers = 0
 	}
 
-	today := time.Now().Format("2006-01-02")
-	startOfMonth := time.Now().AddDate(0, 0, -time.Now().Day()+1).Format("2006-01-02")
+	// Get start and end of today in proper format for SQLite
+	now := time.Now()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	todayEnd := todayStart.Add(24 * time.Hour)
+	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 
 	// Calculate consumption (apartment_meter + heating_meter + water_meter + gas_meter, excluding solar and total meters)
 	if err := h.db.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(mr.consumption_kwh), 0) 
 		FROM meter_readings mr
 		JOIN meters m ON mr.meter_id = m.id
-		WHERE DATE(mr.reading_time) = ?
+		WHERE mr.reading_time >= ? AND mr.reading_time < ?
 		AND m.meter_type IN ('apartment_meter', 'heating_meter', 'water_meter', 'gas_meter')
-	`, today).Scan(&stats.TodayConsumption); err != nil {
+	`, todayStart, todayEnd).Scan(&stats.TodayConsumption); err != nil {
 		log.Printf("Error getting today's consumption: %v", err)
 		stats.TodayConsumption = 0
 	}
@@ -93,9 +96,9 @@ func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 		SELECT COALESCE(SUM(mr.consumption_kwh), 0) 
 		FROM meter_readings mr
 		JOIN meters m ON mr.meter_id = m.id
-		WHERE DATE(mr.reading_time) = ?
+		WHERE mr.reading_time >= ? AND mr.reading_time < ?
 		AND m.meter_type = 'solar_meter'
-	`, today).Scan(&stats.TodaySolar); err != nil {
+	`, todayStart, todayEnd).Scan(&stats.TodaySolar); err != nil {
 		log.Printf("Error getting today's solar: %v", err)
 		stats.TodaySolar = 0
 	}
@@ -115,8 +118,8 @@ func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	if err := h.db.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(power_kwh), 0) 
 		FROM charger_sessions
-		WHERE DATE(session_time) = ?
-	`, today).Scan(&stats.TodayCharging); err != nil {
+		WHERE session_time >= ? AND session_time < ?
+	`, todayStart, todayEnd).Scan(&stats.TodayCharging); err != nil {
 		log.Printf("Error getting today's charging: %v", err)
 		stats.TodayCharging = 0
 	}
