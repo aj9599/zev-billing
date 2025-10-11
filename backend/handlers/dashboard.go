@@ -153,7 +153,8 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	// FIXED: Use longer timeout for the main context
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
 	period := r.URL.Query().Get("period")
@@ -232,22 +233,22 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			Meters:       []MeterData{},
 		}
 
-		meterCtx, meterCancel := context.WithTimeout(ctx, 3*time.Second)
-		
+		// FIXED: Don't cancel context immediately - let it live for the duration of the query
 		log.Printf("  Querying meters for building %d...", buildingID)
-		meterRows, err := h.db.QueryContext(meterCtx, `
+		meterRows, err := h.db.QueryContext(ctx, `
 			SELECT m.id, m.name, m.meter_type, m.user_id
 			FROM meters m
 			WHERE m.building_id = ? AND COALESCE(m.is_active, 1) = 1
 			ORDER BY m.meter_type, m.name
 		`, buildingID)
-		meterCancel()
 
 		if err != nil {
 			log.Printf("  Error querying meters for building %d: %v", buildingID, err)
 			buildings = append(buildings, building)
 			continue
 		}
+		// FIXED: Ensure rows are closed after we're done with them
+		defer meterRows.Close()
 
 		meterCount := 0
 		for meterRows.Next() {
@@ -265,27 +266,25 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 
 			userName := ""
 			if userID.Valid {
-				userCtx, userCancel := context.WithTimeout(ctx, 1*time.Second)
-				err := h.db.QueryRowContext(userCtx, `
+				// Query user name without creating a new context
+				err := h.db.QueryRowContext(ctx, `
 					SELECT first_name || ' ' || last_name 
 					FROM users 
 					WHERE id = ?
 				`, userID.Int64).Scan(&userName)
-				userCancel()
 				
 				if err != nil {
 					log.Printf("    Error getting user name for user %d: %v", userID.Int64, err)
 				}
 			}
 
-			dataCtx, dataCancel := context.WithTimeout(ctx, 3*time.Second)
-			dataRows, err := h.db.QueryContext(dataCtx, `
+			// FIXED: Query readings without cancelling context prematurely
+			dataRows, err := h.db.QueryContext(ctx, `
 				SELECT reading_time, consumption_kwh
 				FROM meter_readings
 				WHERE meter_id = ? AND reading_time >= ?
 				ORDER BY reading_time ASC
 			`, meterID, startTime)
-			dataCancel()
 
 			meterData := MeterData{
 				MeterID:   meterID,
@@ -314,13 +313,12 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					})
 				}
 			}
-			dataRows.Close()
+			dataRows.Close() // Close immediately after iteration
 
 			log.Printf("    Meter ID: %d has %d data points", meterID, dataCount)
 
 			building.Meters = append(building.Meters, meterData)
 		}
-		meterRows.Close()
 
 		log.Printf("  Building %d has %d meters", buildingID, meterCount)
 		buildings = append(buildings, building)

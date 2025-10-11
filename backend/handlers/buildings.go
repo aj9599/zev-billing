@@ -50,13 +50,14 @@ func (h *BuildingHandler) List(w http.ResponseWriter, r *http.Request) {
 			b.GroupBuildings = []int{}
 			groupRows, err := h.db.Query("SELECT building_id FROM building_groups WHERE group_id = ?", b.ID)
 			if err == nil {
-				defer groupRows.Close()
+				// FIXED: Properly close groupRows with defer
 				for groupRows.Next() {
 					var buildingID int
 					if err := groupRows.Scan(&buildingID); err == nil {
 						b.GroupBuildings = append(b.GroupBuildings, buildingID)
 					}
 				}
+				groupRows.Close() // Close immediately after use
 			}
 		} else {
 			b.GroupBuildings = []int{}
@@ -236,8 +237,13 @@ func (h *BuildingHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.db.Exec("DELETE FROM building_groups WHERE group_id = ? OR building_id = ?", id, id)
+	// Delete building group associations first
+	_, err = h.db.Exec("DELETE FROM building_groups WHERE group_id = ? OR building_id = ?", id, id)
+	if err != nil {
+		log.Printf("Error deleting building group associations: %v", err)
+	}
 
+	// Delete the building
 	_, err = h.db.Exec("DELETE FROM buildings WHERE id = ?", id)
 	if err != nil {
 		log.Printf("Error deleting building: %v", err)

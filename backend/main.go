@@ -140,12 +140,13 @@ func main() {
 
 	handler := c.Handler(r)
 
+	// FIXED: Increased timeouts to prevent database lock issues
 	server := &http.Server{
 		Addr:         cfg.ServerAddress,
 		Handler:      handler,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		ReadTimeout:  60 * time.Second,  // Increased from 30s
+		WriteTimeout: 60 * time.Second,  // Increased from 30s
+		IdleTimeout:  180 * time.Second, // Increased from 120s
 	}
 
 	log.Printf("Server starting on %s", cfg.ServerAddress)

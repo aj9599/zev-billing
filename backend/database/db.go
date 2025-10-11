@@ -11,15 +11,17 @@ import (
 func InitDB(dataSourceName string) (*sql.DB, error) {
 	log.Printf("Initializing database: %s", dataSourceName)
 	
-	dsn := dataSourceName + "?_journal_mode=WAL&_busy_timeout=10000&_synchronous=NORMAL&_cache_size=1000&_foreign_keys=ON"
+	// Enable WAL mode for better concurrent access
+	dsn := dataSourceName + "?_journal_mode=WAL&_busy_timeout=30000&_synchronous=NORMAL&_cache_size=2000&_foreign_keys=ON"
 	
 	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, err
 	}
 
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
+	// FIXED: Increase max open connections to allow concurrent queries
+	db.SetMaxOpenConns(10)  // Increased from 1 to 10
+	db.SetMaxIdleConns(5)   // Increased from 1 to 5
 	db.SetConnMaxLifetime(time.Hour)
 	db.SetConnMaxIdleTime(10 * time.Minute)
 
