@@ -114,7 +114,7 @@ export default function AdminLogs() {
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text'
           }}>
-            <Activity size={36} />
+            <Activity size={36} style={{ color: '#667eea' }} />
             System Logs
           </h1>
           <p style={{ color: '#6b7280', fontSize: '16px' }}>

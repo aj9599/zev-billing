@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import * as React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Users, Building, Zap, Car, Activity, TrendingUp } from 'lucide-react';
+import { Users, Building, Zap, Car, Activity, TrendingUp, LayoutDashboard as DashIcon} from 'lucide-react';
 import { api } from '../api/client';
 import type { DashboardStats } from '../types';
 
@@ -131,14 +131,18 @@ export default function Dashboard() {
     <div>
       <div style={{ marginBottom: '30px' }}>
         <h1 style={{ 
-          fontSize: '36px', 
-          fontWeight: '800', 
-          marginBottom: '8px',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text'
+            fontSize: '36px', 
+            fontWeight: '800', 
+            marginBottom: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text'
         }}>
+          <DashIcon size={36} style={{ color: '#667eea' }} />
           Dashboard
         </h1>
         <p style={{ color: '#6b7280', fontSize: '16px' }}>

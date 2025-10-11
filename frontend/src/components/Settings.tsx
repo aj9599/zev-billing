@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Lock, Key, Shield, CheckCircle, RefreshCw, Ban, Database, Activity } from 'lucide-react';
+import { Lock, Key, Shield, CheckCircle, RefreshCw, Ban, Database, Activity, Settings } from 'lucide-react';
 import { api } from '../api/client';
 
 export default function Settings() {
@@ -49,6 +49,7 @@ export default function Settings() {
           WebkitTextFillColor: 'transparent',
           backgroundClip: 'text'
         }}>
+          <Settings size={36} style={{ color: '#667eea' }} />
           Settings
         </h1>
         <p style={{ color: '#6b7280', fontSize: '16px' }}>
