@@ -17,10 +17,11 @@ import (
 type DataCollector struct {
 	db               *sql.DB
 	udpListeners     map[int]*net.UDPConn
-	udpBuffers       map[int]float64 // Buffer for UDP readings
+	udpBuffers       map[int]float64
 	mu               sync.Mutex
 	lastCollection   time.Time
 	udpPorts         []int
+	restartChannel   chan bool
 }
 
 func stripControlCharacters(str string) string {
@@ -35,11 +36,35 @@ func stripControlCharacters(str string) string {
 
 func NewDataCollector(db *sql.DB) *DataCollector {
 	return &DataCollector{
-		db:           db,
-		udpListeners: make(map[int]*net.UDPConn),
-		udpBuffers:   make(map[int]float64),
-		udpPorts:     []int{},
+		db:             db,
+		udpListeners:   make(map[int]*net.UDPConn),
+		udpBuffers:     make(map[int]float64),
+		udpPorts:       []int{},
+		restartChannel: make(chan bool, 1),
 	}
+}
+
+func (dc *DataCollector) RestartUDPListeners() {
+	log.Println("=== Restarting UDP Listeners ===")
+	
+	// Close all existing UDP listeners
+	dc.mu.Lock()
+	for port, conn := range dc.udpListeners {
+		log.Printf("Closing UDP listener on port %d", port)
+		conn.Close()
+		delete(dc.udpListeners, port)
+	}
+	dc.udpPorts = []int{}
+	dc.mu.Unlock()
+
+	// Wait a bit for ports to be released
+	time.Sleep(500 * time.Millisecond)
+
+	// Reinitialize all UDP listeners
+	dc.initializeUDPListeners()
+	
+	log.Println("=== UDP Listeners Restarted ===")
+	dc.logToDatabase("UDP Listeners Restarted", "All UDP listeners have been reinitialized")
 }
 
 func (dc *DataCollector) Start() {
@@ -55,8 +80,13 @@ func (dc *DataCollector) Start() {
 	ticker := time.NewTicker(15 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		dc.collectAllData()
+	for {
+		select {
+		case <-ticker.C:
+			dc.collectAllData()
+		case <-dc.restartChannel:
+			log.Println("Received restart signal")
+		}
 	}
 }
 
@@ -162,6 +192,11 @@ func (dc *DataCollector) startUDPListener(meterID int, meterName string, config 
 	for {
 		n, remoteAddr, err := conn.ReadFromUDP(buffer)
 		if err != nil {
+			// Check if connection was closed (during restart)
+			if strings.Contains(err.Error(), "closed") {
+				log.Printf("UDP listener on port %d closed", port)
+				return
+			}
 			log.Printf("WARNING: UDP read error on port %d: %v", port, err)
 			continue
 		}
@@ -255,7 +290,6 @@ func (dc *DataCollector) saveBufferedUDPData() {
 
 	for meterID, reading := range dc.udpBuffers {
 		if reading > 0 {
-			// Get previous reading to calculate consumption
 			var prevReading float64
 			dc.db.QueryRow(`
 				SELECT power_kwh FROM meter_readings 
@@ -265,10 +299,9 @@ func (dc *DataCollector) saveBufferedUDPData() {
 
 			consumption := reading - prevReading
 			if consumption < 0 {
-				consumption = reading // Reset case
+				consumption = reading
 			}
 
-			// Save the current reading
 			_, err := dc.db.Exec(`
 				INSERT INTO meter_readings (meter_id, reading_time, power_kwh, consumption_kwh)
 				VALUES (?, ?, ?, ?)
@@ -336,7 +369,6 @@ func (dc *DataCollector) collectMeterData() {
 		}
 
 		if reading > 0 {
-			// Get previous reading
 			var prevReading float64
 			dc.db.QueryRow(`
 				SELECT power_kwh FROM meter_readings 

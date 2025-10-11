@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Activity, RefreshCw, AlertCircle, CheckCircle, Info } from 'lucide-react';
+import { Activity, RefreshCw, AlertCircle, CheckCircle, Info, Power } from 'lucide-react';
 import { api } from '../api/client';
 import type { AdminLog } from '../types';
 
@@ -8,6 +8,7 @@ export default function AdminLogs() {
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(false);
+  const [rebooting, setRebooting] = useState(false);
 
   useEffect(() => {
     loadLogs();
@@ -19,7 +20,7 @@ export default function AdminLogs() {
       const interval = setInterval(() => {
         loadLogs();
         loadDebugInfo();
-      }, 30000); // Refresh every 30 seconds
+      }, 30000);
       return () => clearInterval(interval);
     }
   }, [autoRefresh]);
@@ -50,6 +51,35 @@ export default function AdminLogs() {
     }
   };
 
+  const handleReboot = async () => {
+    if (!confirm('Are you sure you want to reboot the system? This will restart the backend service.')) {
+      return;
+    }
+
+    setRebooting(true);
+    try {
+      const response = await fetch('/api/system/reboot', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        alert('System is rebooting... The service will restart in a few seconds.');
+        setTimeout(() => {
+          window.location.reload();
+        }, 5000);
+      } else {
+        alert('Failed to reboot system');
+        setRebooting(false);
+      }
+    } catch (err) {
+      alert('Failed to reboot system');
+      setRebooting(false);
+    }
+  };
+
   const getLogIcon = (action: string) => {
     if (action.toLowerCase().includes('error') || action.toLowerCase().includes('failed')) {
       return <AlertCircle size={16} color="#dc3545" />;
@@ -71,12 +101,35 @@ export default function AdminLogs() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-        <h1 style={{ fontSize: '32px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Activity size={32} />
-          System Logs & Debugging
-        </h1>
+        <div>
+          <h1 style={{ 
+            fontSize: '36px', 
+            fontWeight: '800', 
+            marginBottom: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text'
+          }}>
+            <Activity size={36} />
+            System Logs
+          </h1>
+          <p style={{ color: '#6b7280', fontSize: '16px' }}>
+            Monitor system activity and debug information
+          </p>
+        </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
+          <label style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '8px', 
+            fontSize: '14px',
+            fontWeight: '500',
+            color: '#374151'
+          }}>
             <input 
               type="checkbox" 
               checked={autoRefresh} 
@@ -88,13 +141,70 @@ export default function AdminLogs() {
             onClick={() => { loadLogs(); loadDebugInfo(); }}
             disabled={loading}
             style={{
-              display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
-              backgroundColor: '#007bff', color: 'white', border: 'none',
-              borderRadius: '6px', fontSize: '14px', opacity: loading ? 0.7 : 1
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px', 
+              padding: '12px 20px',
+              backgroundColor: '#007bff', 
+              color: 'white', 
+              border: 'none',
+              borderRadius: '10px', 
+              fontSize: '14px',
+              fontWeight: '600',
+              opacity: loading ? 0.7 : 1,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              boxShadow: '0 4px 12px rgba(0, 123, 255, 0.3)',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseEnter={(e) => {
+              if (!loading) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 123, 255, 0.4)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!loading) {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 123, 255, 0.3)';
+              }
             }}
           >
             <RefreshCw size={18} />
-            Refresh Now
+            Refresh
+          </button>
+          <button
+            onClick={handleReboot}
+            disabled={rebooting}
+            style={{
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px', 
+              padding: '12px 20px',
+              background: rebooting ? '#9ca3af' : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+              color: 'white', 
+              border: 'none',
+              borderRadius: '10px', 
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: rebooting ? 'not-allowed' : 'pointer',
+              boxShadow: rebooting ? 'none' : '0 4px 12px rgba(240, 147, 251, 0.3)',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseEnter={(e) => {
+              if (!rebooting) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 6px 16px rgba(240, 147, 251, 0.4)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!rebooting) {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(240, 147, 251, 0.3)';
+              }
+            }}
+          >
+            <Power size={18} />
+            {rebooting ? 'Rebooting...' : 'Reboot System'}
           </button>
         </div>
       </div>
@@ -102,7 +212,7 @@ export default function AdminLogs() {
       {/* Debug Information Cards */}
       {debugInfo && (
         <div style={{ marginBottom: '30px' }}>
-          <h2 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px' }}>
+          <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '16px', color: '#1f2937' }}>
             Real-Time System Status
           </h2>
           <div style={{
@@ -111,81 +221,113 @@ export default function AdminLogs() {
             gap: '20px'
           }}>
             <div style={{
-              backgroundColor: 'white', padding: '24px', borderRadius: '12px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)', border: '2px solid #28a745'
-            }}>
-              <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Data Collector Status</div>
-              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#28a745' }}>
+              backgroundColor: 'white', 
+              padding: '24px', 
+              borderRadius: '16px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.08)', 
+              border: '2px solid #10b981',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+              <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>Data Collector Status</div>
+              <div style={{ fontSize: '28px', fontWeight: '800', color: '#10b981', marginBottom: '8px' }}>
                 ● Running
               </div>
-              <div style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
+              <div style={{ fontSize: '12px', color: '#6b7280' }}>
                 Collection Interval: 15 minutes
               </div>
             </div>
 
             <div style={{
-              backgroundColor: 'white', padding: '24px', borderRadius: '12px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-            }}>
-              <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Active Meters</div>
-              <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
+              backgroundColor: 'white', 
+              padding: '24px', 
+              borderRadius: '16px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+              <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>Active Meters</div>
+              <div style={{ fontSize: '28px', fontWeight: '800', color: '#667eea' }}>
                 {debugInfo.active_meters || 0} / {debugInfo.total_meters || 0}
               </div>
-              <div style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
+              <div style={{ fontSize: '12px', color: '#6b7280' }}>
                 Collecting data
               </div>
             </div>
 
             <div style={{
-              backgroundColor: 'white', padding: '24px', borderRadius: '12px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-            }}>
-              <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Active Chargers</div>
-              <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
+              backgroundColor: 'white', 
+              padding: '24px', 
+              borderRadius: '16px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+              <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>Active Chargers</div>
+              <div style={{ fontSize: '28px', fontWeight: '800', color: '#764ba2' }}>
                 {debugInfo.active_chargers || 0} / {debugInfo.total_chargers || 0}
               </div>
-              <div style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
+              <div style={{ fontSize: '12px', color: '#6b7280' }}>
                 Monitoring sessions
               </div>
             </div>
 
             <div style={{
-              backgroundColor: 'white', padding: '24px', borderRadius: '12px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-            }}>
-              <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Last Collection</div>
-              <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                {debugInfo.last_collection ? new Date(debugInfo.last_collection).toLocaleTimeString('de-CH') : 'Never'}
+              backgroundColor: 'white', 
+              padding: '24px', 
+              borderRadius: '16px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+              <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>Last Collection</div>
+              <div style={{ fontSize: '28px', fontWeight: '800', color: '#1f2937' }}>
+                {debugInfo.last_collection ? new Date(debugInfo.last_collection).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' }) : 'Never'}
               </div>
-              <div style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
+              <div style={{ fontSize: '12px', color: '#6b7280' }}>
                 Next in ~{debugInfo.next_collection_minutes || 15} min
               </div>
             </div>
 
             {debugInfo.udp_listeners && debugInfo.udp_listeners.length > 0 && (
               <div style={{
-                backgroundColor: 'white', padding: '24px', borderRadius: '12px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)', border: '2px solid #007bff'
-              }}>
-                <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>UDP Listeners</div>
-                <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#007bff' }}>
+                backgroundColor: 'white', 
+                padding: '24px', 
+                borderRadius: '16px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.08)', 
+                border: '2px solid #3b82f6',
+                transition: 'all 0.3s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+                <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>UDP Listeners</div>
+                <div style={{ fontSize: '28px', fontWeight: '800', color: '#3b82f6' }}>
                   {debugInfo.udp_listeners.length} Active
                 </div>
-                <div style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
+                <div style={{ fontSize: '12px', color: '#6b7280' }}>
                   Ports: {debugInfo.udp_listeners.join(', ')}
                 </div>
               </div>
             )}
 
             <div style={{
-              backgroundColor: 'white', padding: '24px', borderRadius: '12px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-            }}>
-              <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Recent Errors</div>
-              <div style={{ fontSize: '24px', fontWeight: 'bold', color: debugInfo.recent_errors > 0 ? '#dc3545' : '#28a745' }}>
+              backgroundColor: 'white', 
+              padding: '24px', 
+              borderRadius: '16px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+              <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>Recent Errors</div>
+              <div style={{ fontSize: '28px', fontWeight: '800', color: debugInfo.recent_errors > 0 ? '#dc3545' : '#10b981' }}>
                 {debugInfo.recent_errors || 0}
               </div>
-              <div style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
+              <div style={{ fontSize: '12px', color: '#6b7280' }}>
                 Last 24 hours
               </div>
             </div>
@@ -193,49 +335,28 @@ export default function AdminLogs() {
         </div>
       )}
 
-      {/* Connection Test Guide */}
-      <div style={{
-        backgroundColor: '#e3f2fd', padding: '20px', borderRadius: '12px',
-        marginBottom: '30px', border: '1px solid #2196f3'
-      }}>
-        <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px', color: '#1565c0' }}>
-          🔍 Debugging Tips
-        </h3>
-        <div style={{ fontSize: '14px', color: '#1565c0', lineHeight: '1.6' }}>
-          <p><strong>What to look for in the logs:</strong></p>
-          <ul style={{ marginLeft: '20px', marginTop: '8px' }}>
-            <li><strong>Data collection attempts:</strong> Look for "Starting data collection cycle" every 15 minutes</li>
-            <li><strong>HTTP errors:</strong> "HTTP request failed" indicates network or endpoint issues</li>
-            <li><strong>UDP reception:</strong> "UDP data received" confirms packets are arriving</li>
-            <li><strong>Successful readings:</strong> "Collected meter data" with kWh values</li>
-            <li><strong>Connection errors:</strong> Timeout or connection refused messages</li>
-          </ul>
-          <p style={{ marginTop: '12px' }}><strong>Common issues:</strong></p>
-          <ul style={{ marginLeft: '20px', marginTop: '8px' }}>
-            <li>No logs appearing → Service may not be running (check with <code style={{ backgroundColor: '#bbdefb', padding: '2px 6px', borderRadius: '4px' }}>sudo systemctl status zev-billing</code>)</li>
-            <li>HTTP timeout → Check if the IP address is correct and reachable</li>
-            <li>UDP not receiving → Verify firewall allows port 8888/UDP</li>
-            <li>Wrong data format → Check the JSON structure matches expectations</li>
-          </ul>
-        </div>
-      </div>
-
       {/* Logs Table */}
       <div style={{
-        backgroundColor: 'white', borderRadius: '12px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden'
+        backgroundColor: 'white', 
+        borderRadius: '16px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.08)', 
+        overflow: 'hidden'
       }}>
         <div style={{
-          padding: '20px', borderBottom: '1px solid #eee',
-          backgroundColor: '#f9f9f9', fontWeight: '600'
+          padding: '20px', 
+          borderBottom: '2px solid #f3f4f6',
+          backgroundColor: '#f9fafb', 
+          fontWeight: '700',
+          fontSize: '18px',
+          color: '#1f2937'
         }}>
           Activity Log (Most Recent 200 Entries)
         </div>
         
         <div style={{ maxHeight: '600px', overflow: 'auto' }}>
           <table style={{ width: '100%' }}>
-            <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f9f9f9' }}>
-              <tr style={{ borderBottom: '1px solid #eee' }}>
+            <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f9fafb', zIndex: 10 }}>
+              <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', width: '40px' }}></th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Timestamp</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Action</th>
@@ -246,20 +367,23 @@ export default function AdminLogs() {
             <tbody>
               {logs.map(log => (
                 <tr key={log.id} style={{
-                  borderBottom: '1px solid #eee',
-                  backgroundColor: getLogColor(log.action)
-                }}>
+                  borderBottom: '1px solid #f3f4f6',
+                  backgroundColor: getLogColor(log.action),
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = getLogColor(log.action)}>
                   <td style={{ padding: '16px', textAlign: 'center' }}>
                     {getLogIcon(log.action)}
                   </td>
-                  <td style={{ padding: '16px', fontSize: '13px', color: '#666', whiteSpace: 'nowrap' }}>
+                  <td style={{ padding: '16px', fontSize: '13px', color: '#6b7280', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>
                     {new Date(log.created_at).toLocaleString('de-CH')}
                   </td>
-                  <td style={{ padding: '16px', fontWeight: '500' }}>{log.action}</td>
-                  <td style={{ padding: '16px', fontSize: '14px', color: '#666', maxWidth: '400px', wordBreak: 'break-word' }}>
+                  <td style={{ padding: '16px', fontWeight: '600', fontSize: '14px' }}>{log.action}</td>
+                  <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280', maxWidth: '400px', wordBreak: 'break-word' }}>
                     {log.details || '-'}
                   </td>
-                  <td style={{ padding: '16px', fontSize: '13px', fontFamily: 'monospace' }}>
+                  <td style={{ padding: '16px', fontSize: '13px', fontFamily: 'monospace', color: '#6b7280' }}>
                     {log.ip_address || '-'}
                   </td>
                 </tr>
@@ -269,33 +393,16 @@ export default function AdminLogs() {
         </div>
 
         {logs.length === 0 && !loading && (
-          <div style={{ padding: '60px', textAlign: 'center', color: '#999' }}>
+          <div style={{ padding: '60px', textAlign: 'center', color: '#9ca3af' }}>
             No logs available yet. System activity will appear here.
           </div>
         )}
 
         {loading && (
-          <div style={{ padding: '60px', textAlign: 'center', color: '#999' }}>
+          <div style={{ padding: '60px', textAlign: 'center', color: '#9ca3af' }}>
             Loading logs...
           </div>
         )}
-      </div>
-
-      {/* Help Information */}
-      <div style={{
-        marginTop: '30px', padding: '20px', backgroundColor: '#fff3cd',
-        border: '1px solid #ffc107', borderRadius: '8px'
-      }}>
-        <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: '#856404' }}>
-          📊 System Information
-        </h3>
-        <p style={{ fontSize: '14px', color: '#856404', lineHeight: '1.6' }}>
-          The ZEV billing system collects data from all active meters and chargers every 15 minutes according to the Swiss ZEV standard.
-          All data is stored with timestamps for accurate billing calculations. Monitor this page to ensure all devices are reporting correctly.
-        </p>
-        <p style={{ fontSize: '14px', color: '#856404', lineHeight: '1.6', marginTop: '10px' }}>
-          <strong>Need more help?</strong> Check the full system logs on the Raspberry Pi with: <code style={{ backgroundColor: '#fff', padding: '2px 6px', borderRadius: '4px' }}>journalctl -u zev-billing -f</code>
-        </p>
       </div>
     </div>
   );

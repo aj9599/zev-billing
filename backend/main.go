@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
+	"os/exec"
 	"time"
 
 	"github.com/aj9599/zev-billing/backend/config"
@@ -46,7 +48,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(db, cfg.JWTSecret)
 	userHandler := handlers.NewUserHandler(db)
 	buildingHandler := handlers.NewBuildingHandler(db)
-	meterHandler := handlers.NewMeterHandler(db)
+	meterHandler := handlers.NewMeterHandler(db, dataCollector)
 	chargerHandler := handlers.NewChargerHandler(db)
 	billingHandler := handlers.NewBillingHandler(db, billingService)
 	dashboardHandler := handlers.NewDashboardHandler(db)
@@ -67,6 +69,9 @@ func main() {
 
 	// Debug/Status route
 	api.HandleFunc("/debug/status", debugStatusHandler).Methods("GET")
+
+	// System routes
+	api.HandleFunc("/system/reboot", rebootHandler).Methods("POST")
 
 	// User routes
 	api.HandleFunc("/users", userHandler.List).Methods("GET")
@@ -151,4 +156,26 @@ func debugStatusHandler(w http.ResponseWriter, r *http.Request) {
 	debugInfo := dataCollector.GetDebugInfo()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(debugInfo)
+}
+
+func rebootHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("System reboot requested")
+	
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"rebooting"}`))
+
+	// Restart the service after a short delay
+	go func() {
+		time.Sleep(1 * time.Second)
+		log.Println("Executing service restart...")
+		
+		// Try to restart via systemctl
+		cmd := exec.Command("systemctl", "restart", "zev-billing.service")
+		if err := cmd.Run(); err != nil {
+			log.Printf("Failed to restart via systemctl: %v", err)
+			// Fallback: exit the process, systemd will restart it
+			os.Exit(0)
+		}
+	}()
 }

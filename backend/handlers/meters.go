@@ -3,19 +3,25 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/aj9599/zev-billing/backend/models"
+	"github.com/aj9599/zev-billing/backend/services"
 	"github.com/gorilla/mux"
 )
 
 type MeterHandler struct {
-	db *sql.DB
+	db            *sql.DB
+	dataCollector *services.DataCollector
 }
 
-func NewMeterHandler(db *sql.DB) *MeterHandler {
-	return &MeterHandler{db: db}
+func NewMeterHandler(db *sql.DB, dataCollector *services.DataCollector) *MeterHandler {
+	return &MeterHandler{
+		db:            db,
+		dataCollector: dataCollector,
+	}
 }
 
 func (h *MeterHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -118,6 +124,12 @@ func (h *MeterHandler) Create(w http.ResponseWriter, r *http.Request) {
 	id, _ := result.LastInsertId()
 	m.ID = int(id)
 
+	// If it's a UDP meter, restart UDP listeners
+	if m.ConnectionType == "udp" {
+		log.Printf("New UDP meter created, restarting UDP listeners...")
+		go h.dataCollector.RestartUDPListeners()
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(m)
@@ -152,6 +164,13 @@ func (h *MeterHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	m.ID = id
+
+	// If it's a UDP meter, restart UDP listeners
+	if m.ConnectionType == "udp" {
+		log.Printf("UDP meter updated, restarting UDP listeners...")
+		go h.dataCollector.RestartUDPListeners()
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(m)
 }
@@ -164,10 +183,20 @@ func (h *MeterHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if it's a UDP meter
+	var connectionType string
+	h.db.QueryRow("SELECT connection_type FROM meters WHERE id = ?", id).Scan(&connectionType)
+
 	_, err = h.db.Exec("DELETE FROM meters WHERE id = ?", id)
 	if err != nil {
 		http.Error(w, "Failed to delete meter", http.StatusInternalServerError)
 		return
+	}
+
+	// If it was a UDP meter, restart UDP listeners
+	if connectionType == "udp" {
+		log.Printf("UDP meter deleted, restarting UDP listeners...")
+		go h.dataCollector.RestartUDPListeners()
 	}
 
 	w.WriteHeader(http.StatusNoContent)
