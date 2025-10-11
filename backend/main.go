@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"runtime/debug"
 	"time"
 
 	"github.com/aj9599/zev-billing/backend/config"
@@ -19,8 +20,38 @@ import (
 
 var dataCollector *services.DataCollector
 
+// Panic recovery middleware
+func recoverMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Printf("PANIC RECOVERED: %v", err)
+				log.Printf("Stack trace: %s", debug.Stack())
+				
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(map[string]string{
+					"error": "Internal server error",
+				})
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
+
+// Request logging middleware
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		log.Printf("[%s] %s %s", r.Method, r.URL.Path, r.RemoteAddr)
+		next.ServeHTTP(w, r)
+		log.Printf("[%s] %s - completed in %v", r.Method, r.URL.Path, time.Since(start))
+	})
+}
+
 func main() {
 	log.Println("Starting ZEV Billing System...")
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	// Load configuration
 	cfg := config.Load()
@@ -55,6 +86,10 @@ func main() {
 
 	// Setup router
 	r := mux.NewRouter()
+
+	// Apply global middlewares
+	r.Use(recoverMiddleware)
+	r.Use(loggingMiddleware)
 
 	// Public routes
 	r.HandleFunc("/api/auth/login", authHandler.Login).Methods("POST")
@@ -124,6 +159,7 @@ func main() {
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"*"},
 		AllowCredentials: true,
+		Debug:            false,
 	})
 
 	handler := c.Handler(r)
@@ -132,15 +168,16 @@ func main() {
 	server := &http.Server{
 		Addr:         cfg.ServerAddress,
 		Handler:      handler,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	log.Printf("Server starting on %s", cfg.ServerAddress)
 	log.Println("Data collector running (15-minute intervals)")
 	log.Println("Default credentials: admin / admin123")
 	log.Println("IMPORTANT: Change default password after first login!")
+	log.Println("===========================================")
 
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
@@ -150,7 +187,10 @@ func main() {
 func healthCheck(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"ok"}`))
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "ok",
+		"time":   time.Now().Format(time.RFC3339),
+	})
 }
 
 func debugStatusHandler(w http.ResponseWriter, r *http.Request) {
@@ -164,7 +204,7 @@ func rebootHandler(w http.ResponseWriter, r *http.Request) {
 	
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"rebooting"}`))
+	json.NewEncoder(w).Encode(map[string]string{"status": "rebooting"})
 
 	// Restart the service after a short delay
 	go func() {

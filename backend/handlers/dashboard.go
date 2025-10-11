@@ -19,37 +19,80 @@ func NewDashboardHandler(db *sql.DB) *DashboardHandler {
 }
 
 func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("PANIC in GetStats: %v", rec)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+	}()
+
 	var stats models.DashboardStats
 
-	// Get total counts
-	h.db.QueryRow("SELECT COUNT(*) FROM users").Scan(&stats.TotalUsers)
-	h.db.QueryRow("SELECT COUNT(*) FROM buildings").Scan(&stats.TotalBuildings)
-	h.db.QueryRow("SELECT COUNT(*) FROM meters").Scan(&stats.TotalMeters)
-	h.db.QueryRow("SELECT COUNT(*) FROM chargers").Scan(&stats.TotalChargers)
-	h.db.QueryRow("SELECT COUNT(*) FROM meters WHERE is_active = 1").Scan(&stats.ActiveMeters)
-	h.db.QueryRow("SELECT COUNT(*) FROM chargers WHERE is_active = 1").Scan(&stats.ActiveChargers)
+	// Get total counts with error handling
+	if err := h.db.QueryRow("SELECT COUNT(*) FROM users").Scan(&stats.TotalUsers); err != nil {
+		log.Printf("Error counting users: %v", err)
+		stats.TotalUsers = 0
+	}
+	
+	if err := h.db.QueryRow("SELECT COUNT(*) FROM buildings").Scan(&stats.TotalBuildings); err != nil {
+		log.Printf("Error counting buildings: %v", err)
+		stats.TotalBuildings = 0
+	}
+	
+	if err := h.db.QueryRow("SELECT COUNT(*) FROM meters").Scan(&stats.TotalMeters); err != nil {
+		log.Printf("Error counting meters: %v", err)
+		stats.TotalMeters = 0
+	}
+	
+	if err := h.db.QueryRow("SELECT COUNT(*) FROM chargers").Scan(&stats.TotalChargers); err != nil {
+		log.Printf("Error counting chargers: %v", err)
+		stats.TotalChargers = 0
+	}
+	
+	if err := h.db.QueryRow("SELECT COUNT(*) FROM meters WHERE is_active = 1").Scan(&stats.ActiveMeters); err != nil {
+		log.Printf("Error counting active meters: %v", err)
+		stats.ActiveMeters = 0
+	}
+	
+	if err := h.db.QueryRow("SELECT COUNT(*) FROM chargers WHERE is_active = 1").Scan(&stats.ActiveChargers); err != nil {
+		log.Printf("Error counting active chargers: %v", err)
+		stats.ActiveChargers = 0
+	}
 
-	// Get today's consumption - Use consumption_kwh instead of power_kwh
+	// Get today's consumption
 	today := time.Now().Format("2006-01-02")
-	h.db.QueryRow(`
+	if err := h.db.QueryRow(`
 		SELECT COALESCE(SUM(consumption_kwh), 0) 
 		FROM meter_readings 
 		WHERE DATE(reading_time) = ?
-	`, today).Scan(&stats.TodayConsumption)
+	`, today).Scan(&stats.TodayConsumption); err != nil {
+		log.Printf("Error getting today's consumption: %v", err)
+		stats.TodayConsumption = 0
+	}
 
-	// Get this month's consumption - Use consumption_kwh instead of power_kwh
+	// Get this month's consumption
 	startOfMonth := time.Now().AddDate(0, 0, -time.Now().Day()+1).Format("2006-01-02")
-	h.db.QueryRow(`
+	if err := h.db.QueryRow(`
 		SELECT COALESCE(SUM(consumption_kwh), 0) 
 		FROM meter_readings 
 		WHERE reading_time >= ?
-	`, startOfMonth).Scan(&stats.MonthConsumption)
+	`, startOfMonth).Scan(&stats.MonthConsumption); err != nil {
+		log.Printf("Error getting month's consumption: %v", err)
+		stats.MonthConsumption = 0
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
 }
 
 func (h *DashboardHandler) GetConsumption(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("PANIC in GetConsumption: %v", rec)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+	}()
+
 	period := r.URL.Query().Get("period")
 	if period == "" {
 		period = "24h"
@@ -69,7 +112,6 @@ func (h *DashboardHandler) GetConsumption(w http.ResponseWriter, r *http.Request
 		startTime = time.Now().Add(-24 * time.Hour)
 	}
 
-	// Use consumption_kwh instead of power_kwh for the chart
 	rows, err := h.db.Query(`
 		SELECT m.meter_type, mr.reading_time, mr.consumption_kwh
 		FROM meter_readings mr
@@ -79,7 +121,9 @@ func (h *DashboardHandler) GetConsumption(w http.ResponseWriter, r *http.Request
 	`, startTime)
 
 	if err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Printf("Error querying consumption: %v", err)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]interface{}{})
 		return
 	}
 	defer rows.Close()
@@ -96,12 +140,21 @@ func (h *DashboardHandler) GetConsumption(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(consumption)
 }
 
-// NEW: Get consumption data grouped by building and meter
 func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("PANIC in GetConsumptionByBuilding: %v", rec)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode([]interface{}{})
+		}
+	}()
+
 	period := r.URL.Query().Get("period")
 	if period == "" {
 		period = "24h"
 	}
+
+	log.Printf("GetConsumptionByBuilding called with period: %s", period)
 
 	var startTime time.Time
 	switch period {
@@ -121,12 +174,11 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 	buildingRows, err := h.db.Query(`
 		SELECT id, name 
 		FROM buildings 
-		WHERE is_group = 0
+		WHERE COALESCE(is_group, 0) = 0
 		ORDER BY name
 	`)
 	if err != nil {
 		log.Printf("Error querying buildings: %v", err)
-		// Return empty array instead of error
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode([]interface{}{})
 		return
@@ -149,13 +201,17 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 
 	buildings := []BuildingConsumption{}
 
+	buildingCount := 0
 	for buildingRows.Next() {
+		buildingCount++
 		var buildingID int
 		var buildingName string
 		if err := buildingRows.Scan(&buildingID, &buildingName); err != nil {
 			log.Printf("Error scanning building row: %v", err)
 			continue
 		}
+
+		log.Printf("Processing building ID: %d, Name: %s", buildingID, buildingName)
 
 		building := BuildingConsumption{
 			BuildingID:   buildingID,
@@ -173,12 +229,13 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 
 		if err != nil {
 			log.Printf("Error querying meters for building %d: %v", buildingID, err)
-			// Still add the building with empty meters
 			buildings = append(buildings, building)
 			continue
 		}
 
+		meterCount := 0
 		for meterRows.Next() {
+			meterCount++
 			var meterID int
 			var meterName, meterType string
 			var userID sql.NullInt64
@@ -198,7 +255,6 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				`, userID.Int64).Scan(&userName)
 				if err != nil {
 					log.Printf("Error getting user name for user %d: %v", userID.Int64, err)
-					// Continue without user name
 				}
 			}
 
@@ -220,12 +276,13 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 
 			if err != nil {
 				log.Printf("Error querying readings for meter %d: %v", meterID, err)
-				// Add meter with empty data
 				building.Meters = append(building.Meters, meterData)
 				continue
 			}
 
+			dataCount := 0
 			for dataRows.Next() {
+				dataCount++
 				var timestamp time.Time
 				var consumption float64
 				if err := dataRows.Scan(&timestamp, &consumption); err == nil {
@@ -238,19 +295,32 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			}
 			dataRows.Close()
 
+			log.Printf("  Meter ID: %d, Name: %s, Data points: %d", meterID, meterName, dataCount)
+
 			building.Meters = append(building.Meters, meterData)
 		}
 		meterRows.Close()
 
-		// Add building even if it has no meters (so user can see it exists)
+		log.Printf("Building %d has %d meters", buildingID, meterCount)
 		buildings = append(buildings, building)
 	}
 
+	log.Printf("Returning %d buildings", len(buildings))
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(buildings)
+	if err := json.NewEncoder(w).Encode(buildings); err != nil {
+		log.Printf("Error encoding JSON response: %v", err)
+	}
 }
 
 func (h *DashboardHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("PANIC in GetLogs: %v", rec)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+	}()
+
 	limit := r.URL.Query().Get("limit")
 	if limit == "" {
 		limit = "100"
@@ -264,7 +334,9 @@ func (h *DashboardHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 	`, limit)
 
 	if err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Printf("Error querying logs: %v", err)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]interface{}{})
 		return
 	}
 	defer rows.Close()

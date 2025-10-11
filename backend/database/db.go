@@ -9,28 +9,53 @@ import (
 )
 
 func InitDB(dataSourceName string) (*sql.DB, error) {
-	// Add query parameters for better concurrency handling
-	db, err := sql.Open("sqlite3", dataSourceName+"?_journal_mode=WAL&_busy_timeout=5000&_synchronous=NORMAL")
+	log.Printf("Initializing database: %s", dataSourceName)
+	
+	// Add query parameters for better concurrency handling and reliability
+	dsn := dataSourceName + "?_journal_mode=WAL&_busy_timeout=10000&_synchronous=NORMAL&_cache_size=1000&_foreign_keys=ON"
+	
+	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, err
 	}
 
-	// Set connection pool settings
-	db.SetMaxOpenConns(1) // SQLite works best with single writer
+	// Set connection pool settings - SQLite works best with limited connections
+	db.SetMaxOpenConns(1)  // Single writer for SQLite
 	db.SetMaxIdleConns(1)
 	db.SetConnMaxLifetime(time.Hour)
-
-	// Enable foreign keys
-	_, err = db.Exec("PRAGMA foreign_keys = ON")
-	if err != nil {
-		return nil, err
-	}
+	db.SetConnMaxIdleTime(10 * time.Minute)
 
 	// Test connection
 	if err := db.Ping(); err != nil {
 		return nil, err
 	}
 
-	log.Println("Database connection established with WAL mode")
+	// Verify WAL mode is enabled
+	var journalMode string
+	err = db.QueryRow("PRAGMA journal_mode").Scan(&journalMode)
+	if err != nil {
+		log.Printf("Warning: Could not verify journal mode: %v", err)
+	} else {
+		log.Printf("Database journal mode: %s", journalMode)
+	}
+
+	// Verify foreign keys are enabled
+	var foreignKeys int
+	err = db.QueryRow("PRAGMA foreign_keys").Scan(&foreignKeys)
+	if err != nil {
+		log.Printf("Warning: Could not verify foreign keys: %v", err)
+	} else {
+		log.Printf("Foreign keys enabled: %v", foreignKeys == 1)
+	}
+
+	// Run a simple query to ensure the database is accessible
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table'").Scan(&count)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("Database has %d tables", count)
+
+	log.Println("Database connection established successfully")
 	return db, nil
 }

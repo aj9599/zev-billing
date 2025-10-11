@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -21,11 +22,14 @@ func NewBuildingHandler(db *sql.DB) *BuildingHandler {
 func (h *BuildingHandler) List(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Query(`
 		SELECT id, name, address_street, address_city, address_zip, 
-		       address_country, notes, is_group, created_at, updated_at
+		       address_country, notes, COALESCE(is_group, 0), created_at, updated_at
 		FROM buildings
+		ORDER BY name
 	`)
 	if err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Printf("Error listing buildings: %v", err)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]interface{}{})
 		return
 	}
 	defer rows.Close()
@@ -38,15 +42,16 @@ func (h *BuildingHandler) List(w http.ResponseWriter, r *http.Request) {
 			&b.AddressCountry, &b.Notes, &b.IsGroup, &b.CreatedAt, &b.UpdatedAt,
 		)
 		if err != nil {
+			log.Printf("Error scanning building: %v", err)
 			continue
 		}
 
 		// If it's a group, load associated buildings
 		if b.IsGroup {
+			b.GroupBuildings = []int{}
 			groupRows, err := h.db.Query("SELECT building_id FROM building_groups WHERE group_id = ?", b.ID)
 			if err == nil {
 				defer groupRows.Close()
-				b.GroupBuildings = []int{}
 				for groupRows.Next() {
 					var buildingID int
 					if err := groupRows.Scan(&buildingID); err == nil {
@@ -54,6 +59,8 @@ func (h *BuildingHandler) List(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 			}
+		} else {
+			b.GroupBuildings = []int{}
 		}
 
 		buildings = append(buildings, b)
@@ -74,7 +81,7 @@ func (h *BuildingHandler) Get(w http.ResponseWriter, r *http.Request) {
 	var b models.Building
 	err = h.db.QueryRow(`
 		SELECT id, name, address_street, address_city, address_zip, 
-		       address_country, notes, is_group, created_at, updated_at
+		       address_country, notes, COALESCE(is_group, 0), created_at, updated_at
 		FROM buildings WHERE id = ?
 	`, id).Scan(
 		&b.ID, &b.Name, &b.AddressStreet, &b.AddressCity, &b.AddressZip,
@@ -86,16 +93,19 @@ func (h *BuildingHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
+		log.Printf("Error getting building: %v", err)
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
+
+	// Initialize GroupBuildings
+	b.GroupBuildings = []int{}
 
 	// If it's a group, load associated buildings
 	if b.IsGroup {
 		rows, err := h.db.Query("SELECT building_id FROM building_groups WHERE group_id = ?", b.ID)
 		if err == nil {
 			defer rows.Close()
-			b.GroupBuildings = []int{}
 			for rows.Next() {
 				var buildingID int
 				if err := rows.Scan(&buildingID); err == nil {
@@ -112,8 +122,22 @@ func (h *BuildingHandler) Get(w http.ResponseWriter, r *http.Request) {
 func (h *BuildingHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var b models.Building
 	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		log.Printf("Error decoding building: %v", err)
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
+	}
+
+	log.Printf("Creating building: %s, is_group: %v", b.Name, b.IsGroup)
+
+	// Ensure is_group is properly set (0 or 1)
+	isGroupVal := 0
+	if b.IsGroup {
+		isGroupVal = 1
+	}
+
+	// Set defaults if empty
+	if b.AddressCountry == "" {
+		b.AddressCountry = "Switzerland"
 	}
 
 	result, err := h.db.Exec(`
@@ -122,22 +146,34 @@ func (h *BuildingHandler) Create(w http.ResponseWriter, r *http.Request) {
 			address_country, notes, is_group
 		) VALUES (?, ?, ?, ?, ?, ?, ?)
 	`, b.Name, b.AddressStreet, b.AddressCity, b.AddressZip,
-		b.AddressCountry, b.Notes, b.IsGroup)
+		b.AddressCountry, b.Notes, isGroupVal)
 
 	if err != nil {
+		log.Printf("Error creating building: %v", err)
 		http.Error(w, "Failed to create building", http.StatusInternalServerError)
 		return
 	}
 
 	id, _ := result.LastInsertId()
 	b.ID = int(id)
+	b.IsGroup = isGroupVal == 1
+
+	// Initialize GroupBuildings as empty array
+	if b.GroupBuildings == nil {
+		b.GroupBuildings = []int{}
+	}
 
 	// If it's a group, save building associations
 	if b.IsGroup && len(b.GroupBuildings) > 0 {
 		for _, buildingID := range b.GroupBuildings {
-			h.db.Exec("INSERT INTO building_groups (group_id, building_id) VALUES (?, ?)", b.ID, buildingID)
+			_, err := h.db.Exec("INSERT INTO building_groups (group_id, building_id) VALUES (?, ?)", b.ID, buildingID)
+			if err != nil {
+				log.Printf("Error adding building to group: %v", err)
+			}
 		}
 	}
+
+	log.Printf("Successfully created building ID: %d", b.ID)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -154,8 +190,15 @@ func (h *BuildingHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	var b models.Building
 	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		log.Printf("Error decoding building: %v", err)
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
+	}
+
+	// Ensure is_group is properly set (0 or 1)
+	isGroupVal := 0
+	if b.IsGroup {
+		isGroupVal = 1
 	}
 
 	_, err = h.db.Exec(`
@@ -164,9 +207,10 @@ func (h *BuildingHandler) Update(w http.ResponseWriter, r *http.Request) {
 			address_country = ?, notes = ?, is_group = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`, b.Name, b.AddressStreet, b.AddressCity, b.AddressZip,
-		b.AddressCountry, b.Notes, b.IsGroup, id)
+		b.AddressCountry, b.Notes, isGroupVal, id)
 
 	if err != nil {
+		log.Printf("Error updating building: %v", err)
 		http.Error(w, "Failed to update building", http.StatusInternalServerError)
 		return
 	}
@@ -174,12 +218,22 @@ func (h *BuildingHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Update building groups
 	if b.IsGroup {
 		h.db.Exec("DELETE FROM building_groups WHERE group_id = ?", id)
-		for _, buildingID := range b.GroupBuildings {
-			h.db.Exec("INSERT INTO building_groups (group_id, building_id) VALUES (?, ?)", id, buildingID)
+		if b.GroupBuildings != nil {
+			for _, buildingID := range b.GroupBuildings {
+				h.db.Exec("INSERT INTO building_groups (group_id, building_id) VALUES (?, ?)", id, buildingID)
+			}
 		}
+	} else {
+		// Remove from any groups if no longer a group
+		h.db.Exec("DELETE FROM building_groups WHERE group_id = ?", id)
 	}
 
 	b.ID = id
+	b.IsGroup = isGroupVal == 1
+	if b.GroupBuildings == nil {
+		b.GroupBuildings = []int{}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(b)
 }
@@ -197,6 +251,7 @@ func (h *BuildingHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	_, err = h.db.Exec("DELETE FROM buildings WHERE id = ?", id)
 	if err != nil {
+		log.Printf("Error deleting building: %v", err)
 		http.Error(w, "Failed to delete building", http.StatusInternalServerError)
 		return
 	}
