@@ -19,7 +19,8 @@ func NewBillingService(db *sql.DB) *BillingService {
 }
 
 func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, endDate string) ([]models.Invoice, error) {
-	log.Printf("Generating bills for buildings %v, users %v, period %s to %s", buildingIDs, userIDs, startDate, endDate)
+	log.Printf("=== BILL GENERATION START ===")
+	log.Printf("Buildings: %v, Users: %v, Period: %s to %s", buildingIDs, userIDs, startDate, endDate)
 
 	invoices := []models.Invoice{}
 
@@ -35,7 +36,11 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 	// Make end date inclusive - add 24 hours to include the entire end day
 	end = end.Add(24 * time.Hour).Add(-1 * time.Second) // End of day: 23:59:59
 
+	log.Printf("Parsed dates - Start: %s, End: %s", start, end)
+
 	for _, buildingID := range buildingIDs {
+		log.Printf("\n--- Processing Building ID: %d ---", buildingID)
+		
 		var settings models.BillingSettings
 		err := bs.db.QueryRow(`
 			SELECT id, building_id, normal_power_price, solar_power_price, 
@@ -49,9 +54,13 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 		)
 
 		if err != nil {
-			log.Printf("No active billing settings for building %d, skipping: %v", buildingID, err)
+			log.Printf("ERROR: No active billing settings for building %d: %v", buildingID, err)
 			continue
 		}
+
+		log.Printf("Billing Settings - Normal: %.3f, Solar: %.3f, Car Normal: %.3f, Car Priority: %.3f %s",
+			settings.NormalPowerPrice, settings.SolarPowerPrice,
+			settings.CarChargingNormalPrice, settings.CarChargingPriorityPrice, settings.Currency)
 
 		var usersQuery string
 		var args []interface{}
@@ -70,17 +79,22 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 
 		userRows, err := bs.db.Query(usersQuery, args...)
 		if err != nil {
-			log.Printf("Error querying users: %v", err)
+			log.Printf("ERROR: Failed to query users: %v", err)
 			continue
 		}
 
+		userCount := 0
 		for userRows.Next() {
 			var userID int
 			var firstName, lastName, email string
 			var chargerIDs sql.NullString
 			if err := userRows.Scan(&userID, &firstName, &lastName, &email, &chargerIDs); err != nil {
+				log.Printf("ERROR: Failed to scan user: %v", err)
 				continue
 			}
+
+			userCount++
+			log.Printf("\n  Processing User #%d: %s %s (ID: %d)", userCount, firstName, lastName, userID)
 
 			chargerIDStr := ""
 			if chargerIDs.Valid {
@@ -89,18 +103,19 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 
 			invoice, err := bs.generateUserInvoice(userID, buildingID, start, end, settings, chargerIDStr)
 			if err != nil {
-				log.Printf("Error generating invoice for user %d: %v", userID, err)
+				log.Printf("ERROR: Failed to generate invoice for user %d: %v", userID, err)
 				continue
 			}
 
 			invoices = append(invoices, *invoice)
-			log.Printf("Generated invoice for %s %s: %s %.2f", 
-				firstName, lastName, settings.Currency, invoice.TotalAmount)
+			log.Printf("  ✓ Generated invoice %s: %s %.2f", invoice.InvoiceNumber, settings.Currency, invoice.TotalAmount)
 		}
 		userRows.Close()
+		
+		log.Printf("--- Building %d: Generated %d invoices ---", buildingID, userCount)
 	}
 
-	log.Printf("Successfully generated %d invoices", len(invoices))
+	log.Printf("\n=== BILL GENERATION COMPLETE: %d total invoices ===\n", len(invoices))
 	return invoices, nil
 }
 
@@ -116,7 +131,11 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 	// Calculate apartment power consumption using Swiss ZEV standard
 	normalPower, solarPower, totalConsumption := bs.calculateZEVConsumption(userID, buildingID, start, end)
 
-	// Add meter reading info as first item
+	log.Printf("  Meter: %s, From: %.2f kWh, To: %.2f kWh", meterName, meterReadingFrom, meterReadingTo)
+	log.Printf("  Calculated - Total: %.2f kWh, Normal: %.2f kWh, Solar: %.2f kWh", 
+		totalConsumption, normalPower, solarPower)
+
+	// Add meter reading info header
 	if totalConsumption > 0 {
 		items = append(items, models.InvoiceItem{
 			Description: fmt.Sprintf("Apartment Meter: %s", meterName),
@@ -149,34 +168,46 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 			TotalPrice:  0,
 			ItemType:    "total_consumption",
 		})
+
+		// Add separator before pricing
+		items = append(items, models.InvoiceItem{
+			Description: "",
+			Quantity:    0,
+			UnitPrice:   0,
+			TotalPrice:  0,
+			ItemType:    "separator",
+		})
 	}
 
-	// Add consumption breakdown
+	// Add consumption breakdown with pricing
+	// IMPORTANT: Show Solar FIRST, then Normal (as requested)
 	if solarPower > 0 {
 		solarCost := solarPower * settings.SolarPowerPrice
 		totalAmount += solarCost
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("    Solar Power: %.2f kWh × %.3f %s/kWh", solarPower, settings.SolarPowerPrice, settings.Currency),
+			Description: fmt.Sprintf("Solar Power: %.2f kWh × %.3f %s/kWh", solarPower, settings.SolarPowerPrice, settings.Currency),
 			Quantity:    solarPower,
 			UnitPrice:   settings.SolarPowerPrice,
 			TotalPrice:  solarCost,
 			ItemType:    "solar_power",
 		})
+		log.Printf("  Solar Cost: %.2f kWh × %.3f = %.2f %s", solarPower, settings.SolarPowerPrice, solarCost, settings.Currency)
 	}
 
 	if normalPower > 0 {
 		normalCost := normalPower * settings.NormalPowerPrice
 		totalAmount += normalCost
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("    Normal Power: %.2f kWh × %.3f %s/kWh", normalPower, settings.NormalPowerPrice, settings.Currency),
+			Description: fmt.Sprintf("Normal Power (Grid): %.2f kWh × %.3f %s/kWh", normalPower, settings.NormalPowerPrice, settings.Currency),
 			Quantity:    normalPower,
 			UnitPrice:   settings.NormalPowerPrice,
 			TotalPrice:  normalCost,
 			ItemType:    "normal_power",
 		})
+		log.Printf("  Normal Cost: %.2f kWh × %.3f = %.2f %s", normalPower, settings.NormalPowerPrice, normalCost, settings.Currency)
 	}
 
-	// Calculate car charging costs - FIXED: properly parse charger IDs
+	// Calculate car charging costs
 	if chargerIDs != "" {
 		normalCharging, priorityCharging := bs.calculateChargingConsumption(chargerIDs, start, end)
 
@@ -209,6 +240,7 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 				TotalPrice:  normalChargingCost,
 				ItemType:    "car_charging_normal",
 			})
+			log.Printf("  Car Charging Normal: %.2f kWh × %.3f = %.2f %s", normalCharging, settings.CarChargingNormalPrice, normalChargingCost, settings.Currency)
 		}
 
 		if priorityCharging > 0 {
@@ -221,16 +253,22 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 				TotalPrice:  priorityChargingCost,
 				ItemType:    "car_charging_priority",
 			})
+			log.Printf("  Car Charging Priority: %.2f kWh × %.3f = %.2f %s", priorityCharging, settings.CarChargingPriorityPrice, priorityChargingCost, settings.Currency)
 		}
 	}
 
+	log.Printf("  INVOICE TOTAL: %s %.2f", settings.Currency, totalAmount)
+
+	// FIXED: Change status from 'draft' to 'pending' or 'issued'
+	invoiceStatus := "issued"
+	
 	result, err := bs.db.Exec(`
 		INSERT INTO invoices (
 			invoice_number, user_id, building_id, period_start, period_end,
 			total_amount, currency, status
-		) VALUES (?, ?, ?, ?, ?, ?, ?, 'draft')
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`, invoiceNumber, userID, buildingID, start.Format("2006-01-02"), end.Format("2006-01-02"),
-		totalAmount, settings.Currency)
+		totalAmount, settings.Currency, invoiceStatus)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create invoice: %v", err)
@@ -246,7 +284,7 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 		`, invoiceID, item.Description, item.Quantity, item.UnitPrice, item.TotalPrice, item.ItemType)
 		
 		if err != nil {
-			log.Printf("Warning: Failed to insert invoice item: %v", err)
+			log.Printf("WARNING: Failed to insert invoice item: %v", err)
 		}
 	}
 
@@ -259,7 +297,7 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 		PeriodEnd:     end.Format("2006-01-02"),
 		TotalAmount:   totalAmount,
 		Currency:      settings.Currency,
-		Status:        "draft",
+		Status:        invoiceStatus,
 		Items:         items,
 		GeneratedAt:   time.Now(),
 	}
@@ -280,7 +318,7 @@ func (bs *BillingService) getMeterReadings(userID int, start, end time.Time) (fl
 	`, userID).Scan(&meterID, &meterName)
 	
 	if err != nil {
-		log.Printf("Error finding meter for user %d: %v", userID, err)
+		log.Printf("ERROR: No apartment meter found for user %d: %v", userID, err)
 		return 0, 0, "Unknown Meter"
 	}
 
@@ -313,9 +351,10 @@ func (bs *BillingService) getMeterReadings(userID int, start, end time.Time) (fl
 	return from, to, meterName
 }
 
-// calculateZEVConsumption implements Swiss ZEV standard
+// calculateZEVConsumption implements Swiss ZEV standard with 15-minute interval solar distribution
 func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start, end time.Time) (normal, solar, total float64) {
-	log.Printf("Calculating ZEV consumption for user %d in building %d", userID, buildingID)
+	log.Printf("    [ZEV] Calculating consumption for user %d in building %d", userID, buildingID)
+	log.Printf("    [ZEV] Period: %s to %s", start.Format("2006-01-02 15:04:05"), end.Format("2006-01-02 15:04:05"))
 
 	// Get all unique timestamps where we have readings for this building
 	timestampRows, err := bs.db.Query(`
@@ -329,7 +368,7 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 	`, buildingID, start, end)
 
 	if err != nil {
-		log.Printf("Error querying timestamps: %v", err)
+		log.Printf("    [ZEV] ERROR querying timestamps: %v", err)
 		return 0, 0, 0
 	}
 	defer timestampRows.Close()
@@ -337,6 +376,7 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 	totalNormal := 0.0
 	totalSolar := 0.0
 	totalConsumption := 0.0
+	intervalCount := 0
 
 	// Process each 15-minute interval
 	for timestampRows.Next() {
@@ -344,6 +384,8 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 		if err := timestampRows.Scan(&timestamp); err != nil {
 			continue
 		}
+
+		intervalCount++
 
 		// Get this user's apartment consumption at this timestamp
 		var userConsumption float64
@@ -372,7 +414,7 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 		`, buildingID, timestamp).Scan(&totalBuildingConsumption)
 
 		if err != nil || totalBuildingConsumption == 0 {
-			// No building consumption, all goes to normal
+			// No building consumption data, count all as normal
 			totalNormal += userConsumption
 			continue
 		}
@@ -394,24 +436,32 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 		// Calculate this user's share of consumption
 		userShare := userConsumption / totalBuildingConsumption
 
-		// Distribute solar proportionally
+		// Distribute solar proportionally (Swiss ZEV standard)
 		var userSolar, userNormal float64
 		if solarGeneration >= totalBuildingConsumption {
-			// Enough solar for everyone - all consumption is solar
+			// Enough solar for everyone - all consumption is solar-powered
 			userSolar = userConsumption
 			userNormal = 0
 		} else {
-			// Limited solar - distribute proportionally
+			// Limited solar - distribute proportionally based on consumption share
 			userSolar = solarGeneration * userShare
 			userNormal = userConsumption - userSolar
 		}
 
 		totalSolar += userSolar
 		totalNormal += userNormal
+
+		// Detailed logging for first few intervals
+		if intervalCount <= 3 {
+			log.Printf("    [ZEV] Interval %s: User consumed %.3f kWh (%.1f%% of building's %.3f kWh), Solar available: %.3f kWh → User gets %.3f kWh solar + %.3f kWh grid", 
+				timestamp.Format("15:04"), userConsumption, userShare*100, totalBuildingConsumption, solarGeneration, userSolar, userNormal)
+		}
 	}
 
-	log.Printf("User %d total - Consumption: %.2f kWh, Normal: %.2f kWh, Solar: %.2f kWh", 
-		userID, totalConsumption, totalNormal, totalSolar)
+	log.Printf("    [ZEV] Processed %d intervals", intervalCount)
+	log.Printf("    [ZEV] RESULT - Total: %.2f kWh, Solar: %.2f kWh (%.1f%%), Grid: %.2f kWh (%.1f%%)", 
+		totalConsumption, totalSolar, (totalSolar/totalConsumption)*100, totalNormal, (totalNormal/totalConsumption)*100)
+
 	return totalNormal, totalSolar, totalConsumption
 }
 
@@ -445,7 +495,7 @@ func (bs *BillingService) calculateChargingConsumption(chargerIDs string, start,
 	
 	err := bs.db.QueryRow(normalQuery, normalArgs...).Scan(&normal)
 	if err != nil {
-		log.Printf("Error calculating normal charging: %v", err)
+		log.Printf("ERROR calculating normal charging: %v", err)
 		normal = 0
 	}
 
@@ -460,10 +510,10 @@ func (bs *BillingService) calculateChargingConsumption(chargerIDs string, start,
 	
 	err = bs.db.QueryRow(priorityQuery, priorityArgs...).Scan(&priority)
 	if err != nil {
-		log.Printf("Error calculating priority charging: %v", err)
+		log.Printf("ERROR calculating priority charging: %v", err)
 		priority = 0
 	}
 
-	log.Printf("Charging consumption - Normal: %.2f kWh, Priority: %.2f kWh", normal, priority)
+	log.Printf("  Charging - Normal: %.2f kWh, Priority: %.2f kWh", normal, priority)
 	return normal, priority
 }

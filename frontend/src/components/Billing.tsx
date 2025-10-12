@@ -88,6 +88,21 @@ export default function Billing() {
     }
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'issued':
+        return { bg: '#d4edda', color: '#155724' }; // Green
+      case 'pending':
+        return { bg: '#fff3cd', color: '#856404' }; // Yellow
+      case 'paid':
+        return { bg: '#d1ecf1', color: '#0c5460' }; // Blue
+      case 'draft':
+        return { bg: '#f8d7da', color: '#721c24' }; // Red
+      default:
+        return { bg: '#e2e3e5', color: '#383d41' }; // Gray
+    }
+  };
+
   const downloadPDF = (invoice: Invoice) => {
     const user = users.find(u => u.id === invoice.user_id);
     const building = buildings.find(b => b.id === invoice.building_id);
@@ -122,6 +137,18 @@ export default function Billing() {
             color: #666; 
             font-size: 14px; 
             margin-top: 5px;
+          }
+          .status-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-top: 10px;
+            ${(() => {
+              const colors = getStatusColor(invoice.status);
+              return `background-color: ${colors.bg}; color: ${colors.color};`;
+            })()}
           }
           .info-section { 
             margin-bottom: 30px;
@@ -166,6 +193,12 @@ export default function Billing() {
           .item-cost { 
             font-weight: 500;
           }
+          .solar-highlight {
+            background-color: #fffbea;
+          }
+          .normal-highlight {
+            background-color: #f0f4ff;
+          }
           .total-section { 
             background-color: #f9f9f9; 
             padding: 20px; 
@@ -178,6 +211,14 @@ export default function Billing() {
             font-weight: bold; 
             margin: 0;
           }
+          .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+          }
           @media print {
             body { padding: 20px; }
           }
@@ -187,6 +228,7 @@ export default function Billing() {
         <div class="header">
           <h1>${t('billing.invoice')}</h1>
           <div class="invoice-number">#${invoice.invoice_number}</div>
+          <div class="status-badge">${invoice.status.toUpperCase()}</div>
         </div>
 
         <div class="info-section">
@@ -224,6 +266,16 @@ export default function Billing() {
                 return `<tr class="item-info"><td colspan="2">${item.description}</td></tr>`;
               } else if (item.item_type === 'separator') {
                 return `<tr><td colspan="2" style="padding: 5px;"></td></tr>`;
+              } else if (item.item_type === 'solar_power') {
+                return `<tr class="item-cost solar-highlight">
+                  <td><strong>☀ ${item.description}</strong></td>
+                  <td class="text-right"><strong>${invoice.currency} ${item.total_price.toFixed(2)}</strong></td>
+                </tr>`;
+              } else if (item.item_type === 'normal_power') {
+                return `<tr class="item-cost normal-highlight">
+                  <td><strong>⚡ ${item.description}</strong></td>
+                  <td class="text-right"><strong>${invoice.currency} ${item.total_price.toFixed(2)}</strong></td>
+                </tr>`;
               } else {
                 return `<tr class="item-cost">
                   <td>${item.description}</td>
@@ -236,6 +288,11 @@ export default function Billing() {
 
         <div class="total-section">
           <p>${t('billing.total')} ${invoice.currency} ${invoice.total_amount.toFixed(2)}</p>
+        </div>
+
+        <div class="footer">
+          <p>Generated on ${new Date().toLocaleString()}</p>
+          <p>ZEV Billing System - Swiss Energy Community Standard</p>
         </div>
 
         <script>
@@ -477,6 +534,7 @@ export default function Billing() {
                   <tbody>
                     {buildingInvoices.map(invoice => {
                       const user = users.find(u => u.id === invoice.user_id);
+                      const statusColors = getStatusColor(invoice.status);
                       return (
                         <tr key={invoice.id} style={{ borderBottom: '1px solid #eee' }}>
                           <td style={{ padding: '16px', fontFamily: 'monospace', fontSize: '13px' }}>{invoice.invoice_number}</td>
@@ -485,10 +543,11 @@ export default function Billing() {
                           <td style={{ padding: '16px', fontWeight: '600' }}>{invoice.currency} {invoice.total_amount.toFixed(2)}</td>
                           <td style={{ padding: '16px' }}>
                             <span style={{
-                              padding: '4px 12px', borderRadius: '12px', fontSize: '12px',
-                              backgroundColor: '#fff3cd', color: '#856404'
+                              padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600',
+                              backgroundColor: statusColors.bg, 
+                              color: statusColors.color
                             }}>
-                              {invoice.status}
+                              {invoice.status.toUpperCase()}
                             </span>
                           </td>
                           <td style={{ padding: '16px', fontSize: '13px', color: '#666' }}>
@@ -612,6 +671,17 @@ export default function Billing() {
             <div style={{ borderBottom: '2px solid #007bff', paddingBottom: '20px', marginBottom: '30px' }}>
               <h2 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '8px' }}>{t('billing.invoice')}</h2>
               <p style={{ fontSize: '14px', color: '#666' }}>#{selectedInvoice.invoice_number}</p>
+              <span style={{
+                display: 'inline-block',
+                padding: '6px 16px',
+                borderRadius: '20px',
+                fontSize: '13px',
+                fontWeight: '600',
+                marginTop: '10px',
+                ...getStatusColor(selectedInvoice.status)
+              }}>
+                {selectedInvoice.status.toUpperCase()}
+              </span>
             </div>
 
             {selectedInvoice.user && (
@@ -644,22 +714,29 @@ export default function Billing() {
                   const isHeader = item.item_type === 'meter_info' || item.item_type === 'charging_header';
                   const isInfo = item.item_type === 'meter_reading_from' || item.item_type === 'meter_reading_to' || item.item_type === 'total_consumption';
                   const isSeparator = item.item_type === 'separator';
+                  const isSolar = item.item_type === 'solar_power';
+                  const isNormal = item.item_type === 'normal_power';
                   
                   if (isSeparator) {
                     return <tr key={item.id}><td colSpan={2} style={{ padding: '8px' }}></td></tr>;
                   }
                   
                   return (
-                    <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
+                    <tr key={item.id} style={{ 
+                      borderBottom: '1px solid #eee',
+                      backgroundColor: isSolar ? '#fffbea' : isNormal ? '#f0f4ff' : 'transparent'
+                    }}>
                       <td style={{ 
                         padding: '12px',
-                        fontWeight: isHeader ? '600' : 'normal',
+                        fontWeight: isHeader || isSolar || isNormal ? '600' : 'normal',
                         color: isInfo ? '#666' : 'inherit',
                         fontSize: isInfo ? '14px' : '15px'
                       }}>
+                        {isSolar && '☀ '}
+                        {isNormal && '⚡ '}
                         {item.description}
                       </td>
-                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: item.total_price > 0 ? '500' : 'normal' }}>
+                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: item.total_price > 0 ? '600' : 'normal' }}>
                         {item.total_price > 0 ? `${selectedInvoice.currency} ${item.total_price.toFixed(2)}` : ''}
                       </td>
                     </tr>
