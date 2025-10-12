@@ -401,7 +401,7 @@ export default function Dashboard() {
                       />
                       <YAxis 
                         label={{ 
-                          value: 'Power (kW)', 
+                          value: 'Power (W)', 
                           angle: -90, 
                           position: 'insideLeft',
                           style: { fontSize: '12px' }
@@ -415,7 +415,12 @@ export default function Dashboard() {
                           border: '1px solid #e5e7eb',
                           borderRadius: '6px'
                         }}
-                        formatter={(value: number) => `${value.toFixed(2)} kW`}
+                        formatter={(value: number) => {
+                          if (value >= 1000) {
+                            return `${(value / 1000).toFixed(2)} kW`;
+                          }
+                          return `${value.toFixed(0)} W`;
+                        }}
                       />
                       <Legend 
                         wrapperStyle={{ fontSize: '12px' }}

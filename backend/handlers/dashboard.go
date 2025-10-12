@@ -390,7 +390,8 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				}
 			}
 
-			// STEP 5: Read all readings and calculate power (kW) from consumption
+			// STEP 5: Read all readings with timestamps and calculate power
+			// We need reading_time from both current and previous reading to validate the time gap
 			dataRows, err := h.db.QueryContext(ctx, `
 				SELECT reading_time, consumption_kwh
 				FROM meter_readings
@@ -412,28 +413,61 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				continue
 			}
 
-			// Calculate power in kW from consumption
+			// Calculate power in Watts from consumption
 			// Readings are every 15 minutes = 0.25 hours
-			// Power (kW) = Consumption (kWh) / Time (h)
+			// Power (W) = Consumption (kWh) / Time (h) * 1000
 			const intervalHours = 0.25 // 15 minutes
+			const maxGapMinutes = 20   // Maximum gap to consider readings consecutive
 
+			type readingData struct {
+				timestamp      time.Time
+				consumptionKwh float64
+			}
+			
+			var previousReading *readingData
+			
 			for dataRows.Next() {
 				var timestamp time.Time
 				var consumptionKwh float64
-				if err := dataRows.Scan(&timestamp, &consumptionKwh); err == nil {
-					// Calculate power from consumption
-					powerKw := consumptionKwh / intervalHours
-					
-					meterData.Data = append(meterData.Data, models.ConsumptionData{
-						Timestamp: timestamp,
-						Power:     powerKw,  // Now in kW instead of kWh
-						Source:    mi.meterType,
-					})
+				if err := dataRows.Scan(&timestamp, &consumptionKwh); err != nil {
+					continue
 				}
+
+				currentReading := &readingData{
+					timestamp:      timestamp,
+					consumptionKwh: consumptionKwh,
+				}
+
+				// Check if we have a valid previous reading within the time window
+				if previousReading != nil {
+					timeDiff := currentReading.timestamp.Sub(previousReading.timestamp).Minutes()
+					
+					// Only calculate power if readings are consecutive (within 20 minutes)
+					// and consumption is positive
+					if timeDiff <= maxGapMinutes && currentReading.consumptionKwh > 0 {
+						// Calculate power in Watts
+						powerW := (currentReading.consumptionKwh / intervalHours) * 1000
+						
+						meterData.Data = append(meterData.Data, models.ConsumptionData{
+							Timestamp: currentReading.timestamp,
+							Power:     powerW,
+							Source:    mi.meterType,
+						})
+					} else if timeDiff > maxGapMinutes {
+						log.Printf("    Skipping reading at %v: gap too large (%.1f minutes)", 
+							currentReading.timestamp, timeDiff)
+					}
+				} else {
+					// First reading - skip it or set to 0 since we can't calculate power
+					log.Printf("    Skipping first reading at %v (no previous reading to compare)", 
+						currentReading.timestamp)
+				}
+
+				previousReading = currentReading
 			}
 			dataRows.Close()
 
-			log.Printf("    Meter ID: %d has %d data points", mi.id, len(meterData.Data))
+			log.Printf("    Meter ID: %d has %d valid data points", mi.id, len(meterData.Data))
 
 			building.Meters = append(building.Meters, meterData)
 		}
