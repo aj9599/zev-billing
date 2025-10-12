@@ -469,93 +469,144 @@ export default function Meters() {
             </h2>
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', 
-              gap: '16px' 
+              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', 
+              gap: '20px' 
             }}>
               {buildingMeters.map(meter => (
                 <div key={meter.id} style={{
                   backgroundColor: 'white',
-                  borderRadius: '12px',
-                  padding: '20px',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                  border: '1px solid #e5e7eb'
+                  borderRadius: '16px',
+                  padding: '24px',
+                  boxShadow: '0 4px 6px rgba(0,0,0,0.07)',
+                  border: '1px solid #f0f0f0',
+                  position: 'relative',
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = '0 8px 12px rgba(0,0,0,0.12)';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.07)';
+                  e.currentTarget.style.transform = 'translateY(0)';
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '16px' }}>
-                    <div>
-                      <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '4px', color: '#1f2937' }}>
-                        {meter.name}
-                      </h3>
-                      <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
-                        {meter.meter_type.replace('_', ' ')}
-                      </p>
-                    </div>
-                    <span style={{
-                      padding: '4px 12px',
-                      borderRadius: '12px',
-                      fontSize: '12px',
-                      backgroundColor: meter.is_active ? '#d4edda' : '#f8d7da',
-                      color: meter.is_active ? '#155724' : '#721c24'
-                    }}>
-                      {meter.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-
-                  <div style={{ marginBottom: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '14px', color: '#6b7280' }}>Connection:</span>
-                      <span style={{ fontSize: '14px', fontWeight: '500', color: '#1f2937', textTransform: 'uppercase' }}>
-                        {meter.connection_type}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: '14px', color: '#6b7280' }}>Last Reading:</span>
-                      <span style={{ fontSize: '14px', fontWeight: '500', color: '#1f2937' }}>
-                        {meter.last_reading ? `${meter.last_reading.toFixed(2)} kWh` : '-'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '8px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
+                  {/* Action buttons in top right */}
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '16px', 
+                    right: '16px', 
+                    display: 'flex', 
+                    gap: '8px' 
+                  }}>
                     <button 
                       onClick={() => handleEdit(meter)} 
                       style={{
-                        flex: 1,
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        border: 'none',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        color: '#3b82f6',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: '6px',
-                        padding: '8px',
-                        backgroundColor: '#007bff',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '6px',
-                        fontSize: '14px',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
                       }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.2)';
+                        e.currentTarget.style.transform = 'scale(1.1)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                        e.currentTarget.style.transform = 'scale(1)';
+                      }}
+                      title="Edit"
                     >
                       <Edit2 size={16} />
-                      Edit
                     </button>
                     <button 
                       onClick={() => handleDelete(meter.id)} 
                       style={{
-                        flex: 1,
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        border: 'none',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        color: '#ef4444',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: '6px',
-                        padding: '8px',
-                        backgroundColor: '#dc3545',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '6px',
-                        fontSize: '14px',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
                       }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
+                        e.currentTarget.style.transform = 'scale(1.1)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+                        e.currentTarget.style.transform = 'scale(1)';
+                      }}
+                      title="Delete"
                     >
                       <Trash2 size={16} />
-                      Delete
                     </button>
+                  </div>
+
+                  {/* Card content */}
+                  <div style={{ paddingRight: '72px' }}>
+                    <h3 style={{ 
+                      fontSize: '20px', 
+                      fontWeight: '600', 
+                      marginBottom: '6px', 
+                      color: '#1f2937',
+                      lineHeight: '1.3'
+                    }}>
+                      {meter.name}
+                    </h3>
+                    <p style={{ 
+                      fontSize: '14px', 
+                      color: '#6b7280', 
+                      margin: 0,
+                      textTransform: 'capitalize'
+                    }}>
+                      {meter.meter_type.replace('_', ' ')}
+                    </p>
+                  </div>
+
+                  <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #f3f4f6' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                      <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>Connection</span>
+                      <span style={{ 
+                        fontSize: '13px', 
+                        fontWeight: '600', 
+                        color: '#667eea',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
+                      }}>
+                        {meter.connection_type}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                      <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>Last Reading</span>
+                      <span style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
+                        {meter.last_reading ? `${meter.last_reading.toFixed(2)} kWh` : '-'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>Status</span>
+                      <span style={{
+                        padding: '4px 12px',
+                        borderRadius: '20px',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        backgroundColor: meter.is_active ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                        color: meter.is_active ? '#22c55e' : '#ef4444'
+                      }}>
+                        {meter.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               ))}
