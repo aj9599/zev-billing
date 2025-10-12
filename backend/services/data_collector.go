@@ -417,6 +417,9 @@ func (dc *DataCollector) saveBufferedUDPData() {
 	dc.mu.Lock()
 	defer dc.mu.Unlock()
 
+	// Track which meters we've seen data for
+	metersWithData := make(map[int]bool)
+
 	// Save meter data
 	for meterID, reading := range dc.udpMeterBuffers {
 		if reading > 0 {
@@ -449,10 +452,37 @@ func (dc *DataCollector) saveBufferedUDPData() {
 				dc.logToDatabase("UDP Meter Data Saved", 
 					fmt.Sprintf("Meter ID: %d, Reading: %.2f kWh, Consumption: %.2f kWh", meterID, reading, consumption))
 			}
+			metersWithData[meterID] = true
 		}
 	}
 
-	// Save charger data
+	// NEW: For meters that didn't send data this cycle, save a 0 consumption reading
+	// This ensures continuous lines in charts, especially important for solar meters
+	for meterID := range dc.udpMeterBuffers {
+		if !metersWithData[meterID] {
+			// Get the last reading to maintain cumulative value
+			var lastReading float64
+			dc.db.QueryRow(`
+				SELECT power_kwh FROM meter_readings 
+				WHERE meter_id = ? 
+				ORDER BY reading_time DESC LIMIT 1
+			`, meterID).Scan(&lastReading)
+
+			// Insert a reading with 0 consumption (no change in cumulative)
+			_, err := dc.db.Exec(`
+				INSERT INTO meter_readings (meter_id, reading_time, power_kwh, consumption_kwh)
+				VALUES (?, ?, ?, 0)
+			`, meterID, time.Now(), lastReading)
+
+			if err == nil {
+				log.Printf("INFO: Zero consumption recorded for inactive meter ID %d", meterID)
+				dc.logToDatabase("Zero Consumption Recorded", 
+					fmt.Sprintf("Meter ID: %d (no data received this cycle)", meterID))
+			}
+		}
+	}
+
+	// Save charger data (unchanged)
 	for chargerID, data := range dc.udpChargerBuffers {
 		if data.Power > 0 {
 			_, err := dc.db.Exec(`
