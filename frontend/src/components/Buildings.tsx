@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Building as BuildingIcon, Search } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Building as BuildingIcon, Search, MapPin } from 'lucide-react';
 import { api } from '../api/client';
 import type { Building } from '../types';
 import { useTranslation } from '../i18n';
@@ -83,8 +83,8 @@ export default function Buildings() {
   );
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+    <div className="buildings-container">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', gap: '15px', flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ 
             fontSize: '36px', 
@@ -145,7 +145,8 @@ export default function Buildings() {
         </div>
       </div>
 
-      <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+      {/* Desktop Table */}
+      <div className="desktop-table" style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
         <table style={{ width: '100%' }}>
           <thead>
             <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
@@ -192,12 +193,64 @@ export default function Buildings() {
         )}
       </div>
 
+      {/* Mobile Cards */}
+      <div className="mobile-cards">
+        {filteredBuildings.map(building => (
+          <div key={building.id} style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '16px',
+            marginBottom: '16px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: '#1f2937' }}>
+                  {building.name}
+                </h3>
+                <div style={{ fontSize: '13px', color: '#6b7280', display: 'flex', alignItems: 'start', gap: '6px', marginBottom: '8px' }}>
+                  <MapPin size={14} style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <span>
+                    {building.address_street}<br />
+                    {building.address_zip} {building.address_city}
+                  </span>
+                </div>
+                <span style={{
+                  padding: '4px 12px',
+                  borderRadius: '12px',
+                  fontSize: '12px',
+                  backgroundColor: building.is_group ? '#e3f2fd' : '#f3e5f5',
+                  color: building.is_group ? '#1976d2' : '#7b1fa2',
+                  display: 'inline-block'
+                }}>
+                  {building.is_group ? t('buildings.group') : t('buildings.single')}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => handleEdit(building)} style={{ padding: '8px', border: 'none', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '6px', cursor: 'pointer' }}>
+                  <Edit2 size={16} color="#3b82f6" />
+                </button>
+                <button onClick={() => handleDelete(building.id)} style={{ padding: '8px', border: 'none', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '6px', cursor: 'pointer' }}>
+                  <Trash2 size={16} color="#ef4444" />
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+        {filteredBuildings.length === 0 && (
+          <div style={{ backgroundColor: 'white', padding: '40px 20px', textAlign: 'center', color: '#999', borderRadius: '12px' }}>
+            {searchQuery ? t('buildings.noResults') : t('buildings.noBuildings')}
+          </div>
+        )}
+      </div>
+
       {showModal && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+          padding: '15px'
         }}>
-          <div style={{
+          <div className="modal-content" style={{
             backgroundColor: 'white', borderRadius: '12px', padding: '30px',
             width: '90%', maxWidth: '600px', maxHeight: '90vh', overflow: 'auto'
           }}>
@@ -232,7 +285,7 @@ export default function Buildings() {
                   {availableBuildings.length === 0 ? (
                     <p style={{ color: '#999', fontSize: '14px' }}>{t('buildings.noAvailableBuildings')}</p>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
                       {availableBuildings.map(b => (
                         <label key={b.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                           <input
@@ -252,7 +305,7 @@ export default function Buildings() {
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('common.address')}</label>
                 <input type="text" value={formData.address_street} onChange={(e) => setFormData({ ...formData, address_street: e.target.value })}
                   placeholder={t('users.street')} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', marginBottom: '8px' }} />
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '8px' }}>
+                <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '8px' }}>
                   <input type="text" value={formData.address_zip} onChange={(e) => setFormData({ ...formData, address_zip: e.target.value })}
                     placeholder={t('users.zip')} style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                   <input type="text" value={formData.address_city} onChange={(e) => setFormData({ ...formData, address_city: e.target.value })}
@@ -266,7 +319,7 @@ export default function Buildings() {
                   rows={3} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'inherit' }} />
               </div>
 
-              <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+              <div className="button-group" style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                 <button type="submit" style={{
                   flex: 1, padding: '12px', backgroundColor: '#007bff', color: 'white',
                   border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500'
@@ -284,6 +337,38 @@ export default function Buildings() {
           </div>
         </div>
       )}
+
+      <style>{`
+        @media (max-width: 768px) {
+          .buildings-container h1 {
+            font-size: 24px !important;
+          }
+
+          .buildings-container h1 svg {
+            width: 24px !important;
+            height: 24px !important;
+          }
+
+          .buildings-container p {
+            font-size: 14px !important;
+          }
+
+          .modal-content h2 {
+            font-size: 20px !important;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .buildings-container h1 {
+            font-size: 20px !important;
+          }
+
+          .buildings-container h1 svg {
+            width: 20px !important;
+            height: 20px !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

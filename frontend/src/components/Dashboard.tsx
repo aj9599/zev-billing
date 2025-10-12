@@ -24,42 +24,27 @@ interface BuildingConsumption {
   meters: MeterData[];
 }
 
-// Color palette for different apartment meters
 const APARTMENT_COLORS = [
-  '#10b981', // Green
-  '#8b5cf6', // Purple
-  '#ec4899', // Pink
-  '#06b6d4', // Cyan
-  '#14b8a6', // Teal
-  '#6366f1', // Indigo
-  '#a855f7', // Violet
-  '#ef4444', // Red
-  '#84cc16', // Lime
-  '#22c55e', // Light Green
-  '#0ea5e9', // Sky Blue
+  '#10b981', '#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6', '#6366f1',
+  '#a855f7', '#ef4444', '#84cc16', '#22c55e', '#0ea5e9',
 ];
 
 const FIXED_COLORS: Record<string, string> = {
-  'solar_meter': '#fbbf24',   // Golden/Yellow for solar
-  'total_meter': '#3b82f6',   // Blue for total
+  'solar_meter': '#fbbf24',
+  'total_meter': '#3b82f6',
   'default': '#6b7280'
 };
 
-// Track apartment colors to ensure each apartment gets a unique color
 const apartmentColorMap = new Map<number, string>();
 
 function getMeterColor(meterType: string, meterId?: number): string {
-  // For apartment meters, assign a unique color per apartment
   if (meterType === 'apartment_meter' && meterId !== undefined) {
     if (!apartmentColorMap.has(meterId)) {
-      // Assign the next available color from the palette
       const colorIndex = apartmentColorMap.size % APARTMENT_COLORS.length;
       apartmentColorMap.set(meterId, APARTMENT_COLORS[colorIndex]);
     }
     return apartmentColorMap.get(meterId)!;
   }
-  
-  // For other meter types, use fixed colors
   return FIXED_COLORS[meterType] || FIXED_COLORS.default;
 }
 
@@ -160,9 +145,9 @@ export default function Dashboard() {
   ];
 
   return (
-    <div>
-      <div style={{ marginBottom: '30px' }}>
-        <h1 style={{ 
+    <div className="dashboard-container">
+      <div className="dashboard-header" style={{ marginBottom: '30px' }}>
+        <h1 className="dashboard-title" style={{ 
             fontSize: '36px', 
             fontWeight: '800', 
             marginBottom: '8px',
@@ -174,15 +159,15 @@ export default function Dashboard() {
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text'
         }}>
-          <LayoutDashboard size={36} style={{ color: '#667eea' }} />
+          <LayoutDashboard className="dashboard-icon" size={36} style={{ color: '#667eea' }} />
           {t('dashboard.title')}
         </h1>
-        <p style={{ color: '#6b7280', fontSize: '16px' }}>
+        <p className="dashboard-subtitle" style={{ color: '#6b7280', fontSize: '16px' }}>
           {t('dashboard.subtitle')}
         </p>
       </div>
 
-      <div style={{
+      <div className="stats-grid" style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
         gap: '20px',
@@ -193,6 +178,7 @@ export default function Dashboard() {
           return (
             <div
               key={idx}
+              className="stat-card"
               style={{
                 backgroundColor: 'white',
                 padding: '24px',
@@ -210,15 +196,16 @@ export default function Dashboard() {
                 backgroundColor: card.color + '20',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                flexShrink: 0
               }}>
                 <Icon size={24} color={card.color} />
               </div>
-              <div>
-                <div style={{ fontSize: '14px', color: '#666', marginBottom: '4px' }}>
+              <div style={{ minWidth: 0 }}>
+                <div className="stat-label" style={{ fontSize: '14px', color: '#666', marginBottom: '4px' }}>
                   {card.label}
                 </div>
-                <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                <div className="stat-value" style={{ fontSize: '24px', fontWeight: 'bold' }}>
                   {card.value}
                 </div>
               </div>
@@ -227,7 +214,7 @@ export default function Dashboard() {
         })}
       </div>
 
-      <div style={{
+      <div className="consumption-controls" style={{
         backgroundColor: 'white',
         padding: '20px',
         borderRadius: '12px',
@@ -242,12 +229,13 @@ export default function Dashboard() {
         <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0 }}>
           {t('dashboard.consumptionByBuilding')}
         </h2>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+        <div className="controls-group" style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
           <input
             type="text"
             placeholder={t('dashboard.searchBuildings')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            className="search-input"
             style={{
               padding: '8px 12px',
               border: '1px solid #ddd',
@@ -259,6 +247,7 @@ export default function Dashboard() {
           <select
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
+            className="period-select"
             style={{
               padding: '8px 12px',
               border: '1px solid #ddd',
@@ -285,7 +274,7 @@ export default function Dashboard() {
               return (
                 <div style={{
                   backgroundColor: 'white',
-                  padding: '60px',
+                  padding: '60px 20px',
                   borderRadius: '12px',
                   boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                   textAlign: 'center',
@@ -357,6 +346,7 @@ export default function Dashboard() {
             return (
               <div
                 key={building.building_id}
+                className="building-card"
                 style={{
                   backgroundColor: 'white',
                   padding: '24px',
@@ -374,7 +364,7 @@ export default function Dashboard() {
                 </h3>
 
                 {meters.length > 0 && (
-                  <div style={{
+                  <div className="meter-legend" style={{
                     display: 'flex',
                     flexWrap: 'wrap',
                     gap: '12px',
@@ -401,7 +391,8 @@ export default function Dashboard() {
                             width: '12px',
                             height: '12px',
                             borderRadius: '2px',
-                            backgroundColor: getMeterColor(meter.meter_type, meter.meter_id)
+                            backgroundColor: getMeterColor(meter.meter_type, meter.meter_id),
+                            flexShrink: 0
                           }}
                         />
                         <span style={{ fontWeight: '500' }}>
@@ -416,58 +407,60 @@ export default function Dashboard() {
                 )}
 
                 {chartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={400}>
-                    <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                      <XAxis 
-                        dataKey="time" 
-                        style={{ fontSize: '12px' }}
-                        stroke="#6b7280"
-                      />
-                      <YAxis 
-                        label={{ 
-                          value: 'Power (W)', 
-                          angle: -90, 
-                          position: 'insideLeft',
-                          style: { fontSize: '12px' }
-                        }}
-                        style={{ fontSize: '12px' }}
-                        stroke="#6b7280"
-                      />
-                      <Tooltip 
-                        contentStyle={{
-                          backgroundColor: 'white',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '6px'
-                        }}
-                        formatter={(value: number) => {
-                          if (value >= 1000) {
-                            return `${(value / 1000).toFixed(2)} kW`;
-                          }
-                          return `${value.toFixed(0)} W`;
-                        }}
-                      />
-                      <Legend 
-                        wrapperStyle={{ fontSize: '12px' }}
-                      />
-                      {meters.map(meter => (
-                        <Line
-                          key={meter.meter_id}
-                          type="monotone"
-                          dataKey={`meter_${meter.meter_id}`}
-                          stroke={getMeterColor(meter.meter_type, meter.meter_id)}
-                          strokeWidth={2}
-                          name={getMeterDisplayName(meter)}
-                          dot={false}
-                          activeDot={{ r: 4 }}
+                  <div className="chart-container" style={{ width: '100%', height: '400px' }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis 
+                          dataKey="time" 
+                          style={{ fontSize: '12px' }}
+                          stroke="#6b7280"
                         />
-                      ))}
-                    </LineChart>
-                  </ResponsiveContainer>
+                        <YAxis 
+                          label={{ 
+                            value: 'Power (W)', 
+                            angle: -90, 
+                            position: 'insideLeft',
+                            style: { fontSize: '12px' }
+                          }}
+                          style={{ fontSize: '12px' }}
+                          stroke="#6b7280"
+                        />
+                        <Tooltip 
+                          contentStyle={{
+                            backgroundColor: 'white',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '6px'
+                          }}
+                          formatter={(value: number) => {
+                            if (value >= 1000) {
+                              return `${(value / 1000).toFixed(2)} kW`;
+                            }
+                            return `${value.toFixed(0)} W`;
+                          }}
+                        />
+                        <Legend 
+                          wrapperStyle={{ fontSize: '12px' }}
+                        />
+                        {meters.map(meter => (
+                          <Line
+                            key={meter.meter_id}
+                            type="monotone"
+                            dataKey={`meter_${meter.meter_id}`}
+                            stroke={getMeterColor(meter.meter_type, meter.meter_id)}
+                            strokeWidth={2}
+                            name={getMeterDisplayName(meter)}
+                            dot={false}
+                            activeDot={{ r: 4 }}
+                          />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
                 ) : meters.length > 0 ? (
                   <div style={{ 
                     textAlign: 'center', 
-                    padding: '60px', 
+                    padding: '60px 20px', 
                     color: '#9ca3af' 
                   }}>
                     {t('dashboard.noConsumptionData')}
@@ -477,7 +470,7 @@ export default function Dashboard() {
                 ) : (
                   <div style={{ 
                     textAlign: 'center', 
-                    padding: '60px', 
+                    padding: '60px 20px', 
                     color: '#9ca3af' 
                   }}>
                     {t('dashboard.noMetersConfigured')}
@@ -495,7 +488,7 @@ export default function Dashboard() {
       ) : (
         <div style={{
           backgroundColor: 'white',
-          padding: '60px',
+          padding: '60px 20px',
           borderRadius: '12px',
           boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
           textAlign: 'center',
@@ -505,6 +498,113 @@ export default function Dashboard() {
           <p>{t('dashboard.createBuildings')}</p>
         </div>
       )}
+
+      <style>{`
+        @media (max-width: 768px) {
+          .dashboard-title {
+            font-size: 24px !important;
+          }
+
+          .dashboard-icon {
+            width: 24px !important;
+            height: 24px !important;
+          }
+
+          .dashboard-subtitle {
+            font-size: 14px !important;
+          }
+
+          .stats-grid {
+            grid-template-columns: 1fr !important;
+            gap: 15px !important;
+          }
+
+          .stat-card {
+            padding: 16px !important;
+          }
+
+          .stat-value {
+            font-size: 20px !important;
+          }
+
+          .consumption-controls {
+            flex-direction: column;
+            align-items: stretch !important;
+            padding: 15px !important;
+          }
+
+          .consumption-controls h2 {
+            font-size: 18px !important;
+          }
+
+          .controls-group {
+            width: 100%;
+            flex-direction: column;
+          }
+
+          .search-input,
+          .period-select {
+            width: 100% !important;
+            min-width: auto !important;
+          }
+
+          .building-card {
+            padding: 16px !important;
+          }
+
+          .building-card h3 {
+            font-size: 18px !important;
+          }
+
+          .meter-legend {
+            padding: 8px !important;
+            gap: 8px !important;
+          }
+
+          .chart-container {
+            height: 300px !important;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .dashboard-title {
+            font-size: 20px !important;
+            gap: 8px !important;
+          }
+
+          .dashboard-icon {
+            width: 20px !important;
+            height: 20px !important;
+          }
+
+          .stat-card {
+            padding: 12px !important;
+            gap: 12px !important;
+          }
+
+          .stat-card > div:first-child {
+            width: 40px !important;
+            height: 40px !important;
+          }
+
+          .stat-card > div:first-child svg {
+            width: 20px !important;
+            height: 20px !important;
+          }
+
+          .stat-label {
+            font-size: 12px !important;
+          }
+
+          .stat-value {
+            font-size: 18px !important;
+          }
+
+          .chart-container {
+            height: 250px !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

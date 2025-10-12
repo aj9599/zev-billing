@@ -1,5 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, Building, Zap, Car, FileText, Settings, LogOut, Activity, DollarSign } from 'lucide-react';
+import { useState } from 'react';
+import { LayoutDashboard, Users, Building, Zap, Car, FileText, Settings, LogOut, Activity, DollarSign, Menu, X } from 'lucide-react';
 import { api } from '../api/client';
 import { useTranslation } from '../i18n';
 
@@ -10,6 +11,7 @@ interface LayoutProps {
 export default function Layout({ onLogout }: LayoutProps) {
   const location = useLocation();
   const { t, language, setLanguage } = useTranslation();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleLogout = () => {
     api.logout();
@@ -28,9 +30,60 @@ export default function Layout({ onLogout }: LayoutProps) {
     { path: '/settings', icon: Settings, label: t('nav.settings') },
   ];
 
+  const closeMobileMenu = () => setMobileMenuOpen(false);
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <aside style={{
+      {/* Mobile Header */}
+      <div className="mobile-header" style={{
+        display: 'none',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: '60px',
+        backgroundColor: '#1a1a1a',
+        color: 'white',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '0 20px',
+        zIndex: 1001
+      }}>
+        <h1 style={{ fontSize: '20px', fontWeight: 'bold' }}>ZEV Billing</h1>
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'white',
+            cursor: 'pointer',
+            padding: '8px'
+          }}
+        >
+          {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+      </div>
+
+      {/* Overlay for mobile menu */}
+      {mobileMenuOpen && (
+        <div
+          className="mobile-overlay"
+          onClick={closeMobileMenu}
+          style={{
+            display: 'none',
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            zIndex: 999
+          }}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside className={`sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`} style={{
         position: 'fixed',
         left: 0,
         top: 0,
@@ -41,9 +94,11 @@ export default function Layout({ onLogout }: LayoutProps) {
         padding: '20px',
         display: 'flex',
         flexDirection: 'column',
-        overflowY: 'auto'
+        overflowY: 'auto',
+        zIndex: 1000,
+        transition: 'transform 0.3s ease'
       }}>
-        <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '30px' }}>
+        <h1 className="desktop-only" style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '30px' }}>
           ZEV Billing
         </h1>
         
@@ -56,6 +111,7 @@ export default function Layout({ onLogout }: LayoutProps) {
               <Link
                 key={item.path}
                 to={item.path}
+                onClick={closeMobileMenu}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -150,7 +206,7 @@ export default function Layout({ onLogout }: LayoutProps) {
         </button>
       </aside>
 
-      <main style={{
+      <main className="main-content" style={{
         marginLeft: '250px',
         flex: 1,
         padding: '30px',
@@ -159,6 +215,42 @@ export default function Layout({ onLogout }: LayoutProps) {
       }}>
         <Outlet />
       </main>
+
+      <style>{`
+        @media (max-width: 768px) {
+          .mobile-header {
+            display: flex !important;
+          }
+
+          .mobile-overlay {
+            display: block !important;
+          }
+
+          .sidebar {
+            transform: translateX(-100%);
+            top: 60px;
+          }
+
+          .sidebar.mobile-open {
+            transform: translateX(0);
+          }
+
+          .desktop-only {
+            display: none !important;
+          }
+
+          .main-content {
+            margin-left: 0 !important;
+            padding: 80px 15px 15px 15px !important;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .main-content {
+            padding: 70px 10px 10px 10px !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

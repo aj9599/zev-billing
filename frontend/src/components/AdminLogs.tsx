@@ -101,10 +101,10 @@ export default function AdminLogs() {
   };
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+    <div className="admin-logs-container">
+      <div className="logs-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', gap: '15px', flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ 
+          <h1 className="logs-title" style={{ 
             fontSize: '36px', 
             fontWeight: '800', 
             marginBottom: '8px',
@@ -119,18 +119,19 @@ export default function AdminLogs() {
             <Activity size={36} style={{ color: '#667eea' }} />
             {t('logs.title')}
           </h1>
-          <p style={{ color: '#6b7280', fontSize: '16px' }}>
+          <p className="logs-subtitle" style={{ color: '#6b7280', fontSize: '16px' }}>
             {t('logs.subtitle')}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+        <div className="logs-actions" style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
           <label style={{ 
             display: 'flex', 
             alignItems: 'center', 
             gap: '8px', 
             fontSize: '14px',
             fontWeight: '500',
-            color: '#374151'
+            color: '#374151',
+            whiteSpace: 'nowrap'
           }}>
             <input 
               type="checkbox" 
@@ -142,6 +143,7 @@ export default function AdminLogs() {
           <button
             onClick={() => { loadLogs(); loadDebugInfo(); }}
             disabled={loading}
+            className="refresh-button"
             style={{
               display: 'flex', 
               alignItems: 'center', 
@@ -172,11 +174,12 @@ export default function AdminLogs() {
             }}
           >
             <RefreshCw size={18} />
-            {t('logs.refresh')}
+            <span className="button-text">{t('logs.refresh')}</span>
           </button>
           <button
             onClick={handleReboot}
             disabled={rebooting}
+            className="reboot-button"
             style={{
               display: 'flex', 
               alignItems: 'center', 
@@ -206,7 +209,7 @@ export default function AdminLogs() {
             }}
           >
             <Power size={18} />
-            {rebooting ? t('logs.rebooting') : t('logs.rebootSystem')}
+            <span className="button-text">{rebooting ? t('logs.rebooting') : t('logs.rebootSystem')}</span>
           </button>
         </div>
       </div>
@@ -217,12 +220,12 @@ export default function AdminLogs() {
           <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '16px', color: '#1f2937' }}>
             {t('logs.realTimeStatus')}
           </h2>
-          <div style={{
+          <div className="debug-grid" style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
             gap: '20px'
           }}>
-            <div style={{
+            <div className="debug-card" style={{
               backgroundColor: 'white', 
               padding: '24px', 
               borderRadius: '16px',
@@ -241,7 +244,7 @@ export default function AdminLogs() {
               </div>
             </div>
 
-            <div style={{
+            <div className="debug-card" style={{
               backgroundColor: 'white', 
               padding: '24px', 
               borderRadius: '16px',
@@ -259,7 +262,7 @@ export default function AdminLogs() {
               </div>
             </div>
 
-            <div style={{
+            <div className="debug-card" style={{
               backgroundColor: 'white', 
               padding: '24px', 
               borderRadius: '16px',
@@ -277,7 +280,7 @@ export default function AdminLogs() {
               </div>
             </div>
 
-            <div style={{
+            <div className="debug-card" style={{
               backgroundColor: 'white', 
               padding: '24px', 
               borderRadius: '16px',
@@ -296,7 +299,7 @@ export default function AdminLogs() {
             </div>
 
             {debugInfo.udp_listeners && debugInfo.udp_listeners.length > 0 && (
-              <div style={{
+              <div className="debug-card" style={{
                 backgroundColor: 'white', 
                 padding: '24px', 
                 borderRadius: '16px',
@@ -316,7 +319,7 @@ export default function AdminLogs() {
               </div>
             )}
 
-            <div style={{
+            <div className="debug-card" style={{
               backgroundColor: 'white', 
               padding: '24px', 
               borderRadius: '16px',
@@ -337,8 +340,8 @@ export default function AdminLogs() {
         </div>
       )}
 
-      {/* Logs Table */}
-      <div style={{
+      {/* Logs Table - Desktop */}
+      <div className="desktop-table" style={{
         backgroundColor: 'white', 
         borderRadius: '16px',
         boxShadow: '0 4px 12px rgba(0,0,0,0.08)', 
@@ -406,6 +409,190 @@ export default function AdminLogs() {
           </div>
         )}
       </div>
+
+      {/* Mobile Cards */}
+      <div className="mobile-cards">
+        <div style={{
+          backgroundColor: 'white',
+          borderRadius: '12px',
+          padding: '16px',
+          marginBottom: '16px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+        }}>
+          <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>
+            {t('logs.activityLog')}
+          </h3>
+        </div>
+
+        {logs.map(log => (
+          <div key={log.id} style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '16px',
+            marginBottom: '12px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            borderLeft: `4px solid ${
+              log.action.toLowerCase().includes('error') || log.action.toLowerCase().includes('failed') 
+                ? '#dc3545' 
+                : log.action.toLowerCase().includes('success') || log.action.toLowerCase().includes('collected')
+                ? '#28a745'
+                : '#007bff'
+            }`
+          }}>
+            <div style={{ display: 'flex', alignItems: 'start', gap: '12px', marginBottom: '12px' }}>
+              <div style={{ marginTop: '2px' }}>
+                {getLogIcon(log.action)}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '15px', fontWeight: '600', marginBottom: '4px', color: '#1f2937' }}>
+                  {log.action}
+                </div>
+                <div style={{ fontSize: '12px', color: '#6b7280', fontFamily: 'monospace', marginBottom: '8px' }}>
+                  {new Date(log.created_at).toLocaleString('de-CH')}
+                </div>
+              </div>
+            </div>
+            
+            {log.details && (
+              <div style={{
+                fontSize: '13px',
+                color: '#4b5563',
+                padding: '12px',
+                backgroundColor: '#f9fafb',
+                borderRadius: '6px',
+                marginBottom: '8px',
+                wordBreak: 'break-word'
+              }}>
+                {log.details}
+              </div>
+            )}
+            
+            {log.ip_address && (
+              <div style={{ fontSize: '12px', color: '#9ca3af', fontFamily: 'monospace' }}>
+                IP: {log.ip_address}
+              </div>
+            )}
+          </div>
+        ))}
+
+        {logs.length === 0 && !loading && (
+          <div style={{ 
+            backgroundColor: 'white', 
+            padding: '40px 20px', 
+            textAlign: 'center', 
+            color: '#9ca3af',
+            borderRadius: '12px'
+          }}>
+            {t('logs.noLogs')}
+          </div>
+        )}
+
+        {loading && (
+          <div style={{ 
+            backgroundColor: 'white', 
+            padding: '40px 20px', 
+            textAlign: 'center', 
+            color: '#9ca3af',
+            borderRadius: '12px'
+          }}>
+            {t('logs.loadingLogs')}
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @media (max-width: 768px) {
+          .admin-logs-container .logs-title {
+            font-size: 24px !important;
+            gap: 8px !important;
+          }
+
+          .admin-logs-container .logs-title svg {
+            width: 24px !important;
+            height: 24px !important;
+          }
+
+          .admin-logs-container .logs-subtitle {
+            font-size: 14px !important;
+          }
+
+          .logs-header {
+            flex-direction: column !important;
+            align-items: stretch !important;
+          }
+
+          .logs-actions {
+            width: 100%;
+            flex-direction: column !important;
+          }
+
+          .logs-actions label {
+            width: 100%;
+            justify-content: center;
+          }
+
+          .refresh-button,
+          .reboot-button {
+            width: 100% !important;
+            justify-content: center !important;
+          }
+
+          .debug-grid {
+            grid-template-columns: 1fr !important;
+            gap: 15px !important;
+          }
+
+          .debug-card {
+            padding: 16px !important;
+          }
+
+          .debug-card > div:first-child {
+            font-size: 12px !important;
+          }
+
+          .debug-card > div:nth-child(2) {
+            font-size: 24px !important;
+          }
+
+          .debug-card > div:last-child {
+            font-size: 11px !important;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .admin-logs-container .logs-title {
+            font-size: 20px !important;
+            gap: 6px !important;
+          }
+
+          .admin-logs-container .logs-title svg {
+            width: 20px !important;
+            height: 20px !important;
+          }
+
+          .logs-subtitle {
+            font-size: 13px !important;
+          }
+
+          .refresh-button,
+          .reboot-button {
+            padding: 10px 16px !important;
+            font-size: 13px !important;
+          }
+
+          .button-text {
+            display: inline !important;
+          }
+
+          .debug-card {
+            padding: 14px !important;
+          }
+
+          .debug-card > div:nth-child(2) {
+            font-size: 22px !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
