@@ -171,6 +171,11 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 
 func debugStatusHandler(w http.ResponseWriter, r *http.Request) {
 	debugInfo := dataCollector.GetDebugInfo()
+	
+	// Add system health information
+	systemHealth := services.GetSystemHealth()
+	debugInfo["system_health"] = systemHealth
+	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(debugInfo)
 }

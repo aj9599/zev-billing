@@ -1,13 +1,26 @@
 import { useState, useEffect } from 'react';
-import { Activity, RefreshCw, AlertCircle, CheckCircle, Info, Power } from 'lucide-react';
+import { Activity, RefreshCw, AlertCircle, CheckCircle, Info, Power, Cpu, HardDrive, Thermometer, Clock } from 'lucide-react';
 import { api } from '../api/client';
 import type { AdminLog } from '../types';
 import { useTranslation } from '../i18n';
+
+interface SystemHealth {
+  cpu_usage: number;
+  memory_used: number;
+  memory_total: number;
+  memory_percent: number;
+  disk_used: number;
+  disk_total: number;
+  disk_percent: number;
+  temperature: number;
+  uptime: string;
+}
 
 export default function AdminLogs() {
   const { t } = useTranslation();
   const [logs, setLogs] = useState<AdminLog[]>([]);
   const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [rebooting, setRebooting] = useState(false);
@@ -48,6 +61,9 @@ export default function AdminLogs() {
       });
       const data = await response.json();
       setDebugInfo(data);
+      if (data.system_health) {
+        setSystemHealth(data.system_health);
+      }
     } catch (err) {
       console.error(t('logs.debugInfoFailed'), err);
     }
@@ -82,6 +98,14 @@ export default function AdminLogs() {
     }
   };
 
+  const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
+  };
+
   const getLogIcon = (action: string) => {
     if (action.toLowerCase().includes('error') || action.toLowerCase().includes('failed')) {
       return <AlertCircle size={16} color="#dc3545" />;
@@ -98,6 +122,18 @@ export default function AdminLogs() {
       return '#f0fdf4';
     }
     return '#fff';
+  };
+
+  const getHealthColor = (percent: number) => {
+    if (percent >= 90) return '#dc3545';
+    if (percent >= 75) return '#ffc107';
+    return '#10b981';
+  };
+
+  const getTempColor = (temp: number) => {
+    if (temp >= 80) return '#dc3545';
+    if (temp >= 70) return '#ffc107';
+    return '#10b981';
   };
 
   return (
@@ -213,6 +249,139 @@ export default function AdminLogs() {
           </button>
         </div>
       </div>
+
+      {/* System Health Cards */}
+      {systemHealth && (
+        <div style={{ marginBottom: '30px', width: '100%' }}>
+          <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '16px', color: '#1f2937' }}>
+            Device Health
+          </h2>
+          <div className="debug-grid" style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: '20px',
+            width: '100%'
+          }}>
+            <div className="debug-card" style={{
+              backgroundColor: 'white', 
+              padding: '24px', 
+              borderRadius: '16px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.08)', 
+              border: `2px solid ${getHealthColor(systemHealth.cpu_usage)}`,
+              transition: 'all 0.3s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                <Cpu size={24} color={getHealthColor(systemHealth.cpu_usage)} />
+                <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>CPU Usage</div>
+              </div>
+              <div style={{ fontSize: '28px', fontWeight: '800', color: getHealthColor(systemHealth.cpu_usage) }}>
+                {systemHealth.cpu_usage.toFixed(1)}%
+              </div>
+              <div style={{ width: '100%', height: '8px', backgroundColor: '#e5e7eb', borderRadius: '4px', marginTop: '12px', overflow: 'hidden' }}>
+                <div style={{ width: `${systemHealth.cpu_usage}%`, height: '100%', backgroundColor: getHealthColor(systemHealth.cpu_usage), transition: 'width 0.3s ease' }}></div>
+              </div>
+            </div>
+
+            <div className="debug-card" style={{
+              backgroundColor: 'white', 
+              padding: '24px', 
+              borderRadius: '16px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.08)', 
+              border: `2px solid ${getHealthColor(systemHealth.memory_percent)}`,
+              transition: 'all 0.3s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                <Activity size={24} color={getHealthColor(systemHealth.memory_percent)} />
+                <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>Memory Usage</div>
+              </div>
+              <div style={{ fontSize: '28px', fontWeight: '800', color: getHealthColor(systemHealth.memory_percent) }}>
+                {systemHealth.memory_percent.toFixed(1)}%
+              </div>
+              <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
+                {formatBytes(systemHealth.memory_used)} / {formatBytes(systemHealth.memory_total)}
+              </div>
+              <div style={{ width: '100%', height: '8px', backgroundColor: '#e5e7eb', borderRadius: '4px', marginTop: '12px', overflow: 'hidden' }}>
+                <div style={{ width: `${systemHealth.memory_percent}%`, height: '100%', backgroundColor: getHealthColor(systemHealth.memory_percent), transition: 'width 0.3s ease' }}></div>
+              </div>
+            </div>
+
+            <div className="debug-card" style={{
+              backgroundColor: 'white', 
+              padding: '24px', 
+              borderRadius: '16px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.08)', 
+              border: `2px solid ${getHealthColor(systemHealth.disk_percent)}`,
+              transition: 'all 0.3s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                <HardDrive size={24} color={getHealthColor(systemHealth.disk_percent)} />
+                <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>Disk Usage</div>
+              </div>
+              <div style={{ fontSize: '28px', fontWeight: '800', color: getHealthColor(systemHealth.disk_percent) }}>
+                {systemHealth.disk_percent.toFixed(1)}%
+              </div>
+              <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
+                {formatBytes(systemHealth.disk_used)} / {formatBytes(systemHealth.disk_total)}
+              </div>
+              <div style={{ width: '100%', height: '8px', backgroundColor: '#e5e7eb', borderRadius: '4px', marginTop: '12px', overflow: 'hidden' }}>
+                <div style={{ width: `${systemHealth.disk_percent}%`, height: '100%', backgroundColor: getHealthColor(systemHealth.disk_percent), transition: 'width 0.3s ease' }}></div>
+              </div>
+            </div>
+
+            {systemHealth.temperature > 0 && (
+              <div className="debug-card" style={{
+                backgroundColor: 'white', 
+                padding: '24px', 
+                borderRadius: '16px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.08)', 
+                border: `2px solid ${getTempColor(systemHealth.temperature)}`,
+                transition: 'all 0.3s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                  <Thermometer size={24} color={getTempColor(systemHealth.temperature)} />
+                  <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>CPU Temperature</div>
+                </div>
+                <div style={{ fontSize: '28px', fontWeight: '800', color: getTempColor(systemHealth.temperature) }}>
+                  {systemHealth.temperature.toFixed(1)}°C
+                </div>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
+                  {systemHealth.temperature < 70 ? 'Normal' : systemHealth.temperature < 80 ? 'Warm' : 'Hot'}
+                </div>
+              </div>
+            )}
+
+            <div className="debug-card" style={{
+              backgroundColor: 'white', 
+              padding: '24px', 
+              borderRadius: '16px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.08)', 
+              border: '2px solid #3b82f6',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                <Clock size={24} color="#3b82f6" />
+                <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>System Uptime</div>
+              </div>
+              <div style={{ fontSize: '28px', fontWeight: '800', color: '#3b82f6' }}>
+                {systemHealth.uptime}
+              </div>
+              <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
+                Since last restart
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Debug Information Cards */}
       {debugInfo && (
