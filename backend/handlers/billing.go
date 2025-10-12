@@ -290,6 +290,7 @@ func (h *BillingHandler) GetInvoice(w http.ResponseWriter, r *http.Request) {
 	itemRows, err := h.db.Query(`
 		SELECT id, invoice_id, description, quantity, unit_price, total_price, item_type
 		FROM invoice_items WHERE invoice_id = ?
+		ORDER BY id ASC
 	`, inv.ID)
 
 	if err == nil {
@@ -321,6 +322,31 @@ func (h *BillingHandler) GetInvoice(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(inv)
+}
+
+func (h *BillingHandler) DeleteInvoice(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	// Delete invoice items first
+	_, err = h.db.Exec("DELETE FROM invoice_items WHERE invoice_id = ?", id)
+	if err != nil {
+		http.Error(w, "Failed to delete invoice items", http.StatusInternalServerError)
+		return
+	}
+
+	// Delete invoice
+	_, err = h.db.Exec("DELETE FROM invoices WHERE id = ?", id)
+	if err != nil {
+		http.Error(w, "Failed to delete invoice", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *BillingHandler) BackupDatabase(w http.ResponseWriter, r *http.Request) {

@@ -234,6 +234,10 @@ class ApiClient {
     return this.request(`/billing/invoices/${id}`);
   }
 
+  async deleteInvoice(id: number) {
+    return this.request(`/billing/invoices/${id}`, { method: 'DELETE' });
+  }
+
   // Dashboard
   async getDashboardStats(): Promise<DashboardStats> {
     return this.request('/dashboard/stats');
@@ -243,7 +247,7 @@ class ApiClient {
     return this.request(`/dashboard/consumption?period=${period}`);
   }
 
-  // NEW: Get consumption data grouped by building and meter
+  // Get consumption data grouped by building and meter
   async getConsumptionByBuilding(period: string = '24h'): Promise<BuildingConsumption[]> {
     return this.request(`/dashboard/consumption-by-building?period=${period}`);
   }

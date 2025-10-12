@@ -70,97 +70,15 @@ func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	todayEnd := todayStart.Add(24 * time.Hour)
 	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 
-	// Helper function to calculate consumption for a period
-	calculateConsumption := func(meterTypes []string, periodStart, periodEnd time.Time) float64 {
-		if len(meterTypes) == 0 {
-			return 0
-		}
+	// Calculate total apartment consumption (sum of all apartment meters)
+	consumptionMeterTypes := []string{"apartment_meter"}
+	stats.TodayConsumption = calculateTotalConsumption(h.db, ctx, consumptionMeterTypes, todayStart, todayEnd)
+	stats.MonthConsumption = calculateTotalConsumption(h.db, ctx, consumptionMeterTypes, startOfMonth, now)
 
-		// Build dynamic query for meter types
-		placeholders := make([]string, len(meterTypes))
-		args := make([]interface{}, len(meterTypes))
-		for i, mt := range meterTypes {
-			placeholders[i] = "?"
-			args[i] = mt
-		}
-		
-		query := fmt.Sprintf(`
-			SELECT id FROM meters 
-			WHERE meter_type IN (%s) 
-			AND COALESCE(is_active, 1) = 1
-		`, strings.Join(placeholders, ","))
-		
-		// Get all active meters of specified types
-		meterRows, err := h.db.QueryContext(ctx, query, args...)
-		
-		if err != nil {
-			log.Printf("Error querying meters: %v", err)
-			return 0
-		}
-		defer meterRows.Close()
-
-		totalConsumption := 0.0
-		
-		for meterRows.Next() {
-			var meterID int
-			if err := meterRows.Scan(&meterID); err != nil {
-				continue
-			}
-
-			// Get reading just before period start (baseline)
-			var baselineReading sql.NullFloat64
-			h.db.QueryRowContext(ctx, `
-				SELECT power_kwh FROM meter_readings 
-				WHERE meter_id = ? AND reading_time < ?
-				ORDER BY reading_time DESC LIMIT 1
-			`, meterID, periodStart).Scan(&baselineReading)
-
-			// Get latest reading in the period
-			var latestReading sql.NullFloat64
-			h.db.QueryRowContext(ctx, `
-				SELECT power_kwh FROM meter_readings 
-				WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
-				ORDER BY reading_time DESC LIMIT 1
-			`, meterID, periodStart, periodEnd).Scan(&latestReading)
-
-			// Calculate consumption for this meter
-			if latestReading.Valid {
-				if baselineReading.Valid {
-					// Normal case: we have a baseline
-					consumption := latestReading.Float64 - baselineReading.Float64
-					if consumption > 0 {
-						totalConsumption += consumption
-					}
-				} else {
-					// No baseline (first reading ever is today)
-					// Use first reading of period as baseline
-					var firstReading sql.NullFloat64
-					h.db.QueryRowContext(ctx, `
-						SELECT power_kwh FROM meter_readings 
-						WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
-						ORDER BY reading_time ASC LIMIT 1
-					`, meterID, periodStart, periodEnd).Scan(&firstReading)
-					
-					if firstReading.Valid && latestReading.Float64 > firstReading.Float64 {
-						totalConsumption += latestReading.Float64 - firstReading.Float64
-					}
-				}
-			}
-		}
-		
-		return totalConsumption
-	}
-
-	consumptionMeterTypes := []string{"apartment_meter", "heating_meter", "water_meter", "gas_meter"}
+	// Calculate total solar generation
 	solarMeterTypes := []string{"solar_meter"}
-
-	// Calculate consumption
-	stats.TodayConsumption = calculateConsumption(consumptionMeterTypes, todayStart, todayEnd)
-	stats.MonthConsumption = calculateConsumption(consumptionMeterTypes, startOfMonth, now)
-
-	// Calculate solar generation
-	stats.TodaySolar = calculateConsumption(solarMeterTypes, todayStart, todayEnd)
-	stats.MonthSolar = calculateConsumption(solarMeterTypes, startOfMonth, now)
+	stats.TodaySolar = calculateTotalConsumption(h.db, ctx, solarMeterTypes, todayStart, todayEnd)
+	stats.MonthSolar = calculateTotalConsumption(h.db, ctx, solarMeterTypes, startOfMonth, now)
 
 	// Calculate car charging (charger_sessions - these are already consumption values, not cumulative)
 	if err := h.db.QueryRowContext(ctx, `
@@ -183,6 +101,40 @@ func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
+}
+
+func calculateTotalConsumption(db *sql.DB, ctx context.Context, meterTypes []string, periodStart, periodEnd time.Time) float64 {
+	if len(meterTypes) == 0 {
+		return 0
+	}
+
+	// Build dynamic query for meter types
+	placeholders := make([]string, len(meterTypes))
+	args := make([]interface{}, len(meterTypes)+2)
+	for i, mt := range meterTypes {
+		placeholders[i] = "?"
+		args[i] = mt
+	}
+	args[len(meterTypes)] = periodStart
+	args[len(meterTypes)+1] = periodEnd
+	
+	query := fmt.Sprintf(`
+		SELECT COALESCE(SUM(mr.consumption_kwh), 0)
+		FROM meter_readings mr
+		JOIN meters m ON mr.meter_id = m.id
+		WHERE m.meter_type IN (%s)
+		AND COALESCE(m.is_active, 1) = 1
+		AND mr.reading_time >= ? AND mr.reading_time < ?
+	`, strings.Join(placeholders, ","))
+	
+	var total float64
+	err := db.QueryRowContext(ctx, query, args...).Scan(&total)
+	if err != nil {
+		log.Printf("Error calculating total consumption: %v", err)
+		return 0
+	}
+	
+	return total
 }
 
 func (h *DashboardHandler) GetConsumption(w http.ResponseWriter, r *http.Request) {
@@ -305,7 +257,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		}
 		buildingInfos = append(buildingInfos, bi)
 	}
-	buildingRows.Close() // CRITICAL: Close immediately
+	buildingRows.Close()
 	
 	log.Printf("Found %d buildings to process", len(buildingInfos))
 
@@ -340,7 +292,9 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		meterRows, err := h.db.QueryContext(ctx, `
 			SELECT m.id, m.name, m.meter_type, m.user_id
 			FROM meters m
-			WHERE m.building_id = ? AND COALESCE(m.is_active, 1) = 1
+			WHERE m.building_id = ? 
+			AND COALESCE(m.is_active, 1) = 1
+			AND m.meter_type IN ('apartment_meter', 'solar_meter')
 			ORDER BY m.meter_type, m.name
 		`, bi.id)
 
@@ -366,7 +320,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			}
 			meterInfos = append(meterInfos, mi)
 		}
-		meterRows.Close() // CRITICAL: Close immediately
+		meterRows.Close()
 		
 		log.Printf("  Found %d meters for building %d", len(meterInfos), bi.id)
 
@@ -387,9 +341,9 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				}
 			}
 
-			// STEP 5: Read all readings for this meter - USE power_kwh for chart display
+			// STEP 5: Read all readings for this meter - USE consumption_kwh for display
 			dataRows, err := h.db.QueryContext(ctx, `
-				SELECT reading_time, power_kwh
+				SELECT reading_time, consumption_kwh
 				FROM meter_readings
 				WHERE meter_id = ? AND reading_time >= ?
 				ORDER BY reading_time ASC
@@ -411,16 +365,16 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 
 			for dataRows.Next() {
 				var timestamp time.Time
-				var powerKwh float64
-				if err := dataRows.Scan(&timestamp, &powerKwh); err == nil {
+				var consumptionKwh float64
+				if err := dataRows.Scan(&timestamp, &consumptionKwh); err == nil {
 					meterData.Data = append(meterData.Data, models.ConsumptionData{
 						Timestamp: timestamp,
-						Power:     powerKwh,  // Use actual meter reading for chart
+						Power:     consumptionKwh,  // Use consumption for each interval
 						Source:    mi.meterType,
 					})
 				}
 			}
-			dataRows.Close() // CRITICAL: Close immediately
+			dataRows.Close()
 
 			log.Printf("    Meter ID: %d has %d data points", mi.id, len(meterData.Data))
 

@@ -121,7 +121,8 @@ func main() {
 	api.HandleFunc("/billing/settings/{id}", billingHandler.DeleteSettings).Methods("DELETE")
 	api.HandleFunc("/billing/generate", billingHandler.GenerateBills).Methods("POST")
 	api.HandleFunc("/billing/invoices", billingHandler.ListInvoices).Methods("GET")
-	api.HandleFunc("/billing/invoices/{id}", billingHandler.GetInvoice).Methods("GET")
+	api.HandleFunc("/billing/invoices/{id}", billingHandler.Get).Methods("GET")
+	api.HandleFunc("/billing/invoices/{id}", billingHandler.DeleteInvoice).Methods("DELETE")
 	api.HandleFunc("/billing/backup", billingHandler.BackupDatabase).Methods("GET")
 	api.HandleFunc("/billing/export", billingHandler.ExportData).Methods("GET")
 
@@ -140,13 +141,12 @@ func main() {
 
 	handler := c.Handler(r)
 
-	// FIXED: Increased timeouts to prevent database lock issues
 	server := &http.Server{
 		Addr:         cfg.ServerAddress,
 		Handler:      handler,
-		ReadTimeout:  60 * time.Second,  // Increased from 30s
-		WriteTimeout: 60 * time.Second,  // Increased from 30s
-		IdleTimeout:  180 * time.Second, // Increased from 120s
+		ReadTimeout:  60 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  180 * time.Second,
 	}
 
 	log.Printf("Server starting on %s", cfg.ServerAddress)

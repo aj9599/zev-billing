@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Eye, FileText } from 'lucide-react';
+import { Plus, Eye, FileText, Download, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
 import type { Invoice, Building, User } from '../types';
 
@@ -16,6 +16,7 @@ export default function Billing() {
     end_date: ''
   });
   const [generating, setGenerating] = useState(false);
+  const [expandedBuildings, setExpandedBuildings] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     loadData();
@@ -30,6 +31,10 @@ export default function Billing() {
     setInvoices(invoicesData);
     setBuildings(buildingsData);
     setUsers(usersData);
+    
+    // Expand all buildings by default
+    const buildingIds = new Set(buildingsData.map(b => b.id));
+    setExpandedBuildings(buildingIds);
   };
 
   const handleGenerate = async (e: React.FormEvent) => {
@@ -58,6 +63,180 @@ export default function Billing() {
     setSelectedInvoice(invoice);
   };
 
+  const deleteInvoice = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this invoice?')) return;
+    
+    try {
+      await api.deleteInvoice(id);
+      loadData();
+      alert('Invoice deleted successfully');
+    } catch (err) {
+      alert('Failed to delete invoice: ' + err);
+    }
+  };
+
+  const downloadPDF = (invoice: Invoice) => {
+    const user = users.find(u => u.id === invoice.user_id);
+    const building = buildings.find(b => b.id === invoice.building_id);
+    
+    // Create a printable invoice HTML
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Invoice ${invoice.invoice_number}</title>
+        <style>
+          body { 
+            font-family: Arial, sans-serif; 
+            padding: 40px; 
+            max-width: 800px; 
+            margin: 0 auto;
+          }
+          .header { 
+            border-bottom: 3px solid #007bff; 
+            padding-bottom: 20px; 
+            margin-bottom: 30px;
+          }
+          .header h1 { 
+            margin: 0; 
+            font-size: 32px; 
+            color: #007bff;
+          }
+          .invoice-number { 
+            color: #666; 
+            font-size: 14px; 
+            margin-top: 5px;
+          }
+          .info-section { 
+            margin-bottom: 30px;
+          }
+          .info-section h3 { 
+            font-size: 14px; 
+            text-transform: uppercase; 
+            color: #666; 
+            margin-bottom: 10px;
+          }
+          .info-section p { 
+            margin: 5px 0; 
+            line-height: 1.6;
+          }
+          table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin: 30px 0;
+          }
+          th { 
+            background-color: #f9f9f9; 
+            padding: 12px; 
+            text-align: left; 
+            border-bottom: 2px solid #ddd;
+            font-weight: 600;
+          }
+          td { 
+            padding: 12px; 
+            border-bottom: 1px solid #eee;
+          }
+          .text-right { 
+            text-align: right;
+          }
+          .item-header { 
+            font-weight: 600;
+            background-color: #f5f5f5;
+          }
+          .item-info { 
+            color: #666;
+            font-size: 14px;
+          }
+          .item-cost { 
+            font-weight: 500;
+          }
+          .total-section { 
+            background-color: #f9f9f9; 
+            padding: 20px; 
+            text-align: right; 
+            margin-top: 30px;
+            border-radius: 8px;
+          }
+          .total-section p { 
+            font-size: 24px; 
+            font-weight: bold; 
+            margin: 0;
+          }
+          @media print {
+            body { padding: 20px; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Invoice</h1>
+          <div class="invoice-number">#${invoice.invoice_number}</div>
+        </div>
+
+        <div class="info-section">
+          <h3>Bill To:</h3>
+          <p>
+            <strong>${user?.first_name} ${user?.last_name}</strong><br>
+            ${user?.address_street || ''}<br>
+            ${user?.address_zip || ''} ${user?.address_city || ''}<br>
+            ${user?.email || ''}
+          </p>
+        </div>
+
+        <div class="info-section">
+          <h3>Invoice Details:</h3>
+          <p>
+            <strong>Building:</strong> ${building?.name || 'N/A'}<br>
+            <strong>Period:</strong> ${formatDate(invoice.period_start)} to ${formatDate(invoice.period_end)}<br>
+            <strong>Generated:</strong> ${formatDate(invoice.generated_at)}<br>
+            <strong>Status:</strong> ${invoice.status}
+          </p>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th class="text-right">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${invoice.items?.map(item => {
+              if (item.item_type === 'meter_info' || item.item_type === 'charging_header') {
+                return `<tr class="item-header"><td colspan="2">${item.description}</td></tr>`;
+              } else if (item.item_type === 'meter_reading_from' || item.item_type === 'meter_reading_to' || item.item_type === 'total_consumption') {
+                return `<tr class="item-info"><td colspan="2">${item.description}</td></tr>`;
+              } else if (item.item_type === 'separator') {
+                return `<tr><td colspan="2" style="padding: 5px;"></td></tr>`;
+              } else {
+                return `<tr class="item-cost">
+                  <td>${item.description}</td>
+                  <td class="text-right">${invoice.currency} ${item.total_price.toFixed(2)}</td>
+                </tr>`;
+              }
+            }).join('')}
+          </tbody>
+        </table>
+
+        <div class="total-section">
+          <p>Total: ${invoice.currency} ${invoice.total_amount.toFixed(2)}</p>
+        </div>
+
+        <script>
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+      </html>
+    `);
+    
+    printWindow.document.close();
+  };
+
   const resetForm = () => {
     setFormData({
       building_ids: [],
@@ -82,6 +261,27 @@ export default function Billing() {
       setFormData({ ...formData, user_ids: [...formData.user_ids, id] });
     }
   };
+
+  const toggleBuildingExpand = (id: number) => {
+    const newExpanded = new Set(expandedBuildings);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
+    } else {
+      newExpanded.add(id);
+    }
+    setExpandedBuildings(newExpanded);
+  };
+
+  const formatDate = (dateStr: string | Date) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('de-CH');
+  };
+
+  // Group invoices by building
+  const invoicesByBuilding = buildings.map(building => ({
+    building,
+    invoices: invoices.filter(inv => inv.building_id === building.id)
+  })).filter(group => group.invoices.length > 0);
 
   return (
     <div>
@@ -118,55 +318,97 @@ export default function Billing() {
         </button>
       </div>
 
-      <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
-        <table style={{ width: '100%' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Invoice #</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>User</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Period</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Amount</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Status</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Generated</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {invoices.map(invoice => {
-              const user = users.find(u => u.id === invoice.user_id);
-              return (
-                <tr key={invoice.id} style={{ borderBottom: '1px solid #eee' }}>
-                  <td style={{ padding: '16px', fontFamily: 'monospace', fontSize: '13px' }}>{invoice.invoice_number}</td>
-                  <td style={{ padding: '16px' }}>{user ? `${user.first_name} ${user.last_name}` : '-'}</td>
-                  <td style={{ padding: '16px' }}>{invoice.period_start} to {invoice.period_end}</td>
-                  <td style={{ padding: '16px', fontWeight: '600' }}>{invoice.currency} {invoice.total_amount.toFixed(2)}</td>
-                  <td style={{ padding: '16px' }}>
-                    <span style={{
-                      padding: '4px 12px', borderRadius: '12px', fontSize: '12px',
-                      backgroundColor: '#fff3cd', color: '#856404'
-                    }}>
-                      {invoice.status}
-                    </span>
-                  </td>
-                  <td style={{ padding: '16px', fontSize: '13px', color: '#666' }}>
-                    {new Date(invoice.generated_at).toLocaleDateString('de-CH')}
-                  </td>
-                  <td style={{ padding: '16px' }}>
-                    <button onClick={() => viewInvoice(invoice.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}>
-                      <Eye size={16} color="#007bff" />
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {invoices.length === 0 && (
-          <div style={{ padding: '60px', textAlign: 'center', color: '#999' }}>
-            No invoices generated yet. Click "Generate Bills" to create invoices.
+      {invoicesByBuilding.length === 0 ? (
+        <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '60px', textAlign: 'center', color: '#999' }}>
+          No invoices generated yet. Click "Generate Bills" to create invoices.
+        </div>
+      ) : (
+        invoicesByBuilding.map(({ building, invoices: buildingInvoices }) => (
+          <div key={building.id} style={{ marginBottom: '24px' }}>
+            <div 
+              onClick={() => toggleBuildingExpand(building.id)}
+              style={{ 
+                backgroundColor: '#f8f9fa', 
+                padding: '16px 20px', 
+                borderRadius: '8px', 
+                marginBottom: '12px',
+                cursor: 'pointer',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                border: '2px solid #e9ecef'
+              }}
+            >
+              <div>
+                <h2 style={{ fontSize: '20px', fontWeight: '600', margin: 0 }}>
+                  {building.name}
+                </h2>
+                <p style={{ fontSize: '14px', color: '#666', margin: '4px 0 0 0' }}>
+                  {buildingInvoices.length} invoice{buildingInvoices.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+              <span style={{ fontSize: '24px', color: '#666' }}>
+                {expandedBuildings.has(building.id) ? '▼' : '▶'}
+              </span>
+            </div>
+
+            {expandedBuildings.has(building.id) && (
+              <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+                <table style={{ width: '100%' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
+                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Invoice #</th>
+                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>User</th>
+                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Period</th>
+                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Amount</th>
+                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Status</th>
+                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Generated</th>
+                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {buildingInvoices.map(invoice => {
+                      const user = users.find(u => u.id === invoice.user_id);
+                      return (
+                        <tr key={invoice.id} style={{ borderBottom: '1px solid #eee' }}>
+                          <td style={{ padding: '16px', fontFamily: 'monospace', fontSize: '13px' }}>{invoice.invoice_number}</td>
+                          <td style={{ padding: '16px' }}>{user ? `${user.first_name} ${user.last_name}` : '-'}</td>
+                          <td style={{ padding: '16px' }}>{formatDate(invoice.period_start)} - {formatDate(invoice.period_end)}</td>
+                          <td style={{ padding: '16px', fontWeight: '600' }}>{invoice.currency} {invoice.total_amount.toFixed(2)}</td>
+                          <td style={{ padding: '16px' }}>
+                            <span style={{
+                              padding: '4px 12px', borderRadius: '12px', fontSize: '12px',
+                              backgroundColor: '#fff3cd', color: '#856404'
+                            }}>
+                              {invoice.status}
+                            </span>
+                          </td>
+                          <td style={{ padding: '16px', fontSize: '13px', color: '#666' }}>
+                            {formatDate(invoice.generated_at)}
+                          </td>
+                          <td style={{ padding: '16px' }}>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button onClick={() => viewInvoice(invoice.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title="View">
+                                <Eye size={16} color="#007bff" />
+                              </button>
+                              <button onClick={() => downloadPDF(invoice)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title="Download PDF">
+                                <Download size={16} color="#28a745" />
+                              </button>
+                              <button onClick={() => deleteInvoice(invoice.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title="Delete">
+                                <Trash2 size={16} color="#dc3545" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        ))
+      )}
 
       {showGenerateModal && (
         <div style={{
@@ -234,13 +476,13 @@ export default function Billing() {
               <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                 <button type="submit" disabled={generating} style={{
                   flex: 1, padding: '12px', backgroundColor: '#28a745', color: 'white',
-                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', opacity: generating ? 0.7 : 1
+                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', opacity: generating ? 0.7 : 1, cursor: generating ? 'not-allowed' : 'pointer'
                 }}>
                   {generating ? 'Generating...' : 'Generate Bills'}
                 </button>
                 <button type="button" onClick={() => { setShowGenerateModal(false); resetForm(); }} style={{
                   flex: 1, padding: '12px', backgroundColor: '#6c757d', color: 'white',
-                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500'
+                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
                 }}>
                   Cancel
                 </button>
@@ -278,7 +520,7 @@ export default function Billing() {
 
             <div style={{ marginBottom: '30px' }}>
               <p style={{ fontSize: '14px', color: '#666' }}>
-                <strong>Period:</strong> {selectedInvoice.period_start} to {selectedInvoice.period_end}
+                <strong>Period:</strong> {formatDate(selectedInvoice.period_start)} to {formatDate(selectedInvoice.period_end)}
               </p>
             </div>
 
@@ -286,20 +528,35 @@ export default function Billing() {
               <thead>
                 <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '2px solid #ddd' }}>
                   <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Description</th>
-                  <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>Quantity</th>
-                  <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>Unit Price</th>
-                  <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>Total</th>
+                  <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>Amount</th>
                 </tr>
               </thead>
               <tbody>
-                {selectedInvoice.items?.map(item => (
-                  <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: '12px' }}>{item.description}</td>
-                    <td style={{ padding: '12px', textAlign: 'right' }}>{item.quantity.toFixed(2)}</td>
-                    <td style={{ padding: '12px', textAlign: 'right' }}>{selectedInvoice.currency} {item.unit_price.toFixed(2)}</td>
-                    <td style={{ padding: '12px', textAlign: 'right', fontWeight: '500' }}>{selectedInvoice.currency} {item.total_price.toFixed(2)}</td>
-                  </tr>
-                ))}
+                {selectedInvoice.items?.map(item => {
+                  const isHeader = item.item_type === 'meter_info' || item.item_type === 'charging_header';
+                  const isInfo = item.item_type === 'meter_reading_from' || item.item_type === 'meter_reading_to' || item.item_type === 'total_consumption';
+                  const isSeparator = item.item_type === 'separator';
+                  
+                  if (isSeparator) {
+                    return <tr key={item.id}><td colSpan={2} style={{ padding: '8px' }}></td></tr>;
+                  }
+                  
+                  return (
+                    <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
+                      <td style={{ 
+                        padding: '12px',
+                        fontWeight: isHeader ? '600' : 'normal',
+                        color: isInfo ? '#666' : 'inherit',
+                        fontSize: isInfo ? '14px' : '15px'
+                      }}>
+                        {item.description}
+                      </td>
+                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: item.total_price > 0 ? '500' : 'normal' }}>
+                        {item.total_price > 0 ? `${selectedInvoice.currency} ${item.total_price.toFixed(2)}` : ''}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
 
@@ -309,12 +566,22 @@ export default function Billing() {
               </p>
             </div>
 
-            <button onClick={() => setSelectedInvoice(null)} style={{
-              width: '100%', marginTop: '30px', padding: '12px', backgroundColor: '#007bff', color: 'white',
-              border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
-            }}>
-              Close
-            </button>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '30px' }}>
+              <button onClick={() => downloadPDF(selectedInvoice)} style={{
+                flex: 1, padding: '12px', backgroundColor: '#28a745', color: 'white',
+                border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+              }}>
+                <Download size={18} />
+                Download PDF
+              </button>
+              <button onClick={() => setSelectedInvoice(null)} style={{
+                flex: 1, padding: '12px', backgroundColor: '#007bff', color: 'white',
+                border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
+              }}>
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
