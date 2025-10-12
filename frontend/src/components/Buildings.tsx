@@ -131,7 +131,7 @@ export default function Buildings() {
           <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
           <input
             type="text"
-            placeholder={t('buildings.searchBuildings')}
+            placeholder={t('dashboard.searchBuildings')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
