@@ -456,28 +456,33 @@ func (dc *DataCollector) saveBufferedUDPData() {
 		}
 	}
 
-	// NEW: For meters that didn't send data this cycle, save a 0 consumption reading
+	// NEW: For meters that didn't send data this cycle, save the last reading with 0 consumption
 	// This ensures continuous lines in charts, especially important for solar meters
 	for meterID := range dc.udpMeterBuffers {
 		if !metersWithData[meterID] {
-			// Get the last reading to maintain cumulative value
+			// Get the last cumulative reading to maintain it
 			var lastReading float64
-			dc.db.QueryRow(`
+			err := dc.db.QueryRow(`
 				SELECT power_kwh FROM meter_readings 
 				WHERE meter_id = ? 
 				ORDER BY reading_time DESC LIMIT 1
 			`, meterID).Scan(&lastReading)
 
-			// Insert a reading with 0 consumption (no change in cumulative)
-			_, err := dc.db.Exec(`
-				INSERT INTO meter_readings (meter_id, reading_time, power_kwh, consumption_kwh)
-				VALUES (?, ?, ?, 0)
-			`, meterID, time.Now(), lastReading)
+			// Only insert if we have a previous reading to maintain
+			if err == nil && lastReading > 0 {
+				// Insert the same cumulative reading with 0 consumption
+				// This maintains the cumulative value while showing no new generation/consumption
+				_, insertErr := dc.db.Exec(`
+					INSERT INTO meter_readings (meter_id, reading_time, power_kwh, consumption_kwh)
+					VALUES (?, ?, ?, 0)
+				`, meterID, time.Now(), lastReading)
 
-			if err == nil {
-				log.Printf("INFO: Zero consumption recorded for inactive meter ID %d", meterID)
-				dc.logToDatabase("Zero Consumption Recorded", 
-					fmt.Sprintf("Meter ID: %d (no data received this cycle)", meterID))
+				if insertErr == nil {
+					log.Printf("INFO: Maintained last reading (%.2f kWh) with zero consumption for inactive meter ID %d", 
+						lastReading, meterID)
+					dc.logToDatabase("Last Reading Maintained", 
+						fmt.Sprintf("Meter ID: %d, Last Reading: %.2f kWh (no new data this cycle)", meterID, lastReading))
+				}
 			}
 		}
 	}
