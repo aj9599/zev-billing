@@ -4,6 +4,67 @@ import { api } from '../api/client';
 import type { Charger, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
 
+// ============================================================================
+// PRESET CONFIGURATION SYSTEM
+// ============================================================================
+interface PresetStateMapping {
+  cable_locked: string;
+  waiting_auth: string;
+  charging: string;
+  idle: string;
+}
+
+interface PresetModeMapping {
+  normal: string;
+  priority: string;
+}
+
+interface PresetConfig {
+  name: string;
+  label: string;
+  description: string;
+  defaultStateMappings: PresetStateMapping;
+  defaultModeMappings: PresetModeMapping;
+  stateOptions: Array<{ value: string; label: string }>;
+  modeOptions: Array<{ value: string; label: string }>;
+}
+
+// WeidMüller Preset Configuration
+const WEIDMULLER_PRESET: PresetConfig = {
+  name: 'weidmuller',
+  label: 'WeidMüller',
+  description: 'WeidMüller AC Smart chargers with UDP/HTTP/Modbus support',
+  defaultStateMappings: {
+    cable_locked: '65',
+    waiting_auth: '66',
+    charging: '67',
+    idle: '50'
+  },
+  defaultModeMappings: {
+    normal: '1',
+    priority: '2'
+  },
+  stateOptions: [
+    { value: 'cable_locked', label: 'Cable Locked' },
+    { value: 'waiting_auth', label: 'Waiting for Authentication' },
+    { value: 'charging', label: 'Charging' },
+    { value: 'idle', label: 'Idle' }
+  ],
+  modeOptions: [
+    { value: 'normal', label: 'Normal Charging' },
+    { value: 'priority', label: 'Priority Charging' }
+  ]
+};
+
+// Future presets can be added here:
+// const ABB_PRESET: PresetConfig = { ... };
+
+const CHARGER_PRESETS: Record<string, PresetConfig> = {
+  weidmuller: WEIDMULLER_PRESET,
+  // abb: ABB_PRESET,  // Uncomment when implementing
+};
+// ============================================================================
+
 interface ChargerConnectionConfig {
   power_endpoint?: string;
   state_endpoint?: string;
@@ -21,6 +82,12 @@ interface ChargerConnectionConfig {
   state_key?: string;
   user_id_key?: string;
   mode_key?: string;
+  state_cable_locked?: string;
+  state_waiting_auth?: string;
+  state_charging?: string;
+  state_idle?: string;
+  mode_normal?: string;
+  mode_priority?: string;
 }
 
 export default function Chargers() {
@@ -50,10 +117,16 @@ export default function Chargers() {
     mode_register: 3,
     unit_id: 1,
     listen_port: 8888,
-    power_key: 'charger_power',
-    state_key: 'charger_state',
-    user_id_key: 'charger_user',
-    mode_key: 'charger_mode'
+    power_key: '',
+    state_key: '',
+    user_id_key: '',
+    mode_key: '',
+    state_cable_locked: '65',
+    state_waiting_auth: '66',
+    state_charging: '67',
+    state_idle: '50',
+    mode_normal: '1',
+    mode_priority: '2'
   });
 
   useEffect(() => {
@@ -69,6 +142,28 @@ export default function Chargers() {
     setBuildings(buildingsData.filter(b => !b.is_group));
   };
 
+  const generateUUID = (): string => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
+  const generateUniqueKeys = () => {
+    const baseUUID = generateUUID();
+    return {
+      power_key: `${baseUUID}_power`,
+      state_key: `${baseUUID}_state`,
+      user_id_key: `${baseUUID}_user`,
+      mode_key: `${baseUUID}_mode`
+    };
+  };
+
+  const getCurrentPreset = (): PresetConfig => {
+    return CHARGER_PRESETS[formData.preset || 'weidmuller'] || WEIDMULLER_PRESET;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -79,7 +174,13 @@ export default function Chargers() {
         power_endpoint: connectionConfig.power_endpoint,
         state_endpoint: connectionConfig.state_endpoint,
         user_id_endpoint: connectionConfig.user_id_endpoint,
-        mode_endpoint: connectionConfig.mode_endpoint
+        mode_endpoint: connectionConfig.mode_endpoint,
+        state_cable_locked: connectionConfig.state_cable_locked,
+        state_waiting_auth: connectionConfig.state_waiting_auth,
+        state_charging: connectionConfig.state_charging,
+        state_idle: connectionConfig.state_idle,
+        mode_normal: connectionConfig.mode_normal,
+        mode_priority: connectionConfig.mode_priority
       };
     } else if (formData.connection_type === 'modbus_tcp') {
       config = {
@@ -89,7 +190,13 @@ export default function Chargers() {
         state_register: connectionConfig.state_register,
         user_id_register: connectionConfig.user_id_register,
         mode_register: connectionConfig.mode_register,
-        unit_id: connectionConfig.unit_id
+        unit_id: connectionConfig.unit_id,
+        state_cable_locked: connectionConfig.state_cable_locked,
+        state_waiting_auth: connectionConfig.state_waiting_auth,
+        state_charging: connectionConfig.state_charging,
+        state_idle: connectionConfig.state_idle,
+        mode_normal: connectionConfig.mode_normal,
+        mode_priority: connectionConfig.mode_priority
       };
     } else if (formData.connection_type === 'udp') {
       config = {
@@ -97,7 +204,13 @@ export default function Chargers() {
         power_key: connectionConfig.power_key,
         state_key: connectionConfig.state_key,
         user_id_key: connectionConfig.user_id_key,
-        mode_key: connectionConfig.mode_key
+        mode_key: connectionConfig.mode_key,
+        state_cable_locked: connectionConfig.state_cable_locked,
+        state_waiting_auth: connectionConfig.state_waiting_auth,
+        state_charging: connectionConfig.state_charging,
+        state_idle: connectionConfig.state_idle,
+        mode_normal: connectionConfig.mode_normal,
+        mode_priority: connectionConfig.mode_priority
       };
     }
     
@@ -138,6 +251,8 @@ export default function Chargers() {
     
     try {
       const config = JSON.parse(charger.connection_config);
+      const preset = CHARGER_PRESETS[charger.preset] || WEIDMULLER_PRESET;
+      
       setConnectionConfig({
         power_endpoint: config.power_endpoint || '',
         state_endpoint: config.state_endpoint || '',
@@ -151,10 +266,16 @@ export default function Chargers() {
         mode_register: config.mode_register || 3,
         unit_id: config.unit_id || 1,
         listen_port: config.listen_port || 8888,
-        power_key: config.power_key || 'charger_power',
-        state_key: config.state_key || 'charger_state',
-        user_id_key: config.user_id_key || 'charger_user',
-        mode_key: config.mode_key || 'charger_mode'
+        power_key: config.power_key || '',
+        state_key: config.state_key || '',
+        user_id_key: config.user_id_key || '',
+        mode_key: config.mode_key || '',
+        state_cable_locked: config.state_cable_locked || preset.defaultStateMappings.cable_locked,
+        state_waiting_auth: config.state_waiting_auth || preset.defaultStateMappings.waiting_auth,
+        state_charging: config.state_charging || preset.defaultStateMappings.charging,
+        state_idle: config.state_idle || preset.defaultStateMappings.idle,
+        mode_normal: config.mode_normal || preset.defaultModeMappings.normal,
+        mode_priority: config.mode_priority || preset.defaultModeMappings.priority
       });
     } catch (e) {
       console.error('Failed to parse config:', e);
@@ -185,6 +306,7 @@ export default function Chargers() {
   };
 
   const resetForm = () => {
+    const preset = WEIDMULLER_PRESET;
     setFormData({
       name: '', brand: 'weidmuller', preset: 'weidmuller', building_id: 0,
       connection_type: 'udp', connection_config: '{}', supports_priority: true,
@@ -203,10 +325,44 @@ export default function Chargers() {
       mode_register: 3,
       unit_id: 1,
       listen_port: 8888,
-      power_key: 'charger_power',
-      state_key: 'charger_state',
-      user_id_key: 'charger_user',
-      mode_key: 'charger_mode'
+      power_key: '',
+      state_key: '',
+      user_id_key: '',
+      mode_key: '',
+      state_cable_locked: preset.defaultStateMappings.cable_locked,
+      state_waiting_auth: preset.defaultStateMappings.waiting_auth,
+      state_charging: preset.defaultStateMappings.charging,
+      state_idle: preset.defaultStateMappings.idle,
+      mode_normal: preset.defaultModeMappings.normal,
+      mode_priority: preset.defaultModeMappings.priority
+    });
+  };
+
+  const handleAddCharger = () => {
+    resetForm();
+    const uniqueKeys = generateUniqueKeys();
+    setConnectionConfig(prev => ({
+      ...prev,
+      ...uniqueKeys
+    }));
+    setShowModal(true);
+  };
+
+  const handlePresetChange = (presetName: string) => {
+    const preset = CHARGER_PRESETS[presetName] || WEIDMULLER_PRESET;
+    setFormData({ 
+      ...formData, 
+      brand: presetName, 
+      preset: presetName 
+    });
+    setConnectionConfig({
+      ...connectionConfig,
+      state_cable_locked: preset.defaultStateMappings.cable_locked,
+      state_waiting_auth: preset.defaultStateMappings.waiting_auth,
+      state_charging: preset.defaultStateMappings.charging,
+      state_idle: preset.defaultStateMappings.idle,
+      mode_normal: preset.defaultModeMappings.normal,
+      mode_priority: preset.defaultModeMappings.priority
     });
   };
 
@@ -249,12 +405,12 @@ export default function Chargers() {
             🚗 WeidMüller Charger Setup
           </h3>
           <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
-            <p><strong>WeidMüller chargers require 4 data points:</strong></p>
+            <p><strong>WeidMüller chargers require 4 data points with UUID keys:</strong></p>
             <ul style={{ marginLeft: '20px', marginTop: '10px' }}>
-              <li><strong>Power Consumed:</strong> Current power consumption in kWh</li>
-              <li><strong>State:</strong> Charging state (charging, idle, error, etc.)</li>
-              <li><strong>User ID:</strong> Which user is using the charger</li>
-              <li><strong>Mode:</strong> "normal" or "priority" charging</li>
+              <li><strong>Power (UUID_power):</strong> Current power consumption in kWh</li>
+              <li><strong>State (UUID_state):</strong> Charging state as numeric value (e.g., 65=cable locked, 66=waiting auth, 67=charging, 50=idle)</li>
+              <li><strong>User ID (UUID_user):</strong> Which user is using the charger</li>
+              <li><strong>Mode (UUID_mode):</strong> Charging mode as numeric value (e.g., 1=normal, 2=priority)</li>
             </ul>
           </div>
 
@@ -262,97 +418,64 @@ export default function Chargers() {
             📡 UDP Connection (Shared Port - RECOMMENDED!)
           </h3>
           <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #3b82f6' }}>
-            <p><strong>⭐ Share ONE UDP port for chargers and meters!</strong></p>
+            <p><strong>⭐ Auto-generated UUID keys for all 4 charger data points!</strong></p>
             <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
+              <li>Click "Add Charger" - unique UUIDs are generated for all 4 keys automatically</li>
               <li>Use the SAME UDP port as your meters (e.g., 8888)</li>
-              <li>Configure 4 unique JSON keys for the charger data</li>
-              <li>Send all data in a single JSON packet or separate packets</li>
-              <li><strong>Example Configuration:</strong></li>
+              <li>Send all 4 data points with their UUID keys in JSON packets</li>
+              <li>Configure state value mappings (e.g., 65=cable locked, 67=charging)</li>
+              <li>Configure mode value mappings (e.g., 1=normal, 2=priority)</li>
             </ol>
             <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '10px', fontFamily: 'monospace', fontSize: '13px' }}>
               <strong>Charger 1 Config:</strong><br/>
               Port: 8888<br/>
-              Power Key: "charger1_power"<br/>
-              State Key: "charger1_state"<br/>
-              User ID Key: "charger1_user"<br/>
-              Mode Key: "charger1_mode"<br/><br/>
+              Power Key: "abc123-uuid_power"<br/>
+              State Key: "abc123-uuid_state"<br/>
+              User ID Key: "abc123-uuid_user"<br/>
+              Mode Key: "abc123-uuid_mode"<br/><br/>
               
-              <strong>Loxone sends (all in one or separate):</strong><br/>
+              <strong>Loxone sends:</strong><br/>
               {"{"}<br/>
-              &nbsp;&nbsp;"charger1_power": &lt;v&gt;,<br/>
-              &nbsp;&nbsp;"charger1_state": "charging",<br/>
-              &nbsp;&nbsp;"charger1_user": "USER_001",<br/>
-              &nbsp;&nbsp;"charger1_mode": "priority"<br/>
+              &nbsp;&nbsp;"abc123-uuid_power": &lt;v&gt;,<br/>
+              &nbsp;&nbsp;"abc123-uuid_state": 67,  // 67 = charging<br/>
+              &nbsp;&nbsp;"abc123-uuid_user": "USER_001",<br/>
+              &nbsp;&nbsp;"abc123-uuid_mode": 2  // 2 = priority<br/>
               {"}"}
             </div>
-            <p style={{ marginTop: '10px', fontSize: '14px', color: '#1f2937' }}>
-              <strong>Benefits:</strong> One UDP port for entire building - meters AND chargers!
-            </p>
           </div>
 
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            🔌 HTTP Connection (Alternative)
+            🔧 State & Mode Value Mappings
+          </h3>
+          <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '1px solid #f59e0b' }}>
+            <p><strong>Configure numeric values for states and modes:</strong></p>
+            <p style={{ marginTop: '10px' }}><strong>State Values (from your charger):</strong></p>
+            <ul style={{ marginLeft: '20px' }}>
+              <li>Cable Locked: 65</li>
+              <li>Waiting for Auth: 66</li>
+              <li>Charging: 67</li>
+              <li>Idle: 50</li>
+            </ul>
+            <p style={{ marginTop: '10px' }}><strong>Mode Values (from your charger):</strong></p>
+            <ul style={{ marginLeft: '20px' }}>
+              <li>Normal Mode: 1</li>
+              <li>Priority Mode: 2</li>
+            </ul>
+            <p style={{ marginTop: '10px', fontSize: '14px' }}>These mappings tell the system how to interpret the numeric values your charger sends.</p>
+          </div>
+
+          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
+            📌 HTTP Connection
           </h3>
           <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
-            <p><strong>Setup with Loxone or HTTP-enabled charger:</strong></p>
-            <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
-              <li>Configure 4 separate Virtual Outputs in Loxone</li>
-              <li>Set each endpoint to point to your charger's API</li>
-              <li>Example endpoints:</li>
-            </ol>
-            <div style={{ backgroundColor: '#e5e7eb', padding: '12px', borderRadius: '6px', marginTop: '10px', fontFamily: 'monospace', fontSize: '13px' }}>
-              Power: http://charger-ip/api/power<br/>
-              State: http://charger-ip/api/state<br/>
-              User ID: http://charger-ip/api/user_id<br/>
-              Mode: http://charger-ip/api/mode
-            </div>
+            <p>Configure 4 separate HTTP endpoints for power, state, user_id, and mode. State and mode values are also configurable.</p>
           </div>
 
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
             ⚡ Modbus TCP Connection
           </h3>
           <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
-            <p><strong>For Modbus-compatible chargers:</strong></p>
-            <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
-              <li>Enter the charger's IP address</li>
-              <li>Port (default: 502)</li>
-              <li>Configure register addresses for each data point:</li>
-            </ol>
-            <ul style={{ marginLeft: '40px', marginTop: '6px' }}>
-              <li>Power Register (where kWh data is stored)</li>
-              <li>State Register (charging state)</li>
-              <li>User ID Register (current user)</li>
-              <li>Mode Register (normal/priority mode)</li>
-            </ul>
-          </div>
-
-          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            🔍 Testing & Debugging
-          </h3>
-          <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '1px solid #3b82f6' }}>
-            <p><strong>Monitor your charger connection:</strong></p>
-            <ul style={{ marginLeft: '20px', marginTop: '10px' }}>
-              <li>Check Admin Logs page every 15 minutes for collection attempts</li>
-              <li>Verify all 4 data points are being collected</li>
-              <li>Check for error messages in the logs</li>
-              <li>Ensure the charger IP/port is reachable from the Raspberry Pi</li>
-              <li>For UDP: Verify unique keys don't conflict with meter keys</li>
-            </ul>
-          </div>
-
-          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            ⚠️ Troubleshooting
-          </h3>
-          <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', border: '1px solid #f59e0b' }}>
-            <ul style={{ marginLeft: '20px' }}>
-              <li>Verify network connectivity: <code style={{ backgroundColor: '#fff', padding: '2px 6px', borderRadius: '4px' }}>ping charger-ip</code></li>
-              <li>Check firewall allows HTTP/Modbus/UDP traffic</li>
-              <li>Test endpoints manually with curl or browser</li>
-              <li>Check Admin Logs for detailed error messages</li>
-              <li>Verify JSON format matches expected structure</li>
-              <li>Ensure all 4 data points return valid data</li>
-              <li><strong>UDP:</strong> Make sure each charger has UNIQUE keys!</li>
-            </ul>
+            <p>Configure register addresses for all 4 data points. State and mode register values will be interpreted according to your configured mappings.</p>
           </div>
         </div>
 
@@ -412,7 +535,7 @@ export default function Chargers() {
             {t('chargers.setupInstructions')}
           </button>
           <button
-            onClick={() => { resetForm(); setShowModal(true); }}
+            onClick={handleAddCharger}
             style={{
               display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
               backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
@@ -424,7 +547,6 @@ export default function Chargers() {
         </div>
       </div>
 
-      {/* Search Bar */}
       <div style={{ marginBottom: '20px' }}>
         <div style={{ position: 'relative', maxWidth: '400px' }}>
           <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
@@ -444,14 +566,12 @@ export default function Chargers() {
         </div>
       </div>
 
-      {/* Building Cards */}
       <div className="building-cards-grid" style={{ 
         display: 'grid', 
         gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', 
         gap: '16px', 
         marginBottom: '30px' 
       }}>
-        {/* All Buildings Card */}
         <div
           onClick={() => setSelectedBuildingId(null)}
           style={{
@@ -476,7 +596,6 @@ export default function Chargers() {
           </p>
         </div>
 
-        {/* Individual Building Cards */}
         {filteredBuildings.map(building => {
           const buildingChargers = chargers.filter(c => c.building_id === building.id);
           return (
@@ -508,7 +627,6 @@ export default function Chargers() {
         })}
       </div>
 
-      {/* Chargers grouped by building */}
       {Object.entries(groupedChargers).map(([buildingId, buildingChargers]) => {
         const building = buildings.find(b => b.id === parseInt(buildingId));
         return (
@@ -539,7 +657,6 @@ export default function Chargers() {
                   e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.07)';
                   e.currentTarget.style.transform = 'translateY(0)';
                 }}>
-                  {/* Action buttons in top right */}
                   <div style={{ 
                     position: 'absolute', 
                     top: '16px', 
@@ -603,7 +720,6 @@ export default function Chargers() {
                     </button>
                   </div>
 
-                  {/* Card content */}
                   <div style={{ paddingRight: '72px' }}>
                     <h3 style={{ 
                       fontSize: '20px', 
@@ -720,14 +836,14 @@ export default function Chargers() {
 
               <div style={{ marginTop: '16px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('chargers.brandPreset')} *</label>
-                <select required value={formData.brand} onChange={(e) => {
-                  setFormData({ ...formData, brand: e.target.value, preset: e.target.value });
-                }}
+                <select required value={formData.brand} onChange={(e) => handlePresetChange(e.target.value)}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
-                  <option value="weidmuller">{t('chargers.weidmuller')}</option>
+                  {Object.values(CHARGER_PRESETS).map(preset => (
+                    <option key={preset.name} value={preset.name}>{preset.label}</option>
+                  ))}
                 </select>
                 <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                  {t('chargers.weidmullerHelp')}
+                  {getCurrentPreset().description}
                 </p>
               </div>
 
@@ -759,7 +875,7 @@ export default function Chargers() {
                   <>
                     <div style={{ backgroundColor: '#dbeafe', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #3b82f6' }}>
                       <p style={{ fontSize: '13px', color: '#1e40af', margin: 0 }}>
-                        <strong>⭐ {t('chargers.sharedPortInfo')}</strong>
+                        <strong>⭐ {editingCharger ? 'Existing UUID keys' : 'Auto-generated UUID keys for all 4 data points!'}</strong>
                       </p>
                     </div>
                     <div style={{ marginBottom: '12px' }}>
@@ -770,58 +886,54 @@ export default function Chargers() {
                         onChange={(e) => setConnectionConfig({ ...connectionConfig, listen_port: parseInt(e.target.value) })}
                         placeholder="8888"
                         style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
-                      <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                        {t('meters.samePort')}
-                      </p>
                     </div>
-                    <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          {t('chargers.powerKey')} *
+                          Power Key (UUID_power) *
                         </label>
                         <input type="text" required value={connectionConfig.power_key}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, power_key: e.target.value })}
-                          placeholder="charger1_power"
-                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                          readOnly={!editingCharger}
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} />
                       </div>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          {t('chargers.stateKey')} *
+                          State Key (UUID_state) *
                         </label>
                         <input type="text" required value={connectionConfig.state_key}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, state_key: e.target.value })}
-                          placeholder="charger1_state"
-                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                          readOnly={!editingCharger}
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} />
                       </div>
                     </div>
-                    <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
+                    <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          {t('chargers.userIdKey')} *
+                          User ID Key (UUID_user) *
                         </label>
                         <input type="text" required value={connectionConfig.user_id_key}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, user_id_key: e.target.value })}
-                          placeholder="charger1_user"
-                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                          readOnly={!editingCharger}
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} />
                       </div>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          {t('chargers.modeKey')} *
+                          Mode Key (UUID_mode) *
                         </label>
                         <input type="text" required value={connectionConfig.mode_key}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, mode_key: e.target.value })}
-                          placeholder="charger1_mode"
-                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                          readOnly={!editingCharger}
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} />
                       </div>
                     </div>
                     <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '12px', fontFamily: 'monospace', fontSize: '12px', border: '1px solid #e5e7eb' }}>
-                      <strong>Loxone Configuration:</strong><br/>
-                      Virtual Output UDP to {connectionConfig.listen_port || 8888}<br/>
-                      Command: {"{"}<br/>
-                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.power_key || 'power_key'}</span>": &lt;v&gt;,<br/>
-                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.state_key || 'state_key'}</span>": "charging",<br/>
-                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.user_id_key || 'user_key'}</span>": "USER_001",<br/>
-                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.mode_key || 'mode_key'}</span>": "normal"<br/>
+                      <strong>Loxone sends to port {connectionConfig.listen_port || 8888}:</strong><br/>
+                      {"{"}<br/>
+                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.power_key || 'UUID_power'}</span>": &lt;v&gt;,<br/>
+                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.state_key || 'UUID_state'}</span>": 67,<br/>
+                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.user_id_key || 'UUID_user'}</span>": "USER_001",<br/>
+                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.mode_key || 'UUID_mode'}</span>": 2<br/>
                       {"}"}
                     </div>
                   </>
@@ -829,44 +941,45 @@ export default function Chargers() {
 
                 {formData.connection_type === 'http' && (
                   <>
-                    <div style={{ marginBottom: '12px' }}>
-                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                        {t('chargers.powerEndpoint')} *
-                      </label>
-                      <input type="url" required value={connectionConfig.power_endpoint}
-                        onChange={(e) => setConnectionConfig({ ...connectionConfig, power_endpoint: e.target.value })}
-                        placeholder="http://192.168.1.100/api/power"
-                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                    <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('chargers.powerEndpoint')} *
+                        </label>
+                        <input type="url" required value={connectionConfig.power_endpoint}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, power_endpoint: e.target.value })}
+                          placeholder="http://192.168.1.100/api/power"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('chargers.stateEndpoint')} *
+                        </label>
+                        <input type="url" required value={connectionConfig.state_endpoint}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, state_endpoint: e.target.value })}
+                          placeholder="http://192.168.1.100/api/state"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
                     </div>
-                    <div style={{ marginBottom: '12px' }}>
-                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                        {t('chargers.stateEndpoint')} *
-                      </label>
-                      <input type="url" required value={connectionConfig.state_endpoint}
-                        onChange={(e) => setConnectionConfig({ ...connectionConfig, state_endpoint: e.target.value })}
-                        placeholder="http://192.168.1.100/api/state"
-                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
-                    </div>
-                    <div style={{ marginBottom: '12px' }}>
-                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                        {t('chargers.userIdEndpoint')} *
-                      </label>
-                      <input type="url" required value={connectionConfig.user_id_endpoint}
-                        onChange={(e) => setConnectionConfig({ ...connectionConfig, user_id_endpoint: e.target.value })}
-                        placeholder="http://192.168.1.100/api/user_id"
-                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                        {t('chargers.modeEndpoint')} *
-                      </label>
-                      <input type="url" required value={connectionConfig.mode_endpoint}
-                        onChange={(e) => setConnectionConfig({ ...connectionConfig, mode_endpoint: e.target.value })}
-                        placeholder="http://192.168.1.100/api/mode"
-                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
-                      <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                        {t('chargers.modeEndpointHelp')}
-                      </p>
+                    <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('chargers.userIdEndpoint')} *
+                        </label>
+                        <input type="url" required value={connectionConfig.user_id_endpoint}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, user_id_endpoint: e.target.value })}
+                          placeholder="http://192.168.1.100/api/user_id"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('chargers.modeEndpoint')} *
+                        </label>
+                        <input type="url" required value={connectionConfig.mode_endpoint}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, mode_endpoint: e.target.value })}
+                          placeholder="http://192.168.1.100/api/mode"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
                     </div>
                   </>
                 )}
@@ -893,10 +1006,10 @@ export default function Chargers() {
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
                     </div>
-                    <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                    <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: '12px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          {t('chargers.powerRegister')} *
+                          Power Reg *
                         </label>
                         <input type="number" required value={connectionConfig.power_register}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, power_register: parseInt(e.target.value) })}
@@ -905,18 +1018,16 @@ export default function Chargers() {
                       </div>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          {t('chargers.stateRegister')} *
+                          State Reg *
                         </label>
                         <input type="number" required value={connectionConfig.state_register}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, state_register: parseInt(e.target.value) })}
                           placeholder="1"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
-                    </div>
-                    <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          {t('chargers.userIdRegister')} *
+                          User Reg *
                         </label>
                         <input type="number" required value={connectionConfig.user_id_register}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, user_id_register: parseInt(e.target.value) })}
@@ -925,7 +1036,7 @@ export default function Chargers() {
                       </div>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          {t('chargers.modeRegister')} *
+                          Mode Reg *
                         </label>
                         <input type="number" required value={connectionConfig.mode_register}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, mode_register: parseInt(e.target.value) })}
@@ -934,7 +1045,7 @@ export default function Chargers() {
                       </div>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          {t('meters.unitId')} *
+                          Unit ID *
                         </label>
                         <input type="number" required value={connectionConfig.unit_id}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, unit_id: parseInt(e.target.value) })}
@@ -944,6 +1055,84 @@ export default function Chargers() {
                     </div>
                   </>
                 )}
+
+                {/* State Value Mappings */}
+                <div style={{ marginTop: '20px', padding: '16px', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                  <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>
+                    State Value Mappings
+                  </h4>
+                  <p style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>
+                    Configure the numeric values your charger sends for each state:
+                  </p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
+                        Cable Locked
+                      </label>
+                      <input type="text" required value={connectionConfig.state_cable_locked}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, state_cable_locked: e.target.value })}
+                        placeholder="65"
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
+                        Waiting for Auth
+                      </label>
+                      <input type="text" required value={connectionConfig.state_waiting_auth}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, state_waiting_auth: e.target.value })}
+                        placeholder="66"
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
+                        Charging
+                      </label>
+                      <input type="text" required value={connectionConfig.state_charging}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, state_charging: e.target.value })}
+                        placeholder="67"
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
+                        Idle
+                      </label>
+                      <input type="text" required value={connectionConfig.state_idle}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, state_idle: e.target.value })}
+                        placeholder="50"
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px' }} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Mode Value Mappings */}
+                <div style={{ marginTop: '12px', padding: '16px', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                  <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>
+                    Mode Value Mappings
+                  </h4>
+                  <p style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>
+                    Configure the numeric values your charger sends for each charging mode:
+                  </p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
+                        Normal Mode
+                      </label>
+                      <input type="text" required value={connectionConfig.mode_normal}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, mode_normal: e.target.value })}
+                        placeholder="1"
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
+                        Priority Mode
+                      </label>
+                      <input type="text" required value={connectionConfig.mode_priority}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, mode_priority: e.target.value })}
+                        placeholder="2"
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px' }} />
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div style={{ marginTop: '16px' }}>
@@ -1042,6 +1231,10 @@ export default function Chargers() {
 
           .instructions-modal h3 {
             font-size: 16px !important;
+          }
+
+          .form-row {
+            grid-template-columns: 1fr !important;
           }
         }
 

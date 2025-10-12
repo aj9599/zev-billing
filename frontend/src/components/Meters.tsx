@@ -57,6 +57,42 @@ export default function Meters() {
     setUsers(usersData);
   };
 
+  // Generate a UUID v4
+  const generateUUID = (): string => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
+  // Check if a data_key is already used by any meter
+  const isDataKeyUsed = (dataKey: string): boolean => {
+    return meters.some(meter => {
+      if (meter.connection_type !== 'udp') return false;
+      try {
+        const config = JSON.parse(meter.connection_config);
+        return config.data_key === dataKey;
+      } catch (e) {
+        return false;
+      }
+    });
+  };
+
+  // Generate a unique data_key that's not used by any other meter
+  const generateUniqueDataKey = (): string => {
+    let uuid = generateUUID() + '_power_kwh';
+    let attempts = 0;
+    const maxAttempts = 100; // Safety limit
+    
+    while (isDataKeyUsed(uuid) && attempts < maxAttempts) {
+      uuid = generateUUID() + '_power_kwh';
+      attempts++;
+    }
+    
+    return uuid;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -176,6 +212,18 @@ export default function Meters() {
     });
   };
 
+  // Handle opening the modal for adding a new meter
+  const handleAddMeter = () => {
+    resetForm();
+    // Generate a unique UUID for the data_key
+    const uniqueUUID = generateUniqueDataKey();
+    setConnectionConfig(prev => ({
+      ...prev,
+      data_key: uniqueUUID
+    }));
+    setShowModal(true);
+  };
+
   const meterTypes = [
     { value: 'total_meter', label: t('meters.totalMeter') },
     { value: 'solar_meter', label: t('meters.solarMeter') },
@@ -223,31 +271,32 @@ export default function Meters() {
             📡 UDP Connection (Shared Port - RECOMMENDED!)
           </h3>
           <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #3b82f6' }}>
-            <p><strong>⭐ NEW: Share ONE UDP port for multiple meters!</strong></p>
+            <p><strong>⭐ NEW: Auto-generated UUID_power_kwh keys for each meter!</strong></p>
             <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
+              <li>Click "Add Meter" - a unique UUID_power_kwh is generated automatically</li>
               <li>In Loxone Config, create Virtual Output UDP devices</li>
               <li>Set ALL meters to the SAME port (e.g., 8888)</li>
-              <li>Each meter uses a UNIQUE JSON key to identify its data</li>
+              <li>Each meter uses its auto-generated UUID_power_kwh to identify its data</li>
               <li><strong>Example for Building A with 3 meters:</strong></li>
             </ol>
             <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '10px', fontFamily: 'monospace', fontSize: '13px' }}>
               <strong>Apartment Meter 1:</strong><br/>
               Port: 8888<br/>
-              Data Key: "apart1_kwh"<br/>
-              Loxone sends: {"{\"apart1_kwh\": <v>}"}<br/><br/>
+              Data Key: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d_power_kwh" (auto-generated)<br/>
+              Loxone sends: {"{\"a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d_power_kwh\": <v>}"}<br/><br/>
               
               <strong>Apartment Meter 2:</strong><br/>
               Port: 8888 (same port!)<br/>
-              Data Key: "apart2_kwh"<br/>
-              Loxone sends: {"{\"apart2_kwh\": <v>}"}<br/><br/>
+              Data Key: "f6e5d4c3-b2a1-4098-7654-321fedcba098_power_kwh" (auto-generated)<br/>
+              Loxone sends: {"{\"f6e5d4c3-b2a1-4098-7654-321fedcba098_power_kwh\": <v>}"}<br/><br/>
               
               <strong>Solar Meter:</strong><br/>
               Port: 8888 (same port!)<br/>
-              Data Key: "solar_kwh"<br/>
-              Loxone sends: {"{\"solar_kwh\": <v>}"}
+              Data Key: "12345678-90ab-4cde-f012-3456789abcde_power_kwh" (auto-generated)<br/>
+              Loxone sends: {"{\"12345678-90ab-4cde-f012-3456789abcde_power_kwh\": <v>}"}
             </div>
             <p style={{ marginTop: '10px', fontSize: '14px', color: '#1f2937' }}>
-              <strong>Benefits:</strong> One UDP port per building instead of one per meter. Much cleaner network configuration!
+              <strong>Benefits:</strong> Unique UUID_power_kwh keys prevent conflicts, one UDP port per building, cleaner network configuration!
             </p>
           </div>
 
@@ -286,9 +335,9 @@ export default function Meters() {
             <p><strong>Check the Admin Logs page to see:</strong></p>
             <ul style={{ marginLeft: '20px', marginTop: '10px' }}>
               <li>Data collection attempts every 15 minutes</li>
-              <li>Successful meter readings with data keys</li>
+              <li>Successful meter readings with UUID_power_kwh keys</li>
               <li>Connection errors and debugging information</li>
-              <li>UDP packet reception logs showing which keys were received</li>
+              <li>UDP packet reception logs showing which UUID_power_kwh keys were received</li>
             </ul>
           </div>
 
@@ -302,7 +351,7 @@ export default function Meters() {
               <li>Check logs: <code style={{ backgroundColor: '#fff', padding: '2px 6px', borderRadius: '4px' }}>journalctl -u zev-billing -f</code></li>
               <li>Test network: <code style={{ backgroundColor: '#fff', padding: '2px 6px', borderRadius: '4px' }}>ping YOUR_LOXONE_IP</code></li>
               <li>Monitor the Admin Logs page in real-time for debugging</li>
-              <li><strong>UDP:</strong> Make sure each meter has a UNIQUE data_key!</li>
+              <li><strong>UDP:</strong> Copy the auto-generated UUID_power_kwh exactly into your Loxone config!</li>
             </ul>
           </div>
         </div>
@@ -363,7 +412,7 @@ export default function Meters() {
             <span className="button-text">{t('meters.setupInstructions')}</span>
           </button>
           <button
-            onClick={() => { resetForm(); setShowModal(true); }}
+            onClick={handleAddMeter}
             style={{
               display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
               backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
@@ -714,7 +763,7 @@ export default function Meters() {
                   <>
                     <div style={{ backgroundColor: '#dbeafe', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #3b82f6' }}>
                       <p style={{ fontSize: '13px', color: '#1e40af', margin: 0 }}>
-                        <strong>⭐ {t('meters.sharedPortInfo')}</strong>
+                        <strong>⭐ {editingMeter ? 'Existing UUID_power_kwh key' : 'Auto-generated UUID_power_kwh for this meter!'}</strong>
                       </p>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
@@ -732,14 +781,15 @@ export default function Meters() {
                       </div>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          {t('meters.dataKey')} *
+                          {t('meters.dataKey')} * (UUID_power_kwh)
                         </label>
                         <input type="text" required value={connectionConfig.data_key}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, data_key: e.target.value })}
-                          placeholder="apart1_kwh"
-                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                          placeholder="uuid_power_kwh"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }}
+                          readOnly={!editingMeter} />
                         <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                          {t('meters.dataKeyHelp')}
+                          {editingMeter ? 'You can modify the UUID if needed' : 'Auto-generated unique identifier (UUID_power_kwh format)'}
                         </p>
                       </div>
                     </div>
@@ -747,7 +797,7 @@ export default function Meters() {
                       <strong>Loxone Configuration:</strong><br/>
                       Virtual Output UDP to {connectionConfig.listen_port || 8888}<br/>
                       Command: {"{\""}
-                      <span style={{ color: '#3b82f6' }}>{connectionConfig.data_key || 'YOUR_KEY'}</span>
+                      <span style={{ color: '#3b82f6', fontWeight: 'bold' }}>{connectionConfig.data_key || 'YOUR_UUID_power_kwh'}</span>
                       {"\": <v>}"}
                     </div>
                   </>

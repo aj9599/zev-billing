@@ -106,10 +106,7 @@ export default function Layout({ onLogout }: LayoutProps) {
           ZEV Billing
         </h1>
         
-        {/* Mobile top spacing to prevent content from being hidden behind header */}
-        <div className="mobile-spacer" style={{ display: 'none', height: '20px', flexShrink: 0 }} />
-        
-        <nav style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+        <nav style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', marginBottom: '12px' }}>
           {navItems.map(item => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
@@ -153,7 +150,6 @@ export default function Layout({ onLogout }: LayoutProps) {
           backgroundColor: '#2a2a2a',
           borderRadius: '8px',
           marginBottom: '12px',
-          marginTop: '12px',
           flexShrink: 0
         }}>
           <button
@@ -206,8 +202,7 @@ export default function Layout({ onLogout }: LayoutProps) {
             width: '100%',
             fontSize: '14px',
             cursor: 'pointer',
-            flexShrink: 0,
-            marginBottom: '10px'
+            flexShrink: 0
           }}
           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2a2a2a'}
           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -239,25 +234,22 @@ export default function Layout({ onLogout }: LayoutProps) {
           }
 
           .sidebar {
-            transform: translateX(-100%);
-            top: 60px;
-            height: calc(100vh - 60px);
-            max-height: calc(100vh - 60px);
-            padding: 15px 20px 20px 20px;
-            overflow-y: auto;
+            transform: translateX(-100%) !important;
+            top: 60px !important;
+            bottom: 0 !important;
+            height: auto !important;
+            padding: 20px !important;
+            overflow-y: auto !important;
             -webkit-overflow-scrolling: touch;
+            box-shadow: 2px 0 8px rgba(0,0,0,0.3);
           }
 
           .sidebar.mobile-open {
-            transform: translateX(0);
+            transform: translateX(0) !important;
           }
 
           .desktop-only {
             display: none !important;
-          }
-
-          .mobile-spacer {
-            display: block !important;
           }
 
           .main-content {
@@ -275,8 +267,13 @@ export default function Layout({ onLogout }: LayoutProps) {
           }
           
           .sidebar {
-            padding: 12px 15px 15px 15px;
+            padding: 15px !important;
           }
+        }
+
+        /* Ensure smooth scrolling on iOS */
+        .sidebar {
+          -webkit-overflow-scrolling: touch;
         }
       `}</style>
     </div>
