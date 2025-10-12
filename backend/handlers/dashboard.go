@@ -341,9 +341,9 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				}
 			}
 
-			// STEP 5: Read all readings for this meter - USE consumption_kwh for display
+			// STEP 5: Read all readings for this meter - USE power_kwh for chart display
 			dataRows, err := h.db.QueryContext(ctx, `
-				SELECT reading_time, consumption_kwh
+				SELECT reading_time, power_kwh
 				FROM meter_readings
 				WHERE meter_id = ? AND reading_time >= ?
 				ORDER BY reading_time ASC
@@ -365,11 +365,11 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 
 			for dataRows.Next() {
 				var timestamp time.Time
-				var consumptionKwh float64
-				if err := dataRows.Scan(&timestamp, &consumptionKwh); err == nil {
+				var powerKwh float64
+				if err := dataRows.Scan(&timestamp, &powerKwh); err == nil {
 					meterData.Data = append(meterData.Data, models.ConsumptionData{
 						Timestamp: timestamp,
-						Power:     consumptionKwh,  // Use consumption for each interval
+						Power:     powerKwh,  // Use actual meter reading for chart
 						Source:    mi.meterType,
 					})
 				}
