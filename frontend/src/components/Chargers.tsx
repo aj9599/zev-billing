@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, HelpCircle, Info, Car, Download } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, HelpCircle, Info, Car, Download, Search, Building } from 'lucide-react';
 import { api } from '../api/client';
-import type { Charger, Building } from '../types';
+import type { Charger, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
 
 interface ChargerConnectionConfig {
@@ -26,13 +26,15 @@ interface ChargerConnectionConfig {
 export default function Chargers() {
   const { t } = useTranslation();
   const [chargers, setChargers] = useState<Charger[]>([]);
-  const [buildings, setBuildings] = useState<Building[]>([]);
+  const [buildings, setBuildings] = useState<BuildingType[]>([]);
+  const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [editingCharger, setEditingCharger] = useState<Charger | null>(null);
   const [formData, setFormData] = useState<Partial<Charger>>({
     name: '', brand: 'weidmuller', preset: 'weidmuller', building_id: 0,
-    connection_type: 'http', connection_config: '{}', supports_priority: true,
+    connection_type: 'udp', connection_config: '{}', supports_priority: true,
     notes: '', is_active: true
   });
   const [connectionConfig, setConnectionConfig] = useState<ChargerConnectionConfig>({
@@ -64,7 +66,7 @@ export default function Chargers() {
       api.getBuildings()
     ]);
     setChargers(chargersData);
-    setBuildings(buildingsData);
+    setBuildings(buildingsData.filter(b => !b.is_group));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -185,7 +187,7 @@ export default function Chargers() {
   const resetForm = () => {
     setFormData({
       name: '', brand: 'weidmuller', preset: 'weidmuller', building_id: 0,
-      connection_type: 'http', connection_config: '{}', supports_priority: true,
+      connection_type: 'udp', connection_config: '{}', supports_priority: true,
       notes: '', is_active: true
     });
     setConnectionConfig({
@@ -207,6 +209,22 @@ export default function Chargers() {
       mode_key: 'charger_mode'
     });
   };
+
+  const filteredBuildings = buildings.filter(b =>
+    b.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredChargers = selectedBuildingId
+    ? chargers.filter(c => c.building_id === selectedBuildingId)
+    : chargers;
+
+  const groupedChargers = filteredChargers.reduce((acc, charger) => {
+    if (!acc[charger.building_id]) {
+      acc[charger.building_id] = [];
+    }
+    acc[charger.building_id].push(charger);
+    return acc;
+  }, {} as Record<number, Charger[]>);
 
   const InstructionsModal = () => (
     <div style={{
@@ -241,25 +259,7 @@ export default function Chargers() {
           </div>
 
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            🔌 HTTP Connection (Recommended)
-          </h3>
-          <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
-            <p><strong>Setup with Loxone or HTTP-enabled charger:</strong></p>
-            <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
-              <li>Configure 4 separate Virtual Outputs in Loxone</li>
-              <li>Set each endpoint to point to your charger's API</li>
-              <li>Example endpoints:</li>
-            </ol>
-            <div style={{ backgroundColor: '#e5e7eb', padding: '12px', borderRadius: '6px', marginTop: '10px', fontFamily: 'monospace', fontSize: '13px' }}>
-              Power: http://charger-ip/api/power<br/>
-              State: http://charger-ip/api/state<br/>
-              User ID: http://charger-ip/api/user_id<br/>
-              Mode: http://charger-ip/api/mode
-            </div>
-          </div>
-
-          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            📡 UDP Connection (Shared Port - NEW!)
+            📡 UDP Connection (Shared Port - RECOMMENDED!)
           </h3>
           <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #3b82f6' }}>
             <p><strong>⭐ Share ONE UDP port for chargers and meters!</strong></p>
@@ -288,6 +288,24 @@ export default function Chargers() {
             <p style={{ marginTop: '10px', fontSize: '14px', color: '#1f2937' }}>
               <strong>Benefits:</strong> One UDP port for entire building - meters AND chargers!
             </p>
+          </div>
+
+          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
+            🔌 HTTP Connection (Alternative)
+          </h3>
+          <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
+            <p><strong>Setup with Loxone or HTTP-enabled charger:</strong></p>
+            <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
+              <li>Configure 4 separate Virtual Outputs in Loxone</li>
+              <li>Set each endpoint to point to your charger's API</li>
+              <li>Example endpoints:</li>
+            </ol>
+            <div style={{ backgroundColor: '#e5e7eb', padding: '12px', borderRadius: '6px', marginTop: '10px', fontFamily: 'monospace', fontSize: '13px' }}>
+              Power: http://charger-ip/api/power<br/>
+              State: http://charger-ip/api/state<br/>
+              User ID: http://charger-ip/api/user_id<br/>
+              Mode: http://charger-ip/api/mode
+            </div>
           </div>
 
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
@@ -406,60 +424,207 @@ export default function Chargers() {
         </div>
       </div>
 
-      <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
-        <table style={{ width: '100%' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.name')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('chargers.brand')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.building')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('meters.connection')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('chargers.priority')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.status')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.actions')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {chargers.map(charger => (
-              <tr key={charger.id} style={{ borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: '16px', fontWeight: '500' }}>{charger.name}</td>
-                <td style={{ padding: '16px' }}>{charger.brand}</td>
-                <td style={{ padding: '16px' }}>
-                  {buildings.find(b => b.id === charger.building_id)?.name || '-'}
-                </td>
-                <td style={{ padding: '16px' }}>{charger.connection_type.toUpperCase()}</td>
-                <td style={{ padding: '16px' }}>
-                  {charger.supports_priority ? '✔' : '✗'}
-                </td>
-                <td style={{ padding: '16px' }}>
-                  <span style={{
-                    padding: '4px 12px', borderRadius: '12px', fontSize: '12px',
-                    backgroundColor: charger.is_active ? '#d4edda' : '#f8d7da',
-                    color: charger.is_active ? '#155724' : '#721c24'
-                  }}>
-                    {charger.is_active ? t('common.active') : t('common.inactive')}
-                  </span>
-                </td>
-                <td style={{ padding: '16px' }}>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => handleEdit(charger)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}>
-                      <Edit2 size={16} color="#007bff" />
+      {/* Search Bar */}
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ position: 'relative', maxWidth: '400px' }}>
+          <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
+          <input
+            type="text"
+            placeholder="Search buildings..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px 10px 10px 40px',
+              border: '1px solid #ddd',
+              borderRadius: '8px',
+              fontSize: '14px'
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Building Cards */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', 
+        gap: '16px', 
+        marginBottom: '30px' 
+      }}>
+        {/* All Buildings Card */}
+        <div
+          onClick={() => setSelectedBuildingId(null)}
+          style={{
+            padding: '20px',
+            backgroundColor: selectedBuildingId === null ? '#667eea' : 'white',
+            color: selectedBuildingId === null ? 'white' : '#1f2937',
+            borderRadius: '12px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            border: selectedBuildingId === null ? '2px solid #667eea' : '2px solid transparent'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            <Building size={24} />
+            <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>
+              All Buildings
+            </h3>
+          </div>
+          <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
+            {chargers.length} chargers
+          </p>
+        </div>
+
+        {/* Individual Building Cards */}
+        {filteredBuildings.map(building => {
+          const buildingChargers = chargers.filter(c => c.building_id === building.id);
+          return (
+            <div
+              key={building.id}
+              onClick={() => setSelectedBuildingId(building.id)}
+              style={{
+                padding: '20px',
+                backgroundColor: selectedBuildingId === building.id ? '#667eea' : 'white',
+                color: selectedBuildingId === building.id ? 'white' : '#1f2937',
+                borderRadius: '12px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                border: selectedBuildingId === building.id ? '2px solid #667eea' : '2px solid transparent'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                <Building size={24} />
+                <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>
+                  {building.name}
+                </h3>
+              </div>
+              <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
+                {buildingChargers.length} chargers
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Chargers grouped by building */}
+      {Object.entries(groupedChargers).map(([buildingId, buildingChargers]) => {
+        const building = buildings.find(b => b.id === parseInt(buildingId));
+        return (
+          <div key={buildingId} style={{ marginBottom: '30px' }}>
+            <h2 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '16px', color: '#1f2937' }}>
+              {building?.name || 'Unknown Building'}
+            </h2>
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', 
+              gap: '16px' 
+            }}>
+              {buildingChargers.map(charger => (
+                <div key={charger.id} style={{
+                  backgroundColor: 'white',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                  border: '1px solid #e5e7eb'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '16px' }}>
+                    <div>
+                      <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '4px', color: '#1f2937' }}>
+                        {charger.name}
+                      </h3>
+                      <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
+                        {charger.brand}
+                      </p>
+                    </div>
+                    <span style={{
+                      padding: '4px 12px',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      backgroundColor: charger.is_active ? '#d4edda' : '#f8d7da',
+                      color: charger.is_active ? '#155724' : '#721c24'
+                    }}>
+                      {charger.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '14px', color: '#6b7280' }}>Connection:</span>
+                      <span style={{ fontSize: '14px', fontWeight: '500', color: '#1f2937', textTransform: 'uppercase' }}>
+                        {charger.connection_type}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '14px', color: '#6b7280' }}>Priority Mode:</span>
+                      <span style={{ fontSize: '14px', fontWeight: '500', color: '#1f2937' }}>
+                        {charger.supports_priority ? '✓ Supported' : '✗ Not supported'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
+                    <button 
+                      onClick={() => handleEdit(charger)} 
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        padding: '8px',
+                        backgroundColor: '#007bff',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Edit2 size={16} />
+                      Edit
                     </button>
-                    <button onClick={() => handleDelete(charger.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}>
-                      <Trash2 size={16} color="#dc3545" />
+                    <button 
+                      onClick={() => handleDelete(charger.id)} 
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        padding: '8px',
+                        backgroundColor: '#dc3545',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Trash2 size={16} />
+                      Delete
                     </button>
                   </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {chargers.length === 0 && (
-          <div style={{ padding: '60px', textAlign: 'center', color: '#999' }}>
-            {t('chargers.noChargers')}
+                </div>
+              ))}
+            </div>
           </div>
-        )}
-      </div>
+        );
+      })}
+
+      {filteredChargers.length === 0 && (
+        <div style={{ 
+          backgroundColor: 'white', 
+          borderRadius: '12px', 
+          padding: '60px', 
+          textAlign: 'center', 
+          color: '#999',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+        }}>
+          {t('chargers.noChargers')}
+        </div>
+      )}
 
       {showInstructions && <InstructionsModal />}
 
@@ -523,8 +688,8 @@ export default function Chargers() {
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('meters.connectionType')} *</label>
                 <select required value={formData.connection_type} onChange={(e) => setFormData({ ...formData, connection_type: e.target.value })}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
+                  <option value="udp">UDP (Recommended)</option>
                   <option value="http">HTTP</option>
-                  <option value="udp">UDP ({t('meters.udp')})</option>
                   <option value="modbus_tcp">Modbus TCP</option>
                 </select>
               </div>
@@ -533,6 +698,78 @@ export default function Chargers() {
                 <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>
                   {t('chargers.connectionConfig')}
                 </h3>
+
+                {formData.connection_type === 'udp' && (
+                  <>
+                    <div style={{ backgroundColor: '#dbeafe', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #3b82f6' }}>
+                      <p style={{ fontSize: '13px', color: '#1e40af', margin: 0 }}>
+                        <strong>⭐ {t('chargers.sharedPortInfo')}</strong>
+                      </p>
+                    </div>
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                        {t('meters.listenPort')} *
+                      </label>
+                      <input type="number" required value={connectionConfig.listen_port}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, listen_port: parseInt(e.target.value) })}
+                        placeholder="8888"
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                        {t('meters.samePort')}
+                      </p>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('chargers.powerKey')} *
+                        </label>
+                        <input type="text" required value={connectionConfig.power_key}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, power_key: e.target.value })}
+                          placeholder="charger1_power"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('chargers.stateKey')} *
+                        </label>
+                        <input type="text" required value={connectionConfig.state_key}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, state_key: e.target.value })}
+                          placeholder="charger1_state"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('chargers.userIdKey')} *
+                        </label>
+                        <input type="text" required value={connectionConfig.user_id_key}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, user_id_key: e.target.value })}
+                          placeholder="charger1_user"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('chargers.modeKey')} *
+                        </label>
+                        <input type="text" required value={connectionConfig.mode_key}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, mode_key: e.target.value })}
+                          placeholder="charger1_mode"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                    </div>
+                    <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '12px', fontFamily: 'monospace', fontSize: '12px', border: '1px solid #e5e7eb' }}>
+                      <strong>Loxone Configuration:</strong><br/>
+                      Virtual Output UDP to {connectionConfig.listen_port || 8888}<br/>
+                      Command: {"{"}<br/>
+                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.power_key || 'power_key'}</span>": &lt;v&gt;,<br/>
+                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.state_key || 'state_key'}</span>": "charging",<br/>
+                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.user_id_key || 'user_key'}</span>": "USER_001",<br/>
+                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.mode_key || 'mode_key'}</span>": "normal"<br/>
+                      {"}"}
+                    </div>
+                  </>
+                )}
 
                 {formData.connection_type === 'http' && (
                   <>
@@ -648,78 +885,6 @@ export default function Chargers() {
                           placeholder="1"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
-                    </div>
-                  </>
-                )}
-
-                {formData.connection_type === 'udp' && (
-                  <>
-                    <div style={{ backgroundColor: '#dbeafe', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #3b82f6' }}>
-                      <p style={{ fontSize: '13px', color: '#1e40af', margin: 0 }}>
-                        <strong>⭐ {t('chargers.sharedPortInfo')}</strong>
-                      </p>
-                    </div>
-                    <div style={{ marginBottom: '12px' }}>
-                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                        {t('meters.listenPort')} *
-                      </label>
-                      <input type="number" required value={connectionConfig.listen_port}
-                        onChange={(e) => setConnectionConfig({ ...connectionConfig, listen_port: parseInt(e.target.value) })}
-                        placeholder="8888"
-                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
-                      <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                        {t('meters.samePort')}
-                      </p>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                      <div>
-                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          {t('chargers.powerKey')} *
-                        </label>
-                        <input type="text" required value={connectionConfig.power_key}
-                          onChange={(e) => setConnectionConfig({ ...connectionConfig, power_key: e.target.value })}
-                          placeholder="charger1_power"
-                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
-                      </div>
-                      <div>
-                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          {t('chargers.stateKey')} *
-                        </label>
-                        <input type="text" required value={connectionConfig.state_key}
-                          onChange={(e) => setConnectionConfig({ ...connectionConfig, state_key: e.target.value })}
-                          placeholder="charger1_state"
-                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
-                      </div>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
-                      <div>
-                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          {t('chargers.userIdKey')} *
-                        </label>
-                        <input type="text" required value={connectionConfig.user_id_key}
-                          onChange={(e) => setConnectionConfig({ ...connectionConfig, user_id_key: e.target.value })}
-                          placeholder="charger1_user"
-                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
-                      </div>
-                      <div>
-                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          {t('chargers.modeKey')} *
-                        </label>
-                        <input type="text" required value={connectionConfig.mode_key}
-                          onChange={(e) => setConnectionConfig({ ...connectionConfig, mode_key: e.target.value })}
-                          placeholder="charger1_mode"
-                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
-                      </div>
-                    </div>
-                    <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '12px', fontFamily: 'monospace', fontSize: '12px', border: '1px solid #e5e7eb' }}>
-                      <strong>Loxone Configuration:</strong><br/>
-                      Virtual Output UDP to {connectionConfig.listen_port || 8888}<br/>
-                      Command: {"{"}<br/>
-                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.power_key || 'power_key'}</span>": &lt;v&gt;,<br/>
-                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.state_key || 'state_key'}</span>": "charging",<br/>
-                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.user_id_key || 'user_key'}</span>": "USER_001",<br/>
-                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.mode_key || 'mode_key'}</span>": "normal"<br/>
-                      {"}"}
                     </div>
                   </>
                 )}

@@ -156,6 +156,8 @@ export const de: Translations = {
   'chargers.subtitle': 'E-Fahrzeug Ladeinfrastruktur verwalten',
   'chargers.addCharger': 'Ladestation hinzufügen',
   'chargers.editCharger': 'Ladestation bearbeiten',
+  'chargers.setupInstructions': 'Setup-Anleitung',
+  'chargers.exportData': 'Daten exportieren',
   'chargers.brand': 'Marke',
   'chargers.priority': 'Priorität',
   'chargers.noChargers': 'Keine Ladestationen gefunden. Klicken Sie auf "Setup-Anleitung".',

@@ -156,6 +156,8 @@ export const en: Translations = {
   'chargers.subtitle': 'Manage EV charging infrastructure',
   'chargers.addCharger': 'Add Charger',
   'chargers.editCharger': 'Edit Charger',
+  'chargers.setupInstructions': 'Setup Instructions',
+  'chargers.exportData': 'Export Data',
   'chargers.brand': 'Brand',
   'chargers.priority': 'Priority',
   'chargers.noChargers': 'No chargers found. Click "Setup Instructions" to learn how to configure your first charger.',

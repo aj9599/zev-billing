@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, DollarSign } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, DollarSign, Search, Building } from 'lucide-react';
 import { api } from '../api/client';
-import type { BillingSettings, Building } from '../types';
+import type { BillingSettings, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
 
 export default function PricingSettings() {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<BillingSettings[]>([]);
-  const [buildings, setBuildings] = useState<Building[]>([]);
+  const [buildings, setBuildings] = useState<BuildingType[]>([]);
+  const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingSetting, setEditingSetting] = useState<BillingSettings | null>(null);
   const [formData, setFormData] = useState<Partial<BillingSettings>>({
@@ -35,7 +37,6 @@ export default function PricingSettings() {
       ]);
       setSettings(Array.isArray(settingsData) ? settingsData : []);
       setBuildings(buildingsData.filter(b => !b.is_group));
-      console.log('Loaded buildings:', buildingsData);
     } catch (err) {
       console.error('Failed to load data:', err);
       setMessage(t('pricing.loadFailed'));
@@ -94,6 +95,20 @@ export default function PricingSettings() {
     });
   };
 
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+
+  const filteredBuildings = buildings.filter(b =>
+    b.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredSettings = selectedBuildingId
+    ? settings.filter(s => s.building_id === selectedBuildingId)
+    : settings;
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -136,6 +151,91 @@ export default function PricingSettings() {
         </div>
       )}
 
+      {/* Search Bar */}
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ position: 'relative', maxWidth: '400px' }}>
+          <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
+          <input
+            type="text"
+            placeholder="Search buildings..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px 10px 10px 40px',
+              border: '1px solid #ddd',
+              borderRadius: '8px',
+              fontSize: '14px'
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Building Cards */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', 
+        gap: '16px', 
+        marginBottom: '30px' 
+      }}>
+        {/* All Buildings Card */}
+        <div
+          onClick={() => setSelectedBuildingId(null)}
+          style={{
+            padding: '20px',
+            backgroundColor: selectedBuildingId === null ? '#667eea' : 'white',
+            color: selectedBuildingId === null ? 'white' : '#1f2937',
+            borderRadius: '12px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            border: selectedBuildingId === null ? '2px solid #667eea' : '2px solid transparent'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            <Building size={24} />
+            <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>
+              All Buildings
+            </h3>
+          </div>
+          <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
+            {settings.length} pricing settings
+          </p>
+        </div>
+
+        {/* Individual Building Cards */}
+        {filteredBuildings.map(building => {
+          const buildingSettings = settings.filter(s => s.building_id === building.id);
+          return (
+            <div
+              key={building.id}
+              onClick={() => setSelectedBuildingId(building.id)}
+              style={{
+                padding: '20px',
+                backgroundColor: selectedBuildingId === building.id ? '#667eea' : 'white',
+                color: selectedBuildingId === building.id ? 'white' : '#1f2937',
+                borderRadius: '12px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                border: selectedBuildingId === building.id ? '2px solid #667eea' : '2px solid transparent'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                <Building size={24} />
+                <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>
+                  {building.name}
+                </h3>
+              </div>
+              <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
+                {buildingSettings.length} pricing settings
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Pricing Settings Table */}
       <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
         <table style={{ width: '100%' }}>
           <thead>
@@ -151,7 +251,7 @@ export default function PricingSettings() {
             </tr>
           </thead>
           <tbody>
-            {settings.map(setting => {
+            {filteredSettings.map(setting => {
               const building = buildings.find(b => b.id === setting.building_id);
               return (
                 <tr key={setting.id} style={{ borderBottom: '1px solid #eee' }}>
@@ -161,7 +261,7 @@ export default function PricingSettings() {
                   <td style={{ padding: '16px' }}>{setting.currency} {setting.car_charging_normal_price.toFixed(2)}</td>
                   <td style={{ padding: '16px' }}>{setting.currency} {setting.car_charging_priority_price.toFixed(2)}</td>
                   <td style={{ padding: '16px', fontSize: '13px' }}>
-                    {setting.valid_from} {setting.valid_to ? `${t('pricing.to')} ${setting.valid_to}` : `(${t('pricing.ongoing')})`}
+                    {formatDate(setting.valid_from)} {setting.valid_to ? `- ${formatDate(setting.valid_to)}` : '(Ongoing)'}
                   </td>
                   <td style={{ padding: '16px' }}>
                     <span style={{
@@ -187,7 +287,7 @@ export default function PricingSettings() {
             })}
           </tbody>
         </table>
-        {settings.length === 0 && (
+        {filteredSettings.length === 0 && (
           <div style={{ padding: '60px', textAlign: 'center', color: '#999' }}>
             {t('pricing.noPricing')}
           </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Info, HelpCircle, Zap, Download } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Info, HelpCircle, Zap, Download, Search, Building } from 'lucide-react';
 import { api } from '../api/client';
-import type { Meter, Building, User } from '../types';
+import type { Meter, Building as BuildingType, User } from '../types';
 import { useTranslation } from '../i18n';
 
 interface ConnectionConfig {
@@ -19,14 +19,16 @@ interface ConnectionConfig {
 export default function Meters() {
   const { t } = useTranslation();
   const [meters, setMeters] = useState<Meter[]>([]);
-  const [buildings, setBuildings] = useState<Building[]>([]);
+  const [buildings, setBuildings] = useState<BuildingType[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
   const [formData, setFormData] = useState<Partial<Meter>>({
     name: '', meter_type: 'total_meter', building_id: 0, user_id: undefined,
-    connection_type: 'http', connection_config: '{}', notes: '', is_active: true
+    connection_type: 'udp', connection_config: '{}', notes: '', is_active: true
   });
   const [connectionConfig, setConnectionConfig] = useState<ConnectionConfig>({
     endpoint: '',
@@ -51,7 +53,7 @@ export default function Meters() {
       api.getUsers()
     ]);
     setMeters(metersData);
-    setBuildings(buildingsData);
+    setBuildings(buildingsData.filter(b => !b.is_group));
     setUsers(usersData);
   };
 
@@ -159,7 +161,7 @@ export default function Meters() {
   const resetForm = () => {
     setFormData({
       name: '', meter_type: 'total_meter', building_id: 0, user_id: undefined,
-      connection_type: 'http', connection_config: '{}', notes: '', is_active: true
+      connection_type: 'udp', connection_config: '{}', notes: '', is_active: true
     });
     setConnectionConfig({
       endpoint: '',
@@ -182,6 +184,22 @@ export default function Meters() {
     { value: 'other', label: t('meters.other') }
   ];
 
+  const filteredBuildings = buildings.filter(b =>
+    b.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredMeters = selectedBuildingId
+    ? meters.filter(m => m.building_id === selectedBuildingId)
+    : meters;
+
+  const groupedMeters = filteredMeters.reduce((acc, meter) => {
+    if (!acc[meter.building_id]) {
+      acc[meter.building_id] = [];
+    }
+    acc[meter.building_id].push(meter);
+    return acc;
+  }, {} as Record<number, Meter[]>);
+
   const InstructionsModal = () => (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -202,20 +220,6 @@ export default function Meters() {
 
         <div style={{ lineHeight: '1.8', color: '#374151' }}>
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            🔌 HTTP Connection (Recommended for Loxone)
-          </h3>
-          <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
-            <p><strong>Loxone Virtual Output Setup:</strong></p>
-            <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
-              <li>In Loxone Config, create a Virtual Output</li>
-              <li>Set the address to: <code style={{ backgroundColor: '#e5e7eb', padding: '2px 6px', borderRadius: '4px' }}>http://YOUR_RASPBERRY_IP:8080/api/meters/data</code></li>
-              <li>In the meter configuration, set endpoint to the same URL</li>
-              <li>Set power_field to match your JSON field name (default: "power_kwh")</li>
-              <li>Loxone should send: <code style={{ backgroundColor: '#e5e7eb', padding: '2px 6px', borderRadius: '4px' }}>{"{"}"power_kwh": 123.45{"}"}</code></li>
-            </ol>
-          </div>
-
-          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
             📡 UDP Connection (Shared Port - RECOMMENDED!)
           </h3>
           <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #3b82f6' }}>
@@ -230,17 +234,17 @@ export default function Meters() {
               <strong>Apartment Meter 1:</strong><br/>
               Port: 8888<br/>
               Data Key: "apart1_kwh"<br/>
-              Loxone sends: {"{"}"apart1_kwh": &lt;v&gt;{"}"}<br/><br/>
+              Loxone sends: {"{\"apart1_kwh\": <v>}"}<br/><br/>
               
               <strong>Apartment Meter 2:</strong><br/>
               Port: 8888 (same port!)<br/>
               Data Key: "apart2_kwh"<br/>
-              Loxone sends: {"{"}"apart2_kwh": &lt;v&gt;{"}"}<br/><br/>
+              Loxone sends: {"{\"apart2_kwh\": <v>}"}<br/><br/>
               
               <strong>Solar Meter:</strong><br/>
               Port: 8888 (same port!)<br/>
               Data Key: "solar_kwh"<br/>
-              Loxone sends: {"{"}"solar_kwh": &lt;v&gt;{"}"}
+              Loxone sends: {"{\"solar_kwh\": <v>}"}
             </div>
             <p style={{ marginTop: '10px', fontSize: '14px', color: '#1f2937' }}>
               <strong>Benefits:</strong> One UDP port per building instead of one per meter. Much cleaner network configuration!
@@ -248,16 +252,17 @@ export default function Meters() {
           </div>
 
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            🔧 Testing Your Connection
+            🔌 HTTP Connection (Alternative)
           </h3>
-          <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '1px solid #3b82f6' }}>
-            <p><strong>Check the Admin Logs page to see:</strong></p>
-            <ul style={{ marginLeft: '20px', marginTop: '10px' }}>
-              <li>Data collection attempts every 15 minutes</li>
-              <li>Successful meter readings with data keys</li>
-              <li>Connection errors and debugging information</li>
-              <li>UDP packet reception logs showing which keys were received</li>
-            </ul>
+          <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
+            <p><strong>Loxone Virtual Output Setup:</strong></p>
+            <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
+              <li>In Loxone Config, create a Virtual Output</li>
+              <li>Set the address to: <code style={{ backgroundColor: '#e5e7eb', padding: '2px 6px', borderRadius: '4px' }}>http://YOUR_RASPBERRY_IP:8080/api/meters/data</code></li>
+              <li>In the meter configuration, set endpoint to the same URL</li>
+              <li>Set power_field to match your JSON field name (default: "power_kwh")</li>
+              <li>Loxone should send: <code style={{ backgroundColor: '#e5e7eb', padding: '2px 6px', borderRadius: '4px' }}>{"{\"power_kwh\": 123.45}"}</code></li>
+            </ol>
           </div>
 
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
@@ -272,6 +277,19 @@ export default function Meters() {
               <li>Number of registers to read (typically 2 for float values)</li>
               <li>Unit ID (slave address, typically 1)</li>
             </ol>
+          </div>
+
+          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
+            🔧 Testing Your Connection
+          </h3>
+          <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '1px solid #3b82f6' }}>
+            <p><strong>Check the Admin Logs page to see:</strong></p>
+            <ul style={{ marginLeft: '20px', marginTop: '10px' }}>
+              <li>Data collection attempts every 15 minutes</li>
+              <li>Successful meter readings with data keys</li>
+              <li>Connection errors and debugging information</li>
+              <li>UDP packet reception logs showing which keys were received</li>
+            </ul>
           </div>
 
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
@@ -357,60 +375,207 @@ export default function Meters() {
         </div>
       </div>
 
-      <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
-        <table style={{ width: '100%' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.name')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('meters.type')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.building')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('meters.connection')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('meters.lastReading')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.status')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.actions')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {meters.map(meter => (
-              <tr key={meter.id} style={{ borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: '16px', fontWeight: '500' }}>{meter.name}</td>
-                <td style={{ padding: '16px' }}>{meter.meter_type.replace('_', ' ')}</td>
-                <td style={{ padding: '16px' }}>
-                  {buildings.find(b => b.id === meter.building_id)?.name || '-'}
-                </td>
-                <td style={{ padding: '16px' }}>{meter.connection_type.toUpperCase()}</td>
-                <td style={{ padding: '16px' }}>
-                  {meter.last_reading ? `${meter.last_reading.toFixed(2)} kWh` : '-'}
-                </td>
-                <td style={{ padding: '16px' }}>
-                  <span style={{
-                    padding: '4px 12px', borderRadius: '12px', fontSize: '12px',
-                    backgroundColor: meter.is_active ? '#d4edda' : '#f8d7da',
-                    color: meter.is_active ? '#155724' : '#721c24'
-                  }}>
-                    {meter.is_active ? t('common.active') : t('common.inactive')}
-                  </span>
-                </td>
-                <td style={{ padding: '16px' }}>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => handleEdit(meter)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}>
-                      <Edit2 size={16} color="#007bff" />
+      {/* Search Bar */}
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ position: 'relative', maxWidth: '400px' }}>
+          <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
+          <input
+            type="text"
+            placeholder="Search buildings..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px 10px 10px 40px',
+              border: '1px solid #ddd',
+              borderRadius: '8px',
+              fontSize: '14px'
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Building Cards */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', 
+        gap: '16px', 
+        marginBottom: '30px' 
+      }}>
+        {/* All Buildings Card */}
+        <div
+          onClick={() => setSelectedBuildingId(null)}
+          style={{
+            padding: '20px',
+            backgroundColor: selectedBuildingId === null ? '#667eea' : 'white',
+            color: selectedBuildingId === null ? 'white' : '#1f2937',
+            borderRadius: '12px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            border: selectedBuildingId === null ? '2px solid #667eea' : '2px solid transparent'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            <Building size={24} />
+            <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>
+              All Buildings
+            </h3>
+          </div>
+          <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
+            {meters.length} meters
+          </p>
+        </div>
+
+        {/* Individual Building Cards */}
+        {filteredBuildings.map(building => {
+          const buildingMeters = meters.filter(m => m.building_id === building.id);
+          return (
+            <div
+              key={building.id}
+              onClick={() => setSelectedBuildingId(building.id)}
+              style={{
+                padding: '20px',
+                backgroundColor: selectedBuildingId === building.id ? '#667eea' : 'white',
+                color: selectedBuildingId === building.id ? 'white' : '#1f2937',
+                borderRadius: '12px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                border: selectedBuildingId === building.id ? '2px solid #667eea' : '2px solid transparent'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                <Building size={24} />
+                <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>
+                  {building.name}
+                </h3>
+              </div>
+              <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
+                {buildingMeters.length} meters
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Meters grouped by building */}
+      {Object.entries(groupedMeters).map(([buildingId, buildingMeters]) => {
+        const building = buildings.find(b => b.id === parseInt(buildingId));
+        return (
+          <div key={buildingId} style={{ marginBottom: '30px' }}>
+            <h2 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '16px', color: '#1f2937' }}>
+              {building?.name || 'Unknown Building'}
+            </h2>
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', 
+              gap: '16px' 
+            }}>
+              {buildingMeters.map(meter => (
+                <div key={meter.id} style={{
+                  backgroundColor: 'white',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                  border: '1px solid #e5e7eb'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '16px' }}>
+                    <div>
+                      <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '4px', color: '#1f2937' }}>
+                        {meter.name}
+                      </h3>
+                      <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
+                        {meter.meter_type.replace('_', ' ')}
+                      </p>
+                    </div>
+                    <span style={{
+                      padding: '4px 12px',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      backgroundColor: meter.is_active ? '#d4edda' : '#f8d7da',
+                      color: meter.is_active ? '#155724' : '#721c24'
+                    }}>
+                      {meter.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '14px', color: '#6b7280' }}>Connection:</span>
+                      <span style={{ fontSize: '14px', fontWeight: '500', color: '#1f2937', textTransform: 'uppercase' }}>
+                        {meter.connection_type}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '14px', color: '#6b7280' }}>Last Reading:</span>
+                      <span style={{ fontSize: '14px', fontWeight: '500', color: '#1f2937' }}>
+                        {meter.last_reading ? `${meter.last_reading.toFixed(2)} kWh` : '-'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
+                    <button 
+                      onClick={() => handleEdit(meter)} 
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        padding: '8px',
+                        backgroundColor: '#007bff',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Edit2 size={16} />
+                      Edit
                     </button>
-                    <button onClick={() => handleDelete(meter.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}>
-                      <Trash2 size={16} color="#dc3545" />
+                    <button 
+                      onClick={() => handleDelete(meter.id)} 
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        padding: '8px',
+                        backgroundColor: '#dc3545',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Trash2 size={16} />
+                      Delete
                     </button>
                   </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {meters.length === 0 && (
-          <div style={{ padding: '60px', textAlign: 'center', color: '#999' }}>
-            {t('meters.noMeters')}
+                </div>
+              ))}
+            </div>
           </div>
-        )}
-      </div>
+        );
+      })}
+
+      {filteredMeters.length === 0 && (
+        <div style={{ 
+          backgroundColor: 'white', 
+          borderRadius: '12px', 
+          padding: '60px', 
+          textAlign: 'center', 
+          color: '#999',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+        }}>
+          {t('meters.noMeters')}
+        </div>
+      )}
 
       {showInstructions && <InstructionsModal />}
 
@@ -482,8 +647,8 @@ export default function Meters() {
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('meters.connectionType')} *</label>
                 <select required value={formData.connection_type} onChange={(e) => setFormData({ ...formData, connection_type: e.target.value })}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
+                  <option value="udp">{t('meters.udp')} (Recommended)</option>
                   <option value="http">{t('meters.http')}</option>
-                  <option value="udp">{t('meters.udp')}</option>
                   <option value="modbus_tcp">{t('meters.modbusTcp')}</option>
                 </select>
               </div>
@@ -492,6 +657,49 @@ export default function Meters() {
                 <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>
                   {t('meters.connectionConfig')}
                 </h3>
+
+                {formData.connection_type === 'udp' && (
+                  <>
+                    <div style={{ backgroundColor: '#dbeafe', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #3b82f6' }}>
+                      <p style={{ fontSize: '13px', color: '#1e40af', margin: 0 }}>
+                        <strong>⭐ {t('meters.sharedPortInfo')}</strong>
+                      </p>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('meters.listenPort')} *
+                        </label>
+                        <input type="number" required value={connectionConfig.listen_port}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, listen_port: parseInt(e.target.value) })}
+                          placeholder="8888"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                        <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                          {t('meters.samePort')}
+                        </p>
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('meters.dataKey')} *
+                        </label>
+                        <input type="text" required value={connectionConfig.data_key}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, data_key: e.target.value })}
+                          placeholder="apart1_kwh"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                        <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                          {t('meters.dataKeyHelp')}
+                        </p>
+                      </div>
+                    </div>
+                    <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '12px', fontFamily: 'monospace', fontSize: '12px', border: '1px solid #e5e7eb' }}>
+                      <strong>Loxone Configuration:</strong><br/>
+                      Virtual Output UDP to {connectionConfig.listen_port || 8888}<br/>
+                      Command: {"{\""}
+                      <span style={{ color: '#3b82f6' }}>{connectionConfig.data_key || 'YOUR_KEY'}</span>
+                      {"\": <v>}"}
+                    </div>
+                  </>
+                )}
 
                 {formData.connection_type === 'http' && (
                   <>
@@ -569,47 +777,6 @@ export default function Meters() {
                           placeholder="1"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
-                    </div>
-                  </>
-                )}
-
-                {formData.connection_type === 'udp' && (
-                  <>
-                    <div style={{ backgroundColor: '#dbeafe', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #3b82f6' }}>
-                      <p style={{ fontSize: '13px', color: '#1e40af', margin: 0 }}>
-                        <strong>⭐ {t('meters.sharedPortInfo')}</strong>
-                      </p>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
-                      <div>
-                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          {t('meters.listenPort')} *
-                        </label>
-                        <input type="number" required value={connectionConfig.listen_port}
-                          onChange={(e) => setConnectionConfig({ ...connectionConfig, listen_port: parseInt(e.target.value) })}
-                          placeholder="8888"
-                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
-                        <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                          {t('meters.samePort')}
-                        </p>
-                      </div>
-                      <div>
-                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          {t('meters.dataKey')} *
-                        </label>
-                        <input type="text" required value={connectionConfig.data_key}
-                          onChange={(e) => setConnectionConfig({ ...connectionConfig, data_key: e.target.value })}
-                          placeholder="apart1_kwh"
-                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
-                        <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                          {t('meters.dataKeyHelp')}
-                        </p>
-                      </div>
-                    </div>
-                    <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '12px', fontFamily: 'monospace', fontSize: '12px', border: '1px solid #e5e7eb' }}>
-                      <strong>Loxone Configuration:</strong><br/>
-                      Virtual Output UDP to {connectionConfig.listen_port || 8888}<br/>
-                      Command: {"{"}"<span style={{ color: '#3b82f6' }}>{connectionConfig.data_key || 'YOUR_KEY'}</span>": &lt;v&gt;{"}"}
                     </div>
                   </>
                 )}
