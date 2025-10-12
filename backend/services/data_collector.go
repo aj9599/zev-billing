@@ -19,6 +19,8 @@ type DataCollector struct {
 	udpListeners     map[int]*net.UDPConn
 	udpMeterBuffers  map[int]float64
 	udpChargerBuffers map[int]ChargerData
+	// NEW: Buffer for partial charger data (when sent in separate packets)
+	partialChargerData map[int]*PartialChargerData
 	mu               sync.Mutex
 	lastCollection   time.Time
 	udpPorts         []int
@@ -30,6 +32,15 @@ type ChargerData struct {
 	State  string
 	UserID string
 	Mode   string
+}
+
+// NEW: Structure to hold partial charger data as it arrives
+type PartialChargerData struct {
+	Power      *float64
+	State      *string
+	UserID     *string
+	Mode       *string
+	LastUpdate time.Time
 }
 
 type UDPMeterConfig struct {
@@ -59,12 +70,13 @@ func stripControlCharacters(str string) string {
 
 func NewDataCollector(db *sql.DB) *DataCollector {
 	return &DataCollector{
-		db:                db,
-		udpListeners:      make(map[int]*net.UDPConn),
-		udpMeterBuffers:   make(map[int]float64),
-		udpChargerBuffers: make(map[int]ChargerData),
-		udpPorts:          []int{},
-		restartChannel:    make(chan bool, 1),
+		db:                 db,
+		udpListeners:       make(map[int]*net.UDPConn),
+		udpMeterBuffers:    make(map[int]float64),
+		udpChargerBuffers:  make(map[int]ChargerData),
+		partialChargerData: make(map[int]*PartialChargerData),
+		udpPorts:           []int{},
+		restartChannel:     make(chan bool, 1),
 	}
 }
 
@@ -98,6 +110,9 @@ func (dc *DataCollector) Start() {
 	dc.logSystemStatus()
 	dc.collectAllData()
 
+	// Start goroutine to clean up stale partial data
+	go dc.cleanupStalePartialData()
+
 	ticker := time.NewTicker(15 * time.Minute)
 	defer ticker.Stop()
 
@@ -108,6 +123,25 @@ func (dc *DataCollector) Start() {
 		case <-dc.restartChannel:
 			log.Println("Received restart signal")
 		}
+	}
+}
+
+// NEW: Clean up partial charger data that hasn't been updated in 5 minutes
+func (dc *DataCollector) cleanupStalePartialData() {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		dc.mu.Lock()
+		now := time.Now()
+		for chargerID, partial := range dc.partialChargerData {
+			if now.Sub(partial.LastUpdate) > 5*time.Minute {
+				log.Printf("DEBUG: Cleaning up stale partial data for charger %d (last update: %v)", 
+					chargerID, partial.LastUpdate)
+				delete(dc.partialChargerData, chargerID)
+			}
+		}
+		dc.mu.Unlock()
 	}
 }
 
@@ -286,12 +320,16 @@ func (dc *DataCollector) startUDPListener(port int, meters []UDPMeterConfig, cha
 	}
 	for _, c := range chargers {
 		dc.udpChargerBuffers[c.ChargerID] = ChargerData{}
+		dc.partialChargerData[c.ChargerID] = &PartialChargerData{
+			LastUpdate: time.Now(),
+		}
 	}
 	dc.mu.Unlock()
 
 	deviceCount := len(meters) + len(chargers)
 	log.Printf("SUCCESS: UDP listener started on port %d for %d devices (%d meters, %d chargers)", 
 		port, deviceCount, len(meters), len(chargers))
+	log.Printf("INFO: Chargers will accept data in combined JSON or separate packets")
 	dc.logToDatabase("UDP Listener Started", 
 		fmt.Sprintf("Port: %d, Meters: %d, Chargers: %d", port, len(meters), len(chargers)))
 
@@ -317,6 +355,7 @@ func (dc *DataCollector) startUDPListener(port int, meters []UDPMeterConfig, cha
 			continue
 		}
 
+		// Process meter data (unchanged)
 		for _, meter := range meters {
 			if value, ok := jsonData[meter.DataKey]; ok {
 				var reading float64
@@ -339,66 +378,137 @@ func (dc *DataCollector) startUDPListener(port int, meters []UDPMeterConfig, cha
 			}
 		}
 
+		// NEW: Process charger data - supports both combined and separate packets
 		for _, charger := range chargers {
-			chargerData := ChargerData{}
-			updated := false
+			dc.processChargerPacket(charger, jsonData, remoteAddr.IP.String())
+		}
+	}
+}
 
-			if value, ok := jsonData[charger.PowerKey]; ok {
-				switch v := value.(type) {
-				case float64:
-					chargerData.Power = v
-					updated = true
-				case string:
-					if f, err := strconv.ParseFloat(v, 64); err == nil {
-						chargerData.Power = f
-						updated = true
-					}
-				}
-			}
+// NEW: Process charger packet - handles both combined and separate packets
+func (dc *DataCollector) processChargerPacket(charger UDPChargerConfig, jsonData map[string]interface{}, remoteIP string) {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
 
-			// State can be string or numeric
-			if value, ok := jsonData[charger.StateKey]; ok {
-				switch v := value.(type) {
-				case string:
-					chargerData.State = v
-					updated = true
-				case float64:
-					chargerData.State = fmt.Sprintf("%.0f", v)
-					updated = true
-				}
-			}
+	// Get or create partial data buffer for this charger
+	partial := dc.partialChargerData[charger.ChargerID]
+	if partial == nil {
+		partial = &PartialChargerData{}
+		dc.partialChargerData[charger.ChargerID] = partial
+	}
 
-			// User ID as string
-			if value, ok := jsonData[charger.UserIDKey]; ok {
-				switch v := value.(type) {
-				case string:
-					chargerData.UserID = v
-					updated = true
-				case float64:
-					chargerData.UserID = fmt.Sprintf("%.0f", v)
-					updated = true
-				}
-			}
+	updated := false
+	fieldsReceived := []string{}
 
-			// Mode can be string or numeric
-			if value, ok := jsonData[charger.ModeKey]; ok {
-				switch v := value.(type) {
-				case string:
-					chargerData.Mode = v
-					updated = true
-				case float64:
-					chargerData.Mode = fmt.Sprintf("%.0f", v)
-					updated = true
-				}
+	// Check for power
+	if value, ok := jsonData[charger.PowerKey]; ok {
+		switch v := value.(type) {
+		case float64:
+			partial.Power = &v
+			updated = true
+			fieldsReceived = append(fieldsReceived, "power")
+		case string:
+			if f, err := strconv.ParseFloat(v, 64); err == nil {
+				partial.Power = &f
+				updated = true
+				fieldsReceived = append(fieldsReceived, "power")
 			}
+		}
+	}
 
-			if updated {
-				dc.mu.Lock()
-				dc.udpChargerBuffers[charger.ChargerID] = chargerData
-				dc.mu.Unlock()
-				log.Printf("DEBUG: UDP data buffered for charger '%s': Power=%.2f, State=%s, User=%s, Mode=%s from %s", 
-					charger.Name, chargerData.Power, chargerData.State, chargerData.UserID, chargerData.Mode, remoteAddr.IP)
+	// Check for state
+	if value, ok := jsonData[charger.StateKey]; ok {
+		var stateStr string
+		switch v := value.(type) {
+		case string:
+			stateStr = v
+		case float64:
+			stateStr = fmt.Sprintf("%.0f", v)
+		}
+		if stateStr != "" {
+			partial.State = &stateStr
+			updated = true
+			fieldsReceived = append(fieldsReceived, "state")
+		}
+	}
+
+	// Check for user_id
+	if value, ok := jsonData[charger.UserIDKey]; ok {
+		var userStr string
+		switch v := value.(type) {
+		case string:
+			userStr = v
+		case float64:
+			userStr = fmt.Sprintf("%.0f", v)
+		}
+		if userStr != "" {
+			partial.UserID = &userStr
+			updated = true
+			fieldsReceived = append(fieldsReceived, "user_id")
+		}
+	}
+
+	// Check for mode
+	if value, ok := jsonData[charger.ModeKey]; ok {
+		var modeStr string
+		switch v := value.(type) {
+		case string:
+			modeStr = v
+		case float64:
+			modeStr = fmt.Sprintf("%.0f", v)
+		}
+		if modeStr != "" {
+			partial.Mode = &modeStr
+			updated = true
+			fieldsReceived = append(fieldsReceived, "mode")
+		}
+	}
+
+	if updated {
+		partial.LastUpdate = time.Now()
+		
+		// Log what we received
+		if len(fieldsReceived) > 0 {
+			log.Printf("DEBUG: Charger '%s' received fields [%s] from %s", 
+				charger.Name, strings.Join(fieldsReceived, ", "), remoteIP)
+		}
+
+		// Check if we have all 4 fields
+		if partial.Power != nil && partial.State != nil && partial.UserID != nil && partial.Mode != nil {
+			// Complete data received! Move to main buffer
+			completeData := ChargerData{
+				Power:  *partial.Power,
+				State:  *partial.State,
+				UserID: *partial.UserID,
+				Mode:   *partial.Mode,
 			}
+			
+			dc.udpChargerBuffers[charger.ChargerID] = completeData
+			
+			log.Printf("SUCCESS: Complete charger data buffered for '%s': Power=%.2f, State=%s, User=%s, Mode=%s", 
+				charger.Name, completeData.Power, completeData.State, completeData.UserID, completeData.Mode)
+			
+			// Reset partial data for next cycle
+			dc.partialChargerData[charger.ChargerID] = &PartialChargerData{
+				LastUpdate: time.Now(),
+			}
+		} else {
+			// Still waiting for more fields
+			missing := []string{}
+			if partial.Power == nil {
+				missing = append(missing, "power")
+			}
+			if partial.State == nil {
+				missing = append(missing, "state")
+			}
+			if partial.UserID == nil {
+				missing = append(missing, "user_id")
+			}
+			if partial.Mode == nil {
+				missing = append(missing, "mode")
+			}
+			log.Printf("DEBUG: Charger '%s' waiting for fields: [%s]", 
+				charger.Name, strings.Join(missing, ", "))
 		}
 	}
 }
@@ -490,7 +600,6 @@ func (dc *DataCollector) saveBufferedUDPData() {
 
 	// Save charger data
 	for chargerID, data := range dc.udpChargerBuffers {
-		// Always save charger data, even if power is 0 (important for state tracking)
 		if data.UserID != "" && data.State != "" && data.Mode != "" {
 			_, err := dc.db.Exec(`
 				INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
@@ -506,6 +615,9 @@ func (dc *DataCollector) saveBufferedUDPData() {
 			} else {
 				log.Printf("ERROR: Failed to save charger data: %v", err)
 			}
+		} else {
+			log.Printf("WARNING: Incomplete charger data for charger ID %d (user: %s, state: %s, mode: %s) - not saving",
+				chargerID, data.UserID, data.State, data.Mode)
 		}
 	}
 }
@@ -634,7 +746,6 @@ func (dc *DataCollector) collectChargerData() {
 			power, userID, mode, state = dc.collectWeidmullerData(name, config)
 		}
 
-		// Save charger data even if power is 0 (for state tracking)
 		if userID != "" && mode != "" && state != "" {
 			_, err := dc.db.Exec(`
 				INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
