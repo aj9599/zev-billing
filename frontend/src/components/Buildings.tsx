@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Building as BuildingIcon } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Building as BuildingIcon, Search } from 'lucide-react';
 import { api } from '../api/client';
 import type { Building } from '../types';
 import { useTranslation } from '../i18n';
@@ -7,6 +7,7 @@ import { useTranslation } from '../i18n';
 export default function Buildings() {
   const { t } = useTranslation();
   const [buildings, setBuildings] = useState<Building[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingBuilding, setEditingBuilding] = useState<Building | null>(null);
   const [formData, setFormData] = useState<Partial<Building>>({
@@ -75,6 +76,12 @@ export default function Buildings() {
 
   const availableBuildings = buildings.filter(b => !b.is_group && b.id !== editingBuilding?.id);
 
+  const filteredBuildings = buildings.filter(b =>
+    b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    b.address_street.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    b.address_city.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
@@ -118,6 +125,26 @@ export default function Buildings() {
         </button>
       </div>
 
+      {/* Search Bar */}
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ position: 'relative', maxWidth: '400px' }}>
+          <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
+          <input
+            type="text"
+            placeholder={t('buildings.searchBuildings')}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px 10px 10px 40px',
+              border: '1px solid #ddd',
+              borderRadius: '8px',
+              fontSize: '14px'
+            }}
+          />
+        </div>
+      </div>
+
       <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
         <table style={{ width: '100%' }}>
           <thead>
@@ -129,7 +156,7 @@ export default function Buildings() {
             </tr>
           </thead>
           <tbody>
-            {buildings.map(building => (
+            {filteredBuildings.map(building => (
               <tr key={building.id} style={{ borderBottom: '1px solid #eee' }}>
                 <td style={{ padding: '16px', fontWeight: '500' }}>{building.name}</td>
                 <td style={{ padding: '16px' }}>
@@ -158,9 +185,9 @@ export default function Buildings() {
             ))}
           </tbody>
         </table>
-        {buildings.length === 0 && (
+        {filteredBuildings.length === 0 && (
           <div style={{ padding: '60px', textAlign: 'center', color: '#999' }}>
-            {t('buildings.noBuildings')}
+            {searchQuery ? t('buildings.noResults') : t('buildings.noBuildings')}
           </div>
         )}
       </div>

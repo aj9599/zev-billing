@@ -322,5 +322,5 @@ export const en: Translations = {
   'login.invalidCredentials': 'Invalid credentials',
   'login.enterUsername': 'Enter your username',
   'login.enterPassword': 'Enter your password',
-  'login.poweredBy': 'Powered by AJ • Swiss Energy Solutions',
+  'login.poweredBy': 'Powered by AJ',
 };

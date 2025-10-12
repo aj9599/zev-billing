@@ -322,5 +322,5 @@ export const de: Translations = {
   'login.invalidCredentials': 'Ungültige Anmeldedaten',
   'login.enterUsername': 'Geben Sie Ihren Benutzernamen ein',
   'login.enterPassword': 'Geben Sie Ihr Passwort ein',
-  'login.poweredBy': 'Entwickelt von AJ • Schweizer Energielösungen',
+  'login.poweredBy': 'Entwickelt von AJ',
 };
