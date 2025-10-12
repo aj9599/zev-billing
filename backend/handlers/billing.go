@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -62,6 +63,7 @@ func (h *BillingHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.Query(query, args...)
 	if err != nil {
+		log.Printf("ERROR: Failed to query billing settings: %v", err)
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
@@ -91,6 +93,7 @@ func (h *BillingHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 func (h *BillingHandler) CreateSettings(w http.ResponseWriter, r *http.Request) {
 	var s models.BillingSettings
 	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
+		log.Printf("ERROR: Failed to decode billing settings: %v", err)
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
@@ -112,12 +115,15 @@ func (h *BillingHandler) CreateSettings(w http.ResponseWriter, r *http.Request) 
 		s.Currency, s.ValidFrom, validTo, s.IsActive)
 
 	if err != nil {
+		log.Printf("ERROR: Failed to create billing settings: %v", err)
 		http.Error(w, "Failed to create settings", http.StatusInternalServerError)
 		return
 	}
 
 	id, _ := result.LastInsertId()
 	s.ID = int(id)
+
+	log.Printf("SUCCESS: Created billing settings ID %d for building %d", s.ID, s.BuildingID)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -134,16 +140,19 @@ func (h *BillingHandler) DeleteSettings(w http.ResponseWriter, r *http.Request) 
 
 	_, err = h.db.Exec("DELETE FROM billing_settings WHERE id = ?", id)
 	if err != nil {
+		log.Printf("ERROR: Failed to delete billing settings ID %d: %v", id, err)
 		http.Error(w, "Failed to delete settings", http.StatusInternalServerError)
 		return
 	}
 
+	log.Printf("SUCCESS: Deleted billing settings ID %d", id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *BillingHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	var s models.BillingSettings
 	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
+		log.Printf("ERROR: Failed to decode billing settings: %v", err)
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
@@ -163,12 +172,14 @@ func (h *BillingHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) 
 			s.CarChargingNormalPrice, s.CarChargingPriorityPrice, s.Currency)
 
 		if err != nil {
+			log.Printf("ERROR: Failed to create billing settings: %v", err)
 			http.Error(w, "Failed to create settings", http.StatusInternalServerError)
 			return
 		}
 
 		id, _ := result.LastInsertId()
 		s.ID = int(id)
+		log.Printf("SUCCESS: Created billing settings ID %d for building %d", s.ID, s.BuildingID)
 	} else {
 		// Update existing settings
 		_, err = h.db.Exec(`
@@ -182,9 +193,11 @@ func (h *BillingHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) 
 			s.Currency, s.BuildingID)
 
 		if err != nil {
+			log.Printf("ERROR: Failed to update billing settings: %v", err)
 			http.Error(w, "Failed to update settings", http.StatusInternalServerError)
 			return
 		}
+		log.Printf("SUCCESS: Updated billing settings for building %d", s.BuildingID)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -194,15 +207,24 @@ func (h *BillingHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) 
 func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 	var req GenerateBillsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("ERROR: Failed to decode generate bills request: %v", err)
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
+	log.Printf("=== Starting bill generation ===")
+	log.Printf("Buildings: %v, Users: %v, Period: %s to %s", 
+		req.BuildingIDs, req.UserIDs, req.StartDate, req.EndDate)
+
 	invoices, err := h.billingService.GenerateBills(req.BuildingIDs, req.UserIDs, req.StartDate, req.EndDate)
 	if err != nil {
+		log.Printf("ERROR: Bill generation failed: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	log.Printf("=== Bill generation completed successfully ===")
+	log.Printf("Generated %d invoices", len(invoices))
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -212,6 +234,8 @@ func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 func (h *BillingHandler) ListInvoices(w http.ResponseWriter, r *http.Request) {
 	userID := r.URL.Query().Get("user_id")
 	buildingID := r.URL.Query().Get("building_id")
+
+	log.Printf("Listing invoices - User: %s, Building: %s", userID, buildingID)
 
 	query := `
 		SELECT i.id, i.invoice_number, i.user_id, i.building_id, 
@@ -235,6 +259,7 @@ func (h *BillingHandler) ListInvoices(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.Query(query, args...)
 	if err != nil {
+		log.Printf("ERROR: Failed to query invoices: %v", err)
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
@@ -252,6 +277,8 @@ func (h *BillingHandler) ListInvoices(w http.ResponseWriter, r *http.Request) {
 			invoices = append(invoices, inv)
 		}
 	}
+
+	log.Printf("Found %d invoices", len(invoices))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(invoices)
@@ -278,10 +305,12 @@ func (h *BillingHandler) GetInvoice(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err == sql.ErrNoRows {
+		log.Printf("ERROR: Invoice ID %d not found", id)
 		http.Error(w, "Invoice not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
+		log.Printf("ERROR: Failed to query invoice ID %d: %v", id, err)
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
@@ -335,6 +364,7 @@ func (h *BillingHandler) DeleteInvoice(w http.ResponseWriter, r *http.Request) {
 	// Delete invoice items first
 	_, err = h.db.Exec("DELETE FROM invoice_items WHERE invoice_id = ?", id)
 	if err != nil {
+		log.Printf("ERROR: Failed to delete invoice items for invoice ID %d: %v", id, err)
 		http.Error(w, "Failed to delete invoice items", http.StatusInternalServerError)
 		return
 	}
@@ -342,10 +372,12 @@ func (h *BillingHandler) DeleteInvoice(w http.ResponseWriter, r *http.Request) {
 	// Delete invoice
 	_, err = h.db.Exec("DELETE FROM invoices WHERE id = ?", id)
 	if err != nil {
+		log.Printf("ERROR: Failed to delete invoice ID %d: %v", id, err)
 		http.Error(w, "Failed to delete invoice", http.StatusInternalServerError)
 		return
 	}
 
+	log.Printf("SUCCESS: Deleted invoice ID %d", id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -357,6 +389,7 @@ func (h *BillingHandler) BackupDatabase(w http.ResponseWriter, r *http.Request) 
 	// Read the database file
 	data, err := os.ReadFile(dbPath)
 	if err != nil {
+		log.Printf("ERROR: Failed to read database for backup: %v", err)
 		http.Error(w, "Failed to read database", http.StatusInternalServerError)
 		return
 	}
@@ -367,6 +400,7 @@ func (h *BillingHandler) BackupDatabase(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
 	
 	w.Write(data)
+	log.Printf("SUCCESS: Database backup created: %s", backupName)
 }
 
 func (h *BillingHandler) ExportData(w http.ResponseWriter, r *http.Request) {
@@ -375,6 +409,9 @@ func (h *BillingHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 	startDate := r.URL.Query().Get("start_date")
 	endDate := r.URL.Query().Get("end_date")
 	exportType := r.URL.Query().Get("type") // "meters" or "chargers"
+
+	log.Printf("Exporting data - Type: %s, Building: %s, User: %s, Period: %s to %s",
+		exportType, buildingID, userID, startDate, endDate)
 
 	var query string
 	var args []interface{}
@@ -440,6 +477,7 @@ func (h *BillingHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.Query(query, args...)
 	if err != nil {
+		log.Printf("ERROR: Failed to export data: %v", err)
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
@@ -486,4 +524,6 @@ func (h *BillingHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/csv")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	w.Write([]byte(csv.String()))
+
+	log.Printf("SUCCESS: Exported data to %s", filename)
 }

@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Plus, Eye, FileText, Download, Trash2 } from 'lucide-react';
+import { Plus, Eye, FileText, Download, Trash2, Building, Search } from 'lucide-react';
 import { api } from '../api/client';
-import type { Invoice, Building, User } from '../types';
+import type { Invoice, Building as BuildingType, User } from '../types';
 import { useTranslation } from '../i18n';
 
 export default function Billing() {
   const { t } = useTranslation();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [buildings, setBuildings] = useState<Building[]>([]);
+  const [buildings, setBuildings] = useState<BuildingType[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [formData, setFormData] = useState({
@@ -25,18 +27,22 @@ export default function Billing() {
   }, []);
 
   const loadData = async () => {
-    const [invoicesData, buildingsData, usersData] = await Promise.all([
-      api.getInvoices(),
-      api.getBuildings(),
-      api.getUsers()
-    ]);
-    setInvoices(invoicesData);
-    setBuildings(buildingsData);
-    setUsers(usersData);
-    
-    // Expand all buildings by default
-    const buildingIds = new Set(buildingsData.map(b => b.id));
-    setExpandedBuildings(buildingIds);
+    try {
+      const [invoicesData, buildingsData, usersData] = await Promise.all([
+        api.getInvoices(),
+        api.getBuildings(),
+        api.getUsers()
+      ]);
+      setInvoices(invoicesData);
+      setBuildings(buildingsData.filter(b => !b.is_group));
+      setUsers(usersData);
+      
+      // Expand all buildings by default
+      const buildingIds = new Set(buildingsData.filter(b => !b.is_group).map(b => b.id));
+      setExpandedBuildings(buildingIds);
+    } catch (err) {
+      console.error('Failed to load data:', err);
+    }
   };
 
   const handleGenerate = async (e: React.FormEvent) => {
@@ -48,12 +54,17 @@ export default function Billing() {
     
     setGenerating(true);
     try {
-      await api.generateBills(formData);
+      const result = await api.generateBills(formData);
+      console.log('Generated invoices:', result);
       setShowGenerateModal(false);
       resetForm();
-      loadData();
-      alert(t('billing.generatedSuccess'));
+      // Wait a bit for the database to commit, then reload
+      setTimeout(() => {
+        loadData();
+      }, 500);
+      alert(t('billing.generatedSuccess') + ` (${result.length} invoices)`);
     } catch (err) {
+      console.error('Generation error:', err);
       alert(t('billing.generateFailed') + ' ' + err);
     } finally {
       setGenerating(false);
@@ -279,10 +290,20 @@ export default function Billing() {
     return date.toLocaleDateString('de-CH');
   };
 
-  // Group invoices by building
+  // Filter buildings based on search
+  const filteredBuildings = buildings.filter(b =>
+    b.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Filter invoices based on selected building
+  const filteredInvoices = selectedBuildingId
+    ? invoices.filter(inv => inv.building_id === selectedBuildingId)
+    : invoices;
+
+  // Group invoices by building for display
   const invoicesByBuilding = buildings.map(building => ({
     building,
-    invoices: invoices.filter(inv => inv.building_id === building.id)
+    invoices: filteredInvoices.filter(inv => inv.building_id === building.id)
   })).filter(group => group.invoices.length > 0);
 
   return (
@@ -320,6 +341,91 @@ export default function Billing() {
         </button>
       </div>
 
+      {/* Search Bar */}
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ position: 'relative', maxWidth: '400px' }}>
+          <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
+          <input
+            type="text"
+            placeholder="Search buildings..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px 10px 10px 40px',
+              border: '1px solid #ddd',
+              borderRadius: '8px',
+              fontSize: '14px'
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Building Cards */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', 
+        gap: '16px', 
+        marginBottom: '30px' 
+      }}>
+        {/* All Buildings Card */}
+        <div
+          onClick={() => setSelectedBuildingId(null)}
+          style={{
+            padding: '20px',
+            backgroundColor: selectedBuildingId === null ? '#667eea' : 'white',
+            color: selectedBuildingId === null ? 'white' : '#1f2937',
+            borderRadius: '12px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            border: selectedBuildingId === null ? '2px solid #667eea' : '2px solid transparent'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            <Building size={24} />
+            <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>
+              All Buildings
+            </h3>
+          </div>
+          <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
+            {invoices.length} {invoices.length === 1 ? 'invoice' : 'invoices'}
+          </p>
+        </div>
+
+        {/* Individual Building Cards */}
+        {filteredBuildings.map(building => {
+          const buildingInvoiceCount = invoices.filter(inv => inv.building_id === building.id).length;
+          return (
+            <div
+              key={building.id}
+              onClick={() => setSelectedBuildingId(building.id)}
+              style={{
+                padding: '20px',
+                backgroundColor: selectedBuildingId === building.id ? '#667eea' : 'white',
+                color: selectedBuildingId === building.id ? 'white' : '#1f2937',
+                borderRadius: '12px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                border: selectedBuildingId === building.id ? '2px solid #667eea' : '2px solid transparent'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                <Building size={24} />
+                <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>
+                  {building.name}
+                </h3>
+              </div>
+              <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
+                {buildingInvoiceCount} {buildingInvoiceCount === 1 ? 'invoice' : 'invoices'}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Invoices List */}
       {invoicesByBuilding.length === 0 ? (
         <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '60px', textAlign: 'center', color: '#999' }}>
           {t('billing.noInvoices')}
@@ -346,7 +452,7 @@ export default function Billing() {
                   {building.name}
                 </h2>
                 <p style={{ fontSize: '14px', color: '#666', margin: '4px 0 0 0' }}>
-                  {buildingInvoices.length} {buildingInvoices.length === 1 ? t('billing.invoices') : t('billing.invoicesPlural')}
+                  {buildingInvoices.length} {buildingInvoices.length === 1 ? 'invoice' : 'invoices'}
                 </p>
               </div>
               <span style={{ fontSize: '24px', color: '#666' }}>

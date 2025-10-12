@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/aj9599/zev-billing/backend/models"
@@ -99,6 +100,7 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 		userRows.Close()
 	}
 
+	log.Printf("Successfully generated %d invoices", len(invoices))
 	return invoices, nil
 }
 
@@ -174,7 +176,7 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 		})
 	}
 
-	// Calculate car charging costs - combined totals
+	// Calculate car charging costs - FIXED: properly parse charger IDs
 	if chargerIDs != "" {
 		normalCharging, priorityCharging := bs.calculateChargingConsumption(chargerIDs, start, end)
 
@@ -311,10 +313,7 @@ func (bs *BillingService) getMeterReadings(userID int, start, end time.Time) (fl
 	return from, to, meterName
 }
 
-// calculateZEVConsumption implements Swiss ZEV standard:
-// - At each 15-minute interval, check total building consumption and solar generation
-// - Distribute solar proportionally based on each apartment's consumption share
-// - Remaining consumption is charged as normal power
+// calculateZEVConsumption implements Swiss ZEV standard
 func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start, end time.Time) (normal, solar, total float64) {
 	log.Printf("Calculating ZEV consumption for user %d in building %d", userID, buildingID)
 
@@ -416,32 +415,55 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 	return totalNormal, totalSolar, totalConsumption
 }
 
+// FIXED: Properly handle comma-separated charger IDs
 func (bs *BillingService) calculateChargingConsumption(chargerIDs string, start, end time.Time) (normal, priority float64) {
+	// Split the comma-separated IDs
+	idList := strings.Split(strings.TrimSpace(chargerIDs), ",")
+	if len(idList) == 0 || (len(idList) == 1 && idList[0] == "") {
+		return 0, 0
+	}
+
+	// Build the IN clause with proper placeholders
+	placeholders := make([]string, len(idList))
+	args := make([]interface{}, 0, len(idList)+2)
+	
+	for i, id := range idList {
+		placeholders[i] = "?"
+		args = append(args, strings.TrimSpace(id))
+	}
+	
+	inClause := strings.Join(placeholders, ",")
+
 	// Calculate normal charging
-	err := bs.db.QueryRow(`
+	normalArgs := append(args, start, end)
+	normalQuery := fmt.Sprintf(`
 		SELECT COALESCE(SUM(power_kwh), 0)
 		FROM charger_sessions
-		WHERE user_id IN (?) AND mode = 'normal'
+		WHERE charger_id IN (%s) AND mode = 'normal'
 		AND session_time >= ? AND session_time <= ?
-	`, chargerIDs, start, end).Scan(&normal)
-
+	`, inClause)
+	
+	err := bs.db.QueryRow(normalQuery, normalArgs...).Scan(&normal)
 	if err != nil {
 		log.Printf("Error calculating normal charging: %v", err)
 		normal = 0
 	}
 
 	// Calculate priority charging
-	err = bs.db.QueryRow(`
+	priorityArgs := append(args, start, end)
+	priorityQuery := fmt.Sprintf(`
 		SELECT COALESCE(SUM(power_kwh), 0)
 		FROM charger_sessions
-		WHERE user_id IN (?) AND mode = 'priority'
+		WHERE charger_id IN (%s) AND mode = 'priority'
 		AND session_time >= ? AND session_time <= ?
-	`, chargerIDs, start, end).Scan(&priority)
-
+	`, inClause)
+	
+	err = bs.db.QueryRow(priorityQuery, priorityArgs...).Scan(&priority)
 	if err != nil {
 		log.Printf("Error calculating priority charging: %v", err)
 		priority = 0
 	}
 
+	log.Printf("Charging consumption - Normal: %.2f kWh, Priority: %.2f kWh", normal, priority)
 	return normal, priority
 }
