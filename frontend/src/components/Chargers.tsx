@@ -3,67 +3,7 @@ import { Plus, Edit2, Trash2, X, HelpCircle, Info, Car, Download, Search, Buildi
 import { api } from '../api/client';
 import type { Charger, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
-
-// ============================================================================
-// PRESET CONFIGURATION SYSTEM
-// ============================================================================
-interface PresetStateMapping {
-  cable_locked: string;
-  waiting_auth: string;
-  charging: string;
-  idle: string;
-}
-
-interface PresetModeMapping {
-  normal: string;
-  priority: string;
-}
-
-interface PresetConfig {
-  name: string;
-  label: string;
-  description: string;
-  defaultStateMappings: PresetStateMapping;
-  defaultModeMappings: PresetModeMapping;
-  stateOptions: Array<{ value: string; label: string }>;
-  modeOptions: Array<{ value: string; label: string }>;
-}
-
-// WeidMüller Preset Configuration
-const WEIDMULLER_PRESET: PresetConfig = {
-  name: 'weidmuller',
-  label: 'WeidMüller',
-  description: 'WeidMüller AC Smart chargers with UDP/HTTP/Modbus support',
-  defaultStateMappings: {
-    cable_locked: '65',
-    waiting_auth: '66',
-    charging: '67',
-    idle: '50'
-  },
-  defaultModeMappings: {
-    normal: '1',
-    priority: '2'
-  },
-  stateOptions: [
-    { value: 'cable_locked', label: 'Cable Locked' },
-    { value: 'waiting_auth', label: 'Waiting for Authentication' },
-    { value: 'charging', label: 'Charging' },
-    { value: 'idle', label: 'Idle' }
-  ],
-  modeOptions: [
-    { value: 'normal', label: 'Normal Charging' },
-    { value: 'priority', label: 'Priority Charging' }
-  ]
-};
-
-// Future presets can be added here:
-// const ABB_PRESET: PresetConfig = { ... };
-
-const CHARGER_PRESETS: Record<string, PresetConfig> = {
-  weidmuller: WEIDMULLER_PRESET,
-  // abb: ABB_PRESET,  // Uncomment when implementing
-};
-// ============================================================================
+import { CHARGER_PRESETS, getPreset, type PresetConfig } from './chargerPresets';
 
 interface ChargerConnectionConfig {
   power_endpoint?: string;
@@ -101,7 +41,7 @@ export default function Chargers() {
   const [editingCharger, setEditingCharger] = useState<Charger | null>(null);
   const [formData, setFormData] = useState<Partial<Charger>>({
     name: '', brand: 'weidmuller', preset: 'weidmuller', building_id: 0,
-    connection_type: 'udp', connection_config: '{}', supports_priority: true,
+    connection_type: 'udp', connection_config: '{}',
     notes: '', is_active: true
   });
   const [connectionConfig, setConnectionConfig] = useState<ChargerConnectionConfig>({
@@ -161,7 +101,7 @@ export default function Chargers() {
   };
 
   const getCurrentPreset = (): PresetConfig => {
-    return CHARGER_PRESETS[formData.preset || 'weidmuller'] || WEIDMULLER_PRESET;
+    return getPreset(formData.preset || 'weidmuller');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -251,7 +191,7 @@ export default function Chargers() {
     
     try {
       const config = JSON.parse(charger.connection_config);
-      const preset = CHARGER_PRESETS[charger.preset] || WEIDMULLER_PRESET;
+      const preset = getPreset(charger.preset);
       
       setConnectionConfig({
         power_endpoint: config.power_endpoint || '',
@@ -306,10 +246,10 @@ export default function Chargers() {
   };
 
   const resetForm = () => {
-    const preset = WEIDMULLER_PRESET;
+    const preset = getPreset('weidmuller');
     setFormData({
       name: '', brand: 'weidmuller', preset: 'weidmuller', building_id: 0,
-      connection_type: 'udp', connection_config: '{}', supports_priority: true,
+      connection_type: 'udp', connection_config: '{}',
       notes: '', is_active: true
     });
     setConnectionConfig({
@@ -349,11 +289,11 @@ export default function Chargers() {
   };
 
   const handlePresetChange = (presetName: string) => {
-    const preset = CHARGER_PRESETS[presetName] || WEIDMULLER_PRESET;
+    const preset = getPreset(presetName);
     setFormData({ 
       ...formData, 
       brand: presetName, 
-      preset: presetName 
+      preset: presetName
     });
     setConnectionConfig({
       ...connectionConfig,
@@ -393,7 +333,7 @@ export default function Chargers() {
         maxWidth: '800px', maxHeight: '90vh', overflow: 'auto', width: '100%'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>Charger Setup Instructions</h2>
+          <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>{t('chargers.setupInstructions')}</h2>
           <button onClick={() => setShowInstructions(false)} 
             style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
             <X size={24} />
@@ -402,80 +342,32 @@ export default function Chargers() {
 
         <div style={{ lineHeight: '1.8', color: '#374151' }}>
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            🚗 WeidMüller Charger Setup
+            🚗 {getCurrentPreset().label} {t('chargers.chargerSetup')}
           </h3>
           <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
-            <p><strong>WeidMüller chargers require 4 data points with UUID keys:</strong></p>
+            <p><strong>{t('chargers.requiresFourDataPoints')}</strong></p>
             <ul style={{ marginLeft: '20px', marginTop: '10px' }}>
-              <li><strong>Power (UUID_power):</strong> Current power consumption in kWh</li>
-              <li><strong>State (UUID_state):</strong> Charging state as numeric value (e.g., 65=cable locked, 66=waiting auth, 67=charging, 50=idle)</li>
-              <li><strong>User ID (UUID_user):</strong> Which user is using the charger</li>
-              <li><strong>Mode (UUID_mode):</strong> Charging mode as numeric value (e.g., 1=normal, 2=priority)</li>
+              <li><strong>{t('chargers.powerUuidPower')}:</strong> {t('chargers.powerDescription')}</li>
+              <li><strong>{t('chargers.stateUuidState')}:</strong> {t('chargers.stateDescription')}</li>
+              <li><strong>{t('chargers.userIdUuidUser')}:</strong> {t('chargers.userIdDescription')}</li>
+              <li><strong>{t('chargers.modeUuidMode')}:</strong> {t('chargers.modeDescription')}</li>
             </ul>
           </div>
 
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            📡 UDP Connection (Shared Port - RECOMMENDED!)
+            📡 {t('chargers.udpConnection')}
           </h3>
           <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #3b82f6' }}>
-            <p><strong>⭐ Auto-generated UUID keys for all 4 charger data points!</strong></p>
-            <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
-              <li>Click "Add Charger" - unique UUIDs are generated for all 4 keys automatically</li>
-              <li>Use the SAME UDP port as your meters (e.g., 8888)</li>
-              <li>Send all 4 data points with their UUID keys in JSON packets</li>
-              <li>Configure state value mappings (e.g., 65=cable locked, 67=charging)</li>
-              <li>Configure mode value mappings (e.g., 1=normal, 2=priority)</li>
-            </ol>
-            <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '10px', fontFamily: 'monospace', fontSize: '13px' }}>
-              <strong>Charger 1 Config:</strong><br/>
-              Port: 8888<br/>
-              Power Key: "abc123-uuid_power"<br/>
-              State Key: "abc123-uuid_state"<br/>
-              User ID Key: "abc123-uuid_user"<br/>
-              Mode Key: "abc123-uuid_mode"<br/><br/>
-              
-              <strong>Loxone sends:</strong><br/>
-              {"{"}<br/>
-              &nbsp;&nbsp;"abc123-uuid_power": &lt;v&gt;,<br/>
-              &nbsp;&nbsp;"abc123-uuid_state": 67,  // 67 = charging<br/>
-              &nbsp;&nbsp;"abc123-uuid_user": "USER_001",<br/>
-              &nbsp;&nbsp;"abc123-uuid_mode": 2  // 2 = priority<br/>
-              {"}"}
-            </div>
+            <p><strong>⭐ {t('chargers.autoGeneratedUuidKeys')}</strong></p>
+            <p style={{ marginTop: '10px' }}>{t('chargers.udpInstructions')}</p>
           </div>
 
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            🔧 State & Mode Value Mappings
+            🔧 {t('chargers.stateAndModeValues')}
           </h3>
           <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '1px solid #f59e0b' }}>
-            <p><strong>Configure numeric values for states and modes:</strong></p>
-            <p style={{ marginTop: '10px' }}><strong>State Values (from your charger):</strong></p>
-            <ul style={{ marginLeft: '20px' }}>
-              <li>Cable Locked: 65</li>
-              <li>Waiting for Auth: 66</li>
-              <li>Charging: 67</li>
-              <li>Idle: 50</li>
-            </ul>
-            <p style={{ marginTop: '10px' }}><strong>Mode Values (from your charger):</strong></p>
-            <ul style={{ marginLeft: '20px' }}>
-              <li>Normal Mode: 1</li>
-              <li>Priority Mode: 2</li>
-            </ul>
-            <p style={{ marginTop: '10px', fontSize: '14px' }}>These mappings tell the system how to interpret the numeric values your charger sends.</p>
-          </div>
-
-          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            📌 HTTP Connection
-          </h3>
-          <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
-            <p>Configure 4 separate HTTP endpoints for power, state, user_id, and mode. State and mode values are also configurable.</p>
-          </div>
-
-          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            ⚡ Modbus TCP Connection
-          </h3>
-          <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
-            <p>Configure register addresses for all 4 data points. State and mode register values will be interpreted according to your configured mappings.</p>
+            <p><strong>{t('chargers.configureNumericValues')}</strong></p>
+            <p style={{ marginTop: '10px' }}>{t('chargers.valueMappingsDescription')}</p>
           </div>
         </div>
 
@@ -552,7 +444,7 @@ export default function Chargers() {
           <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
           <input
             type="text"
-            placeholder="Search buildings..."
+            placeholder={t('common.searchBuildings')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -588,11 +480,11 @@ export default function Chargers() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
             <Building size={24} />
             <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>
-              All Buildings
+              {t('common.allBuildings')}
             </h3>
           </div>
           <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
-            {chargers.length} chargers
+            {chargers.length} {t('chargers.chargers')}
           </p>
         </div>
 
@@ -620,7 +512,7 @@ export default function Chargers() {
                 </h3>
               </div>
               <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
-                {buildingChargers.length} chargers
+                {buildingChargers.length} {t('chargers.chargers')}
               </p>
             </div>
           );
@@ -632,153 +524,158 @@ export default function Chargers() {
         return (
           <div key={buildingId} style={{ marginBottom: '30px' }}>
             <h2 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '16px', color: '#1f2937' }}>
-              {building?.name || 'Unknown Building'}
+              {building?.name || t('common.unknownBuilding')}
             </h2>
             <div className="chargers-grid" style={{ 
               display: 'grid', 
               gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', 
               gap: '20px' 
             }}>
-              {buildingChargers.map(charger => (
-                <div key={charger.id} className="charger-card" style={{
-                  backgroundColor: 'white',
-                  borderRadius: '16px',
-                  padding: '24px',
-                  boxShadow: '0 4px 6px rgba(0,0,0,0.07)',
-                  border: '1px solid #f0f0f0',
-                  position: 'relative',
-                  transition: 'all 0.2s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.boxShadow = '0 8px 12px rgba(0,0,0,0.12)';
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.07)';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                }}>
-                  <div style={{ 
-                    position: 'absolute', 
-                    top: '16px', 
-                    right: '16px', 
-                    display: 'flex', 
-                    gap: '8px' 
+              {buildingChargers.map(charger => {
+                const chargerPreset = getPreset(charger.preset);
+                return (
+                  <div key={charger.id} className="charger-card" style={{
+                    backgroundColor: 'white',
+                    borderRadius: '16px',
+                    padding: '24px',
+                    boxShadow: '0 4px 6px rgba(0,0,0,0.07)',
+                    border: '1px solid #f0f0f0',
+                    position: 'relative',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = '0 8px 12px rgba(0,0,0,0.12)';
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.07)';
+                    e.currentTarget.style.transform = 'translateY(0)';
                   }}>
-                    <button 
-                      onClick={() => handleEdit(charger)} 
-                      style={{
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '50%',
-                        border: 'none',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        color: '#3b82f6',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.2)';
-                        e.currentTarget.style.transform = 'scale(1.1)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
-                        e.currentTarget.style.transform = 'scale(1)';
-                      }}
-                      title="Edit"
-                    >
-                      <Edit2 size={16} />
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(charger.id)} 
-                      style={{
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '50%',
-                        border: 'none',
-                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                        color: '#ef4444',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
-                        e.currentTarget.style.transform = 'scale(1.1)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
-                        e.currentTarget.style.transform = 'scale(1)';
-                      }}
-                      title="Delete"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-
-                  <div style={{ paddingRight: '72px' }}>
-                    <h3 style={{ 
-                      fontSize: '20px', 
-                      fontWeight: '600', 
-                      marginBottom: '6px', 
-                      color: '#1f2937',
-                      lineHeight: '1.3'
+                    <div style={{ 
+                      position: 'absolute', 
+                      top: '16px', 
+                      right: '16px', 
+                      display: 'flex', 
+                      gap: '8px' 
                     }}>
-                      {charger.name}
-                    </h3>
-                    <p style={{ 
-                      fontSize: '14px', 
-                      color: '#6b7280', 
-                      margin: 0,
-                      textTransform: 'capitalize'
-                    }}>
-                      {charger.brand}
-                    </p>
-                  </div>
+                      <button 
+                        onClick={() => handleEdit(charger)} 
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '50%',
+                          border: 'none',
+                          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                          color: '#3b82f6',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.2)';
+                          e.currentTarget.style.transform = 'scale(1.1)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                          e.currentTarget.style.transform = 'scale(1)';
+                        }}
+                        title={t('common.edit')}
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(charger.id)} 
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '50%',
+                          border: 'none',
+                          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                          color: '#ef4444',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
+                          e.currentTarget.style.transform = 'scale(1.1)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+                          e.currentTarget.style.transform = 'scale(1)';
+                        }}
+                        title={t('common.delete')}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
 
-                  <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #f3f4f6' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                      <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>Connection</span>
-                      <span style={{ 
-                        fontSize: '13px', 
+                    <div style={{ paddingRight: '72px' }}>
+                      <h3 style={{ 
+                        fontSize: '20px', 
                         fontWeight: '600', 
-                        color: '#667eea',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px'
+                        marginBottom: '6px', 
+                        color: '#1f2937',
+                        lineHeight: '1.3'
                       }}>
-                        {charger.connection_type}
-                      </span>
+                        {charger.name}
+                      </h3>
+                      <p style={{ 
+                        fontSize: '14px', 
+                        color: '#6b7280', 
+                        margin: 0,
+                        textTransform: 'capitalize'
+                      }}>
+                        {chargerPreset.label}
+                      </p>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                      <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>Priority Mode</span>
-                      <span style={{ 
-                        fontSize: '13px', 
-                        fontWeight: '600', 
-                        color: charger.supports_priority ? '#22c55e' : '#6b7280'
-                      }}>
-                        {charger.supports_priority ? '✓ Supported' : '✗ Not supported'}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>Status</span>
-                      <span style={{
-                        padding: '4px 12px',
-                        borderRadius: '20px',
-                        fontSize: '12px',
-                        fontWeight: '600',
-                        backgroundColor: charger.is_active ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                        color: charger.is_active ? '#22c55e' : '#ef4444'
-                      }}>
-                        {charger.is_active ? 'Active' : 'Inactive'}
-                      </span>
+
+                    <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #f3f4f6' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                        <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>{t('chargers.connection')}</span>
+                        <span style={{ 
+                          fontSize: '13px', 
+                          fontWeight: '600', 
+                          color: '#667eea',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px'
+                        }}>
+                          {charger.connection_type}
+                        </span>
+                      </div>
+                      {chargerPreset.supportsPriority && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                          <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>{t('chargers.priorityMode')}</span>
+                          <span style={{ 
+                            fontSize: '13px', 
+                            fontWeight: '600', 
+                            color: '#22c55e'
+                          }}>
+                            ✓ {t('chargers.supported')}
+                          </span>
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>{t('common.status')}</span>
+                        <span style={{
+                          padding: '4px 12px',
+                          borderRadius: '20px',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          backgroundColor: charger.is_active ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                          color: charger.is_active ? '#22c55e' : '#ef4444'
+                        }}>
+                          {charger.is_active ? t('common.active') : t('common.inactive')}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         );
@@ -817,7 +714,7 @@ export default function Chargers() {
                 <button 
                   onClick={() => setShowInstructions(true)}
                   style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer', color: '#007bff' }}
-                  title="Show setup instructions"
+                  title={t('chargers.setupInstructions')}
                 >
                   <Info size={20} />
                 </button>
@@ -860,9 +757,9 @@ export default function Chargers() {
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('meters.connectionType')} *</label>
                 <select required value={formData.connection_type} onChange={(e) => setFormData({ ...formData, connection_type: e.target.value })}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
-                  <option value="udp">UDP (Recommended)</option>
-                  <option value="http">HTTP</option>
-                  <option value="modbus_tcp">Modbus TCP</option>
+                  <option value="udp">{t('meters.udp')} ({t('common.recommended')})</option>
+                  <option value="http">{t('meters.http')}</option>
+                  <option value="modbus_tcp">{t('meters.modbusTcp')}</option>
                 </select>
               </div>
 
@@ -875,7 +772,7 @@ export default function Chargers() {
                   <>
                     <div style={{ backgroundColor: '#dbeafe', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #3b82f6' }}>
                       <p style={{ fontSize: '13px', color: '#1e40af', margin: 0 }}>
-                        <strong>⭐ {editingCharger ? 'Existing UUID keys' : 'Auto-generated UUID keys for all 4 data points!'}</strong>
+                        <strong>⭐ {editingCharger ? t('chargers.existingUuidKeys') : t('chargers.autoGeneratedUuidKeys')}</strong>
                       </p>
                     </div>
                     <div style={{ marginBottom: '12px' }}>
@@ -890,7 +787,7 @@ export default function Chargers() {
                     <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          Power Key (UUID_power) *
+                          {t('chargers.powerKey')} *
                         </label>
                         <input type="text" required value={connectionConfig.power_key}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, power_key: e.target.value })}
@@ -899,7 +796,7 @@ export default function Chargers() {
                       </div>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          State Key (UUID_state) *
+                          {t('chargers.stateKey')} *
                         </label>
                         <input type="text" required value={connectionConfig.state_key}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, state_key: e.target.value })}
@@ -910,7 +807,7 @@ export default function Chargers() {
                     <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          User ID Key (UUID_user) *
+                          {t('chargers.userIdKey')} *
                         </label>
                         <input type="text" required value={connectionConfig.user_id_key}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, user_id_key: e.target.value })}
@@ -919,7 +816,7 @@ export default function Chargers() {
                       </div>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          Mode Key (UUID_mode) *
+                          {t('chargers.modeKey')} *
                         </label>
                         <input type="text" required value={connectionConfig.mode_key}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, mode_key: e.target.value })}
@@ -928,7 +825,7 @@ export default function Chargers() {
                       </div>
                     </div>
                     <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '12px', fontFamily: 'monospace', fontSize: '12px', border: '1px solid #e5e7eb' }}>
-                      <strong>Loxone sends to port {connectionConfig.listen_port || 8888}:</strong><br/>
+                      <strong>{t('chargers.loxoneSendsTo')} {connectionConfig.listen_port || 8888}:</strong><br/>
                       {"{"}<br/>
                       &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.power_key || 'UUID_power'}</span>": &lt;v&gt;,<br/>
                       &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.state_key || 'UUID_state'}</span>": 67,<br/>
@@ -1009,7 +906,7 @@ export default function Chargers() {
                     <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: '12px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          Power Reg *
+                          {t('chargers.powerReg')} *
                         </label>
                         <input type="number" required value={connectionConfig.power_register}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, power_register: parseInt(e.target.value) })}
@@ -1018,7 +915,7 @@ export default function Chargers() {
                       </div>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          State Reg *
+                          {t('chargers.stateReg')} *
                         </label>
                         <input type="number" required value={connectionConfig.state_register}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, state_register: parseInt(e.target.value) })}
@@ -1027,7 +924,7 @@ export default function Chargers() {
                       </div>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          User Reg *
+                          {t('chargers.userReg')} *
                         </label>
                         <input type="number" required value={connectionConfig.user_id_register}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, user_id_register: parseInt(e.target.value) })}
@@ -1036,7 +933,7 @@ export default function Chargers() {
                       </div>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          Mode Reg *
+                          {t('chargers.modeReg')} *
                         </label>
                         <input type="number" required value={connectionConfig.mode_register}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, mode_register: parseInt(e.target.value) })}
@@ -1045,7 +942,7 @@ export default function Chargers() {
                       </div>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          Unit ID *
+                          {t('meters.unitId')} *
                         </label>
                         <input type="number" required value={connectionConfig.unit_id}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, unit_id: parseInt(e.target.value) })}
@@ -1059,15 +956,15 @@ export default function Chargers() {
                 {/* State Value Mappings */}
                 <div style={{ marginTop: '20px', padding: '16px', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
                   <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>
-                    State Value Mappings
+                    {t('chargers.stateValueMappings')}
                   </h4>
                   <p style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>
-                    Configure the numeric values your charger sends for each state:
+                    {t('chargers.configureStateValues')}
                   </p>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <div>
                       <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
-                        Cable Locked
+                        {t('chargers.stateCableLocked')}
                       </label>
                       <input type="text" required value={connectionConfig.state_cable_locked}
                         onChange={(e) => setConnectionConfig({ ...connectionConfig, state_cable_locked: e.target.value })}
@@ -1076,7 +973,7 @@ export default function Chargers() {
                     </div>
                     <div>
                       <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
-                        Waiting for Auth
+                        {t('chargers.stateWaitingAuth')}
                       </label>
                       <input type="text" required value={connectionConfig.state_waiting_auth}
                         onChange={(e) => setConnectionConfig({ ...connectionConfig, state_waiting_auth: e.target.value })}
@@ -1085,7 +982,7 @@ export default function Chargers() {
                     </div>
                     <div>
                       <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
-                        Charging
+                        {t('chargers.stateCharging')}
                       </label>
                       <input type="text" required value={connectionConfig.state_charging}
                         onChange={(e) => setConnectionConfig({ ...connectionConfig, state_charging: e.target.value })}
@@ -1094,7 +991,7 @@ export default function Chargers() {
                     </div>
                     <div>
                       <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
-                        Idle
+                        {t('chargers.stateIdle')}
                       </label>
                       <input type="text" required value={connectionConfig.state_idle}
                         onChange={(e) => setConnectionConfig({ ...connectionConfig, state_idle: e.target.value })}
@@ -1107,15 +1004,15 @@ export default function Chargers() {
                 {/* Mode Value Mappings */}
                 <div style={{ marginTop: '12px', padding: '16px', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
                   <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>
-                    Mode Value Mappings
+                    {t('chargers.modeValueMappings')}
                   </h4>
                   <p style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>
-                    Configure the numeric values your charger sends for each charging mode:
+                    {t('chargers.configureModeValues')}
                   </p>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <div>
                       <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
-                        Normal Mode
+                        {t('chargers.modeNormal')}
                       </label>
                       <input type="text" required value={connectionConfig.mode_normal}
                         onChange={(e) => setConnectionConfig({ ...connectionConfig, mode_normal: e.target.value })}
@@ -1124,7 +1021,7 @@ export default function Chargers() {
                     </div>
                     <div>
                       <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
-                        Priority Mode
+                        {t('chargers.modePriority')}
                       </label>
                       <input type="text" required value={connectionConfig.mode_priority}
                         onChange={(e) => setConnectionConfig({ ...connectionConfig, mode_priority: e.target.value })}
@@ -1133,13 +1030,6 @@ export default function Chargers() {
                     </div>
                   </div>
                 </div>
-              </div>
-
-              <div style={{ marginTop: '16px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={formData.supports_priority} onChange={(e) => setFormData({ ...formData, supports_priority: e.target.checked })} />
-                  <span style={{ fontWeight: '500', fontSize: '14px' }}>{t('chargers.supportsPriority')}</span>
-                </label>
               </div>
 
               <div style={{ marginTop: '16px' }}>
