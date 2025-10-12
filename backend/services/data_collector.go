@@ -17,8 +17,8 @@ import (
 type DataCollector struct {
 	db               *sql.DB
 	udpListeners     map[int]*net.UDPConn
-	udpMeterBuffers  map[int]float64  // meter_id -> reading
-	udpChargerBuffers map[int]ChargerData // charger_id -> data
+	udpMeterBuffers  map[int]float64
+	udpChargerBuffers map[int]ChargerData
 	mu               sync.Mutex
 	lastCollection   time.Time
 	udpPorts         []int
@@ -151,13 +151,11 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 }
 
 func (dc *DataCollector) initializeUDPListeners() {
-	// Group meters and chargers by port
 	portDevices := make(map[int]struct {
 		meters   []UDPMeterConfig
 		chargers []UDPChargerConfig
 	})
 
-	// Query UDP meters
 	meterRows, err := dc.db.Query(`
 		SELECT id, name, connection_config
 		FROM meters 
@@ -201,7 +199,6 @@ func (dc *DataCollector) initializeUDPListeners() {
 		}
 	}
 
-	// Query UDP chargers
 	chargerRows, err := dc.db.Query(`
 		SELECT id, name, connection_config
 		FROM chargers 
@@ -263,7 +260,6 @@ func (dc *DataCollector) initializeUDPListeners() {
 		}
 	}
 
-	// Start one listener per port
 	for port, devices := range portDevices {
 		go dc.startUDPListener(port, devices.meters, devices.chargers)
 	}
@@ -321,7 +317,6 @@ func (dc *DataCollector) startUDPListener(port int, meters []UDPMeterConfig, cha
 			continue
 		}
 
-		// Process meter data
 		for _, meter := range meters {
 			if value, ok := jsonData[meter.DataKey]; ok {
 				var reading float64
@@ -344,7 +339,6 @@ func (dc *DataCollector) startUDPListener(port int, meters []UDPMeterConfig, cha
 			}
 		}
 
-		// Process charger data
 		for _, charger := range chargers {
 			chargerData := ChargerData{}
 			updated := false
@@ -362,23 +356,38 @@ func (dc *DataCollector) startUDPListener(port int, meters []UDPMeterConfig, cha
 				}
 			}
 
+			// State can be string or numeric
 			if value, ok := jsonData[charger.StateKey]; ok {
-				if s, ok := value.(string); ok {
-					chargerData.State = s
+				switch v := value.(type) {
+				case string:
+					chargerData.State = v
+					updated = true
+				case float64:
+					chargerData.State = fmt.Sprintf("%.0f", v)
 					updated = true
 				}
 			}
 
+			// User ID as string
 			if value, ok := jsonData[charger.UserIDKey]; ok {
-				if u, ok := value.(string); ok {
-					chargerData.UserID = u
+				switch v := value.(type) {
+				case string:
+					chargerData.UserID = v
+					updated = true
+				case float64:
+					chargerData.UserID = fmt.Sprintf("%.0f", v)
 					updated = true
 				}
 			}
 
+			// Mode can be string or numeric
 			if value, ok := jsonData[charger.ModeKey]; ok {
-				if m, ok := value.(string); ok {
-					chargerData.Mode = m
+				switch v := value.(type) {
+				case string:
+					chargerData.Mode = v
+					updated = true
+				case float64:
+					chargerData.Mode = fmt.Sprintf("%.0f", v)
 					updated = true
 				}
 			}
@@ -417,10 +426,8 @@ func (dc *DataCollector) saveBufferedUDPData() {
 	dc.mu.Lock()
 	defer dc.mu.Unlock()
 
-	// Track which meters we've seen data for
 	metersWithData := make(map[int]bool)
 
-	// Save meter data
 	for meterID, reading := range dc.udpMeterBuffers {
 		if reading > 0 {
 			var prevReading float64
@@ -456,11 +463,8 @@ func (dc *DataCollector) saveBufferedUDPData() {
 		}
 	}
 
-	// NEW: For meters that didn't send data this cycle, save the last reading with 0 consumption
-	// This ensures continuous lines in charts, especially important for solar meters
 	for meterID := range dc.udpMeterBuffers {
 		if !metersWithData[meterID] {
-			// Get the last cumulative reading to maintain it
 			var lastReading float64
 			err := dc.db.QueryRow(`
 				SELECT power_kwh FROM meter_readings 
@@ -468,10 +472,7 @@ func (dc *DataCollector) saveBufferedUDPData() {
 				ORDER BY reading_time DESC LIMIT 1
 			`, meterID).Scan(&lastReading)
 
-			// Only insert if we have a previous reading to maintain
 			if err == nil && lastReading > 0 {
-				// Insert the same cumulative reading with 0 consumption
-				// This maintains the cumulative value while showing no new generation/consumption
 				_, insertErr := dc.db.Exec(`
 					INSERT INTO meter_readings (meter_id, reading_time, power_kwh, consumption_kwh)
 					VALUES (?, ?, ?, 0)
@@ -487,9 +488,10 @@ func (dc *DataCollector) saveBufferedUDPData() {
 		}
 	}
 
-	// Save charger data (unchanged)
+	// Save charger data
 	for chargerID, data := range dc.udpChargerBuffers {
-		if data.Power > 0 {
+		// Always save charger data, even if power is 0 (important for state tracking)
+		if data.UserID != "" && data.State != "" && data.Mode != "" {
 			_, err := dc.db.Exec(`
 				INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
 				VALUES (?, ?, ?, ?, ?, ?)
@@ -499,7 +501,10 @@ func (dc *DataCollector) saveBufferedUDPData() {
 				log.Printf("SUCCESS: UDP charger data saved for charger ID %d: %.2f kWh (user: %s, mode: %s, state: %s)", 
 					chargerID, data.Power, data.UserID, data.Mode, data.State)
 				dc.logToDatabase("UDP Charger Data Saved", 
-					fmt.Sprintf("Charger ID: %d, Power: %.2f kWh, User: %s, Mode: %s", chargerID, data.Power, data.UserID, data.Mode))
+					fmt.Sprintf("Charger ID: %d, Power: %.2f kWh, User: %s, Mode: %s, State: %s", 
+						chargerID, data.Power, data.UserID, data.Mode, data.State))
+			} else {
+				log.Printf("ERROR: Failed to save charger data: %v", err)
 			}
 		}
 	}
@@ -629,7 +634,8 @@ func (dc *DataCollector) collectChargerData() {
 			power, userID, mode, state = dc.collectWeidmullerData(name, config)
 		}
 
-		if power > 0 {
+		// Save charger data even if power is 0 (for state tracking)
+		if userID != "" && mode != "" && state != "" {
 			_, err := dc.db.Exec(`
 				INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
 				VALUES (?, ?, ?, ?, ?, ?)
@@ -642,7 +648,7 @@ func (dc *DataCollector) collectChargerData() {
 				log.Printf("SUCCESS: Collected charger data: '%s' = %.2f kWh (user: %s, mode: %s, state: %s)", 
 					name, power, userID, mode, state)
 				dc.logToDatabase("Charger Data Collected", 
-					fmt.Sprintf("%s: %.2f kWh, User: %s, Mode: %s", name, power, userID, mode))
+					fmt.Sprintf("%s: %.2f kWh, User: %s, Mode: %s, State: %s", name, power, userID, mode, state))
 				successCount++
 			}
 		}
@@ -735,8 +741,11 @@ func (dc *DataCollector) collectWeidmullerData(name string, config map[string]in
 		body, _ := io.ReadAll(resp.Body)
 		var data map[string]interface{}
 		if json.Unmarshal(body, &data) == nil {
-			if s, ok := data["state"].(string); ok {
-				state = s
+			switch v := data["state"].(type) {
+			case string:
+				state = v
+			case float64:
+				state = fmt.Sprintf("%.0f", v)
 			}
 		}
 	}
@@ -746,8 +755,11 @@ func (dc *DataCollector) collectWeidmullerData(name string, config map[string]in
 		body, _ := io.ReadAll(resp.Body)
 		var data map[string]interface{}
 		if json.Unmarshal(body, &data) == nil {
-			if uid, ok := data["user_id"].(string); ok {
-				userID = uid
+			switch v := data["user_id"].(type) {
+			case string:
+				userID = v
+			case float64:
+				userID = fmt.Sprintf("%.0f", v)
 			}
 		}
 	}
@@ -757,8 +769,11 @@ func (dc *DataCollector) collectWeidmullerData(name string, config map[string]in
 		body, _ := io.ReadAll(resp.Body)
 		var data map[string]interface{}
 		if json.Unmarshal(body, &data) == nil {
-			if m, ok := data["mode"].(string); ok {
-				mode = m
+			switch v := data["mode"].(type) {
+			case string:
+				mode = v
+			case float64:
+				mode = fmt.Sprintf("%.0f", v)
 			}
 		}
 	}
