@@ -29,6 +29,11 @@ const APARTMENT_COLORS = [
   '#a855f7', '#ef4444', '#84cc16', '#22c55e', '#0ea5e9',
 ];
 
+const CHARGER_COLORS = [
+  '#f59e0b', '#f97316', '#fb923c', '#fdba74', '#fcd34d', '#fde047',
+  '#facc15', '#eab308', '#ca8a04', '#a16207', '#854d0e',
+];
+
 const FIXED_COLORS: Record<string, string> = {
   'solar_meter': '#fbbf24',
   'total_meter': '#3b82f6',
@@ -36,8 +41,9 @@ const FIXED_COLORS: Record<string, string> = {
 };
 
 const apartmentColorMap = new Map<number, string>();
+const chargerColorMap = new Map<string, string>(); // Key: charger_id + user_id
 
-function getMeterColor(meterType: string, meterId?: number): string {
+function getMeterColor(meterType: string, meterId?: number, userId?: string): string {
   if (meterType === 'apartment_meter' && meterId !== undefined) {
     if (!apartmentColorMap.has(meterId)) {
       const colorIndex = apartmentColorMap.size % APARTMENT_COLORS.length;
@@ -45,14 +51,37 @@ function getMeterColor(meterType: string, meterId?: number): string {
     }
     return apartmentColorMap.get(meterId)!;
   }
+  
+  if (meterType === 'charger' && meterId !== undefined && userId) {
+    const key = `${meterId}_${userId}`;
+    if (!chargerColorMap.has(key)) {
+      const colorIndex = chargerColorMap.size % CHARGER_COLORS.length;
+      chargerColorMap.set(key, CHARGER_COLORS[colorIndex]);
+    }
+    return chargerColorMap.get(key)!;
+  }
+  
   return FIXED_COLORS[meterType] || FIXED_COLORS.default;
 }
 
 function getMeterDisplayName(meter: MeterData): string {
+  if (meter.meter_type === 'charger') {
+    const userName = meter.user_name || 'Unknown User';
+    return `${meter.meter_name} - ${userName}`;
+  }
+  
   if (meter.user_name) {
     return `${meter.meter_name} (${meter.user_name})`;
   }
   return meter.meter_name;
+}
+
+function getMeterUniqueKey(meter: MeterData): string {
+  // Create unique key for each meter/charger+user combination
+  if (meter.meter_type === 'charger' && meter.user_name) {
+    return `charger_${meter.meter_id}_${meter.user_name}`;
+  }
+  return `meter_${meter.meter_id}`;
 }
 
 export default function Dashboard() {
@@ -333,7 +362,8 @@ export default function Dashboard() {
                   timeMap.set(time, { time });
                 }
                 
-                const meterKey = `meter_${meter.meter_id}`;
+                // Use unique key for each meter/charger+user
+                const meterKey = getMeterUniqueKey(meter);
                 const current = timeMap.get(time);
                 current[meterKey] = reading.power;
               });
@@ -373,36 +403,39 @@ export default function Dashboard() {
                     backgroundColor: '#f9fafb',
                     borderRadius: '8px'
                   }}>
-                    {meters.map(meter => (
-                      <div
-                        key={meter.meter_id}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          padding: '4px 8px',
-                          backgroundColor: 'white',
-                          borderRadius: '4px',
-                          fontSize: '13px'
-                        }}
-                      >
+                    {meters.map(meter => {
+                      const uniqueKey = getMeterUniqueKey(meter);
+                      return (
                         <div
+                          key={uniqueKey}
                           style={{
-                            width: '12px',
-                            height: '12px',
-                            borderRadius: '2px',
-                            backgroundColor: getMeterColor(meter.meter_type, meter.meter_id),
-                            flexShrink: 0
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '4px 8px',
+                            backgroundColor: 'white',
+                            borderRadius: '4px',
+                            fontSize: '13px'
                           }}
-                        />
-                        <span style={{ fontWeight: '500' }}>
-                          {getMeterDisplayName(meter)}
-                        </span>
-                        <span style={{ color: '#6b7280', fontSize: '12px' }}>
-                          ({meter.meter_type.replace('_', ' ')})
-                        </span>
-                      </div>
-                    ))}
+                        >
+                          <div
+                            style={{
+                              width: '12px',
+                              height: '12px',
+                              borderRadius: '2px',
+                              backgroundColor: getMeterColor(meter.meter_type, meter.meter_id, meter.user_name),
+                              flexShrink: 0
+                            }}
+                          />
+                          <span style={{ fontWeight: '500' }}>
+                            {getMeterDisplayName(meter)}
+                          </span>
+                          <span style={{ color: '#6b7280', fontSize: '12px' }}>
+                            ({meter.meter_type === 'charger' ? 'Charger' : meter.meter_type.replace('_', ' ')})
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -442,18 +475,22 @@ export default function Dashboard() {
                         <Legend 
                           wrapperStyle={{ fontSize: '12px' }}
                         />
-                        {meters.map(meter => (
-                          <Line
-                            key={meter.meter_id}
-                            type="monotone"
-                            dataKey={`meter_${meter.meter_id}`}
-                            stroke={getMeterColor(meter.meter_type, meter.meter_id)}
-                            strokeWidth={2}
-                            name={getMeterDisplayName(meter)}
-                            dot={false}
-                            activeDot={{ r: 4 }}
-                          />
-                        ))}
+                        {meters.map(meter => {
+                          const uniqueKey = getMeterUniqueKey(meter);
+                          return (
+                            <Line
+                              key={uniqueKey}
+                              type="monotone"
+                              dataKey={uniqueKey}
+                              stroke={getMeterColor(meter.meter_type, meter.meter_id, meter.user_name)}
+                              strokeWidth={meter.meter_type === 'charger' ? 3 : 2}
+                              strokeDasharray={meter.meter_type === 'charger' ? '5 5' : undefined}
+                              name={getMeterDisplayName(meter)}
+                              dot={false}
+                              activeDot={{ r: 4 }}
+                            />
+                          );
+                        })}
                       </LineChart>
                     </ResponsiveContainer>
                   </div>

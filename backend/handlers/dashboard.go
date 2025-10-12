@@ -391,7 +391,6 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			}
 
 			// STEP 5: Read all readings with timestamps and calculate power
-			// We need reading_time from both current and previous reading to validate the time gap
 			dataRows, err := h.db.QueryContext(ctx, `
 				SELECT reading_time, consumption_kwh
 				FROM meter_readings
@@ -414,8 +413,6 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			}
 
 			// Calculate power in Watts from consumption
-			// Readings are every 15 minutes = 0.25 hours
-			// Power (W) = Consumption (kWh) / Time (h) * 1000
 			const intervalHours = 0.25 // 15 minutes
 			const maxGapMinutes = 20   // Maximum gap to consider readings consecutive
 
@@ -438,14 +435,12 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					consumptionKwh: consumptionKwh,
 				}
 
-				// Check if we have a valid previous reading within the time window
 				if previousReading != nil {
 					timeDiff := currentReading.timestamp.Sub(previousReading.timestamp).Minutes()
 					
-					// Only calculate power if readings are consecutive (within 20 minutes)
-					// and consumption is positive
-					if timeDiff <= maxGapMinutes && currentReading.consumptionKwh > 0 {
-						// Calculate power in Watts
+					// Include all readings within time window, even if consumption is 0
+					// This shows flat lines at 0W when meters are idle (e.g., solar at night)
+					if timeDiff <= maxGapMinutes {
 						powerW := (currentReading.consumptionKwh / intervalHours) * 1000
 						
 						meterData.Data = append(meterData.Data, models.ConsumptionData{
@@ -458,7 +453,6 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 							currentReading.timestamp, timeDiff)
 					}
 				} else {
-					// First reading - skip it or set to 0 since we can't calculate power
 					log.Printf("    Skipping first reading at %v (no previous reading to compare)", 
 						currentReading.timestamp)
 				}
@@ -472,7 +466,117 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			building.Meters = append(building.Meters, meterData)
 		}
 
-		log.Printf("  Building %d processed with %d meters", bi.id, len(building.Meters))
+		// STEP 6: Now add charger data for this building
+		log.Printf("  Querying chargers for building %d...", bi.id)
+		chargerRows, err := h.db.QueryContext(ctx, `
+			SELECT c.id, c.name
+			FROM chargers c
+			WHERE c.building_id = ? 
+			AND COALESCE(c.is_active, 1) = 1
+			ORDER BY c.name
+		`, bi.id)
+
+		if err != nil {
+			log.Printf("  Error querying chargers for building %d: %v", bi.id, err)
+		} else {
+			type chargerInfo struct {
+				id   int
+				name string
+			}
+			chargerInfos := []chargerInfo{}
+			
+			for chargerRows.Next() {
+				var ci chargerInfo
+				if err := chargerRows.Scan(&ci.id, &ci.name); err != nil {
+					log.Printf("  Error scanning charger row: %v", err)
+					continue
+				}
+				chargerInfos = append(chargerInfos, ci)
+			}
+			chargerRows.Close()
+			
+			log.Printf("  Found %d chargers for building %d", len(chargerInfos), bi.id)
+
+			// Process each charger
+			for _, ci := range chargerInfos {
+				log.Printf("    Processing charger ID: %d, Name: %s", ci.id, ci.name)
+
+				// Get charger sessions where state != 'idle'
+				sessionRows, err := h.db.QueryContext(ctx, `
+					SELECT cs.session_time, cs.power_kwh, cs.user_id, cs.state
+					FROM charger_sessions cs
+					WHERE cs.charger_id = ? 
+					AND cs.session_time >= ?
+					AND LOWER(cs.state) != 'idle'
+					ORDER BY cs.session_time ASC
+				`, ci.id, startTime)
+
+				if err != nil {
+					log.Printf("    Error querying sessions for charger %d: %v", ci.id, err)
+					continue
+				}
+
+				// Group sessions by user_id to create separate lines
+				userSessions := make(map[string][]models.ConsumptionData)
+				
+				for sessionRows.Next() {
+					var sessionTime time.Time
+					var powerKwh float64
+					var userID, state string
+					
+					if err := sessionRows.Scan(&sessionTime, &powerKwh, &userID, &state); err != nil {
+						continue
+					}
+
+					// Convert kWh to Watts (instantaneous power reading)
+					// Since sessions are 15-minute intervals, divide by 0.25 hours
+					powerW := (powerKwh / 0.25) * 1000
+					
+					if _, exists := userSessions[userID]; !exists {
+						userSessions[userID] = []models.ConsumptionData{}
+					}
+					
+					userSessions[userID] = append(userSessions[userID], models.ConsumptionData{
+						Timestamp: sessionTime,
+						Power:     powerW,
+						Source:    "charger",
+					})
+				}
+				sessionRows.Close()
+
+				// Create a MeterData entry for each user's charging sessions
+				for userID, sessions := range userSessions {
+					if len(sessions) == 0 {
+						continue
+					}
+
+					// Get user name
+					userName := userID
+					err := h.db.QueryRowContext(ctx, `
+						SELECT first_name || ' ' || last_name 
+						FROM users 
+						WHERE id = ?
+					`, userID).Scan(&userName)
+					
+					if err != nil && err != sql.ErrNoRows {
+						log.Printf("    Error getting user name for user %s: %v", userID, err)
+					}
+
+					chargerData := MeterData{
+						MeterID:   ci.id,
+						MeterName: ci.name,
+						MeterType: "charger",
+						UserName:  userName,
+						Data:      sessions,
+					}
+
+					log.Printf("    Charger ID: %d has %d data points for user %s", ci.id, len(sessions), userName)
+					building.Meters = append(building.Meters, chargerData)
+				}
+			}
+		}
+
+		log.Printf("  Building %d processed with %d meters/chargers", bi.id, len(building.Meters))
 		buildings = append(buildings, building)
 	}
 
