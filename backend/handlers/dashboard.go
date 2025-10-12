@@ -110,31 +110,80 @@ func calculateTotalConsumption(db *sql.DB, ctx context.Context, meterTypes []str
 
 	// Build dynamic query for meter types
 	placeholders := make([]string, len(meterTypes))
-	args := make([]interface{}, len(meterTypes)+2)
+	args := make([]interface{}, len(meterTypes))
 	for i, mt := range meterTypes {
 		placeholders[i] = "?"
 		args[i] = mt
 	}
-	args[len(meterTypes)] = periodStart
-	args[len(meterTypes)+1] = periodEnd
 	
-	query := fmt.Sprintf(`
-		SELECT COALESCE(SUM(mr.consumption_kwh), 0)
-		FROM meter_readings mr
-		JOIN meters m ON mr.meter_id = m.id
-		WHERE m.meter_type IN (%s)
-		AND COALESCE(m.is_active, 1) = 1
-		AND mr.reading_time >= ? AND mr.reading_time < ?
-	`, strings.Join(placeholders, ","))
+	meterTypeFilter := strings.Join(placeholders, ",")
 	
-	var total float64
-	err := db.QueryRowContext(ctx, query, args...).Scan(&total)
+	// Get all active meters of the specified types
+	meterQuery := fmt.Sprintf(`
+		SELECT id FROM meters 
+		WHERE meter_type IN (%s) 
+		AND COALESCE(is_active, 1) = 1
+	`, meterTypeFilter)
+	
+	meterRows, err := db.QueryContext(ctx, meterQuery, args...)
 	if err != nil {
-		log.Printf("Error calculating total consumption: %v", err)
+		log.Printf("Error querying meters: %v", err)
 		return 0
 	}
+	defer meterRows.Close()
+
+	totalConsumption := 0.0
 	
-	return total
+	for meterRows.Next() {
+		var meterID int
+		if err := meterRows.Scan(&meterID); err != nil {
+			continue
+		}
+
+		// Get first reading in the period
+		var firstReading sql.NullFloat64
+		db.QueryRowContext(ctx, `
+			SELECT power_kwh FROM meter_readings 
+			WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
+			ORDER BY reading_time ASC LIMIT 1
+		`, meterID, periodStart, periodEnd).Scan(&firstReading)
+
+		// Get latest reading in the period
+		var latestReading sql.NullFloat64
+		db.QueryRowContext(ctx, `
+			SELECT power_kwh FROM meter_readings 
+			WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
+			ORDER BY reading_time DESC LIMIT 1
+		`, meterID, periodStart, periodEnd).Scan(&latestReading)
+
+		// If we have readings in this period, calculate consumption
+		if firstReading.Valid && latestReading.Valid {
+			// Try to get a baseline from before the period
+			var baselineReading sql.NullFloat64
+			db.QueryRowContext(ctx, `
+				SELECT power_kwh FROM meter_readings 
+				WHERE meter_id = ? AND reading_time < ?
+				ORDER BY reading_time DESC LIMIT 1
+			`, meterID, periodStart).Scan(&baselineReading)
+
+			var baseline float64
+			if baselineReading.Valid {
+				// Use the last reading from before the period
+				baseline = baselineReading.Float64
+			} else {
+				// No previous readings - use first reading of this period as baseline
+				baseline = firstReading.Float64
+			}
+
+			// Calculate consumption
+			consumption := latestReading.Float64 - baseline
+			if consumption > 0 {
+				totalConsumption += consumption
+			}
+		}
+	}
+	
+	return totalConsumption
 }
 
 func (h *DashboardHandler) GetConsumption(w http.ResponseWriter, r *http.Request) {
