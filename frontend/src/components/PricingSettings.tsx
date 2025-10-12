@@ -110,7 +110,7 @@ export default function PricingSettings() {
     : settings;
 
   return (
-    <div className="pricing-container">
+    <div className="pricing-container" style={{ width: '100%', maxWidth: '100%' }}>
       <div className="pricing-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '15px', flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ 
@@ -152,7 +152,7 @@ export default function PricingSettings() {
       )}
 
       {/* Search Bar */}
-      <div style={{ marginBottom: '20px' }}>
+      <div style={{ marginBottom: '20px', width: '100%' }}>
         <div style={{ position: 'relative', maxWidth: '400px' }}>
           <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
           <input
@@ -174,9 +174,10 @@ export default function PricingSettings() {
       {/* Building Cards */}
       <div className="building-cards-grid" style={{ 
         display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
         gap: '16px', 
-        marginBottom: '30px' 
+        marginBottom: '30px',
+        width: '100%'
       }}>
         {/* All Buildings Card */}
         <div
@@ -236,7 +237,7 @@ export default function PricingSettings() {
       </div>
 
       {/* Desktop Table */}
-      <div className="desktop-table" style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+      <div className="desktop-table" style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden', width: '100%' }}>
         <table style={{ width: '100%' }}>
           <thead>
             <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
@@ -489,6 +490,11 @@ export default function PricingSettings() {
       )}
 
       <style>{`
+        .pricing-container {
+          width: 100%;
+          max-width: 100%;
+        }
+
         @media (max-width: 768px) {
           .pricing-container .pricing-header h1 {
             font-size: 24px !important;
@@ -510,6 +516,24 @@ export default function PricingSettings() {
 
           .modal-content h2 {
             font-size: 20px !important;
+          }
+
+          .desktop-table {
+            display: none;
+          }
+
+          .mobile-cards {
+            display: block;
+          }
+        }
+
+        @media (min-width: 769px) {
+          .mobile-cards {
+            display: none;
+          }
+
+          .desktop-table {
+            display: table;
           }
         }
 

@@ -101,7 +101,7 @@ export default function AdminLogs() {
   };
 
   return (
-    <div className="admin-logs-container">
+    <div className="admin-logs-container" style={{ width: '100%', maxWidth: '100%' }}>
       <div className="logs-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', gap: '15px', flexWrap: 'wrap' }}>
         <div>
           <h1 className="logs-title" style={{ 
@@ -216,14 +216,15 @@ export default function AdminLogs() {
 
       {/* Debug Information Cards */}
       {debugInfo && (
-        <div style={{ marginBottom: '30px' }}>
+        <div style={{ marginBottom: '30px', width: '100%' }}>
           <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '16px', color: '#1f2937' }}>
             {t('logs.realTimeStatus')}
           </h2>
           <div className="debug-grid" style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: '20px'
+            gap: '20px',
+            width: '100%'
           }}>
             <div className="debug-card" style={{
               backgroundColor: 'white', 
@@ -345,7 +346,8 @@ export default function AdminLogs() {
         backgroundColor: 'white', 
         borderRadius: '16px',
         boxShadow: '0 4px 12px rgba(0,0,0,0.08)', 
-        overflow: 'hidden'
+        overflow: 'hidden',
+        width: '100%'
       }}>
         <div style={{
           padding: '20px', 
@@ -358,7 +360,7 @@ export default function AdminLogs() {
           {t('logs.activityLog')}
         </div>
         
-        <div style={{ maxHeight: '600px', overflow: 'auto' }}>
+        <div style={{ maxHeight: '600px', overflow: 'auto', width: '100%' }}>
           <table style={{ width: '100%' }}>
             <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f9fafb', zIndex: 10 }}>
               <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
@@ -501,6 +503,11 @@ export default function AdminLogs() {
       </div>
 
       <style>{`
+        .admin-logs-container {
+          width: 100%;
+          max-width: 100%;
+        }
+
         @media (max-width: 768px) {
           .admin-logs-container .logs-title {
             font-size: 24px !important;
@@ -556,6 +563,24 @@ export default function AdminLogs() {
 
           .debug-card > div:last-child {
             font-size: 11px !important;
+          }
+
+          .desktop-table {
+            display: none;
+          }
+
+          .mobile-cards {
+            display: block;
+          }
+        }
+
+        @media (min-width: 769px) {
+          .mobile-cards {
+            display: none;
+          }
+
+          .desktop-table {
+            display: block;
           }
         }
 
