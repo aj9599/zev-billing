@@ -232,7 +232,7 @@ export default function Chargers() {
       backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', 
       justifyContent: 'center', zIndex: 2000, padding: '20px'
     }}>
-      <div style={{
+      <div className="modal-content instructions-modal" style={{
         backgroundColor: 'white', borderRadius: '12px', padding: '30px',
         maxWidth: '800px', maxHeight: '90vh', overflow: 'auto', width: '100%'
       }}>
@@ -359,7 +359,7 @@ export default function Chargers() {
         <button onClick={() => setShowInstructions(false)} style={{
           width: '100%', marginTop: '24px', padding: '12px',
           backgroundColor: '#007bff', color: 'white', border: 'none',
-          borderRadius: '6px', fontSize: '14px', fontWeight: '500'
+          borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
         }}>
           {t('common.close')}
         </button>
@@ -368,8 +368,8 @@ export default function Chargers() {
   );
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+    <div className="chargers-container">
+      <div className="chargers-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', gap: '15px', flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ 
             fontSize: '36px', 
@@ -390,7 +390,7 @@ export default function Chargers() {
             {t('chargers.subtitle')}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
+        <div className="button-group-header" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <button
             onClick={handleExport}
             style={{
@@ -445,7 +445,7 @@ export default function Chargers() {
       </div>
 
       {/* Building Cards */}
-      <div style={{ 
+      <div className="building-cards-grid" style={{ 
         display: 'grid', 
         gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', 
         gap: '16px', 
@@ -516,13 +516,13 @@ export default function Chargers() {
             <h2 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '16px', color: '#1f2937' }}>
               {building?.name || 'Unknown Building'}
             </h2>
-            <div style={{ 
+            <div className="chargers-grid" style={{ 
               display: 'grid', 
               gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', 
               gap: '20px' 
             }}>
               {buildingChargers.map(charger => (
-                <div key={charger.id} style={{
+                <div key={charger.id} className="charger-card" style={{
                   backgroundColor: 'white',
                   borderRadius: '16px',
                   padding: '24px',
@@ -672,7 +672,7 @@ export default function Chargers() {
         <div style={{ 
           backgroundColor: 'white', 
           borderRadius: '12px', 
-          padding: '60px', 
+          padding: '60px 20px', 
           textAlign: 'center', 
           color: '#999',
           boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
@@ -686,9 +686,10 @@ export default function Chargers() {
       {showModal && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+          padding: '15px'
         }}>
-          <div style={{
+          <div className="modal-content" style={{
             backgroundColor: 'white', borderRadius: '12px', padding: '30px',
             width: '90%', maxWidth: '700px', maxHeight: '90vh', overflow: 'auto'
           }}>
@@ -773,7 +774,7 @@ export default function Chargers() {
                         {t('meters.samePort')}
                       </p>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
                           {t('chargers.powerKey')} *
@@ -793,7 +794,7 @@ export default function Chargers() {
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
+                    <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
                           {t('chargers.userIdKey')} *
@@ -872,7 +873,7 @@ export default function Chargers() {
 
                 {formData.connection_type === 'modbus_tcp' && (
                   <>
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                    <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '12px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
                           {t('meters.ipAddress')} *
@@ -892,7 +893,7 @@ export default function Chargers() {
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                    <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
                           {t('chargers.powerRegister')} *
@@ -912,7 +913,7 @@ export default function Chargers() {
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                    <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
                           {t('chargers.userIdRegister')} *
@@ -965,16 +966,16 @@ export default function Chargers() {
                   rows={2} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'inherit' }} />
               </div>
 
-              <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+              <div className="button-group" style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                 <button type="submit" style={{
                   flex: 1, padding: '12px', backgroundColor: '#007bff', color: 'white',
-                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500'
+                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
                 }}>
                   {editingCharger ? t('common.update') : t('common.create')}
                 </button>
                 <button type="button" onClick={() => { setShowModal(false); setEditingCharger(null); }} style={{
                   flex: 1, padding: '12px', backgroundColor: '#6c757d', color: 'white',
-                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500'
+                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
                 }}>
                   {t('common.cancel')}
                 </button>
@@ -983,6 +984,123 @@ export default function Chargers() {
           </div>
         </div>
       )}
+
+      <style>{`
+        @media (max-width: 768px) {
+          .chargers-container .chargers-header h1 {
+            font-size: 24px !important;
+          }
+
+          .chargers-container .chargers-header h1 svg {
+            width: 24px !important;
+            height: 24px !important;
+          }
+
+          .chargers-container .chargers-header p {
+            font-size: 14px !important;
+          }
+
+          .button-group-header {
+            width: 100%;
+            justify-content: stretch !important;
+          }
+
+          .button-group-header button {
+            flex: 1;
+            justify-content: center;
+          }
+
+          .building-cards-grid {
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+          }
+
+          .chargers-grid {
+            grid-template-columns: 1fr !important;
+            gap: 16px !important;
+          }
+
+          .charger-card {
+            padding: 20px !important;
+          }
+
+          .charger-card h3 {
+            font-size: 18px !important;
+          }
+
+          .modal-content h2 {
+            font-size: 20px !important;
+          }
+
+          .instructions-modal {
+            padding: 20px !important;
+          }
+
+          .instructions-modal h2 {
+            font-size: 20px !important;
+          }
+
+          .instructions-modal h3 {
+            font-size: 16px !important;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .chargers-container .chargers-header h1 {
+            font-size: 20px !important;
+            gap: 8px !important;
+          }
+
+          .chargers-container .chargers-header h1 svg {
+            width: 20px !important;
+            height: 20px !important;
+          }
+
+          .button-group-header {
+            flex-direction: column;
+          }
+
+          .button-group-header button {
+            width: 100%;
+          }
+
+          .building-cards-grid > div {
+            padding: 16px !important;
+          }
+
+          .building-cards-grid h3 {
+            font-size: 16px !important;
+          }
+
+          .charger-card {
+            padding: 16px !important;
+          }
+
+          .charger-card h3 {
+            font-size: 16px !important;
+          }
+
+          .modal-content {
+            padding: 20px !important;
+          }
+
+          .instructions-modal {
+            padding: 16px !important;
+          }
+
+          .instructions-modal h2 {
+            font-size: 18px !important;
+          }
+
+          .instructions-modal h3 {
+            font-size: 15px !important;
+          }
+
+          .instructions-modal div {
+            font-size: 13px !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

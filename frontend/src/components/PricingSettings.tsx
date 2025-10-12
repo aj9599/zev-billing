@@ -110,8 +110,8 @@ export default function PricingSettings() {
     : settings;
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+    <div className="pricing-container">
+      <div className="pricing-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '15px', flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ 
             fontSize: '36px', 
@@ -172,7 +172,7 @@ export default function PricingSettings() {
       </div>
 
       {/* Building Cards */}
-      <div style={{ 
+      <div className="building-cards-grid" style={{ 
         display: 'grid', 
         gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', 
         gap: '16px', 
@@ -235,8 +235,8 @@ export default function PricingSettings() {
         })}
       </div>
 
-      {/* Pricing Settings Table */}
-      <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+      {/* Desktop Table */}
+      <div className="desktop-table" style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
         <table style={{ width: '100%' }}>
           <thead>
             <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
@@ -294,12 +294,94 @@ export default function PricingSettings() {
         )}
       </div>
 
+      {/* Mobile Cards */}
+      <div className="mobile-cards">
+        {filteredSettings.map(setting => {
+          const building = buildings.find(b => b.id === setting.building_id);
+          return (
+            <div key={setting.id} style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '16px',
+              marginBottom: '16px',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: '#1f2937' }}>
+                    {building?.name || 'Unknown Building'}
+                  </h3>
+                  <span style={{
+                    padding: '4px 12px',
+                    borderRadius: '12px',
+                    fontSize: '12px',
+                    backgroundColor: setting.is_active ? '#d4edda' : '#f8d7da',
+                    color: setting.is_active ? '#155724' : '#721c24',
+                    display: 'inline-block'
+                  }}>
+                    {setting.is_active ? t('common.active') : t('common.inactive')}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={() => handleEdit(setting)} style={{ padding: '8px', border: 'none', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '6px', cursor: 'pointer' }}>
+                    <Edit2 size={16} color="#3b82f6" />
+                  </button>
+                  <button onClick={() => handleDelete(setting.id)} style={{ padding: '8px', border: 'none', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '6px', cursor: 'pointer' }}>
+                    <Trash2 size={16} color="#ef4444" />
+                  </button>
+                </div>
+              </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '16px', paddingTop: '12px', borderTop: '1px solid #f3f4f6' }}>
+                <div>
+                  <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>{t('pricing.normalKwh')}</div>
+                  <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
+                    {setting.currency} {setting.normal_power_price.toFixed(2)}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>{t('pricing.solarKwh')}</div>
+                  <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
+                    {setting.currency} {setting.solar_power_price.toFixed(2)}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>{t('pricing.chargingNormal')}</div>
+                  <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
+                    {setting.currency} {setting.car_charging_normal_price.toFixed(2)}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>{t('pricing.chargingPriority')}</div>
+                  <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
+                    {setting.currency} {setting.car_charging_priority_price.toFixed(2)}
+                  </div>
+                </div>
+              </div>
+              
+              <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #f3f4f6' }}>
+                <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>{t('pricing.validPeriod')}</div>
+                <div style={{ fontSize: '13px', color: '#6b7280' }}>
+                  {formatDate(setting.valid_from)} {setting.valid_to ? `- ${formatDate(setting.valid_to)}` : '(Ongoing)'}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {filteredSettings.length === 0 && (
+          <div style={{ backgroundColor: 'white', padding: '40px 20px', textAlign: 'center', color: '#999', borderRadius: '12px' }}>
+            {t('pricing.noPricing')}
+          </div>
+        )}
+      </div>
+
       {showModal && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+          padding: '15px'
         }}>
-          <div style={{
+          <div className="modal-content" style={{
             backgroundColor: 'white', borderRadius: '12px', padding: '30px',
             width: '90%', maxWidth: '600px', maxHeight: '90vh', overflow: 'auto'
           }}>
@@ -322,7 +404,7 @@ export default function PricingSettings() {
                 </select>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '16px' }}>
+              <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '16px' }}>
                 <div>
                   <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
                     {t('pricing.normalPower')} *
@@ -341,7 +423,7 @@ export default function PricingSettings() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '16px' }}>
+              <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '16px' }}>
                 <div>
                   <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
                     {t('pricing.chargingNormal')} *
@@ -360,7 +442,7 @@ export default function PricingSettings() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '16px' }}>
+              <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '16px' }}>
                 <div>
                   <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
                     {t('pricing.validFrom')} *
@@ -387,7 +469,7 @@ export default function PricingSettings() {
                 </label>
               </div>
 
-              <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+              <div className="button-group" style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                 <button type="submit" style={{
                   flex: 1, padding: '12px', backgroundColor: '#007bff', color: 'white',
                   border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500'
@@ -405,6 +487,52 @@ export default function PricingSettings() {
           </div>
         </div>
       )}
+
+      <style>{`
+        @media (max-width: 768px) {
+          .pricing-container .pricing-header h1 {
+            font-size: 24px !important;
+          }
+
+          .pricing-container .pricing-header h1 svg {
+            width: 24px !important;
+            height: 24px !important;
+          }
+
+          .pricing-container .pricing-header p {
+            font-size: 14px !important;
+          }
+
+          .building-cards-grid {
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+          }
+
+          .modal-content h2 {
+            font-size: 20px !important;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .pricing-container .pricing-header h1 {
+            font-size: 20px !important;
+            gap: 8px !important;
+          }
+
+          .pricing-container .pricing-header h1 svg {
+            width: 20px !important;
+            height: 20px !important;
+          }
+
+          .building-cards-grid > div {
+            padding: 16px !important;
+          }
+
+          .building-cards-grid h3 {
+            font-size: 16px !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

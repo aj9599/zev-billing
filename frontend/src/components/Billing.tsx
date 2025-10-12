@@ -58,7 +58,6 @@ export default function Billing() {
       console.log('Generated invoices:', result);
       setShowGenerateModal(false);
       resetForm();
-      // Wait a bit for the database to commit, then reload
       setTimeout(() => {
         loadData();
       }, 500);
@@ -91,15 +90,15 @@ export default function Billing() {
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'issued':
-        return { bg: '#d4edda', color: '#155724' }; // Green
+        return { bg: '#d4edda', color: '#155724' };
       case 'pending':
-        return { bg: '#fff3cd', color: '#856404' }; // Yellow
+        return { bg: '#fff3cd', color: '#856404' };
       case 'paid':
-        return { bg: '#d1ecf1', color: '#0c5460' }; // Blue
+        return { bg: '#d1ecf1', color: '#0c5460' };
       case 'draft':
-        return { bg: '#f8d7da', color: '#721c24' }; // Red
+        return { bg: '#f8d7da', color: '#721c24' };
       default:
-        return { bg: '#e2e3e5', color: '#383d41' }; // Gray
+        return { bg: '#e2e3e5', color: '#383d41' };
     }
   };
 
@@ -107,7 +106,6 @@ export default function Billing() {
     const user = users.find(u => u.id === invoice.user_id);
     const building = buildings.find(b => b.id === invoice.building_id);
     
-    // Create a printable invoice HTML
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
     
@@ -347,25 +345,22 @@ export default function Billing() {
     return date.toLocaleDateString('de-CH');
   };
 
-  // Filter buildings based on search
   const filteredBuildings = buildings.filter(b =>
     b.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Filter invoices based on selected building
   const filteredInvoices = selectedBuildingId
     ? invoices.filter(inv => inv.building_id === selectedBuildingId)
     : invoices;
 
-  // Group invoices by building for display
   const invoicesByBuilding = buildings.map(building => ({
     building,
     invoices: filteredInvoices.filter(inv => inv.building_id === building.id)
   })).filter(group => group.invoices.length > 0);
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+    <div className="billing-container">
+      <div className="billing-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', gap: '15px', flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ 
             fontSize: '36px', 
@@ -394,7 +389,7 @@ export default function Billing() {
           }}
         >
           <Plus size={18} />
-          {t('billing.generateBills')}
+          <span className="button-text">{t('billing.generateBills')}</span>
         </button>
       </div>
 
@@ -425,7 +420,6 @@ export default function Billing() {
         gap: '16px', 
         marginBottom: '30px' 
       }}>
-        {/* All Buildings Card */}
         <div
           onClick={() => setSelectedBuildingId(null)}
           style={{
@@ -450,7 +444,6 @@ export default function Billing() {
           </p>
         </div>
 
-        {/* Individual Building Cards */}
         {filteredBuildings.map(building => {
           const buildingInvoiceCount = invoices.filter(inv => inv.building_id === building.id).length;
           return (
@@ -484,7 +477,7 @@ export default function Billing() {
 
       {/* Invoices List */}
       {invoicesByBuilding.length === 0 ? (
-        <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '60px', textAlign: 'center', color: '#999' }}>
+        <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '60px 20px', textAlign: 'center', color: '#999' }}>
           {t('billing.noInvoices')}
         </div>
       ) : (
@@ -518,60 +511,174 @@ export default function Billing() {
             </div>
 
             {expandedBuildings.has(building.id) && (
-              <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
-                <table style={{ width: '100%' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
-                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('billing.invoiceNumber')}</th>
-                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('billing.user')}</th>
-                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('billing.period')}</th>
-                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('billing.amount')}</th>
-                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.status')}</th>
-                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('billing.generated')}</th>
-                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.actions')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {buildingInvoices.map(invoice => {
-                      const user = users.find(u => u.id === invoice.user_id);
-                      const statusColors = getStatusColor(invoice.status);
-                      return (
-                        <tr key={invoice.id} style={{ borderBottom: '1px solid #eee' }}>
-                          <td style={{ padding: '16px', fontFamily: 'monospace', fontSize: '13px' }}>{invoice.invoice_number}</td>
-                          <td style={{ padding: '16px' }}>{user ? `${user.first_name} ${user.last_name}` : '-'}</td>
-                          <td style={{ padding: '16px' }}>{formatDate(invoice.period_start)} - {formatDate(invoice.period_end)}</td>
-                          <td style={{ padding: '16px', fontWeight: '600' }}>{invoice.currency} {invoice.total_amount.toFixed(2)}</td>
-                          <td style={{ padding: '16px' }}>
+              <>
+                {/* Desktop Table */}
+                <div className="desktop-table" style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+                  <table style={{ width: '100%' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
+                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('billing.invoiceNumber')}</th>
+                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('billing.user')}</th>
+                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('billing.period')}</th>
+                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('billing.amount')}</th>
+                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.status')}</th>
+                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('billing.generated')}</th>
+                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.actions')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {buildingInvoices.map(invoice => {
+                        const user = users.find(u => u.id === invoice.user_id);
+                        const statusColors = getStatusColor(invoice.status);
+                        return (
+                          <tr key={invoice.id} style={{ borderBottom: '1px solid #eee' }}>
+                            <td style={{ padding: '16px', fontFamily: 'monospace', fontSize: '13px' }}>{invoice.invoice_number}</td>
+                            <td style={{ padding: '16px' }}>{user ? `${user.first_name} ${user.last_name}` : '-'}</td>
+                            <td style={{ padding: '16px' }}>{formatDate(invoice.period_start)} - {formatDate(invoice.period_end)}</td>
+                            <td style={{ padding: '16px', fontWeight: '600' }}>{invoice.currency} {invoice.total_amount.toFixed(2)}</td>
+                            <td style={{ padding: '16px' }}>
+                              <span style={{
+                                padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600',
+                                backgroundColor: statusColors.bg, 
+                                color: statusColors.color
+                              }}>
+                                {invoice.status.toUpperCase()}
+                              </span>
+                            </td>
+                            <td style={{ padding: '16px', fontSize: '13px', color: '#666' }}>
+                              {formatDate(invoice.generated_at)}
+                            </td>
+                            <td style={{ padding: '16px' }}>
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button onClick={() => viewInvoice(invoice.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title={t('billing.view')}>
+                                  <Eye size={16} color="#007bff" />
+                                </button>
+                                <button onClick={() => downloadPDF(invoice)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title={t('billing.downloadPdf')}>
+                                  <Download size={16} color="#28a745" />
+                                </button>
+                                <button onClick={() => deleteInvoice(invoice.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title={t('common.delete')}>
+                                  <Trash2 size={16} color="#dc3545" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Cards */}
+                <div className="mobile-cards">
+                  {buildingInvoices.map(invoice => {
+                    const user = users.find(u => u.id === invoice.user_id);
+                    const statusColors = getStatusColor(invoice.status);
+                    return (
+                      <div key={invoice.id} style={{
+                        backgroundColor: 'white',
+                        borderRadius: '12px',
+                        padding: '16px',
+                        marginBottom: '12px',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: '13px', fontFamily: 'monospace', color: '#6b7280', marginBottom: '4px' }}>
+                              {invoice.invoice_number}
+                            </div>
+                            <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: '#1f2937' }}>
+                              {user ? `${user.first_name} ${user.last_name}` : '-'}
+                            </h3>
+                            <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>
+                              {formatDate(invoice.period_start)} - {formatDate(invoice.period_end)}
+                            </div>
+                            <div style={{ fontSize: '18px', fontWeight: '700', color: '#1f2937', marginBottom: '8px' }}>
+                              {invoice.currency} {invoice.total_amount.toFixed(2)}
+                            </div>
                             <span style={{
-                              padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600',
-                              backgroundColor: statusColors.bg, 
-                              color: statusColors.color
+                              display: 'inline-block',
+                              padding: '4px 12px',
+                              borderRadius: '12px',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              backgroundColor: statusColors.bg,
+                              color: statusColors.color,
+                              marginBottom: '8px'
                             }}>
                               {invoice.status.toUpperCase()}
                             </span>
-                          </td>
-                          <td style={{ padding: '16px', fontSize: '13px', color: '#666' }}>
-                            {formatDate(invoice.generated_at)}
-                          </td>
-                          <td style={{ padding: '16px' }}>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                              <button onClick={() => viewInvoice(invoice.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title={t('billing.view')}>
-                                <Eye size={16} color="#007bff" />
-                              </button>
-                              <button onClick={() => downloadPDF(invoice)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title={t('billing.downloadPdf')}>
-                                <Download size={16} color="#28a745" />
-                              </button>
-                              <button onClick={() => deleteInvoice(invoice.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title={t('common.delete')}>
-                                <Trash2 size={16} color="#dc3545" />
-                              </button>
+                            <div style={{ fontSize: '12px', color: '#9ca3af' }}>
+                              Generated: {formatDate(invoice.generated_at)}
                             </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid #f3f4f6', paddingTop: '12px' }}>
+                          <button
+                            onClick={() => viewInvoice(invoice.id)}
+                            style={{
+                              flex: 1,
+                              padding: '10px',
+                              backgroundColor: '#007bff',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontSize: '13px',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px'
+                            }}
+                          >
+                            <Eye size={16} />
+                            View
+                          </button>
+                          <button
+                            onClick={() => downloadPDF(invoice)}
+                            style={{
+                              flex: 1,
+                              padding: '10px',
+                              backgroundColor: '#28a745',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontSize: '13px',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px'
+                            }}
+                          >
+                            <Download size={16} />
+                            PDF
+                          </button>
+                          <button
+                            onClick={() => deleteInvoice(invoice.id)}
+                            style={{
+                              padding: '10px',
+                              backgroundColor: '#dc3545',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontSize: '13px',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
         ))
@@ -580,9 +687,10 @@ export default function Billing() {
       {showGenerateModal && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+          padding: '15px'
         }}>
-          <div style={{
+          <div className="modal-content" style={{
             backgroundColor: 'white', borderRadius: '12px', padding: '30px',
             width: '90%', maxWidth: '700px', maxHeight: '90vh', overflow: 'auto'
           }}>
@@ -621,13 +729,13 @@ export default function Billing() {
                         checked={formData.user_ids.includes(u.id)}
                         onChange={() => toggleUser(u.id)}
                       />
-                      <span>{u.first_name} {u.last_name} ({u.email})</span>
+                      <span style={{ fontSize: '14px' }}>{u.first_name} {u.last_name} ({u.email})</span>
                     </label>
                   ))}
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '20px' }}>
+              <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '20px' }}>
                 <div>
                   <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('billing.startDate')} *</label>
                   <input type="date" required value={formData.start_date} onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
@@ -640,7 +748,7 @@ export default function Billing() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+              <div className="button-group" style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                 <button type="submit" disabled={generating} style={{
                   flex: 1, padding: '12px', backgroundColor: '#28a745', color: 'white',
                   border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', opacity: generating ? 0.7 : 1, cursor: generating ? 'not-allowed' : 'pointer'
@@ -662,9 +770,10 @@ export default function Billing() {
       {selectedInvoice && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+          padding: '15px'
         }} onClick={() => setSelectedInvoice(null)}>
-          <div style={{
+          <div className="modal-content" style={{
             backgroundColor: 'white', borderRadius: '12px', padding: '40px',
             width: '90%', maxWidth: '800px', maxHeight: '90vh', overflow: 'auto'
           }} onClick={(e) => e.stopPropagation()}>
@@ -702,48 +811,50 @@ export default function Billing() {
               </p>
             </div>
 
-            <table style={{ width: '100%', marginBottom: '30px' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '2px solid #ddd' }}>
-                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>{t('billing.description')}</th>
-                  <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>{t('billing.amount')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selectedInvoice.items?.map(item => {
-                  const isHeader = item.item_type === 'meter_info' || item.item_type === 'charging_header';
-                  const isInfo = item.item_type === 'meter_reading_from' || item.item_type === 'meter_reading_to' || item.item_type === 'total_consumption';
-                  const isSeparator = item.item_type === 'separator';
-                  const isSolar = item.item_type === 'solar_power';
-                  const isNormal = item.item_type === 'normal_power';
-                  
-                  if (isSeparator) {
-                    return <tr key={item.id}><td colSpan={2} style={{ padding: '8px' }}></td></tr>;
-                  }
-                  
-                  return (
-                    <tr key={item.id} style={{ 
-                      borderBottom: '1px solid #eee',
-                      backgroundColor: isSolar ? '#fffbea' : isNormal ? '#f0f4ff' : 'transparent'
-                    }}>
-                      <td style={{ 
-                        padding: '12px',
-                        fontWeight: isHeader || isSolar || isNormal ? '600' : 'normal',
-                        color: isInfo ? '#666' : 'inherit',
-                        fontSize: isInfo ? '14px' : '15px'
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', marginBottom: '30px', minWidth: '400px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '2px solid #ddd' }}>
+                    <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>{t('billing.description')}</th>
+                    <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>{t('billing.amount')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedInvoice.items?.map(item => {
+                    const isHeader = item.item_type === 'meter_info' || item.item_type === 'charging_header';
+                    const isInfo = item.item_type === 'meter_reading_from' || item.item_type === 'meter_reading_to' || item.item_type === 'total_consumption';
+                    const isSeparator = item.item_type === 'separator';
+                    const isSolar = item.item_type === 'solar_power';
+                    const isNormal = item.item_type === 'normal_power';
+                    
+                    if (isSeparator) {
+                      return <tr key={item.id}><td colSpan={2} style={{ padding: '8px' }}></td></tr>;
+                    }
+                    
+                    return (
+                      <tr key={item.id} style={{ 
+                        borderBottom: '1px solid #eee',
+                        backgroundColor: isSolar ? '#fffbea' : isNormal ? '#f0f4ff' : 'transparent'
                       }}>
-                        {isSolar && '☀ '}
-                        {isNormal && '⚡ '}
-                        {item.description}
-                      </td>
-                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: item.total_price > 0 ? '600' : 'normal' }}>
-                        {item.total_price > 0 ? `${selectedInvoice.currency} ${item.total_price.toFixed(2)}` : ''}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        <td style={{ 
+                          padding: '12px',
+                          fontWeight: isHeader || isSolar || isNormal ? '600' : 'normal',
+                          color: isInfo ? '#666' : 'inherit',
+                          fontSize: isInfo ? '14px' : '15px'
+                        }}>
+                          {isSolar && '☀ '}
+                          {isNormal && '⚡ '}
+                          {item.description}
+                        </td>
+                        <td style={{ padding: '12px', textAlign: 'right', fontWeight: item.total_price > 0 ? '600' : 'normal' }}>
+                          {item.total_price > 0 ? `${selectedInvoice.currency} ${item.total_price.toFixed(2)}` : ''}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
 
             <div style={{ textAlign: 'right', padding: '20px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
               <p style={{ fontSize: '24px', fontWeight: 'bold' }}>
@@ -751,7 +862,7 @@ export default function Billing() {
               </p>
             </div>
 
-            <div style={{ display: 'flex', gap: '12px', marginTop: '30px' }}>
+            <div className="button-group" style={{ display: 'flex', gap: '12px', marginTop: '30px' }}>
               <button onClick={() => downloadPDF(selectedInvoice)} style={{
                 flex: 1, padding: '12px', backgroundColor: '#28a745', color: 'white',
                 border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer',
@@ -770,6 +881,73 @@ export default function Billing() {
           </div>
         </div>
       )}
+
+      <style>{`
+        @media (max-width: 768px) {
+          .billing-container h1 {
+            font-size: 24px !important;
+          }
+
+          .billing-container h1 svg {
+            width: 24px !important;
+            height: 24px !important;
+          }
+
+          .billing-container p {
+            font-size: 14px !important;
+          }
+
+          .billing-header {
+            flex-direction: column !important;
+            align-items: stretch !important;
+          }
+
+          .billing-header button {
+            width: 100% !important;
+            justify-content: center !important;
+          }
+
+          .modal-content {
+            padding: 20px !important;
+          }
+
+          .modal-content h2 {
+            font-size: 20px !important;
+          }
+
+          .modal-content h3 {
+            font-size: 14px !important;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .billing-container h1 {
+            font-size: 20px !important;
+          }
+
+          .billing-container h1 svg {
+            width: 20px !important;
+            height: 20px !important;
+          }
+
+          .button-text {
+            display: inline !important;
+          }
+
+          .modal-content {
+            padding: 15px !important;
+          }
+
+          .modal-content table {
+            font-size: 13px !important;
+          }
+
+          .modal-content table th,
+          .modal-content table td {
+            padding: 8px !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

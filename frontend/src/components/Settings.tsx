@@ -40,8 +40,8 @@ export default function Settings() {
   };
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '40px' }}>
+    <div className="settings-container" style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      <div className="settings-header" style={{ marginBottom: '40px' }}>
         <h1 style={{ 
             fontSize: '36px', 
             fontWeight: '800', 
@@ -83,13 +83,13 @@ export default function Settings() {
         </div>
       )}
 
-      <div style={{ 
+      <div className="settings-grid" style={{ 
         display: 'grid', 
         gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))', 
         gap: '30px' 
       }}>
         {/* Password Change Card */}
-        <div style={{ 
+        <div className="settings-card" style={{ 
           backgroundColor: 'white', 
           borderRadius: '20px', 
           padding: '40px',
@@ -299,7 +299,7 @@ export default function Settings() {
         </div>
 
         {/* Security Tips Card */}
-        <div style={{ 
+        <div className="settings-card" style={{ 
           backgroundColor: 'white', 
           borderRadius: '20px', 
           padding: '40px',
@@ -381,7 +381,7 @@ export default function Settings() {
                   }}>
                     <IconComponent size={24} color={tip.color} strokeWidth={2} />
                   </div>
-                  <div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <h3 style={{ 
                       fontSize: '15px', 
                       fontWeight: '600', 
@@ -410,6 +410,106 @@ export default function Settings() {
           to {
             opacity: 1;
             transform: translateY(0);
+          }
+        }
+
+        @media (max-width: 768px) {
+          .settings-container {
+            padding: 0 !important;
+          }
+
+          .settings-header h1 {
+            font-size: 24px !important;
+          }
+
+          .settings-header h1 svg {
+            width: 24px !important;
+            height: 24px !important;
+          }
+
+          .settings-header p {
+            font-size: 14px !important;
+          }
+
+          .settings-grid {
+            grid-template-columns: 1fr !important;
+            gap: 20px !important;
+          }
+
+          .settings-card {
+            padding: 24px !important;
+          }
+
+          .settings-card > div:first-child {
+            flex-direction: column;
+            align-items: flex-start !important;
+            text-align: left;
+          }
+
+          .settings-card > div:first-child > div:first-child {
+            width: 48px !important;
+            height: 48px !important;
+          }
+
+          .settings-card > div:first-child > div:first-child svg {
+            width: 24px !important;
+            height: 24px !important;
+          }
+
+          .settings-card h2 {
+            font-size: 20px !important;
+          }
+
+          .settings-card h3 {
+            font-size: 14px !important;
+          }
+
+          .settings-card p {
+            font-size: 12px !important;
+          }
+
+          .settings-card form input {
+            font-size: 14px !important;
+          }
+
+          .settings-card form button {
+            font-size: 15px !important;
+            padding: 14px !important;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .settings-header h1 {
+            font-size: 20px !important;
+            gap: 8px !important;
+          }
+
+          .settings-header h1 svg {
+            width: 20px !important;
+            height: 20px !important;
+          }
+
+          .settings-card {
+            padding: 20px !important;
+            border-radius: 16px !important;
+          }
+
+          .settings-card > div:first-child {
+            margin-bottom: 24px !important;
+            padding-bottom: 16px !important;
+          }
+
+          .settings-card h2 {
+            font-size: 18px !important;
+          }
+
+          .settings-card form input {
+            padding: 12px 14px !important;
+          }
+
+          .settings-card form label svg {
+            width: 14px !important;
+            height: 14px !important;
           }
         }
       `}</style>

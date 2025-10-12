@@ -206,7 +206,7 @@ export default function Meters() {
       backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', 
       justifyContent: 'center', zIndex: 2000, padding: '20px'
     }}>
-      <div style={{
+      <div className="modal-content" style={{
         backgroundColor: 'white', borderRadius: '12px', padding: '30px',
         maxWidth: '800px', maxHeight: '90vh', overflow: 'auto', width: '100%'
       }}>
@@ -319,8 +319,8 @@ export default function Meters() {
   );
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+    <div className="meters-container">
+      <div className="meters-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', gap: '15px', flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ 
             fontSize: '36px', 
@@ -341,7 +341,7 @@ export default function Meters() {
             {t('meters.subtitle')}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
+        <div className="header-actions" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <button
             onClick={handleExport}
             style={{
@@ -350,7 +350,7 @@ export default function Meters() {
             }}
           >
             <Download size={18} />
-            {t('meters.exportData')}
+            <span className="button-text">{t('meters.exportData')}</span>
           </button>
           <button
             onClick={() => setShowInstructions(true)}
@@ -360,7 +360,7 @@ export default function Meters() {
             }}
           >
             <HelpCircle size={18} />
-            {t('meters.setupInstructions')}
+            <span className="button-text">{t('meters.setupInstructions')}</span>
           </button>
           <button
             onClick={() => { resetForm(); setShowModal(true); }}
@@ -370,7 +370,7 @@ export default function Meters() {
             }}
           >
             <Plus size={18} />
-            {t('meters.addMeter')}
+            <span className="button-text">{t('meters.addMeter')}</span>
           </button>
         </div>
       </div>
@@ -619,7 +619,7 @@ export default function Meters() {
         <div style={{ 
           backgroundColor: 'white', 
           borderRadius: '12px', 
-          padding: '60px', 
+          padding: '60px 20px', 
           textAlign: 'center', 
           color: '#999',
           boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
@@ -633,9 +633,10 @@ export default function Meters() {
       {showModal && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+          padding: '15px'
         }}>
-          <div style={{
+          <div className="modal-content" style={{
             backgroundColor: 'white', borderRadius: '12px', padding: '30px',
             width: '90%', maxWidth: '700px', maxHeight: '90vh', overflow: 'auto'
           }}>
@@ -846,7 +847,7 @@ export default function Meters() {
                   rows={2} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'inherit' }} />
               </div>
 
-              <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+              <div className="button-group" style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                 <button type="submit" style={{
                   flex: 1, padding: '12px', backgroundColor: '#007bff', color: 'white',
                   border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500'
@@ -864,6 +865,65 @@ export default function Meters() {
           </div>
         </div>
       )}
+
+      <style>{`
+        @media (max-width: 768px) {
+          .meters-container h1 {
+            font-size: 24px !important;
+          }
+
+          .meters-container h1 svg {
+            width: 24px !important;
+            height: 24px !important;
+          }
+
+          .meters-container > div > div > p {
+            font-size: 14px !important;
+          }
+
+          .meters-header {
+            flex-direction: column !important;
+            align-items: stretch !important;
+          }
+
+          .header-actions {
+            width: 100%;
+            flex-direction: column !important;
+          }
+
+          .header-actions button {
+            width: 100% !important;
+            justify-content: center !important;
+          }
+
+          .modal-content {
+            padding: 20px !important;
+          }
+
+          .modal-content h2 {
+            font-size: 20px !important;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .meters-container h1 {
+            font-size: 20px !important;
+          }
+
+          .meters-container h1 svg {
+            width: 20px !important;
+            height: 20px !important;
+          }
+
+          .button-text {
+            display: inline !important;
+          }
+
+          .modal-content {
+            padding: 15px !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
