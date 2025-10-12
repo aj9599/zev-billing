@@ -121,7 +121,7 @@ func main() {
 	api.HandleFunc("/billing/settings/{id}", billingHandler.DeleteSettings).Methods("DELETE")
 	api.HandleFunc("/billing/generate", billingHandler.GenerateBills).Methods("POST")
 	api.HandleFunc("/billing/invoices", billingHandler.ListInvoices).Methods("GET")
-	api.HandleFunc("/billing/invoices/{id}", billingHandler.Get).Methods("GET")
+	api.HandleFunc("/billing/invoices/{id}", billingHandler.GetInvoice).Methods("GET")
 	api.HandleFunc("/billing/invoices/{id}", billingHandler.DeleteInvoice).Methods("DELETE")
 	api.HandleFunc("/billing/backup", billingHandler.BackupDatabase).Methods("GET")
 	api.HandleFunc("/billing/export", billingHandler.ExportData).Methods("GET")
