@@ -24,18 +24,46 @@ interface BuildingConsumption {
   meters: MeterData[];
 }
 
-const METER_COLORS: Record<string, string> = {
-  'apartment_meter': '#10b981',
-  'heating_meter': '#f59e0b',
-  'solar_meter': '#fbbf24',
-  'total_meter': '#3b82f6',
-  'water_meter': '#06b6d4',
-  'gas_meter': '#8b5cf6',
+// Color palette for different apartment meters
+const APARTMENT_COLORS = [
+  '#10b981', // Green
+  '#f59e0b', // Orange
+  '#8b5cf6', // Purple
+  '#ec4899', // Pink
+  '#06b6d4', // Cyan
+  '#14b8a6', // Teal
+  '#f97316', // Deep Orange
+  '#6366f1', // Indigo
+  '#a855f7', // Violet
+  '#ef4444', // Red
+  '#84cc16', // Lime
+  '#eab308', // Yellow
+  '#22c55e', // Light Green
+  '#0ea5e9', // Sky Blue
+];
+
+const FIXED_COLORS: Record<string, string> = {
+  'solar_meter': '#fbbf24',   // Golden/Yellow for solar
+  'total_meter': '#3b82f6',   // Blue for total
   'default': '#6b7280'
 };
 
-function getMeterColor(meterType: string): string {
-  return METER_COLORS[meterType] || METER_COLORS.default;
+// Track apartment colors to ensure each apartment gets a unique color
+const apartmentColorMap = new Map<number, string>();
+
+function getMeterColor(meterType: string, meterId?: number): string {
+  // For apartment meters, assign a unique color per apartment
+  if (meterType === 'apartment_meter' && meterId !== undefined) {
+    if (!apartmentColorMap.has(meterId)) {
+      // Assign the next available color from the palette
+      const colorIndex = apartmentColorMap.size % APARTMENT_COLORS.length;
+      apartmentColorMap.set(meterId, APARTMENT_COLORS[colorIndex]);
+    }
+    return apartmentColorMap.get(meterId)!;
+  }
+  
+  // For other meter types, use fixed colors
+  return FIXED_COLORS[meterType] || FIXED_COLORS.default;
 }
 
 function getMeterDisplayName(meter: MeterData): string {
@@ -376,7 +404,7 @@ export default function Dashboard() {
                             width: '12px',
                             height: '12px',
                             borderRadius: '2px',
-                            backgroundColor: getMeterColor(meter.meter_type)
+                            backgroundColor: getMeterColor(meter.meter_type, meter.meter_id)
                           }}
                         />
                         <span style={{ fontWeight: '500' }}>
@@ -430,7 +458,7 @@ export default function Dashboard() {
                           key={meter.meter_id}
                           type="monotone"
                           dataKey={`meter_${meter.meter_id}`}
-                          stroke={getMeterColor(meter.meter_type)}
+                          stroke={getMeterColor(meter.meter_type, meter.meter_id)}
                           strokeWidth={2}
                           name={getMeterDisplayName(meter)}
                           dot={false}
