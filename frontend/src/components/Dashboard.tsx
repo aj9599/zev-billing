@@ -27,17 +27,14 @@ interface BuildingConsumption {
 // Color palette for different apartment meters
 const APARTMENT_COLORS = [
   '#10b981', // Green
-  '#f59e0b', // Orange
   '#8b5cf6', // Purple
   '#ec4899', // Pink
   '#06b6d4', // Cyan
   '#14b8a6', // Teal
-  '#f97316', // Deep Orange
   '#6366f1', // Indigo
   '#a855f7', // Violet
   '#ef4444', // Red
   '#84cc16', // Lime
-  '#eab308', // Yellow
   '#22c55e', // Light Green
   '#0ea5e9', // Sky Blue
 ];
