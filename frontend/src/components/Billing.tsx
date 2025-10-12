@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { Plus, Eye, FileText, Download, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
 import type { Invoice, Building, User } from '../types';
+import { useTranslation } from '../i18n';
 
 export default function Billing() {
+  const { t } = useTranslation();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -40,7 +42,7 @@ export default function Billing() {
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.building_ids.length === 0) {
-      alert('Please select at least one building');
+      alert(t('billing.selectAtLeastOne'));
       return;
     }
     
@@ -50,9 +52,9 @@ export default function Billing() {
       setShowGenerateModal(false);
       resetForm();
       loadData();
-      alert('Bills generated successfully!');
+      alert(t('billing.generatedSuccess'));
     } catch (err) {
-      alert('Failed to generate bills: ' + err);
+      alert(t('billing.generateFailed') + ' ' + err);
     } finally {
       setGenerating(false);
     }
@@ -64,14 +66,14 @@ export default function Billing() {
   };
 
   const deleteInvoice = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this invoice?')) return;
+    if (!confirm(t('billing.deleteConfirm'))) return;
     
     try {
       await api.deleteInvoice(id);
       loadData();
-      alert('Invoice deleted successfully');
+      alert(t('billing.deleteSuccess'));
     } catch (err) {
-      alert('Failed to delete invoice: ' + err);
+      alert(t('billing.deleteFailed') + ' ' + err);
     }
   };
 
@@ -87,7 +89,7 @@ export default function Billing() {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Invoice ${invoice.invoice_number}</title>
+        <title>${t('billing.invoice')} ${invoice.invoice_number}</title>
         <style>
           body { 
             font-family: Arial, sans-serif; 
@@ -172,12 +174,12 @@ export default function Billing() {
       </head>
       <body>
         <div class="header">
-          <h1>Invoice</h1>
+          <h1>${t('billing.invoice')}</h1>
           <div class="invoice-number">#${invoice.invoice_number}</div>
         </div>
 
         <div class="info-section">
-          <h3>Bill To:</h3>
+          <h3>${t('billing.billTo')}</h3>
           <p>
             <strong>${user?.first_name} ${user?.last_name}</strong><br>
             ${user?.address_street || ''}<br>
@@ -187,20 +189,20 @@ export default function Billing() {
         </div>
 
         <div class="info-section">
-          <h3>Invoice Details:</h3>
+          <h3>${t('billing.invoiceDetails')}</h3>
           <p>
-            <strong>Building:</strong> ${building?.name || 'N/A'}<br>
-            <strong>Period:</strong> ${formatDate(invoice.period_start)} to ${formatDate(invoice.period_end)}<br>
-            <strong>Generated:</strong> ${formatDate(invoice.generated_at)}<br>
-            <strong>Status:</strong> ${invoice.status}
+            <strong>${t('users.building')}:</strong> ${building?.name || 'N/A'}<br>
+            <strong>${t('billing.periodLabel')}</strong> ${formatDate(invoice.period_start)} ${t('pricing.to')} ${formatDate(invoice.period_end)}<br>
+            <strong>${t('billing.generatedLabel')}</strong> ${formatDate(invoice.generated_at)}<br>
+            <strong>${t('billing.statusLabel')}</strong> ${invoice.status}
           </p>
         </div>
 
         <table>
           <thead>
             <tr>
-              <th>Description</th>
-              <th class="text-right">Amount</th>
+              <th>${t('billing.description')}</th>
+              <th class="text-right">${t('billing.amount')}</th>
             </tr>
           </thead>
           <tbody>
@@ -222,7 +224,7 @@ export default function Billing() {
         </table>
 
         <div class="total-section">
-          <p>Total: ${invoice.currency} ${invoice.total_amount.toFixed(2)}</p>
+          <p>${t('billing.total')} ${invoice.currency} ${invoice.total_amount.toFixed(2)}</p>
         </div>
 
         <script>
@@ -300,10 +302,10 @@ export default function Billing() {
             backgroundClip: 'text'
           }}>
             <FileText size={36} style={{ color: '#667eea' }} />
-            Billing & Invoices
+            {t('billing.title')}
           </h1>
           <p style={{ color: '#6b7280', fontSize: '16px' }}>
-            Generate and manage billing invoices
+            {t('billing.subtitle')}
           </p>
         </div>
         <button
@@ -314,13 +316,13 @@ export default function Billing() {
           }}
         >
           <Plus size={18} />
-          Generate Bills
+          {t('billing.generateBills')}
         </button>
       </div>
 
       {invoicesByBuilding.length === 0 ? (
         <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '60px', textAlign: 'center', color: '#999' }}>
-          No invoices generated yet. Click "Generate Bills" to create invoices.
+          {t('billing.noInvoices')}
         </div>
       ) : (
         invoicesByBuilding.map(({ building, invoices: buildingInvoices }) => (
@@ -344,7 +346,7 @@ export default function Billing() {
                   {building.name}
                 </h2>
                 <p style={{ fontSize: '14px', color: '#666', margin: '4px 0 0 0' }}>
-                  {buildingInvoices.length} invoice{buildingInvoices.length !== 1 ? 's' : ''}
+                  {buildingInvoices.length} {buildingInvoices.length === 1 ? t('billing.invoices') : t('billing.invoicesPlural')}
                 </p>
               </div>
               <span style={{ fontSize: '24px', color: '#666' }}>
@@ -357,13 +359,13 @@ export default function Billing() {
                 <table style={{ width: '100%' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
-                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Invoice #</th>
-                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>User</th>
-                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Period</th>
-                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Amount</th>
-                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Status</th>
-                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Generated</th>
-                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Actions</th>
+                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('billing.invoiceNumber')}</th>
+                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('billing.user')}</th>
+                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('billing.period')}</th>
+                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('billing.amount')}</th>
+                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.status')}</th>
+                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('billing.generated')}</th>
+                      <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -388,13 +390,13 @@ export default function Billing() {
                           </td>
                           <td style={{ padding: '16px' }}>
                             <div style={{ display: 'flex', gap: '8px' }}>
-                              <button onClick={() => viewInvoice(invoice.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title="View">
+                              <button onClick={() => viewInvoice(invoice.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title={t('billing.view')}>
                                 <Eye size={16} color="#007bff" />
                               </button>
-                              <button onClick={() => downloadPDF(invoice)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title="Download PDF">
+                              <button onClick={() => downloadPDF(invoice)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title={t('billing.downloadPdf')}>
                                 <Download size={16} color="#28a745" />
                               </button>
-                              <button onClick={() => deleteInvoice(invoice.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title="Delete">
+                              <button onClick={() => deleteInvoice(invoice.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title={t('common.delete')}>
                                 <Trash2 size={16} color="#dc3545" />
                               </button>
                             </div>
@@ -420,13 +422,13 @@ export default function Billing() {
             width: '90%', maxWidth: '700px', maxHeight: '90vh', overflow: 'auto'
           }}>
             <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '20px' }}>
-              Generate Bills
+              {t('billing.generateBills')}
             </h2>
 
             <form onSubmit={handleGenerate}>
               <div>
                 <label style={{ display: 'block', marginBottom: '12px', fontWeight: '600', fontSize: '15px' }}>
-                  Select Buildings * (at least one)
+                  {t('billing.selectBuildings')} * ({t('billing.atLeastOne')})
                 </label>
                 <div style={{ padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '8px', maxHeight: '200px', overflow: 'auto' }}>
                   {buildings.map(b => (
@@ -444,7 +446,7 @@ export default function Billing() {
 
               <div style={{ marginTop: '20px' }}>
                 <label style={{ display: 'block', marginBottom: '12px', fontWeight: '600', fontSize: '15px' }}>
-                  Select Users (leave empty for all users in selected buildings)
+                  {t('billing.selectUsers')} ({t('billing.leaveEmptyForAll')})
                 </label>
                 <div style={{ padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '8px', maxHeight: '200px', overflow: 'auto' }}>
                   {users.filter(u => formData.building_ids.includes(u.building_id || 0)).map(u => (
@@ -462,12 +464,12 @@ export default function Billing() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '20px' }}>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>Start Date *</label>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('billing.startDate')} *</label>
                   <input type="date" required value={formData.start_date} onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                     style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>End Date *</label>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('billing.endDate')} *</label>
                   <input type="date" required value={formData.end_date} onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
                     style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                 </div>
@@ -478,13 +480,13 @@ export default function Billing() {
                   flex: 1, padding: '12px', backgroundColor: '#28a745', color: 'white',
                   border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', opacity: generating ? 0.7 : 1, cursor: generating ? 'not-allowed' : 'pointer'
                 }}>
-                  {generating ? 'Generating...' : 'Generate Bills'}
+                  {generating ? t('billing.generating') : t('billing.generateBills')}
                 </button>
                 <button type="button" onClick={() => { setShowGenerateModal(false); resetForm(); }} style={{
                   flex: 1, padding: '12px', backgroundColor: '#6c757d', color: 'white',
                   border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
                 }}>
-                  Cancel
+                  {t('common.cancel')}
                 </button>
               </div>
             </form>
@@ -502,13 +504,13 @@ export default function Billing() {
             width: '90%', maxWidth: '800px', maxHeight: '90vh', overflow: 'auto'
           }} onClick={(e) => e.stopPropagation()}>
             <div style={{ borderBottom: '2px solid #007bff', paddingBottom: '20px', marginBottom: '30px' }}>
-              <h2 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '8px' }}>Invoice</h2>
+              <h2 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '8px' }}>{t('billing.invoice')}</h2>
               <p style={{ fontSize: '14px', color: '#666' }}>#{selectedInvoice.invoice_number}</p>
             </div>
 
             {selectedInvoice.user && (
               <div style={{ marginBottom: '30px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>Bill To:</h3>
+                <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>{t('billing.billTo')}</h3>
                 <p style={{ fontSize: '15px', lineHeight: '1.6' }}>
                   {selectedInvoice.user.first_name} {selectedInvoice.user.last_name}<br />
                   {selectedInvoice.user.address_street}<br />
@@ -520,15 +522,15 @@ export default function Billing() {
 
             <div style={{ marginBottom: '30px' }}>
               <p style={{ fontSize: '14px', color: '#666' }}>
-                <strong>Period:</strong> {formatDate(selectedInvoice.period_start)} to {formatDate(selectedInvoice.period_end)}
+                <strong>{t('billing.periodLabel')}</strong> {formatDate(selectedInvoice.period_start)} {t('pricing.to')} {formatDate(selectedInvoice.period_end)}
               </p>
             </div>
 
             <table style={{ width: '100%', marginBottom: '30px' }}>
               <thead>
                 <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '2px solid #ddd' }}>
-                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Description</th>
-                  <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>Amount</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>{t('billing.description')}</th>
+                  <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>{t('billing.amount')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -562,7 +564,7 @@ export default function Billing() {
 
             <div style={{ textAlign: 'right', padding: '20px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
               <p style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                Total: {selectedInvoice.currency} {selectedInvoice.total_amount.toFixed(2)}
+                {t('billing.total')} {selectedInvoice.currency} {selectedInvoice.total_amount.toFixed(2)}
               </p>
             </div>
 
@@ -573,13 +575,13 @@ export default function Billing() {
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
               }}>
                 <Download size={18} />
-                Download PDF
+                {t('billing.downloadPdf')}
               </button>
               <button onClick={() => setSelectedInvoice(null)} style={{
                 flex: 1, padding: '12px', backgroundColor: '#007bff', color: 'white',
                 border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
               }}>
-                Close
+                {t('common.close')}
               </button>
             </div>
           </div>

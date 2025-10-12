@@ -4,6 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { Users, Building, Zap, Car, Activity, TrendingUp, TrendingDown, Sun, Battery, LayoutDashboard } from 'lucide-react';
 import { api } from '../api/client';
 import type { DashboardStats } from '../types';
+import { useTranslation } from '../i18n';
 
 interface MeterData {
   meter_id: number;
@@ -45,6 +46,7 @@ function getMeterDisplayName(meter: MeterData): string {
 }
 
 export default function Dashboard() {
+  const { t } = useTranslation();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [buildingData, setBuildingData] = useState<BuildingConsumption[]>([]);
   const [period, setPeriod] = useState('24h');
@@ -86,7 +88,7 @@ export default function Dashboard() {
         fontSize: '18px',
         color: '#666'
       }}>
-        Loading dashboard...
+        {t('common.loading')}
       </div>
     );
   }
@@ -113,23 +115,23 @@ export default function Dashboard() {
             cursor: 'pointer'
           }}
         >
-          Retry
+          {t('logs.refresh')}
         </button>
       </div>
     );
   }
 
   const statCards = [
-    { icon: Users, label: 'Total Users', value: stats?.total_users || 0, color: '#007bff' },
-    { icon: Building, label: 'Buildings', value: stats?.total_buildings || 0, color: '#28a745' },
-    { icon: Zap, label: 'Active Meters', value: `${stats?.active_meters}/${stats?.total_meters}`, color: '#ffc107' },
-    { icon: Car, label: 'Active Chargers', value: `${stats?.active_chargers}/${stats?.total_chargers}`, color: '#6f42c1' },
-    { icon: Activity, label: 'Consumption Today', value: `${stats?.today_consumption.toFixed(2)} kWh`, color: '#dc3545' },
-    { icon: TrendingUp, label: 'Consumption Month', value: `${stats?.month_consumption.toFixed(2)} kWh`, color: '#e74c3c' },
-    { icon: Sun, label: 'Solar Today', value: `${stats?.today_solar.toFixed(2)} kWh`, color: '#f39c12' },
-    { icon: TrendingDown, label: 'Solar Month', value: `${stats?.month_solar.toFixed(2)} kWh`, color: '#e67e22' },
-    { icon: Battery, label: 'Charging Today', value: `${stats?.today_charging.toFixed(2)} kWh`, color: '#9b59b6' },
-    { icon: Zap, label: 'Charging Month', value: `${stats?.month_charging.toFixed(2)} kWh`, color: '#8e44ad' },
+    { icon: Users, label: t('dashboard.totalUsers'), value: stats?.total_users || 0, color: '#007bff' },
+    { icon: Building, label: t('dashboard.buildings'), value: stats?.total_buildings || 0, color: '#28a745' },
+    { icon: Zap, label: t('dashboard.activeMeters'), value: `${stats?.active_meters}/${stats?.total_meters}`, color: '#ffc107' },
+    { icon: Car, label: t('dashboard.activeChargers'), value: `${stats?.active_chargers}/${stats?.total_chargers}`, color: '#6f42c1' },
+    { icon: Activity, label: t('dashboard.consumptionToday'), value: `${stats?.today_consumption.toFixed(2)} kWh`, color: '#dc3545' },
+    { icon: TrendingUp, label: t('dashboard.consumptionMonth'), value: `${stats?.month_consumption.toFixed(2)} kWh`, color: '#e74c3c' },
+    { icon: Sun, label: t('dashboard.solarToday'), value: `${stats?.today_solar.toFixed(2)} kWh`, color: '#f39c12' },
+    { icon: TrendingDown, label: t('dashboard.solarMonth'), value: `${stats?.month_solar.toFixed(2)} kWh`, color: '#e67e22' },
+    { icon: Battery, label: t('dashboard.chargingToday'), value: `${stats?.today_charging.toFixed(2)} kWh`, color: '#9b59b6' },
+    { icon: Zap, label: t('dashboard.chargingMonth'), value: `${stats?.month_charging.toFixed(2)} kWh`, color: '#8e44ad' },
   ];
 
   return (
@@ -148,10 +150,10 @@ export default function Dashboard() {
             backgroundClip: 'text'
         }}>
           <LayoutDashboard size={36} style={{ color: '#667eea' }} />
-          Dashboard
+          {t('dashboard.title')}
         </h1>
         <p style={{ color: '#6b7280', fontSize: '16px' }}>
-          Real-time overview of your energy management system
+          {t('dashboard.subtitle')}
         </p>
       </div>
 
@@ -213,12 +215,12 @@ export default function Dashboard() {
         gap: '15px'
       }}>
         <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0 }}>
-          Consumption by Building
+          {t('dashboard.consumptionByBuilding')}
         </h2>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <input
             type="text"
-            placeholder="Search buildings..."
+            placeholder={t('dashboard.searchBuildings')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -239,10 +241,10 @@ export default function Dashboard() {
               fontSize: '14px'
             }}
           >
-            <option value="1h">Last Hour</option>
-            <option value="24h">Last 24 Hours</option>
-            <option value="7d">Last 7 Days</option>
-            <option value="30d">Last 30 Days</option>
+            <option value="1h">{t('dashboard.lastHour')}</option>
+            <option value="24h">{t('dashboard.last24Hours')}</option>
+            <option value="7d">{t('dashboard.last7Days')}</option>
+            <option value="30d">{t('dashboard.last30Days')}</option>
           </select>
         </div>
       </div>
@@ -264,8 +266,8 @@ export default function Dashboard() {
                   textAlign: 'center',
                   color: '#9ca3af'
                 }}>
-                  <h3 style={{ marginTop: 0, color: '#6b7280' }}>No Buildings Found</h3>
-                  <p>No buildings match your search "{searchQuery}"</p>
+                  <h3 style={{ marginTop: 0, color: '#6b7280' }}>{t('dashboard.noBuildings')}</h3>
+                  <p>{t('dashboard.noBuildingsMatch').replace('{query}', searchQuery)}</p>
                   <button
                     onClick={() => setSearchQuery('')}
                     style={{
@@ -279,7 +281,7 @@ export default function Dashboard() {
                       marginTop: '10px'
                     }}
                   >
-                    Clear Search
+                    {t('dashboard.clearSearch')}
                   </button>
                 </div>
               );
@@ -296,7 +298,9 @@ export default function Dashboard() {
                     color: '#0369a1',
                     border: '1px solid #bae6fd'
                   }}>
-                    Showing {filteredBuildings.length} of {buildingData.length} buildings
+                    {t('dashboard.showingBuildings')
+                      .replace('{count}', filteredBuildings.length.toString())
+                      .replace('{total}', buildingData.length.toString())}
                   </div>
                 )}
                 {filteredBuildings.map((building) => {
@@ -435,9 +439,9 @@ export default function Dashboard() {
                     padding: '60px', 
                     color: '#9ca3af' 
                   }}>
-                    No consumption data available for this building in the selected period.
+                    {t('dashboard.noConsumptionData')}
                     <br />
-                    <small>Meters are configured but haven't collected data yet.</small>
+                    <small>{t('dashboard.metersConfigured')}</small>
                   </div>
                 ) : (
                   <div style={{ 
@@ -445,9 +449,9 @@ export default function Dashboard() {
                     padding: '60px', 
                     color: '#9ca3af' 
                   }}>
-                    No meters configured for this building yet.
+                    {t('dashboard.noMetersConfigured')}
                     <br />
-                    <small>Add meters in the Meters page to start tracking consumption.</small>
+                    <small>{t('dashboard.addMeters')}</small>
                   </div>
                 )}
               </div>
@@ -466,8 +470,8 @@ export default function Dashboard() {
           textAlign: 'center',
           color: '#9ca3af'
         }}>
-          <h3 style={{ marginTop: 0, color: '#6b7280' }}>No Buildings Found</h3>
-          <p>Create buildings in the Buildings page to start monitoring consumption.</p>
+          <h3 style={{ marginTop: 0, color: '#6b7280' }}>{t('dashboard.noBuildings')}</h3>
+          <p>{t('dashboard.createBuildings')}</p>
         </div>
       )}
     </div>

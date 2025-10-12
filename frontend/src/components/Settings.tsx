@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Lock, Key, Shield, CheckCircle, RefreshCw, Ban, Database, Activity, Settings as SettingsIcon } from 'lucide-react';
 import { api } from '../api/client';
+import { useTranslation } from '../i18n';
 
 export default function Settings() {
+  const { t } = useTranslation();
   const [passwordForm, setPasswordForm] = useState({
     old_password: '',
     new_password: '',
@@ -15,24 +17,24 @@ export default function Settings() {
     e.preventDefault();
     
     if (passwordForm.new_password !== passwordForm.confirm_password) {
-      setMessage('New passwords do not match');
+      setMessage(t('settings.passwordMismatch'));
       setMessageType('error');
       return;
     }
 
     if (passwordForm.new_password.length < 6) {
-      setMessage('Password must be at least 6 characters');
+      setMessage(t('settings.passwordTooShort'));
       setMessageType('error');
       return;
     }
 
     try {
       await api.changePassword(passwordForm.old_password, passwordForm.new_password);
-      setMessage('Password changed successfully!');
+      setMessage(t('settings.passwordChangeSuccess'));
       setMessageType('success');
       setPasswordForm({ old_password: '', new_password: '', confirm_password: '' });
     } catch (err) {
-      setMessage('Failed to change password. Check your old password.');
+      setMessage(t('settings.passwordChangeFailed'));
       setMessageType('error');
     }
   };
@@ -53,10 +55,10 @@ export default function Settings() {
             backgroundClip: 'text'
         }}>
           <SettingsIcon size={36} style={{ color: '#667eea' }} />
-          Settings
+          {t('settings.title')}
         </h1>
         <p style={{ color: '#6b7280', fontSize: '16px' }}>
-          Manage your account settings and security preferences
+          {t('settings.subtitle')}
         </p>
       </div>
 
@@ -130,10 +132,10 @@ export default function Settings() {
                 marginBottom: '4px',
                 color: '#1f2937'
               }}>
-                Change Password
+                {t('settings.changePassword')}
               </h2>
               <p style={{ fontSize: '14px', color: '#6b7280' }}>
-                Update your password to keep your account secure
+                {t('settings.updateYourPassword')}
               </p>
             </div>
           </div>
@@ -150,7 +152,7 @@ export default function Settings() {
                 fontSize: '14px' 
               }}>
                 <Key size={16} />
-                Current Password
+                {t('settings.currentPassword')}
               </label>
               <input
                 type="password"
@@ -166,7 +168,7 @@ export default function Settings() {
                   transition: 'all 0.3s ease',
                   outline: 'none'
                 }}
-                placeholder="Enter your current password"
+                placeholder={t('settings.enterCurrentPassword')}
                 onFocus={(e) => {
                   e.currentTarget.style.borderColor = '#667eea';
                   e.currentTarget.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.1)';
@@ -189,7 +191,7 @@ export default function Settings() {
                 fontSize: '14px' 
               }}>
                 <Shield size={16} />
-                New Password
+                {t('settings.newPassword')}
               </label>
               <input
                 type="password"
@@ -205,7 +207,7 @@ export default function Settings() {
                   transition: 'all 0.3s ease',
                   outline: 'none'
                 }}
-                placeholder="Enter your new password"
+                placeholder={t('settings.enterNewPassword')}
                 onFocus={(e) => {
                   e.currentTarget.style.borderColor = '#667eea';
                   e.currentTarget.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.1)';
@@ -223,7 +225,7 @@ export default function Settings() {
                 alignItems: 'center',
                 gap: '4px'
               }}>
-                💡 Must be at least 6 characters long
+                💡 {t('settings.passwordMinLength')}
               </p>
             </div>
 
@@ -238,7 +240,7 @@ export default function Settings() {
                 fontSize: '14px' 
               }}>
                 <CheckCircle size={16} />
-                Confirm New Password
+                {t('settings.confirmPassword')}
               </label>
               <input
                 type="password"
@@ -254,7 +256,7 @@ export default function Settings() {
                   transition: 'all 0.3s ease',
                   outline: 'none'
                 }}
-                placeholder="Confirm your new password"
+                placeholder={t('settings.confirmNewPassword')}
                 onFocus={(e) => {
                   e.currentTarget.style.borderColor = '#667eea';
                   e.currentTarget.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.1)';
@@ -291,7 +293,7 @@ export default function Settings() {
                 e.currentTarget.style.boxShadow = '0 8px 20px rgba(102, 126, 234, 0.3)';
               }}
             >
-              Update Password
+              {t('settings.updatePassword')}
             </button>
           </form>
         </div>
@@ -331,21 +333,21 @@ export default function Settings() {
                 marginBottom: '4px',
                 color: '#1f2937'
               }}>
-                Security Tips
+                {t('settings.securityTips')}
               </h2>
               <p style={{ fontSize: '14px', color: '#6b7280' }}>
-                Keep your account secure
+                {t('settings.keepAccountSecure')}
               </p>
             </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {[
-              { Icon: Lock, title: 'Use Strong Passwords', desc: 'Combine letters, numbers, and symbols', color: '#007bff' },
-              { Icon: RefreshCw, title: 'Change Regularly', desc: 'Update your password every 3-6 months', color: '#28a745' },
-              { Icon: Ban, title: 'Never Share', desc: 'Keep your credentials private and secure', color: '#dc3545' },
-              { Icon: Database, title: 'Backup Important Data', desc: 'Use Admin Logs page to backup database', color: '#ffc107' },
-              { Icon: Activity, title: 'Monitor Activity', desc: 'Check Admin Logs for suspicious activity', color: '#6f42c1' }
+              { Icon: Lock, title: t('settings.useStrongPasswords'), desc: t('settings.useStrongPasswordsDesc'), color: '#007bff' },
+              { Icon: RefreshCw, title: t('settings.changeRegularly'), desc: t('settings.changeRegularlyDesc'), color: '#28a745' },
+              { Icon: Ban, title: t('settings.neverShare'), desc: t('settings.neverShareDesc'), color: '#dc3545' },
+              { Icon: Database, title: t('settings.backupData'), desc: t('settings.backupDataDesc'), color: '#ffc107' },
+              { Icon: Activity, title: t('settings.monitorActivity'), desc: t('settings.monitorActivityDesc'), color: '#6f42c1' }
             ].map((tip, idx) => {
               const IconComponent = tip.Icon;
               return (

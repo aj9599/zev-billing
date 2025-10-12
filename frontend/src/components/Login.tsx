@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { Zap, Lock, User } from 'lucide-react';
 import { api } from '../api/client';
+import { useTranslation } from '../i18n';
 
 interface LoginProps {
   onLogin: () => void;
 }
 
 export default function Login({ onLogin }: LoginProps) {
+  const { t } = useTranslation();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -21,7 +23,7 @@ export default function Login({ onLogin }: LoginProps) {
       await api.login(username, password);
       onLogin();
     } catch (err) {
-      setError('Invalid credentials');
+      setError(t('login.invalidCredentials'));
     } finally {
       setLoading(false);
     }
@@ -64,14 +66,14 @@ export default function Login({ onLogin }: LoginProps) {
             marginBottom: '8px',
             color: '#ffffff'
           }}>
-            ZEV Billing
+            {t('login.title')}
           </h1>
           <p style={{
             color: '#999',
             fontSize: '16px',
             fontWeight: '500'
           }}>
-            Swiss Energy Management
+            {t('login.subtitle')}
           </p>
         </div>
 
@@ -84,7 +86,7 @@ export default function Login({ onLogin }: LoginProps) {
               color: '#ccc',
               fontSize: '14px'
             }}>
-              Username
+              {t('login.username')}
             </label>
             <div style={{ position: 'relative' }}>
               <div style={{
@@ -112,7 +114,7 @@ export default function Login({ onLogin }: LoginProps) {
                   transition: 'all 0.3s ease',
                   outline: 'none'
                 }}
-                placeholder="Enter your username"
+                placeholder={t('login.enterUsername')}
                 onFocus={(e) => {
                   e.currentTarget.style.borderColor = '#667eea';
                   e.currentTarget.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
@@ -133,7 +135,7 @@ export default function Login({ onLogin }: LoginProps) {
               color: '#ccc',
               fontSize: '14px'
             }}>
-              Password
+              {t('login.password')}
             </label>
             <div style={{ position: 'relative' }}>
               <div style={{
@@ -161,7 +163,7 @@ export default function Login({ onLogin }: LoginProps) {
                   transition: 'all 0.3s ease',
                   outline: 'none'
                 }}
-                placeholder="Enter your password"
+                placeholder={t('login.enterPassword')}
                 onFocus={(e) => {
                   e.currentTarget.style.borderColor = '#667eea';
                   e.currentTarget.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
@@ -218,7 +220,7 @@ export default function Login({ onLogin }: LoginProps) {
               }
             }}
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? t('login.signingIn') : t('login.signIn')}
           </button>
         </form>
 
@@ -229,7 +231,7 @@ export default function Login({ onLogin }: LoginProps) {
           color: '#666',
           fontWeight: '500'
         }}>
-          <p>Powered by AJ • Swiss Energy Solutions</p>
+          <p>{t('login.poweredBy')}</p>
         </div>
       </div>
     </div>

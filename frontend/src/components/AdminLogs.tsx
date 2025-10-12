@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { Activity, RefreshCw, AlertCircle, CheckCircle, Info, Power } from 'lucide-react';
 import { api } from '../api/client';
 import type { AdminLog } from '../types';
+import { useTranslation } from '../i18n';
 
 export default function AdminLogs() {
+  const { t } = useTranslation();
   const [logs, setLogs] = useState<AdminLog[]>([]);
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -47,12 +49,12 @@ export default function AdminLogs() {
       const data = await response.json();
       setDebugInfo(data);
     } catch (err) {
-      console.error('Failed to load debug info:', err);
+      console.error(t('logs.debugInfoFailed'), err);
     }
   };
 
   const handleReboot = async () => {
-    if (!confirm('Are you sure you want to reboot the system? This will restart the backend service.')) {
+    if (!confirm(t('logs.rebootConfirm'))) {
       return;
     }
 
@@ -66,16 +68,16 @@ export default function AdminLogs() {
       });
 
       if (response.ok) {
-        alert('System is rebooting... The service will restart in a few seconds.');
+        alert(t('logs.rebootSuccess'));
         setTimeout(() => {
           window.location.reload();
         }, 5000);
       } else {
-        alert('Failed to reboot system');
+        alert(t('logs.rebootFailed'));
         setRebooting(false);
       }
     } catch (err) {
-      alert('Failed to reboot system');
+      alert(t('logs.rebootFailed'));
       setRebooting(false);
     }
   };
@@ -115,10 +117,10 @@ export default function AdminLogs() {
             backgroundClip: 'text'
           }}>
             <Activity size={36} style={{ color: '#667eea' }} />
-            System Logs
+            {t('logs.title')}
           </h1>
           <p style={{ color: '#6b7280', fontSize: '16px' }}>
-            Monitor system activity and debug information
+            {t('logs.subtitle')}
           </p>
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
@@ -135,7 +137,7 @@ export default function AdminLogs() {
               checked={autoRefresh} 
               onChange={(e) => setAutoRefresh(e.target.checked)}
             />
-            Auto-refresh (30s)
+            {t('logs.autoRefresh')}
           </label>
           <button
             onClick={() => { loadLogs(); loadDebugInfo(); }}
@@ -170,7 +172,7 @@ export default function AdminLogs() {
             }}
           >
             <RefreshCw size={18} />
-            Refresh
+            {t('logs.refresh')}
           </button>
           <button
             onClick={handleReboot}
@@ -204,7 +206,7 @@ export default function AdminLogs() {
             }}
           >
             <Power size={18} />
-            {rebooting ? 'Rebooting...' : 'Reboot System'}
+            {rebooting ? t('logs.rebooting') : t('logs.rebootSystem')}
           </button>
         </div>
       </div>
@@ -213,7 +215,7 @@ export default function AdminLogs() {
       {debugInfo && (
         <div style={{ marginBottom: '30px' }}>
           <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '16px', color: '#1f2937' }}>
-            Real-Time System Status
+            {t('logs.realTimeStatus')}
           </h2>
           <div style={{
             display: 'grid',
@@ -230,12 +232,12 @@ export default function AdminLogs() {
             }}
             onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
             onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
-              <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>Data Collector Status</div>
+              <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>{t('logs.dataCollectorStatus')}</div>
               <div style={{ fontSize: '28px', fontWeight: '800', color: '#10b981', marginBottom: '8px' }}>
-                ● Running
+                ● {t('logs.running')}
               </div>
               <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                Collection Interval: 15 minutes
+                {t('logs.collectionInterval')}
               </div>
             </div>
 
@@ -248,12 +250,12 @@ export default function AdminLogs() {
             }}
             onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
             onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
-              <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>Active Meters</div>
+              <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>{t('logs.activeMeters')}</div>
               <div style={{ fontSize: '28px', fontWeight: '800', color: '#667eea' }}>
                 {debugInfo.active_meters || 0} / {debugInfo.total_meters || 0}
               </div>
               <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                Collecting data
+                {t('logs.collectingData')}
               </div>
             </div>
 
@@ -266,12 +268,12 @@ export default function AdminLogs() {
             }}
             onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
             onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
-              <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>Active Chargers</div>
+              <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>{t('logs.activeChargers')}</div>
               <div style={{ fontSize: '28px', fontWeight: '800', color: '#764ba2' }}>
                 {debugInfo.active_chargers || 0} / {debugInfo.total_chargers || 0}
               </div>
               <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                Monitoring sessions
+                {t('logs.monitoringSessions')}
               </div>
             </div>
 
@@ -284,12 +286,12 @@ export default function AdminLogs() {
             }}
             onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
             onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
-              <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>Last Collection</div>
+              <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>{t('logs.lastCollection')}</div>
               <div style={{ fontSize: '28px', fontWeight: '800', color: '#1f2937' }}>
-                {debugInfo.last_collection ? new Date(debugInfo.last_collection).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' }) : 'Never'}
+                {debugInfo.last_collection ? new Date(debugInfo.last_collection).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' }) : t('logs.never')}
               </div>
               <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                Next in ~{debugInfo.next_collection_minutes || 15} min
+                {t('logs.nextIn').replace('{minutes}', (debugInfo.next_collection_minutes || 15).toString())}
               </div>
             </div>
 
@@ -304,12 +306,12 @@ export default function AdminLogs() {
               }}
               onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
               onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
-                <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>UDP Listeners</div>
+                <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>{t('logs.udpListeners')}</div>
                 <div style={{ fontSize: '28px', fontWeight: '800', color: '#3b82f6' }}>
-                  {debugInfo.udp_listeners.length} Active
+                  {debugInfo.udp_listeners.length} {t('logs.udpActive')}
                 </div>
                 <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                  Ports: {debugInfo.udp_listeners.join(', ')}
+                  {t('logs.ports')} {debugInfo.udp_listeners.join(', ')}
                 </div>
               </div>
             )}
@@ -323,12 +325,12 @@ export default function AdminLogs() {
             }}
             onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
             onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
-              <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>Recent Errors</div>
+              <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>{t('logs.recentErrors')}</div>
               <div style={{ fontSize: '28px', fontWeight: '800', color: debugInfo.recent_errors > 0 ? '#dc3545' : '#10b981' }}>
                 {debugInfo.recent_errors || 0}
               </div>
               <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                Last 24 hours
+                {t('logs.last24Hours')}
               </div>
             </div>
           </div>
@@ -350,7 +352,7 @@ export default function AdminLogs() {
           fontSize: '18px',
           color: '#1f2937'
         }}>
-          Activity Log (Most Recent 200 Entries)
+          {t('logs.activityLog')}
         </div>
         
         <div style={{ maxHeight: '600px', overflow: 'auto' }}>
@@ -358,10 +360,10 @@ export default function AdminLogs() {
             <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f9fafb', zIndex: 10 }}>
               <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', width: '40px' }}></th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Timestamp</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Action</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Details</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>IP Address</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('logs.timestamp')}</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('logs.action')}</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('logs.details')}</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('logs.ipAddress')}</th>
               </tr>
             </thead>
             <tbody>
@@ -394,13 +396,13 @@ export default function AdminLogs() {
 
         {logs.length === 0 && !loading && (
           <div style={{ padding: '60px', textAlign: 'center', color: '#9ca3af' }}>
-            No logs available yet. System activity will appear here.
+            {t('logs.noLogs')}
           </div>
         )}
 
         {loading && (
           <div style={{ padding: '60px', textAlign: 'center', color: '#9ca3af' }}>
-            Loading logs...
+            {t('logs.loadingLogs')}
           </div>
         )}
       </div>

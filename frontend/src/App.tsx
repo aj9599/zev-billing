@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import { I18nProvider } from './i18n';
 import Layout from './components/Layout';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
@@ -24,32 +25,36 @@ function App() {
 
   if (!isAuthenticated) {
     return (
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login onLogin={() => setIsAuthenticated(true)} />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </BrowserRouter>
+      <I18nProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<Login onLogin={() => setIsAuthenticated(true)} />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </I18nProvider>
     );
   }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Layout onLogout={() => setIsAuthenticated(false)} />}>
-          <Route index element={<Dashboard />} />
-          <Route path="users" element={<Users />} />
-          <Route path="buildings" element={<Buildings />} />
-          <Route path="meters" element={<Meters />} />
-          <Route path="chargers" element={<Chargers />} />
-          <Route path="billing" element={<Billing />} />
-          <Route path="pricing" element={<PricingSettings />} />
-          <Route path="settings" element={<Settings />} />
-          <Route path="logs" element={<AdminLogs />} />
-        </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <I18nProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Layout onLogout={() => setIsAuthenticated(false)} />}>
+            <Route index element={<Dashboard />} />
+            <Route path="users" element={<Users />} />
+            <Route path="buildings" element={<Buildings />} />
+            <Route path="meters" element={<Meters />} />
+            <Route path="chargers" element={<Chargers />} />
+            <Route path="billing" element={<Billing />} />
+            <Route path="pricing" element={<PricingSettings />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="logs" element={<AdminLogs />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </I18nProvider>
   );
 }
 

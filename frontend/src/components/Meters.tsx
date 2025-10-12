@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, X, Info, HelpCircle, Zap, Download } from 'lucide-react';
 import { api } from '../api/client';
 import type { Meter, Building, User } from '../types';
+import { useTranslation } from '../i18n';
 
 interface ConnectionConfig {
   endpoint?: string;
@@ -16,6 +17,7 @@ interface ConnectionConfig {
 }
 
 export default function Meters() {
+  const { t } = useTranslation();
   const [meters, setMeters] = useState<Meter[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -94,17 +96,17 @@ export default function Meters() {
       resetForm();
       loadData();
     } catch (err) {
-      alert('Failed to save meter');
+      alert(t('meters.saveFailed'));
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('Are you sure you want to delete this meter?')) {
+    if (confirm(t('meters.deleteConfirm'))) {
       try {
         await api.deleteMeter(id);
         loadData();
       } catch (err) {
-        alert('Failed to delete meter');
+        alert(t('meters.deleteFailed'));
       }
     }
   };
@@ -150,7 +152,7 @@ export default function Meters() {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      alert('Failed to export data');
+      alert(t('meters.exportFailed'));
     }
   };
 
@@ -173,11 +175,11 @@ export default function Meters() {
   };
 
   const meterTypes = [
-    { value: 'total_meter', label: 'Total Meter' },
-    { value: 'solar_meter', label: 'Solar Meter' },
-    { value: 'apartment_meter', label: 'Apartment Meter' },
-    { value: 'heating_meter', label: 'Heating Meter' },
-    { value: 'other', label: 'Other' }
+    { value: 'total_meter', label: t('meters.totalMeter') },
+    { value: 'solar_meter', label: t('meters.solarMeter') },
+    { value: 'apartment_meter', label: t('meters.apartmentMeter') },
+    { value: 'heating_meter', label: t('meters.heatingMeter') },
+    { value: 'other', label: t('meters.other') }
   ];
 
   const InstructionsModal = () => (
@@ -292,7 +294,7 @@ export default function Meters() {
           backgroundColor: '#007bff', color: 'white', border: 'none',
           borderRadius: '6px', fontSize: '14px', fontWeight: '500'
         }}>
-          Got it!
+          {t('common.close')}
         </button>
       </div>
     </div>
@@ -315,10 +317,10 @@ export default function Meters() {
             backgroundClip: 'text'
           }}>
             <Zap size={36} style={{ color: '#667eea' }} />
-            Power Meters
+            {t('meters.title')}
           </h1>
           <p style={{ color: '#6b7280', fontSize: '16px' }}>
-            Monitor and manage power consumption meters
+            {t('meters.subtitle')}
           </p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
@@ -330,7 +332,7 @@ export default function Meters() {
             }}
           >
             <Download size={18} />
-            Export Data
+            {t('meters.exportData')}
           </button>
           <button
             onClick={() => setShowInstructions(true)}
@@ -340,7 +342,7 @@ export default function Meters() {
             }}
           >
             <HelpCircle size={18} />
-            Setup Instructions
+            {t('meters.setupInstructions')}
           </button>
           <button
             onClick={() => { resetForm(); setShowModal(true); }}
@@ -350,7 +352,7 @@ export default function Meters() {
             }}
           >
             <Plus size={18} />
-            Add Meter
+            {t('meters.addMeter')}
           </button>
         </div>
       </div>
@@ -359,13 +361,13 @@ export default function Meters() {
         <table style={{ width: '100%' }}>
           <thead>
             <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Name</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Type</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Building</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Connection</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Last Reading</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Status</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Actions</th>
+              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.name')}</th>
+              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('meters.type')}</th>
+              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.building')}</th>
+              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('meters.connection')}</th>
+              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('meters.lastReading')}</th>
+              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.status')}</th>
+              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.actions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -386,7 +388,7 @@ export default function Meters() {
                     backgroundColor: meter.is_active ? '#d4edda' : '#f8d7da',
                     color: meter.is_active ? '#155724' : '#721c24'
                   }}>
-                    {meter.is_active ? 'Active' : 'Inactive'}
+                    {meter.is_active ? t('common.active') : t('common.inactive')}
                   </span>
                 </td>
                 <td style={{ padding: '16px' }}>
@@ -405,7 +407,7 @@ export default function Meters() {
         </table>
         {meters.length === 0 && (
           <div style={{ padding: '60px', textAlign: 'center', color: '#999' }}>
-            No meters found. Click "Setup Instructions" to learn how to configure your first meter.
+            {t('meters.noMeters')}
           </div>
         )}
       </div>
@@ -424,7 +426,7 @@ export default function Meters() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                  {editingMeter ? 'Edit Meter' : 'Add Meter'}
+                  {editingMeter ? t('meters.editMeter') : t('meters.addMeter')}
                 </h2>
                 <button 
                   onClick={() => setShowInstructions(true)}
@@ -441,13 +443,13 @@ export default function Meters() {
 
             <form onSubmit={handleSubmit}>
               <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>Name *</label>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('common.name')} *</label>
                 <input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
               </div>
 
               <div style={{ marginTop: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>Meter Type *</label>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('meters.meterType')} *</label>
                 <select required value={formData.meter_type} onChange={(e) => setFormData({ ...formData, meter_type: e.target.value })}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
                   {meterTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -455,20 +457,20 @@ export default function Meters() {
               </div>
 
               <div style={{ marginTop: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>Building *</label>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('users.building')} *</label>
                 <select required value={formData.building_id} onChange={(e) => setFormData({ ...formData, building_id: parseInt(e.target.value) })}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
-                  <option value={0}>Select Building</option>
+                  <option value={0}>{t('users.selectBuilding')}</option>
                   {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
               </div>
 
               {formData.meter_type === 'apartment_meter' && (
                 <div style={{ marginTop: '16px' }}>
-                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>User (for apartment meter)</label>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('meters.userForApartment')}</label>
                   <select value={formData.user_id || ''} onChange={(e) => setFormData({ ...formData, user_id: e.target.value ? parseInt(e.target.value) : undefined })}
                     style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
-                    <option value="">Select User</option>
+                    <option value="">{t('meters.selectUser')}</option>
                     {users.filter(u => u.building_id === formData.building_id).map(u => (
                       <option key={u.id} value={u.id}>{u.first_name} {u.last_name}</option>
                     ))}
@@ -477,25 +479,25 @@ export default function Meters() {
               )}
 
               <div style={{ marginTop: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>Connection Type *</label>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('meters.connectionType')} *</label>
                 <select required value={formData.connection_type} onChange={(e) => setFormData({ ...formData, connection_type: e.target.value })}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
-                  <option value="http">HTTP (Loxone Virtual Output)</option>
-                  <option value="udp">UDP (Shared Port - Recommended!)</option>
-                  <option value="modbus_tcp">Modbus TCP</option>
+                  <option value="http">{t('meters.http')}</option>
+                  <option value="udp">{t('meters.udp')}</option>
+                  <option value="modbus_tcp">{t('meters.modbusTcp')}</option>
                 </select>
               </div>
 
               <div style={{ marginTop: '20px', padding: '20px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
                 <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>
-                  Connection Configuration
+                  {t('meters.connectionConfig')}
                 </h3>
 
                 {formData.connection_type === 'http' && (
                   <>
                     <div style={{ marginBottom: '12px' }}>
                       <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                        Endpoint URL *
+                        {t('meters.endpointUrl')} *
                       </label>
                       <input type="url" required value={connectionConfig.endpoint}
                         onChange={(e) => setConnectionConfig({ ...connectionConfig, endpoint: e.target.value })}
@@ -504,14 +506,14 @@ export default function Meters() {
                     </div>
                     <div>
                       <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                        Power Field Name *
+                        {t('meters.powerField')} *
                       </label>
                       <input type="text" required value={connectionConfig.power_field}
                         onChange={(e) => setConnectionConfig({ ...connectionConfig, power_field: e.target.value })}
                         placeholder="power_kwh"
                         style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                        JSON field name that contains the power value in kWh
+                        {t('meters.powerFieldHelp')}
                       </p>
                     </div>
                   </>
@@ -522,7 +524,7 @@ export default function Meters() {
                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '12px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          IP Address *
+                          {t('meters.ipAddress')} *
                         </label>
                         <input type="text" required value={connectionConfig.ip_address}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, ip_address: e.target.value })}
@@ -531,7 +533,7 @@ export default function Meters() {
                       </div>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          Port *
+                          {t('meters.port')} *
                         </label>
                         <input type="number" required value={connectionConfig.port}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, port: parseInt(e.target.value) })}
@@ -542,7 +544,7 @@ export default function Meters() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          Register Address *
+                          {t('meters.registerAddress')} *
                         </label>
                         <input type="number" required value={connectionConfig.register_address}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, register_address: parseInt(e.target.value) })}
@@ -551,7 +553,7 @@ export default function Meters() {
                       </div>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          Register Count *
+                          {t('meters.registerCount')} *
                         </label>
                         <input type="number" required value={connectionConfig.register_count}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, register_count: parseInt(e.target.value) })}
@@ -560,7 +562,7 @@ export default function Meters() {
                       </div>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          Unit ID *
+                          {t('meters.unitId')} *
                         </label>
                         <input type="number" required value={connectionConfig.unit_id}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, unit_id: parseInt(e.target.value) })}
@@ -575,32 +577,32 @@ export default function Meters() {
                   <>
                     <div style={{ backgroundColor: '#dbeafe', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #3b82f6' }}>
                       <p style={{ fontSize: '13px', color: '#1e40af', margin: 0 }}>
-                        <strong>⭐ Shared UDP Port:</strong> Multiple meters can share the same port! Use unique data keys to distinguish them.
+                        <strong>⭐ {t('meters.sharedPortInfo')}</strong>
                       </p>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          Listen Port *
+                          {t('meters.listenPort')} *
                         </label>
                         <input type="number" required value={connectionConfig.listen_port}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, listen_port: parseInt(e.target.value) })}
                           placeholder="8888"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                         <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                          Same port for all meters in this building
+                          {t('meters.samePort')}
                         </p>
                       </div>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          Data Key (JSON field) *
+                          {t('meters.dataKey')} *
                         </label>
                         <input type="text" required value={connectionConfig.data_key}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, data_key: e.target.value })}
                           placeholder="apart1_kwh"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                         <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                          Unique key like: apart1_kwh, solar_kwh, etc.
+                          {t('meters.dataKeyHelp')}
                         </p>
                       </div>
                     </div>
@@ -616,12 +618,12 @@ export default function Meters() {
               <div style={{ marginTop: '16px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                   <input type="checkbox" checked={formData.is_active} onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })} />
-                  <span style={{ fontWeight: '500', fontSize: '14px' }}>Active (collect data)</span>
+                  <span style={{ fontWeight: '500', fontSize: '14px' }}>{t('meters.activeCollectData')}</span>
                 </label>
               </div>
 
               <div style={{ marginTop: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>Notes</label>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('common.notes')}</label>
                 <textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={2} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'inherit' }} />
               </div>
@@ -631,13 +633,13 @@ export default function Meters() {
                   flex: 1, padding: '12px', backgroundColor: '#007bff', color: 'white',
                   border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500'
                 }}>
-                  {editingMeter ? 'Update' : 'Create'}
+                  {editingMeter ? t('common.update') : t('common.create')}
                 </button>
                 <button type="button" onClick={() => { setShowModal(false); setEditingMeter(null); }} style={{
                   flex: 1, padding: '12px', backgroundColor: '#6c757d', color: 'white',
                   border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500'
                 }}>
-                  Cancel
+                  {t('common.cancel')}
                 </button>
               </div>
             </form>

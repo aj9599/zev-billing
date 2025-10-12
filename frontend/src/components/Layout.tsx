@@ -1,6 +1,7 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, Building, Zap, Car, FileText, Settings, LogOut, Activity, DollarSign } from 'lucide-react';
 import { api } from '../api/client';
+import { useTranslation } from '../i18n';
 
 interface LayoutProps {
   onLogout: () => void;
@@ -8,6 +9,7 @@ interface LayoutProps {
 
 export default function Layout({ onLogout }: LayoutProps) {
   const location = useLocation();
+  const { t, language, setLanguage } = useTranslation();
 
   const handleLogout = () => {
     api.logout();
@@ -15,15 +17,15 @@ export default function Layout({ onLogout }: LayoutProps) {
   };
 
   const navItems = [
-    { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/users', icon: Users, label: 'Users' },
-    { path: '/buildings', icon: Building, label: 'Buildings' },
-    { path: '/meters', icon: Zap, label: 'Meters' },
-    { path: '/chargers', icon: Car, label: 'Chargers' },
-    { path: '/billing', icon: FileText, label: 'Billing' },
-    { path: '/pricing', icon: DollarSign, label: 'Pricing' },
-    { path: '/logs', icon: Activity, label: 'Logs' },
-    { path: '/settings', icon: Settings, label: 'Settings' },
+    { path: '/', icon: LayoutDashboard, label: t('nav.dashboard') },
+    { path: '/users', icon: Users, label: t('nav.users') },
+    { path: '/buildings', icon: Building, label: t('nav.buildings') },
+    { path: '/meters', icon: Zap, label: t('nav.meters') },
+    { path: '/chargers', icon: Car, label: t('nav.chargers') },
+    { path: '/billing', icon: FileText, label: t('nav.billing') },
+    { path: '/pricing', icon: DollarSign, label: t('nav.pricing') },
+    { path: '/logs', icon: Activity, label: t('nav.logs') },
+    { path: '/settings', icon: Settings, label: t('nav.settings') },
   ];
 
   return (
@@ -80,6 +82,51 @@ export default function Layout({ onLogout }: LayoutProps) {
           })}
         </nav>
 
+        {/* Language Switcher */}
+        <div style={{ 
+          display: 'flex', 
+          gap: '8px', 
+          padding: '8px', 
+          backgroundColor: '#2a2a2a',
+          borderRadius: '8px',
+          marginBottom: '12px'
+        }}>
+          <button
+            onClick={() => setLanguage('en')}
+            style={{
+              flex: 1,
+              padding: '8px',
+              backgroundColor: language === 'en' ? '#667eea' : 'transparent',
+              color: 'white',
+              border: language === 'en' ? '2px solid #667eea' : '1px solid #444',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            EN
+          </button>
+          <button
+            onClick={() => setLanguage('de')}
+            style={{
+              flex: 1,
+              padding: '8px',
+              backgroundColor: language === 'de' ? '#667eea' : 'transparent',
+              color: 'white',
+              border: language === 'de' ? '2px solid #667eea' : '1px solid #444',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            DE
+          </button>
+        </div>
+
         <button
           onClick={handleLogout}
           style={{
@@ -99,7 +146,7 @@ export default function Layout({ onLogout }: LayoutProps) {
           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
         >
           <LogOut size={20} />
-          <span>Logout</span>
+          <span>{t('nav.logout')}</span>
         </button>
       </aside>
 
