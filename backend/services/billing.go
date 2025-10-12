@@ -370,7 +370,7 @@ func (bs *BillingService) calculateZEVConsumptionFixed(userID, buildingID int, s
 	log.Printf("    [ZEV] Calculating consumption for user %d in building %d", userID, buildingID)
 	log.Printf("    [ZEV] Period: %s to %s", start.Format("2006-01-02 15:04:05"), end.Format("2006-01-02 15:04:05"))
 
-	// Get all readings for this building, sorted by time
+	// Get all readings for this building
 	type ReadingData struct {
 		MeterID     int
 		MeterType   string
@@ -397,20 +397,26 @@ func (bs *BillingService) calculateZEVConsumptionFixed(userID, buildingID int, s
 
 	// Store all readings
 	allReadings := []ReadingData{}
+	solarReadingsFound := 0
 	for rows.Next() {
 		var r ReadingData
 		if err := rows.Scan(&r.MeterID, &r.MeterType, &r.UserID, &r.ReadingTime, &r.PowerKWh); err != nil {
 			continue
 		}
 		allReadings = append(allReadings, r)
+		if r.MeterType == "solar_meter" {
+			solarReadingsFound++
+		}
 	}
 
+	log.Printf("    [ZEV] Fetched %d readings (%d solar)", len(allReadings), solarReadingsFound)
+
 	if len(allReadings) == 0 {
-		log.Printf("    [ZEV] ERROR: No readings found for building %d", buildingID)
+		log.Printf("    [ZEV] ERROR: No readings found")
 		return 0, 0, 0
 	}
 
-	// Group by timestamp and compute consumption at each interval
+	// FIXED: Group by rounded timestamp (to nearest minute) to handle microsecond differences
 	type IntervalData struct {
 		UserConsumption     float64
 		BuildingConsumption float64
@@ -422,31 +428,35 @@ func (bs *BillingService) calculateZEVConsumptionFixed(userID, buildingID int, s
 	intervalData := make(map[time.Time]*IntervalData)
 
 	for _, reading := range allReadings {
-		timestamp := reading.ReadingTime
+		// FIXED: Round timestamp to nearest minute
+		roundedTime := reading.ReadingTime.Truncate(time.Minute)
 
 		// Initialize interval if needed
-		if intervalData[timestamp] == nil {
-			intervalData[timestamp] = &IntervalData{}
+		if intervalData[roundedTime] == nil {
+			intervalData[roundedTime] = &IntervalData{}
 		}
 
-		// Calculate consumption since last reading
+		// Calculate consumption since last reading for this meter
 		var consumption float64
 		if prevVal, exists := prevReadings[reading.MeterID]; exists {
 			consumption = reading.PowerKWh - prevVal
 			if consumption < 0 {
 				consumption = 0 // Handle meter resets
 			}
+		} else {
+			// First reading for this meter - no previous value, consumption = 0
+			consumption = 0
 		}
 		prevReadings[reading.MeterID] = reading.PowerKWh
 
 		// Categorize the consumption
 		if reading.MeterType == "apartment_meter" {
 			if reading.UserID.Valid && int(reading.UserID.Int64) == userID {
-				intervalData[timestamp].UserConsumption += consumption
+				intervalData[roundedTime].UserConsumption += consumption
 			}
-			intervalData[timestamp].BuildingConsumption += consumption
+			intervalData[roundedTime].BuildingConsumption += consumption
 		} else if reading.MeterType == "solar_meter" {
-			intervalData[timestamp].SolarProduction += consumption
+			intervalData[roundedTime].SolarProduction += consumption
 		}
 	}
 
@@ -455,18 +465,24 @@ func (bs *BillingService) calculateZEVConsumptionFixed(userID, buildingID int, s
 	totalSolar := 0.0
 	totalConsumption := 0.0
 	intervalCount := 0
+	solarUsed := 0.0
 
 	// Sort timestamps
 	timestamps := make([]time.Time, 0, len(intervalData))
 	for ts := range intervalData {
 		timestamps = append(timestamps, ts)
 	}
-
-	for i, timestamp := range timestamps {
-		if i == 0 {
-			continue // Skip first interval (no previous reading to compare)
+	
+	// Sort timestamps
+	for i := 0; i < len(timestamps); i++ {
+		for j := i + 1; j < len(timestamps); j++ {
+			if timestamps[i].After(timestamps[j]) {
+				timestamps[i], timestamps[j] = timestamps[j], timestamps[i]
+			}
 		}
+	}
 
+	for _, timestamp := range timestamps {
 		data := intervalData[timestamp]
 		
 		if data.UserConsumption <= 0 {
@@ -498,9 +514,13 @@ func (bs *BillingService) calculateZEVConsumptionFixed(userID, buildingID int, s
 
 		totalSolar += userSolar
 		totalNormal += userNormal
+		
+		if userSolar > 0 {
+			solarUsed += userSolar
+		}
 
-		// Log first few intervals
-		if intervalCount <= 5 {
+		// Log first few intervals with solar
+		if (intervalCount <= 5) || (userSolar > 0 && solarUsed <= userSolar*3) {
 			log.Printf("    [ZEV] %s: User %.3f kWh, Building %.3f kWh, Solar %.3f kWh → %.3f solar + %.3f grid", 
 				timestamp.Format("15:04"), data.UserConsumption, data.BuildingConsumption, 
 				data.SolarProduction, userSolar, userNormal)
