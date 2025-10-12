@@ -47,9 +47,10 @@ export default function Layout({ onLogout }: LayoutProps) {
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '0 20px',
-        zIndex: 1001
+        zIndex: 1001,
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
       }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 'bold' }}>ZEV Billing</h1>
+        <h1 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0 }}>ZEV Billing</h1>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           style={{
@@ -57,7 +58,10 @@ export default function Layout({ onLogout }: LayoutProps) {
             border: 'none',
             color: 'white',
             cursor: 'pointer',
-            padding: '8px'
+            padding: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
           }}
         >
           {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
@@ -211,7 +215,8 @@ export default function Layout({ onLogout }: LayoutProps) {
         flex: 1,
         padding: '30px',
         backgroundColor: '#f5f5f5',
-        minHeight: '100vh'
+        minHeight: '100vh',
+        width: '100%'
       }}>
         <Outlet />
       </main>
@@ -229,6 +234,7 @@ export default function Layout({ onLogout }: LayoutProps) {
           .sidebar {
             transform: translateX(-100%);
             top: 60px;
+            height: calc(100vh - 60px);
           }
 
           .sidebar.mobile-open {
@@ -241,13 +247,16 @@ export default function Layout({ onLogout }: LayoutProps) {
 
           .main-content {
             margin-left: 0 !important;
-            padding: 80px 15px 15px 15px !important;
+            margin-top: 60px !important;
+            padding: 20px 15px 15px 15px !important;
+            width: 100% !important;
+            min-height: calc(100vh - 60px) !important;
           }
         }
 
         @media (max-width: 480px) {
           .main-content {
-            padding: 70px 10px 10px 10px !important;
+            padding: 15px 10px 10px 10px !important;
           }
         }
       `}</style>
