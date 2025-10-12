@@ -390,9 +390,9 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				}
 			}
 
-			// STEP 5: Read all readings for this meter - USE power_kwh for chart display
+			// STEP 5: Read all readings and calculate power (kW) from consumption
 			dataRows, err := h.db.QueryContext(ctx, `
-				SELECT reading_time, power_kwh
+				SELECT reading_time, consumption_kwh
 				FROM meter_readings
 				WHERE meter_id = ? AND reading_time >= ?
 				ORDER BY reading_time ASC
@@ -412,13 +412,21 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				continue
 			}
 
+			// Calculate power in kW from consumption
+			// Readings are every 15 minutes = 0.25 hours
+			// Power (kW) = Consumption (kWh) / Time (h)
+			const intervalHours = 0.25 // 15 minutes
+
 			for dataRows.Next() {
 				var timestamp time.Time
-				var powerKwh float64
-				if err := dataRows.Scan(&timestamp, &powerKwh); err == nil {
+				var consumptionKwh float64
+				if err := dataRows.Scan(&timestamp, &consumptionKwh); err == nil {
+					// Calculate power from consumption
+					powerKw := consumptionKwh / intervalHours
+					
 					meterData.Data = append(meterData.Data, models.ConsumptionData{
 						Timestamp: timestamp,
-						Power:     powerKwh,  // Use actual meter reading for chart
+						Power:     powerKw,  // Now in kW instead of kWh
 						Source:    mi.meterType,
 					})
 				}
