@@ -432,7 +432,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 
 			userName := ""
 			if mi.userID.Valid {
-				err := h.db.QueryRowContext(ctx, `
+				err = h.db.QueryRowContext(ctx, `
 					SELECT first_name || ' ' || last_name 
 					FROM users 
 					WHERE id = ?
@@ -452,7 +452,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			var baselineTimestamp time.Time
 			var baselinePowerKwh float64
 			
-			err := h.db.QueryRowContext(ctx, `
+			err = h.db.QueryRowContext(ctx, `
 				SELECT reading_time, power_kwh
 				FROM meter_readings
 				WHERE meter_id = ? AND reading_time < ?
@@ -469,7 +469,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					mi.id, baselineTimestamp, baselinePowerKwh)
 			}
 			
-			dataRows, err := h.db.QueryContext(ctx, `
+			dataRows, err = h.db.QueryContext(ctx, `
 				SELECT reading_time, power_kwh
 				FROM meter_readings
 				WHERE meter_id = ? 
@@ -574,7 +574,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			for _, ci := range chargerInfos {
 				log.Printf("    Processing charger ID: %d, Name: %s", ci.id, ci.name)
 
-				sessionRows, err := h.db.QueryContext(ctx, `
+				sessionRows, err = h.db.QueryContext(ctx, `
 					SELECT cs.session_time, cs.power_kwh, cs.user_id, cs.state
 					FROM charger_sessions cs
 					WHERE cs.charger_id = ? 
@@ -627,7 +627,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					}
 
 					userName := userID
-					err := h.db.QueryRowContext(ctx, `
+					err = h.db.QueryRowContext(ctx, `
 						SELECT first_name || ' ' || last_name 
 						FROM users 
 						WHERE id = ?
@@ -641,7 +641,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					var baselineTime time.Time
 					var baselinePowerKwh float64
 					
-					err := h.db.QueryRowContext(ctx, `
+					err = h.db.QueryRowContext(ctx, `
 						SELECT session_time, power_kwh
 						FROM charger_sessions
 						WHERE charger_id = ? 
