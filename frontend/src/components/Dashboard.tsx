@@ -455,33 +455,26 @@ export default function Dashboard() {
                             display: 'flex',
                             alignItems: 'center',
                             gap: '6px',
-                            padding: '6px 10px',
+                            padding: '4px 8px',
                             backgroundColor: 'white',
-                            borderRadius: '6px',
-                            fontSize: '13px',
-                            border: isCharger ? '2px solid #ff6b35' : '1px solid #e5e7eb',
-                            boxShadow: isCharger ? '0 2px 4px rgba(255, 107, 53, 0.2)' : 'none'
+                            borderRadius: '4px',
+                            fontSize: '13px'
                           }}
                         >
                           <div
                             style={{
-                              width: '16px',
-                              height: '16px',
-                              borderRadius: '3px',
+                              width: '12px',
+                              height: '12px',
+                              borderRadius: '2px',
                               backgroundColor: getMeterColor(meter.meter_type, meter.meter_id, meter.user_name),
                               flexShrink: 0,
-                              border: isCharger ? '2px solid #fff' : '1px solid rgba(0,0,0,0.1)',
-                              boxShadow: isCharger ? '0 0 0 2px rgba(255, 107, 53, 0.3)' : 'none'
+                              border: isCharger ? '2px dashed rgba(0,0,0,0.2)' : 'none'
                             }}
                           />
-                          <span style={{ fontWeight: isCharger ? '600' : '500' }}>
+                          <span style={{ fontWeight: '500' }}>
                             {getMeterDisplayName(meter)}
                           </span>
-                          <span style={{ 
-                            color: isCharger ? '#ff6b35' : '#6b7280', 
-                            fontSize: '12px',
-                            fontWeight: isCharger ? '600' : 'normal'
-                          }}>
+                          <span style={{ color: '#6b7280', fontSize: '12px' }}>
                             ({meter.meter_type === 'charger' ? '⚡ Charger' : 
                               meter.meter_type === 'solar_meter' ? '☀️ Solar' :
                               meter.meter_type === 'apartment_meter' ? '🏠 Apartment' :
@@ -541,12 +534,12 @@ export default function Dashboard() {
                               type="monotone"
                               dataKey={uniqueKey}
                               stroke={getMeterColor(meter.meter_type, meter.meter_id, meter.user_name)}
-                              strokeWidth={isCharger ? 4 : 2}
-                              strokeDasharray={isCharger ? '8 4' : undefined}
+                              strokeWidth={isCharger ? 3 : 2}
+                              strokeDasharray={isCharger ? '5 5' : undefined}
                               name={getMeterDisplayName(meter)}
-                              dot={isCharger ? { r: 5, strokeWidth: 2, fill: '#fff' } : false}
-                              activeDot={{ r: 6, strokeWidth: 2 }}
-                              connectNulls={true}
+                              dot={false}
+                              activeDot={{ r: 4 }}
+                              connectNulls={false}
                             />
                           );
                         })}
