@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Users as UsersIcon, Mail, Phone, MapPin } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Users as UsersIcon, Mail, Phone, MapPin, CreditCard } from 'lucide-react';
 import { api } from '../api/client';
 import type { User, Building } from '../types';
 import { useTranslation } from '../i18n';
@@ -123,7 +123,7 @@ export default function Users() {
             <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
               <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.name')}</th>
               <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.email')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.phone')}</th>
+              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>RFID Card(s)</th>
               <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.building')}</th>
               <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.actions')}</th>
             </tr>
@@ -133,7 +133,24 @@ export default function Users() {
               <tr key={user.id} style={{ borderBottom: '1px solid #eee' }}>
                 <td style={{ padding: '16px' }}>{user.first_name} {user.last_name}</td>
                 <td style={{ padding: '16px' }}>{user.email}</td>
-                <td style={{ padding: '16px' }}>{user.phone}</td>
+                <td style={{ padding: '16px' }}>
+                  {user.charger_ids ? (
+                    <span style={{ 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      gap: '4px',
+                      padding: '4px 8px',
+                      backgroundColor: '#f0f9ff',
+                      color: '#0369a1',
+                      borderRadius: '4px',
+                      fontSize: '13px',
+                      fontFamily: 'monospace'
+                    }}>
+                      <CreditCard size={14} />
+                      {user.charger_ids}
+                    </span>
+                  ) : '-'}
+                </td>
                 <td style={{ padding: '16px' }}>
                   {buildings.find(b => b.id === user.building_id)?.name || '-'}
                 </td>
@@ -181,6 +198,12 @@ export default function Users() {
                   <div style={{ fontSize: '13px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                     <Phone size={14} />
                     {user.phone}
+                  </div>
+                )}
+                {user.charger_ids && (
+                  <div style={{ fontSize: '13px', color: '#0369a1', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                    <CreditCard size={14} />
+                    RFID: {user.charger_ids}
                   </div>
                 )}
                 {user.building_id && (
@@ -260,6 +283,29 @@ export default function Users() {
                   <option value="">{t('users.selectBuilding')}</option>
                   {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
+                <small style={{ display: 'block', marginTop: '4px', color: '#666', fontSize: '12px' }}>
+                  User can charge at any charger in this building
+                </small>
+              </div>
+
+              <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#0369a1' }}>
+                  <CreditCard size={18} />
+                  RFID Card ID(s) *
+                </label>
+                <input 
+                  type="text" 
+                  required
+                  value={formData.charger_ids} 
+                  onChange={(e) => setFormData({ ...formData, charger_ids: e.target.value })}
+                  placeholder="15"
+                  style={{ width: '100%', padding: '10px', border: '1px solid #bae6fd', borderRadius: '6px', fontFamily: 'monospace' }} 
+                />
+                <small style={{ display: 'block', marginTop: '6px', color: '#0369a1', fontSize: '12px', lineHeight: '1.4' }}>
+                  <strong>Important:</strong> Enter the RFID card number(s) that Loxone sends (e.g., "15" or "15,16" for multiple cards).
+                  <br />
+                  This is NOT a charger ID - it's the identification number from the physical RFID card/tag.
+                </small>
               </div>
 
               <div style={{ marginTop: '16px' }}>
@@ -285,12 +331,6 @@ export default function Users() {
               </div>
 
               <div style={{ marginTop: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('users.chargerIds')}</label>
-                <input type="text" value={formData.charger_ids} onChange={(e) => setFormData({ ...formData, charger_ids: e.target.value })}
-                  placeholder={t('users.chargerIdsPlaceholder')} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
-              </div>
-
-              <div style={{ marginTop: '16px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('common.notes')}</label>
                 <textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={3} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'inherit' }} />
@@ -299,13 +339,13 @@ export default function Users() {
               <div className="button-group" style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                 <button type="submit" style={{
                   flex: 1, padding: '12px', backgroundColor: '#007bff', color: 'white',
-                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500'
+                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
                 }}>
                   {editingUser ? t('common.update') : t('common.create')}
                 </button>
                 <button type="button" onClick={() => { setShowModal(false); setEditingUser(null); }} style={{
                   flex: 1, padding: '12px', backgroundColor: '#6c757d', color: 'white',
-                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500'
+                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
                 }}>
                   {t('common.cancel')}
                 </button>
@@ -332,6 +372,10 @@ export default function Users() {
 
           .modal-content h2 {
             font-size: 20px !important;
+          }
+
+          .form-row {
+            grid-template-columns: 1fr !important;
           }
         }
 
