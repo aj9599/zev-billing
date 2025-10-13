@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import * as React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Users, Building, Zap, Car, Activity, TrendingUp, TrendingDown, Sun, Battery, LayoutDashboard } from 'lucide-react';
+import { Users, Building, Zap, Car, Activity, TrendingUp, TrendingDown, Sun, Battery, LayoutDashboard, Home, Bolt } from 'lucide-react';
 import { api } from '../api/client';
 import type { DashboardStats } from '../types';
 import { useTranslation } from '../i18n';
@@ -68,7 +68,10 @@ function getMeterColor(meterType: string, meterId?: number, userName?: string): 
 function getMeterDisplayName(meter: MeterData): string {
   if (meter.meter_type === 'charger') {
     const userName = meter.user_name || 'Unknown User';
-    return `${meter.meter_name} - ${userName}`;
+    // Extract just the numeric user ID if the format is "User XX"
+    const userMatch = userName.match(/^User (\d+)$/);
+    const displayUser = userMatch ? `User ${userMatch[1]}` : userName;
+    return `${meter.meter_name} - ${displayUser}`;
   }
   
   if (meter.user_name) {
@@ -82,6 +85,21 @@ function getMeterUniqueKey(meter: MeterData): string {
     return `charger_${meter.meter_id}_${meter.user_name}`;
   }
   return `meter_${meter.meter_id}`;
+}
+
+function getMeterTypeIcon(meterType: string): { Icon: any; label: string } {
+  switch (meterType) {
+    case 'charger':
+      return { Icon: Bolt, label: 'Charger' };
+    case 'solar_meter':
+      return { Icon: Sun, label: 'Solar' };
+    case 'apartment_meter':
+      return { Icon: Home, label: 'Apartment' };
+    case 'total_meter':
+      return { Icon: Zap, label: 'Total' };
+    default:
+      return { Icon: Zap, label: meterType.replace('_', ' ') };
+  }
 }
 
 function roundToNearest15Minutes(timestamp: string): Date {
@@ -390,6 +408,19 @@ export default function Dashboard() {
             const timeMap = new Map<string, any>();
             const meters = building.meters || [];
             
+            // Debug: Log charger meters
+            const chargerMeters = meters.filter(m => m.meter_type === 'charger');
+            if (chargerMeters.length > 0) {
+              console.log(`Building ${building.building_name} has ${chargerMeters.length} charger(s):`);
+              chargerMeters.forEach(cm => {
+                console.log(`  - ${cm.meter_name} (User: ${cm.user_name}): ${cm.data.length} data points`);
+                if (cm.data.length > 0) {
+                  console.log(`    First point: ${cm.data[0].timestamp}, Power: ${cm.data[0].power}W`);
+                  console.log(`    Last point: ${cm.data[cm.data.length-1].timestamp}, Power: ${cm.data[cm.data.length-1].power}W`);
+                }
+              });
+            }
+            
             meters.forEach(meter => {
               const readings = meter.data || [];
               readings.forEach(reading => {
@@ -414,6 +445,16 @@ export default function Dashboard() {
             const chartData = Array.from(timeMap.values()).sort((a, b) => {
               return a.sortKey - b.sortKey;
             });
+            
+            // Debug: Log chart data for chargers
+            if (chargerMeters.length > 0) {
+              console.log(`Chart data has ${chartData.length} time points`);
+              const chargerKeys = chargerMeters.map(cm => getMeterUniqueKey(cm));
+              const pointsWithChargerData = chartData.filter(point => 
+                chargerKeys.some(key => point[key] !== undefined)
+              );
+              console.log(`Points with charger data: ${pointsWithChargerData.length}`);
+            }
 
             return (
               <div
@@ -448,6 +489,7 @@ export default function Dashboard() {
                     {meters.map(meter => {
                       const uniqueKey = getMeterUniqueKey(meter);
                       const isCharger = meter.meter_type === 'charger';
+                      const { Icon: TypeIcon, label: typeLabel } = getMeterTypeIcon(meter.meter_type);
                       return (
                         <div
                           key={uniqueKey}
@@ -474,11 +516,15 @@ export default function Dashboard() {
                           <span style={{ fontWeight: '500' }}>
                             {getMeterDisplayName(meter)}
                           </span>
-                          <span style={{ color: '#6b7280', fontSize: '12px' }}>
-                            ({meter.meter_type === 'charger' ? '⚡ Charger' : 
-                              meter.meter_type === 'solar_meter' ? '☀️ Solar' :
-                              meter.meter_type === 'apartment_meter' ? '🏠 Apartment' :
-                              meter.meter_type.replace('_', ' ')})
+                          <span style={{ 
+                            color: '#6b7280', 
+                            fontSize: '12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}>
+                            <TypeIcon size={12} />
+                            {typeLabel}
                           </span>
                         </div>
                       );

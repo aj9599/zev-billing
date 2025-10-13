@@ -635,15 +635,19 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					}
 
 					// Get user name
-					userName := userID
+					userName := fmt.Sprintf("User %s", userID)
 					err = h.db.QueryRowContext(ctx, `
 						SELECT first_name || ' ' || last_name 
 						FROM users 
 						WHERE id = ?
 					`, userID).Scan(&userName)
 					
-					if err != nil && err != sql.ErrNoRows {
-						log.Printf("    Error getting user name for user %s: %v", userID, err)
+					if err != nil {
+						if err != sql.ErrNoRows {
+							log.Printf("    Error getting user name for user %s: %v", userID, err)
+						}
+						// Keep default "User {id}" if not found
+						log.Printf("    User %s not found in database, using ID as name", userID)
 					}
 
 					// Get baseline reading for this user (last session before period)
@@ -673,10 +677,15 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					consumptionData := []models.ConsumptionData{}
 					previousReading := baselineReading
 					
+					log.Printf("    Processing %d sessions for user %s", len(sessions), userID)
+					
 					// Calculate power from energy differences
-					for _, currentReading := range sessions {
+					for idx, currentReading := range sessions {
 						if previousReading != nil {
 							consumptionKwh := currentReading.powerKwh - previousReading.powerKwh
+							
+							log.Printf("    Session %d: time=%v, power_kwh=%.4f, prev_power_kwh=%.4f, consumption=%.4f kWh", 
+								idx, currentReading.sessionTime, currentReading.powerKwh, previousReading.powerKwh, consumptionKwh)
 							
 							if consumptionKwh < 0 {
 								log.Printf("    WARNING: Negative consumption for charger %d, user %s at %v (possible reset)", 
@@ -685,8 +694,9 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 								continue
 							}
 							
-							// Skip if consumption is exactly 0 to avoid flat line at bottom
-							if consumptionKwh == 0 {
+							// Include very small consumption values (threshold: 0.001 kWh)
+							if consumptionKwh < 0.001 {
+								log.Printf("    SKIPPING: Consumption too small (%.6f kWh)", consumptionKwh)
 								previousReading = &currentReading
 								continue
 							}
@@ -706,8 +716,10 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 								Source:    "charger",
 							})
 							
-							log.Printf("    Charger %d, user %s: %.3f kWh over %.2f hours = %.0f W", 
+							log.Printf("    ✓ ADDED DATA POINT: Charger %d, user %s: %.4f kWh over %.2f hours = %.0f W", 
 								ci.id, userID, consumptionKwh, timeDiffHours, powerW)
+						} else {
+							log.Printf("    Session %d: No previous reading, setting baseline", idx)
 						}
 						
 						previousReading = &currentReading
