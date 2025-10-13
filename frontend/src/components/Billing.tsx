@@ -109,35 +109,71 @@ export default function Billing() {
     }
   };
 
-  const downloadPDF = (invoice: Invoice) => {
+  const downloadPDF = (invoice: Invoice, senderInfo?: any, bankingInfo?: any) => {
     const user = users.find(u => u.id === invoice.user_id);
     const building = buildings.find(b => b.id === invoice.building_id);
     
-    // Get sender and banking details from the invoice metadata if available
-    const senderInfo = {
-      name: formData.sender_name || 'ZEV Billing System',
+    // Use provided info or defaults
+    const sender = senderInfo || {
+      name: formData.sender_name || '',
       address: formData.sender_address || '',
       city: formData.sender_city || '',
       zip: formData.sender_zip || '',
       country: formData.sender_country || 'Switzerland'
     };
     
-    const bankingInfo = {
+    const banking = bankingInfo || {
       name: formData.bank_name || '',
       iban: formData.bank_iban || '',
       holder: formData.bank_account_holder || ''
     };
     
+    const hasBankingDetails = banking.iban && banking.holder;
+    
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
     
-    const hasBankingDetails = bankingInfo.iban && bankingInfo.holder;
+    // Generate QR code data for Swiss QR bill
+    const generateQRData = () => {
+      if (!hasBankingDetails) return '';
+      
+      const parts = [
+        'SPC',
+        '0200',
+        '1',
+        banking.iban.replace(/\s/g, ''),
+        'K',
+        banking.holder,
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        invoice.total_amount.toFixed(2),
+        invoice.currency,
+        'K',
+        `${user?.first_name || ''} ${user?.last_name || ''}`,
+        user?.address_street || '',
+        `${user?.address_zip || ''} ${user?.address_city || ''}`.trim(),
+        '',
+        '',
+        '',
+        '',
+        'NON',
+        '',
+        invoice.invoice_number
+      ];
+      
+      return parts.join('\n');
+    };
     
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
       <head>
         <title>${t('billing.invoice')} ${invoice.invoice_number}</title>
+        <meta charset="UTF-8">
         <style>
           @page {
             size: A4;
@@ -248,6 +284,10 @@ export default function Billing() {
             border-bottom: 1px solid #eee;
           }
           
+          td svg {
+            flex-shrink: 0;
+          }
+          
           .text-right { 
             text-align: right;
           }
@@ -308,6 +348,7 @@ export default function Billing() {
             justify-content: center;
             min-height: 100vh;
             text-align: center;
+            padding: 40px;
           }
           
           .qr-title {
@@ -319,9 +360,10 @@ export default function Billing() {
           
           .qr-container {
             border: 2px solid #007bff;
-            padding: 20px;
+            padding: 30px;
             border-radius: 10px;
             background: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
           }
           
           .qr-info {
@@ -329,6 +371,10 @@ export default function Billing() {
             font-size: 14px;
             line-height: 1.8;
             text-align: left;
+          }
+          
+          #qrcode {
+            margin: 20px auto;
           }
           
           @media print {
@@ -345,12 +391,12 @@ export default function Billing() {
               <div class="invoice-number">#${invoice.invoice_number}</div>
               <div class="status-badge">${invoice.status.toUpperCase()}</div>
             </div>
-            ${senderInfo.name ? `
+            ${sender.name ? `
               <div class="header-right">
-                <strong>${senderInfo.name}</strong>
-                ${senderInfo.address ? `${senderInfo.address}<br>` : ''}
-                ${senderInfo.zip ? `${senderInfo.zip} ` : ''}${senderInfo.city ? `${senderInfo.city}<br>` : ''}
-                ${senderInfo.country || ''}
+                <strong>${sender.name}</strong>
+                ${sender.address ? `${sender.address}<br>` : ''}
+                ${sender.zip ? `${sender.zip} ` : ''}${sender.city ? `${sender.city}<br>` : ''}
+                ${sender.country || ''}
               </div>
             ` : ''}
           </div>
@@ -402,25 +448,62 @@ export default function Billing() {
                 } 
                 else if (item.item_type === 'solar_power') {
                   return `<tr class="item-cost solar-highlight">
-                    <td><strong>☀ ${item.description}</strong></td>
+                    <td style="display: flex; align-items: center; gap: 8px;">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="4"/>
+                        <path d="M12 2v2"/>
+                        <path d="M12 20v2"/>
+                        <path d="m4.93 4.93 1.41 1.41"/>
+                        <path d="m17.66 17.66 1.41 1.41"/>
+                        <path d="M2 12h2"/>
+                        <path d="M20 12h2"/>
+                        <path d="m6.34 17.66-1.41 1.41"/>
+                        <path d="m19.07 4.93-1.41 1.41"/>
+                      </svg>
+                      <strong>${item.description}</strong>
+                    </td>
                     <td class="text-right"><strong>${invoice.currency} ${item.total_price.toFixed(2)}</strong></td>
                   </tr>`;
                 } 
                 else if (item.item_type === 'normal_power') {
                   return `<tr class="item-cost normal-highlight">
-                    <td><strong>⚡ ${item.description}</strong></td>
+                    <td style="display: flex; align-items: center; gap: 8px;">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>
+                      </svg>
+                      <strong>${item.description}</strong>
+                    </td>
                     <td class="text-right"><strong>${invoice.currency} ${item.total_price.toFixed(2)}</strong></td>
                   </tr>`;
                 }
                 else if (item.item_type === 'car_charging_normal') {
                   return `<tr class="item-cost charging-highlight">
-                    <td><strong>🚗 ${item.description}</strong></td>
+                    <td style="display: flex; align-items: center; gap: 8px;">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/>
+                        <circle cx="7" cy="17" r="2"/>
+                        <path d="M9 17h6"/>
+                        <circle cx="17" cy="17" r="2"/>
+                      </svg>
+                      <strong>${item.description}</strong>
+                    </td>
                     <td class="text-right"><strong>${invoice.currency} ${item.total_price.toFixed(2)}</strong></td>
                   </tr>`;
                 }
                 else if (item.item_type === 'car_charging_priority') {
                   return `<tr class="item-cost charging-highlight">
-                    <td><strong>🚗⚡ ${item.description}</strong></td>
+                    <td style="display: flex; align-items: center; gap: 8px;">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/>
+                        <circle cx="7" cy="17" r="2"/>
+                        <path d="M9 17h6"/>
+                        <circle cx="17" cy="17" r="2"/>
+                      </svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left: -4px;">
+                        <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>
+                      </svg>
+                      <strong>${item.description}</strong>
+                    </td>
                     <td class="text-right"><strong>${invoice.currency} ${item.total_price.toFixed(2)}</strong></td>
                   </tr>`;
                 }
@@ -447,9 +530,9 @@ export default function Billing() {
             <div class="info-section" style="margin-top: 30px;">
               <h3>${t('billing.paymentDetails')}</h3>
               <p>
-                <strong>${t('billing.bankName')}:</strong> ${bankingInfo.name}<br>
-                <strong>${t('billing.accountHolder')}:</strong> ${bankingInfo.holder}<br>
-                <strong>${t('billing.iban')}:</strong> ${bankingInfo.iban}
+                <strong>${t('billing.bankName')}:</strong> ${banking.name}<br>
+                <strong>${t('billing.accountHolder')}:</strong> ${banking.holder}<br>
+                <strong>${t('billing.iban')}:</strong> ${banking.iban}
               </p>
             </div>
           ` : ''}
@@ -464,59 +547,46 @@ export default function Billing() {
           <div class="page qr-page">
             <div class="qr-title">${t('billing.swissQR')}</div>
             <div class="qr-container">
-              <div id="qrcode"></div>
+              <canvas id="qrcode"></canvas>
               <div class="qr-info">
                 <p><strong>${t('billing.invoice')}:</strong> ${invoice.invoice_number}</p>
                 <p><strong>${t('billing.amount')}:</strong> ${invoice.currency} ${invoice.total_amount.toFixed(2)}</p>
-                <p><strong>${t('billing.iban')}:</strong> ${bankingInfo.iban}</p>
-                <p><strong>${t('billing.reference')}: </strong>${invoice.invoice_number.replace(/[^0-9]/g, '')}</p>
+                <p><strong>${t('billing.iban')}:</strong> ${banking.iban}</p>
+                <p><strong>${t('billing.reference')}:</strong> ${invoice.invoice_number.replace(/[^0-9]/g, '')}</p>
               </div>
             </div>
           </div>
         ` : ''}
 
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
         <script>
           ${hasBankingDetails ? `
             // Generate Swiss QR Code
-            const qrData = [
-              'SPC',
-              '0200',
-              '1',
-              '${bankingInfo.iban}',
-              'K',
-              '${bankingInfo.holder}',
-              '',
-              '',
-              '',
-              '',
-              '',
-              '',
-              '${invoice.total_amount.toFixed(2)}',
-              '${invoice.currency}',
-              'K',
-              '${user?.first_name} ${user?.last_name}',
-              '${user?.address_street || ''}',
-              '${user?.address_zip || ''} ${user?.address_city || ''}',
-              '',
-              '',
-              '',
-              '',
-              'NON',
-              '',
-              '${invoice.invoice_number}'
-            ].join('\\n');
+            const qrData = ${JSON.stringify(generateQRData())};
             
-            new QRCode(document.getElementById("qrcode"), {
-              text: qrData,
+            const canvas = document.getElementById('qrcode');
+            QRCode.toCanvas(canvas, qrData, {
               width: 300,
-              height: 300
+              margin: 2,
+              errorCorrectionLevel: 'M'
+            }, function (error) {
+              if (error) {
+                console.error('QR Code generation error:', error);
+              } else {
+                console.log('QR Code generated successfully');
+              }
             });
-          ` : ''}
-          
-          window.onload = function() {
-            ${hasBankingDetails ? 'setTimeout(() => window.print(), 1000);' : 'window.print();'}
-          };
+            
+            // Wait for QR code to render before printing
+            setTimeout(() => {
+              window.print();
+            }, 1000);
+          ` : `
+            // No banking details, print immediately
+            window.onload = function() {
+              window.print();
+            };
+          `}
         </script>
       </body>
       </html>
@@ -610,20 +680,6 @@ export default function Billing() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <select 
-            value={language} 
-            onChange={(e) => setLanguage(e.target.value as 'en' | 'de')}
-            style={{
-              padding: '10px 15px',
-              border: '1px solid #ddd',
-              borderRadius: '6px',
-              fontSize: '14px',
-              cursor: 'pointer'
-            }}
-          >
-            <option value="en">English</option>
-            <option value="de">Deutsch</option>
-          </select>
           <button
             onClick={() => setShowGenerateModal(true)}
             style={{
@@ -1199,7 +1255,17 @@ export default function Billing() {
             </div>
 
             <div className="button-group" style={{ display: 'flex', gap: '12px', marginTop: '30px' }}>
-              <button onClick={() => downloadPDF(selectedInvoice)} style={{
+              <button onClick={() => downloadPDF(selectedInvoice, {
+                name: formData.sender_name,
+                address: formData.sender_address,
+                city: formData.sender_city,
+                zip: formData.sender_zip,
+                country: formData.sender_country
+              }, {
+                name: formData.bank_name,
+                iban: formData.bank_iban,
+                holder: formData.bank_account_holder
+              })} style={{
                 flex: 1, padding: '12px', backgroundColor: '#28a745', color: 'white',
                 border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
