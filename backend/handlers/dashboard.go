@@ -80,24 +80,9 @@ func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	stats.TodaySolar = calculateTotalConsumption(h.db, ctx, solarMeterTypes, todayStart, todayEnd)
 	stats.MonthSolar = calculateTotalConsumption(h.db, ctx, solarMeterTypes, startOfMonth, now)
 
-	// Calculate car charging (charger_sessions - these are already consumption values, not cumulative)
-	if err := h.db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(power_kwh), 0) 
-		FROM charger_sessions
-		WHERE session_time >= ? AND session_time < ?
-	`, todayStart, todayEnd).Scan(&stats.TodayCharging); err != nil {
-		log.Printf("Error getting today's charging: %v", err)
-		stats.TodayCharging = 0
-	}
-
-	if err := h.db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(power_kwh), 0) 
-		FROM charger_sessions
-		WHERE session_time >= ?
-	`, startOfMonth).Scan(&stats.MonthCharging); err != nil {
-		log.Printf("Error getting month's charging: %v", err)
-		stats.MonthCharging = 0
-	}
+	// Calculate car charging (charger_sessions - need to calculate from cumulative values)
+	stats.TodayCharging = calculateTotalChargingConsumption(h.db, ctx, todayStart, todayEnd)
+	stats.MonthCharging = calculateTotalChargingConsumption(h.db, ctx, startOfMonth, now)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
@@ -181,6 +166,91 @@ func calculateTotalConsumption(db *sql.DB, ctx context.Context, meterTypes []str
 				totalConsumption += consumption
 			}
 		}
+	}
+	
+	return totalConsumption
+}
+
+func calculateTotalChargingConsumption(db *sql.DB, ctx context.Context, periodStart, periodEnd time.Time) float64 {
+	// Get all active chargers
+	chargerRows, err := db.QueryContext(ctx, `
+		SELECT id FROM chargers 
+		WHERE COALESCE(is_active, 1) = 1
+	`)
+	if err != nil {
+		log.Printf("Error querying chargers: %v", err)
+		return 0
+	}
+	defer chargerRows.Close()
+
+	totalConsumption := 0.0
+	
+	for chargerRows.Next() {
+		var chargerID int
+		if err := chargerRows.Scan(&chargerID); err != nil {
+			continue
+		}
+
+		// Get all distinct users for this charger
+		userRows, err := db.QueryContext(ctx, `
+			SELECT DISTINCT user_id 
+			FROM charger_sessions 
+			WHERE charger_id = ?
+			AND session_time >= ? AND session_time < ?
+		`, chargerID, periodStart, periodEnd)
+		
+		if err != nil {
+			continue
+		}
+
+		for userRows.Next() {
+			var userID string
+			if err := userRows.Scan(&userID); err != nil {
+				continue
+			}
+
+			// Get first and last readings for this user/charger combo
+			var firstReading sql.NullFloat64
+			db.QueryRowContext(ctx, `
+				SELECT power_kwh FROM charger_sessions 
+				WHERE charger_id = ? AND user_id = ? 
+				AND session_time >= ? AND session_time < ?
+				ORDER BY session_time ASC LIMIT 1
+			`, chargerID, userID, periodStart, periodEnd).Scan(&firstReading)
+
+			var latestReading sql.NullFloat64
+			db.QueryRowContext(ctx, `
+				SELECT power_kwh FROM charger_sessions 
+				WHERE charger_id = ? AND user_id = ? 
+				AND session_time >= ? AND session_time < ?
+				ORDER BY session_time DESC LIMIT 1
+			`, chargerID, userID, periodStart, periodEnd).Scan(&latestReading)
+
+			// Calculate consumption
+			if firstReading.Valid && latestReading.Valid {
+				// Try to get baseline from before the period
+				var baselineReading sql.NullFloat64
+				db.QueryRowContext(ctx, `
+					SELECT power_kwh FROM charger_sessions 
+					WHERE charger_id = ? AND user_id = ? 
+					AND session_time < ?
+					ORDER BY session_time DESC LIMIT 1
+				`, chargerID, userID, periodStart).Scan(&baselineReading)
+
+				var baseline float64
+				if baselineReading.Valid {
+					baseline = baselineReading.Float64
+				} else {
+					baseline = firstReading.Float64
+				}
+
+				consumption := latestReading.Float64 - baseline
+				if consumption > 0 {
+					totalConsumption += consumption
+				}
+			}
+		}
+		userRows.Close()
 	}
 	
 	return totalConsumption
@@ -539,14 +609,14 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				log.Printf("    Processing charger ID: %d, Name: %s", ci.id, ci.name)
 
 				// FIXED: Get charger sessions from startTime to now
+				// Sessions store CUMULATIVE kWh, so we need to calculate deltas
 				sessionRows, err := h.db.QueryContext(ctx, `
 					SELECT cs.session_time, cs.power_kwh, cs.user_id, cs.state
 					FROM charger_sessions cs
 					WHERE cs.charger_id = ? 
 					AND cs.session_time >= ?
 					AND cs.session_time <= ?
-					AND LOWER(cs.state) != 'idle'
-					ORDER BY cs.session_time ASC
+					ORDER BY cs.user_id, cs.session_time ASC
 				`, ci.id, startTime, now)
 
 				if err != nil {
@@ -555,7 +625,14 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				}
 
 				// Group sessions by user_id to create separate lines
-				userSessions := make(map[string][]models.ConsumptionData)
+				// Store sessions with their cumulative values first
+				type sessionReading struct {
+					sessionTime time.Time
+					powerKwh    float64
+					state       string
+				}
+				
+				userSessions := make(map[string][]sessionReading)
 				
 				for sessionRows.Next() {
 					var sessionTime time.Time
@@ -566,23 +643,24 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						continue
 					}
 
-					// Convert kWh to Watts (instantaneous power reading)
-					// Since sessions are 15-minute intervals, divide by 0.25 hours
-					powerW := (powerKwh / 0.25) * 1000
-					
+					// Skip idle states
+					if strings.ToLower(state) == "idle" || state == "50" {
+						continue
+					}
+
 					if _, exists := userSessions[userID]; !exists {
-						userSessions[userID] = []models.ConsumptionData{}
+						userSessions[userID] = []sessionReading{}
 					}
 					
-					userSessions[userID] = append(userSessions[userID], models.ConsumptionData{
-						Timestamp: sessionTime,
-						Power:     powerW,
-						Source:    "charger",
+					userSessions[userID] = append(userSessions[userID], sessionReading{
+						sessionTime: sessionTime,
+						powerKwh:    powerKwh,
+						state:       state,
 					})
 				}
 				sessionRows.Close()
 
-				// Create a MeterData entry for each user's charging sessions
+				// Now calculate power from deltas for each user
 				for userID, sessions := range userSessions {
 					if len(sessions) == 0 {
 						continue
@@ -600,16 +678,92 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						log.Printf("    Error getting user name for user %s: %v", userID, err)
 					}
 
-					chargerData := MeterData{
-						MeterID:   ci.id,
-						MeterName: ci.name,
-						MeterType: "charger",
-						UserName:  userName,
-						Data:      sessions,
+					// Get baseline reading (last reading before the time window)
+					var baselineReading *sessionReading
+					var baselineTime time.Time
+					var baselinePowerKwh float64
+					
+					err := h.db.QueryRowContext(ctx, `
+						SELECT session_time, power_kwh
+						FROM charger_sessions
+						WHERE charger_id = ? 
+						AND user_id = ?
+						AND session_time < ?
+						ORDER BY session_time DESC
+						LIMIT 1
+					`, ci.id, userID, startTime).Scan(&baselineTime, &baselinePowerKwh)
+					
+					if err == nil {
+						baselineReading = &sessionReading{
+							sessionTime: baselineTime,
+							powerKwh:    baselinePowerKwh,
+						}
+						log.Printf("    Found baseline for charger %d, user %s at %v: %.2f kWh", 
+							ci.id, userID, baselineTime, baselinePowerKwh)
 					}
 
-					log.Printf("    Charger ID: %d has %d data points for user %s", ci.id, len(sessions), userName)
-					building.Meters = append(building.Meters, chargerData)
+					// Calculate power from cumulative readings
+					consumptionData := []models.ConsumptionData{}
+					const intervalHours = 0.25 // 15 minutes
+					
+					previousReading := baselineReading
+					
+					for _, currentReading := range sessions {
+						if previousReading != nil {
+							// Calculate consumption between previous and current reading
+							consumptionKwh := currentReading.powerKwh - previousReading.powerKwh
+							
+							// Handle meter resets (consumption shouldn't be negative)
+							if consumptionKwh < 0 {
+								log.Printf("    WARNING: Negative consumption for charger %d, user %s at %v (possible reset)", 
+									ci.id, userID, currentReading.sessionTime)
+								// Use current reading as baseline for next calculation
+								previousReading = &currentReading
+								continue
+							}
+							
+							// Skip if no consumption (e.g., waiting for auth, cable locked)
+							if consumptionKwh == 0 {
+								previousReading = &currentReading
+								continue
+							}
+							
+							// Convert consumption to power in Watts
+							// Power = Energy / Time
+							powerW := (consumptionKwh / intervalHours) * 1000
+							
+							consumptionData = append(consumptionData, models.ConsumptionData{
+								Timestamp: currentReading.sessionTime,
+								Power:     powerW,
+								Source:    "charger",
+							})
+							
+							log.Printf("    Charger %d, user %s: consumption %.3f kWh over 15min = %.0f W", 
+								ci.id, userID, consumptionKwh, powerW)
+						} else {
+							// No baseline - skip this first reading
+							log.Printf("    No baseline for charger %d, user %s, skipping first reading at %v", 
+								ci.id, userID, currentReading.sessionTime)
+						}
+						
+						previousReading = &currentReading
+					}
+
+					if len(consumptionData) > 0 {
+						chargerData := MeterData{
+							MeterID:   ci.id,
+							MeterName: ci.name,
+							MeterType: "charger",
+							UserName:  userName,
+							Data:      consumptionData,
+						}
+
+						log.Printf("    Charger ID: %d has %d data points for user %s", 
+							ci.id, len(consumptionData), userName)
+						building.Meters = append(building.Meters, chargerData)
+					} else {
+						log.Printf("    No valid consumption data for charger %d, user %s", ci.id, userID)
+					}
 				}
 			}
 		}
