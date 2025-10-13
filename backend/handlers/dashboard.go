@@ -302,34 +302,64 @@ func (h *DashboardHandler) GetConsumption(w http.ResponseWriter, r *http.Request
 
 // FIXED: Smart detection of instantaneous vs cumulative charger data
 func detectChargerDataType(sessions []float64) string {
-	if len(sessions) < 3 {
-		return "unknown"
+	if len(sessions) < 2 {
+		return "cumulative" // Default to cumulative for safety
 	}
 
-	// Check if values are consistently increasing (cumulative)
+	// Analyze the pattern of values
 	increasing := 0
-	similar := 0
+	decreasing := 0
+	identical := 0
+	
+	// Check the range and pattern
+	minVal := sessions[0]
+	maxVal := sessions[0]
 	
 	for i := 1; i < len(sessions); i++ {
 		diff := sessions[i] - sessions[i-1]
-		if diff > 0.1 {
+		
+		if sessions[i] < minVal {
+			minVal = sessions[i]
+		}
+		if sessions[i] > maxVal {
+			maxVal = sessions[i]
+		}
+		
+		if diff > 0.0001 {
 			increasing++
-		} else if diff >= -0.01 && diff <= 0.01 {
-			similar++
+		} else if diff < -0.0001 {
+			decreasing++
+		} else {
+			identical++
 		}
 	}
 
-	// If most values are increasing, it's cumulative
-	if increasing > len(sessions)/2 {
+	valueRange := maxVal - minVal
+	
+	// Key insight: If values are large (>100) and always increasing, it's cumulative
+	// Instantaneous power readings would fluctuate and be in single/double digits (kW)
+	if minVal > 100 {
+		// Values over 100 are almost certainly cumulative kWh totals
 		return "cumulative"
 	}
 	
-	// If most values are similar (within 0.01 kWh), it's instantaneous
-	if similar > len(sessions)/2 {
+	// If values are consistently increasing (even slowly), it's cumulative
+	if increasing > (len(sessions) * 3 / 4) {
+		return "cumulative"
+	}
+	
+	// If most values are identical, could be idle charger - treat as cumulative
+	if identical > (len(sessions) / 2) {
+		return "cumulative"
+	}
+	
+	// If values fluctuate up and down, likely instantaneous
+	if increasing > 0 && decreasing > 0 && valueRange < 50 {
 		return "instantaneous"
 	}
 
-	return "unknown"
+	// Default to cumulative - safer assumption
+	return "cumulative"
 }
 
 func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *http.Request) {
@@ -734,8 +764,9 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					
 					// Log sample values for debugging
 					if len(sessionValues) >= 3 {
-						log.Printf("      Sample values: %.4f, %.4f, %.4f kWh", 
-							sessionValues[0], sessionValues[1], sessionValues[len(sessionValues)-1])
+						log.Printf("      Sample values: %.4f, %.4f, %.4f kWh (min=%.4f, max=%.4f)", 
+							sessionValues[0], sessionValues[1], sessionValues[len(sessionValues)-1],
+							findMin(sessionValues), findMax(sessionValues))
 					}
 
 					consumptionData := []models.ConsumptionData{}
@@ -752,7 +783,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 								idx, currentReading.powerKwh, powerW, currentReading.sessionTime)
 							
 						} else {
-							// Treat as cumulative energy reading
+							// Treat as cumulative energy reading (default and most common)
 							if previousReading != nil {
 								consumptionKwh := currentReading.powerKwh - previousReading.powerKwh
 								
@@ -858,6 +889,34 @@ func calculateAvgPower(data []models.ConsumptionData) float64 {
 		total += d.Power
 	}
 	return total / float64(len(data))
+}
+
+// Helper function to find minimum value
+func findMin(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	min := values[0]
+	for _, v := range values {
+		if v < min {
+			min = v
+		}
+	}
+	return min
+}
+
+// Helper function to find maximum value
+func findMax(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	max := values[0]
+	for _, v := range values {
+		if v > max {
+			max = v
+		}
+	}
+	return max
 }
 
 func (h *DashboardHandler) GetLogs(w http.ResponseWriter, r *http.Request) {

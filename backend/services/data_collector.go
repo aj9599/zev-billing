@@ -529,16 +529,8 @@ func (dc *DataCollector) processChargerPacket(charger UDPChargerConfig, jsonData
 			
 			dc.udpChargerBuffers[charger.ChargerID] = completeData
 			
-			// ENHANCED: Detect if this looks like instantaneous or cumulative data
-			dataType := "unknown"
-			if completeData.Power < 100 {
-				dataType = "likely INSTANTANEOUS (kW)"
-			} else {
-				dataType = "likely CUMULATIVE (kWh)"
-			}
-			
-			log.Printf("✅ Complete charger data buffered for '%s': Power=%.4f (%s), State=%s, User=%s, Mode=%s", 
-				charger.Name, completeData.Power, dataType, completeData.State, completeData.UserID, completeData.Mode)
+			log.Printf("✅ Complete charger data buffered for '%s': Power=%.4f kWh, State=%s, User=%s, Mode=%s", 
+				charger.Name, completeData.Power, completeData.State, completeData.UserID, completeData.Mode)
 			
 			// Reset partial data for next cycle
 			dc.partialChargerData[charger.ChargerID] = &PartialChargerData{
@@ -651,7 +643,7 @@ func (dc *DataCollector) saveBufferedUDPData() {
 		}
 	}
 
-	// ENHANCED: Save charger data with type detection logging
+	// Save charger data with validation logging
 	log.Printf("Processing %d chargers in buffer", len(dc.udpChargerBuffers))
 	for chargerID, data := range dc.udpChargerBuffers {
 		// Validate all required fields are present
@@ -661,23 +653,15 @@ func (dc *DataCollector) saveBufferedUDPData() {
 			continue
 		}
 
-		// ENHANCED: Log what type of data we think this is
-		dataTypeHint := ""
-		if data.Power < 100 {
-			dataTypeHint = " [Likely INSTANTANEOUS kW - dashboard will convert to Watts]"
-		} else {
-			dataTypeHint = " [Likely CUMULATIVE kWh - dashboard will calculate difference]"
-		}
-
-		// Always insert charger data
+		// Always insert charger data - dashboard will handle type detection
 		_, err := dc.db.Exec(`
 			INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
 			VALUES (?, ?, ?, ?, ?, ?)
 		`, chargerID, data.UserID, time.Now(), data.Power, data.Mode, data.State)
 
 		if err == nil {
-			log.Printf("✅ SUCCESS: Charger data saved - ID=%d, Power=%.4f%s, User=%s, Mode=%s, State=%s, Time=%s", 
-				chargerID, data.Power, dataTypeHint, data.UserID, data.Mode, data.State, time.Now().Format("15:04:05"))
+			log.Printf("✅ SUCCESS: Charger data saved - ID=%d, Power=%.4f kWh, User=%s, Mode=%s, State=%s, Time=%s", 
+				chargerID, data.Power, data.UserID, data.Mode, data.State, time.Now().Format("15:04:05"))
 			dc.logToDatabase("UDP Charger Data Saved", 
 				fmt.Sprintf("Charger ID: %d, Power: %.4f kWh, User: %s, Mode: %s, State: %s", 
 					chargerID, data.Power, data.UserID, data.Mode, data.State))
