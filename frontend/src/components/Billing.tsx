@@ -13,6 +13,22 @@ export default function Billing() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  
+  // Persistent sender and banking info
+  const [senderInfo, setSenderInfo] = useState({
+    name: '',
+    address: '',
+    city: '',
+    zip: '',
+    country: 'Switzerland'
+  });
+  
+  const [bankingInfo, setBankingInfo] = useState({
+    name: '',
+    iban: '',
+    holder: ''
+  });
+  
   const [formData, setFormData] = useState({
     building_ids: [] as number[],
     user_ids: [] as number[],
@@ -32,7 +48,59 @@ export default function Billing() {
 
   useEffect(() => {
     loadData();
+    
+    // Load saved sender/banking info from localStorage
+    const savedSender = localStorage.getItem('zev_sender_info');
+    const savedBanking = localStorage.getItem('zev_banking_info');
+    
+    if (savedSender) {
+      try {
+        const parsed = JSON.parse(savedSender);
+        setSenderInfo(parsed);
+        // Pre-fill form with saved data
+        setFormData(prev => ({
+          ...prev,
+          sender_name: parsed.name || '',
+          sender_address: parsed.address || '',
+          sender_city: parsed.city || '',
+          sender_zip: parsed.zip || '',
+          sender_country: parsed.country || 'Switzerland'
+        }));
+      } catch (e) {
+        console.error('Failed to parse sender info:', e);
+      }
+    }
+    
+    if (savedBanking) {
+      try {
+        const parsed = JSON.parse(savedBanking);
+        setBankingInfo(parsed);
+        // Pre-fill form with saved data
+        setFormData(prev => ({
+          ...prev,
+          bank_name: parsed.name || '',
+          bank_iban: parsed.iban || '',
+          bank_account_holder: parsed.holder || ''
+        }));
+      } catch (e) {
+        console.error('Failed to parse banking info:', e);
+      }
+    }
   }, []);
+
+  // Save sender info to localStorage when it changes
+  useEffect(() => {
+    if (senderInfo.name || senderInfo.iban) {
+      localStorage.setItem('zev_sender_info', JSON.stringify(senderInfo));
+    }
+  }, [senderInfo]);
+
+  // Save banking info to localStorage when it changes
+  useEffect(() => {
+    if (bankingInfo.iban || bankingInfo.holder) {
+      localStorage.setItem('zev_banking_info', JSON.stringify(bankingInfo));
+    }
+  }, [bankingInfo]);
 
   const loadData = async () => {
     try {
@@ -59,6 +127,24 @@ export default function Billing() {
       return;
     }
     
+    // Save sender and banking info to persistent state
+    const newSenderInfo = {
+      name: formData.sender_name,
+      address: formData.sender_address,
+      city: formData.sender_city,
+      zip: formData.sender_zip,
+      country: formData.sender_country
+    };
+    
+    const newBankingInfo = {
+      name: formData.bank_name,
+      iban: formData.bank_iban,
+      holder: formData.bank_account_holder
+    };
+    
+    setSenderInfo(newSenderInfo);
+    setBankingInfo(newBankingInfo);
+    
     setGenerating(true);
     try {
       const result = await api.generateBills(formData);
@@ -78,8 +164,19 @@ export default function Billing() {
   };
 
   const viewInvoice = async (id: number) => {
-    const invoice = await api.getInvoice(id);
-    setSelectedInvoice(invoice);
+    try {
+      const invoice = await api.getInvoice(id);
+      console.log('Loaded invoice:', invoice);
+      
+      if (!invoice.items || invoice.items.length === 0) {
+        console.warn('Invoice loaded but has no items');
+      }
+      
+      setSelectedInvoice(invoice);
+    } catch (err) {
+      console.error('Failed to load invoice:', err);
+      alert('Failed to load invoice details');
+    }
   };
 
   const deleteInvoice = async (id: number) => {
@@ -109,24 +206,19 @@ export default function Billing() {
     }
   };
 
-  const downloadPDF = (invoice: Invoice, senderInfo?: any, bankingInfo?: any) => {
+  const downloadPDF = (invoice: Invoice, senderInfoOverride?: any, bankingInfoOverride?: any) => {
+    // Check if invoice has items
+    if (!invoice.items || invoice.items.length === 0) {
+      alert('Invoice items not loaded. Please view the invoice first and then download.');
+      return;
+    }
+    
     const user = users.find(u => u.id === invoice.user_id);
     const building = buildings.find(b => b.id === invoice.building_id);
     
-    // Use provided info or defaults
-    const sender = senderInfo || {
-      name: formData.sender_name || '',
-      address: formData.sender_address || '',
-      city: formData.sender_city || '',
-      zip: formData.sender_zip || '',
-      country: formData.sender_country || 'Switzerland'
-    };
-    
-    const banking = bankingInfo || {
-      name: formData.bank_name || '',
-      iban: formData.bank_iban || '',
-      holder: formData.bank_account_holder || ''
-    };
+    // Use override if provided, otherwise use persistent state
+    const sender = senderInfoOverride || senderInfo;
+    const banking = bankingInfoOverride || bankingInfo;
     
     const hasBankingDetails = banking.iban && banking.holder;
     
@@ -596,20 +688,21 @@ export default function Billing() {
   };
 
   const resetForm = () => {
-    setFormData({
+    setFormData(prev => ({
       building_ids: [],
       user_ids: [],
       start_date: '',
       end_date: '',
-      sender_name: '',
-      sender_address: '',
-      sender_city: '',
-      sender_zip: '',
-      sender_country: 'Switzerland',
-      bank_name: '',
-      bank_iban: '',
-      bank_account_holder: ''
-    });
+      // Keep sender and banking info from persistent state
+      sender_name: senderInfo.name,
+      sender_address: senderInfo.address,
+      sender_city: senderInfo.city,
+      sender_zip: senderInfo.zip,
+      sender_country: senderInfo.country,
+      bank_name: bankingInfo.name,
+      bank_iban: bankingInfo.iban,
+      bank_account_holder: bankingInfo.holder
+    }));
   };
 
   const toggleBuilding = (id: number) => {
@@ -849,7 +942,7 @@ export default function Billing() {
                                 <button onClick={() => viewInvoice(invoice.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title={t('billing.view')}>
                                   <Eye size={16} color="#007bff" />
                                 </button>
-                                <button onClick={() => downloadPDF(invoice)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title={t('billing.downloadPdf')}>
+                                <button onClick={() => downloadPDF(invoice, senderInfo, bankingInfo)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title={t('billing.downloadPdf')}>
                                   <Download size={16} color="#28a745" />
                                 </button>
                                 <button onClick={() => deleteInvoice(invoice.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title={t('common.delete')}>
@@ -927,7 +1020,7 @@ export default function Billing() {
                             <span style={{ fontSize: '11px' }}>View</span>
                           </button>
                           <button
-                            onClick={() => downloadPDF(invoice)}
+                            onClick={() => downloadPDF(invoice, senderInfo, bankingInfo)}
                             style={{
                               padding: '10px',
                               backgroundColor: '#28a745',
@@ -1255,17 +1348,7 @@ export default function Billing() {
             </div>
 
             <div className="button-group" style={{ display: 'flex', gap: '12px', marginTop: '30px' }}>
-              <button onClick={() => downloadPDF(selectedInvoice, {
-                name: formData.sender_name,
-                address: formData.sender_address,
-                city: formData.sender_city,
-                zip: formData.sender_zip,
-                country: formData.sender_country
-              }, {
-                name: formData.bank_name,
-                iban: formData.bank_iban,
-                holder: formData.bank_account_holder
-              })} style={{
+              <button onClick={() => downloadPDF(selectedInvoice, senderInfo, bankingInfo)} style={{
                 flex: 1, padding: '12px', backgroundColor: '#28a745', color: 'white',
                 border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
