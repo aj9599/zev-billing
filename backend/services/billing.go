@@ -201,10 +201,10 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 		log.Printf("  Normal Cost: %.2f kWh × %.3f = %.2f %s", normalPower, settings.NormalPowerPrice, normalCost, settings.Currency)
 	}
 
-	// FIXED: Enhanced charging calculation with better logging
+	// FIXED: Enhanced charging calculation with detailed logging
 	if rfidCards != "" {
 		log.Printf("  [CHARGING] Starting charging calculation for RFID cards: '%s'", rfidCards)
-		normalCharging, priorityCharging, firstSession, lastSession := bs.calculateChargingConsumptionByRFID(buildingID, rfidCards, start, end)
+		normalCharging, priorityCharging, firstSession, lastSession := bs.calculateChargingConsumptionFixed(buildingID, rfidCards, start, end)
 
 		log.Printf("  [CHARGING] Results: Normal=%.2f kWh, Priority=%.2f kWh", normalCharging, priorityCharging)
 
@@ -563,8 +563,8 @@ func (bs *BillingService) calculateZEVConsumptionFixed(userID, buildingID int, s
 	return totalNormal, totalSolar, totalConsumption
 }
 
-// FIXED: Enhanced charging calculation with comprehensive logging
-func (bs *BillingService) calculateChargingConsumptionByRFID(buildingID int, rfidCards string, start, end time.Time) (normal, priority float64, firstSession, lastSession time.Time) {
+// COMPLETELY REWRITTEN: Fixed charging calculation with proper session tracking
+func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfidCards string, start, end time.Time) (normal, priority float64, firstSession, lastSession time.Time) {
 	log.Printf("  [CHARGING] ========================================")
 	log.Printf("  [CHARGING] Starting calculation")
 	log.Printf("  [CHARGING] Building ID: %d", buildingID)
@@ -736,7 +736,8 @@ func (bs *BillingService) calculateChargingConsumptionByRFID(buildingID int, rfi
 
 		totalSessionsFound++
 
-		if totalSessionsFound <= 5 {
+		// Log first 10 sessions with all details
+		if totalSessionsFound <= 10 {
 			log.Printf("  [CHARGING] Session #%d: charger=%d, user='%s', time=%s, power=%.2f, mode='%s', state='%s'",
 				totalSessionsFound, chargerID, sessionUserID, sessionTime.Format("2006-01-02 15:04"), 
 				power, mode, state)
@@ -759,25 +760,13 @@ func (bs *BillingService) calculateChargingConsumptionByRFID(buildingID int, rfi
 
 	if totalSessionsFound == 0 {
 		log.Printf("  [CHARGING] ERROR: No sessions found for RFID cards %v in period", cleanedRfids)
-		log.Printf("  [CHARGING] Checking if any sessions exist at all for these RFIDs...")
-		
-		// Debug: Check if sessions exist outside the time period
-		var anySessionsCount int
-		checkQuery := fmt.Sprintf(`
-			SELECT COUNT(*) FROM charger_sessions WHERE user_id IN (%s)
-		`, inClause)
-		err = bs.db.QueryRow(checkQuery, args[:len(cleanedRfids)]...).Scan(&anySessionsCount)
-		if err == nil {
-			log.Printf("  [CHARGING] Found %d sessions for these RFIDs outside the billing period", anySessionsCount)
-		}
-		
 		return 0, 0, time.Time{}, time.Time{}
 	}
 
 	normalTotal := 0.0
 	priorityTotal := 0.0
-	billableSessions := 0
-	skippedSessions := 0
+	totalBillableSessions := 0
+	totalSkippedSessions := 0
 
 	// Process each charger's sessions
 	for chargerID, sessions := range chargerSessions {
@@ -793,17 +782,15 @@ func (bs *BillingService) calculateChargingConsumptionByRFID(buildingID int, rfi
 		if config == nil {
 			log.Printf("  [CHARGING] WARNING: No config found for charger %d - skipping %d sessions", 
 				chargerID, len(sessions))
-			skippedSessions += len(sessions)
+			totalSkippedSessions += len(sessions)
 			continue
 		}
 
-		log.Printf("  [CHARGING] Processing %d sessions for charger %d (%s)", 
-			len(sessions), chargerID, config.ChargerName)
+		log.Printf("  [CHARGING] ----------------------------------------")
+		log.Printf("  [CHARGING] Processing charger %d (%s) with %d sessions", 
+			chargerID, config.ChargerName, len(sessions))
 
-		// Get baseline reading for this charger
-		var baselinePower float64
-		var baselineTime time.Time
-		
+		// FIXED: Get baseline reading for this charger from BEFORE the billing period
 		baselineQuery := fmt.Sprintf(`
 			SELECT power_kwh, session_time
 			FROM charger_sessions
@@ -815,48 +802,58 @@ func (bs *BillingService) calculateChargingConsumptionByRFID(buildingID int, rfi
 		`, inClause)
 		
 		baselineArgs := []interface{}{chargerID}
-		baselineArgs = append(baselineArgs, args[:len(cleanedRfids)]...)
+		for _, rfid := range cleanedRfids {
+			baselineArgs = append(baselineArgs, rfid)
+		}
 		baselineArgs = append(baselineArgs, start)
 		
+		var baselinePower float64
+		var baselineTime time.Time
 		err := bs.db.QueryRow(baselineQuery, baselineArgs...).Scan(&baselinePower, &baselineTime)
 		
-		var previousPower *float64
+		var previousPower float64
+		var hasPreviousPower bool
+		
 		if err == nil {
-			previousPower = &baselinePower
-			log.Printf("  [CHARGING] Charger %d baseline: %.2f kWh at %s", 
-				chargerID, baselinePower, baselineTime.Format("2006-01-02 15:04"))
+			previousPower = baselinePower
+			hasPreviousPower = true
+			log.Printf("  [CHARGING] Found baseline: %.2f kWh at %s", baselinePower, baselineTime.Format("2006-01-02 15:04"))
 		} else {
-			log.Printf("  [CHARGING] No baseline found for charger %d: %v", chargerID, err)
+			log.Printf("  [CHARGING] No baseline found (using first session as baseline): %v", err)
 		}
 
-		sessionNum := 0
-		for _, session := range sessions {
-			sessionNum++
+		chargerBillable := 0
+		chargerSkipped := 0
+		chargerNormal := 0.0
+		chargerPriority := 0.0
+
+		for sessionIdx, session := range sessions {
+			sessionNum := sessionIdx + 1
 			
-			// FIXED: More flexible state checking
-			isBillable := true // Default to billable
+			// Check if this session should be billable based on state
+			isBillable := true
 			if session.State == config.StateIdle || strings.ToLower(session.State) == "idle" {
 				isBillable = false
-				if sessionNum <= 3 {
-					log.Printf("  [CHARGING]   Session %d: SKIPPED (idle state: '%s')", sessionNum, session.State)
-				}
-			} else if session.State == config.StateCableLocked || 
-			          session.State == config.StateWaitingAuth || 
-			          session.State == config.StateCharging {
-				isBillable = true
-				if sessionNum <= 3 {
-					log.Printf("  [CHARGING]   Session %d: BILLABLE (state: '%s')", sessionNum, session.State)
-				}
-			} else {
-				// Unknown state - assume billable but log warning
-				log.Printf("  [CHARGING]   Session %d: UNKNOWN state '%s' - treating as BILLABLE", sessionNum, session.State)
 			}
-
+			
+			// Log every session for first charger, or first 10 sessions for others
+			shouldLog := (chargerID == chargerConfigs[0].ChargerID && sessionNum <= 20) || sessionNum <= 10
+			
+			if shouldLog {
+				if isBillable {
+					log.Printf("  [CHARGING]     [%d] %s: %.2f kWh, mode=%s, state=%s → BILLABLE", 
+						sessionNum, session.SessionTime.Format("15:04"), session.PowerKwh, session.Mode, session.State)
+				} else {
+					log.Printf("  [CHARGING]     [%d] %s: %.2f kWh, mode=%s, state=%s → SKIP (idle)", 
+						sessionNum, session.SessionTime.Format("15:04"), session.PowerKwh, session.Mode, session.State)
+				}
+			}
+			
 			if !isBillable {
-				skippedSessions++
+				chargerSkipped++
 				continue
 			}
-
+			
 			// Track first and last session times
 			if firstSession.IsZero() || session.SessionTime.Before(firstSession) {
 				firstSession = session.SessionTime
@@ -864,56 +861,82 @@ func (bs *BillingService) calculateChargingConsumptionByRFID(buildingID int, rfi
 			if session.SessionTime.After(lastSession) {
 				lastSession = session.SessionTime
 			}
-
+			
 			// Calculate consumption
-			if previousPower != nil {
-				consumption := session.PowerKwh - *previousPower
-				
-				if consumption < 0 {
-					log.Printf("  [CHARGING]   Session %d: NEGATIVE consumption (%.2f kWh) - possible meter reset", 
-						sessionNum, consumption)
-					previousPower = &session.PowerKwh
-					continue
+			if !hasPreviousPower {
+				// First session becomes baseline
+				previousPower = session.PowerKwh
+				hasPreviousPower = true
+				if shouldLog {
+					log.Printf("  [CHARGING]     [%d] Established baseline at %.2f kWh", sessionNum, session.PowerKwh)
 				}
-
-				if consumption > 0 {
-					billableSessions++
-					
-					// FIXED: More flexible mode checking
-					if session.Mode == config.ModeNormal || strings.ToLower(session.Mode) == "normal" || session.Mode == "1" {
-						normalTotal += consumption
-						if billableSessions <= 5 {
-							log.Printf("  [CHARGING]   Session %d: %.3f kWh NORMAL (user: %s, mode: '%s')", 
-								sessionNum, consumption, session.UserID, session.Mode)
-						}
-					} else if session.Mode == config.ModePriority || strings.ToLower(session.Mode) == "priority" || session.Mode == "2" {
-						priorityTotal += consumption
-						if billableSessions <= 5 {
-							log.Printf("  [CHARGING]   Session %d: %.3f kWh PRIORITY (user: %s, mode: '%s')", 
-								sessionNum, consumption, session.UserID, session.Mode)
-						}
-					} else {
-						// Unknown mode - default to normal
-						log.Printf("  [CHARGING]   Session %d: UNKNOWN mode '%s' - treating as NORMAL", sessionNum, session.Mode)
-						normalTotal += consumption
-					}
-				} else if billableSessions <= 3 {
-					log.Printf("  [CHARGING]   Session %d: ZERO consumption - skipping", sessionNum)
-				}
-			} else if sessionNum <= 3 {
-				log.Printf("  [CHARGING]   Session %d: No baseline - establishing baseline at %.2f kWh", 
-					sessionNum, session.PowerKwh)
+				continue
 			}
-
-			previousPower = &session.PowerKwh
+			
+			consumption := session.PowerKwh - previousPower
+			
+			if consumption < 0 {
+				if shouldLog {
+					log.Printf("  [CHARGING]     [%d] NEGATIVE consumption %.2f kWh - possible meter reset, resetting baseline", 
+						sessionNum, consumption)
+				}
+				previousPower = session.PowerKwh
+				continue
+			}
+			
+			if consumption > 0 {
+				chargerBillable++
+				
+				// Determine mode
+				isNormal := (session.Mode == config.ModeNormal || 
+					strings.ToLower(session.Mode) == "normal" || 
+					session.Mode == "1")
+				isPriority := (session.Mode == config.ModePriority || 
+					strings.ToLower(session.Mode) == "priority" || 
+					session.Mode == "2")
+				
+				if isNormal {
+					chargerNormal += consumption
+					if shouldLog {
+						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh NORMAL (%.2f → %.2f)", 
+							sessionNum, consumption, previousPower, session.PowerKwh)
+					}
+				} else if isPriority {
+					chargerPriority += consumption
+					if shouldLog {
+						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh PRIORITY (%.2f → %.2f)", 
+							sessionNum, consumption, previousPower, session.PowerKwh)
+					}
+				} else {
+					// Unknown mode - default to normal
+					chargerNormal += consumption
+					if shouldLog {
+						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh UNKNOWN mode '%s' → NORMAL (%.2f → %.2f)", 
+							sessionNum, consumption, session.Mode, previousPower, session.PowerKwh)
+					}
+				}
+			} else if shouldLog {
+				log.Printf("  [CHARGING]     [%d] Zero consumption (%.2f → %.2f)", 
+					sessionNum, previousPower, session.PowerKwh)
+			}
+			
+			previousPower = session.PowerKwh
 		}
+		
+		log.Printf("  [CHARGING] Charger %d summary: %d billable, %d skipped, %.2f kWh normal, %.2f kWh priority", 
+			chargerID, chargerBillable, chargerSkipped, chargerNormal, chargerPriority)
+		
+		normalTotal += chargerNormal
+		priorityTotal += chargerPriority
+		totalBillableSessions += chargerBillable
+		totalSkippedSessions += chargerSkipped
 	}
 
 	log.Printf("  [CHARGING] ========================================")
 	log.Printf("  [CHARGING] FINAL RESULTS:")
 	log.Printf("  [CHARGING] Total sessions found: %d", totalSessionsFound)
-	log.Printf("  [CHARGING] Billable sessions: %d", billableSessions)
-	log.Printf("  [CHARGING] Skipped sessions: %d", skippedSessions)
+	log.Printf("  [CHARGING] Billable sessions: %d", totalBillableSessions)
+	log.Printf("  [CHARGING] Skipped sessions: %d", totalSkippedSessions)
 	log.Printf("  [CHARGING] Normal charging: %.2f kWh", normalTotal)
 	log.Printf("  [CHARGING] Priority charging: %.2f kWh", priorityTotal)
 	log.Printf("  [CHARGING] Total charging: %.2f kWh", normalTotal+priorityTotal)

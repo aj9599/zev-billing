@@ -19,7 +19,6 @@ type DataCollector struct {
 	udpListeners     map[int]*net.UDPConn
 	udpMeterBuffers  map[int]float64
 	udpChargerBuffers map[int]ChargerData
-	// NEW: Buffer for partial charger data (when sent in separate packets)
 	partialChargerData map[int]*PartialChargerData
 	mu               sync.Mutex
 	lastCollection   time.Time
@@ -34,7 +33,6 @@ type ChargerData struct {
 	Mode   string
 }
 
-// NEW: Structure to hold partial charger data as it arrives
 type PartialChargerData struct {
 	Power      *float64
 	State      *string
@@ -106,11 +104,9 @@ func (dc *DataCollector) Start() {
 	log.Println("Collection Interval: 15 minutes")
 	log.Println("===================================")
 
-	// FIXED: Initialize UDP listeners first
 	dc.initializeUDPListeners()
 	dc.logSystemStatus()
 	
-	// FIXED: Wait 3 minutes after startup to allow meters to send new data
 	log.Println(">>> WAITING 3 MINUTES BEFORE INITIAL DATA COLLECTION <<<")
 	log.Printf(">>> This allows meters to generate new readings after system restart <<<")
 	log.Printf(">>> First collection will occur at %s <<<", 
@@ -118,15 +114,12 @@ func (dc *DataCollector) Start() {
 	
 	time.Sleep(3 * time.Minute)
 	
-	// FIXED: Collect data after 3-minute delay
 	log.Println(">>> INITIAL DATA COLLECTION ON STARTUP <<<")
 	dc.collectAllData()
 	log.Println(">>> INITIAL DATA COLLECTION COMPLETED <<<")
 
-	// Start goroutine to clean up stale partial data
 	go dc.cleanupStalePartialData()
 
-	// FIXED: Use a ticker that fires every 15 minutes from now
 	ticker := time.NewTicker(15 * time.Minute)
 	defer ticker.Stop()
 
@@ -146,7 +139,6 @@ func (dc *DataCollector) Start() {
 	}
 }
 
-// NEW: Clean up partial charger data that hasn't been updated in 5 minutes
 func (dc *DataCollector) cleanupStalePartialData() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
@@ -375,7 +367,7 @@ func (dc *DataCollector) startUDPListener(port int, meters []UDPMeterConfig, cha
 			continue
 		}
 
-		// Process meter data (unchanged)
+		// Process meter data
 		for _, meter := range meters {
 			if value, ok := jsonData[meter.DataKey]; ok {
 				var reading float64
@@ -398,19 +390,17 @@ func (dc *DataCollector) startUDPListener(port int, meters []UDPMeterConfig, cha
 			}
 		}
 
-		// NEW: Process charger data - supports both combined and separate packets
+		// Process charger data
 		for _, charger := range chargers {
 			dc.processChargerPacket(charger, jsonData, remoteAddr.IP.String())
 		}
 	}
 }
 
-// NEW: Process charger packet - handles both combined and separate packets
 func (dc *DataCollector) processChargerPacket(charger UDPChargerConfig, jsonData map[string]interface{}, remoteIP string) {
 	dc.mu.Lock()
 	defer dc.mu.Unlock()
 
-	// Get or create partial data buffer for this charger
 	partial := dc.partialChargerData[charger.ChargerID]
 	if partial == nil {
 		partial = &PartialChargerData{}
@@ -487,7 +477,6 @@ func (dc *DataCollector) processChargerPacket(charger UDPChargerConfig, jsonData
 	if updated {
 		partial.LastUpdate = time.Now()
 		
-		// Log what we received
 		if len(fieldsReceived) > 0 {
 			log.Printf("DEBUG: Charger '%s' received fields [%s] from %s", 
 				charger.Name, strings.Join(fieldsReceived, ", "), remoteIP)
@@ -495,7 +484,6 @@ func (dc *DataCollector) processChargerPacket(charger UDPChargerConfig, jsonData
 
 		// Check if we have all 4 fields
 		if partial.Power != nil && partial.State != nil && partial.UserID != nil && partial.Mode != nil {
-			// Complete data received! Move to main buffer
 			completeData := ChargerData{
 				Power:  *partial.Power,
 				State:  *partial.State,
@@ -513,7 +501,6 @@ func (dc *DataCollector) processChargerPacket(charger UDPChargerConfig, jsonData
 				LastUpdate: time.Now(),
 			}
 		} else {
-			// Still waiting for more fields
 			missing := []string{}
 			if partial.Power == nil {
 				missing = append(missing, "power")
@@ -541,7 +528,6 @@ func (dc *DataCollector) collectAllData() {
 	
 	dc.logToDatabase("Data Collection Started", "15-minute collection cycle initiated")
 
-	// FIXED: Collect data with proper error handling
 	dc.collectMeterData()
 	dc.collectChargerData()
 	dc.saveBufferedUDPData()
@@ -559,6 +545,7 @@ func (dc *DataCollector) saveBufferedUDPData() {
 
 	metersWithData := make(map[int]bool)
 
+	// Save meter data
 	for meterID, reading := range dc.udpMeterBuffers {
 		if reading > 0 {
 			var prevReading float64
@@ -596,8 +583,7 @@ func (dc *DataCollector) saveBufferedUDPData() {
 		}
 	}
 
-	// FIXED: Maintain last reading for inactive meters (e.g., solar at night)
-	// This ensures continuous lines in charts showing 0W when no power is generated/consumed
+	// Maintain last reading for inactive meters
 	for meterID := range dc.udpMeterBuffers {
 		if !metersWithData[meterID] {
 			var lastReading float64
@@ -616,16 +602,16 @@ func (dc *DataCollector) saveBufferedUDPData() {
 				if insertErr == nil {
 					log.Printf("INFO: Maintained last reading (%.2f kWh) with zero consumption for inactive meter ID %d", 
 						lastReading, meterID)
-					dc.logToDatabase("Last Reading Maintained", 
-						fmt.Sprintf("Meter ID: %d, Last Reading: %.2f kWh (no new data this cycle)", meterID, lastReading))
 				}
 			}
 		}
 	}
 
-	// Save charger data
+	// Save charger data with enhanced logging
 	for chargerID, data := range dc.udpChargerBuffers {
 		if data.UserID != "" && data.State != "" && data.Mode != "" {
+			// FIXED: Always insert charger data, even if power is 0
+			// This ensures we capture all session states for billing
 			_, err := dc.db.Exec(`
 				INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
 				VALUES (?, ?, ?, ?, ?, ?)
@@ -638,7 +624,7 @@ func (dc *DataCollector) saveBufferedUDPData() {
 					fmt.Sprintf("Charger ID: %d, Power: %.2f kWh, User: %s, Mode: %s, State: %s", 
 						chargerID, data.Power, data.UserID, data.Mode, data.State))
 			} else {
-				log.Printf("ERROR: Failed to save charger data: %v", err)
+				log.Printf("ERROR: Failed to save charger data for charger ID %d: %v", chargerID, err)
 			}
 		} else {
 			log.Printf("WARNING: Incomplete charger data for charger ID %d (user: %s, state: %s, mode: %s) - not saving",

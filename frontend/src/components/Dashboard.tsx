@@ -43,7 +43,7 @@ const FIXED_COLORS: Record<string, string> = {
 const apartmentColorMap = new Map<number, string>();
 const chargerColorMap = new Map<string, string>();
 
-function getMeterColor(meterType: string, meterId?: number, userId?: string): string {
+function getMeterColor(meterType: string, meterId?: number, userName?: string): string {
   if (meterType === 'apartment_meter' && meterId !== undefined) {
     if (!apartmentColorMap.has(meterId)) {
       const colorIndex = apartmentColorMap.size % APARTMENT_COLORS.length;
@@ -52,8 +52,8 @@ function getMeterColor(meterType: string, meterId?: number, userId?: string): st
     return apartmentColorMap.get(meterId)!;
   }
   
-  if (meterType === 'charger' && meterId !== undefined && userId) {
-    const key = `${meterId}_${userId}`;
+  if (meterType === 'charger' && meterId !== undefined && userName) {
+    const key = `${meterId}_${userName}`;
     if (!chargerColorMap.has(key)) {
       const colorIndex = chargerColorMap.size % CHARGER_COLORS.length;
       chargerColorMap.set(key, CHARGER_COLORS[colorIndex]);
@@ -83,7 +83,6 @@ function getMeterUniqueKey(meter: MeterData): string {
   return `meter_${meter.meter_id}`;
 }
 
-// FIXED: Round timestamp to nearest 15-minute interval
 function roundToNearest15Minutes(timestamp: string): Date {
   const date = new Date(timestamp);
   const minutes = date.getMinutes();
@@ -97,9 +96,7 @@ function roundToNearest15Minutes(timestamp: string): Date {
   return rounded;
 }
 
-// Format time based on period duration
 function formatTimeForPeriod(date: Date, period: string): string {
-  // For 1 hour, just show time
   if (period === '1h') {
     return date.toLocaleTimeString('de-CH', { 
       hour: '2-digit', 
@@ -107,7 +104,6 @@ function formatTimeForPeriod(date: Date, period: string): string {
     });
   }
   
-  // For 24h, show date + time to distinguish between days
   if (period === '24h') {
     const day = date.getDate().toString().padStart(2, '0');
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
@@ -118,7 +114,6 @@ function formatTimeForPeriod(date: Date, period: string): string {
     return `${day}.${month} ${time}`;
   }
   
-  // For 7d and 30d, show date + time
   const day = date.getDate().toString().padStart(2, '0');
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
   const time = date.toLocaleTimeString('de-CH', { 
@@ -391,18 +386,14 @@ export default function Dashboard() {
                   </div>
                 )}
                 {filteredBuildings.map((building) => {
-            // FIXED: Round timestamps to 15-minute intervals so all meters align
             const timeMap = new Map<string, any>();
             const meters = building.meters || [];
             
             meters.forEach(meter => {
               const readings = meter.data || [];
               readings.forEach(reading => {
-                // Round timestamp to nearest 15 minutes
                 const roundedDate = roundToNearest15Minutes(reading.timestamp);
                 const timestampKey = roundedDate.toISOString();
-                
-                // Format for display based on period
                 const displayTime = formatTimeForPeriod(roundedDate, period);
                 
                 if (!timeMap.has(timestampKey)) {
@@ -419,7 +410,6 @@ export default function Dashboard() {
               });
             });
 
-            // FIXED: Sort by actual timestamp, not display string
             const chartData = Array.from(timeMap.values()).sort((a, b) => {
               return a.sortKey - b.sortKey;
             });
@@ -475,14 +465,18 @@ export default function Dashboard() {
                               height: '12px',
                               borderRadius: '2px',
                               backgroundColor: getMeterColor(meter.meter_type, meter.meter_id, meter.user_name),
-                              flexShrink: 0
+                              flexShrink: 0,
+                              border: meter.meter_type === 'charger' ? '2px dashed rgba(0,0,0,0.2)' : 'none'
                             }}
                           />
                           <span style={{ fontWeight: '500' }}>
                             {getMeterDisplayName(meter)}
                           </span>
                           <span style={{ color: '#6b7280', fontSize: '12px' }}>
-                            ({meter.meter_type === 'charger' ? 'Charger' : meter.meter_type.replace('_', ' ')})
+                            ({meter.meter_type === 'charger' ? 'Charger' : 
+                              meter.meter_type === 'solar_meter' ? 'Solar' :
+                              meter.meter_type === 'apartment_meter' ? 'Apartment' :
+                              meter.meter_type.replace('_', ' ')})
                           </span>
                         </div>
                       );
