@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import * as React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Users, Building, Zap, Car, Activity, TrendingUp, TrendingDown, Sun, Battery, LayoutDashboard, Home, Bolt } from 'lucide-react';
+import { Users, Building, Zap, Car, Activity, TrendingUp, TrendingDown, Sun, Battery, LayoutDashboard, Home } from 'lucide-react';
 import { api } from '../api/client';
 import type { DashboardStats } from '../types';
 import { useTranslation } from '../i18n';
@@ -90,7 +90,7 @@ function getMeterUniqueKey(meter: MeterData): string {
 function getMeterTypeIcon(meterType: string): { Icon: any; label: string } {
   switch (meterType) {
     case 'charger':
-      return { Icon: Bolt, label: 'Charger' };
+      return { Icon: Zap, label: 'Charger' };
     case 'solar_meter':
       return { Icon: Sun, label: 'Solar' };
     case 'apartment_meter':
