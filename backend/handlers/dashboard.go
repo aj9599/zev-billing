@@ -398,12 +398,42 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				}
 			}
 
+			// Define reading data structure
+			type readingData struct {
+				timestamp      time.Time
+				cumulativeKwh  float64
+			}
+
 			// STEP 5: Read all readings with timestamps and calculate power
-			// FIXED: Query from startTime to now (not just >= startTime)
-			dataRows, err := h.db.QueryContext(ctx, `
-				SELECT reading_time, consumption_kwh
+			// First, get the last reading BEFORE the time window as a baseline
+			var baselineReading *readingData
+			var baselineTimestamp time.Time
+			var baselinePowerKwh float64
+			
+			err := h.db.QueryRowContext(ctx, `
+				SELECT reading_time, power_kwh
 				FROM meter_readings
-				WHERE meter_id = ? AND reading_time >= ? AND reading_time <= ?
+				WHERE meter_id = ? AND reading_time < ?
+				ORDER BY reading_time DESC
+				LIMIT 1
+			`, mi.id, startTime).Scan(&baselineTimestamp, &baselinePowerKwh)
+			
+			if err == nil {
+				baselineReading = &readingData{
+					timestamp:      baselineTimestamp,
+					cumulativeKwh:  baselinePowerKwh,
+				}
+				log.Printf("    Found baseline reading for meter %d at %v: %.2f kWh", 
+					mi.id, baselineTimestamp, baselinePowerKwh)
+			}
+			
+			// Now get all readings in the time window
+			dataRows, err := h.db.QueryContext(ctx, `
+				SELECT reading_time, power_kwh
+				FROM meter_readings
+				WHERE meter_id = ? 
+				AND reading_time >= ? 
+				AND reading_time <= ?
 				ORDER BY reading_time ASC
 			`, mi.id, startTime, now)
 
@@ -421,33 +451,37 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				continue
 			}
 
-			// FIXED: Calculate power in Watts from consumption
-			// Removed maxGapMinutes restriction to show data across midnight
+			// FIXED: Calculate power in Watts from cumulative readings
 			const intervalHours = 0.25 // 15 minutes
-
-			type readingData struct {
-				timestamp      time.Time
-				consumptionKwh float64
-			}
 			
-			var previousReading *readingData
+			previousReading := baselineReading // Start with baseline reading
 			
 			for dataRows.Next() {
 				var timestamp time.Time
-				var consumptionKwh float64
-				if err := dataRows.Scan(&timestamp, &consumptionKwh); err != nil {
+				var cumulativeKwh float64
+				if err := dataRows.Scan(&timestamp, &cumulativeKwh); err != nil {
 					continue
 				}
 
 				currentReading := &readingData{
 					timestamp:      timestamp,
-					consumptionKwh: consumptionKwh,
+					cumulativeKwh:  cumulativeKwh,
 				}
 
 				if previousReading != nil {
-					// FIXED: Remove gap check - always include all readings
-					// This ensures data is shown across midnight and other gaps
-					powerW := (currentReading.consumptionKwh / intervalHours) * 1000
+					// Calculate consumption between previous and current reading
+					consumptionKwh := currentReading.cumulativeKwh - previousReading.cumulativeKwh
+					
+					// Handle meter resets (consumption shouldn't be negative)
+					if consumptionKwh < 0 {
+						consumptionKwh = 0
+						log.Printf("    WARNING: Negative consumption detected for meter %d at %v (possible meter reset)", 
+							mi.id, timestamp)
+					}
+					
+					// Convert consumption to power in Watts
+					// Power = Energy / Time
+					powerW := (consumptionKwh / intervalHours) * 1000
 					
 					meterData.Data = append(meterData.Data, models.ConsumptionData{
 						Timestamp: currentReading.timestamp,
@@ -455,10 +489,9 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						Source:    mi.meterType,
 					})
 				} else {
-					// For the very first reading, we can't calculate power without a previous reading
-					// So we skip it (this only affects the first data point after system start)
-					log.Printf("    Skipping first reading at %v (no previous reading to compare)", 
-						currentReading.timestamp)
+					// This should rarely happen now since we have baseline reading
+					log.Printf("    No baseline available for meter %d, skipping first reading at %v", 
+						mi.id, currentReading.timestamp)
 				}
 
 				previousReading = currentReading

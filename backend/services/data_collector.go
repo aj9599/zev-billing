@@ -588,7 +588,8 @@ func (dc *DataCollector) saveBufferedUDPData() {
 		}
 	}
 
-	// FIXED: Maintain last reading for inactive meters
+	// FIXED: Maintain last reading for inactive meters (e.g., solar at night)
+	// This ensures continuous lines in charts showing 0W when no power is generated/consumed
 	for meterID := range dc.udpMeterBuffers {
 		if !metersWithData[meterID] {
 			var lastReading float64
