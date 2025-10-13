@@ -5,7 +5,7 @@ import type { Invoice, Building as BuildingType, User } from '../types';
 import { useTranslation } from '../i18n';
 
 export default function Billing() {
-  const { t, language, setLanguage } = useTranslation();
+  const { t } = useTranslation();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [buildings, setBuildings] = useState<BuildingType[]>([]);
   const [users, setUsers] = useState<User[]>([]);
