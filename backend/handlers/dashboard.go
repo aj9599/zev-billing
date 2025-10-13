@@ -803,8 +803,12 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 								if consumptionKwh < 0 {
 									log.Printf("      ⚠️  Session %d: Negative consumption (%.6f kWh) - meter may have reset", 
 										idx, consumptionKwh)
-									// Use current reading as new baseline
-									previousReading = &currentReading
+									// FIXED: Make a copy, not a pointer
+									previousReading = &sessionReading{
+										sessionTime: currentReading.sessionTime,
+										powerKwh:    currentReading.powerKwh,
+										state:       currentReading.state,
+									}
 									continue
 								}
 								
@@ -846,7 +850,12 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 									Power:     0,
 									Source:    "charger",
 								})
-								previousReading = &currentReading
+								// FIXED: Make a copy, not a pointer
+								previousReading = &sessionReading{
+									sessionTime: currentReading.sessionTime,
+									powerKwh:    currentReading.powerKwh,
+									state:       currentReading.state,
+								}
 								continue
 							}
 						}
@@ -858,7 +867,12 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 							Source:    "charger",
 						})
 						
-						previousReading = &currentReading
+						// FIXED: Make a copy, not a pointer to the loop variable
+						previousReading = &sessionReading{
+							sessionTime: currentReading.sessionTime,
+							powerKwh:    currentReading.powerKwh,
+							state:       currentReading.state,
+						}
 					}
 
 					// Log summary of what we collected
