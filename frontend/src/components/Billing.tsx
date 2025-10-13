@@ -197,6 +197,9 @@ export default function Billing() {
           .normal-highlight {
             background-color: #f0f4ff;
           }
+          .charging-highlight {
+            background-color: #f0fff4;
+          }
           .total-section { 
             background-color: #f9f9f9; 
             padding: 20px; 
@@ -258,26 +261,62 @@ export default function Billing() {
           </thead>
           <tbody>
             ${invoice.items?.map(item => {
+              // Header items (no price, bold styling)
               if (item.item_type === 'meter_info' || item.item_type === 'charging_header') {
-                return `<tr class="item-header"><td colspan="2">${item.description}</td></tr>`;
-              } else if (item.item_type === 'meter_reading_from' || item.item_type === 'meter_reading_to' || item.item_type === 'total_consumption') {
+                return `<tr class="item-header"><td colspan="2"><strong>${item.description}</strong></td></tr>`;
+              } 
+              // Info items (no price, smaller text, indented)
+              else if (item.item_type === 'meter_reading_from' || 
+                       item.item_type === 'meter_reading_to' || 
+                       item.item_type === 'total_consumption' ||
+                       item.item_type === 'charging_session_from' ||
+                       item.item_type === 'charging_session_to' ||
+                       item.item_type === 'total_charged') {
                 return `<tr class="item-info"><td colspan="2">${item.description}</td></tr>`;
-              } else if (item.item_type === 'separator') {
-                return `<tr><td colspan="2" style="padding: 5px;"></td></tr>`;
-              } else if (item.item_type === 'solar_power') {
+              } 
+              // Separator (empty row)
+              else if (item.item_type === 'separator') {
+                return `<tr><td colspan="2" style="padding: 8px;"></td></tr>`;
+              } 
+              // Solar power (highlighted with sun icon)
+              else if (item.item_type === 'solar_power') {
                 return `<tr class="item-cost solar-highlight">
                   <td><strong>☀ ${item.description}</strong></td>
                   <td class="text-right"><strong>${invoice.currency} ${item.total_price.toFixed(2)}</strong></td>
                 </tr>`;
-              } else if (item.item_type === 'normal_power') {
+              } 
+              // Normal power (highlighted with lightning icon)
+              else if (item.item_type === 'normal_power') {
                 return `<tr class="item-cost normal-highlight">
                   <td><strong>⚡ ${item.description}</strong></td>
                   <td class="text-right"><strong>${invoice.currency} ${item.total_price.toFixed(2)}</strong></td>
                 </tr>`;
-              } else {
+              }
+              // Car charging normal (highlighted with car icon)
+              else if (item.item_type === 'car_charging_normal') {
+                return `<tr class="item-cost charging-highlight">
+                  <td><strong>🚗 ${item.description}</strong></td>
+                  <td class="text-right"><strong>${invoice.currency} ${item.total_price.toFixed(2)}</strong></td>
+                </tr>`;
+              }
+              // Car charging priority (highlighted with priority icon)
+              else if (item.item_type === 'car_charging_priority') {
+                return `<tr class="item-cost charging-highlight">
+                  <td><strong>🚗⚡ ${item.description}</strong></td>
+                  <td class="text-right"><strong>${invoice.currency} ${item.total_price.toFixed(2)}</strong></td>
+                </tr>`;
+              }
+              // Default case for any other billable items
+              else if (item.total_price > 0) {
                 return `<tr class="item-cost">
-                  <td>${item.description}</td>
-                  <td class="text-right">${invoice.currency} ${item.total_price.toFixed(2)}</td>
+                  <td><strong>${item.description}</strong></td>
+                  <td class="text-right"><strong>${invoice.currency} ${item.total_price.toFixed(2)}</strong></td>
+                </tr>`;
+              }
+              // Non-billable items (just description, no price)
+              else {
+                return `<tr class="item-info">
+                  <td colspan="2">${item.description}</td>
                 </tr>`;
               }
             }).join('')}
@@ -822,28 +861,42 @@ export default function Billing() {
                 <tbody>
                   {selectedInvoice.items?.map(item => {
                     const isHeader = item.item_type === 'meter_info' || item.item_type === 'charging_header';
-                    const isInfo = item.item_type === 'meter_reading_from' || item.item_type === 'meter_reading_to' || item.item_type === 'total_consumption';
+                    const isInfo = item.item_type === 'meter_reading_from' || 
+                                   item.item_type === 'meter_reading_to' || 
+                                   item.item_type === 'total_consumption' ||
+                                   item.item_type === 'charging_session_from' ||
+                                   item.item_type === 'charging_session_to' ||
+                                   item.item_type === 'total_charged';
                     const isSeparator = item.item_type === 'separator';
                     const isSolar = item.item_type === 'solar_power';
                     const isNormal = item.item_type === 'normal_power';
+                    const isChargingNormal = item.item_type === 'car_charging_normal';
+                    const isChargingPriority = item.item_type === 'car_charging_priority';
                     
                     if (isSeparator) {
                       return <tr key={item.id}><td colSpan={2} style={{ padding: '8px' }}></td></tr>;
                     }
                     
+                    let backgroundColor = 'transparent';
+                    if (isSolar) backgroundColor = '#fffbea';
+                    else if (isNormal) backgroundColor = '#f0f4ff';
+                    else if (isChargingNormal || isChargingPriority) backgroundColor = '#f0fff4';
+                    
                     return (
                       <tr key={item.id} style={{ 
                         borderBottom: '1px solid #eee',
-                        backgroundColor: isSolar ? '#fffbea' : isNormal ? '#f0f4ff' : 'transparent'
+                        backgroundColor
                       }}>
                         <td style={{ 
                           padding: '12px',
-                          fontWeight: isHeader || isSolar || isNormal ? '600' : 'normal',
+                          fontWeight: isHeader || isSolar || isNormal || isChargingNormal || isChargingPriority ? '600' : 'normal',
                           color: isInfo ? '#666' : 'inherit',
                           fontSize: isInfo ? '14px' : '15px'
                         }}>
                           {isSolar && '☀ '}
                           {isNormal && '⚡ '}
+                          {isChargingNormal && '🚗 '}
+                          {isChargingPriority && '🚗⚡ '}
                           {item.description}
                         </td>
                         <td style={{ padding: '12px', textAlign: 'right', fontWeight: item.total_price > 0 ? '600' : 'normal' }}>
