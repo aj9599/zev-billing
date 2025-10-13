@@ -90,7 +90,7 @@ function getMeterUniqueKey(meter: MeterData): string {
 function getMeterTypeIcon(meterType: string): { Icon: any; label: string } {
   switch (meterType) {
     case 'charger':
-      return { Icon: Zap, label: 'Charger' };
+      return { Icon: Car, label: 'Charger' };
     case 'solar_meter':
       return { Icon: Sun, label: 'Solar' };
     case 'apartment_meter':
