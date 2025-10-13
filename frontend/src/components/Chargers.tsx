@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, HelpCircle, Info, Car, Download, Search, Building } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, HelpCircle, Info, Car, Download, Search, Building, Radio, Plug, Zap, Settings, AlertCircle, Star } from 'lucide-react';
 import { api } from '../api/client';
 import type { Charger, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
@@ -38,7 +38,12 @@ export default function Chargers() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [editingCharger, setEditingCharger] = useState<Charger | null>(null);
+  const [exportDateRange, setExportDateRange] = useState({
+    start_date: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
+    end_date: new Date().toISOString().split('T')[0]
+  });
   const [formData, setFormData] = useState<Partial<Charger>>({
     name: '', brand: 'weidmuller', preset: 'weidmuller', building_id: 0,
     connection_type: 'udp', connection_config: '{}',
@@ -226,7 +231,13 @@ export default function Chargers() {
 
   const handleExport = async () => {
     try {
-      const response = await fetch('/api/billing/export?type=chargers', {
+      const params = new URLSearchParams({
+        type: 'chargers',
+        start_date: exportDateRange.start_date,
+        end_date: exportDateRange.end_date
+      });
+      
+      const response = await fetch(`/api/billing/export?${params}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -235,11 +246,12 @@ export default function Chargers() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `chargers-export-${new Date().toISOString().split('T')[0]}.csv`;
+      a.download = `chargers-export-${exportDateRange.start_date}-to-${exportDateRange.end_date}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
+      setShowExportModal(false);
     } catch (err) {
       alert(t('chargers.exportFailed'));
     }
@@ -322,6 +334,68 @@ export default function Chargers() {
     return acc;
   }, {} as Record<number, Charger[]>);
 
+  const ExportModal = () => (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', 
+      justifyContent: 'center', zIndex: 2000, padding: '20px'
+    }}>
+      <div className="modal-content" style={{
+        backgroundColor: 'white', borderRadius: '12px', padding: '30px',
+        maxWidth: '500px', width: '100%'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>Export Charger Data</h2>
+          <button onClick={() => setShowExportModal(false)} 
+            style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
+            <X size={24} />
+          </button>
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+            Start Date *
+          </label>
+          <input 
+            type="date" 
+            required 
+            value={exportDateRange.start_date}
+            onChange={(e) => setExportDateRange({ ...exportDateRange, start_date: e.target.value })}
+            style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} 
+          />
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+            End Date *
+          </label>
+          <input 
+            type="date" 
+            required 
+            value={exportDateRange.end_date}
+            onChange={(e) => setExportDateRange({ ...exportDateRange, end_date: e.target.value })}
+            style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} 
+          />
+        </div>
+
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button onClick={handleExport} style={{
+            flex: 1, padding: '12px', backgroundColor: '#28a745', color: 'white',
+            border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
+          }}>
+            Export Data
+          </button>
+          <button onClick={() => setShowExportModal(false)} style={{
+            flex: 1, padding: '12px', backgroundColor: '#6c757d', color: 'white',
+            border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
+          }}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   const InstructionsModal = () => (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -341,8 +415,9 @@ export default function Chargers() {
         </div>
 
         <div style={{ lineHeight: '1.8', color: '#374151' }}>
-          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            🚗 {getCurrentPreset().label} {t('chargers.chargerSetup')}
+          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Car size={20} color="#667eea" />
+            {getCurrentPreset().label} {t('chargers.chargerSetup')}
           </h3>
           <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
             <p><strong>{t('chargers.requiresFourDataPoints')}</strong></p>
@@ -354,16 +429,21 @@ export default function Chargers() {
             </ul>
           </div>
 
-          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            📡 {t('chargers.udpConnection')}
+          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Radio size={20} color="#3b82f6" />
+            {t('chargers.udpConnection')}
           </h3>
           <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #3b82f6' }}>
-            <p><strong>⭐ {t('chargers.autoGeneratedUuidKeys')}</strong></p>
+            <p style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Star size={16} fill="#fbbf24" color="#fbbf24" />
+              <strong>{t('chargers.autoGeneratedUuidKeys')}</strong>
+            </p>
             <p style={{ marginTop: '10px' }}>{t('chargers.udpInstructions')}</p>
           </div>
 
-          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            🔧 {t('chargers.stateAndModeValues')}
+          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Settings size={20} color="#6b7280" />
+            {t('chargers.stateAndModeValues')}
           </h3>
           <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '1px solid #f59e0b' }}>
             <p><strong>{t('chargers.configureNumericValues')}</strong></p>
@@ -407,7 +487,7 @@ export default function Chargers() {
         </div>
         <div className="button-group-header" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <button
-            onClick={handleExport}
+            onClick={() => setShowExportModal(true)}
             style={{
               display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
               backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
@@ -444,7 +524,7 @@ export default function Chargers() {
           <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
           <input
             type="text"
-            placeholder={t('common.searchBuildings')}
+            placeholder={t('dashboard.searchBuildings')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -480,7 +560,7 @@ export default function Chargers() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
             <Building size={24} />
             <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>
-              {t('common.allBuildings')}
+              {t('dashboard.allBuildings')}
             </h3>
           </div>
           <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
@@ -695,6 +775,7 @@ export default function Chargers() {
       )}
 
       {showInstructions && <InstructionsModal />}
+      {showExportModal && <ExportModal />}
 
       {showModal && (
         <div style={{
@@ -770,9 +851,10 @@ export default function Chargers() {
 
                 {formData.connection_type === 'udp' && (
                   <>
-                    <div style={{ backgroundColor: '#dbeafe', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #3b82f6' }}>
+                    <div style={{ backgroundColor: '#dbeafe', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #3b82f6', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Star size={16} fill="#fbbf24" color="#fbbf24" />
                       <p style={{ fontSize: '13px', color: '#1e40af', margin: 0 }}>
-                        <strong>⭐ {editingCharger ? t('chargers.existingUuidKeys') : t('chargers.autoGeneratedUuidKeys')}</strong>
+                        <strong>{editingCharger ? t('chargers.existingUuidKeys') : t('chargers.autoGeneratedUuidKeys')}</strong>
                       </p>
                     </div>
                     <div style={{ marginBottom: '12px' }}>
@@ -953,7 +1035,6 @@ export default function Chargers() {
                   </>
                 )}
 
-                {/* State Value Mappings */}
                 <div style={{ marginTop: '20px', padding: '16px', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
                   <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>
                     {t('chargers.stateValueMappings')}
@@ -1001,7 +1082,6 @@ export default function Chargers() {
                   </div>
                 </div>
 
-                {/* Mode Value Mappings */}
                 <div style={{ marginTop: '12px', padding: '16px', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
                   <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>
                     {t('chargers.modeValueMappings')}

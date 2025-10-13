@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Info, HelpCircle, Zap, Download, Search, Building } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Info, HelpCircle, Zap, Download, Search, Building, Radio, Plug, Settings, AlertCircle, Star } from 'lucide-react';
 import { api } from '../api/client';
 import type { Meter, Building as BuildingType, User } from '../types';
 import { useTranslation } from '../i18n';
@@ -25,7 +25,12 @@ export default function Meters() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
+  const [exportDateRange, setExportDateRange] = useState({
+    start_date: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
+    end_date: new Date().toISOString().split('T')[0]
+  });
   const [formData, setFormData] = useState<Partial<Meter>>({
     name: '', meter_type: 'total_meter', building_id: 0, user_id: undefined,
     connection_type: 'udp', connection_config: '{}', notes: '', is_active: true
@@ -57,7 +62,6 @@ export default function Meters() {
     setUsers(usersData);
   };
 
-  // Generate a UUID v4
   const generateUUID = (): string => {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
       const r = Math.random() * 16 | 0;
@@ -66,7 +70,6 @@ export default function Meters() {
     });
   };
 
-  // Check if a data_key is already used by any meter
   const isDataKeyUsed = (dataKey: string): boolean => {
     return meters.some(meter => {
       if (meter.connection_type !== 'udp') return false;
@@ -79,11 +82,10 @@ export default function Meters() {
     });
   };
 
-  // Generate a unique data_key that's not used by any other meter
   const generateUniqueDataKey = (): string => {
     let uuid = generateUUID() + '_power_kwh';
     let attempts = 0;
-    const maxAttempts = 100; // Safety limit
+    const maxAttempts = 100;
     
     while (isDataKeyUsed(uuid) && attempts < maxAttempts) {
       uuid = generateUUID() + '_power_kwh';
@@ -175,7 +177,13 @@ export default function Meters() {
 
   const handleExport = async () => {
     try {
-      const response = await fetch('/api/billing/export?type=meters', {
+      const params = new URLSearchParams({
+        type: 'meters',
+        start_date: exportDateRange.start_date,
+        end_date: exportDateRange.end_date
+      });
+      
+      const response = await fetch(`/api/billing/export?${params}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -184,11 +192,12 @@ export default function Meters() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `meters-export-${new Date().toISOString().split('T')[0]}.csv`;
+      a.download = `meters-export-${exportDateRange.start_date}-to-${exportDateRange.end_date}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
+      setShowExportModal(false);
     } catch (err) {
       alert(t('meters.exportFailed'));
     }
@@ -212,10 +221,8 @@ export default function Meters() {
     });
   };
 
-  // Handle opening the modal for adding a new meter
   const handleAddMeter = () => {
     resetForm();
-    // Generate a unique UUID for the data_key
     const uniqueUUID = generateUniqueDataKey();
     setConnectionConfig(prev => ({
       ...prev,
@@ -248,6 +255,68 @@ export default function Meters() {
     return acc;
   }, {} as Record<number, Meter[]>);
 
+  const ExportModal = () => (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', 
+      justifyContent: 'center', zIndex: 2000, padding: '20px'
+    }}>
+      <div className="modal-content" style={{
+        backgroundColor: 'white', borderRadius: '12px', padding: '30px',
+        maxWidth: '500px', width: '100%'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>Export Meter Data</h2>
+          <button onClick={() => setShowExportModal(false)} 
+            style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
+            <X size={24} />
+          </button>
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+            Start Date *
+          </label>
+          <input 
+            type="date" 
+            required 
+            value={exportDateRange.start_date}
+            onChange={(e) => setExportDateRange({ ...exportDateRange, start_date: e.target.value })}
+            style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} 
+          />
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+            End Date *
+          </label>
+          <input 
+            type="date" 
+            required 
+            value={exportDateRange.end_date}
+            onChange={(e) => setExportDateRange({ ...exportDateRange, end_date: e.target.value })}
+            style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} 
+          />
+        </div>
+
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button onClick={handleExport} style={{
+            flex: 1, padding: '12px', backgroundColor: '#28a745', color: 'white',
+            border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
+          }}>
+            Export Data
+          </button>
+          <button onClick={() => setShowExportModal(false)} style={{
+            flex: 1, padding: '12px', backgroundColor: '#6c757d', color: 'white',
+            border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
+          }}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   const InstructionsModal = () => (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -267,11 +336,15 @@ export default function Meters() {
         </div>
 
         <div style={{ lineHeight: '1.8', color: '#374151' }}>
-          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            📡 UDP Connection (Shared Port - RECOMMENDED!)
+          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Radio size={20} color="#3b82f6" />
+            UDP Connection (Shared Port - RECOMMENDED!)
           </h3>
           <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #3b82f6' }}>
-            <p><strong>⭐ NEW: Auto-generated UUID_power_kwh keys for each meter!</strong></p>
+            <p style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Star size={16} fill="#fbbf24" color="#fbbf24" />
+              <strong>NEW: Auto-generated UUID_power_kwh keys for each meter!</strong>
+            </p>
             <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
               <li>Click "Add Meter" - a unique UUID_power_kwh is generated automatically</li>
               <li>In Loxone Config, create Virtual Output UDP devices</li>
@@ -300,8 +373,9 @@ export default function Meters() {
             </p>
           </div>
 
-          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            🔌 HTTP Connection (Alternative)
+          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Plug size={20} color="#6b7280" />
+            HTTP Connection (Alternative)
           </h3>
           <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
             <p><strong>Loxone Virtual Output Setup:</strong></p>
@@ -314,8 +388,9 @@ export default function Meters() {
             </ol>
           </div>
 
-          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            ⚡ Modbus TCP Connection
+          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Zap size={20} color="#f59e0b" />
+            Modbus TCP Connection
           </h3>
           <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
             <p><strong>For Modbus-compatible meters:</strong></p>
@@ -328,8 +403,9 @@ export default function Meters() {
             </ol>
           </div>
 
-          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            🔧 Testing Your Connection
+          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Settings size={20} color="#3b82f6" />
+            Testing Your Connection
           </h3>
           <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '1px solid #3b82f6' }}>
             <p><strong>Check the Admin Logs page to see:</strong></p>
@@ -341,8 +417,9 @@ export default function Meters() {
             </ul>
           </div>
 
-          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
-            🔍 Troubleshooting
+          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertCircle size={20} color="#f59e0b" />
+            Troubleshooting
           </h3>
           <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', border: '1px solid #f59e0b' }}>
             <ul style={{ marginLeft: '20px' }}>
@@ -359,7 +436,7 @@ export default function Meters() {
         <button onClick={() => setShowInstructions(false)} style={{
           width: '100%', marginTop: '24px', padding: '12px',
           backgroundColor: '#007bff', color: 'white', border: 'none',
-          borderRadius: '6px', fontSize: '14px', fontWeight: '500'
+          borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
         }}>
           {t('common.close')}
         </button>
@@ -392,7 +469,7 @@ export default function Meters() {
         </div>
         <div className="header-actions" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <button
-            onClick={handleExport}
+            onClick={() => setShowExportModal(true)}
             style={{
               display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
               backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
@@ -424,7 +501,6 @@ export default function Meters() {
         </div>
       </div>
 
-      {/* Search Bar */}
       <div style={{ marginBottom: '20px' }}>
         <div style={{ position: 'relative', maxWidth: '400px' }}>
           <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
@@ -444,14 +520,12 @@ export default function Meters() {
         </div>
       </div>
 
-      {/* Building Cards */}
       <div style={{ 
         display: 'grid', 
         gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', 
         gap: '16px', 
         marginBottom: '30px' 
       }}>
-        {/* All Buildings Card */}
         <div
           onClick={() => setSelectedBuildingId(null)}
           style={{
@@ -476,7 +550,6 @@ export default function Meters() {
           </p>
         </div>
 
-        {/* Individual Building Cards */}
         {filteredBuildings.map(building => {
           const buildingMeters = meters.filter(m => m.building_id === building.id);
           return (
@@ -508,7 +581,6 @@ export default function Meters() {
         })}
       </div>
 
-      {/* Meters grouped by building */}
       {Object.entries(groupedMeters).map(([buildingId, buildingMeters]) => {
         const building = buildings.find(b => b.id === parseInt(buildingId));
         return (
@@ -539,7 +611,6 @@ export default function Meters() {
                   e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.07)';
                   e.currentTarget.style.transform = 'translateY(0)';
                 }}>
-                  {/* Action buttons in top right */}
                   <div style={{ 
                     position: 'absolute', 
                     top: '16px', 
@@ -603,7 +674,6 @@ export default function Meters() {
                     </button>
                   </div>
 
-                  {/* Card content */}
                   <div style={{ paddingRight: '72px' }}>
                     <h3 style={{ 
                       fontSize: '20px', 
@@ -678,6 +748,7 @@ export default function Meters() {
       )}
 
       {showInstructions && <InstructionsModal />}
+      {showExportModal && <ExportModal />}
 
       {showModal && (
         <div style={{
@@ -761,9 +832,10 @@ export default function Meters() {
 
                 {formData.connection_type === 'udp' && (
                   <>
-                    <div style={{ backgroundColor: '#dbeafe', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #3b82f6' }}>
+                    <div style={{ backgroundColor: '#dbeafe', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #3b82f6', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Star size={16} fill="#fbbf24" color="#fbbf24" />
                       <p style={{ fontSize: '13px', color: '#1e40af', margin: 0 }}>
-                        <strong>⭐ {editingMeter ? 'Existing UUID_power_kwh key' : 'Auto-generated UUID_power_kwh for this meter!'}</strong>
+                        <strong>{editingMeter ? 'Existing UUID_power_kwh key' : 'Auto-generated UUID_power_kwh for this meter!'}</strong>
                       </p>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
@@ -900,13 +972,13 @@ export default function Meters() {
               <div className="button-group" style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                 <button type="submit" style={{
                   flex: 1, padding: '12px', backgroundColor: '#007bff', color: 'white',
-                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500'
+                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
                 }}>
                   {editingMeter ? t('common.update') : t('common.create')}
                 </button>
                 <button type="button" onClick={() => { setShowModal(false); setEditingMeter(null); }} style={{
                   flex: 1, padding: '12px', backgroundColor: '#6c757d', color: 'white',
-                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500'
+                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
                 }}>
                   {t('common.cancel')}
                 </button>
