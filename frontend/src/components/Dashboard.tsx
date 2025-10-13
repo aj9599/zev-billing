@@ -41,7 +41,7 @@ const FIXED_COLORS: Record<string, string> = {
 };
 
 const apartmentColorMap = new Map<number, string>();
-const chargerColorMap = new Map<string, string>(); // Key: charger_id + user_id
+const chargerColorMap = new Map<string, string>();
 
 function getMeterColor(meterType: string, meterId?: number, userId?: string): string {
   if (meterType === 'apartment_meter' && meterId !== undefined) {
@@ -77,11 +77,43 @@ function getMeterDisplayName(meter: MeterData): string {
 }
 
 function getMeterUniqueKey(meter: MeterData): string {
-  // Create unique key for each meter/charger+user combination
   if (meter.meter_type === 'charger' && meter.user_name) {
     return `charger_${meter.meter_id}_${meter.user_name}`;
   }
   return `meter_${meter.meter_id}`;
+}
+
+// FIXED: Format time based on period duration
+function formatTimeForPeriod(timestamp: string, period: string): string {
+  const date = new Date(timestamp);
+  
+  // For 1 hour, just show time
+  if (period === '1h') {
+    return date.toLocaleTimeString('de-CH', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+  }
+  
+  // For 24h, show date + time to distinguish between days
+  if (period === '24h') {
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const time = date.toLocaleTimeString('de-CH', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+    return `${day}.${month} ${time}`;
+  }
+  
+  // For 7d and 30d, show date + time
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const time = date.toLocaleTimeString('de-CH', { 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  });
+  return `${day}.${month} ${time}`;
 }
 
 export default function Dashboard() {
@@ -347,30 +379,36 @@ export default function Dashboard() {
                   </div>
                 )}
                 {filteredBuildings.map((building) => {
+            // FIXED: Use timestamp as unique key, format for display based on period
             const timeMap = new Map<string, any>();
             const meters = building.meters || [];
             
             meters.forEach(meter => {
               const readings = meter.data || [];
               readings.forEach(reading => {
-                const time = new Date(reading.timestamp).toLocaleTimeString('de-CH', { 
-                  hour: '2-digit', 
-                  minute: '2-digit' 
-                });
+                // Use ISO timestamp as unique key
+                const timestampKey = reading.timestamp;
                 
-                if (!timeMap.has(time)) {
-                  timeMap.set(time, { time });
+                // Format for display based on period
+                const displayTime = formatTimeForPeriod(reading.timestamp, period);
+                
+                if (!timeMap.has(timestampKey)) {
+                  timeMap.set(timestampKey, { 
+                    time: displayTime,
+                    timestamp: reading.timestamp,
+                    sortKey: new Date(reading.timestamp).getTime()
+                  });
                 }
                 
-                // Use unique key for each meter/charger+user
                 const meterKey = getMeterUniqueKey(meter);
-                const current = timeMap.get(time);
+                const current = timeMap.get(timestampKey);
                 current[meterKey] = reading.power;
               });
             });
 
+            // FIXED: Sort by actual timestamp, not display string
             const chartData = Array.from(timeMap.values()).sort((a, b) => {
-              return a.time.localeCompare(b.time);
+              return a.sortKey - b.sortKey;
             });
 
             return (
@@ -448,6 +486,9 @@ export default function Dashboard() {
                           dataKey="time" 
                           style={{ fontSize: '12px' }}
                           stroke="#6b7280"
+                          angle={period === '24h' || period === '7d' || period === '30d' ? -45 : 0}
+                          textAnchor={period === '24h' || period === '7d' || period === '30d' ? 'end' : 'middle'}
+                          height={period === '24h' || period === '7d' || period === '30d' ? 80 : 30}
                         />
                         <YAxis 
                           label={{ 
