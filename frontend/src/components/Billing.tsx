@@ -90,7 +90,7 @@ export default function Billing() {
 
   // Save sender info to localStorage when it changes
   useEffect(() => {
-    if (senderInfo.name || senderInfo.iban) {
+    if (senderInfo.name || senderInfo.address) {
       localStorage.setItem('zev_sender_info', JSON.stringify(senderInfo));
     }
   }, [senderInfo]);
@@ -688,7 +688,7 @@ export default function Billing() {
   };
 
   const resetForm = () => {
-    setFormData(prev => ({
+    setFormData({
       building_ids: [],
       user_ids: [],
       start_date: '',
