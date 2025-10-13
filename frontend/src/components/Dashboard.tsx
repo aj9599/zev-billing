@@ -83,10 +83,22 @@ function getMeterUniqueKey(meter: MeterData): string {
   return `meter_${meter.meter_id}`;
 }
 
-// FIXED: Format time based on period duration
-function formatTimeForPeriod(timestamp: string, period: string): string {
+// FIXED: Round timestamp to nearest 15-minute interval
+function roundToNearest15Minutes(timestamp: string): Date {
   const date = new Date(timestamp);
+  const minutes = date.getMinutes();
+  const roundedMinutes = Math.round(minutes / 15) * 15;
   
+  const rounded = new Date(date);
+  rounded.setMinutes(roundedMinutes);
+  rounded.setSeconds(0);
+  rounded.setMilliseconds(0);
+  
+  return rounded;
+}
+
+// Format time based on period duration
+function formatTimeForPeriod(date: Date, period: string): string {
   // For 1 hour, just show time
   if (period === '1h') {
     return date.toLocaleTimeString('de-CH', { 
@@ -379,24 +391,25 @@ export default function Dashboard() {
                   </div>
                 )}
                 {filteredBuildings.map((building) => {
-            // FIXED: Use timestamp as unique key, format for display based on period
+            // FIXED: Round timestamps to 15-minute intervals so all meters align
             const timeMap = new Map<string, any>();
             const meters = building.meters || [];
             
             meters.forEach(meter => {
               const readings = meter.data || [];
               readings.forEach(reading => {
-                // Use ISO timestamp as unique key
-                const timestampKey = reading.timestamp;
+                // Round timestamp to nearest 15 minutes
+                const roundedDate = roundToNearest15Minutes(reading.timestamp);
+                const timestampKey = roundedDate.toISOString();
                 
                 // Format for display based on period
-                const displayTime = formatTimeForPeriod(reading.timestamp, period);
+                const displayTime = formatTimeForPeriod(roundedDate, period);
                 
                 if (!timeMap.has(timestampKey)) {
                   timeMap.set(timestampKey, { 
                     time: displayTime,
-                    timestamp: reading.timestamp,
-                    sortKey: new Date(reading.timestamp).getTime()
+                    timestamp: timestampKey,
+                    sortKey: roundedDate.getTime()
                   });
                 }
                 
