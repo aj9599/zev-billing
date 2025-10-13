@@ -469,6 +469,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					mi.id, baselineTimestamp, baselinePowerKwh)
 			}
 			
+			var dataRows *sql.Rows
 			dataRows, err = h.db.QueryContext(ctx, `
 				SELECT reading_time, power_kwh
 				FROM meter_readings
@@ -574,6 +575,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			for _, ci := range chargerInfos {
 				log.Printf("    Processing charger ID: %d, Name: %s", ci.id, ci.name)
 
+				var sessionRows *sql.Rows
 				sessionRows, err = h.db.QueryContext(ctx, `
 					SELECT cs.session_time, cs.power_kwh, cs.user_id, cs.state
 					FROM charger_sessions cs
