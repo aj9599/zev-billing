@@ -29,9 +29,10 @@ const APARTMENT_COLORS = [
   '#a855f7', '#ef4444', '#84cc16', '#22c55e', '#0ea5e9',
 ];
 
+// ENHANCED: More vibrant and distinct colors for chargers
 const CHARGER_COLORS = [
-  '#f59e0b', '#f97316', '#fb923c', '#fdba74', '#fcd34d', '#fde047',
-  '#facc15', '#eab308', '#ca8a04', '#a16207', '#854d0e',
+  '#ff6b35', '#ff8c42', '#ffa94d', '#ffc078', '#ffd89b',
+  '#f77f00', '#fcbf49', '#e63946', '#d62828', '#a4161a',
 ];
 
 const FIXED_COLORS: Record<string, string> = {
@@ -446,6 +447,7 @@ export default function Dashboard() {
                   }}>
                     {meters.map(meter => {
                       const uniqueKey = getMeterUniqueKey(meter);
+                      const isCharger = meter.meter_type === 'charger';
                       return (
                         <div
                           key={uniqueKey}
@@ -453,29 +455,36 @@ export default function Dashboard() {
                             display: 'flex',
                             alignItems: 'center',
                             gap: '6px',
-                            padding: '4px 8px',
+                            padding: '6px 10px',
                             backgroundColor: 'white',
-                            borderRadius: '4px',
-                            fontSize: '13px'
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            border: isCharger ? '2px solid #ff6b35' : '1px solid #e5e7eb',
+                            boxShadow: isCharger ? '0 2px 4px rgba(255, 107, 53, 0.2)' : 'none'
                           }}
                         >
                           <div
                             style={{
-                              width: '12px',
-                              height: '12px',
-                              borderRadius: '2px',
+                              width: '16px',
+                              height: '16px',
+                              borderRadius: '3px',
                               backgroundColor: getMeterColor(meter.meter_type, meter.meter_id, meter.user_name),
                               flexShrink: 0,
-                              border: meter.meter_type === 'charger' ? '2px dashed rgba(0,0,0,0.2)' : 'none'
+                              border: isCharger ? '2px solid #fff' : '1px solid rgba(0,0,0,0.1)',
+                              boxShadow: isCharger ? '0 0 0 2px rgba(255, 107, 53, 0.3)' : 'none'
                             }}
                           />
-                          <span style={{ fontWeight: '500' }}>
+                          <span style={{ fontWeight: isCharger ? '600' : '500' }}>
                             {getMeterDisplayName(meter)}
                           </span>
-                          <span style={{ color: '#6b7280', fontSize: '12px' }}>
-                            ({meter.meter_type === 'charger' ? 'Charger' : 
-                              meter.meter_type === 'solar_meter' ? 'Solar' :
-                              meter.meter_type === 'apartment_meter' ? 'Apartment' :
+                          <span style={{ 
+                            color: isCharger ? '#ff6b35' : '#6b7280', 
+                            fontSize: '12px',
+                            fontWeight: isCharger ? '600' : 'normal'
+                          }}>
+                            ({meter.meter_type === 'charger' ? '⚡ Charger' : 
+                              meter.meter_type === 'solar_meter' ? '☀️ Solar' :
+                              meter.meter_type === 'apartment_meter' ? '🏠 Apartment' :
                               meter.meter_type.replace('_', ' ')})
                           </span>
                         </div>
@@ -525,17 +534,19 @@ export default function Dashboard() {
                         />
                         {meters.map(meter => {
                           const uniqueKey = getMeterUniqueKey(meter);
+                          const isCharger = meter.meter_type === 'charger';
                           return (
                             <Line
                               key={uniqueKey}
                               type="monotone"
                               dataKey={uniqueKey}
                               stroke={getMeterColor(meter.meter_type, meter.meter_id, meter.user_name)}
-                              strokeWidth={meter.meter_type === 'charger' ? 3 : 2}
-                              strokeDasharray={meter.meter_type === 'charger' ? '5 5' : undefined}
+                              strokeWidth={isCharger ? 4 : 2}
+                              strokeDasharray={isCharger ? '8 4' : undefined}
                               name={getMeterDisplayName(meter)}
-                              dot={false}
-                              activeDot={{ r: 4 }}
+                              dot={isCharger ? { r: 5, strokeWidth: 2, fill: '#fff' } : false}
+                              activeDot={{ r: 6, strokeWidth: 2 }}
+                              connectNulls={true}
                             />
                           );
                         })}

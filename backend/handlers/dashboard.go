@@ -546,6 +546,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		}
 
 		// Process chargers - grouped by user_id
+		// FIXED: Include all charger sessions to ensure the line always appears
 		log.Printf("  Querying chargers for building %d...", bi.id)
 		chargerRows, err := h.db.QueryContext(ctx, `
 			SELECT c.id, c.name
@@ -580,6 +581,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				log.Printf("    Processing charger ID: %d, Name: %s", ci.id, ci.name)
 
 				// Get all sessions for this charger, grouped by user
+				// FIXED: Don't filter by state - include all sessions
 				var sessionRows *sql.Rows
 				sessionRows, err = h.db.QueryContext(ctx, `
 					SELECT cs.session_time, cs.power_kwh, cs.user_id, cs.state
@@ -613,11 +615,9 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						continue
 					}
 
-					// Skip idle sessions (no charging happening)
-					if strings.ToLower(state) == "idle" || state == "50" {
-						continue
-					}
-
+					// FIXED: Don't skip idle sessions - include all states
+					// This ensures the line always appears on the chart
+					
 					if _, exists := userSessions[userID]; !exists {
 						userSessions[userID] = []sessionReading{}
 					}
@@ -687,10 +687,8 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 								continue
 							}
 							
-							if consumptionKwh == 0 {
-								previousReading = &currentReading
-								continue
-							}
+							// FIXED: Include zero consumption readings
+							// This ensures the line continues even during idle periods
 							
 							// Calculate actual time difference in hours
 							timeDiffHours := currentReading.sessionTime.Sub(previousReading.sessionTime).Hours()
@@ -707,14 +705,17 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 								Source:    "charger",
 							})
 							
-							log.Printf("    Charger %d, user %s: %.3f kWh over %.2f hours = %.0f W", 
-								ci.id, userID, consumptionKwh, timeDiffHours, powerW)
+							if powerW > 0 {
+								log.Printf("    Charger %d, user %s: %.3f kWh over %.2f hours = %.0f W", 
+									ci.id, userID, consumptionKwh, timeDiffHours, powerW)
+							}
 						}
 						
 						previousReading = &currentReading
 					}
 
-					// Only add charger data if we have actual consumption data
+					// FIXED: Always add charger data if we have any sessions
+					// This ensures the charger appears on the chart even with all zeros
 					if len(consumptionData) > 0 {
 						chargerData := MeterData{
 							MeterID:   ci.id,
@@ -724,9 +725,11 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 							Data:      consumptionData,
 						}
 
-						log.Printf("    Charger ID: %d has %d data points for user %s", 
+						log.Printf("    Charger ID: %d has %d data points for user %s (including zeros)", 
 							ci.id, len(consumptionData), userName)
 						building.Meters = append(building.Meters, chargerData)
+					} else {
+						log.Printf("    WARNING: Charger %d has no data points for user %s", ci.id, userName)
 					}
 				}
 			}
