@@ -184,6 +184,19 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 		nextCollection = 0
 	}
 
+	// ENHANCED: Add charger buffer status
+	dc.mu.Lock()
+	chargerBufferStatus := make(map[string]interface{})
+	for chargerID, data := range dc.udpChargerBuffers {
+		chargerBufferStatus[fmt.Sprintf("charger_%d", chargerID)] = map[string]interface{}{
+			"power":   data.Power,
+			"state":   data.State,
+			"user_id": data.UserID,
+			"mode":    data.Mode,
+		}
+	}
+	dc.mu.Unlock()
+
 	return map[string]interface{}{
 		"active_meters":           activeMeters,
 		"total_meters":            totalMeters,
@@ -193,6 +206,7 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 		"next_collection_minutes": nextCollection,
 		"udp_listeners":           dc.udpPorts,
 		"recent_errors":           recentErrors,
+		"charger_buffers":         chargerBufferStatus,
 	}
 }
 
@@ -607,30 +621,51 @@ func (dc *DataCollector) saveBufferedUDPData() {
 		}
 	}
 
-	// Save charger data with enhanced logging
+	// ENHANCED: Save charger data with better validation and logging
+	log.Printf("Processing %d chargers in buffer", len(dc.udpChargerBuffers))
 	for chargerID, data := range dc.udpChargerBuffers {
-		if data.UserID != "" && data.State != "" && data.Mode != "" {
-			// FIXED: Always insert charger data, even if power is 0
-			// This ensures we capture all session states for billing
-			_, err := dc.db.Exec(`
-				INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
-				VALUES (?, ?, ?, ?, ?, ?)
-			`, chargerID, data.UserID, time.Now(), data.Power, data.Mode, data.State)
+		// FIXED: Validate all required fields are present
+		if data.UserID == "" || data.State == "" || data.Mode == "" {
+			log.Printf("WARNING: Incomplete charger data for charger ID %d (user=%s, state=%s, mode=%s) - skipping",
+				chargerID, data.UserID, data.State, data.Mode)
+			continue
+		}
 
-			if err == nil {
-				log.Printf("SUCCESS: UDP charger data saved for charger ID %d: %.2f kWh (user: %s, mode: %s, state: %s)", 
-					chargerID, data.Power, data.UserID, data.Mode, data.State)
-				dc.logToDatabase("UDP Charger Data Saved", 
-					fmt.Sprintf("Charger ID: %d, Power: %.2f kWh, User: %s, Mode: %s, State: %s", 
-						chargerID, data.Power, data.UserID, data.Mode, data.State))
+		// FIXED: Always insert charger data regardless of power value
+		// This ensures we track all session states for proper billing
+		_, err := dc.db.Exec(`
+			INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
+			VALUES (?, ?, ?, ?, ?, ?)
+		`, chargerID, data.UserID, time.Now(), data.Power, data.Mode, data.State)
+
+		if err == nil {
+			// ENHANCED: More detailed success logging
+			log.Printf("✓ SUCCESS: Charger data saved - ID=%d, Power=%.4f kWh, User=%s, Mode=%s, State=%s, Time=%s", 
+				chargerID, data.Power, data.UserID, data.Mode, data.State, time.Now().Format("15:04:05"))
+			dc.logToDatabase("UDP Charger Data Saved", 
+				fmt.Sprintf("Charger ID: %d, Power: %.4f kWh, User: %s, Mode: %s, State: %s", 
+					chargerID, data.Power, data.UserID, data.Mode, data.State))
+			
+			// ENHANCED: Verify the data was actually saved
+			var count int
+			dc.db.QueryRow(`
+				SELECT COUNT(*) FROM charger_sessions 
+				WHERE charger_id = ? AND user_id = ? 
+				AND session_time >= datetime('now', '-1 minute')
+			`, chargerID, data.UserID).Scan(&count)
+			
+			if count > 0 {
+				log.Printf("  ✓ Verified: %d recent session(s) in database for charger %d", count, chargerID)
 			} else {
-				log.Printf("ERROR: Failed to save charger data for charger ID %d: %v", chargerID, err)
+				log.Printf("  ⚠ WARNING: Could not verify saved session in database for charger %d", chargerID)
 			}
 		} else {
-			log.Printf("WARNING: Incomplete charger data for charger ID %d (user: %s, state: %s, mode: %s) - not saving",
-				chargerID, data.UserID, data.State, data.Mode)
+			log.Printf("✗ ERROR: Failed to save charger data for charger ID %d: %v", chargerID, err)
+			dc.logToDatabase("Charger Save Error", fmt.Sprintf("Charger ID: %d, Error: %v", chargerID, err))
 		}
 	}
+	
+	log.Printf("Charger buffer processing complete")
 }
 
 func (dc *DataCollector) collectMeterData() {

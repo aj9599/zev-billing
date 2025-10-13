@@ -398,7 +398,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			FROM meters m
 			WHERE m.building_id = ? 
 			AND COALESCE(m.is_active, 1) = 1
-			AND m.meter_type IN ('apartment_meter', 'solar_meter')
+			AND m.meter_type IN ('apartment_meter', 'solar_meter', 'total_meter')
 			ORDER BY m.meter_type, m.name
 		`, bi.id)
 
@@ -545,8 +545,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			building.Meters = append(building.Meters, meterData)
 		}
 
-		// Process chargers - grouped by user_id
-		// FIXED: Include all charger sessions to ensure the line always appears
+		// FIXED: Process chargers with improved algorithm
 		log.Printf("  Querying chargers for building %d...", bi.id)
 		chargerRows, err := h.db.QueryContext(ctx, `
 			SELECT c.id, c.name
@@ -580,123 +579,149 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			for _, ci := range chargerInfos {
 				log.Printf("    Processing charger ID: %d, Name: %s", ci.id, ci.name)
 
-				// Get all sessions for this charger, grouped by user
-				var sessionRows *sql.Rows
-				sessionRows, err = h.db.QueryContext(ctx, `
-					SELECT cs.session_time, cs.power_kwh, cs.user_id, cs.state
-					FROM charger_sessions cs
-					WHERE cs.charger_id = ? 
-					AND cs.session_time >= ?
-					AND cs.session_time <= ?
-					ORDER BY cs.user_id, cs.session_time ASC
+				// Get all distinct users who have sessions for this charger in the period
+				var userRows *sql.Rows
+				userRows, err = h.db.QueryContext(ctx, `
+					SELECT DISTINCT user_id
+					FROM charger_sessions
+					WHERE charger_id = ? 
+					AND session_time >= ?
+					AND session_time <= ?
+					ORDER BY user_id
 				`, ci.id, startTime, now)
 
 				if err != nil {
-					log.Printf("    Error querying sessions for charger %d: %v", ci.id, err)
+					log.Printf("    Error querying users for charger %d: %v", ci.id, err)
 					continue
 				}
 
-				type sessionReading struct {
-					sessionTime time.Time
-					powerKwh    float64
-					state       string
+				type userInfo struct {
+					userID string
 				}
+				userInfos := []userInfo{}
 				
-				// Group sessions by user_id
-				userSessions := make(map[string][]sessionReading)
-				
-				for sessionRows.Next() {
-					var sessionTime time.Time
-					var powerKwh float64
-					var userID, state string
-					
-					if err := sessionRows.Scan(&sessionTime, &powerKwh, &userID, &state); err != nil {
+				for userRows.Next() {
+					var ui userInfo
+					if err := userRows.Scan(&ui.userID); err != nil {
 						continue
 					}
-
-					// Include all sessions, but mark idle ones
-					// This helps us track the charger state properly
-					if _, exists := userSessions[userID]; !exists {
-						userSessions[userID] = []sessionReading{}
-					}
-					
-					userSessions[userID] = append(userSessions[userID], sessionReading{
-						sessionTime: sessionTime,
-						powerKwh:    powerKwh,
-						state:       state,
-					})
+					userInfos = append(userInfos, ui)
 				}
-				sessionRows.Close()
+				userRows.Close()
 
-				// Process each user's sessions separately
-				for userID, sessions := range userSessions {
-					if len(sessions) == 0 {
-						continue
-					}
+				log.Printf("    Found %d users with sessions for charger %d", len(userInfos), ci.id)
+
+				for _, ui := range userInfos {
+					log.Printf("      Processing user: %s", ui.userID)
 
 					// Get user name
-					userName := fmt.Sprintf("User %s", userID)
+					userName := fmt.Sprintf("User %s", ui.userID)
 					err = h.db.QueryRowContext(ctx, `
 						SELECT first_name || ' ' || last_name 
 						FROM users 
 						WHERE id = ?
-					`, userID).Scan(&userName)
+					`, ui.userID).Scan(&userName)
 					
-					if err != nil {
-						if err != sql.ErrNoRows {
-							log.Printf("    Error getting user name for user %s: %v", userID, err)
-						}
-						// Keep default "User {id}" if not found
-						log.Printf("    User %s not found in database, using ID as name", userID)
+					if err != nil && err != sql.ErrNoRows {
+						log.Printf("      Error getting user name for user %s: %v", ui.userID, err)
+					}
+
+					type sessionReading struct {
+						sessionTime time.Time
+						powerKwh    float64
+						state       string
 					}
 
 					// Get baseline reading for this user (last session before period)
 					var baselineReading *sessionReading
 					var baselineTime time.Time
 					var baselinePowerKwh float64
+					var baselineState string
 					
 					err = h.db.QueryRowContext(ctx, `
-						SELECT session_time, power_kwh
+						SELECT session_time, power_kwh, state
 						FROM charger_sessions
 						WHERE charger_id = ? 
 						AND user_id = ?
 						AND session_time < ?
 						ORDER BY session_time DESC
 						LIMIT 1
-					`, ci.id, userID, startTime).Scan(&baselineTime, &baselinePowerKwh)
+					`, ci.id, ui.userID, startTime).Scan(&baselineTime, &baselinePowerKwh, &baselineState)
 					
 					if err == nil {
 						baselineReading = &sessionReading{
 							sessionTime: baselineTime,
 							powerKwh:    baselinePowerKwh,
+							state:       baselineState,
 						}
-						log.Printf("    Found baseline for charger %d, user %s at %v: %.2f kWh", 
-							ci.id, userID, baselineTime, baselinePowerKwh)
+						log.Printf("      Found baseline for charger %d, user %s at %v: %.4f kWh, state=%s", 
+							ci.id, ui.userID, baselineTime, baselinePowerKwh, baselineState)
+					} else {
+						log.Printf("      No baseline found for charger %d, user %s", ci.id, ui.userID)
+					}
+
+					// Get all sessions for this user in the period
+					var sessionRows *sql.Rows
+					sessionRows, err = h.db.QueryContext(ctx, `
+						SELECT session_time, power_kwh, state
+						FROM charger_sessions
+						WHERE charger_id = ? 
+						AND user_id = ?
+						AND session_time >= ?
+						AND session_time <= ?
+						ORDER BY session_time ASC
+					`, ci.id, ui.userID, startTime, now)
+
+					if err != nil {
+						log.Printf("      Error querying sessions for charger %d, user %s: %v", ci.id, ui.userID, err)
+						continue
+					}
+
+					sessions := []sessionReading{}
+					for sessionRows.Next() {
+						var sr sessionReading
+						if err := sessionRows.Scan(&sr.sessionTime, &sr.powerKwh, &sr.state); err != nil {
+							continue
+						}
+						sessions = append(sessions, sr)
+					}
+					sessionRows.Close()
+
+					log.Printf("      Found %d sessions for charger %d, user %s", len(sessions), ci.id, ui.userID)
+
+					if len(sessions) == 0 {
+						log.Printf("      No sessions found, skipping user %s", ui.userID)
+						continue
 					}
 
 					consumptionData := []models.ConsumptionData{}
 					previousReading := baselineReading
-					
-					log.Printf("    Processing %d sessions for user %s", len(sessions), userID)
-					
-					// Calculate power from energy differences
+
+					// FIXED: More lenient processing - include all valid data points
 					for idx, currentReading := range sessions {
 						if previousReading != nil {
 							consumptionKwh := currentReading.powerKwh - previousReading.powerKwh
 							
-							log.Printf("    Session %d: time=%v, power_kwh=%.4f, prev_power_kwh=%.4f, consumption=%.4f kWh", 
-								idx, currentReading.sessionTime, currentReading.powerKwh, previousReading.powerKwh, consumptionKwh)
-							
+							// Handle meter reset
 							if consumptionKwh < 0 {
-								log.Printf("    WARNING: Negative consumption for charger %d, user %s at %v (possible reset)", 
-									ci.id, userID, currentReading.sessionTime)
+								log.Printf("      Session %d: Negative consumption detected (%.6f kWh), treating as meter reset", 
+									idx, consumptionKwh)
+								// Use current reading as new baseline
 								previousReading = &currentReading
 								continue
 							}
 							
-							// Include very small consumption values (threshold: 0.001 kWh)
-							if consumptionKwh < 0.001 {
-								log.Printf("    SKIPPING: Consumption too small (%.6f kWh)", consumptionKwh)
+							// FIXED: Lower threshold from 0.001 to 0.0001 kWh (0.1 Wh)
+							// This allows capturing even very small charging amounts
+							if consumptionKwh < 0.0001 {
+								log.Printf("      Session %d: Consumption too small (%.6f kWh), adding zero power point", 
+									idx, consumptionKwh)
+								// Still add a data point with zero power to maintain continuity
+								consumptionData = append(consumptionData, models.ConsumptionData{
+									Timestamp: currentReading.sessionTime,
+									Power:     0,
+									Source:    "charger",
+								})
 								previousReading = &currentReading
 								continue
 							}
@@ -710,22 +735,35 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 							// Convert consumption to power in Watts: Power (W) = Energy (kWh) / Time (h) * 1000
 							powerW := (consumptionKwh / timeDiffHours) * 1000
 							
+							// FIXED: Cap unrealistic power values (e.g., > 50kW for typical chargers)
+							if powerW > 50000 {
+								log.Printf("      Session %d: Power too high (%.0f W), capping at 50kW", idx, powerW)
+								powerW = 50000
+							}
+							
 							consumptionData = append(consumptionData, models.ConsumptionData{
 								Timestamp: currentReading.sessionTime,
 								Power:     powerW,
 								Source:    "charger",
 							})
 							
-							log.Printf("    ✓ ADDED DATA POINT: Charger %d, user %s: %.4f kWh over %.2f hours = %.0f W", 
-								ci.id, userID, consumptionKwh, timeDiffHours, powerW)
+							log.Printf("      ✓ Session %d: time=%v, energy_diff=%.4f kWh, time_diff=%.2f h, power=%.0f W, state=%s", 
+								idx, currentReading.sessionTime, consumptionKwh, timeDiffHours, powerW, currentReading.state)
 						} else {
-							log.Printf("    Session %d: No previous reading, setting baseline", idx)
+							log.Printf("      Session %d: No previous reading, using as baseline", idx)
+							// FIXED: Add first point with zero power to ensure line appears
+							consumptionData = append(consumptionData, models.ConsumptionData{
+								Timestamp: currentReading.sessionTime,
+								Power:     0,
+								Source:    "charger",
+							})
 						}
 						
 						previousReading = &currentReading
 					}
 
-					// Only add charger data if we have actual consumption (non-zero)
+					// FIXED: Always add charger data if we have ANY sessions
+					// This ensures the charger line appears even during idle periods
 					if len(consumptionData) > 0 {
 						chargerData := MeterData{
 							MeterID:   ci.id,
@@ -735,21 +773,21 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 							Data:      consumptionData,
 						}
 
-						log.Printf("    Charger ID: %d has %d data points with consumption for user %s", 
+						log.Printf("      ✓ Charger ID: %d has %d data points for user %s", 
 							ci.id, len(consumptionData), userName)
 						building.Meters = append(building.Meters, chargerData)
 					} else {
-						log.Printf("    INFO: Charger %d has no consumption data for user %s (skipping)", ci.id, userName)
+						log.Printf("      ⚠ Charger ID: %d has no valid data points for user %s", ci.id, userName)
 					}
 				}
 			}
 		}
 
-		log.Printf("  Building %d processed with %d meters/chargers", bi.id, len(building.Meters))
+		log.Printf("  Building %d processed with %d meters/chargers total", bi.id, len(building.Meters))
 		buildings = append(buildings, building)
 	}
 
-	log.Printf("Returning %d buildings", len(buildings))
+	log.Printf("Returning %d buildings with consumption data", len(buildings))
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(buildings); err != nil {

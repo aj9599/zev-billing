@@ -29,10 +29,11 @@ const APARTMENT_COLORS = [
   '#a855f7', '#ef4444', '#84cc16', '#22c55e', '#0ea5e9',
 ];
 
-// ENHANCED: More vibrant and distinct colors for chargers
+// ENHANCED: Even more vibrant and distinct colors for chargers with better contrast
 const CHARGER_COLORS = [
-  '#ff6b35', '#ff8c42', '#ffa94d', '#ffc078', '#ffd89b',
-  '#f77f00', '#fcbf49', '#e63946', '#d62828', '#a4161a',
+  '#ff3366', '#ff6b35', '#ff8c42', '#ffa94d', '#ffbd59',
+  '#f77f00', '#fcbf49', '#e63946', '#d62828', '#c1121f',
+  '#780000', '#9d4edd', '#7209b7', '#560bad', '#3a0ca3',
 ];
 
 const FIXED_COLORS: Record<string, string> = {
@@ -68,7 +69,6 @@ function getMeterColor(meterType: string, meterId?: number, userName?: string): 
 function getMeterDisplayName(meter: MeterData): string {
   if (meter.meter_type === 'charger') {
     const userName = meter.user_name || 'Unknown User';
-    // Extract just the numeric user ID if the format is "User XX"
     const userMatch = userName.match(/^User (\d+)$/);
     const displayUser = userMatch ? `User ${userMatch[1]}` : userName;
     return `${meter.meter_name} - ${displayUser}`;
@@ -159,6 +159,25 @@ export default function Dashboard() {
         api.getConsumptionByBuilding(period)
       ]);
       setStats(statsData);
+      
+      // FIXED: Log charger data for debugging
+      if (Array.isArray(buildingConsumption)) {
+        buildingConsumption.forEach(building => {
+          const chargers = building.meters?.filter(m => m.meter_type === 'charger') || [];
+          if (chargers.length > 0) {
+            console.log(`Building ${building.building_name}:`);
+            chargers.forEach(c => {
+              console.log(`  - ${c.meter_name} (${c.user_name}): ${c.data.length} data points`);
+              if (c.data.length > 0) {
+                const avgPower = c.data.reduce((sum, d) => sum + d.power, 0) / c.data.length;
+                const maxPower = Math.max(...c.data.map(d => d.power));
+                console.log(`    Avg: ${avgPower.toFixed(0)}W, Max: ${maxPower.toFixed(0)}W`);
+              }
+            });
+          }
+        });
+      }
+      
       setBuildingData(Array.isArray(buildingConsumption) ? buildingConsumption : []);
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
@@ -408,21 +427,20 @@ export default function Dashboard() {
             const timeMap = new Map<string, any>();
             const meters = building.meters || [];
             
-            // Debug: Log charger meters
+            // FIXED: Better data point aggregation for chargers
             const chargerMeters = meters.filter(m => m.meter_type === 'charger');
             if (chargerMeters.length > 0) {
-              console.log(`Building ${building.building_name} has ${chargerMeters.length} charger(s):`);
-              chargerMeters.forEach(cm => {
-                console.log(`  - ${cm.meter_name} (User: ${cm.user_name}): ${cm.data.length} data points`);
-                if (cm.data.length > 0) {
-                  console.log(`    First point: ${cm.data[0].timestamp}, Power: ${cm.data[0].power}W`);
-                  console.log(`    Last point: ${cm.data[cm.data.length-1].timestamp}, Power: ${cm.data[cm.data.length-1].power}W`);
-                }
-              });
+              console.log(`Building ${building.building_name} - Processing ${chargerMeters.length} charger(s)`);
             }
             
             meters.forEach(meter => {
               const readings = meter.data || [];
+              const isCharger = meter.meter_type === 'charger';
+              
+              if (isCharger && readings.length > 0) {
+                console.log(`  Charger ${meter.meter_name} (${meter.user_name}): ${readings.length} readings`);
+              }
+              
               readings.forEach(reading => {
                 const roundedDate = roundToNearest15Minutes(reading.timestamp);
                 const timestampKey = roundedDate.toISOString();
@@ -438,7 +456,11 @@ export default function Dashboard() {
                 
                 const meterKey = getMeterUniqueKey(meter);
                 const current = timeMap.get(timestampKey);
-                current[meterKey] = reading.power;
+                
+                // FIXED: For chargers, keep even zero values to maintain line continuity
+                if (isCharger || reading.power > 0) {
+                  current[meterKey] = reading.power;
+                }
               });
             });
 
@@ -446,14 +468,12 @@ export default function Dashboard() {
               return a.sortKey - b.sortKey;
             });
             
-            // Debug: Log chart data for chargers
             if (chargerMeters.length > 0) {
-              console.log(`Chart data has ${chartData.length} time points`);
               const chargerKeys = chargerMeters.map(cm => getMeterUniqueKey(cm));
               const pointsWithChargerData = chartData.filter(point => 
                 chargerKeys.some(key => point[key] !== undefined)
               );
-              console.log(`Points with charger data: ${pointsWithChargerData.length}`);
+              console.log(`  Chart has ${chartData.length} time points, ${pointsWithChargerData.length} with charger data`);
             }
 
             return (
@@ -490,6 +510,8 @@ export default function Dashboard() {
                       const uniqueKey = getMeterUniqueKey(meter);
                       const isCharger = meter.meter_type === 'charger';
                       const { Icon: TypeIcon, label: typeLabel } = getMeterTypeIcon(meter.meter_type);
+                      const color = getMeterColor(meter.meter_type, meter.meter_id, meter.user_name);
+                      
                       return (
                         <div
                           key={uniqueKey}
@@ -500,7 +522,8 @@ export default function Dashboard() {
                             padding: '4px 8px',
                             backgroundColor: 'white',
                             borderRadius: '4px',
-                            fontSize: '13px'
+                            fontSize: '13px',
+                            border: isCharger ? `2px solid ${color}30` : 'none'
                           }}
                         >
                           <div
@@ -508,12 +531,12 @@ export default function Dashboard() {
                               width: '12px',
                               height: '12px',
                               borderRadius: '2px',
-                              backgroundColor: getMeterColor(meter.meter_type, meter.meter_id, meter.user_name),
+                              backgroundColor: color,
                               flexShrink: 0,
-                              border: isCharger ? '2px dashed rgba(0,0,0,0.2)' : 'none'
+                              border: isCharger ? `2px solid ${color}` : 'none'
                             }}
                           />
-                          <span style={{ fontWeight: '500' }}>
+                          <span style={{ fontWeight: isCharger ? '600' : '500' }}>
                             {getMeterDisplayName(meter)}
                           </span>
                           <span style={{ 
@@ -526,6 +549,16 @@ export default function Dashboard() {
                             <TypeIcon size={12} />
                             {typeLabel}
                           </span>
+                          {meter.data.length > 0 && (
+                            <span style={{
+                              color: '#10b981',
+                              fontSize: '11px',
+                              fontWeight: '600',
+                              marginLeft: '4px'
+                            }}>
+                              {meter.data.length} pts
+                            </span>
+                          )}
                         </div>
                       );
                     })}
@@ -561,11 +594,11 @@ export default function Dashboard() {
                             border: '1px solid #e5e7eb',
                             borderRadius: '6px'
                           }}
-                          formatter={(value: number) => {
+                          formatter={(value: number, name: string) => {
                             if (value >= 1000) {
-                              return `${(value / 1000).toFixed(2)} kW`;
+                              return [`${(value / 1000).toFixed(2)} kW`, name];
                             }
-                            return `${value.toFixed(0)} W`;
+                            return [`${value.toFixed(0)} W`, name];
                           }}
                         />
                         <Legend 
@@ -574,18 +607,20 @@ export default function Dashboard() {
                         {meters.map(meter => {
                           const uniqueKey = getMeterUniqueKey(meter);
                           const isCharger = meter.meter_type === 'charger';
+                          const color = getMeterColor(meter.meter_type, meter.meter_id, meter.user_name);
+                          
                           return (
                             <Line
                               key={uniqueKey}
                               type="monotone"
                               dataKey={uniqueKey}
-                              stroke={getMeterColor(meter.meter_type, meter.meter_id, meter.user_name)}
-                              strokeWidth={isCharger ? 3 : 2}
-                              strokeDasharray={isCharger ? '5 5' : undefined}
+                              stroke={color}
+                              strokeWidth={isCharger ? 4 : 2}
+                              strokeDasharray={isCharger ? '8 4' : undefined}
                               name={getMeterDisplayName(meter)}
                               dot={false}
-                              activeDot={{ r: 4 }}
-                              connectNulls={false}
+                              activeDot={{ r: isCharger ? 6 : 4 }}
+                              connectNulls={true}
                             />
                           );
                         })}
