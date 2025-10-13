@@ -18,7 +18,6 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    // Merge with any additional headers from options
     if (options.headers) {
       Object.assign(headers, options.headers);
     }
@@ -215,6 +214,14 @@ class ApiClient {
     user_ids: number[];
     start_date: string;
     end_date: string;
+    sender_name?: string;
+    sender_address?: string;
+    sender_city?: string;
+    sender_zip?: string;
+    sender_country?: string;
+    bank_name?: string;
+    bank_iban?: string;
+    bank_account_holder?: string;
   }): Promise<Invoice[]> {
     return this.request('/billing/generate', {
       method: 'POST',
@@ -247,7 +254,6 @@ class ApiClient {
     return this.request(`/dashboard/consumption?period=${period}`);
   }
 
-  // Get consumption data grouped by building and meter
   async getConsumptionByBuilding(period: string = '24h'): Promise<BuildingConsumption[]> {
     return this.request(`/dashboard/consumption-by-building?period=${period}`);
   }

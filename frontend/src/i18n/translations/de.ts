@@ -250,13 +250,13 @@ export const de: Translations = {
   'billing.startDate': 'Startdatum',
   'billing.endDate': 'Enddatum',
   'billing.generating': 'Wird erstellt...',
-  'billing.billTo': 'Rechnung an:',
-  'billing.invoiceDetails': 'Rechnungsdetails:',
+  'billing.billTo': 'Rechnung an',
+  'billing.invoiceDetails': 'Rechnungsdetails',
   'billing.periodLabel': 'Zeitraum:',
   'billing.generatedLabel': 'Erstellt:',
   'billing.statusLabel': 'Status:',
   'billing.description': 'Beschreibung',
-  'billing.total': 'Gesamt:',
+  'billing.total': 'Gesamt',
   'billing.downloadPdf': 'PDF herunterladen',
   'billing.view': 'Ansehen',
   'billing.invoice': 'Rechnung',
@@ -264,10 +264,32 @@ export const de: Translations = {
   'billing.invoicesPlural': 'Rechnungen',
   'billing.selectAtLeastOne': 'Bitte wählen Sie mindestens ein Gebäude aus',
   'billing.generatedSuccess': 'Rechnungen erfolgreich erstellt!',
-  'billing.generateFailed': 'Erstellen der Rechnungen fehlgeschlagen:',
+  'billing.generateFailed': 'Erstellen der Rechnungen fehlgeschlagen',
   'billing.deleteConfirm': 'Sind Sie sicher, dass Sie diese Rechnung löschen möchten?',
   'billing.deleteSuccess': 'Rechnung erfolgreich gelöscht',
-  'billing.deleteFailed': 'Löschen der Rechnung fehlgeschlagen:',
+  'billing.deleteFailed': 'Löschen der Rechnung fehlgeschlagen',
+
+  // NEW: Billing - Sender Information
+  'billing.senderInfo': 'Absenderinformationen',
+  'billing.senderName': 'Absender / Firma',
+  'billing.senderAddress': 'Strasse',
+  'billing.senderCity': 'Ort',
+  'billing.senderZip': 'PLZ',
+  'billing.senderCountry': 'Land',
+  'billing.zip': 'PLZ',
+  'billing.city': 'Ort',
+
+  // NEW: Billing - Banking Information
+  'billing.bankingInfo': 'Bankverbindung',
+  'billing.bankName': 'Bank',
+  'billing.iban': 'IBAN',
+  'billing.accountHolder': 'Kontoinhaber',
+  'billing.paymentDetails': 'Zahlungsdetails',
+  'billing.qrNote': 'Bei Angabe der Bankverbindung wird ein Schweizer QR-Einzahlungsschein auf einer zweiten Seite generiert',
+
+  // NEW: Billing - Swiss QR
+  'billing.swissQR': 'Schweizer QR-Rechnung',
+  'billing.reference': 'Referenz',
 
   // Pricing
   'pricing.title': 'Preiseinstellungen',

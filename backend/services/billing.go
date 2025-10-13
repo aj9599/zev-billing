@@ -23,6 +23,32 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 	log.Printf("=== BILL GENERATION START ===")
 	log.Printf("Buildings: %v, Users: %v, Period: %s to %s", buildingIDs, userIDs, startDate, endDate)
 
+	// VALIDATION: Check if all buildings have active pricing
+	buildingsWithoutPricing := []string{}
+	for _, buildingID := range buildingIDs {
+		var count int
+		err := bs.db.QueryRow(`
+			SELECT COUNT(*) FROM billing_settings 
+			WHERE building_id = ? AND is_active = 1
+		`, buildingID).Scan(&count)
+		
+		if err != nil || count == 0 {
+			var buildingName string
+			bs.db.QueryRow("SELECT name FROM buildings WHERE id = ?", buildingID).Scan(&buildingName)
+			if buildingName == "" {
+				buildingName = fmt.Sprintf("Building ID %d", buildingID)
+			}
+			buildingsWithoutPricing = append(buildingsWithoutPricing, buildingName)
+		}
+	}
+	
+	if len(buildingsWithoutPricing) > 0 {
+		errorMsg := fmt.Sprintf("No active pricing configuration found for the following building(s): %s. Please configure pricing in the Pricing section before generating bills.", 
+			strings.Join(buildingsWithoutPricing, ", "))
+		log.Printf("ERROR: %s", errorMsg)
+		return nil, fmt.Errorf(errorMsg)
+	}
+
 	invoices := []models.Invoice{}
 
 	start, err := time.Parse("2006-01-02", startDate)
@@ -201,7 +227,6 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 		log.Printf("  Normal Cost: %.2f kWh × %.3f = %.2f %s", normalPower, settings.NormalPowerPrice, normalCost, settings.Currency)
 	}
 
-	// FIXED: Enhanced charging calculation with detailed logging
 	if rfidCards != "" {
 		log.Printf("  [CHARGING] Starting charging calculation for RFID cards: '%s'", rfidCards)
 		normalCharging, priorityCharging, firstSession, lastSession := bs.calculateChargingConsumptionFixed(buildingID, rfidCards, start, end)
@@ -563,7 +588,6 @@ func (bs *BillingService) calculateZEVConsumptionFixed(userID, buildingID int, s
 	return totalNormal, totalSolar, totalConsumption
 }
 
-// COMPLETELY REWRITTEN: Fixed charging calculation with proper session tracking
 func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfidCards string, start, end time.Time) (normal, priority float64, firstSession, lastSession time.Time) {
 	log.Printf("  [CHARGING] ========================================")
 	log.Printf("  [CHARGING] Starting calculation")
@@ -571,7 +595,6 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 	log.Printf("  [CHARGING] RFID cards raw: '%s'", rfidCards)
 	log.Printf("  [CHARGING] Period: %s to %s", start.Format("2006-01-02 15:04"), end.Format("2006-01-02 15:04"))
 	
-	// Parse RFID cards
 	rfidList := strings.Split(strings.TrimSpace(rfidCards), ",")
 	if len(rfidList) == 0 || (len(rfidList) == 1 && rfidList[0] == "") {
 		log.Printf("  [CHARGING] ERROR: No RFID cards provided")
@@ -593,7 +616,6 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 
 	log.Printf("  [CHARGING] Cleaned RFID cards: %v", cleanedRfids)
 
-	// Get all chargers in this building
 	chargerRows, err := bs.db.Query(`
 		SELECT id, name, connection_config FROM chargers 
 		WHERE building_id = ? AND is_active = 1
@@ -682,7 +704,6 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 
 	log.Printf("  [CHARGING] Loaded %d active chargers in building", len(chargerConfigs))
 
-	// Build query to get sessions for any of the RFID cards
 	placeholders := make([]string, len(cleanedRfids))
 	args := []interface{}{}
 	
@@ -736,7 +757,6 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 
 		totalSessionsFound++
 
-		// Log first 10 sessions with all details
 		if totalSessionsFound <= 10 {
 			log.Printf("  [CHARGING] Session #%d: charger=%d, user='%s', time=%s, power=%.2f, mode='%s', state='%s'",
 				totalSessionsFound, chargerID, sessionUserID, sessionTime.Format("2006-01-02 15:04"), 
@@ -768,9 +788,7 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 	totalBillableSessions := 0
 	totalSkippedSessions := 0
 
-	// Process each charger's sessions
 	for chargerID, sessions := range chargerSessions {
-		// Find config for this charger
 		var config *ChargerConfig
 		for i := range chargerConfigs {
 			if chargerConfigs[i].ChargerID == chargerID {
@@ -790,7 +808,6 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 		log.Printf("  [CHARGING] Processing charger %d (%s) with %d sessions", 
 			chargerID, config.ChargerName, len(sessions))
 
-		// FIXED: Get baseline reading for this charger from BEFORE the billing period
 		baselineQuery := fmt.Sprintf(`
 			SELECT power_kwh, session_time
 			FROM charger_sessions
@@ -830,13 +847,11 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 		for sessionIdx, session := range sessions {
 			sessionNum := sessionIdx + 1
 			
-			// Check if this session should be billable based on state
 			isBillable := true
 			if session.State == config.StateIdle || strings.ToLower(session.State) == "idle" {
 				isBillable = false
 			}
 			
-			// Log every session for first charger, or first 10 sessions for others
 			shouldLog := (chargerID == chargerConfigs[0].ChargerID && sessionNum <= 20) || sessionNum <= 10
 			
 			if shouldLog {
@@ -854,7 +869,6 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 				continue
 			}
 			
-			// Track first and last session times
 			if firstSession.IsZero() || session.SessionTime.Before(firstSession) {
 				firstSession = session.SessionTime
 			}
@@ -862,9 +876,7 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 				lastSession = session.SessionTime
 			}
 			
-			// Calculate consumption
 			if !hasPreviousPower {
-				// First session becomes baseline
 				previousPower = session.PowerKwh
 				hasPreviousPower = true
 				if shouldLog {
@@ -887,7 +899,6 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 			if consumption > 0 {
 				chargerBillable++
 				
-				// Determine mode
 				isNormal := (session.Mode == config.ModeNormal || 
 					strings.ToLower(session.Mode) == "normal" || 
 					session.Mode == "1")
@@ -908,7 +919,6 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 							sessionNum, consumption, previousPower, session.PowerKwh)
 					}
 				} else {
-					// Unknown mode - default to normal
 					chargerNormal += consumption
 					if shouldLog {
 						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh UNKNOWN mode '%s' → NORMAL (%.2f → %.2f)", 

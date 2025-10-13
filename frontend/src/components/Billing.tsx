@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Plus, Eye, FileText, Download, Trash2, Building, Search } from 'lucide-react';
+import { Plus, Eye, FileText, Download, Trash2, Building, Search, Sun, Zap, Car } from 'lucide-react';
 import { api } from '../api/client';
 import type { Invoice, Building as BuildingType, User } from '../types';
 import { useTranslation } from '../i18n';
 
 export default function Billing() {
-  const { t } = useTranslation();
+  const { t, language, setLanguage } = useTranslation();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [buildings, setBuildings] = useState<BuildingType[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -17,7 +17,15 @@ export default function Billing() {
     building_ids: [] as number[],
     user_ids: [] as number[],
     start_date: '',
-    end_date: ''
+    end_date: '',
+    sender_name: '',
+    sender_address: '',
+    sender_city: '',
+    sender_zip: '',
+    sender_country: 'Switzerland',
+    bank_name: '',
+    bank_iban: '',
+    bank_account_holder: ''
   });
   const [generating, setGenerating] = useState(false);
   const [expandedBuildings, setExpandedBuildings] = useState<Set<number>>(new Set());
@@ -37,7 +45,6 @@ export default function Billing() {
       setBuildings(buildingsData.filter(b => !b.is_group));
       setUsers(usersData);
       
-      // Expand all buildings by default
       const buildingIds = new Set(buildingsData.filter(b => !b.is_group).map(b => b.id));
       setExpandedBuildings(buildingIds);
     } catch (err) {
@@ -62,9 +69,9 @@ export default function Billing() {
         loadData();
       }, 500);
       alert(t('billing.generatedSuccess') + ` (${result.length} invoices)`);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Generation error:', err);
-      alert(t('billing.generateFailed') + ' ' + err);
+      alert(t('billing.generateFailed') + '\n' + (err.message || err));
     } finally {
       setGenerating(false);
     }
@@ -106,8 +113,25 @@ export default function Billing() {
     const user = users.find(u => u.id === invoice.user_id);
     const building = buildings.find(b => b.id === invoice.building_id);
     
+    // Get sender and banking details from the invoice metadata if available
+    const senderInfo = {
+      name: formData.sender_name || 'ZEV Billing System',
+      address: formData.sender_address || '',
+      city: formData.sender_city || '',
+      zip: formData.sender_zip || '',
+      country: formData.sender_country || 'Switzerland'
+    };
+    
+    const bankingInfo = {
+      name: formData.bank_name || '',
+      iban: formData.bank_iban || '',
+      holder: formData.bank_account_holder || ''
+    };
+    
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
+    
+    const hasBankingDetails = bankingInfo.iban && bankingInfo.holder;
     
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -115,27 +139,61 @@ export default function Billing() {
       <head>
         <title>${t('billing.invoice')} ${invoice.invoice_number}</title>
         <style>
+          @page {
+            size: A4;
+            margin: 20mm;
+          }
+          
           body { 
             font-family: Arial, sans-serif; 
-            padding: 40px; 
-            max-width: 800px; 
-            margin: 0 auto;
+            padding: 0;
+            margin: 0;
+            max-width: 210mm;
           }
+          
+          .page {
+            page-break-after: always;
+            padding: 40px;
+            min-height: 100vh;
+          }
+          
+          .page:last-child {
+            page-break-after: auto;
+          }
+          
           .header { 
             border-bottom: 3px solid #007bff; 
             padding-bottom: 20px; 
             margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
           }
-          .header h1 { 
+          
+          .header-left h1 { 
             margin: 0; 
             font-size: 32px; 
             color: #007bff;
           }
-          .invoice-number { 
+          
+          .header-left .invoice-number { 
             color: #666; 
             font-size: 14px; 
             margin-top: 5px;
           }
+          
+          .header-right {
+            text-align: right;
+            font-size: 12px;
+            line-height: 1.6;
+          }
+          
+          .header-right strong {
+            display: block;
+            font-size: 14px;
+            margin-bottom: 5px;
+          }
+          
           .status-badge {
             display: inline-block;
             padding: 6px 16px;
@@ -148,24 +206,35 @@ export default function Billing() {
               return `background-color: ${colors.bg}; color: ${colors.color};`;
             })()}
           }
-          .info-section { 
+          
+          .addresses {
+            display: flex;
+            justify-content: space-between;
             margin-bottom: 30px;
           }
+          
+          .info-section { 
+            flex: 1;
+          }
+          
           .info-section h3 { 
             font-size: 14px; 
             text-transform: uppercase; 
             color: #666; 
             margin-bottom: 10px;
           }
+          
           .info-section p { 
             margin: 5px 0; 
             line-height: 1.6;
           }
+          
           table { 
             width: 100%; 
             border-collapse: collapse; 
             margin: 30px 0;
           }
+          
           th { 
             background-color: #f9f9f9; 
             padding: 12px; 
@@ -173,33 +242,42 @@ export default function Billing() {
             border-bottom: 2px solid #ddd;
             font-weight: 600;
           }
+          
           td { 
             padding: 12px; 
             border-bottom: 1px solid #eee;
           }
+          
           .text-right { 
             text-align: right;
           }
+          
           .item-header { 
             font-weight: 600;
             background-color: #f5f5f5;
           }
+          
           .item-info { 
             color: #666;
             font-size: 14px;
           }
+          
           .item-cost { 
             font-weight: 500;
           }
+          
           .solar-highlight {
             background-color: #fffbea;
           }
+          
           .normal-highlight {
             background-color: #f0f4ff;
           }
+          
           .charging-highlight {
             background-color: #f0fff4;
           }
+          
           .total-section { 
             background-color: #f9f9f9; 
             padding: 20px; 
@@ -207,11 +285,13 @@ export default function Billing() {
             margin-top: 30px;
             border-radius: 8px;
           }
+          
           .total-section p { 
             font-size: 24px; 
             font-weight: bold; 
             margin: 0;
           }
+          
           .footer {
             margin-top: 50px;
             padding-top: 20px;
@@ -220,121 +300,222 @@ export default function Billing() {
             color: #666;
             text-align: center;
           }
+          
+          .qr-page {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            text-align: center;
+          }
+          
+          .qr-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #007bff;
+          }
+          
+          .qr-container {
+            border: 2px solid #007bff;
+            padding: 20px;
+            border-radius: 10px;
+            background: white;
+          }
+          
+          .qr-info {
+            margin-top: 20px;
+            font-size: 14px;
+            line-height: 1.8;
+            text-align: left;
+          }
+          
           @media print {
-            body { padding: 20px; }
+            body { padding: 0; }
+            .page { padding: 20px; }
           }
         </style>
       </head>
       <body>
-        <div class="header">
-          <h1>${t('billing.invoice')}</h1>
-          <div class="invoice-number">#${invoice.invoice_number}</div>
-          <div class="status-badge">${invoice.status.toUpperCase()}</div>
+        <div class="page">
+          <div class="header">
+            <div class="header-left">
+              <h1>${t('billing.invoice')}</h1>
+              <div class="invoice-number">#${invoice.invoice_number}</div>
+              <div class="status-badge">${invoice.status.toUpperCase()}</div>
+            </div>
+            ${senderInfo.name ? `
+              <div class="header-right">
+                <strong>${senderInfo.name}</strong>
+                ${senderInfo.address ? `${senderInfo.address}<br>` : ''}
+                ${senderInfo.zip ? `${senderInfo.zip} ` : ''}${senderInfo.city ? `${senderInfo.city}<br>` : ''}
+                ${senderInfo.country || ''}
+              </div>
+            ` : ''}
+          </div>
+
+          <div class="addresses">
+            <div class="info-section">
+              <h3>${t('billing.billTo')}</h3>
+              <p>
+                <strong>${user?.first_name} ${user?.last_name}</strong><br>
+                ${user?.address_street || ''}<br>
+                ${user?.address_zip || ''} ${user?.address_city || ''}<br>
+                ${user?.email || ''}
+              </p>
+            </div>
+
+            <div class="info-section">
+              <h3>${t('billing.invoiceDetails')}</h3>
+              <p>
+                <strong>${t('users.building')}:</strong> ${building?.name || 'N/A'}<br>
+                <strong>${t('billing.periodLabel')}</strong> ${formatDate(invoice.period_start)} ${t('pricing.to')} ${formatDate(invoice.period_end)}<br>
+                <strong>${t('billing.generatedLabel')}</strong> ${formatDate(invoice.generated_at)}<br>
+                <strong>${t('billing.statusLabel')}</strong> ${invoice.status}
+              </p>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>${t('billing.description')}</th>
+                <th class="text-right">${t('billing.amount')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${invoice.items?.map(item => {
+                if (item.item_type === 'meter_info' || item.item_type === 'charging_header') {
+                  return `<tr class="item-header"><td colspan="2"><strong>${item.description}</strong></td></tr>`;
+                } 
+                else if (item.item_type === 'meter_reading_from' || 
+                         item.item_type === 'meter_reading_to' || 
+                         item.item_type === 'total_consumption' ||
+                         item.item_type === 'charging_session_from' ||
+                         item.item_type === 'charging_session_to' ||
+                         item.item_type === 'total_charged') {
+                  return `<tr class="item-info"><td colspan="2">${item.description}</td></tr>`;
+                } 
+                else if (item.item_type === 'separator') {
+                  return `<tr><td colspan="2" style="padding: 8px;"></td></tr>`;
+                } 
+                else if (item.item_type === 'solar_power') {
+                  return `<tr class="item-cost solar-highlight">
+                    <td><strong>☀ ${item.description}</strong></td>
+                    <td class="text-right"><strong>${invoice.currency} ${item.total_price.toFixed(2)}</strong></td>
+                  </tr>`;
+                } 
+                else if (item.item_type === 'normal_power') {
+                  return `<tr class="item-cost normal-highlight">
+                    <td><strong>⚡ ${item.description}</strong></td>
+                    <td class="text-right"><strong>${invoice.currency} ${item.total_price.toFixed(2)}</strong></td>
+                  </tr>`;
+                }
+                else if (item.item_type === 'car_charging_normal') {
+                  return `<tr class="item-cost charging-highlight">
+                    <td><strong>🚗 ${item.description}</strong></td>
+                    <td class="text-right"><strong>${invoice.currency} ${item.total_price.toFixed(2)}</strong></td>
+                  </tr>`;
+                }
+                else if (item.item_type === 'car_charging_priority') {
+                  return `<tr class="item-cost charging-highlight">
+                    <td><strong>🚗⚡ ${item.description}</strong></td>
+                    <td class="text-right"><strong>${invoice.currency} ${item.total_price.toFixed(2)}</strong></td>
+                  </tr>`;
+                }
+                else if (item.total_price > 0) {
+                  return `<tr class="item-cost">
+                    <td><strong>${item.description}</strong></td>
+                    <td class="text-right"><strong>${invoice.currency} ${item.total_price.toFixed(2)}</strong></td>
+                  </tr>`;
+                }
+                else {
+                  return `<tr class="item-info">
+                    <td colspan="2">${item.description}</td>
+                  </tr>`;
+                }
+              }).join('')}
+            </tbody>
+          </table>
+
+          <div class="total-section">
+            <p>${t('billing.total')} ${invoice.currency} ${invoice.total_amount.toFixed(2)}</p>
+          </div>
+
+          ${hasBankingDetails ? `
+            <div class="info-section" style="margin-top: 30px;">
+              <h3>${t('billing.paymentDetails')}</h3>
+              <p>
+                <strong>${t('billing.bankName')}:</strong> ${bankingInfo.name}<br>
+                <strong>${t('billing.accountHolder')}:</strong> ${bankingInfo.holder}<br>
+                <strong>${t('billing.iban')}:</strong> ${bankingInfo.iban}
+              </p>
+            </div>
+          ` : ''}
+
+          <div class="footer">
+            <p>Generated on ${new Date().toLocaleString()}</p>
+            <p>ZEV Billing System - Swiss Energy Community Standard</p>
+          </div>
         </div>
 
-        <div class="info-section">
-          <h3>${t('billing.billTo')}</h3>
-          <p>
-            <strong>${user?.first_name} ${user?.last_name}</strong><br>
-            ${user?.address_street || ''}<br>
-            ${user?.address_zip || ''} ${user?.address_city || ''}<br>
-            ${user?.email || ''}
-          </p>
-        </div>
+        ${hasBankingDetails ? `
+          <div class="page qr-page">
+            <div class="qr-title">${t('billing.swissQR')}</div>
+            <div class="qr-container">
+              <div id="qrcode"></div>
+              <div class="qr-info">
+                <p><strong>${t('billing.invoice')}:</strong> ${invoice.invoice_number}</p>
+                <p><strong>${t('billing.amount')}:</strong> ${invoice.currency} ${invoice.total_amount.toFixed(2)}</p>
+                <p><strong>${t('billing.iban')}:</strong> ${bankingInfo.iban}</p>
+                <p><strong>${t('billing.reference')}: </strong>${invoice.invoice_number.replace(/[^0-9]/g, '')}</p>
+              </div>
+            </div>
+          </div>
+        ` : ''}
 
-        <div class="info-section">
-          <h3>${t('billing.invoiceDetails')}</h3>
-          <p>
-            <strong>${t('users.building')}:</strong> ${building?.name || 'N/A'}<br>
-            <strong>${t('billing.periodLabel')}</strong> ${formatDate(invoice.period_start)} ${t('pricing.to')} ${formatDate(invoice.period_end)}<br>
-            <strong>${t('billing.generatedLabel')}</strong> ${formatDate(invoice.generated_at)}<br>
-            <strong>${t('billing.statusLabel')}</strong> ${invoice.status}
-          </p>
-        </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th>${t('billing.description')}</th>
-              <th class="text-right">${t('billing.amount')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${invoice.items?.map(item => {
-              // Header items (no price, bold styling)
-              if (item.item_type === 'meter_info' || item.item_type === 'charging_header') {
-                return `<tr class="item-header"><td colspan="2"><strong>${item.description}</strong></td></tr>`;
-              } 
-              // Info items (no price, smaller text, indented)
-              else if (item.item_type === 'meter_reading_from' || 
-                       item.item_type === 'meter_reading_to' || 
-                       item.item_type === 'total_consumption' ||
-                       item.item_type === 'charging_session_from' ||
-                       item.item_type === 'charging_session_to' ||
-                       item.item_type === 'total_charged') {
-                return `<tr class="item-info"><td colspan="2">${item.description}</td></tr>`;
-              } 
-              // Separator (empty row)
-              else if (item.item_type === 'separator') {
-                return `<tr><td colspan="2" style="padding: 8px;"></td></tr>`;
-              } 
-              // Solar power (highlighted with sun icon)
-              else if (item.item_type === 'solar_power') {
-                return `<tr class="item-cost solar-highlight">
-                  <td><strong>☀ ${item.description}</strong></td>
-                  <td class="text-right"><strong>${invoice.currency} ${item.total_price.toFixed(2)}</strong></td>
-                </tr>`;
-              } 
-              // Normal power (highlighted with lightning icon)
-              else if (item.item_type === 'normal_power') {
-                return `<tr class="item-cost normal-highlight">
-                  <td><strong>⚡ ${item.description}</strong></td>
-                  <td class="text-right"><strong>${invoice.currency} ${item.total_price.toFixed(2)}</strong></td>
-                </tr>`;
-              }
-              // Car charging normal (highlighted with car icon)
-              else if (item.item_type === 'car_charging_normal') {
-                return `<tr class="item-cost charging-highlight">
-                  <td><strong>🚗 ${item.description}</strong></td>
-                  <td class="text-right"><strong>${invoice.currency} ${item.total_price.toFixed(2)}</strong></td>
-                </tr>`;
-              }
-              // Car charging priority (highlighted with priority icon)
-              else if (item.item_type === 'car_charging_priority') {
-                return `<tr class="item-cost charging-highlight">
-                  <td><strong>🚗⚡ ${item.description}</strong></td>
-                  <td class="text-right"><strong>${invoice.currency} ${item.total_price.toFixed(2)}</strong></td>
-                </tr>`;
-              }
-              // Default case for any other billable items
-              else if (item.total_price > 0) {
-                return `<tr class="item-cost">
-                  <td><strong>${item.description}</strong></td>
-                  <td class="text-right"><strong>${invoice.currency} ${item.total_price.toFixed(2)}</strong></td>
-                </tr>`;
-              }
-              // Non-billable items (just description, no price)
-              else {
-                return `<tr class="item-info">
-                  <td colspan="2">${item.description}</td>
-                </tr>`;
-              }
-            }).join('')}
-          </tbody>
-        </table>
-
-        <div class="total-section">
-          <p>${t('billing.total')} ${invoice.currency} ${invoice.total_amount.toFixed(2)}</p>
-        </div>
-
-        <div class="footer">
-          <p>Generated on ${new Date().toLocaleString()}</p>
-          <p>ZEV Billing System - Swiss Energy Community Standard</p>
-        </div>
-
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
         <script>
+          ${hasBankingDetails ? `
+            // Generate Swiss QR Code
+            const qrData = [
+              'SPC',
+              '0200',
+              '1',
+              '${bankingInfo.iban}',
+              'K',
+              '${bankingInfo.holder}',
+              '',
+              '',
+              '',
+              '',
+              '',
+              '',
+              '${invoice.total_amount.toFixed(2)}',
+              '${invoice.currency}',
+              'K',
+              '${user?.first_name} ${user?.last_name}',
+              '${user?.address_street || ''}',
+              '${user?.address_zip || ''} ${user?.address_city || ''}',
+              '',
+              '',
+              '',
+              '',
+              'NON',
+              '',
+              '${invoice.invoice_number}'
+            ].join('\\n');
+            
+            new QRCode(document.getElementById("qrcode"), {
+              text: qrData,
+              width: 300,
+              height: 300
+            });
+          ` : ''}
+          
           window.onload = function() {
-            window.print();
+            ${hasBankingDetails ? 'setTimeout(() => window.print(), 1000);' : 'window.print();'}
           };
         </script>
       </body>
@@ -349,7 +530,15 @@ export default function Billing() {
       building_ids: [],
       user_ids: [],
       start_date: '',
-      end_date: ''
+      end_date: '',
+      sender_name: '',
+      sender_address: '',
+      sender_city: '',
+      sender_zip: '',
+      sender_country: 'Switzerland',
+      bank_name: '',
+      bank_iban: '',
+      bank_account_holder: ''
     });
   };
 
@@ -400,7 +589,7 @@ export default function Billing() {
   return (
     <div className="billing-container" style={{ width: '100%', maxWidth: '100%' }}>
       <div className="billing-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', gap: '15px', flexWrap: 'wrap' }}>
-        <div>
+        <div style={{ flex: 1 }}>
           <h1 style={{ 
             fontSize: '36px', 
             fontWeight: '800', 
@@ -420,19 +609,34 @@ export default function Billing() {
             {t('billing.subtitle')}
           </p>
         </div>
-        <button
-          onClick={() => setShowGenerateModal(true)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
-            backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
-          }}
-        >
-          <Plus size={18} />
-          <span className="button-text">{t('billing.generateBills')}</span>
-        </button>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <select 
+            value={language} 
+            onChange={(e) => setLanguage(e.target.value as 'en' | 'de')}
+            style={{
+              padding: '10px 15px',
+              border: '1px solid #ddd',
+              borderRadius: '6px',
+              fontSize: '14px',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="en">English</option>
+            <option value="de">Deutsch</option>
+          </select>
+          <button
+            onClick={() => setShowGenerateModal(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
+              backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
+            }}
+          >
+            <Plus size={18} />
+            <span className="button-text">{t('billing.generateBills')}</span>
+          </button>
+        </div>
       </div>
 
-      {/* Search Bar */}
       <div style={{ marginBottom: '20px' }}>
         <div style={{ position: 'relative', maxWidth: '400px' }}>
           <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
@@ -452,7 +656,6 @@ export default function Billing() {
         </div>
       </div>
 
-      {/* Building Cards */}
       <div style={{ 
         display: 'grid', 
         gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', 
@@ -514,7 +717,6 @@ export default function Billing() {
         })}
       </div>
 
-      {/* Invoices List */}
       {invoicesByBuilding.length === 0 ? (
         <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '60px 20px', textAlign: 'center', color: '#999' }}>
           {t('billing.noInvoices')}
@@ -551,7 +753,6 @@ export default function Billing() {
 
             {expandedBuildings.has(building.id) && (
               <>
-                {/* Desktop Table */}
                 <div className="desktop-table" style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden', width: '100%' }}>
                   <table style={{ width: '100%' }}>
                     <thead>
@@ -607,7 +808,6 @@ export default function Billing() {
                   </table>
                 </div>
 
-                {/* Mobile Cards */}
                 <div className="mobile-cards">
                   {buildingInvoices.map(invoice => {
                     const user = users.find(u => u.id === invoice.user_id);
@@ -620,42 +820,39 @@ export default function Billing() {
                         marginBottom: '12px',
                         boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                       }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: '13px', fontFamily: 'monospace', color: '#6b7280', marginBottom: '4px' }}>
-                              {invoice.invoice_number}
-                            </div>
-                            <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: '#1f2937' }}>
-                              {user ? `${user.first_name} ${user.last_name}` : '-'}
-                            </h3>
-                            <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>
-                              {formatDate(invoice.period_start)} - {formatDate(invoice.period_end)}
-                            </div>
-                            <div style={{ fontSize: '18px', fontWeight: '700', color: '#1f2937', marginBottom: '8px' }}>
-                              {invoice.currency} {invoice.total_amount.toFixed(2)}
-                            </div>
-                            <span style={{
-                              display: 'inline-block',
-                              padding: '4px 12px',
-                              borderRadius: '12px',
-                              fontSize: '12px',
-                              fontWeight: '600',
-                              backgroundColor: statusColors.bg,
-                              color: statusColors.color,
-                              marginBottom: '8px'
-                            }}>
-                              {invoice.status.toUpperCase()}
-                            </span>
-                            <div style={{ fontSize: '12px', color: '#9ca3af' }}>
-                              Generated: {formatDate(invoice.generated_at)}
-                            </div>
+                        <div style={{ marginBottom: '12px' }}>
+                          <div style={{ fontSize: '13px', fontFamily: 'monospace', color: '#6b7280', marginBottom: '4px' }}>
+                            {invoice.invoice_number}
+                          </div>
+                          <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: '#1f2937' }}>
+                            {user ? `${user.first_name} ${user.last_name}` : '-'}
+                          </h3>
+                          <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>
+                            {formatDate(invoice.period_start)} - {formatDate(invoice.period_end)}
+                          </div>
+                          <div style={{ fontSize: '18px', fontWeight: '700', color: '#1f2937', marginBottom: '8px' }}>
+                            {invoice.currency} {invoice.total_amount.toFixed(2)}
+                          </div>
+                          <span style={{
+                            display: 'inline-block',
+                            padding: '4px 12px',
+                            borderRadius: '12px',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            backgroundColor: statusColors.bg,
+                            color: statusColors.color,
+                            marginBottom: '8px'
+                          }}>
+                            {invoice.status.toUpperCase()}
+                          </span>
+                          <div style={{ fontSize: '12px', color: '#9ca3af' }}>
+                            Generated: {formatDate(invoice.generated_at)}
                           </div>
                         </div>
-                        <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid #f3f4f6', paddingTop: '12px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', borderTop: '1px solid #f3f4f6', paddingTop: '12px' }}>
                           <button
                             onClick={() => viewInvoice(invoice.id)}
                             style={{
-                              flex: 1,
                               padding: '10px',
                               backgroundColor: '#007bff',
                               color: 'white',
@@ -667,16 +864,15 @@ export default function Billing() {
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              gap: '6px'
+                              gap: '4px'
                             }}
                           >
-                            <Eye size={16} />
-                            View
+                            <Eye size={14} />
+                            <span style={{ fontSize: '11px' }}>View</span>
                           </button>
                           <button
                             onClick={() => downloadPDF(invoice)}
                             style={{
-                              flex: 1,
                               padding: '10px',
                               backgroundColor: '#28a745',
                               color: 'white',
@@ -688,11 +884,11 @@ export default function Billing() {
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              gap: '6px'
+                              gap: '4px'
                             }}
                           >
-                            <Download size={16} />
-                            PDF
+                            <Download size={14} />
+                            <span style={{ fontSize: '11px' }}>PDF</span>
                           </button>
                           <button
                             onClick={() => deleteInvoice(invoice.id)}
@@ -707,10 +903,12 @@ export default function Billing() {
                               cursor: 'pointer',
                               display: 'flex',
                               alignItems: 'center',
-                              justifyContent: 'center'
+                              justifyContent: 'center',
+                              gap: '4px'
                             }}
                           >
-                            <Trash2 size={16} />
+                            <Trash2 size={14} />
+                            <span style={{ fontSize: '11px' }}>Del</span>
                           </button>
                         </div>
                       </div>
@@ -727,7 +925,7 @@ export default function Billing() {
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-          padding: '15px'
+          padding: '15px', overflow: 'auto'
         }}>
           <div className="modal-content" style={{
             backgroundColor: 'white', borderRadius: '12px', padding: '30px',
@@ -785,6 +983,89 @@ export default function Billing() {
                   <input type="date" required value={formData.end_date} onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
                     style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                 </div>
+              </div>
+
+              <div style={{ marginTop: '20px', padding: '16px', backgroundColor: '#f0f4ff', borderRadius: '8px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>{t('billing.senderInfo')}</h3>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.senderName')}</label>
+                  <input 
+                    type="text" 
+                    value={formData.sender_name} 
+                    onChange={(e) => setFormData({ ...formData, sender_name: e.target.value })}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
+                    placeholder="Company Name"
+                  />
+                </div>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.senderAddress')}</label>
+                  <input 
+                    type="text" 
+                    value={formData.sender_address} 
+                    onChange={(e) => setFormData({ ...formData, sender_address: e.target.value })}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
+                    placeholder="Street Address"
+                  />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.zip')}</label>
+                    <input 
+                      type="text" 
+                      value={formData.sender_zip} 
+                      onChange={(e) => setFormData({ ...formData, sender_zip: e.target.value })}
+                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
+                      placeholder="ZIP"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.city')}</label>
+                    <input 
+                      type="text" 
+                      value={formData.sender_city} 
+                      onChange={(e) => setFormData({ ...formData, sender_city: e.target.value })}
+                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
+                      placeholder="City"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: '20px', padding: '16px', backgroundColor: '#f0fff4', borderRadius: '8px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>{t('billing.bankingInfo')}</h3>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.bankName')}</label>
+                  <input 
+                    type="text" 
+                    value={formData.bank_name} 
+                    onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
+                    placeholder="Bank Name"
+                  />
+                </div>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.iban')}</label>
+                  <input 
+                    type="text" 
+                    value={formData.bank_iban} 
+                    onChange={(e) => setFormData({ ...formData, bank_iban: e.target.value })}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
+                    placeholder="CH93 0076 2011 6238 5295 7"
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.accountHolder')}</label>
+                  <input 
+                    type="text" 
+                    value={formData.bank_account_holder} 
+                    onChange={(e) => setFormData({ ...formData, bank_account_holder: e.target.value })}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
+                    placeholder="Account Holder Name"
+                  />
+                </div>
+                <p style={{ fontSize: '12px', color: '#666', marginTop: '8px', fontStyle: 'italic' }}>
+                  {t('billing.qrNote')}
+                </p>
               </div>
 
               <div className="button-group" style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
@@ -891,12 +1172,14 @@ export default function Billing() {
                           padding: '12px',
                           fontWeight: isHeader || isSolar || isNormal || isChargingNormal || isChargingPriority ? '600' : 'normal',
                           color: isInfo ? '#666' : 'inherit',
-                          fontSize: isInfo ? '14px' : '15px'
+                          fontSize: isInfo ? '14px' : '15px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
                         }}>
-                          {isSolar && '☀ '}
-                          {isNormal && '⚡ '}
-                          {isChargingNormal && '🚗 '}
-                          {isChargingPriority && '🚗⚡ '}
+                          {isSolar && <Sun size={16} color="#f59e0b" />}
+                          {isNormal && <Zap size={16} color="#3b82f6" />}
+                          {(isChargingNormal || isChargingPriority) && <Car size={16} color="#10b981" />}
                           {item.description}
                         </td>
                         <td style={{ padding: '12px', textAlign: 'right', fontWeight: item.total_price > 0 ? '600' : 'normal' }}>
@@ -936,7 +1219,17 @@ export default function Billing() {
       )}
 
       <style>{`
+        @media (min-width: 769px) {
+          .mobile-cards {
+            display: none;
+          }
+        }
+
         @media (max-width: 768px) {
+          .desktop-table {
+            display: none;
+          }
+
           .billing-container h1 {
             font-size: 24px !important;
           }
@@ -955,6 +1248,10 @@ export default function Billing() {
             align-items: stretch !important;
           }
 
+          .billing-header > div:last-child {
+            width: 100%;
+          }
+
           .billing-header button {
             width: 100% !important;
             justify-content: center !important;
@@ -970,6 +1267,10 @@ export default function Billing() {
 
           .modal-content h3 {
             font-size: 14px !important;
+          }
+
+          .form-row {
+            grid-template-columns: 1fr !important;
           }
         }
 

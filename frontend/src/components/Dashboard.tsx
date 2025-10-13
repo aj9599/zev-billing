@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import * as React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Users, Building, Zap, Car, Activity, TrendingUp, TrendingDown, Sun, Battery, LayoutDashboard, Home } from 'lucide-react';
+import { Users, Building, Zap, Car, Activity, TrendingUp, TrendingDown, Sun, Battery, LayoutDashboard, Home, Eye, EyeOff } from 'lucide-react';
 import { api } from '../api/client';
 import type { DashboardStats } from '../types';
 import { useTranslation } from '../i18n';
@@ -29,7 +29,6 @@ const APARTMENT_COLORS = [
   '#a855f7', '#ef4444', '#84cc16', '#22c55e', '#0ea5e9',
 ];
 
-// ENHANCED: Even more vibrant and distinct colors for chargers with better contrast
 const CHARGER_COLORS = [
   '#ff3366', '#ff6b35', '#ff8c42', '#ffa94d', '#ffbd59',
   '#f77f00', '#fcbf49', '#e63946', '#d62828', '#c1121f',
@@ -150,6 +149,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // NEW: Track visible meters for each building
+  const [visibleMetersByBuilding, setVisibleMetersByBuilding] = useState<Map<number, Set<string>>>(new Map());
 
   const loadData = React.useCallback(async () => {
     try {
@@ -160,7 +162,7 @@ export default function Dashboard() {
       ]);
       setStats(statsData);
       
-      // FIXED: Log charger data for debugging
+      // Log charger data for debugging
       if (Array.isArray(buildingConsumption)) {
         buildingConsumption.forEach(building => {
           const chargers = building.meters?.filter(m => m.meter_type === 'charger') || [];
@@ -179,6 +181,20 @@ export default function Dashboard() {
       }
       
       setBuildingData(Array.isArray(buildingConsumption) ? buildingConsumption : []);
+      
+      // Initialize all meters as visible
+      const initialVisibility = new Map<number, Set<string>>();
+      if (Array.isArray(buildingConsumption)) {
+        buildingConsumption.forEach(building => {
+          const visibleSet = new Set<string>();
+          building.meters?.forEach(meter => {
+            visibleSet.add(getMeterUniqueKey(meter));
+          });
+          initialVisibility.set(building.building_id, visibleSet);
+        });
+      }
+      setVisibleMetersByBuilding(initialVisibility);
+      
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
@@ -193,6 +209,29 @@ export default function Dashboard() {
     const interval = setInterval(loadData, 60000);
     return () => clearInterval(interval);
   }, [loadData]);
+
+  // NEW: Toggle meter visibility
+  const toggleMeterVisibility = (buildingId: number, meterKey: string) => {
+    setVisibleMetersByBuilding(prev => {
+      const newMap = new Map(prev);
+      const buildingVisible = new Set(newMap.get(buildingId) || new Set<string>());
+      
+      if (buildingVisible.has(meterKey)) {
+        buildingVisible.delete(meterKey);
+      } else {
+        buildingVisible.add(meterKey);
+      }
+      
+      newMap.set(buildingId, buildingVisible);
+      return newMap;
+    });
+  };
+
+  // NEW: Check if meter is visible
+  const isMeterVisible = (buildingId: number, meterKey: string): boolean => {
+    const buildingVisible = visibleMetersByBuilding.get(buildingId);
+    return buildingVisible ? buildingVisible.has(meterKey) : true;
+  };
 
   if (loading) {
     return (
@@ -427,7 +466,6 @@ export default function Dashboard() {
             const timeMap = new Map<string, any>();
             const meters = building.meters || [];
             
-            // FIXED: Better data point aggregation for chargers
             const chargerMeters = meters.filter(m => m.meter_type === 'charger');
             if (chargerMeters.length > 0) {
               console.log(`Building ${building.building_name} - Processing ${chargerMeters.length} charger(s)`);
@@ -457,7 +495,6 @@ export default function Dashboard() {
                 const meterKey = getMeterUniqueKey(meter);
                 const current = timeMap.get(timestampKey);
                 
-                // FIXED: For chargers, keep even zero values to maintain line continuity
                 if (isCharger || reading.power > 0) {
                   current[meterKey] = reading.power;
                 }
@@ -511,36 +548,61 @@ export default function Dashboard() {
                       const isCharger = meter.meter_type === 'charger';
                       const { Icon: TypeIcon, label: typeLabel } = getMeterTypeIcon(meter.meter_type);
                       const color = getMeterColor(meter.meter_type, meter.meter_id, meter.user_name);
+                      const isVisible = isMeterVisible(building.building_id, uniqueKey);
                       
                       return (
                         <div
                           key={uniqueKey}
+                          onClick={() => toggleMeterVisibility(building.building_id, uniqueKey)}
                           style={{
                             display: 'flex',
                             alignItems: 'center',
                             gap: '6px',
-                            padding: '4px 8px',
+                            padding: '6px 10px',
                             backgroundColor: 'white',
-                            borderRadius: '4px',
+                            borderRadius: '6px',
                             fontSize: '13px',
-                            border: isCharger ? `2px solid ${color}30` : 'none'
+                            border: isCharger ? `2px solid ${color}30` : '1px solid #e5e7eb',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            opacity: isVisible ? 1 : 0.5,
+                            textDecoration: isVisible ? 'none' : 'line-through',
+                            userSelect: 'none'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'translateY(-1px)';
+                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = 'none';
                           }}
                         >
-                          <div
-                            style={{
-                              width: '12px',
-                              height: '12px',
-                              borderRadius: '2px',
-                              backgroundColor: color,
-                              flexShrink: 0,
-                              border: isCharger ? `2px solid ${color}` : 'none'
-                            }}
-                          />
-                          <span style={{ fontWeight: isCharger ? '600' : '500' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {isVisible ? (
+                              <Eye size={14} color={color} style={{ flexShrink: 0 }} />
+                            ) : (
+                              <EyeOff size={14} color="#9ca3af" style={{ flexShrink: 0 }} />
+                            )}
+                            <div
+                              style={{
+                                width: '12px',
+                                height: '12px',
+                                borderRadius: '2px',
+                                backgroundColor: isVisible ? color : '#d1d5db',
+                                flexShrink: 0,
+                                border: isCharger ? `2px solid ${isVisible ? color : '#9ca3af'}` : 'none'
+                              }}
+                            />
+                          </div>
+                          <span style={{ 
+                            fontWeight: isCharger ? '600' : '500',
+                            color: isVisible ? '#1f2937' : '#9ca3af'
+                          }}>
                             {getMeterDisplayName(meter)}
                           </span>
                           <span style={{ 
-                            color: '#6b7280', 
+                            color: isVisible ? '#6b7280' : '#9ca3af', 
                             fontSize: '12px',
                             display: 'flex',
                             alignItems: 'center',
@@ -551,7 +613,7 @@ export default function Dashboard() {
                           </span>
                           {meter.data.length > 0 && (
                             <span style={{
-                              color: '#10b981',
+                              color: isVisible ? '#10b981' : '#9ca3af',
                               fontSize: '11px',
                               fontWeight: '600',
                               marginLeft: '4px'
@@ -608,6 +670,10 @@ export default function Dashboard() {
                           const uniqueKey = getMeterUniqueKey(meter);
                           const isCharger = meter.meter_type === 'charger';
                           const color = getMeterColor(meter.meter_type, meter.meter_id, meter.user_name);
+                          const isVisible = isMeterVisible(building.building_id, uniqueKey);
+                          
+                          // Only render visible lines
+                          if (!isVisible) return null;
                           
                           return (
                             <Line

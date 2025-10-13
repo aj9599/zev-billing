@@ -250,13 +250,13 @@ export const en: Translations = {
   'billing.startDate': 'Start Date',
   'billing.endDate': 'End Date',
   'billing.generating': 'Generating...',
-  'billing.billTo': 'Bill To:',
-  'billing.invoiceDetails': 'Invoice Details:',
+  'billing.billTo': 'Bill To',
+  'billing.invoiceDetails': 'Invoice Details',
   'billing.periodLabel': 'Period:',
   'billing.generatedLabel': 'Generated:',
   'billing.statusLabel': 'Status:',
   'billing.description': 'Description',
-  'billing.total': 'Total:',
+  'billing.total': 'Total',
   'billing.downloadPdf': 'Download PDF',
   'billing.view': 'View',
   'billing.invoice': 'Invoice',
@@ -264,10 +264,32 @@ export const en: Translations = {
   'billing.invoicesPlural': 'invoices',
   'billing.selectAtLeastOne': 'Please select at least one building',
   'billing.generatedSuccess': 'Bills generated successfully!',
-  'billing.generateFailed': 'Failed to generate bills:',
+  'billing.generateFailed': 'Failed to generate bills',
   'billing.deleteConfirm': 'Are you sure you want to delete this invoice?',
   'billing.deleteSuccess': 'Invoice deleted successfully',
-  'billing.deleteFailed': 'Failed to delete invoice:',
+  'billing.deleteFailed': 'Failed to delete invoice',
+  
+  // NEW: Billing - Sender Information
+  'billing.senderInfo': 'Sender Information',
+  'billing.senderName': 'Sender Name / Company',
+  'billing.senderAddress': 'Street Address',
+  'billing.senderCity': 'City',
+  'billing.senderZip': 'ZIP Code',
+  'billing.senderCountry': 'Country',
+  'billing.zip': 'ZIP',
+  'billing.city': 'City',
+  
+  // NEW: Billing - Banking Information
+  'billing.bankingInfo': 'Banking Information',
+  'billing.bankName': 'Bank Name',
+  'billing.iban': 'IBAN',
+  'billing.accountHolder': 'Account Holder',
+  'billing.paymentDetails': 'Payment Details',
+  'billing.qrNote': 'If banking details are provided, a Swiss QR bill will be generated on a second page',
+  
+  // NEW: Billing - Swiss QR
+  'billing.swissQR': 'Swiss QR Bill',
+  'billing.reference': 'Reference',
   
   // Pricing
   'pricing.title': 'Pricing Settings',
