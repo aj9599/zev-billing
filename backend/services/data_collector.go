@@ -110,7 +110,15 @@ func (dc *DataCollector) Start() {
 	dc.initializeUDPListeners()
 	dc.logSystemStatus()
 	
-	// FIXED: Collect data immediately on startup
+	// FIXED: Wait 3 minutes after startup to allow meters to send new data
+	log.Println(">>> WAITING 3 MINUTES BEFORE INITIAL DATA COLLECTION <<<")
+	log.Printf(">>> This allows meters to generate new readings after system restart <<<")
+	log.Printf(">>> First collection will occur at %s <<<", 
+		time.Now().Add(3*time.Minute).Format("15:04:05"))
+	
+	time.Sleep(3 * time.Minute)
+	
+	// FIXED: Collect data after 3-minute delay
 	log.Println(">>> INITIAL DATA COLLECTION ON STARTUP <<<")
 	dc.collectAllData()
 	log.Println(">>> INITIAL DATA COLLECTION COMPLETED <<<")
