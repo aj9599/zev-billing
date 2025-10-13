@@ -545,7 +545,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			building.Meters = append(building.Meters, meterData)
 		}
 
-		// FIXED: Process chargers with improved algorithm
+		// FIXED: Process chargers with improved algorithm - removing restrictive threshold
 		log.Printf("  Querying chargers for building %d...", bi.id)
 		chargerRows, err := h.db.QueryContext(ctx, `
 			SELECT c.id, c.name
@@ -697,7 +697,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					consumptionData := []models.ConsumptionData{}
 					previousReading := baselineReading
 
-					// FIXED: More lenient processing - include all valid data points
+					// FIXED: More lenient processing - accept all positive consumption
 					for idx, currentReading := range sessions {
 						if previousReading != nil {
 							consumptionKwh := currentReading.powerKwh - previousReading.powerKwh
@@ -711,10 +711,9 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 								continue
 							}
 							
-							// FIXED: Lower threshold from 0.001 to 0.0001 kWh (0.1 Wh)
-							// This allows capturing even very small charging amounts
-							if consumptionKwh < 0.0001 {
-								log.Printf("      Session %d: Consumption too small (%.6f kWh), adding zero power point", 
+							// FIXED: Accept ALL positive consumption, no matter how small
+							if consumptionKwh == 0 {
+								log.Printf("      Session %d: Zero consumption (%.6f kWh), adding zero power point", 
 									idx, consumptionKwh)
 								// Still add a data point with zero power to maintain continuity
 								consumptionData = append(consumptionData, models.ConsumptionData{
@@ -741,13 +740,19 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 								powerW = 50000
 							}
 							
+							// Log small but valid consumption for debugging
+							if consumptionKwh < 0.001 {
+								log.Printf("      Session %d: Small consumption detected: %.6f kWh over %.2f hours = %.2f W", 
+									idx, consumptionKwh, timeDiffHours, powerW)
+							}
+							
 							consumptionData = append(consumptionData, models.ConsumptionData{
 								Timestamp: currentReading.sessionTime,
 								Power:     powerW,
 								Source:    "charger",
 							})
 							
-							log.Printf("      ✓ Session %d: time=%v, energy_diff=%.4f kWh, time_diff=%.2f h, power=%.0f W, state=%s", 
+							log.Printf("      ✓ Session %d: time=%v, energy_diff=%.6f kWh, time_diff=%.2f h, power=%.2f W, state=%s", 
 								idx, currentReading.sessionTime, consumptionKwh, timeDiffHours, powerW, currentReading.state)
 						} else {
 							log.Printf("      Session %d: No previous reading, using as baseline", idx)
