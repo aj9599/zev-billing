@@ -202,27 +202,32 @@ func (h *DashboardHandler) GetConsumption(w http.ResponseWriter, r *http.Request
 		period = "24h"
 	}
 
+	// FIXED: Calculate exact time periods from now
+	now := time.Now()
 	var startTime time.Time
 	switch period {
 	case "1h":
-		startTime = time.Now().Add(-1 * time.Hour)
+		startTime = now.Add(-1 * time.Hour)
 	case "24h":
-		startTime = time.Now().Add(-24 * time.Hour)
+		startTime = now.Add(-24 * time.Hour)
 	case "7d":
-		startTime = time.Now().Add(-7 * 24 * time.Hour)
+		startTime = now.Add(-7 * 24 * time.Hour)
 	case "30d":
-		startTime = time.Now().Add(-30 * 24 * time.Hour)
+		startTime = now.Add(-30 * 24 * time.Hour)
 	default:
-		startTime = time.Now().Add(-24 * time.Hour)
+		startTime = now.Add(-24 * time.Hour)
 	}
+
+	log.Printf("GetConsumption: period=%s, startTime=%s, endTime=%s", 
+		period, startTime.Format("2006-01-02 15:04:05"), now.Format("2006-01-02 15:04:05"))
 
 	rows, err := h.db.QueryContext(ctx, `
 		SELECT m.meter_type, mr.reading_time, mr.consumption_kwh
 		FROM meter_readings mr
 		JOIN meters m ON mr.meter_id = m.id
-		WHERE mr.reading_time >= ?
+		WHERE mr.reading_time >= ? AND mr.reading_time <= ?
 		ORDER BY mr.reading_time ASC
-	`, startTime)
+	`, startTime, now)
 
 	if err != nil {
 		log.Printf("Error querying consumption: %v", err)
@@ -261,21 +266,24 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		period = "24h"
 	}
 
-	log.Printf("GetConsumptionByBuilding called with period: %s", period)
-
+	// FIXED: Calculate exact time periods from now
+	now := time.Now()
 	var startTime time.Time
 	switch period {
 	case "1h":
-		startTime = time.Now().Add(-1 * time.Hour)
+		startTime = now.Add(-1 * time.Hour)
 	case "24h":
-		startTime = time.Now().Add(-24 * time.Hour)
+		startTime = now.Add(-24 * time.Hour)
 	case "7d":
-		startTime = time.Now().Add(-7 * 24 * time.Hour)
+		startTime = now.Add(-7 * 24 * time.Hour)
 	case "30d":
-		startTime = time.Now().Add(-30 * 24 * time.Hour)
+		startTime = now.Add(-30 * 24 * time.Hour)
 	default:
-		startTime = time.Now().Add(-24 * time.Hour)
+		startTime = now.Add(-24 * time.Hour)
 	}
+
+	log.Printf("GetConsumptionByBuilding: period=%s, startTime=%s, endTime=%s", 
+		period, startTime.Format("2006-01-02 15:04:05"), now.Format("2006-01-02 15:04:05"))
 
 	// STEP 1: Read all buildings into memory and close cursor immediately
 	log.Printf("Step 1: Reading all buildings...")
@@ -391,12 +399,13 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			}
 
 			// STEP 5: Read all readings with timestamps and calculate power
+			// FIXED: Query from startTime to now (not just >= startTime)
 			dataRows, err := h.db.QueryContext(ctx, `
 				SELECT reading_time, consumption_kwh
 				FROM meter_readings
-				WHERE meter_id = ? AND reading_time >= ?
+				WHERE meter_id = ? AND reading_time >= ? AND reading_time <= ?
 				ORDER BY reading_time ASC
-			`, mi.id, startTime)
+			`, mi.id, startTime, now)
 
 			meterData := MeterData{
 				MeterID:   mi.id,
@@ -412,9 +421,9 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				continue
 			}
 
-			// Calculate power in Watts from consumption
+			// FIXED: Calculate power in Watts from consumption
+			// Removed maxGapMinutes restriction to show data across midnight
 			const intervalHours = 0.25 // 15 minutes
-			const maxGapMinutes = 20   // Maximum gap to consider readings consecutive
 
 			type readingData struct {
 				timestamp      time.Time
@@ -436,23 +445,18 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				}
 
 				if previousReading != nil {
-					timeDiff := currentReading.timestamp.Sub(previousReading.timestamp).Minutes()
+					// FIXED: Remove gap check - always include all readings
+					// This ensures data is shown across midnight and other gaps
+					powerW := (currentReading.consumptionKwh / intervalHours) * 1000
 					
-					// Include all readings within time window, even if consumption is 0
-					// This shows flat lines at 0W when meters are idle (e.g., solar at night)
-					if timeDiff <= maxGapMinutes {
-						powerW := (currentReading.consumptionKwh / intervalHours) * 1000
-						
-						meterData.Data = append(meterData.Data, models.ConsumptionData{
-							Timestamp: currentReading.timestamp,
-							Power:     powerW,
-							Source:    mi.meterType,
-						})
-					} else if timeDiff > maxGapMinutes {
-						log.Printf("    Skipping reading at %v: gap too large (%.1f minutes)", 
-							currentReading.timestamp, timeDiff)
-					}
+					meterData.Data = append(meterData.Data, models.ConsumptionData{
+						Timestamp: currentReading.timestamp,
+						Power:     powerW,
+						Source:    mi.meterType,
+					})
 				} else {
+					// For the very first reading, we can't calculate power without a previous reading
+					// So we skip it (this only affects the first data point after system start)
 					log.Printf("    Skipping first reading at %v (no previous reading to compare)", 
 						currentReading.timestamp)
 				}
@@ -501,15 +505,16 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			for _, ci := range chargerInfos {
 				log.Printf("    Processing charger ID: %d, Name: %s", ci.id, ci.name)
 
-				// Get charger sessions where state != 'idle'
+				// FIXED: Get charger sessions from startTime to now
 				sessionRows, err := h.db.QueryContext(ctx, `
 					SELECT cs.session_time, cs.power_kwh, cs.user_id, cs.state
 					FROM charger_sessions cs
 					WHERE cs.charger_id = ? 
 					AND cs.session_time >= ?
+					AND cs.session_time <= ?
 					AND LOWER(cs.state) != 'idle'
 					ORDER BY cs.session_time ASC
-				`, ci.id, startTime)
+				`, ci.id, startTime, now)
 
 				if err != nil {
 					log.Printf("    Error querying sessions for charger %d: %v", ci.id, err)

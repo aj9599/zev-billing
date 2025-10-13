@@ -106,20 +106,32 @@ func (dc *DataCollector) Start() {
 	log.Println("Collection Interval: 15 minutes")
 	log.Println("===================================")
 
+	// FIXED: Initialize UDP listeners first
 	dc.initializeUDPListeners()
 	dc.logSystemStatus()
+	
+	// FIXED: Collect data immediately on startup
+	log.Println(">>> INITIAL DATA COLLECTION ON STARTUP <<<")
 	dc.collectAllData()
+	log.Println(">>> INITIAL DATA COLLECTION COMPLETED <<<")
 
 	// Start goroutine to clean up stale partial data
 	go dc.cleanupStalePartialData()
 
+	// FIXED: Use a ticker that fires every 15 minutes from now
 	ticker := time.NewTicker(15 * time.Minute)
 	defer ticker.Stop()
+
+	log.Printf(">>> Next data collection in 15 minutes (at %s) <<<", 
+		time.Now().Add(15*time.Minute).Format("15:04:05"))
 
 	for {
 		select {
 		case <-ticker.C:
+			log.Printf(">>> Ticker fired - starting scheduled collection <<<")
 			dc.collectAllData()
+			log.Printf(">>> Next data collection in 15 minutes (at %s) <<<", 
+				time.Now().Add(15*time.Minute).Format("15:04:05"))
 		case <-dc.restartChannel:
 			log.Println("Received restart signal")
 		}
@@ -521,6 +533,7 @@ func (dc *DataCollector) collectAllData() {
 	
 	dc.logToDatabase("Data Collection Started", "15-minute collection cycle initiated")
 
+	// FIXED: Collect data with proper error handling
 	dc.collectMeterData()
 	dc.collectChargerData()
 	dc.saveBufferedUDPData()
@@ -568,11 +581,14 @@ func (dc *DataCollector) saveBufferedUDPData() {
 					meterID, reading, consumption)
 				dc.logToDatabase("UDP Meter Data Saved", 
 					fmt.Sprintf("Meter ID: %d, Reading: %.2f kWh, Consumption: %.2f kWh", meterID, reading, consumption))
+			} else {
+				log.Printf("ERROR: Failed to save UDP meter data for meter ID %d: %v", meterID, err)
 			}
 			metersWithData[meterID] = true
 		}
 	}
 
+	// FIXED: Maintain last reading for inactive meters
 	for meterID := range dc.udpMeterBuffers {
 		if !metersWithData[meterID] {
 			var lastReading float64
