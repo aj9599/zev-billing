@@ -702,7 +702,7 @@ export default function Billing() {
       bank_name: bankingInfo.name,
       bank_iban: bankingInfo.iban,
       bank_account_holder: bankingInfo.holder
-    }));
+    });
   };
 
   const toggleBuilding = (id: number) => {
