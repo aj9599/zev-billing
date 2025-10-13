@@ -300,6 +300,38 @@ func (h *DashboardHandler) GetConsumption(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(consumption)
 }
 
+// FIXED: Smart detection of instantaneous vs cumulative charger data
+func detectChargerDataType(sessions []float64) string {
+	if len(sessions) < 3 {
+		return "unknown"
+	}
+
+	// Check if values are consistently increasing (cumulative)
+	increasing := 0
+	similar := 0
+	
+	for i := 1; i < len(sessions); i++ {
+		diff := sessions[i] - sessions[i-1]
+		if diff > 0.1 {
+			increasing++
+		} else if diff >= -0.01 && diff <= 0.01 {
+			similar++
+		}
+	}
+
+	// If most values are increasing, it's cumulative
+	if increasing > len(sessions)/2 {
+		return "cumulative"
+	}
+	
+	// If most values are similar (within 0.01 kWh), it's instantaneous
+	if similar > len(sessions)/2 {
+		return "instantaneous"
+	}
+
+	return "unknown"
+}
+
 func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -545,7 +577,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			building.Meters = append(building.Meters, meterData)
 		}
 
-		// FIXED: Process chargers with improved algorithm - removing restrictive threshold
+		// FIXED: Process chargers with smart detection of data type
 		log.Printf("  Querying chargers for building %d...", bi.id)
 		chargerRows, err := h.db.QueryContext(ctx, `
 			SELECT c.id, c.name
@@ -678,12 +710,14 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					}
 
 					sessions := []sessionReading{}
+					sessionValues := []float64{}
 					for sessionRows.Next() {
 						var sr sessionReading
 						if err := sessionRows.Scan(&sr.sessionTime, &sr.powerKwh, &sr.state); err != nil {
 							continue
 						}
 						sessions = append(sessions, sr)
+						sessionValues = append(sessionValues, sr.powerKwh)
 					}
 					sessionRows.Close()
 
@@ -694,28 +728,74 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						continue
 					}
 
+					// FIXED: Detect if charger data is instantaneous or cumulative
+					dataType := detectChargerDataType(sessionValues)
+					log.Printf("      🔍 Detected charger data type: %s (based on %d readings)", dataType, len(sessionValues))
+					
+					// Log sample values for debugging
+					if len(sessionValues) >= 3 {
+						log.Printf("      Sample values: %.4f, %.4f, %.4f kWh", 
+							sessionValues[0], sessionValues[1], sessionValues[len(sessionValues)-1])
+					}
+
 					consumptionData := []models.ConsumptionData{}
 					previousReading := baselineReading
 
-					// FIXED: More lenient processing - accept all positive consumption
 					for idx, currentReading := range sessions {
-						if previousReading != nil {
-							consumptionKwh := currentReading.powerKwh - previousReading.powerKwh
+						var powerW float64
+						
+						if dataType == "instantaneous" {
+							// FIXED: Treat as instantaneous power reading in kW
+							// Convert directly to Watts
+							powerW = currentReading.powerKwh * 1000
+							log.Printf("      ⚡ Session %d: INSTANTANEOUS power=%.2f kW → %.0f W (time=%v)", 
+								idx, currentReading.powerKwh, powerW, currentReading.sessionTime)
 							
-							// Handle meter reset
-							if consumptionKwh < 0 {
-								log.Printf("      Session %d: Negative consumption detected (%.6f kWh), treating as meter reset", 
-									idx, consumptionKwh)
-								// Use current reading as new baseline
-								previousReading = &currentReading
-								continue
-							}
-							
-							// FIXED: Accept ALL positive consumption, no matter how small
-							if consumptionKwh == 0 {
-								log.Printf("      Session %d: Zero consumption (%.6f kWh), adding zero power point", 
-									idx, consumptionKwh)
-								// Still add a data point with zero power to maintain continuity
+						} else {
+							// Treat as cumulative energy reading
+							if previousReading != nil {
+								consumptionKwh := currentReading.powerKwh - previousReading.powerKwh
+								
+								// Handle meter reset
+								if consumptionKwh < 0 {
+									log.Printf("      Session %d: Negative consumption detected (%.6f kWh), treating as meter reset", 
+										idx, consumptionKwh)
+									previousReading = &currentReading
+									continue
+								}
+								
+								// For zero consumption, add zero power point
+								if consumptionKwh == 0 {
+									log.Printf("      Session %d: Zero consumption, adding zero power point", idx)
+									consumptionData = append(consumptionData, models.ConsumptionData{
+										Timestamp: currentReading.sessionTime,
+										Power:     0,
+										Source:    "charger",
+									})
+									previousReading = &currentReading
+									continue
+								}
+								
+								// Calculate actual time difference in hours
+								timeDiffHours := currentReading.sessionTime.Sub(previousReading.sessionTime).Hours()
+								if timeDiffHours <= 0 {
+									timeDiffHours = 0.25 // Default to 15 minutes
+								}
+								
+								// Convert consumption to power in Watts: Power (W) = Energy (kWh) / Time (h) * 1000
+								powerW = (consumptionKwh / timeDiffHours) * 1000
+								
+								// Cap unrealistic power values
+								if powerW > 50000 {
+									log.Printf("      Session %d: Power too high (%.0f W), capping at 50kW", idx, powerW)
+									powerW = 50000
+								}
+								
+								log.Printf("      ✓ Session %d: CUMULATIVE energy_diff=%.6f kWh, time_diff=%.2f h → %.0f W", 
+									idx, consumptionKwh, timeDiffHours, powerW)
+							} else {
+								// First point - add with zero power
+								log.Printf("      Session %d: No previous reading, using as baseline", idx)
 								consumptionData = append(consumptionData, models.ConsumptionData{
 									Timestamp: currentReading.sessionTime,
 									Power:     0,
@@ -724,51 +804,19 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 								previousReading = &currentReading
 								continue
 							}
-							
-							// Calculate actual time difference in hours
-							timeDiffHours := currentReading.sessionTime.Sub(previousReading.sessionTime).Hours()
-							if timeDiffHours <= 0 {
-								timeDiffHours = 0.25 // Default to 15 minutes
-							}
-							
-							// Convert consumption to power in Watts: Power (W) = Energy (kWh) / Time (h) * 1000
-							powerW := (consumptionKwh / timeDiffHours) * 1000
-							
-							// FIXED: Cap unrealistic power values (e.g., > 50kW for typical chargers)
-							if powerW > 50000 {
-								log.Printf("      Session %d: Power too high (%.0f W), capping at 50kW", idx, powerW)
-								powerW = 50000
-							}
-							
-							// Log small but valid consumption for debugging
-							if consumptionKwh < 0.001 {
-								log.Printf("      Session %d: Small consumption detected: %.6f kWh over %.2f hours = %.2f W", 
-									idx, consumptionKwh, timeDiffHours, powerW)
-							}
-							
-							consumptionData = append(consumptionData, models.ConsumptionData{
-								Timestamp: currentReading.sessionTime,
-								Power:     powerW,
-								Source:    "charger",
-							})
-							
-							log.Printf("      ✓ Session %d: time=%v, energy_diff=%.6f kWh, time_diff=%.2f h, power=%.2f W, state=%s", 
-								idx, currentReading.sessionTime, consumptionKwh, timeDiffHours, powerW, currentReading.state)
-						} else {
-							log.Printf("      Session %d: No previous reading, using as baseline", idx)
-							// FIXED: Add first point with zero power to ensure line appears
-							consumptionData = append(consumptionData, models.ConsumptionData{
-								Timestamp: currentReading.sessionTime,
-								Power:     0,
-								Source:    "charger",
-							})
 						}
+						
+						// Add the data point
+						consumptionData = append(consumptionData, models.ConsumptionData{
+							Timestamp: currentReading.sessionTime,
+							Power:     powerW,
+							Source:    "charger",
+						})
 						
 						previousReading = &currentReading
 					}
 
-					// FIXED: Always add charger data if we have ANY sessions
-					// This ensures the charger line appears even during idle periods
+					// Always add charger data if we have ANY data points
 					if len(consumptionData) > 0 {
 						chargerData := MeterData{
 							MeterID:   ci.id,
@@ -778,11 +826,11 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 							Data:      consumptionData,
 						}
 
-						log.Printf("      ✓ Charger ID: %d has %d data points for user %s", 
-							ci.id, len(consumptionData), userName)
+						log.Printf("      ✅ Charger ID: %d has %d data points for user %s (avg power: %.0f W)", 
+							ci.id, len(consumptionData), userName, calculateAvgPower(consumptionData))
 						building.Meters = append(building.Meters, chargerData)
 					} else {
-						log.Printf("      ⚠ Charger ID: %d has no valid data points for user %s", ci.id, userName)
+						log.Printf("      ⚠️  Charger ID: %d has no valid data points for user %s", ci.id, userName)
 					}
 				}
 			}
@@ -798,6 +846,18 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 	if err := json.NewEncoder(w).Encode(buildings); err != nil {
 		log.Printf("Error encoding JSON response: %v", err)
 	}
+}
+
+// Helper function to calculate average power
+func calculateAvgPower(data []models.ConsumptionData) float64 {
+	if len(data) == 0 {
+		return 0
+	}
+	total := 0.0
+	for _, d := range data {
+		total += d.Power
+	}
+	return total / float64(len(data))
 }
 
 func (h *DashboardHandler) GetLogs(w http.ResponseWriter, r *http.Request) {

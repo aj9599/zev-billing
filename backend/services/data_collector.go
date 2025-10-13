@@ -184,7 +184,7 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 		nextCollection = 0
 	}
 
-	// ENHANCED: Add charger buffer status
+	// ENHANCED: Add detailed charger buffer status
 	dc.mu.Lock()
 	chargerBufferStatus := make(map[string]interface{})
 	for chargerID, data := range dc.udpChargerBuffers {
@@ -194,6 +194,27 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 			"user_id": data.UserID,
 			"mode":    data.Mode,
 		}
+	}
+	
+	// Add partial charger data status
+	partialStatus := make(map[string]interface{})
+	for chargerID, partial := range dc.partialChargerData {
+		status := map[string]interface{}{
+			"last_update": partial.LastUpdate.Format("15:04:05"),
+		}
+		if partial.Power != nil {
+			status["power"] = *partial.Power
+		}
+		if partial.State != nil {
+			status["state"] = *partial.State
+		}
+		if partial.UserID != nil {
+			status["user_id"] = *partial.UserID
+		}
+		if partial.Mode != nil {
+			status["mode"] = *partial.Mode
+		}
+		partialStatus[fmt.Sprintf("charger_%d", chargerID)] = status
 	}
 	dc.mu.Unlock()
 
@@ -207,6 +228,7 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 		"udp_listeners":           dc.udpPorts,
 		"recent_errors":           recentErrors,
 		"charger_buffers":         chargerBufferStatus,
+		"partial_charger_data":    partialStatus,
 	}
 }
 
@@ -507,8 +529,16 @@ func (dc *DataCollector) processChargerPacket(charger UDPChargerConfig, jsonData
 			
 			dc.udpChargerBuffers[charger.ChargerID] = completeData
 			
-			log.Printf("SUCCESS: Complete charger data buffered for '%s': Power=%.2f, State=%s, User=%s, Mode=%s", 
-				charger.Name, completeData.Power, completeData.State, completeData.UserID, completeData.Mode)
+			// ENHANCED: Detect if this looks like instantaneous or cumulative data
+			dataType := "unknown"
+			if completeData.Power < 100 {
+				dataType = "likely INSTANTANEOUS (kW)"
+			} else {
+				dataType = "likely CUMULATIVE (kWh)"
+			}
+			
+			log.Printf("✅ Complete charger data buffered for '%s': Power=%.4f (%s), State=%s, User=%s, Mode=%s", 
+				charger.Name, completeData.Power, dataType, completeData.State, completeData.UserID, completeData.Mode)
 			
 			// Reset partial data for next cycle
 			dc.partialChargerData[charger.ChargerID] = &PartialChargerData{
@@ -621,32 +651,38 @@ func (dc *DataCollector) saveBufferedUDPData() {
 		}
 	}
 
-	// ENHANCED: Save charger data with better validation and logging
+	// ENHANCED: Save charger data with type detection logging
 	log.Printf("Processing %d chargers in buffer", len(dc.udpChargerBuffers))
 	for chargerID, data := range dc.udpChargerBuffers {
-		// FIXED: Validate all required fields are present
+		// Validate all required fields are present
 		if data.UserID == "" || data.State == "" || data.Mode == "" {
 			log.Printf("WARNING: Incomplete charger data for charger ID %d (user=%s, state=%s, mode=%s) - skipping",
 				chargerID, data.UserID, data.State, data.Mode)
 			continue
 		}
 
-		// FIXED: Always insert charger data regardless of power value
-		// This ensures we track all session states for proper billing
+		// ENHANCED: Log what type of data we think this is
+		dataTypeHint := ""
+		if data.Power < 100 {
+			dataTypeHint = " [Likely INSTANTANEOUS kW - dashboard will convert to Watts]"
+		} else {
+			dataTypeHint = " [Likely CUMULATIVE kWh - dashboard will calculate difference]"
+		}
+
+		// Always insert charger data
 		_, err := dc.db.Exec(`
 			INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
 			VALUES (?, ?, ?, ?, ?, ?)
 		`, chargerID, data.UserID, time.Now(), data.Power, data.Mode, data.State)
 
 		if err == nil {
-			// ENHANCED: More detailed success logging
-			log.Printf("✓ SUCCESS: Charger data saved - ID=%d, Power=%.4f kWh, User=%s, Mode=%s, State=%s, Time=%s", 
-				chargerID, data.Power, data.UserID, data.Mode, data.State, time.Now().Format("15:04:05"))
+			log.Printf("✅ SUCCESS: Charger data saved - ID=%d, Power=%.4f%s, User=%s, Mode=%s, State=%s, Time=%s", 
+				chargerID, data.Power, dataTypeHint, data.UserID, data.Mode, data.State, time.Now().Format("15:04:05"))
 			dc.logToDatabase("UDP Charger Data Saved", 
 				fmt.Sprintf("Charger ID: %d, Power: %.4f kWh, User: %s, Mode: %s, State: %s", 
 					chargerID, data.Power, data.UserID, data.Mode, data.State))
 			
-			// ENHANCED: Verify the data was actually saved
+			// Verify the data was saved
 			var count int
 			dc.db.QueryRow(`
 				SELECT COUNT(*) FROM charger_sessions 
@@ -660,7 +696,7 @@ func (dc *DataCollector) saveBufferedUDPData() {
 				log.Printf("  ⚠ WARNING: Could not verify saved session in database for charger %d", chargerID)
 			}
 		} else {
-			log.Printf("✗ ERROR: Failed to save charger data for charger ID %d: %v", chargerID, err)
+			log.Printf("❌ ERROR: Failed to save charger data for charger ID %d: %v", chargerID, err)
 			dc.logToDatabase("Charger Save Error", fmt.Sprintf("Charger ID: %d, Error: %v", chargerID, err))
 		}
 	}
