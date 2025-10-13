@@ -772,6 +772,14 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					consumptionData := []models.ConsumptionData{}
 					previousReading := baselineReading
 
+					// Log the starting point
+					if previousReading != nil {
+						log.Printf("      Starting with baseline: time=%v, energy=%.6f kWh", 
+							previousReading.sessionTime, previousReading.powerKwh)
+					} else {
+						log.Printf("      No baseline found, will use first reading as baseline")
+					}
+
 					for idx, currentReading := range sessions {
 						var powerW float64
 						
@@ -787,22 +795,15 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 							if previousReading != nil {
 								consumptionKwh := currentReading.powerKwh - previousReading.powerKwh
 								
-								// Handle meter reset
-								if consumptionKwh < 0 {
-									log.Printf("      Session %d: Negative consumption detected (%.6f kWh), treating as meter reset", 
-										idx, consumptionKwh)
-									previousReading = &currentReading
-									continue
-								}
+								// Log the raw values for debugging
+								log.Printf("      📊 Session %d: current=%.6f kWh, previous=%.6f kWh, diff=%.6f kWh", 
+									idx, currentReading.powerKwh, previousReading.powerKwh, consumptionKwh)
 								
-								// For zero consumption, add zero power point
-								if consumptionKwh == 0 {
-									log.Printf("      Session %d: Zero consumption, adding zero power point", idx)
-									consumptionData = append(consumptionData, models.ConsumptionData{
-										Timestamp: currentReading.sessionTime,
-										Power:     0,
-										Source:    "charger",
-									})
+								// Handle meter reset (negative consumption)
+								if consumptionKwh < 0 {
+									log.Printf("      ⚠️  Session %d: Negative consumption (%.6f kWh) - meter may have reset", 
+										idx, consumptionKwh)
+									// Use current reading as new baseline
 									previousReading = &currentReading
 									continue
 								}
@@ -811,6 +812,13 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 								timeDiffHours := currentReading.sessionTime.Sub(previousReading.sessionTime).Hours()
 								if timeDiffHours <= 0 {
 									timeDiffHours = 0.25 // Default to 15 minutes
+									log.Printf("      ⚠️  Session %d: Invalid time diff, using default 0.25h", idx)
+								}
+								
+								// IMPORTANT: Accept ALL consumption >= 0, even if very small or zero
+								// Zero consumption means charger is idle, which is valid data
+								if consumptionKwh == 0 {
+									log.Printf("      💤 Session %d: Zero consumption (charger idle), adding 0W point", idx)
 								}
 								
 								// Convert consumption to power in Watts: Power (W) = Energy (kWh) / Time (h) * 1000
@@ -818,15 +826,21 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 								
 								// Cap unrealistic power values
 								if powerW > 50000 {
-									log.Printf("      Session %d: Power too high (%.0f W), capping at 50kW", idx, powerW)
+									log.Printf("      ⚠️  Session %d: Power too high (%.0f W), capping at 50kW", idx, powerW)
 									powerW = 50000
 								}
 								
-								log.Printf("      ✓ Session %d: CUMULATIVE energy_diff=%.6f kWh, time_diff=%.2f h → %.0f W", 
-									idx, consumptionKwh, timeDiffHours, powerW)
+								// Log the final calculated power
+								if powerW > 0 {
+									log.Printf("      ✅ Session %d: energy=%.6f kWh, time=%.2f h → POWER=%.0f W", 
+										idx, consumptionKwh, timeDiffHours, powerW)
+								} else {
+									log.Printf("      ⭕ Session %d: Zero power (idle)", idx)
+								}
+								
 							} else {
-								// First point - add with zero power
-								log.Printf("      Session %d: No previous reading, using as baseline", idx)
+								// First point - use as baseline with zero power
+								log.Printf("      🔵 Session %d: First reading, using as baseline (%.6f kWh)", idx, currentReading.powerKwh)
 								consumptionData = append(consumptionData, models.ConsumptionData{
 									Timestamp: currentReading.sessionTime,
 									Power:     0,
@@ -845,6 +859,25 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						})
 						
 						previousReading = &currentReading
+					}
+
+					// Log summary of what we collected
+					nonZeroCount := 0
+					totalPower := 0.0
+					for _, d := range consumptionData {
+						if d.Power > 0 {
+							nonZeroCount++
+							totalPower += d.Power
+						}
+					}
+					
+					if nonZeroCount > 0 {
+						avgPower := totalPower / float64(nonZeroCount)
+						log.Printf("      📈 Summary: %d total points, %d non-zero (avg %.0f W)", 
+							len(consumptionData), nonZeroCount, avgPower)
+					} else {
+						log.Printf("      ⚠️  Summary: %d total points, but ALL are zero! Charger may be idle.", 
+							len(consumptionData))
 					}
 
 					// Always add charger data if we have ANY data points
