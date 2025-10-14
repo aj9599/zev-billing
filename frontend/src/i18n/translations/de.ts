@@ -360,6 +360,7 @@ export const de: Translations = {
   'billing.title': 'Abrechnung & Rechnungen',
   'billing.subtitle': 'Abrechnungen erstellen und verwalten',
   'billing.generateBills': 'Rechnungen erstellen',
+  'billing.setupInstructions': 'Setup-Anleitung',
   'billing.invoiceNumber': 'Rechnungs-Nr.',
   'billing.user': 'Benutzer',
   'billing.period': 'Zeitraum',
