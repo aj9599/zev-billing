@@ -159,6 +159,28 @@ func RunMigrations(db *sql.DB) error {
 			FOREIGN KEY (invoice_id) REFERENCES invoices(id)
 		)`,
 
+		`CREATE TABLE IF NOT EXISTS auto_billing_configs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			building_ids TEXT NOT NULL,
+			user_ids TEXT,
+			frequency TEXT NOT NULL,
+			generation_day INTEGER NOT NULL,
+			is_active INTEGER DEFAULT 1,
+			last_run DATETIME,
+			next_run DATETIME,
+			sender_name TEXT,
+			sender_address TEXT,
+			sender_city TEXT,
+			sender_zip TEXT,
+			sender_country TEXT DEFAULT 'Switzerland',
+			bank_name TEXT,
+			bank_iban TEXT,
+			bank_account_holder TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
 		`CREATE TABLE IF NOT EXISTS admin_logs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			action TEXT NOT NULL,
@@ -174,6 +196,7 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_charger_sessions_charger ON charger_sessions(charger_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_invoices_building ON invoices(building_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_auto_billing_next_run ON auto_billing_configs(next_run)`,
 	}
 
 	for _, migration := range migrations {

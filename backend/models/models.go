@@ -136,6 +136,28 @@ type InvoiceItem struct {
 	ItemType    string  `json:"item_type"`
 }
 
+type AutoBillingConfig struct {
+	ID                  int       `json:"id"`
+	Name                string    `json:"name"`
+	BuildingIDs         string    `json:"building_ids"`
+	UserIDs             string    `json:"user_ids"`
+	Frequency           string    `json:"frequency"`
+	GenerationDay       int       `json:"generation_day"`
+	IsActive            bool      `json:"is_active"`
+	LastRun             *time.Time `json:"last_run"`
+	NextRun             *time.Time `json:"next_run"`
+	SenderName          string    `json:"sender_name"`
+	SenderAddress       string    `json:"sender_address"`
+	SenderCity          string    `json:"sender_city"`
+	SenderZip           string    `json:"sender_zip"`
+	SenderCountry       string    `json:"sender_country"`
+	BankName            string    `json:"bank_name"`
+	BankIBAN            string    `json:"bank_iban"`
+	BankAccountHolder   string    `json:"bank_account_holder"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
+}
+
 type AdminLog struct {
 	ID        int       `json:"id"`
 	Action    string    `json:"action"`

@@ -245,6 +245,33 @@ class ApiClient {
     return this.request(`/billing/invoices/${id}`, { method: 'DELETE' });
   }
 
+  // Auto Billing
+  async getAutoBillingConfigs(): Promise<any[]> {
+    return this.request('/billing/auto-configs');
+  }
+
+  async getAutoBillingConfig(id: number): Promise<any> {
+    return this.request(`/billing/auto-configs/${id}`);
+  }
+
+  async createAutoBillingConfig(config: any): Promise<any> {
+    return this.request('/billing/auto-configs', {
+      method: 'POST',
+      body: JSON.stringify(config),
+    });
+  }
+
+  async updateAutoBillingConfig(id: number, config: any): Promise<any> {
+    return this.request(`/billing/auto-configs/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(config),
+    });
+  }
+
+  async deleteAutoBillingConfig(id: number) {
+    return this.request(`/billing/auto-configs/${id}`, { method: 'DELETE' });
+  }
+
   // Dashboard
   async getDashboardStats(): Promise<DashboardStats> {
     return this.request('/dashboard/stats');

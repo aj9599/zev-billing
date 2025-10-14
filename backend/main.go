@@ -19,6 +19,7 @@ import (
 )
 
 var dataCollector *services.DataCollector
+var autoBillingScheduler *services.AutoBillingScheduler
 
 func recoverMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -65,8 +66,10 @@ func main() {
 
 	dataCollector = services.NewDataCollector(db)
 	billingService := services.NewBillingService(db)
+	autoBillingScheduler = services.NewAutoBillingScheduler(db, billingService)
 
 	go dataCollector.Start()
+	go autoBillingScheduler.Start()
 
 	authHandler := handlers.NewAuthHandler(db, cfg.JWTSecret)
 	userHandler := handlers.NewUserHandler(db)
@@ -74,6 +77,7 @@ func main() {
 	meterHandler := handlers.NewMeterHandler(db, dataCollector)
 	chargerHandler := handlers.NewChargerHandler(db, dataCollector)
 	billingHandler := handlers.NewBillingHandler(db, billingService)
+	autoBillingHandler := handlers.NewAutoBillingHandler(db)
 	dashboardHandler := handlers.NewDashboardHandler(db)
 
 	r := mux.NewRouter()
@@ -133,6 +137,13 @@ func main() {
 	api.HandleFunc("/billing/backup", billingHandler.BackupDatabase).Methods("GET")
 	api.HandleFunc("/billing/export", billingHandler.ExportData).Methods("GET")
 
+	// Auto Billing routes
+	api.HandleFunc("/billing/auto-configs", autoBillingHandler.List).Methods("GET")
+	api.HandleFunc("/billing/auto-configs", autoBillingHandler.Create).Methods("POST")
+	api.HandleFunc("/billing/auto-configs/{id}", autoBillingHandler.Get).Methods("GET")
+	api.HandleFunc("/billing/auto-configs/{id}", autoBillingHandler.Update).Methods("PUT")
+	api.HandleFunc("/billing/auto-configs/{id}", autoBillingHandler.Delete).Methods("DELETE")
+
 	// Dashboard routes
 	api.HandleFunc("/dashboard/stats", dashboardHandler.GetStats).Methods("GET")
 	api.HandleFunc("/dashboard/consumption", dashboardHandler.GetConsumption).Methods("GET")
@@ -159,6 +170,7 @@ func main() {
 
 	log.Printf("Server starting on %s", cfg.ServerAddress)
 	log.Println("Data collector running (15-minute intervals)")
+	log.Println("Auto billing scheduler running (hourly checks)")
 	log.Println("Default credentials: admin / admin123")
 	log.Println("IMPORTANT: Change default password after first login!")
 	log.Println("===========================================")
