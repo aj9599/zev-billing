@@ -42,7 +42,7 @@ func recoverMiddleware(next http.Handler) http.Handler {
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		log.Printf("[%s] %s %s", r.Method, r.URL.Path, r.RemoteAddr)
+		log.Printf("[%s] %s %s from %s", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr)
 		next.ServeHTTP(w, r)
 		log.Printf("[%s] %s - completed in %v", r.Method, r.URL.Path, time.Since(start))
 	})
@@ -80,16 +80,24 @@ func main() {
 	billingHandler := handlers.NewBillingHandler(db, billingService)
 	autoBillingHandler := handlers.NewAutoBillingHandler(db)
 	dashboardHandler := handlers.NewDashboardHandler(db)
-	exportHandler := handlers.NewExportHandler(db) // FIXED: Added export handler
+	exportHandler := handlers.NewExportHandler(db)
+	webhookHandler := handlers.NewWebhookHandler(db) // NEW: Webhook handler
 
 	r := mux.NewRouter()
 
 	r.Use(recoverMiddleware)
 	r.Use(loggingMiddleware)
 
+	// Public routes (no authentication required)
 	r.HandleFunc("/api/auth/login", authHandler.Login).Methods("POST")
 	r.HandleFunc("/api/health", healthCheck).Methods("GET")
 
+	// NEW: Webhook routes for receiving data from devices (NO AUTHENTICATION)
+	// These endpoints allow devices to push data to the system
+	r.HandleFunc("/webhook/meter", webhookHandler.ReceiveMeterReading).Methods("GET", "POST")
+	r.HandleFunc("/webhook/charger", webhookHandler.ReceiveChargerData).Methods("GET", "POST")
+
+	// Protected API routes (authentication required)
 	api := r.PathPrefix("/api").Subrouter()
 	api.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 
@@ -151,7 +159,7 @@ func main() {
 	api.HandleFunc("/dashboard/consumption-by-building", dashboardHandler.GetConsumptionByBuilding).Methods("GET")
 	api.HandleFunc("/dashboard/logs", dashboardHandler.GetLogs).Methods("GET")
 
-	// FIXED: Export route
+	// Export route
 	api.HandleFunc("/export/data", exportHandler.ExportData).Methods("GET")
 
 	c := cors.New(cors.Options{
@@ -175,6 +183,9 @@ func main() {
 	log.Printf("Server starting on %s", cfg.ServerAddress)
 	log.Println("Data collector running (15-minute intervals)")
 	log.Println("Auto billing scheduler running (hourly checks)")
+	log.Println("Webhook endpoints available:")
+	log.Println("  - POST/GET /webhook/meter?meter_id=X")
+	log.Println("  - POST/GET /webhook/charger?charger_id=X")
 	log.Println("Default credentials: admin / admin123")
 	log.Println("IMPORTANT: Change default password after first login!")
 	log.Println("===========================================")
