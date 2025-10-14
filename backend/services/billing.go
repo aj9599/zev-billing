@@ -101,7 +101,7 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 			continue
 		}
 
-		log.Printf("Billing Settings - Normal: %.3f, Solar: %.3f, Car Normal: %.3f, Car Priority: %.3f %s", 
+		log.Printf("Billing Settings - Normal: %.3f, Solar: %.3f, Car Solar: %.3f, Car Priority: %.3f %s", 
 			settings.NormalPowerPrice, settings.SolarPowerPrice, 
 			settings.CarChargingNormalPrice, settings.CarChargingPriorityPrice, settings.Currency)
 
@@ -248,7 +248,7 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 		log.Printf("  [CHARGING] Starting charging calculation for RFID cards: '%s'", rfidCards)
 		normalCharging, priorityCharging, firstSession, lastSession := bs.calculateChargingConsumptionFixed(buildingID, rfidCards, start, end)
 
-		log.Printf("  [CHARGING] Results: Normal=%.2f kWh, Priority=%.2f kWh", normalCharging, priorityCharging)
+		log.Printf("  [CHARGING] Results: Solar=%.2f kWh, Priority=%.2f kWh", normalCharging, priorityCharging)
 
 		if normalCharging > 0 || priorityCharging > 0 {
 			items = append(items, models.InvoiceItem{
@@ -306,13 +306,13 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 				normalChargingCost := normalCharging * settings.CarChargingNormalPrice
 				totalAmount += normalChargingCost
 				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("Normal Mode: %.2f kWh × %.3f %s/kWh", normalCharging, settings.CarChargingNormalPrice, settings.Currency),
+					Description: fmt.Sprintf("Solar Mode: %.2f kWh × %.3f %s/kWh", normalCharging, settings.CarChargingNormalPrice, settings.Currency),
 					Quantity:    normalCharging,
 					UnitPrice:   settings.CarChargingNormalPrice,
 					TotalPrice:  normalChargingCost,
 					ItemType:    "car_charging_normal",
 				})
-				log.Printf("  Normal Charging: %.2f kWh × %.3f = %.2f %s", normalCharging, settings.CarChargingNormalPrice, normalChargingCost, settings.Currency)
+				log.Printf("  Solar Charging: %.2f kWh × %.3f = %.2f %s", normalCharging, settings.CarChargingNormalPrice, normalChargingCost, settings.Currency)
 			}
 
 			if priorityCharging > 0 {

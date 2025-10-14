@@ -302,7 +302,7 @@ export default function Chargers() {
       params.append('charger_id', chargerId.toString());
     }
 
-    const response = await fetch(`/api/billing/export?${params}`, {
+    const response = await fetch(`/api/export/data?${params}`, {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
       }
