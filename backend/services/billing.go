@@ -19,7 +19,7 @@ func NewBillingService(db *sql.DB) *BillingService {
 	return &BillingService{db: db}
 }
 
-// FIXED: Helper function to safely extract string from interface{}
+// Helper function to safely extract string from interface{}
 func getConfigString(config map[string]interface{}, key string, defaultValue string) string {
 	if val, ok := config[key]; ok {
 		switch v := val.(type) {
@@ -169,7 +169,7 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 	items := []models.InvoiceItem{}
 
 	meterReadingFrom, meterReadingTo, meterName := bs.getMeterReadings(userID, start, end)
-	normalPower, solarPower, totalConsumption := bs.calculateZEVConsumptionFixed(userID, buildingID, start, end)
+	normalPower, solarPower, totalConsumption := bs.calculateZEVConsumption(userID, buildingID, start, end)
 
 	log.Printf("  Meter: %s", meterName)
 	log.Printf("  Reading from: %.2f kWh, Reading to: %.2f kWh", meterReadingFrom, meterReadingTo)
@@ -246,7 +246,7 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 
 	if rfidCards != "" {
 		log.Printf("  [CHARGING] Starting charging calculation for RFID cards: '%s'", rfidCards)
-		normalCharging, priorityCharging, firstSession, lastSession := bs.calculateChargingConsumptionFixed(buildingID, rfidCards, start, end)
+		normalCharging, priorityCharging, firstSession, lastSession := bs.calculateChargingConsumption(buildingID, rfidCards, start, end)
 
 		log.Printf("  [CHARGING] Results: Solar=%.2f kWh, Priority=%.2f kWh", normalCharging, priorityCharging)
 
@@ -327,8 +327,6 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 				})
 				log.Printf("  Priority Charging: %.2f kWh × %.3f = %.2f %s", priorityCharging, settings.CarChargingPriorityPrice, priorityChargingCost, settings.Currency)
 			}
-		} else {
-			log.Printf("  [CHARGING] WARNING: No charging consumption calculated despite having RFID cards!")
 		}
 	} else {
 		log.Printf("  [CHARGING] No RFID cards configured for this user - skipping charging calculation")
@@ -448,7 +446,8 @@ func (bs *BillingService) getMeterReadings(userID int, start, end time.Time) (fl
 	return from, to, meterName
 }
 
-func (bs *BillingService) calculateZEVConsumptionFixed(userID, buildingID int, start, end time.Time) (normal, solar, total float64) {
+// FIXED: ZEV calculation now uses data at fixed 15-minute intervals
+func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start, end time.Time) (normal, solar, total float64) {
 	log.Printf("    [ZEV] Calculating consumption for user %d in building %d", userID, buildingID)
 	log.Printf("    [ZEV] Period: %s to %s", start.Format("2006-01-02 15:04:05"), end.Format("2006-01-02 15:04:05"))
 
@@ -457,11 +456,12 @@ func (bs *BillingService) calculateZEVConsumptionFixed(userID, buildingID int, s
 		MeterType   string
 		UserID      sql.NullInt64
 		ReadingTime time.Time
-		PowerKWh    float64
+		ConsumptionKWh float64
 	}
 
+	// FIXED: Now using consumption_kwh which is already at 15-minute intervals
 	rows, err := bs.db.Query(`
-		SELECT m.id, m.meter_type, m.user_id, mr.reading_time, mr.power_kwh
+		SELECT m.id, m.meter_type, m.user_id, mr.reading_time, mr.consumption_kwh
 		FROM meter_readings mr
 		JOIN meters m ON mr.meter_id = m.id
 		WHERE m.building_id = ?
@@ -480,7 +480,7 @@ func (bs *BillingService) calculateZEVConsumptionFixed(userID, buildingID int, s
 	solarReadingsFound := 0
 	for rows.Next() {
 		var r ReadingData
-		if err := rows.Scan(&r.MeterID, &r.MeterType, &r.UserID, &r.ReadingTime, &r.PowerKWh); err != nil {
+		if err := rows.Scan(&r.MeterID, &r.MeterType, &r.UserID, &r.ReadingTime, &r.ConsumptionKWh); err != nil {
 			continue
 		}
 		allReadings = append(allReadings, r)
@@ -496,40 +496,30 @@ func (bs *BillingService) calculateZEVConsumptionFixed(userID, buildingID int, s
 		return 0, 0, 0
 	}
 
+	// Group readings by time interval (15-minute intervals)
 	type IntervalData struct {
 		UserConsumption     float64
 		BuildingConsumption float64
 		SolarProduction     float64
 	}
 
-	prevReadings := make(map[int]float64)
 	intervalData := make(map[time.Time]*IntervalData)
 
 	for _, reading := range allReadings {
-		roundedTime := reading.ReadingTime.Truncate(time.Minute)
+		// Data is already at 15-minute intervals
+		roundedTime := reading.ReadingTime
 
 		if intervalData[roundedTime] == nil {
 			intervalData[roundedTime] = &IntervalData{}
 		}
 
-		var consumption float64
-		if prevVal, exists := prevReadings[reading.MeterID]; exists {
-			consumption = reading.PowerKWh - prevVal
-			if consumption < 0 {
-				consumption = 0
-			}
-		} else {
-			consumption = 0
-		}
-		prevReadings[reading.MeterID] = reading.PowerKWh
-
 		if reading.MeterType == "apartment_meter" {
 			if reading.UserID.Valid && int(reading.UserID.Int64) == userID {
-				intervalData[roundedTime].UserConsumption += consumption
+				intervalData[roundedTime].UserConsumption += reading.ConsumptionKWh
 			}
-			intervalData[roundedTime].BuildingConsumption += consumption
+			intervalData[roundedTime].BuildingConsumption += reading.ConsumptionKWh
 		} else if reading.MeterType == "solar_meter" {
-			intervalData[roundedTime].SolarProduction += consumption
+			intervalData[roundedTime].SolarProduction += reading.ConsumptionKWh
 		}
 	}
 
@@ -595,7 +585,7 @@ func (bs *BillingService) calculateZEVConsumptionFixed(userID, buildingID int, s
 	if intervalCount == 0 {
 		log.Printf("    [ZEV] WARNING: No valid intervals processed")
 	} else {
-		log.Printf("    [ZEV] Processed %d intervals", intervalCount)
+		log.Printf("    [ZEV] Processed %d intervals (15-minute fixed intervals)", intervalCount)
 		if totalConsumption > 0 {
 			log.Printf("    [ZEV] RESULT - Total: %.2f kWh, Solar: %.2f kWh (%.1f%%), Grid: %.2f kWh (%.1f%%)", 
 				totalConsumption, totalSolar, (totalSolar/totalConsumption)*100, totalNormal, (totalNormal/totalConsumption)*100)
@@ -605,7 +595,8 @@ func (bs *BillingService) calculateZEVConsumptionFixed(userID, buildingID int, s
 	return totalNormal, totalSolar, totalConsumption
 }
 
-func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfidCards string, start, end time.Time) (normal, priority float64, firstSession, lastSession time.Time) {
+// FIXED: Charging calculation now uses data at fixed 15-minute intervals
+func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards string, start, end time.Time) (normal, priority float64, firstSession, lastSession time.Time) {
 	log.Printf("  [CHARGING] ========================================")
 	log.Printf("  [CHARGING] Starting calculation")
 	log.Printf("  [CHARGING] Building ID: %d", buildingID)
@@ -677,7 +668,6 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 			continue
 		}
 
-		// FIXED: Use the helper function for consistent string extraction with proper defaults
 		config := ChargerConfig{
 			ChargerID:        chargerID,
 			ChargerName:      chargerName,
@@ -775,7 +765,7 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 		})
 	}
 
-	log.Printf("  [CHARGING] Found %d total sessions across %d chargers", totalSessionsFound, len(chargerSessions))
+	log.Printf("  [CHARGING] Found %d total sessions across %d chargers (at 15-min intervals)", totalSessionsFound, len(chargerSessions))
 
 	if totalSessionsFound == 0 {
 		log.Printf("  [CHARGING] ERROR: No sessions found for RFID cards %v in period", cleanedRfids)
@@ -807,36 +797,8 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 		log.Printf("  [CHARGING] Processing charger %d (%s) with %d sessions", 
 			chargerID, config.ChargerName, len(sessions))
 
-		baselineQuery := fmt.Sprintf(`
-			SELECT power_kwh, session_time
-			FROM charger_sessions
-			WHERE charger_id = ?
-			AND user_id IN (%s)
-			AND session_time < ?
-			ORDER BY session_time DESC
-			LIMIT 1
-		`, inClause)
-		
-		baselineArgs := []interface{}{chargerID}
-		for _, rfid := range cleanedRfids {
-			baselineArgs = append(baselineArgs, rfid)
-		}
-		baselineArgs = append(baselineArgs, start)
-		
-		var baselinePower float64
-		var baselineTime time.Time
-		err := bs.db.QueryRow(baselineQuery, baselineArgs...).Scan(&baselinePower, &baselineTime)
-		
 		var previousPower float64
 		var hasPreviousPower bool
-		
-		if err == nil {
-			previousPower = baselinePower
-			hasPreviousPower = true
-			log.Printf("  [CHARGING] Found baseline: %.2f kWh at %s", baselinePower, baselineTime.Format("2006-01-02 15:04"))
-		} else {
-			log.Printf("  [CHARGING] No baseline found (using first session as baseline): %v", err)
-		}
 
 		chargerBillable := 0
 		chargerSkipped := 0
@@ -846,7 +808,6 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 		for sessionIdx, session := range sessions {
 			sessionNum := sessionIdx + 1
 			
-			// FIXED: Use exact string comparison with configured values
 			isBillable := true
 			if session.State == config.StateIdle {
 				isBillable = false
@@ -859,8 +820,8 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 					log.Printf("  [CHARGING]     [%d] %s: %.2f kWh, mode=%s, state=%s → BILLABLE", 
 						sessionNum, session.SessionTime.Format("15:04"), session.PowerKwh, session.Mode, session.State)
 				} else {
-					log.Printf("  [CHARGING]     [%d] %s: %.2f kWh, mode=%s, state=%s → SKIP (idle, config=%s)", 
-						sessionNum, session.SessionTime.Format("15:04"), session.PowerKwh, session.Mode, session.State, config.StateIdle)
+					log.Printf("  [CHARGING]     [%d] %s: %.2f kWh, mode=%s, state=%s → SKIP (idle)", 
+						sessionNum, session.SessionTime.Format("15:04"), session.PowerKwh, session.Mode, session.State)
 				}
 			}
 			
@@ -889,7 +850,7 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 			
 			if consumption < 0 {
 				if shouldLog {
-					log.Printf("  [CHARGING]     [%d] NEGATIVE consumption %.2f kWh - possible meter reset, resetting baseline", 
+					log.Printf("  [CHARGING]     [%d] NEGATIVE consumption %.2f kWh - meter reset, resetting baseline", 
 						sessionNum, consumption)
 				}
 				previousPower = session.PowerKwh
@@ -899,27 +860,26 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 			if consumption > 0 {
 				chargerBillable++
 				
-				// FIXED: Use exact string comparison with configured values
 				isNormal := (session.Mode == config.ModeNormal)
 				isPriority := (session.Mode == config.ModePriority)
 				
 				if isNormal {
 					chargerNormal += consumption
 					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh NORMAL (%.2f → %.2f), mode=%s matched config=%s", 
-							sessionNum, consumption, previousPower, session.PowerKwh, session.Mode, config.ModeNormal)
+						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh NORMAL (%.2f → %.2f)", 
+							sessionNum, consumption, previousPower, session.PowerKwh)
 					}
 				} else if isPriority {
 					chargerPriority += consumption
 					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh PRIORITY (%.2f → %.2f), mode=%s matched config=%s", 
-							sessionNum, consumption, previousPower, session.PowerKwh, session.Mode, config.ModePriority)
+						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh PRIORITY (%.2f → %.2f)", 
+							sessionNum, consumption, previousPower, session.PowerKwh)
 					}
 				} else {
 					chargerNormal += consumption
 					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh UNKNOWN mode '%s' → NORMAL (%.2f → %.2f), expected normal=%s or priority=%s", 
-							sessionNum, consumption, session.Mode, previousPower, session.PowerKwh, config.ModeNormal, config.ModePriority)
+						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh UNKNOWN mode '%s' → NORMAL", 
+							sessionNum, consumption, session.Mode)
 					}
 				}
 			} else if shouldLog {
@@ -941,7 +901,7 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 
 	log.Printf("  [CHARGING] ========================================")
 	log.Printf("  [CHARGING] FINAL RESULTS:")
-	log.Printf("  [CHARGING] Total sessions found: %d", totalSessionsFound)
+	log.Printf("  [CHARGING] Total sessions found: %d (at 15-min intervals)", totalSessionsFound)
 	log.Printf("  [CHARGING] Billable sessions: %d", totalBillableSessions)
 	log.Printf("  [CHARGING] Skipped sessions: %d", totalSkippedSessions)
 	log.Printf("  [CHARGING] Normal charging: %.2f kWh", normalTotal)

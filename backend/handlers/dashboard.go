@@ -21,6 +21,26 @@ func NewDashboardHandler(db *sql.DB) *DashboardHandler {
 	return &DashboardHandler{db: db}
 }
 
+// FIXED: Helper function to round time to nearest 15-minute interval
+func roundTo15Min(t time.Time) time.Time {
+	minutes := t.Minute()
+	var roundedMinutes int
+	
+	if minutes < 8 {
+		roundedMinutes = 0
+	} else if minutes < 23 {
+		roundedMinutes = 15
+	} else if minutes < 38 {
+		roundedMinutes = 30
+	} else if minutes < 53 {
+		roundedMinutes = 45
+	} else {
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour()+1, 0, 0, 0, t.Location())
+	}
+	
+	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), roundedMinutes, 0, 0, t.Location())
+}
+
 func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -300,68 +320,7 @@ func (h *DashboardHandler) GetConsumption(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(consumption)
 }
 
-// FIXED: Smart detection of instantaneous vs cumulative charger data
-func detectChargerDataType(sessions []float64) string {
-	if len(sessions) < 2 {
-		return "cumulative" // Default to cumulative for safety
-	}
-
-	// Analyze the pattern of values
-	increasing := 0
-	decreasing := 0
-	identical := 0
-	
-	// Check the range and pattern
-	minVal := sessions[0]
-	maxVal := sessions[0]
-	
-	for i := 1; i < len(sessions); i++ {
-		diff := sessions[i] - sessions[i-1]
-		
-		if sessions[i] < minVal {
-			minVal = sessions[i]
-		}
-		if sessions[i] > maxVal {
-			maxVal = sessions[i]
-		}
-		
-		if diff > 0.0001 {
-			increasing++
-		} else if diff < -0.0001 {
-			decreasing++
-		} else {
-			identical++
-		}
-	}
-
-	valueRange := maxVal - minVal
-	
-	// Key insight: If values are large (>100) and always increasing, it's cumulative
-	// Instantaneous power readings would fluctuate and be in single/double digits (kW)
-	if minVal > 100 {
-		// Values over 100 are almost certainly cumulative kWh totals
-		return "cumulative"
-	}
-	
-	// If values are consistently increasing (even slowly), it's cumulative
-	if increasing > (len(sessions) * 3 / 4) {
-		return "cumulative"
-	}
-	
-	// If most values are identical, could be idle charger - treat as cumulative
-	if identical > (len(sessions) / 2) {
-		return "cumulative"
-	}
-	
-	// If values fluctuate up and down, likely instantaneous
-	if increasing > 0 && decreasing > 0 && valueRange < 50 {
-		return "instantaneous"
-	}
-
-	// Default to cumulative - safer assumption
-	return "cumulative"
-}
-
+// FIXED: GetConsumptionByBuilding now works with 15-minute intervals
 func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -453,7 +412,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			Meters:       []MeterData{},
 		}
 
-		// Process meters (apartment_meter and solar_meter)
+		// Process meters with fixed 15-minute intervals
 		log.Printf("  Querying meters for building %d...", bi.id)
 		meterRows, err := h.db.QueryContext(ctx, `
 			SELECT m.id, m.name, m.meter_type, m.user_id
@@ -506,37 +465,10 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				}
 			}
 
-			type readingData struct {
-				timestamp      time.Time
-				cumulativeKwh  float64
-			}
-
-			// Get baseline reading (last reading before period)
-			var baselineReading *readingData
-			var baselineTimestamp time.Time
-			var baselinePowerKwh float64
-			
-			err = h.db.QueryRowContext(ctx, `
-				SELECT reading_time, power_kwh
-				FROM meter_readings
-				WHERE meter_id = ? AND reading_time < ?
-				ORDER BY reading_time DESC
-				LIMIT 1
-			`, mi.id, startTime).Scan(&baselineTimestamp, &baselinePowerKwh)
-			
-			if err == nil {
-				baselineReading = &readingData{
-					timestamp:      baselineTimestamp,
-					cumulativeKwh:  baselinePowerKwh,
-				}
-				log.Printf("    Found baseline reading for meter %d at %v: %.2f kWh", 
-					mi.id, baselineTimestamp, baselinePowerKwh)
-			}
-			
-			// Get all readings within period
+			// FIXED: Get data at 15-minute intervals and convert consumption to power
 			var dataRows *sql.Rows
 			dataRows, err = h.db.QueryContext(ctx, `
-				SELECT reading_time, power_kwh
+				SELECT reading_time, power_kwh, consumption_kwh
 				FROM meter_readings
 				WHERE meter_id = ? 
 				AND reading_time >= ? 
@@ -558,56 +490,36 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				continue
 			}
 
-			previousReading := baselineReading
+			var lastTime time.Time
 			
 			for dataRows.Next() {
 				var timestamp time.Time
-				var cumulativeKwh float64
-				if err := dataRows.Scan(&timestamp, &cumulativeKwh); err != nil {
+				var powerKwh, consumptionKwh float64
+				if err := dataRows.Scan(&timestamp, &powerKwh, &consumptionKwh); err != nil {
 					continue
 				}
 
-				currentReading := &readingData{
-					timestamp:      timestamp,
-					cumulativeKwh:  cumulativeKwh,
-				}
-
-				// Calculate power from energy difference
-				if previousReading != nil {
-					consumptionKwh := currentReading.cumulativeKwh - previousReading.cumulativeKwh
-					
-					if consumptionKwh < 0 {
-						consumptionKwh = 0
-						log.Printf("    WARNING: Negative consumption detected for meter %d at %v (possible meter reset)", 
-							mi.id, timestamp)
-					}
-					
-					// Calculate actual time difference in hours
-					timeDiffHours := currentReading.timestamp.Sub(previousReading.timestamp).Hours()
-					if timeDiffHours <= 0 {
-						timeDiffHours = 0.25 // Default to 15 minutes if times are equal
-					}
-					
-					// Convert consumption to power in Watts: Power (W) = Energy (kWh) / Time (h) * 1000
-					powerW := (consumptionKwh / timeDiffHours) * 1000
-					
-					meterData.Data = append(meterData.Data, models.ConsumptionData{
-						Timestamp: currentReading.timestamp,
-						Power:     powerW,
-						Source:    mi.meterType,
-					})
-				}
-
-				previousReading = currentReading
+				// Convert consumption (kWh over 15 min) to power (W)
+				// Power (W) = Energy (kWh) / Time (h) * 1000
+				// Time = 15 min = 0.25 h
+				powerW := (consumptionKwh / 0.25) * 1000
+				
+				meterData.Data = append(meterData.Data, models.ConsumptionData{
+					Timestamp: timestamp,
+					Power:     powerW,
+					Source:    mi.meterType,
+				})
+				
+				lastTime = timestamp
 			}
 			dataRows.Close()
 
-			log.Printf("    Meter ID: %d has %d valid data points", mi.id, len(meterData.Data))
+			log.Printf("    Meter ID: %d has %d data points at 15-min intervals", mi.id, len(meterData.Data))
 
 			building.Meters = append(building.Meters, meterData)
 		}
 
-		// FIXED: Process chargers with smart detection of data type
+		// Process chargers with fixed 15-minute intervals
 		log.Printf("  Querying chargers for building %d...", bi.id)
 		chargerRows, err := h.db.QueryContext(ctx, `
 			SELECT c.id, c.name
@@ -641,7 +553,6 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			for _, ci := range chargerInfos {
 				log.Printf("    Processing charger ID: %d, Name: %s", ci.id, ci.name)
 
-				// Get all distinct users who have sessions for this charger in the period
 				var userRows *sql.Rows
 				userRows, err = h.db.QueryContext(ctx, `
 					SELECT DISTINCT user_id
@@ -676,7 +587,6 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				for _, ui := range userInfos {
 					log.Printf("      Processing user: %s", ui.userID)
 
-					// Get user name
 					userName := fmt.Sprintf("User %s", ui.userID)
 					err = h.db.QueryRowContext(ctx, `
 						SELECT first_name || ' ' || last_name 
@@ -688,41 +598,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						log.Printf("      Error getting user name for user %s: %v", ui.userID, err)
 					}
 
-					type sessionReading struct {
-						sessionTime time.Time
-						powerKwh    float64
-						state       string
-					}
-
-					// Get baseline reading for this user (last session before period)
-					var baselineReading *sessionReading
-					var baselineTime time.Time
-					var baselinePowerKwh float64
-					var baselineState string
-					
-					err = h.db.QueryRowContext(ctx, `
-						SELECT session_time, power_kwh, state
-						FROM charger_sessions
-						WHERE charger_id = ? 
-						AND user_id = ?
-						AND session_time < ?
-						ORDER BY session_time DESC
-						LIMIT 1
-					`, ci.id, ui.userID, startTime).Scan(&baselineTime, &baselinePowerKwh, &baselineState)
-					
-					if err == nil {
-						baselineReading = &sessionReading{
-							sessionTime: baselineTime,
-							powerKwh:    baselinePowerKwh,
-							state:       baselineState,
-						}
-						log.Printf("      Found baseline for charger %d, user %s at %v: %.4f kWh, state=%s", 
-							ci.id, ui.userID, baselineTime, baselinePowerKwh, baselineState)
-					} else {
-						log.Printf("      No baseline found for charger %d, user %s", ci.id, ui.userID)
-					}
-
-					// Get all sessions for this user in the period
+					// FIXED: Get charger data at 15-minute intervals
 					var sessionRows *sql.Rows
 					sessionRows, err = h.db.QueryContext(ctx, `
 						SELECT session_time, power_kwh, state
@@ -739,162 +615,59 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						continue
 					}
 
-					sessions := []sessionReading{}
-					sessionValues := []float64{}
+					consumptionData := []models.ConsumptionData{}
+					var previousPower float64
+					var hasPrevious bool
+					
 					for sessionRows.Next() {
-						var sr sessionReading
-						if err := sessionRows.Scan(&sr.sessionTime, &sr.powerKwh, &sr.state); err != nil {
+						var timestamp time.Time
+						var powerKwh float64
+						var state string
+						
+						if err := sessionRows.Scan(&timestamp, &powerKwh, &state); err != nil {
 							continue
 						}
-						sessions = append(sessions, sr)
-						sessionValues = append(sessionValues, sr.powerKwh)
-					}
-					sessionRows.Close()
 
-					log.Printf("      Found %d sessions for charger %d, user %s", len(sessions), ci.id, ui.userID)
-
-					if len(sessions) == 0 {
-						log.Printf("      No sessions found, skipping user %s", ui.userID)
-						continue
-					}
-
-					// FIXED: Detect if charger data is instantaneous or cumulative
-					dataType := detectChargerDataType(sessionValues)
-					log.Printf("      🔍 Detected charger data type: %s (based on %d readings)", dataType, len(sessionValues))
-					
-					// Log sample values for debugging
-					if len(sessionValues) >= 3 {
-						log.Printf("      Sample values: %.4f, %.4f, %.4f kWh (min=%.4f, max=%.4f)", 
-							sessionValues[0], sessionValues[1], sessionValues[len(sessionValues)-1],
-							findMin(sessionValues), findMax(sessionValues))
-					}
-
-					consumptionData := []models.ConsumptionData{}
-					previousReading := baselineReading
-
-					// Log the starting point
-					if previousReading != nil {
-						log.Printf("      Starting with baseline: time=%v, energy=%.6f kWh", 
-							previousReading.sessionTime, previousReading.powerKwh)
-					} else {
-						log.Printf("      No baseline found, will use first reading as baseline")
-					}
-
-					for idx, currentReading := range sessions {
-						var powerW float64
-						
-						if dataType == "instantaneous" {
-							// FIXED: Treat as instantaneous power reading in kW
-							// Convert directly to Watts
-							powerW = currentReading.powerKwh * 1000
-							log.Printf("      ⚡ Session %d: INSTANTANEOUS power=%.2f kW → %.0f W (time=%v)", 
-								idx, currentReading.powerKwh, powerW, currentReading.sessionTime)
-							
-						} else {
-							// Treat as cumulative energy reading (default and most common)
-							if previousReading != nil {
-								consumptionKwh := currentReading.powerKwh - previousReading.powerKwh
-								
-								// Log the raw values for debugging
-								log.Printf("      📊 Session %d: current=%.6f kWh, previous=%.6f kWh, diff=%.6f kWh", 
-									idx, currentReading.powerKwh, previousReading.powerKwh, consumptionKwh)
-								
-								// Handle meter reset (negative consumption)
-								if consumptionKwh < 0 {
-									log.Printf("      ⚠️  Session %d: Negative consumption (%.6f kWh) - meter may have reset", 
-										idx, consumptionKwh)
-									// FIXED: Make a copy, not a pointer
-									previousReading = &sessionReading{
-										sessionTime: currentReading.sessionTime,
-										powerKwh:    currentReading.powerKwh,
-										state:       currentReading.state,
-									}
-									continue
-								}
-								
-								// Calculate actual time difference in hours
-								timeDiffHours := currentReading.sessionTime.Sub(previousReading.sessionTime).Hours()
-								if timeDiffHours <= 0 {
-									timeDiffHours = 0.25 // Default to 15 minutes
-									log.Printf("      ⚠️  Session %d: Invalid time diff, using default 0.25h", idx)
-								}
-								
-								// IMPORTANT: Accept ALL consumption >= 0, even if very small or zero
-								// Zero consumption means charger is idle, which is valid data
-								if consumptionKwh == 0 {
-									log.Printf("      💤 Session %d: Zero consumption (charger idle), adding 0W point", idx)
-								}
-								
-								// Convert consumption to power in Watts: Power (W) = Energy (kWh) / Time (h) * 1000
-								powerW = (consumptionKwh / timeDiffHours) * 1000
-								
-								// Cap unrealistic power values
-								if powerW > 50000 {
-									log.Printf("      ⚠️  Session %d: Power too high (%.0f W), capping at 50kW", idx, powerW)
-									powerW = 50000
-								}
-								
-								// Log the final calculated power
-								if powerW > 0 {
-									log.Printf("      ✅ Session %d: energy=%.6f kWh, time=%.2f h → POWER=%.0f W", 
-										idx, consumptionKwh, timeDiffHours, powerW)
-								} else {
-									log.Printf("      ⭕ Session %d: Zero power (idle)", idx)
-								}
-								
-							} else {
-								// First point - use as baseline with zero power
-								log.Printf("      🔵 Session %d: First reading, using as baseline (%.6f kWh)", idx, currentReading.powerKwh)
-								consumptionData = append(consumptionData, models.ConsumptionData{
-									Timestamp: currentReading.sessionTime,
-									Power:     0,
-									Source:    "charger",
-								})
-								// FIXED: Make a copy, not a pointer
-								previousReading = &sessionReading{
-									sessionTime: currentReading.sessionTime,
-									powerKwh:    currentReading.powerKwh,
-									state:       currentReading.state,
-								}
-								continue
-							}
+						if !hasPrevious {
+							previousPower = powerKwh
+							hasPrevious = true
+							// First point with zero power
+							consumptionData = append(consumptionData, models.ConsumptionData{
+								Timestamp: timestamp,
+								Power:     0,
+								Source:    "charger",
+							})
+							continue
 						}
+
+						// Calculate consumption
+						consumptionKwh := powerKwh - previousPower
 						
-						// Add the data point
+						if consumptionKwh < 0 {
+							// Meter reset
+							log.Printf("      Meter reset detected at %s", timestamp.Format("15:04"))
+							previousPower = powerKwh
+							continue
+						}
+
+						// Convert consumption (kWh over 15 min) to power (W)
+						powerW := (consumptionKwh / 0.25) * 1000
+						
+						// Cap unrealistic values
+						if powerW > 50000 {
+							powerW = 50000
+						}
+
 						consumptionData = append(consumptionData, models.ConsumptionData{
-							Timestamp: currentReading.sessionTime,
+							Timestamp: timestamp,
 							Power:     powerW,
 							Source:    "charger",
 						})
-						
-						// FIXED: Make a copy, not a pointer to the loop variable
-						previousReading = &sessionReading{
-							sessionTime: currentReading.sessionTime,
-							powerKwh:    currentReading.powerKwh,
-							state:       currentReading.state,
-						}
-					}
 
-					// Log summary of what we collected
-					nonZeroCount := 0
-					totalPower := 0.0
-					for _, d := range consumptionData {
-						if d.Power > 0 {
-							nonZeroCount++
-							totalPower += d.Power
-						}
+						previousPower = powerKwh
 					}
-					
-					if nonZeroCount > 0 {
-						avgPower := totalPower / float64(nonZeroCount)
-						log.Printf("      📈 Summary: %d total points, %d non-zero (avg %.0f W)", 
-							len(consumptionData), nonZeroCount, avgPower)
-					} else {
-						log.Printf("      ⚠️  Summary: %d total points, but ALL are zero! Charger may be idle.", 
-							len(consumptionData))
-					}
+					sessionRows.Close()
 
-					// Always add charger data if we have ANY data points
 					if len(consumptionData) > 0 {
 						chargerData := MeterData{
 							MeterID:   ci.id,
@@ -904,11 +677,8 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 							Data:      consumptionData,
 						}
 
-						log.Printf("      ✅ Charger ID: %d has %d data points for user %s (avg power: %.0f W)", 
-							ci.id, len(consumptionData), userName, calculateAvgPower(consumptionData))
+						log.Printf("      ✅ Charger ID: %d has %d data points for user %s", ci.id, len(consumptionData), userName)
 						building.Meters = append(building.Meters, chargerData)
-					} else {
-						log.Printf("      ⚠️  Charger ID: %d has no valid data points for user %s", ci.id, userName)
 					}
 				}
 			}
@@ -924,46 +694,6 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 	if err := json.NewEncoder(w).Encode(buildings); err != nil {
 		log.Printf("Error encoding JSON response: %v", err)
 	}
-}
-
-// Helper function to calculate average power
-func calculateAvgPower(data []models.ConsumptionData) float64 {
-	if len(data) == 0 {
-		return 0
-	}
-	total := 0.0
-	for _, d := range data {
-		total += d.Power
-	}
-	return total / float64(len(data))
-}
-
-// Helper function to find minimum value
-func findMin(values []float64) float64 {
-	if len(values) == 0 {
-		return 0
-	}
-	min := values[0]
-	for _, v := range values {
-		if v < min {
-			min = v
-		}
-	}
-	return min
-}
-
-// Helper function to find maximum value
-func findMax(values []float64) float64 {
-	if len(values) == 0 {
-		return 0
-	}
-	max := values[0]
-	for _, v := range values {
-		if v > max {
-			max = v
-		}
-	}
-	return max
 }
 
 func (h *DashboardHandler) GetLogs(w http.ResponseWriter, r *http.Request) {

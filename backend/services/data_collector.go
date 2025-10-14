@@ -56,6 +56,79 @@ type UDPChargerConfig struct {
 	ModeKey   string
 }
 
+// FIXED: Helper function to round time to nearest 15-minute interval
+func roundToQuarterHour(t time.Time) time.Time {
+	minutes := t.Minute()
+	var roundedMinutes int
+	
+	if minutes < 8 {
+		roundedMinutes = 0
+	} else if minutes < 23 {
+		roundedMinutes = 15
+	} else if minutes < 38 {
+		roundedMinutes = 30
+	} else if minutes < 53 {
+		roundedMinutes = 45
+	} else {
+		// Round up to next hour
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour()+1, 0, 0, 0, t.Location())
+	}
+	
+	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), roundedMinutes, 0, 0, t.Location())
+}
+
+// FIXED: Get next 15-minute interval
+func getNextQuarterHour(t time.Time) time.Time {
+	minutes := t.Minute()
+	
+	if minutes < 15 {
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 15, 0, 0, t.Location())
+	} else if minutes < 30 {
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 30, 0, 0, t.Location())
+	} else if minutes < 45 {
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 45, 0, 0, t.Location())
+	} else {
+		// Next hour at :00
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour()+1, 0, 0, 0, t.Location())
+	}
+}
+
+// FIXED: Linear interpolation between two readings
+func interpolateReadings(startTime time.Time, startValue float64, endTime time.Time, endValue float64) []struct{time time.Time; value float64} {
+	result := []struct{time time.Time; value float64}{}
+	
+	if endTime.Before(startTime) || endTime.Equal(startTime) {
+		return result
+	}
+	
+	// Get first quarter hour after start
+	currentTime := getNextQuarterHour(startTime)
+	
+	// Calculate total time and value difference
+	totalDuration := endTime.Sub(startTime).Seconds()
+	totalValueChange := endValue - startValue
+	
+	// Generate interpolated points at 15-minute intervals
+	for currentTime.Before(endTime) {
+		// Calculate elapsed time from start
+		elapsed := currentTime.Sub(startTime).Seconds()
+		
+		// Linear interpolation
+		ratio := elapsed / totalDuration
+		interpolatedValue := startValue + (totalValueChange * ratio)
+		
+		result = append(result, struct{time time.Time; value float64}{
+			time: currentTime,
+			value: interpolatedValue,
+		})
+		
+		// Move to next 15-minute interval
+		currentTime = currentTime.Add(15 * time.Minute)
+	}
+	
+	return result
+}
+
 func stripControlCharacters(str string) string {
 	result := ""
 	for _, char := range str {
@@ -101,38 +174,42 @@ func (dc *DataCollector) RestartUDPListeners() {
 func (dc *DataCollector) Start() {
 	log.Println("===================================")
 	log.Println("ZEV Data Collector Starting")
-	log.Println("Collection Interval: 15 minutes")
+	log.Println("Collection Interval: 15 minutes (fixed at :00, :15, :30, :45)")
 	log.Println("===================================")
 
 	dc.initializeUDPListeners()
 	dc.logSystemStatus()
 	
-	log.Println(">>> WAITING 3 MINUTES BEFORE INITIAL DATA COLLECTION <<<")
-	log.Printf(">>> This allows meters to generate new readings after system restart <<<")
-	log.Printf(">>> First collection will occur at %s <<<", 
-		time.Now().Add(3*time.Minute).Format("15:04:05"))
+	// Calculate time until next quarter hour
+	now := time.Now()
+	nextCollection := getNextQuarterHour(now)
+	waitDuration := nextCollection.Sub(now)
 	
-	time.Sleep(3 * time.Minute)
+	log.Printf(">>> WAITING UNTIL NEXT 15-MINUTE INTERVAL: %s <<<", nextCollection.Format("15:04:05"))
+	log.Printf(">>> Time to wait: %.0f seconds <<<", waitDuration.Seconds())
 	
-	log.Println(">>> INITIAL DATA COLLECTION ON STARTUP <<<")
+	time.Sleep(waitDuration)
+	
+	log.Println(">>> INITIAL DATA COLLECTION <<<")
 	dc.collectAllData()
 	log.Println(">>> INITIAL DATA COLLECTION COMPLETED <<<")
 
 	go dc.cleanupStalePartialData()
 
+	// Create ticker for 15-minute intervals
 	ticker := time.NewTicker(15 * time.Minute)
 	defer ticker.Stop()
 
-	log.Printf(">>> Next data collection in 15 minutes (at %s) <<<", 
-		time.Now().Add(15*time.Minute).Format("15:04:05"))
+	nextRun := getNextQuarterHour(time.Now())
+	log.Printf(">>> Next data collection at %s <<<", nextRun.Format("15:04:05"))
 
 	for {
 		select {
 		case <-ticker.C:
-			log.Printf(">>> Ticker fired - starting scheduled collection <<<")
+			log.Printf(">>> 15-minute interval reached - starting collection <<<")
 			dc.collectAllData()
-			log.Printf(">>> Next data collection in 15 minutes (at %s) <<<", 
-				time.Now().Add(15*time.Minute).Format("15:04:05"))
+			nextRun = getNextQuarterHour(time.Now())
+			log.Printf(">>> Next data collection at %s <<<", nextRun.Format("15:04:05"))
 		case <-dc.restartChannel:
 			log.Println("Received restart signal")
 		}
@@ -179,12 +256,11 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 	dc.db.QueryRow(`SELECT COUNT(*) FROM admin_logs WHERE (action LIKE '%error%' 
 		OR action LIKE '%failed%') AND created_at > datetime('now', '-24 hours')`).Scan(&recentErrors)
 
-	nextCollection := 15 - int(time.Since(dc.lastCollection).Minutes())
-	if nextCollection < 0 {
-		nextCollection = 0
-	}
+	// Calculate time to next collection
+	now := time.Now()
+	nextCollection := getNextQuarterHour(now)
+	minutesToNext := int(nextCollection.Sub(now).Minutes())
 
-	// ENHANCED: Add detailed charger buffer status
 	dc.mu.Lock()
 	chargerBufferStatus := make(map[string]interface{})
 	for chargerID, data := range dc.udpChargerBuffers {
@@ -196,7 +272,6 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 		}
 	}
 	
-	// Add partial charger data status
 	partialStatus := make(map[string]interface{})
 	for chargerID, partial := range dc.partialChargerData {
 		status := map[string]interface{}{
@@ -223,8 +298,9 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 		"total_meters":            totalMeters,
 		"active_chargers":         activeChargers,
 		"total_chargers":          totalChargers,
-		"last_collection":         dc.lastCollection,
-		"next_collection_minutes": nextCollection,
+		"last_collection":         dc.lastCollection.Format("2006-01-02 15:04:05"),
+		"next_collection":         nextCollection.Format("2006-01-02 15:04:05"),
+		"next_collection_minutes": minutesToNext,
 		"udp_listeners":           dc.udpPorts,
 		"recent_errors":           recentErrors,
 		"charger_buffers":         chargerBufferStatus,
@@ -575,38 +651,74 @@ func (dc *DataCollector) collectAllData() {
 	dc.logToDatabase("Data Collection Completed", "All active devices polled")
 }
 
+// FIXED: Save UDP data with interpolation for missing intervals
 func (dc *DataCollector) saveBufferedUDPData() {
 	dc.mu.Lock()
 	defer dc.mu.Unlock()
 
+	currentTime := roundToQuarterHour(time.Now())
+	log.Printf("Saving buffered data at 15-minute interval: %s", currentTime.Format("15:04:05"))
+
 	metersWithData := make(map[int]bool)
 
-	// Save meter data
+	// Save meter data with interpolation
 	for meterID, reading := range dc.udpMeterBuffers {
 		if reading > 0 {
-			var prevReading float64
-			dc.db.QueryRow(`
-				SELECT power_kwh FROM meter_readings 
+			// Get last reading
+			var lastReading float64
+			var lastTime time.Time
+			err := dc.db.QueryRow(`
+				SELECT power_kwh, reading_time FROM meter_readings 
 				WHERE meter_id = ? 
 				ORDER BY reading_time DESC LIMIT 1
-			`, meterID).Scan(&prevReading)
+			`, meterID).Scan(&lastReading, &lastTime)
 
-			consumption := reading - prevReading
+			if err == nil {
+				// Interpolate missing intervals
+				interpolated := interpolateReadings(lastTime, lastReading, currentTime, reading)
+				
+				log.Printf("Meter ID %d: Interpolating %d missing intervals between %s (%.2f kWh) and %s (%.2f kWh)", 
+					meterID, len(interpolated), lastTime.Format("15:04"), lastReading, 
+					currentTime.Format("15:04"), reading)
+				
+				// Save interpolated points
+				for _, point := range interpolated {
+					consumption := point.value - lastReading
+					if consumption < 0 {
+						consumption = 0
+					}
+					
+					_, err := dc.db.Exec(`
+						INSERT INTO meter_readings (meter_id, reading_time, power_kwh, consumption_kwh)
+						VALUES (?, ?, ?, ?)
+					`, meterID, point.time, point.value, consumption)
+					
+					if err == nil {
+						log.Printf("  Interpolated: %s -> %.2f kWh (consumption: %.2f kWh)", 
+							point.time.Format("15:04"), point.value, consumption)
+					}
+					
+					lastReading = point.value
+				}
+			}
+
+			// Save current reading
+			consumption := reading - lastReading
 			if consumption < 0 {
 				consumption = reading
 			}
 
-			_, err := dc.db.Exec(`
+			_, err = dc.db.Exec(`
 				INSERT INTO meter_readings (meter_id, reading_time, power_kwh, consumption_kwh)
 				VALUES (?, ?, ?, ?)
-			`, meterID, time.Now(), reading, consumption)
+			`, meterID, currentTime, reading, consumption)
 
 			if err == nil {
 				dc.db.Exec(`
 					UPDATE meters 
 					SET last_reading = ?, last_reading_time = ?
 					WHERE id = ?
-				`, reading, time.Now(), meterID)
+				`, reading, currentTime, meterID)
 
 				log.Printf("SUCCESS: UDP meter data saved for meter ID %d: %.2f kWh (consumption: %.2f kWh)", 
 					meterID, reading, consumption)
@@ -619,31 +731,7 @@ func (dc *DataCollector) saveBufferedUDPData() {
 		}
 	}
 
-	// Maintain last reading for inactive meters
-	for meterID := range dc.udpMeterBuffers {
-		if !metersWithData[meterID] {
-			var lastReading float64
-			err := dc.db.QueryRow(`
-				SELECT power_kwh FROM meter_readings 
-				WHERE meter_id = ? 
-				ORDER BY reading_time DESC LIMIT 1
-			`, meterID).Scan(&lastReading)
-
-			if err == nil && lastReading > 0 {
-				_, insertErr := dc.db.Exec(`
-					INSERT INTO meter_readings (meter_id, reading_time, power_kwh, consumption_kwh)
-					VALUES (?, ?, ?, 0)
-				`, meterID, time.Now(), lastReading)
-
-				if insertErr == nil {
-					log.Printf("INFO: Maintained last reading (%.2f kWh) with zero consumption for inactive meter ID %d", 
-						lastReading, meterID)
-				}
-			}
-		}
-	}
-
-	// Save charger data with validation logging
+	// Save charger data with interpolation
 	log.Printf("Processing %d chargers in buffer", len(dc.udpChargerBuffers))
 	for chargerID, data := range dc.udpChargerBuffers {
 		// Validate all required fields are present
@@ -653,32 +741,48 @@ func (dc *DataCollector) saveBufferedUDPData() {
 			continue
 		}
 
-		// Always insert charger data - dashboard will handle type detection
-		_, err := dc.db.Exec(`
+		// Get last reading for this charger and user
+		var lastPower float64
+		var lastTime time.Time
+		err := dc.db.QueryRow(`
+			SELECT power_kwh, session_time FROM charger_sessions 
+			WHERE charger_id = ? AND user_id = ?
+			ORDER BY session_time DESC LIMIT 1
+		`, chargerID, data.UserID).Scan(&lastPower, &lastTime)
+
+		if err == nil {
+			// Interpolate missing intervals
+			interpolated := interpolateReadings(lastTime, lastPower, currentTime, data.Power)
+			
+			log.Printf("Charger ID %d (User %s): Interpolating %d missing intervals between %s (%.4f kWh) and %s (%.4f kWh)", 
+				chargerID, data.UserID, len(interpolated), lastTime.Format("15:04"), lastPower, 
+				currentTime.Format("15:04"), data.Power)
+			
+			// Save interpolated points
+			for _, point := range interpolated {
+				_, err := dc.db.Exec(`
+					INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
+					VALUES (?, ?, ?, ?, ?, ?)
+				`, chargerID, data.UserID, point.time, point.value, data.Mode, data.State)
+				
+				if err == nil {
+					log.Printf("  Interpolated: %s -> %.4f kWh", point.time.Format("15:04"), point.value)
+				}
+			}
+		}
+
+		// Save current reading
+		_, err = dc.db.Exec(`
 			INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
 			VALUES (?, ?, ?, ?, ?, ?)
-		`, chargerID, data.UserID, time.Now(), data.Power, data.Mode, data.State)
+		`, chargerID, data.UserID, currentTime, data.Power, data.Mode, data.State)
 
 		if err == nil {
 			log.Printf("✅ SUCCESS: Charger data saved - ID=%d, Power=%.4f kWh, User=%s, Mode=%s, State=%s, Time=%s", 
-				chargerID, data.Power, data.UserID, data.Mode, data.State, time.Now().Format("15:04:05"))
+				chargerID, data.Power, data.UserID, data.Mode, data.State, currentTime.Format("15:04:05"))
 			dc.logToDatabase("UDP Charger Data Saved", 
 				fmt.Sprintf("Charger ID: %d, Power: %.4f kWh, User: %s, Mode: %s, State: %s", 
 					chargerID, data.Power, data.UserID, data.Mode, data.State))
-			
-			// Verify the data was saved
-			var count int
-			dc.db.QueryRow(`
-				SELECT COUNT(*) FROM charger_sessions 
-				WHERE charger_id = ? AND user_id = ? 
-				AND session_time >= datetime('now', '-1 minute')
-			`, chargerID, data.UserID).Scan(&count)
-			
-			if count > 0 {
-				log.Printf("  ✓ Verified: %d recent session(s) in database for charger %d", count, chargerID)
-			} else {
-				log.Printf("  ⚠ WARNING: Could not verify saved session in database for charger %d", chargerID)
-			}
 		} else {
 			log.Printf("❌ ERROR: Failed to save charger data for charger ID %d: %v", chargerID, err)
 			dc.logToDatabase("Charger Save Error", fmt.Sprintf("Charger ID: %d, Error: %v", chargerID, err))
@@ -702,6 +806,7 @@ func (dc *DataCollector) collectMeterData() {
 
 	meterCount := 0
 	successCount := 0
+	currentTime := roundToQuarterHour(time.Now())
 
 	for rows.Next() {
 		var id int
@@ -734,22 +839,47 @@ func (dc *DataCollector) collectMeterData() {
 		}
 
 		if reading > 0 {
-			var prevReading float64
-			dc.db.QueryRow(`
-				SELECT power_kwh FROM meter_readings 
+			// Get last reading and interpolate
+			var lastReading float64
+			var lastTime time.Time
+			err := dc.db.QueryRow(`
+				SELECT power_kwh, reading_time FROM meter_readings 
 				WHERE meter_id = ? 
 				ORDER BY reading_time DESC LIMIT 1
-			`, id).Scan(&prevReading)
+			`, id).Scan(&lastReading, &lastTime)
 
-			consumption := reading - prevReading
+			if err == nil {
+				// Interpolate missing intervals
+				interpolated := interpolateReadings(lastTime, lastReading, currentTime, reading)
+				
+				log.Printf("Meter '%s': Interpolating %d missing intervals", name, len(interpolated))
+				
+				// Save interpolated points
+				for _, point := range interpolated {
+					consumption := point.value - lastReading
+					if consumption < 0 {
+						consumption = 0
+					}
+					
+					dc.db.Exec(`
+						INSERT INTO meter_readings (meter_id, reading_time, power_kwh, consumption_kwh)
+						VALUES (?, ?, ?, ?)
+					`, id, point.time, point.value, consumption)
+					
+					lastReading = point.value
+				}
+			}
+
+			// Save current reading
+			consumption := reading - lastReading
 			if consumption < 0 {
 				consumption = reading
 			}
 
-			_, err := dc.db.Exec(`
+			_, err = dc.db.Exec(`
 				INSERT INTO meter_readings (meter_id, reading_time, power_kwh, consumption_kwh)
 				VALUES (?, ?, ?, ?)
-			`, id, time.Now(), reading, consumption)
+			`, id, currentTime, reading, consumption)
 
 			if err != nil {
 				log.Printf("ERROR: Failed to save reading for meter '%s': %v", name, err)
@@ -759,7 +889,7 @@ func (dc *DataCollector) collectMeterData() {
 					UPDATE meters 
 					SET last_reading = ?, last_reading_time = ?
 					WHERE id = ?
-				`, reading, time.Now(), id)
+				`, reading, currentTime, id)
 
 				log.Printf("SUCCESS: Collected meter data: '%s' = %.2f kWh (consumption: %.2f kWh)", name, reading, consumption)
 				dc.logToDatabase("Meter Data Collected", fmt.Sprintf("%s: %.2f kWh, Consumption: %.2f kWh", name, reading, consumption))
@@ -785,6 +915,7 @@ func (dc *DataCollector) collectChargerData() {
 
 	chargerCount := 0
 	successCount := 0
+	currentTime := roundToQuarterHour(time.Now())
 
 	for rows.Next() {
 		var id int
@@ -813,10 +944,35 @@ func (dc *DataCollector) collectChargerData() {
 		}
 
 		if userID != "" && mode != "" && state != "" {
-			_, err := dc.db.Exec(`
+			// Get last reading and interpolate
+			var lastPower float64
+			var lastTime time.Time
+			err := dc.db.QueryRow(`
+				SELECT power_kwh, session_time FROM charger_sessions 
+				WHERE charger_id = ? AND user_id = ?
+				ORDER BY session_time DESC LIMIT 1
+			`, id, userID).Scan(&lastPower, &lastTime)
+
+			if err == nil {
+				// Interpolate missing intervals
+				interpolated := interpolateReadings(lastTime, lastPower, currentTime, power)
+				
+				log.Printf("Charger '%s': Interpolating %d missing intervals", name, len(interpolated))
+				
+				// Save interpolated points
+				for _, point := range interpolated {
+					dc.db.Exec(`
+						INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
+						VALUES (?, ?, ?, ?, ?, ?)
+					`, id, userID, point.time, point.value, mode, state)
+				}
+			}
+
+			// Save current reading
+			_, err = dc.db.Exec(`
 				INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
 				VALUES (?, ?, ?, ?, ?, ?)
-			`, id, userID, time.Now(), power, mode, state)
+			`, id, userID, currentTime, power, mode, state)
 
 			if err != nil {
 				log.Printf("ERROR: Failed to save charger session for '%s': %v", name, err)
