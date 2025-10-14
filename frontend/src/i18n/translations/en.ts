@@ -102,7 +102,7 @@ export const en: Translations = {
   'users.street': 'Street',
   'users.zip': 'ZIP',
   'users.city': 'City',
-  
+
   // NEW: User Types & Filtering
   'users.userType': 'User Type',
   'users.regular': 'Regular User (Tenant)',
@@ -118,6 +118,29 @@ export const en: Translations = {
   'users.noRegularUsers': 'No regular users found.',
   'users.adminDescription': 'Administration users create bills and manage multiple buildings',
   'users.regularDescription': 'Regular users are tenants living in buildings',
+
+  // Users - Instructions (add to existing users section)
+  'users.setupInstructions': 'Setup Instructions',
+  'users.instructions.title': 'Users & User Types Guide',
+  'users.instructions.whatIsRegularUser': 'What is a Regular User?',
+  'users.instructions.regularUserDescription': 'A regular user (tenant) is someone who lives in a building and has access to charging stations. They are assigned to a specific building and can charge their vehicle at any charger in that building using their RFID card.',
+  'users.instructions.whatIsAdminUser': 'What is an Administration User?',
+  'users.instructions.adminUserDescription': 'An administration user manages one or more buildings and is responsible for generating bills and managing tenants. They have access to billing information for their assigned buildings and can create invoices for regular users.',
+  'users.instructions.howToUse': 'How to Use',
+  'users.instructions.step1': 'Regular users must have a building assigned and an RFID card number',
+  'users.instructions.step2': 'Administration users need to select which buildings they manage',
+  'users.instructions.step3': 'Each regular user can have multiple RFID cards (comma-separated)',
+  'users.instructions.step4': 'Bank details are optional but required for generating invoices with QR bills',
+  'users.instructions.step5': 'Use filters to search users by building or search by name/email',
+  'users.instructions.rfidTitle': 'Important: RFID Card Numbers',
+  'users.instructions.rfidPoint1': 'Enter the number that Loxone sends (e.g., "15" or "42")',
+  'users.instructions.rfidPoint2': 'For multiple cards, use comma separation: "15,16,23"',
+  'users.instructions.rfidPoint3': 'This is NOT the charger ID - it\'s the card identification number',
+  'users.instructions.rfidPoint4': 'Users can charge at ANY charger in their assigned building',
+  'users.instructions.tips': 'Tips',
+  'users.instructions.tip1': 'Regular users are tenants who live in buildings and use chargers',
+  'users.instructions.tip2': 'Administration users manage buildings and create bills for tenants',
+  'users.instructions.tip3': 'Keep RFID card numbers accurate to ensure proper charging session tracking',
 
   // Buildings - existing keys remain the same...
   'buildings.title': 'Buildings',
@@ -146,7 +169,7 @@ export const en: Translations = {
   'buildings.searchPlaceholder': 'Search buildings, complexes, or addresses...',
   'buildings.setupInstructions': 'Setup Instructions',
   'buildings.noResults': 'No results found',
-  
+
   // Building Instructions
   'buildings.instructions.title': 'Buildings & Complexes Guide',
   'buildings.instructions.whatIsBuilding': 'What is a Building?',
@@ -207,7 +230,7 @@ export const en: Translations = {
   'meters.saveFailed': 'Failed to save meter',
   'meters.exportFailed': 'Failed to export data',
   'meters.metersCount': 'meters',
-  
+
   // Meter Instructions
   'meters.instructions.title': 'Meter Setup Instructions',
   'meters.instructions.udpTitle': 'UDP Connection (Shared Port - RECOMMENDED!)',
@@ -382,7 +405,7 @@ export const en: Translations = {
   'billing.qrNote': 'If banking details are provided, a Swiss QR bill will be generated on a second page',
   'billing.swissQR': 'Swiss QR Bill',
   'billing.reference': 'Reference',
-  
+
   // NEW: Billing Auto-fill
   'billing.autoFillFromAdmin': 'Auto-fill from Administration User',
   'billing.selectAdminUser': 'Select an administration user to auto-fill billing information',
