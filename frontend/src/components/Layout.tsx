@@ -24,9 +24,9 @@ export default function Layout({ onLogout }: LayoutProps) {
     { path: '/users', icon: Users, label: t('nav.users') },
     { path: '/meters', icon: Zap, label: t('nav.meters') },
     { path: '/chargers', icon: Car, label: t('nav.chargers') },
+    { path: '/pricing', icon: DollarSign, label: t('nav.pricing') },
     { path: '/billing', icon: FileText, label: t('nav.billing') },
     { path: '/auto-billing', icon: Calendar, label: t('nav.autoBilling') },
-    { path: '/pricing', icon: DollarSign, label: t('nav.pricing') },
     { path: '/logs', icon: Activity, label: t('nav.logs') },
     { path: '/settings', icon: Settings, label: t('nav.settings') },
   ];
