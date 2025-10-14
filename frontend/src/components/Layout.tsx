@@ -20,8 +20,8 @@ export default function Layout({ onLogout }: LayoutProps) {
 
   const navItems = [
     { path: '/', icon: LayoutDashboard, label: t('nav.dashboard') },
-    { path: '/users', icon: Users, label: t('nav.users') },
     { path: '/buildings', icon: Building, label: t('nav.buildings') },
+    { path: '/users', icon: Users, label: t('nav.users') },
     { path: '/meters', icon: Zap, label: t('nav.meters') },
     { path: '/chargers', icon: Car, label: t('nav.chargers') },
     { path: '/billing', icon: FileText, label: t('nav.billing') },

@@ -102,8 +102,6 @@ export const de: Translations = {
   'users.street': 'Strasse',
   'users.zip': 'PLZ',
   'users.city': 'Ort',
-
-  // NEW: User Types & Filtering
   'users.userType': 'Benutzertyp',
   'users.regular': 'Regulärer Benutzer (Mieter)',
   'users.administration': 'Verwaltungsbenutzer',
@@ -118,8 +116,16 @@ export const de: Translations = {
   'users.noRegularUsers': 'Keine regulären Benutzer gefunden.',
   'users.adminDescription': 'Verwaltungsbenutzer erstellen Rechnungen und verwalten mehrere Gebäude',
   'users.regularDescription': 'Reguläre Benutzer sind Mieter, die in Gebäuden wohnen',
-
-  // Users - Instructions (add to existing users section)
+  'users.user': 'Benutzer',
+  'users.users': 'Benutzer',
+  'users.searchBuildings': 'Gebäude suchen...',
+  'users.manages': 'Verwaltet',
+  'users.canChargeAnywhere': 'Benutzer kann an jeder Ladestation in diesem Gebäude laden',
+  'users.rfidCardIds': 'RFID-Karten-ID(s) *',
+  'users.rfidImportant': 'Wichtig',
+  'users.rfidEnterNumber': 'Geben Sie die RFID-Kartennummer(n) ein, die Loxone sendet (z.B. "15" oder "15,16" für mehrere Karten).',
+  'users.rfidNotChargerId': 'Dies ist NICHT die Ladestations-ID - es ist die Identifikationsnummer der physischen RFID-Karte/Tag.',
+  'users.complex': 'Komplex',
   'users.setupInstructions': 'Setup-Anleitung',
   'users.instructions.title': 'Benutzer & Benutzertypen Anleitung',
   'users.instructions.whatIsRegularUser': 'Was ist ein regulärer Benutzer?',
@@ -169,8 +175,6 @@ export const de: Translations = {
   'buildings.searchPlaceholder': 'Gebäude, Komplexe oder Adressen suchen...',
   'buildings.setupInstructions': 'Setup-Anleitung',
   'buildings.noResults': 'Keine Ergebnisse gefunden',
-
-  // Building Instructions
   'buildings.instructions.title': 'Gebäude & Komplexe Anleitung',
   'buildings.instructions.whatIsBuilding': 'Was ist ein Gebäude?',
   'buildings.instructions.buildingDescription': 'Ein Gebäude repräsentiert eine einzelne physische Immobilie oder Struktur, in der Sie Zähler und Ladestationen installieren. Jedes Gebäude hat seine eigene Adresse, Zähler und Energieüberwachungsgeräte.',
@@ -230,8 +234,6 @@ export const de: Translations = {
   'meters.saveFailed': 'Speichern des Zählers fehlgeschlagen',
   'meters.exportFailed': 'Export der Daten fehlgeschlagen',
   'meters.metersCount': 'Zähler',
-
-  // Meter Instructions
   'meters.instructions.title': 'Zähler Setup-Anleitung',
   'meters.instructions.udpTitle': 'UDP-Verbindung (Geteilter Port - EMPFOHLEN!)',
   'meters.instructions.udpNew': 'NEU: Automatisch generierte UUID_power_kwh-Schlüssel für jeden Zähler!',
@@ -405,12 +407,27 @@ export const de: Translations = {
   'billing.qrNote': 'Bei Angabe der Bankverbindung wird ein Schweizer QR-Einzahlungsschein auf einer zweiten Seite generiert',
   'billing.swissQR': 'Schweizer QR-Rechnung',
   'billing.reference': 'Referenz',
-
-  // NEW: Billing Auto-fill
   'billing.autoFillFromAdmin': 'Automatisch ausfüllen von Verwaltungsbenutzer',
   'billing.selectAdminUser': 'Wählen Sie einen Verwaltungsbenutzer aus, um Rechnungsinformationen automatisch auszufüllen',
   'billing.adminUserFor': 'Verwaltungsbenutzer für ausgewählte Gebäude',
   'billing.noAdminUserFound': 'Kein Verwaltungsbenutzer für die ausgewählten Gebäude gefunden',
+  'billing.searchBuildings': 'Gebäude suchen...',
+  'billing.allBuildings': 'Alle Gebäude',
+  'billing.viewFirstWarning': 'Rechnungsdaten nicht geladen. Bitte sehen Sie sich zuerst die Rechnung an und laden Sie sie dann herunter.',
+  'billing.allowPopups': 'Bitte erlauben Sie Pop-ups, um Rechnungen herunterzuladen',
+  'billing.loadFailed': 'Laden der Rechnungsdetails fehlgeschlagen',
+  'billing.pdfGenerated': 'Erstellt am',
+  'billing.pdfFooter': 'ZEV Abrechnungssystem - Schweizer Energiegemeinschaftsstandard',
+  'billing.viewBtn': 'Ansehen',
+  'billing.pdfBtn': 'PDF',
+  'billing.deleteBtn': 'Löschen',
+  'billing.senderNamePlaceholder': 'Firmenname',
+  'billing.senderAddressPlaceholder': 'Strassenadresse',
+  'billing.zipPlaceholder': 'PLZ',
+  'billing.cityPlaceholder': 'Ort',
+  'billing.bankNamePlaceholder': 'Bankname',
+  'billing.ibanPlaceholder': 'CH93 0076 2011 6238 5295 7',
+  'billing.accountHolderPlaceholder': 'Kontoinhaber',
 
   // Pricing
   'pricing.title': 'Preiseinstellungen',

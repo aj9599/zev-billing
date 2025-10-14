@@ -11,8 +11,9 @@ export default function Users() {
   const [showModal, setShowModal] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [editingUser, setEditingUser] = useState<UserType | null>(null);
-  const [selectedBuilding, setSelectedBuilding] = useState<number | 'all'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedBuildingId, setSelectedBuildingId] = useState<number | 'all'>('all');
+  const [buildingSearchQuery, setBuildingSearchQuery] = useState('');
+  const [userSearchQuery, setUserSearchQuery] = useState('');
   const [formData, setFormData] = useState<Partial<UserType>>({
     first_name: '', last_name: '', email: '', phone: '',
     address_street: '', address_city: '', address_zip: '', address_country: 'Switzerland',
@@ -32,7 +33,7 @@ export default function Users() {
       api.getBuildings()
     ]);
     setUsers(usersData);
-    setBuildings(buildingsData);
+    setBuildings(buildingsData.filter(b => !b.is_group));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -83,11 +84,16 @@ export default function Users() {
     });
   };
 
+  // Filter buildings based on search
+  const filteredBuildingsForCards = buildings.filter(b =>
+    b.name.toLowerCase().includes(buildingSearchQuery.toLowerCase())
+  );
+
   // Filter users
   const filteredUsers = users.filter(user => {
-    const matchesBuilding = selectedBuilding === 'all' || user.building_id === selectedBuilding;
-    const searchLower = searchQuery.toLowerCase();
-    const matchesSearch = searchQuery === '' || 
+    const matchesBuilding = selectedBuildingId === 'all' || user.building_id === selectedBuildingId;
+    const searchLower = userSearchQuery.toLowerCase();
+    const matchesSearch = userSearchQuery === '' || 
       `${user.first_name} ${user.last_name}`.toLowerCase().includes(searchLower) ||
       user.email.toLowerCase().includes(searchLower);
     return matchesBuilding && matchesSearch;
@@ -104,6 +110,11 @@ export default function Users() {
   const getManagedBuildingsNames = (managedBuildings?: number[]) => {
     if (!managedBuildings || managedBuildings.length === 0) return '-';
     return managedBuildings.map(id => buildings.find(b => b.id === id)?.name || `ID ${id}`).join(', ');
+  };
+
+  // Count users per building
+  const getUserCountForBuilding = (buildingId: number) => {
+    return users.filter(u => u.building_id === buildingId).length;
   };
 
   const InstructionsModal = () => (
@@ -243,7 +254,89 @@ export default function Users() {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Building Search */}
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ position: 'relative', maxWidth: '400px' }}>
+          <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
+          <input
+            type="text"
+            placeholder={t('users.searchBuildings')}
+            value={buildingSearchQuery}
+            onChange={(e) => setBuildingSearchQuery(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px 10px 10px 40px',
+              border: '1px solid #ddd',
+              borderRadius: '8px',
+              fontSize: '14px'
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Building Filter Cards */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', 
+        gap: '16px', 
+        marginBottom: '30px' 
+      }}>
+        <div
+          onClick={() => setSelectedBuildingId('all')}
+          style={{
+            padding: '20px',
+            backgroundColor: selectedBuildingId === 'all' ? '#667eea' : 'white',
+            color: selectedBuildingId === 'all' ? 'white' : '#1f2937',
+            borderRadius: '12px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            border: selectedBuildingId === 'all' ? '2px solid #667eea' : '2px solid transparent'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            <Building size={24} />
+            <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>
+              {t('users.allUsers')}
+            </h3>
+          </div>
+          <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
+            {users.length} {users.length === 1 ? t('users.user') : t('users.users')}
+          </p>
+        </div>
+
+        {filteredBuildingsForCards.map(building => {
+          const userCount = getUserCountForBuilding(building.id);
+          return (
+            <div
+              key={building.id}
+              onClick={() => setSelectedBuildingId(building.id)}
+              style={{
+                padding: '20px',
+                backgroundColor: selectedBuildingId === building.id ? '#667eea' : 'white',
+                color: selectedBuildingId === building.id ? 'white' : '#1f2937',
+                borderRadius: '12px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                border: selectedBuildingId === building.id ? '2px solid #667eea' : '2px solid transparent'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                <Building size={24} />
+                <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>
+                  {building.name}
+                </h3>
+              </div>
+              <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
+                {userCount} {userCount === 1 ? t('users.user') : t('users.users')}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* User Search */}
       <div style={{ 
         backgroundColor: 'white', 
         borderRadius: '12px', 
@@ -251,50 +344,23 @@ export default function Users() {
         marginBottom: '20px',
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
       }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px', color: '#374151' }}>
-              <Building size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-              {t('users.filterByBuilding')}
-            </label>
-            <select 
-              value={selectedBuilding} 
-              onChange={(e) => setSelectedBuilding(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
-              style={{ 
-                width: '100%', 
-                padding: '10px', 
-                border: '1px solid #ddd', 
-                borderRadius: '6px',
-                fontSize: '14px'
-              }}
-            >
-              <option value="all">{t('users.allUsers')}</option>
-              {buildings.map(b => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px', color: '#374151' }}>
-              <Search size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-              {t('users.searchUsers')}
-            </label>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t('users.searchUsers')}
-              style={{ 
-                width: '100%', 
-                padding: '10px', 
-                border: '1px solid #ddd', 
-                borderRadius: '6px',
-                fontSize: '14px'
-              }}
-            />
-          </div>
-        </div>
+        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px', color: '#374151' }}>
+          <Search size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
+          {t('users.searchUsers')}
+        </label>
+        <input
+          type="text"
+          value={userSearchQuery}
+          onChange={(e) => setUserSearchQuery(e.target.value)}
+          placeholder={t('users.searchUsers')}
+          style={{ 
+            width: '100%', 
+            padding: '10px', 
+            border: '1px solid #ddd', 
+            borderRadius: '6px',
+            fontSize: '14px'
+          }}
+        />
       </div>
 
       {/* Administration Users Section */}
@@ -398,7 +464,7 @@ export default function Users() {
                   )}
                   <div style={{ fontSize: '13px', color: '#0369a1', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px' }}>
                     <Building size={14} />
-                    <strong>Manages:</strong> {getManagedBuildingsNames(user.managed_buildings)}
+                    <strong>{t('users.manages')}:</strong> {getManagedBuildingsNames(user.managed_buildings)}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -679,14 +745,14 @@ export default function Users() {
                       {buildings.filter(b => !b.is_group).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                     </select>
                     <small style={{ display: 'block', marginTop: '4px', color: '#666', fontSize: '12px' }}>
-                      User can charge at any charger in this building
+                      {t('users.canChargeAnywhere')}
                     </small>
                   </div>
 
                   <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#0369a1' }}>
                       <CreditCard size={18} />
-                      RFID Card ID(s) *
+                      {t('users.rfidCardIds')}
                     </label>
                     <input 
                       type="text" 
@@ -697,9 +763,9 @@ export default function Users() {
                       style={{ width: '100%', padding: '10px', border: '1px solid #bae6fd', borderRadius: '6px', fontFamily: 'monospace' }} 
                     />
                     <small style={{ display: 'block', marginTop: '6px', color: '#0369a1', fontSize: '12px', lineHeight: '1.4' }}>
-                      <strong>Important:</strong> Enter the RFID card number(s) that Loxone sends (e.g., "15" or "15,16" for multiple cards).
+                      <strong>{t('users.rfidImportant')}:</strong> {t('users.rfidEnterNumber')}
                       <br />
-                      This is NOT a charger ID - it's the identification number from the physical RFID card/tag.
+                      {t('users.rfidNotChargerId')}
                     </small>
                   </div>
                 </>
@@ -732,7 +798,7 @@ export default function Users() {
                         />
                         <span style={{ fontSize: '14px' }}>
                           {building.name}
-                          {building.is_group && <span style={{ marginLeft: '6px', fontSize: '12px', color: '#6b7280' }}>(Complex)</span>}
+                          {building.is_group && <span style={{ marginLeft: '6px', fontSize: '12px', color: '#6b7280' }}>({t('users.complex')})</span>}
                         </span>
                       </label>
                     ))}

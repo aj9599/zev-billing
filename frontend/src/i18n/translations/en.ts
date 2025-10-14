@@ -102,8 +102,6 @@ export const en: Translations = {
   'users.street': 'Street',
   'users.zip': 'ZIP',
   'users.city': 'City',
-
-  // NEW: User Types & Filtering
   'users.userType': 'User Type',
   'users.regular': 'Regular User (Tenant)',
   'users.administration': 'Administration User',
@@ -118,8 +116,16 @@ export const en: Translations = {
   'users.noRegularUsers': 'No regular users found.',
   'users.adminDescription': 'Administration users create bills and manage multiple buildings',
   'users.regularDescription': 'Regular users are tenants living in buildings',
-
-  // Users - Instructions (add to existing users section)
+  'users.user': 'user',
+  'users.users': 'users',
+  'users.searchBuildings': 'Search buildings...',
+  'users.manages': 'Manages',
+  'users.canChargeAnywhere': 'User can charge at any charger in this building',
+  'users.rfidCardIds': 'RFID Card ID(s) *',
+  'users.rfidImportant': 'Important',
+  'users.rfidEnterNumber': 'Enter the RFID card number(s) that Loxone sends (e.g., "15" or "15,16" for multiple cards).',
+  'users.rfidNotChargerId': 'This is NOT a charger ID - it\'s the identification number from the physical RFID card/tag.',
+  'users.complex': 'Complex',
   'users.setupInstructions': 'Setup Instructions',
   'users.instructions.title': 'Users & User Types Guide',
   'users.instructions.whatIsRegularUser': 'What is a Regular User?',
@@ -142,7 +148,7 @@ export const en: Translations = {
   'users.instructions.tip2': 'Administration users manage buildings and create bills for tenants',
   'users.instructions.tip3': 'Keep RFID card numbers accurate to ensure proper charging session tracking',
 
-  // Buildings - existing keys remain the same...
+  // Buildings
   'buildings.title': 'Buildings',
   'buildings.subtitle': 'Manage properties and building groups',
   'buildings.addBuilding': 'Add Building',
@@ -169,8 +175,6 @@ export const en: Translations = {
   'buildings.searchPlaceholder': 'Search buildings, complexes, or addresses...',
   'buildings.setupInstructions': 'Setup Instructions',
   'buildings.noResults': 'No results found',
-
-  // Building Instructions
   'buildings.instructions.title': 'Buildings & Complexes Guide',
   'buildings.instructions.whatIsBuilding': 'What is a Building?',
   'buildings.instructions.buildingDescription': 'A building represents a single physical property or structure where you install meters and chargers. Each building has its own address, meters, and energy monitoring equipment.',
@@ -187,7 +191,7 @@ export const en: Translations = {
   'buildings.instructions.tip2': 'Power data is updated in real-time from your meters and chargers',
   'buildings.instructions.tip3': 'A building can only belong to one complex at a time',
 
-  // Meters - keeping all existing keys...
+  // Meters
   'meters.title': 'Power Meters',
   'meters.subtitle': 'Monitor and manage power consumption meters',
   'meters.addMeter': 'Add Meter',
@@ -230,8 +234,6 @@ export const en: Translations = {
   'meters.saveFailed': 'Failed to save meter',
   'meters.exportFailed': 'Failed to export data',
   'meters.metersCount': 'meters',
-
-  // Meter Instructions
   'meters.instructions.title': 'Meter Setup Instructions',
   'meters.instructions.udpTitle': 'UDP Connection (Shared Port - RECOMMENDED!)',
   'meters.instructions.udpNew': 'NEW: Auto-generated UUID_power_kwh keys for each meter!',
@@ -272,7 +274,7 @@ export const en: Translations = {
   'meters.instructions.troubleshootingMonitor': 'Monitor the Admin Logs page in real-time for debugging',
   'meters.instructions.troubleshootingUDP': 'UDP: Copy the auto-generated UUID_power_kwh exactly into your Loxone config!',
 
-  // Chargers - keeping all existing keys...
+  // Chargers
   'chargers.title': 'Car Chargers',
   'chargers.subtitle': 'Manage EV charging infrastructure',
   'chargers.addCharger': 'Add Charger',
@@ -405,12 +407,27 @@ export const en: Translations = {
   'billing.qrNote': 'If banking details are provided, a Swiss QR bill will be generated on a second page',
   'billing.swissQR': 'Swiss QR Bill',
   'billing.reference': 'Reference',
-
-  // NEW: Billing Auto-fill
   'billing.autoFillFromAdmin': 'Auto-fill from Administration User',
   'billing.selectAdminUser': 'Select an administration user to auto-fill billing information',
   'billing.adminUserFor': 'Administration User for Selected Buildings',
   'billing.noAdminUserFound': 'No administration user found for the selected buildings',
+  'billing.searchBuildings': 'Search buildings...',
+  'billing.allBuildings': 'All Buildings',
+  'billing.viewFirstWarning': 'Invoice items not loaded. Please view the invoice first and then download.',
+  'billing.allowPopups': 'Please allow popups to download invoices',
+  'billing.loadFailed': 'Failed to load invoice details',
+  'billing.pdfGenerated': 'Generated on',
+  'billing.pdfFooter': 'ZEV Billing System - Swiss Energy Community Standard',
+  'billing.viewBtn': 'View',
+  'billing.pdfBtn': 'PDF',
+  'billing.deleteBtn': 'Del',
+  'billing.senderNamePlaceholder': 'Company Name',
+  'billing.senderAddressPlaceholder': 'Street Address',
+  'billing.zipPlaceholder': 'ZIP',
+  'billing.cityPlaceholder': 'City',
+  'billing.bankNamePlaceholder': 'Bank Name',
+  'billing.ibanPlaceholder': 'CH93 0076 2011 6238 5295 7',
+  'billing.accountHolderPlaceholder': 'Account Holder Name',
 
   // Pricing
   'pricing.title': 'Pricing Settings',

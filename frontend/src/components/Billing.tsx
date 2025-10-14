@@ -152,7 +152,7 @@ export default function Billing() {
       setTimeout(() => {
         loadData();
       }, 500);
-      alert(t('billing.generatedSuccess') + ` (${result.length} invoices)`);
+      alert(t('billing.generatedSuccess') + ` (${result.length} ${t('billing.invoicesPlural')})`);
     } catch (err: any) {
       console.error('Generation error:', err);
       alert(t('billing.generateFailed') + '\n' + (err.message || err));
@@ -173,7 +173,7 @@ export default function Billing() {
       setSelectedInvoice(invoice);
     } catch (err) {
       console.error('Failed to load invoice:', err);
-      alert('Failed to load invoice details');
+      alert(t('billing.loadFailed'));
     }
   };
 
@@ -246,7 +246,7 @@ export default function Billing() {
       'CH',                           // Debtor Country
       'NON',                          // Reference Type (no reference)
       '',                             // Reference (empty for NON type)
-      `Invoice ${invoice.invoice_number}`, // Additional Information
+      `${t('billing.invoice')} ${invoice.invoice_number}`, // Additional Information
       'EPD',                          // Trailer
       ''                              // Billing Information
     ];
@@ -259,7 +259,7 @@ export default function Billing() {
   const downloadPDF = (invoice: Invoice, senderInfoOverride?: any, bankingInfoOverride?: any) => {
     // Check if invoice has items
     if (!invoice.items || invoice.items.length === 0) {
-      alert('Invoice items not loaded. Please view the invoice first and then download.');
+      alert(t('billing.viewFirstWarning'));
       return;
     }
     
@@ -275,7 +275,7 @@ export default function Billing() {
     // Create a new window for PDF generation
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
-      alert('Please allow popups to download invoices');
+      alert(t('billing.allowPopups'));
       return;
     }
     
@@ -653,8 +653,8 @@ export default function Billing() {
           ` : ''}
 
           <div class="footer">
-            <p>Generated on ${new Date().toLocaleString()}</p>
-            <p>ZEV Billing System - Swiss Energy Community Standard</p>
+            <p>${t('billing.pdfGenerated')} ${new Date().toLocaleString()}</p>
+            <p>${t('billing.pdfFooter')}</p>
           </div>
         </div>
 
@@ -841,7 +841,7 @@ export default function Billing() {
           <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
           <input
             type="text"
-            placeholder="Search buildings..."
+            placeholder={t('billing.searchBuildings')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -877,11 +877,11 @@ export default function Billing() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
             <Building size={24} />
             <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>
-              All Buildings
+              {t('billing.allBuildings')}
             </h3>
           </div>
           <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
-            {invoices.length} {invoices.length === 1 ? 'invoice' : 'invoices'}
+            {invoices.length} {invoices.length === 1 ? t('billing.invoices') : t('billing.invoicesPlural')}
           </p>
         </div>
 
@@ -909,7 +909,7 @@ export default function Billing() {
                 </h3>
               </div>
               <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
-                {buildingInvoiceCount} {buildingInvoiceCount === 1 ? 'invoice' : 'invoices'}
+                {buildingInvoiceCount} {buildingInvoiceCount === 1 ? t('billing.invoices') : t('billing.invoicesPlural')}
               </p>
             </div>
           );
@@ -942,7 +942,7 @@ export default function Billing() {
                   {building.name}
                 </h2>
                 <p style={{ fontSize: '14px', color: '#666', margin: '4px 0 0 0' }}>
-                  {buildingInvoices.length} {buildingInvoices.length === 1 ? 'invoice' : 'invoices'}
+                  {buildingInvoices.length} {buildingInvoices.length === 1 ? t('billing.invoices') : t('billing.invoicesPlural')}
                 </p>
               </div>
               <span style={{ fontSize: '24px', color: '#666' }}>
@@ -1045,7 +1045,7 @@ export default function Billing() {
                             {invoice.status.toUpperCase()}
                           </span>
                           <div style={{ fontSize: '12px', color: '#9ca3af' }}>
-                            Generated: {formatDate(invoice.generated_at)}
+                            {t('billing.generated')}: {formatDate(invoice.generated_at)}
                           </div>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', borderTop: '1px solid #f3f4f6', paddingTop: '12px' }}>
@@ -1067,7 +1067,7 @@ export default function Billing() {
                             }}
                           >
                             <Eye size={14} />
-                            <span style={{ fontSize: '11px' }}>View</span>
+                            <span style={{ fontSize: '11px' }}>{t('billing.viewBtn')}</span>
                           </button>
                           <button
                             onClick={() => downloadPDF(invoice, senderInfo, bankingInfo)}
@@ -1087,7 +1087,7 @@ export default function Billing() {
                             }}
                           >
                             <Download size={14} />
-                            <span style={{ fontSize: '11px' }}>PDF</span>
+                            <span style={{ fontSize: '11px' }}>{t('billing.pdfBtn')}</span>
                           </button>
                           <button
                             onClick={() => deleteInvoice(invoice.id)}
@@ -1107,7 +1107,7 @@ export default function Billing() {
                             }}
                           >
                             <Trash2 size={14} />
-                            <span style={{ fontSize: '11px' }}>Del</span>
+                            <span style={{ fontSize: '11px' }}>{t('billing.deleteBtn')}</span>
                           </button>
                         </div>
                       </div>
@@ -1193,7 +1193,7 @@ export default function Billing() {
                     value={formData.sender_name} 
                     onChange={(e) => setFormData({ ...formData, sender_name: e.target.value })}
                     style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
-                    placeholder="Company Name"
+                    placeholder={t('billing.senderNamePlaceholder')}
                   />
                 </div>
                 <div style={{ marginBottom: '12px' }}>
@@ -1203,7 +1203,7 @@ export default function Billing() {
                     value={formData.sender_address} 
                     onChange={(e) => setFormData({ ...formData, sender_address: e.target.value })}
                     style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
-                    placeholder="Street Address"
+                    placeholder={t('billing.senderAddressPlaceholder')}
                   />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
@@ -1214,7 +1214,7 @@ export default function Billing() {
                       value={formData.sender_zip} 
                       onChange={(e) => setFormData({ ...formData, sender_zip: e.target.value })}
                       style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
-                      placeholder="ZIP"
+                      placeholder={t('billing.zipPlaceholder')}
                     />
                   </div>
                   <div>
@@ -1224,7 +1224,7 @@ export default function Billing() {
                       value={formData.sender_city} 
                       onChange={(e) => setFormData({ ...formData, sender_city: e.target.value })}
                       style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
-                      placeholder="City"
+                      placeholder={t('billing.cityPlaceholder')}
                     />
                   </div>
                 </div>
@@ -1239,7 +1239,7 @@ export default function Billing() {
                     value={formData.bank_name} 
                     onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
                     style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
-                    placeholder="Bank Name"
+                    placeholder={t('billing.bankNamePlaceholder')}
                   />
                 </div>
                 <div style={{ marginBottom: '12px' }}>
@@ -1249,7 +1249,7 @@ export default function Billing() {
                     value={formData.bank_iban} 
                     onChange={(e) => setFormData({ ...formData, bank_iban: e.target.value })}
                     style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
-                    placeholder="CH93 0076 2011 6238 5295 7"
+                    placeholder={t('billing.ibanPlaceholder')}
                   />
                 </div>
                 <div>
@@ -1259,7 +1259,7 @@ export default function Billing() {
                     value={formData.bank_account_holder} 
                     onChange={(e) => setFormData({ ...formData, bank_account_holder: e.target.value })}
                     style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
-                    placeholder="Account Holder Name"
+                    placeholder={t('billing.accountHolderPlaceholder')}
                   />
                 </div>
                 <p style={{ fontSize: '12px', color: '#666', marginTop: '8px', fontStyle: 'italic' }}>
