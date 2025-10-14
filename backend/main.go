@@ -114,6 +114,7 @@ func main() {
 	api.HandleFunc("/chargers/{id}", chargerHandler.Get).Methods("GET")
 	api.HandleFunc("/chargers/{id}", chargerHandler.Update).Methods("PUT")
 	api.HandleFunc("/chargers/{id}", chargerHandler.Delete).Methods("DELETE")
+	api.HandleFunc("/chargers/sessions/latest", chargerHandler.GetLatestSessions).Methods("GET")
 
 	api.HandleFunc("/billing/settings", billingHandler.GetSettings).Methods("GET")
 	api.HandleFunc("/billing/settings", billingHandler.CreateSettings).Methods("POST")

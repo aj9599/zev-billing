@@ -202,3 +202,62 @@ func (h *ChargerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (h *ChargerHandler) GetLatestSessions(w http.ResponseWriter, r *http.Request) {
+	// Query to get the latest session for each charger
+	query := `
+		SELECT 
+			cs.charger_id,
+			cs.power_kwh,
+			cs.state,
+			cs.mode,
+			cs.session_time
+		FROM charger_sessions cs
+		INNER JOIN (
+			SELECT charger_id, MAX(session_time) as max_time
+			FROM charger_sessions
+			WHERE session_time >= datetime('now', '-1 hour')
+			GROUP BY charger_id
+		) latest ON cs.charger_id = latest.charger_id AND cs.session_time = latest.max_time
+		WHERE EXISTS (
+			SELECT 1 FROM chargers c 
+			WHERE c.id = cs.charger_id AND c.is_active = 1
+		)
+	`
+
+	rows, err := h.db.Query(query)
+	if err != nil {
+		log.Printf("Error querying latest charger sessions: %v", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type LatestSession struct {
+		ChargerID   int     `json:"charger_id"`
+		PowerKWh    float64 `json:"power_kwh"`
+		State       string  `json:"state"`
+		Mode        string  `json:"mode"`
+		SessionTime string  `json:"session_time"`
+	}
+
+	sessions := []LatestSession{}
+	for rows.Next() {
+		var s LatestSession
+		err := rows.Scan(
+			&s.ChargerID,
+			&s.PowerKWh,
+			&s.State,
+			&s.Mode,
+			&s.SessionTime,
+		)
+		if err != nil {
+			log.Printf("Error scanning charger session: %v", err)
+			continue
+		}
+		sessions = append(sessions, s)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(sessions)
+}
