@@ -24,6 +24,7 @@ type DataCollector struct {
 	lastCollection   time.Time
 	udpPorts         []int
 	restartChannel   chan bool
+	httpClient       *http.Client
 }
 
 type ChargerData struct {
@@ -56,7 +57,7 @@ type UDPChargerConfig struct {
 	ModeKey   string
 }
 
-// FIXED: Helper function to round time to nearest 15-minute interval
+// Helper function to round time to nearest 15-minute interval
 func roundToQuarterHour(t time.Time) time.Time {
 	minutes := t.Minute()
 	var roundedMinutes int
@@ -70,14 +71,13 @@ func roundToQuarterHour(t time.Time) time.Time {
 	} else if minutes < 53 {
 		roundedMinutes = 45
 	} else {
-		// Round up to next hour
 		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour()+1, 0, 0, 0, t.Location())
 	}
 	
 	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), roundedMinutes, 0, 0, t.Location())
 }
 
-// FIXED: Get next 15-minute interval
+// Get next 15-minute interval
 func getNextQuarterHour(t time.Time) time.Time {
 	minutes := t.Minute()
 	
@@ -88,12 +88,11 @@ func getNextQuarterHour(t time.Time) time.Time {
 	} else if minutes < 45 {
 		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 45, 0, 0, t.Location())
 	} else {
-		// Next hour at :00
 		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour()+1, 0, 0, 0, t.Location())
 	}
 }
 
-// FIXED: Linear interpolation between two readings
+// Linear interpolation between two readings
 func interpolateReadings(startTime time.Time, startValue float64, endTime time.Time, endValue float64) []struct{time time.Time; value float64} {
 	result := []struct{time time.Time; value float64}{}
 	
@@ -101,19 +100,12 @@ func interpolateReadings(startTime time.Time, startValue float64, endTime time.T
 		return result
 	}
 	
-	// Get first quarter hour after start
 	currentTime := getNextQuarterHour(startTime)
-	
-	// Calculate total time and value difference
 	totalDuration := endTime.Sub(startTime).Seconds()
 	totalValueChange := endValue - startValue
 	
-	// Generate interpolated points at 15-minute intervals
 	for currentTime.Before(endTime) {
-		// Calculate elapsed time from start
 		elapsed := currentTime.Sub(startTime).Seconds()
-		
-		// Linear interpolation
 		ratio := elapsed / totalDuration
 		interpolatedValue := startValue + (totalValueChange * ratio)
 		
@@ -122,7 +114,6 @@ func interpolateReadings(startTime time.Time, startValue float64, endTime time.T
 			value: interpolatedValue,
 		})
 		
-		// Move to next 15-minute interval
 		currentTime = currentTime.Add(15 * time.Minute)
 	}
 	
@@ -148,6 +139,9 @@ func NewDataCollector(db *sql.DB) *DataCollector {
 		partialChargerData: make(map[int]*PartialChargerData),
 		udpPorts:           []int{},
 		restartChannel:     make(chan bool, 1),
+		httpClient: &http.Client{
+			Timeout: 10 * time.Second,
+		},
 	}
 }
 
@@ -174,13 +168,13 @@ func (dc *DataCollector) RestartUDPListeners() {
 func (dc *DataCollector) Start() {
 	log.Println("===================================")
 	log.Println("ZEV Data Collector Starting")
+	log.Println("Collection Mode: HTTP Polling (primary) + UDP Monitoring (backup)")
 	log.Println("Collection Interval: 15 minutes (fixed at :00, :15, :30, :45)")
 	log.Println("===================================")
 
 	dc.initializeUDPListeners()
 	dc.logSystemStatus()
 	
-	// Calculate time until next quarter hour
 	now := time.Now()
 	nextCollection := getNextQuarterHour(now)
 	waitDuration := nextCollection.Sub(now)
@@ -196,7 +190,6 @@ func (dc *DataCollector) Start() {
 
 	go dc.cleanupStalePartialData()
 
-	// Create ticker for 15-minute intervals
 	ticker := time.NewTicker(15 * time.Minute)
 	defer ticker.Stop()
 
@@ -243,8 +236,9 @@ func (dc *DataCollector) logSystemStatus() {
 
 	log.Printf("System Status: %d/%d meters active, %d/%d chargers active", activeMeters, totalMeters, activeChargers, totalChargers)
 	if len(dc.udpPorts) > 0 {
-		log.Printf("UDP Listeners active on ports: %v", dc.udpPorts)
+		log.Printf("UDP Listeners active on ports: %v (for real-time monitoring)", dc.udpPorts)
 	}
+	log.Printf("HTTP polling will be used for precise 15-minute readings")
 }
 
 func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
@@ -256,7 +250,6 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 	dc.db.QueryRow(`SELECT COUNT(*) FROM admin_logs WHERE (action LIKE '%error%' 
 		OR action LIKE '%failed%') AND created_at > datetime('now', '-24 hours')`).Scan(&recentErrors)
 
-	// Calculate time to next collection
 	now := time.Now()
 	nextCollection := getNextQuarterHour(now)
 	minutesToNext := int(nextCollection.Sub(now).Minutes())
@@ -305,6 +298,7 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 		"recent_errors":           recentErrors,
 		"charger_buffers":         chargerBufferStatus,
 		"partial_charger_data":    partialStatus,
+		"collection_mode":         "HTTP Polling + UDP Monitoring",
 	}
 }
 
@@ -451,11 +445,11 @@ func (dc *DataCollector) startUDPListener(port int, meters []UDPMeterConfig, cha
 	dc.mu.Unlock()
 
 	deviceCount := len(meters) + len(chargers)
-	log.Printf("SUCCESS: UDP listener started on port %d for %d devices (%d meters, %d chargers)", 
-		port, deviceCount, len(meters), len(chargers))
-	log.Printf("INFO: Chargers will accept data in combined JSON or separate packets")
+	log.Printf("SUCCESS: UDP listener started on port %d for %d devices (MONITORING MODE)", 
+		port, deviceCount)
+	log.Printf("NOTE: UDP is for real-time monitoring. HTTP polling will be used for precise readings.")
 	dc.logToDatabase("UDP Listener Started", 
-		fmt.Sprintf("Port: %d, Meters: %d, Chargers: %d", port, len(meters), len(chargers)))
+		fmt.Sprintf("Port: %d, Meters: %d, Chargers: %d (monitoring mode)", port, len(meters), len(chargers)))
 
 	buffer := make([]byte, 1024)
 
@@ -479,7 +473,7 @@ func (dc *DataCollector) startUDPListener(port int, meters []UDPMeterConfig, cha
 			continue
 		}
 
-		// Process meter data
+		// Process meter data (for monitoring only)
 		for _, meter := range meters {
 			if value, ok := jsonData[meter.DataKey]; ok {
 				var reading float64
@@ -496,13 +490,13 @@ func (dc *DataCollector) startUDPListener(port int, meters []UDPMeterConfig, cha
 					dc.mu.Lock()
 					dc.udpMeterBuffers[meter.MeterID] = reading
 					dc.mu.Unlock()
-					log.Printf("DEBUG: UDP data buffered for meter '%s' (key: %s): %.2f kWh from %s", 
-						meter.Name, meter.DataKey, reading, remoteAddr.IP)
+					log.Printf("DEBUG: UDP monitoring data for meter '%s': %.2f kWh from %s", 
+						meter.Name, reading, remoteAddr.IP)
 				}
 			}
 		}
 
-		// Process charger data
+		// Process charger data (for monitoring only)
 		for _, charger := range chargers {
 			dc.processChargerPacket(charger, jsonData, remoteAddr.IP.String())
 		}
@@ -522,7 +516,6 @@ func (dc *DataCollector) processChargerPacket(charger UDPChargerConfig, jsonData
 	updated := false
 	fieldsReceived := []string{}
 
-	// Check for power
 	if value, ok := jsonData[charger.PowerKey]; ok {
 		switch v := value.(type) {
 		case float64:
@@ -538,7 +531,6 @@ func (dc *DataCollector) processChargerPacket(charger UDPChargerConfig, jsonData
 		}
 	}
 
-	// Check for state
 	if value, ok := jsonData[charger.StateKey]; ok {
 		var stateStr string
 		switch v := value.(type) {
@@ -554,7 +546,6 @@ func (dc *DataCollector) processChargerPacket(charger UDPChargerConfig, jsonData
 		}
 	}
 
-	// Check for user_id
 	if value, ok := jsonData[charger.UserIDKey]; ok {
 		var userStr string
 		switch v := value.(type) {
@@ -570,7 +561,6 @@ func (dc *DataCollector) processChargerPacket(charger UDPChargerConfig, jsonData
 		}
 	}
 
-	// Check for mode
 	if value, ok := jsonData[charger.ModeKey]; ok {
 		var modeStr string
 		switch v := value.(type) {
@@ -589,12 +579,6 @@ func (dc *DataCollector) processChargerPacket(charger UDPChargerConfig, jsonData
 	if updated {
 		partial.LastUpdate = time.Now()
 		
-		if len(fieldsReceived) > 0 {
-			log.Printf("DEBUG: Charger '%s' received fields [%s] from %s", 
-				charger.Name, strings.Join(fieldsReceived, ", "), remoteIP)
-		}
-
-		// Check if we have all 4 fields
 		if partial.Power != nil && partial.State != nil && partial.UserID != nil && partial.Mode != nil {
 			completeData := ChargerData{
 				Power:  *partial.Power,
@@ -605,29 +589,12 @@ func (dc *DataCollector) processChargerPacket(charger UDPChargerConfig, jsonData
 			
 			dc.udpChargerBuffers[charger.ChargerID] = completeData
 			
-			log.Printf("✅ Complete charger data buffered for '%s': Power=%.4f kWh, State=%s, User=%s, Mode=%s", 
-				charger.Name, completeData.Power, completeData.State, completeData.UserID, completeData.Mode)
+			log.Printf("DEBUG: UDP monitoring data for charger '%s': Power=%.4f kWh, User=%s", 
+				charger.Name, completeData.Power, completeData.UserID)
 			
-			// Reset partial data for next cycle
 			dc.partialChargerData[charger.ChargerID] = &PartialChargerData{
 				LastUpdate: time.Now(),
 			}
-		} else {
-			missing := []string{}
-			if partial.Power == nil {
-				missing = append(missing, "power")
-			}
-			if partial.State == nil {
-				missing = append(missing, "state")
-			}
-			if partial.UserID == nil {
-				missing = append(missing, "user_id")
-			}
-			if partial.Mode == nil {
-				missing = append(missing, "mode")
-			}
-			log.Printf("DEBUG: Charger '%s' waiting for fields: [%s]", 
-				charger.Name, strings.Join(missing, ", "))
 		}
 	}
 }
@@ -640,162 +607,25 @@ func (dc *DataCollector) collectAllData() {
 	
 	dc.logToDatabase("Data Collection Started", "15-minute collection cycle initiated")
 
-	dc.collectMeterData()
-	dc.collectChargerData()
-	dc.saveBufferedUDPData()
+	// CHANGED: Collect via HTTP for all devices (primary method)
+	dc.collectMeterDataViaHTTP()
+	dc.collectChargerDataViaHTTP()
+	
+	// Keep UDP buffers as backup/fallback
+	dc.saveBufferedUDPDataAsBackup()
 
 	log.Println("========================================")
 	log.Println("Data collection cycle completed")
 	log.Println("========================================")
 	
-	dc.logToDatabase("Data Collection Completed", "All active devices polled")
+	dc.logToDatabase("Data Collection Completed", "All active devices polled via HTTP")
 }
 
-// FIXED: Save UDP data with interpolation for missing intervals
-func (dc *DataCollector) saveBufferedUDPData() {
-	dc.mu.Lock()
-	defer dc.mu.Unlock()
-
-	currentTime := roundToQuarterHour(time.Now())
-	log.Printf("Saving buffered data at 15-minute interval: %s", currentTime.Format("15:04:05"))
-
-	metersWithData := make(map[int]bool)
-
-	// Save meter data with interpolation
-	for meterID, reading := range dc.udpMeterBuffers {
-		if reading > 0 {
-			// Get last reading
-			var lastReading float64
-			var lastTime time.Time
-			err := dc.db.QueryRow(`
-				SELECT power_kwh, reading_time FROM meter_readings 
-				WHERE meter_id = ? 
-				ORDER BY reading_time DESC LIMIT 1
-			`, meterID).Scan(&lastReading, &lastTime)
-
-			if err == nil {
-				// Interpolate missing intervals
-				interpolated := interpolateReadings(lastTime, lastReading, currentTime, reading)
-				
-				log.Printf("Meter ID %d: Interpolating %d missing intervals between %s (%.2f kWh) and %s (%.2f kWh)", 
-					meterID, len(interpolated), lastTime.Format("15:04"), lastReading, 
-					currentTime.Format("15:04"), reading)
-				
-				// Save interpolated points
-				for _, point := range interpolated {
-					consumption := point.value - lastReading
-					if consumption < 0 {
-						consumption = 0
-					}
-					
-					_, err := dc.db.Exec(`
-						INSERT INTO meter_readings (meter_id, reading_time, power_kwh, consumption_kwh)
-						VALUES (?, ?, ?, ?)
-					`, meterID, point.time, point.value, consumption)
-					
-					if err == nil {
-						log.Printf("  Interpolated: %s -> %.2f kWh (consumption: %.2f kWh)", 
-							point.time.Format("15:04"), point.value, consumption)
-					}
-					
-					lastReading = point.value
-				}
-			}
-
-			// Save current reading
-			consumption := reading - lastReading
-			if consumption < 0 {
-				consumption = reading
-			}
-
-			_, err = dc.db.Exec(`
-				INSERT INTO meter_readings (meter_id, reading_time, power_kwh, consumption_kwh)
-				VALUES (?, ?, ?, ?)
-			`, meterID, currentTime, reading, consumption)
-
-			if err == nil {
-				dc.db.Exec(`
-					UPDATE meters 
-					SET last_reading = ?, last_reading_time = ?
-					WHERE id = ?
-				`, reading, currentTime, meterID)
-
-				log.Printf("SUCCESS: UDP meter data saved for meter ID %d: %.2f kWh (consumption: %.2f kWh)", 
-					meterID, reading, consumption)
-				dc.logToDatabase("UDP Meter Data Saved", 
-					fmt.Sprintf("Meter ID: %d, Reading: %.2f kWh, Consumption: %.2f kWh", meterID, reading, consumption))
-			} else {
-				log.Printf("ERROR: Failed to save UDP meter data for meter ID %d: %v", meterID, err)
-			}
-			metersWithData[meterID] = true
-		}
-	}
-
-	// Save charger data with interpolation
-	log.Printf("Processing %d chargers in buffer", len(dc.udpChargerBuffers))
-	for chargerID, data := range dc.udpChargerBuffers {
-		// Validate all required fields are present
-		if data.UserID == "" || data.State == "" || data.Mode == "" {
-			log.Printf("WARNING: Incomplete charger data for charger ID %d (user=%s, state=%s, mode=%s) - skipping",
-				chargerID, data.UserID, data.State, data.Mode)
-			continue
-		}
-
-		// Get last reading for this charger and user
-		var lastPower float64
-		var lastTime time.Time
-		err := dc.db.QueryRow(`
-			SELECT power_kwh, session_time FROM charger_sessions 
-			WHERE charger_id = ? AND user_id = ?
-			ORDER BY session_time DESC LIMIT 1
-		`, chargerID, data.UserID).Scan(&lastPower, &lastTime)
-
-		if err == nil {
-			// Interpolate missing intervals
-			interpolated := interpolateReadings(lastTime, lastPower, currentTime, data.Power)
-			
-			log.Printf("Charger ID %d (User %s): Interpolating %d missing intervals between %s (%.4f kWh) and %s (%.4f kWh)", 
-				chargerID, data.UserID, len(interpolated), lastTime.Format("15:04"), lastPower, 
-				currentTime.Format("15:04"), data.Power)
-			
-			// Save interpolated points
-			for _, point := range interpolated {
-				_, err := dc.db.Exec(`
-					INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
-					VALUES (?, ?, ?, ?, ?, ?)
-				`, chargerID, data.UserID, point.time, point.value, data.Mode, data.State)
-				
-				if err == nil {
-					log.Printf("  Interpolated: %s -> %.4f kWh", point.time.Format("15:04"), point.value)
-				}
-			}
-		}
-
-		// Save current reading
-		_, err = dc.db.Exec(`
-			INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
-			VALUES (?, ?, ?, ?, ?, ?)
-		`, chargerID, data.UserID, currentTime, data.Power, data.Mode, data.State)
-
-		if err == nil {
-			log.Printf("✅ SUCCESS: Charger data saved - ID=%d, Power=%.4f kWh, User=%s, Mode=%s, State=%s, Time=%s", 
-				chargerID, data.Power, data.UserID, data.Mode, data.State, currentTime.Format("15:04:05"))
-			dc.logToDatabase("UDP Charger Data Saved", 
-				fmt.Sprintf("Charger ID: %d, Power: %.4f kWh, User: %s, Mode: %s, State: %s", 
-					chargerID, data.Power, data.UserID, data.Mode, data.State))
-		} else {
-			log.Printf("❌ ERROR: Failed to save charger data for charger ID %d: %v", chargerID, err)
-			dc.logToDatabase("Charger Save Error", fmt.Sprintf("Charger ID: %d, Error: %v", chargerID, err))
-		}
-	}
-	
-	log.Printf("Charger buffer processing complete")
-}
-
-func (dc *DataCollector) collectMeterData() {
+// NEW: Collect meter data via HTTP polling at exact 15-minute intervals
+func (dc *DataCollector) collectMeterDataViaHTTP() {
 	rows, err := dc.db.Query(`
 		SELECT id, name, meter_type, connection_type, connection_config, is_active
-		FROM meters WHERE is_active = 1 AND connection_type != 'udp'
+		FROM meters WHERE is_active = 1
 	`)
 	if err != nil {
 		log.Printf("ERROR: Failed to query meters: %v", err)
@@ -823,19 +653,32 @@ func (dc *DataCollector) collectMeterData() {
 		var config map[string]interface{}
 		if err := json.Unmarshal([]byte(connectionConfig), &config); err != nil {
 			log.Printf("ERROR: Failed to parse config for meter '%s': %v", name, err)
-			dc.logToDatabase("Config Parse Error", fmt.Sprintf("Meter: %s, Error: %v", name, err))
 			continue
 		}
 
 		var reading float64
-		switch connectionType {
-		case "http":
+		
+		// CHANGED: Prefer HTTP, use UDP buffer as fallback
+		if connectionType == "http" {
 			reading = dc.collectHTTPData(name, config)
-		case "modbus_tcp":
+		} else if connectionType == "udp" {
+			// Check if device also has HTTP endpoint
+			if httpEndpoint, ok := config["http_endpoint"].(string); ok && httpEndpoint != "" {
+				log.Printf("Meter '%s': Using HTTP endpoint instead of UDP for precise reading", name)
+				httpConfig := map[string]interface{}{
+					"endpoint": httpEndpoint,
+					"power_field": config["data_key"],
+				}
+				reading = dc.collectHTTPData(name, httpConfig)
+			} else {
+				// Fallback to UDP buffer
+				log.Printf("Meter '%s': UDP device without HTTP endpoint - using buffered value", name)
+				dc.mu.Lock()
+				reading = dc.udpMeterBuffers[id]
+				dc.mu.Unlock()
+			}
+		} else if connectionType == "modbus_tcp" {
 			reading = dc.collectModbusData(name, config)
-		default:
-			log.Printf("ERROR: Unknown connection type for meter '%s': %s", name, connectionType)
-			continue
 		}
 
 		if reading > 0 {
@@ -849,12 +692,12 @@ func (dc *DataCollector) collectMeterData() {
 			`, id).Scan(&lastReading, &lastTime)
 
 			if err == nil {
-				// Interpolate missing intervals
 				interpolated := interpolateReadings(lastTime, lastReading, currentTime, reading)
 				
-				log.Printf("Meter '%s': Interpolating %d missing intervals", name, len(interpolated))
+				if len(interpolated) > 0 {
+					log.Printf("Meter '%s': Interpolating %d missing intervals", name, len(interpolated))
+				}
 				
-				// Save interpolated points
 				for _, point := range interpolated {
 					consumption := point.value - lastReading
 					if consumption < 0 {
@@ -870,7 +713,6 @@ func (dc *DataCollector) collectMeterData() {
 				}
 			}
 
-			// Save current reading
 			consumption := reading - lastReading
 			if consumption < 0 {
 				consumption = reading
@@ -883,7 +725,6 @@ func (dc *DataCollector) collectMeterData() {
 
 			if err != nil {
 				log.Printf("ERROR: Failed to save reading for meter '%s': %v", name, err)
-				dc.logToDatabase("Save Error", fmt.Sprintf("Meter: %s, Error: %v", name, err))
 			} else {
 				dc.db.Exec(`
 					UPDATE meters 
@@ -892,23 +733,22 @@ func (dc *DataCollector) collectMeterData() {
 				`, reading, currentTime, id)
 
 				log.Printf("SUCCESS: Collected meter data: '%s' = %.2f kWh (consumption: %.2f kWh)", name, reading, consumption)
-				dc.logToDatabase("Meter Data Collected", fmt.Sprintf("%s: %.2f kWh, Consumption: %.2f kWh", name, reading, consumption))
 				successCount++
 			}
 		}
 	}
 
-	log.Printf("Meter collection summary: %d/%d successful", successCount, meterCount)
+	log.Printf("Meter collection summary: %d/%d successful via HTTP polling", successCount, meterCount)
 }
 
-func (dc *DataCollector) collectChargerData() {
+// NEW: Collect charger data via HTTP polling at exact 15-minute intervals
+func (dc *DataCollector) collectChargerDataViaHTTP() {
 	rows, err := dc.db.Query(`
 		SELECT id, name, brand, preset, connection_type, connection_config, is_active
-		FROM chargers WHERE is_active = 1 AND connection_type != 'udp'
+		FROM chargers WHERE is_active = 1
 	`)
 	if err != nil {
 		log.Printf("ERROR: Failed to query chargers: %v", err)
-		dc.logToDatabase("Charger Query Error", fmt.Sprintf("Failed to query chargers: %v", err))
 		return
 	}
 	defer rows.Close()
@@ -932,15 +772,32 @@ func (dc *DataCollector) collectChargerData() {
 		var config map[string]interface{}
 		if err := json.Unmarshal([]byte(connectionConfig), &config); err != nil {
 			log.Printf("ERROR: Failed to parse config for charger '%s': %v", name, err)
-			dc.logToDatabase("Config Parse Error", fmt.Sprintf("Charger: %s, Error: %v", name, err))
 			continue
 		}
 
 		var power float64
 		var userID, mode, state string
 
-		if preset == "weidmuller" {
+		// CHANGED: Prefer HTTP, use UDP buffer as fallback
+		if connectionType == "http" || preset == "weidmuller" {
 			power, userID, mode, state = dc.collectWeidmullerData(name, config)
+		} else if connectionType == "udp" {
+			// Check if device has HTTP endpoints
+			if powerEndpoint, ok := config["http_power_endpoint"].(string); ok && powerEndpoint != "" {
+				log.Printf("Charger '%s': Using HTTP endpoints for precise reading", name)
+				power, userID, mode, state = dc.collectChargerDataHTTP(name, config)
+			} else {
+				// Fallback to UDP buffer
+				log.Printf("Charger '%s': UDP device without HTTP endpoints - using buffered value", name)
+				dc.mu.Lock()
+				if data, ok := dc.udpChargerBuffers[id]; ok {
+					power = data.Power
+					userID = data.UserID
+					mode = data.Mode
+					state = data.State
+				}
+				dc.mu.Unlock()
+			}
 		}
 
 		if userID != "" && mode != "" && state != "" {
@@ -954,12 +811,12 @@ func (dc *DataCollector) collectChargerData() {
 			`, id, userID).Scan(&lastPower, &lastTime)
 
 			if err == nil {
-				// Interpolate missing intervals
 				interpolated := interpolateReadings(lastTime, lastPower, currentTime, power)
 				
-				log.Printf("Charger '%s': Interpolating %d missing intervals", name, len(interpolated))
+				if len(interpolated) > 0 {
+					log.Printf("Charger '%s': Interpolating %d missing intervals", name, len(interpolated))
+				}
 				
-				// Save interpolated points
 				for _, point := range interpolated {
 					dc.db.Exec(`
 						INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
@@ -968,7 +825,6 @@ func (dc *DataCollector) collectChargerData() {
 				}
 			}
 
-			// Save current reading
 			_, err = dc.db.Exec(`
 				INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
 				VALUES (?, ?, ?, ?, ?, ?)
@@ -976,18 +832,138 @@ func (dc *DataCollector) collectChargerData() {
 
 			if err != nil {
 				log.Printf("ERROR: Failed to save charger session for '%s': %v", name, err)
-				dc.logToDatabase("Save Error", fmt.Sprintf("Charger: %s, Error: %v", name, err))
 			} else {
-				log.Printf("SUCCESS: Collected charger data: '%s' = %.2f kWh (user: %s, mode: %s, state: %s)", 
-					name, power, userID, mode, state)
-				dc.logToDatabase("Charger Data Collected", 
-					fmt.Sprintf("%s: %.2f kWh, User: %s, Mode: %s, State: %s", name, power, userID, mode, state))
+				log.Printf("SUCCESS: Collected charger data: '%s' = %.2f kWh (user: %s, mode: %s)", 
+					name, power, userID, mode)
 				successCount++
 			}
 		}
 	}
 
-	log.Printf("Charger collection summary: %d/%d successful", successCount, chargerCount)
+	log.Printf("Charger collection summary: %d/%d successful via HTTP polling", successCount, chargerCount)
+}
+
+// NEW: Collect generic charger data via HTTP
+func (dc *DataCollector) collectChargerDataHTTP(name string, config map[string]interface{}) (power float64, userID, mode, state string) {
+	endpoints := map[string]string{
+		"power":   fmt.Sprintf("%v", config["http_power_endpoint"]),
+		"state":   fmt.Sprintf("%v", config["http_state_endpoint"]),
+		"user_id": fmt.Sprintf("%v", config["http_user_id_endpoint"]),
+		"mode":    fmt.Sprintf("%v", config["http_mode_endpoint"]),
+	}
+
+	powerKey := "power_kwh"
+	if pk, ok := config["power_key"].(string); ok && pk != "" {
+		powerKey = pk
+	}
+
+	if resp, err := dc.httpClient.Get(endpoints["power"]); err == nil {
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		var data map[string]interface{}
+		if json.Unmarshal(body, &data) == nil {
+			if p, ok := data[powerKey].(float64); ok {
+				power = p
+			}
+		}
+	}
+
+	if resp, err := dc.httpClient.Get(endpoints["state"]); err == nil {
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		var data map[string]interface{}
+		if json.Unmarshal(body, &data) == nil {
+			switch v := data["state"].(type) {
+			case string:
+				state = v
+			case float64:
+				state = fmt.Sprintf("%.0f", v)
+			}
+		}
+	}
+
+	if resp, err := dc.httpClient.Get(endpoints["user_id"]); err == nil {
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		var data map[string]interface{}
+		if json.Unmarshal(body, &data) == nil {
+			switch v := data["user_id"].(type) {
+			case string:
+				userID = v
+			case float64:
+				userID = fmt.Sprintf("%.0f", v)
+			}
+		}
+	}
+
+	if resp, err := dc.httpClient.Get(endpoints["mode"]); err == nil {
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		var data map[string]interface{}
+		if json.Unmarshal(body, &data) == nil {
+			switch v := data["mode"].(type) {
+			case string:
+				mode = v
+			case float64:
+				mode = fmt.Sprintf("%.0f", v)
+			}
+		}
+	}
+
+	return power, userID, mode, state
+}
+
+// CHANGED: UDP buffer save is now backup/fallback only
+func (dc *DataCollector) saveBufferedUDPDataAsBackup() {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
+
+	log.Printf("Checking UDP buffers for any devices that failed HTTP polling...")
+	
+	// Only save UDP data for devices that don't have recent HTTP data
+	currentTime := roundToQuarterHour(time.Now())
+	
+	savedCount := 0
+	for meterID, reading := range dc.udpMeterBuffers {
+		if reading > 0 {
+			// Check if we already have data from HTTP
+			var count int
+			dc.db.QueryRow(`
+				SELECT COUNT(*) FROM meter_readings 
+				WHERE meter_id = ? AND reading_time = ?
+			`, meterID, currentTime).Scan(&count)
+			
+			if count == 0 {
+				log.Printf("Using UDP backup data for meter ID %d: %.2f kWh", meterID, reading)
+				
+				var lastReading float64
+				var lastTime time.Time
+				dc.db.QueryRow(`
+					SELECT power_kwh, reading_time FROM meter_readings 
+					WHERE meter_id = ? 
+					ORDER BY reading_time DESC LIMIT 1
+				`, meterID).Scan(&lastReading, &lastTime)
+
+				consumption := reading - lastReading
+				if consumption < 0 {
+					consumption = reading
+				}
+
+				dc.db.Exec(`
+					INSERT INTO meter_readings (meter_id, reading_time, power_kwh, consumption_kwh)
+					VALUES (?, ?, ?, ?)
+				`, meterID, currentTime, reading, consumption)
+				
+				savedCount++
+			}
+		}
+	}
+	
+	if savedCount > 0 {
+		log.Printf("Saved %d meter readings from UDP backup", savedCount)
+	} else {
+		log.Printf("All devices successfully polled via HTTP - no UDP backup needed")
+	}
 }
 
 func (dc *DataCollector) collectHTTPData(name string, config map[string]interface{}) float64 {
@@ -997,11 +973,7 @@ func (dc *DataCollector) collectHTTPData(name string, config map[string]interfac
 		return 0
 	}
 
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-
-	resp, err := client.Get(endpoint)
+	resp, err := dc.httpClient.Get(endpoint)
 	if err != nil {
 		log.Printf("ERROR: HTTP request failed to %s: %v", endpoint, err)
 		dc.logToDatabase("HTTP Request Failed", fmt.Sprintf("Meter: %s, Endpoint: %s, Error: %v", name, endpoint, err))
@@ -1011,7 +983,6 @@ func (dc *DataCollector) collectHTTPData(name string, config map[string]interfac
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("ERROR: HTTP request to %s returned status %d", endpoint, resp.StatusCode)
-		dc.logToDatabase("HTTP Error Status", fmt.Sprintf("Meter: %s, Status: %d", name, resp.StatusCode))
 		return 0
 	}
 
@@ -1024,7 +995,6 @@ func (dc *DataCollector) collectHTTPData(name string, config map[string]interfac
 	var data map[string]interface{}
 	if err := json.Unmarshal(body, &data); err != nil {
 		log.Printf("ERROR: Failed to parse HTTP response as JSON: %v", err)
-		dc.logToDatabase("HTTP Parse Error", fmt.Sprintf("Meter: %s, Error: %v", name, err))
 		return 0
 	}
 
@@ -1042,7 +1012,6 @@ func (dc *DataCollector) collectHTTPData(name string, config map[string]interfac
 
 func (dc *DataCollector) collectModbusData(name string, config map[string]interface{}) float64 {
 	log.Printf("INFO: Modbus TCP collection not yet implemented for meter '%s'", name)
-	dc.logToDatabase("Modbus Not Implemented", fmt.Sprintf("Meter: %s", name))
 	return 0
 }
 
@@ -1054,11 +1023,7 @@ func (dc *DataCollector) collectWeidmullerData(name string, config map[string]in
 		"mode":    fmt.Sprintf("%v", config["mode_endpoint"]),
 	}
 
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-
-	if resp, err := client.Get(endpoints["power"]); err == nil {
+	if resp, err := dc.httpClient.Get(endpoints["power"]); err == nil {
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
 		var data map[string]interface{}
@@ -1069,7 +1034,7 @@ func (dc *DataCollector) collectWeidmullerData(name string, config map[string]in
 		}
 	}
 
-	if resp, err := client.Get(endpoints["state"]); err == nil {
+	if resp, err := dc.httpClient.Get(endpoints["state"]); err == nil {
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
 		var data map[string]interface{}
@@ -1083,7 +1048,7 @@ func (dc *DataCollector) collectWeidmullerData(name string, config map[string]in
 		}
 	}
 
-	if resp, err := client.Get(endpoints["user_id"]); err == nil {
+	if resp, err := dc.httpClient.Get(endpoints["user_id"]); err == nil {
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
 		var data map[string]interface{}
@@ -1097,7 +1062,7 @@ func (dc *DataCollector) collectWeidmullerData(name string, config map[string]in
 		}
 	}
 
-	if resp, err := client.Get(endpoints["mode"]); err == nil {
+	if resp, err := dc.httpClient.Get(endpoints["mode"]); err == nil {
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
 		var data map[string]interface{}
