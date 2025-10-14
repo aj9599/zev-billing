@@ -41,6 +41,7 @@ export const en: Translations = {
   'common.optional': 'optional',
   'common.recommended': 'Recommended',
   'common.unknownBuilding': 'Unknown Building',
+  'common.all': 'All',
 
   // Dashboard
   'dashboard.title': 'Dashboard',
@@ -101,8 +102,24 @@ export const en: Translations = {
   'users.street': 'Street',
   'users.zip': 'ZIP',
   'users.city': 'City',
+  
+  // NEW: User Types & Filtering
+  'users.userType': 'User Type',
+  'users.regular': 'Regular User (Tenant)',
+  'users.administration': 'Administration User',
+  'users.managedBuildings': 'Managed Buildings',
+  'users.selectManagedBuildings': 'Select buildings this administration user manages',
+  'users.administrationUsers': 'Administration Users',
+  'users.regularUsers': 'Regular Users (Tenants)',
+  'users.filterByBuilding': 'Filter by Building',
+  'users.allUsers': 'All Users',
+  'users.searchUsers': 'Search users...',
+  'users.noAdminUsers': 'No administration users found.',
+  'users.noRegularUsers': 'No regular users found.',
+  'users.adminDescription': 'Administration users create bills and manage multiple buildings',
+  'users.regularDescription': 'Regular users are tenants living in buildings',
 
-  // Buildings
+  // Buildings - existing keys remain the same...
   'buildings.title': 'Buildings',
   'buildings.subtitle': 'Manage properties and building groups',
   'buildings.addBuilding': 'Add Building',
@@ -117,8 +134,6 @@ export const en: Translations = {
   'buildings.deleteConfirm': 'Are you sure you want to delete this building?',
   'buildings.deleteFailed': 'Failed to delete building',
   'buildings.saveFailed': 'Failed to save building',
-
-  // Buildings - Additional keys
   'buildings.isComplex': 'This is a building complex (folder containing multiple buildings)',
   'buildings.complexes': 'Building Complexes',
   'buildings.standaloneBuildings': 'Individual Buildings',
@@ -131,7 +146,7 @@ export const en: Translations = {
   'buildings.searchPlaceholder': 'Search buildings, complexes, or addresses...',
   'buildings.setupInstructions': 'Setup Instructions',
   'buildings.noResults': 'No results found',
-
+  
   // Building Instructions
   'buildings.instructions.title': 'Buildings & Complexes Guide',
   'buildings.instructions.whatIsBuilding': 'What is a Building?',
@@ -149,7 +164,7 @@ export const en: Translations = {
   'buildings.instructions.tip2': 'Power data is updated in real-time from your meters and chargers',
   'buildings.instructions.tip3': 'A building can only belong to one complex at a time',
 
-  // Meters
+  // Meters - keeping all existing keys...
   'meters.title': 'Power Meters',
   'meters.subtitle': 'Monitor and manage power consumption meters',
   'meters.addMeter': 'Add Meter',
@@ -192,7 +207,7 @@ export const en: Translations = {
   'meters.saveFailed': 'Failed to save meter',
   'meters.exportFailed': 'Failed to export data',
   'meters.metersCount': 'meters',
-
+  
   // Meter Instructions
   'meters.instructions.title': 'Meter Setup Instructions',
   'meters.instructions.udpTitle': 'UDP Connection (Shared Port - RECOMMENDED!)',
@@ -234,7 +249,7 @@ export const en: Translations = {
   'meters.instructions.troubleshootingMonitor': 'Monitor the Admin Logs page in real-time for debugging',
   'meters.instructions.troubleshootingUDP': 'UDP: Copy the auto-generated UUID_power_kwh exactly into your Loxone config!',
 
-  // Chargers
+  // Chargers - keeping all existing keys...
   'chargers.title': 'Car Chargers',
   'chargers.subtitle': 'Manage EV charging infrastructure',
   'chargers.addCharger': 'Add Charger',
@@ -271,21 +286,16 @@ export const en: Translations = {
   'chargers.saveFailed': 'Failed to save charger',
   'chargers.exportFailed': 'Failed to export data',
   'chargers.chargersCount': 'chargers',
-
-  // State & Mode Value Mappings
   'chargers.stateValueMappings': 'State Value Mappings',
   'chargers.configureStateValues': 'Configure the numeric values your charger sends for each state:',
   'chargers.stateCableLocked': 'Cable Locked',
   'chargers.stateWaitingAuth': 'Waiting for Authentication',
   'chargers.stateCharging': 'Charging',
   'chargers.stateIdle': 'Idle',
-
   'chargers.modeValueMappings': 'Mode Value Mappings',
   'chargers.configureModeValues': 'Configure the numeric values your charger sends for each charging mode:',
   'chargers.modeNormal': 'Normal Mode',
   'chargers.modePriority': 'Priority Mode',
-
-  // Charger state display
   'chargers.state.cableLocked': 'Cable Locked',
   'chargers.state.waitingAuth': 'Waiting for Auth',
   'chargers.state.charging': 'Charging',
@@ -294,8 +304,6 @@ export const en: Translations = {
   'chargers.mode.normal': 'Normal',
   'chargers.mode.priority': 'Priority',
   'chargers.mode.unknown': 'Unknown',
-
-  // Instruction keys
   'chargers.chargerSetup': 'Charger Setup',
   'chargers.requiresFourDataPoints': 'Chargers require 4 data points with UUID keys:',
   'chargers.powerUuidPower': 'Power (UUID_power)',
@@ -306,25 +314,18 @@ export const en: Translations = {
   'chargers.userIdDescription': 'Which user is using the charger',
   'chargers.modeUuidMode': 'Mode (UUID_mode)',
   'chargers.modeDescription': 'Charging mode as numeric value (e.g., 1=normal, 2=priority)',
-
   'chargers.udpConnection': 'UDP Connection (Recommended)',
   'chargers.autoGeneratedUuidKeys': 'Auto-generated UUID keys for all 4 data points!',
   'chargers.existingUuidKeys': 'Existing UUID keys',
   'chargers.udpInstructions': 'Click "Add Charger" to generate unique UUIDs, use the same UDP port as your meters, send all 4 data points with their UUID keys.',
-
   'chargers.stateAndModeValues': 'State & Mode Value Mappings',
   'chargers.configureNumericValues': 'Configure numeric values for states and modes',
   'chargers.valueMappingsDescription': 'These mappings tell the system how to interpret the numeric values your charger sends.',
-
   'chargers.loxoneSendsTo': 'Loxone sends to port',
-
-  // Register labels
   'chargers.powerReg': 'Power Reg',
   'chargers.stateReg': 'State Reg',
   'chargers.userReg': 'User Reg',
   'chargers.modeReg': 'Mode Reg',
-
-  // UI labels
   'chargers.connection': 'Connection',
   'chargers.priorityMode': 'Priority Mode',
   'chargers.supported': 'Supported',
@@ -365,8 +366,6 @@ export const en: Translations = {
   'billing.deleteConfirm': 'Are you sure you want to delete this invoice?',
   'billing.deleteSuccess': 'Invoice deleted successfully',
   'billing.deleteFailed': 'Failed to delete invoice',
-
-  // Billing - Sender Information
   'billing.senderInfo': 'Sender Information',
   'billing.senderName': 'Sender Name / Company',
   'billing.senderAddress': 'Street Address',
@@ -375,18 +374,20 @@ export const en: Translations = {
   'billing.senderCountry': 'Country',
   'billing.zip': 'ZIP',
   'billing.city': 'City',
-
-  // Billing - Banking Information
   'billing.bankingInfo': 'Banking Information',
   'billing.bankName': 'Bank Name',
   'billing.iban': 'IBAN',
   'billing.accountHolder': 'Account Holder',
   'billing.paymentDetails': 'Payment Details',
   'billing.qrNote': 'If banking details are provided, a Swiss QR bill will be generated on a second page',
-
-  // Billing - Swiss QR
   'billing.swissQR': 'Swiss QR Bill',
   'billing.reference': 'Reference',
+  
+  // NEW: Billing Auto-fill
+  'billing.autoFillFromAdmin': 'Auto-fill from Administration User',
+  'billing.selectAdminUser': 'Select an administration user to auto-fill billing information',
+  'billing.adminUserFor': 'Administration User for Selected Buildings',
+  'billing.noAdminUserFound': 'No administration user found for the selected buildings',
 
   // Pricing
   'pricing.title': 'Pricing Settings',

@@ -14,6 +14,8 @@ export interface User {
   charger_ids: string;
   notes: string;
   building_id?: number;
+  user_type: 'regular' | 'administration';
+  managed_buildings?: number[];
   created_at: string;
   updated_at: string;
 }
@@ -124,7 +126,6 @@ export interface ConsumptionData {
   source: string;
 }
 
-// NEW: Types for multi-building dashboard
 export interface MeterData {
   meter_id: number;
   meter_name: string;

@@ -1,20 +1,24 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Users as UsersIcon, Mail, Phone, MapPin, CreditCard } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Users as UsersIcon, Mail, Phone, MapPin, CreditCard, Search, Building, User } from 'lucide-react';
 import { api } from '../api/client';
-import type { User, Building } from '../types';
+import type { User as UserType, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
 
 export default function Users() {
   const { t } = useTranslation();
-  const [users, setUsers] = useState<User[]>([]);
-  const [buildings, setBuildings] = useState<Building[]>([]);
+  const [users, setUsers] = useState<UserType[]>([]);
+  const [buildings, setBuildings] = useState<BuildingType[]>([]);
   const [showModal, setShowModal] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [formData, setFormData] = useState<Partial<User>>({
+  const [editingUser, setEditingUser] = useState<UserType | null>(null);
+  const [selectedBuilding, setSelectedBuilding] = useState<number | 'all'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [formData, setFormData] = useState<Partial<UserType>>({
     first_name: '', last_name: '', email: '', phone: '',
     address_street: '', address_city: '', address_zip: '', address_country: 'Switzerland',
     bank_name: '', bank_iban: '', bank_account_holder: '',
-    charger_ids: '', notes: '', building_id: undefined
+    charger_ids: '', notes: '', building_id: undefined,
+    user_type: 'regular',
+    managed_buildings: []
   });
 
   useEffect(() => {
@@ -58,9 +62,12 @@ export default function Users() {
     }
   };
 
-  const handleEdit = (user: User) => {
+  const handleEdit = (user: UserType) => {
     setEditingUser(user);
-    setFormData(user);
+    setFormData({
+      ...user,
+      managed_buildings: user.managed_buildings || []
+    });
     setShowModal(true);
   };
 
@@ -69,12 +76,38 @@ export default function Users() {
       first_name: '', last_name: '', email: '', phone: '',
       address_street: '', address_city: '', address_zip: '', address_country: 'Switzerland',
       bank_name: '', bank_iban: '', bank_account_holder: '',
-      charger_ids: '', notes: '', building_id: undefined
+      charger_ids: '', notes: '', building_id: undefined,
+      user_type: 'regular',
+      managed_buildings: []
     });
+  };
+
+  // Filter users
+  const filteredUsers = users.filter(user => {
+    const matchesBuilding = selectedBuilding === 'all' || user.building_id === selectedBuilding;
+    const searchLower = searchQuery.toLowerCase();
+    const matchesSearch = searchQuery === '' || 
+      `${user.first_name} ${user.last_name}`.toLowerCase().includes(searchLower) ||
+      user.email.toLowerCase().includes(searchLower);
+    return matchesBuilding && matchesSearch;
+  });
+
+  const adminUsers = filteredUsers.filter(u => u.user_type === 'administration');
+  const regularUsers = filteredUsers.filter(u => u.user_type === 'regular');
+
+  const getBuildingName = (buildingId?: number) => {
+    if (!buildingId) return '-';
+    return buildings.find(b => b.id === buildingId)?.name || '-';
+  };
+
+  const getManagedBuildingsNames = (managedBuildings?: number[]) => {
+    if (!managedBuildings || managedBuildings.length === 0) return '-';
+    return managedBuildings.map(id => buildings.find(b => b.id === id)?.name || `ID ${id}`).join(', ');
   };
 
   return (
     <div className="users-container" style={{ width: '100%', maxWidth: '100%' }}>
+      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', gap: '15px', flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ 
@@ -116,121 +149,332 @@ export default function Users() {
         </button>
       </div>
 
-      {/* Desktop Table */}
-      <div className="desktop-table" style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden', width: '100%' }}>
-        <table style={{ width: '100%' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.name')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.email')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>RFID Card(s)</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.building')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.actions')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map(user => (
-              <tr key={user.id} style={{ borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: '16px' }}>{user.first_name} {user.last_name}</td>
-                <td style={{ padding: '16px' }}>{user.email}</td>
-                <td style={{ padding: '16px' }}>
-                  {user.charger_ids ? (
-                    <span style={{ 
-                      display: 'inline-flex', 
-                      alignItems: 'center', 
-                      gap: '4px',
-                      padding: '4px 8px',
-                      backgroundColor: '#f0f9ff',
-                      color: '#0369a1',
-                      borderRadius: '4px',
-                      fontSize: '13px',
-                      fontFamily: 'monospace'
-                    }}>
-                      <CreditCard size={14} />
-                      {user.charger_ids}
-                    </span>
-                  ) : '-'}
-                </td>
-                <td style={{ padding: '16px' }}>
-                  {buildings.find(b => b.id === user.building_id)?.name || '-'}
-                </td>
-                <td style={{ padding: '16px' }}>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => handleEdit(user)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}>
-                      <Edit2 size={16} color="#007bff" />
-                    </button>
-                    <button onClick={() => handleDelete(user.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}>
-                      <Trash2 size={16} color="#dc3545" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {users.length === 0 && (
-          <div style={{ padding: '60px', textAlign: 'center', color: '#999' }}>
-            {t('users.noUsers')}
+      {/* Filters */}
+      <div style={{ 
+        backgroundColor: 'white', 
+        borderRadius: '12px', 
+        padding: '20px', 
+        marginBottom: '20px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+      }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px', color: '#374151' }}>
+              <Building size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
+              {t('users.filterByBuilding')}
+            </label>
+            <select 
+              value={selectedBuilding} 
+              onChange={(e) => setSelectedBuilding(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
+              style={{ 
+                width: '100%', 
+                padding: '10px', 
+                border: '1px solid #ddd', 
+                borderRadius: '6px',
+                fontSize: '14px'
+              }}
+            >
+              <option value="all">{t('users.allUsers')}</option>
+              {buildings.map(b => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
           </div>
-        )}
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px', color: '#374151' }}>
+              <Search size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
+              {t('users.searchUsers')}
+            </label>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t('users.searchUsers')}
+              style={{ 
+                width: '100%', 
+                padding: '10px', 
+                border: '1px solid #ddd', 
+                borderRadius: '6px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+        </div>
       </div>
 
-      {/* Mobile Cards */}
-      <div className="mobile-cards">
-        {users.map(user => (
-          <div key={user.id} style={{
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            padding: '16px',
-            marginBottom: '16px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
-              <div>
-                <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '4px', color: '#1f2937' }}>
-                  {user.first_name} {user.last_name}
-                </h3>
-                <div style={{ fontSize: '13px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                  <Mail size={14} />
-                  {user.email}
-                </div>
-                {user.phone && (
+      {/* Administration Users Section */}
+      <div style={{ marginBottom: '30px' }}>
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '10px', 
+          marginBottom: '15px',
+          padding: '12px 16px',
+          backgroundColor: '#f0f9ff',
+          borderRadius: '8px',
+          border: '1px solid #bae6fd'
+        }}>
+          <User size={20} style={{ color: '#0369a1' }} />
+          <div>
+            <h2 style={{ fontSize: '18px', fontWeight: '600', color: '#0369a1', margin: 0 }}>
+              {t('users.administrationUsers')}
+            </h2>
+            <p style={{ fontSize: '13px', color: '#0c4a6e', margin: '2px 0 0 0' }}>
+              {t('users.adminDescription')}
+            </p>
+          </div>
+        </div>
+
+        <div className="desktop-table" style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+          <table style={{ width: '100%' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.name')}</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.email')}</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.managedBuildings')}</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.actions')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {adminUsers.map(user => (
+                <tr key={user.id} style={{ borderBottom: '1px solid #eee' }}>
+                  <td style={{ padding: '16px' }}>{user.first_name} {user.last_name}</td>
+                  <td style={{ padding: '16px' }}>{user.email}</td>
+                  <td style={{ padding: '16px', fontSize: '13px', color: '#6b7280' }}>
+                    {getManagedBuildingsNames(user.managed_buildings)}
+                  </td>
+                  <td style={{ padding: '16px' }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={() => handleEdit(user)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}>
+                        <Edit2 size={16} color="#007bff" />
+                      </button>
+                      <button onClick={() => handleDelete(user.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}>
+                        <Trash2 size={16} color="#dc3545" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {adminUsers.length === 0 && (
+            <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>
+              {t('users.noAdminUsers')}
+            </div>
+          )}
+        </div>
+
+        {/* Mobile Cards for Admin Users */}
+        <div className="mobile-cards">
+          {adminUsers.map(user => (
+            <div key={user.id} style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '16px',
+              marginBottom: '16px',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ 
+                    display: 'inline-block',
+                    padding: '2px 8px',
+                    backgroundColor: '#f0f9ff',
+                    color: '#0369a1',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontWeight: '600',
+                    marginBottom: '6px'
+                  }}>
+                    {t('users.administration')}
+                  </div>
+                  <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '4px', color: '#1f2937' }}>
+                    {user.first_name} {user.last_name}
+                  </h3>
                   <div style={{ fontSize: '13px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                    <Phone size={14} />
-                    {user.phone}
+                    <Mail size={14} />
+                    {user.email}
                   </div>
-                )}
-                {user.charger_ids && (
-                  <div style={{ fontSize: '13px', color: '#0369a1', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                    <CreditCard size={14} />
-                    RFID: {user.charger_ids}
+                  {user.phone && (
+                    <div style={{ fontSize: '13px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                      <Phone size={14} />
+                      {user.phone}
+                    </div>
+                  )}
+                  <div style={{ fontSize: '13px', color: '#0369a1', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px' }}>
+                    <Building size={14} />
+                    <strong>Manages:</strong> {getManagedBuildingsNames(user.managed_buildings)}
                   </div>
-                )}
-                {user.building_id && (
-                  <div style={{ fontSize: '13px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <MapPin size={14} />
-                    {buildings.find(b => b.id === user.building_id)?.name || '-'}
-                  </div>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={() => handleEdit(user)} style={{ padding: '8px', border: 'none', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '6px', cursor: 'pointer' }}>
-                  <Edit2 size={16} color="#3b82f6" />
-                </button>
-                <button onClick={() => handleDelete(user.id)} style={{ padding: '8px', border: 'none', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '6px', cursor: 'pointer' }}>
-                  <Trash2 size={16} color="#ef4444" />
-                </button>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={() => handleEdit(user)} style={{ padding: '8px', border: 'none', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '6px', cursor: 'pointer' }}>
+                    <Edit2 size={16} color="#3b82f6" />
+                  </button>
+                  <button onClick={() => handleDelete(user.id)} style={{ padding: '8px', border: 'none', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '6px', cursor: 'pointer' }}>
+                    <Trash2 size={16} color="#ef4444" />
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-        {users.length === 0 && (
-          <div style={{ backgroundColor: 'white', padding: '40px 20px', textAlign: 'center', color: '#999', borderRadius: '12px' }}>
-            {t('users.noUsers')}
-          </div>
-        )}
+          ))}
+          {adminUsers.length === 0 && (
+            <div style={{ backgroundColor: 'white', padding: '40px 20px', textAlign: 'center', color: '#999', borderRadius: '12px' }}>
+              {t('users.noAdminUsers')}
+            </div>
+          )}
+        </div>
       </div>
 
+      {/* Regular Users Section */}
+      <div>
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '10px', 
+          marginBottom: '15px',
+          padding: '12px 16px',
+          backgroundColor: '#f0fdf4',
+          borderRadius: '8px',
+          border: '1px solid #bbf7d0'
+        }}>
+          <UsersIcon size={20} style={{ color: '#15803d' }} />
+          <div>
+            <h2 style={{ fontSize: '18px', fontWeight: '600', color: '#15803d', margin: 0 }}>
+              {t('users.regularUsers')}
+            </h2>
+            <p style={{ fontSize: '13px', color: '#166534', margin: '2px 0 0 0' }}>
+              {t('users.regularDescription')}
+            </p>
+          </div>
+        </div>
+
+        <div className="desktop-table" style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+          <table style={{ width: '100%' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.name')}</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.email')}</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>RFID Card(s)</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.building')}</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.actions')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {regularUsers.map(user => (
+                <tr key={user.id} style={{ borderBottom: '1px solid #eee' }}>
+                  <td style={{ padding: '16px' }}>{user.first_name} {user.last_name}</td>
+                  <td style={{ padding: '16px' }}>{user.email}</td>
+                  <td style={{ padding: '16px' }}>
+                    {user.charger_ids ? (
+                      <span style={{ 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        gap: '4px',
+                        padding: '4px 8px',
+                        backgroundColor: '#f0f9ff',
+                        color: '#0369a1',
+                        borderRadius: '4px',
+                        fontSize: '13px',
+                        fontFamily: 'monospace'
+                      }}>
+                        <CreditCard size={14} />
+                        {user.charger_ids}
+                      </span>
+                    ) : '-'}
+                  </td>
+                  <td style={{ padding: '16px' }}>{getBuildingName(user.building_id)}</td>
+                  <td style={{ padding: '16px' }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={() => handleEdit(user)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}>
+                        <Edit2 size={16} color="#007bff" />
+                      </button>
+                      <button onClick={() => handleDelete(user.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}>
+                        <Trash2 size={16} color="#dc3545" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {regularUsers.length === 0 && (
+            <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>
+              {t('users.noRegularUsers')}
+            </div>
+          )}
+        </div>
+
+        {/* Mobile Cards for Regular Users */}
+        <div className="mobile-cards">
+          {regularUsers.map(user => (
+            <div key={user.id} style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '16px',
+              marginBottom: '16px',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ 
+                    display: 'inline-block',
+                    padding: '2px 8px',
+                    backgroundColor: '#f0fdf4',
+                    color: '#15803d',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontWeight: '600',
+                    marginBottom: '6px'
+                  }}>
+                    {t('users.regular')}
+                  </div>
+                  <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '4px', color: '#1f2937' }}>
+                    {user.first_name} {user.last_name}
+                  </h3>
+                  <div style={{ fontSize: '13px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                    <Mail size={14} />
+                    {user.email}
+                  </div>
+                  {user.phone && (
+                    <div style={{ fontSize: '13px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                      <Phone size={14} />
+                      {user.phone}
+                    </div>
+                  )}
+                  {user.charger_ids && (
+                    <div style={{ fontSize: '13px', color: '#0369a1', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                      <CreditCard size={14} />
+                      RFID: {user.charger_ids}
+                    </div>
+                  )}
+                  {user.building_id && (
+                    <div style={{ fontSize: '13px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <MapPin size={14} />
+                      {getBuildingName(user.building_id)}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={() => handleEdit(user)} style={{ padding: '8px', border: 'none', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '6px', cursor: 'pointer' }}>
+                    <Edit2 size={16} color="#3b82f6" />
+                  </button>
+                  <button onClick={() => handleDelete(user.id)} style={{ padding: '8px', border: 'none', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '6px', cursor: 'pointer' }}>
+                    <Trash2 size={16} color="#ef4444" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+          {regularUsers.length === 0 && (
+            <div style={{ backgroundColor: 'white', padding: '40px 20px', textAlign: 'center', color: '#999', borderRadius: '12px' }}>
+              {t('users.noRegularUsers')}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Modal */}
       {showModal && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -251,6 +495,58 @@ export default function Users() {
             </div>
 
             <form onSubmit={handleSubmit}>
+              {/* User Type Selection */}
+              <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                <label style={{ display: 'block', marginBottom: '12px', fontWeight: '600', fontSize: '14px', color: '#111827' }}>
+                  {t('users.userType')} *
+                </label>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <label style={{ 
+                    flex: 1, 
+                    padding: '12px', 
+                    border: `2px solid ${formData.user_type === 'regular' ? '#15803d' : '#e5e7eb'}`,
+                    backgroundColor: formData.user_type === 'regular' ? '#f0fdf4' : 'white',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}>
+                    <input 
+                      type="radio" 
+                      name="user_type" 
+                      value="regular"
+                      checked={formData.user_type === 'regular'}
+                      onChange={(e) => setFormData({ ...formData, user_type: 'regular' })}
+                      style={{ marginRight: '8px' }}
+                    />
+                    <span style={{ fontWeight: '500', color: formData.user_type === 'regular' ? '#15803d' : '#374151' }}>
+                      {t('users.regular')}
+                    </span>
+                  </label>
+                  <label style={{ 
+                    flex: 1, 
+                    padding: '12px', 
+                    border: `2px solid ${formData.user_type === 'administration' ? '#0369a1' : '#e5e7eb'}`,
+                    backgroundColor: formData.user_type === 'administration' ? '#f0f9ff' : 'white',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}>
+                    <input 
+                      type="radio" 
+                      name="user_type" 
+                      value="administration"
+                      checked={formData.user_type === 'administration'}
+                      onChange={(e) => setFormData({ ...formData, user_type: 'administration' })}
+                      style={{ marginRight: '8px' }}
+                    />
+                    <span style={{ fontWeight: '500', color: formData.user_type === 'administration' ? '#0369a1' : '#374151' }}>
+                      {t('users.administration')}
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Basic Information */}
               <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div>
                   <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('users.firstName')} *</label>
@@ -276,38 +572,82 @@ export default function Users() {
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
               </div>
 
-              <div style={{ marginTop: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('users.building')}</label>
-                <select value={formData.building_id || ''} onChange={(e) => setFormData({ ...formData, building_id: e.target.value ? parseInt(e.target.value) : undefined })}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
-                  <option value="">{t('users.selectBuilding')}</option>
-                  {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                </select>
-                <small style={{ display: 'block', marginTop: '4px', color: '#666', fontSize: '12px' }}>
-                  User can charge at any charger in this building
-                </small>
-              </div>
+              {/* Building Assignment - Only for Regular Users */}
+              {formData.user_type === 'regular' && (
+                <>
+                  <div style={{ marginTop: '16px' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('users.building')}</label>
+                    <select value={formData.building_id || ''} onChange={(e) => setFormData({ ...formData, building_id: e.target.value ? parseInt(e.target.value) : undefined })}
+                      style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
+                      <option value="">{t('users.selectBuilding')}</option>
+                      {buildings.filter(b => !b.is_group).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                    <small style={{ display: 'block', marginTop: '4px', color: '#666', fontSize: '12px' }}>
+                      User can charge at any charger in this building
+                    </small>
+                  </div>
 
-              <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#0369a1' }}>
-                  <CreditCard size={18} />
-                  RFID Card ID(s) *
-                </label>
-                <input 
-                  type="text" 
-                  required
-                  value={formData.charger_ids} 
-                  onChange={(e) => setFormData({ ...formData, charger_ids: e.target.value })}
-                  placeholder="15"
-                  style={{ width: '100%', padding: '10px', border: '1px solid #bae6fd', borderRadius: '6px', fontFamily: 'monospace' }} 
-                />
-                <small style={{ display: 'block', marginTop: '6px', color: '#0369a1', fontSize: '12px', lineHeight: '1.4' }}>
-                  <strong>Important:</strong> Enter the RFID card number(s) that Loxone sends (e.g., "15" or "15,16" for multiple cards).
-                  <br />
-                  This is NOT a charger ID - it's the identification number from the physical RFID card/tag.
-                </small>
-              </div>
+                  <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#0369a1' }}>
+                      <CreditCard size={18} />
+                      RFID Card ID(s) *
+                    </label>
+                    <input 
+                      type="text" 
+                      required
+                      value={formData.charger_ids} 
+                      onChange={(e) => setFormData({ ...formData, charger_ids: e.target.value })}
+                      placeholder="15"
+                      style={{ width: '100%', padding: '10px', border: '1px solid #bae6fd', borderRadius: '6px', fontFamily: 'monospace' }} 
+                    />
+                    <small style={{ display: 'block', marginTop: '6px', color: '#0369a1', fontSize: '12px', lineHeight: '1.4' }}>
+                      <strong>Important:</strong> Enter the RFID card number(s) that Loxone sends (e.g., "15" or "15,16" for multiple cards).
+                      <br />
+                      This is NOT a charger ID - it's the identification number from the physical RFID card/tag.
+                    </small>
+                  </div>
+                </>
+              )}
 
+              {/* Managed Buildings - Only for Administration Users */}
+              {formData.user_type === 'administration' && (
+                <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#0369a1' }}>
+                    <Building size={18} />
+                    {t('users.managedBuildings')}
+                  </label>
+                  <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #bae6fd', borderRadius: '6px', padding: '8px', backgroundColor: 'white' }}>
+                    {buildings.map(building => (
+                      <label key={building.id} style={{ display: 'block', padding: '8px', cursor: 'pointer', borderRadius: '4px' }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f9ff'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={(formData.managed_buildings || []).includes(building.id)}
+                          onChange={(e) => {
+                            const current = formData.managed_buildings || [];
+                            const updated = e.target.checked 
+                              ? [...current, building.id]
+                              : current.filter(id => id !== building.id);
+                            setFormData({ ...formData, managed_buildings: updated });
+                          }}
+                          style={{ marginRight: '8px' }}
+                        />
+                        <span style={{ fontSize: '14px' }}>
+                          {building.name}
+                          {building.is_group && <span style={{ marginLeft: '6px', fontSize: '12px', color: '#6b7280' }}>(Complex)</span>}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <small style={{ display: 'block', marginTop: '6px', color: '#0369a1', fontSize: '12px' }}>
+                    {t('users.selectManagedBuildings')}
+                  </small>
+                </div>
+              )}
+
+              {/* Address */}
               <div style={{ marginTop: '16px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('common.address')}</label>
                 <input type="text" value={formData.address_street} onChange={(e) => setFormData({ ...formData, address_street: e.target.value })}
@@ -320,6 +660,7 @@ export default function Users() {
                 </div>
               </div>
 
+              {/* Bank Details */}
               <div style={{ marginTop: '16px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('users.bankDetails')}</label>
                 <input type="text" value={formData.bank_name} onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
@@ -330,12 +671,14 @@ export default function Users() {
                   placeholder={t('users.accountHolder')} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
               </div>
 
+              {/* Notes */}
               <div style={{ marginTop: '16px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('common.notes')}</label>
                 <textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={3} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'inherit' }} />
               </div>
 
+              {/* Buttons */}
               <div className="button-group" style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                 <button type="submit" style={{
                   flex: 1, padding: '12px', backgroundColor: '#007bff', color: 'white',
@@ -356,7 +699,23 @@ export default function Users() {
       )}
 
       <style>{`
+        .desktop-table {
+          display: block;
+        }
+        
+        .mobile-cards {
+          display: none;
+        }
+
         @media (max-width: 768px) {
+          .desktop-table {
+            display: none;
+          }
+          
+          .mobile-cards {
+            display: block;
+          }
+
           .users-container h1 {
             font-size: 24px !important;
           }

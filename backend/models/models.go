@@ -26,6 +26,8 @@ type User struct {
 	ChargerIDs        string    `json:"charger_ids"`
 	Notes             string    `json:"notes"`
 	BuildingID        *int      `json:"building_id"`
+	UserType          string    `json:"user_type"`
+	ManagedBuildings  string    `json:"managed_buildings"`
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
 }
@@ -45,19 +47,19 @@ type Building struct {
 }
 
 type Meter struct {
-	ID               int       `json:"id"`
-	Name             string    `json:"name"`
-	MeterType        string    `json:"meter_type"`
-	BuildingID       int       `json:"building_id"`
-	UserID           *int      `json:"user_id"`
-	ConnectionType   string    `json:"connection_type"`
-	ConnectionConfig string    `json:"connection_config"`
-	Notes            string    `json:"notes"`
-	LastReading      float64   `json:"last_reading"`
+	ID               int        `json:"id"`
+	Name             string     `json:"name"`
+	MeterType        string     `json:"meter_type"`
+	BuildingID       int        `json:"building_id"`
+	UserID           *int       `json:"user_id"`
+	ConnectionType   string     `json:"connection_type"`
+	ConnectionConfig string     `json:"connection_config"`
+	Notes            string     `json:"notes"`
+	LastReading      float64    `json:"last_reading"`
 	LastReadingTime  *time.Time `json:"last_reading_time"`
-	IsActive         bool      `json:"is_active"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	IsActive         bool       `json:"is_active"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 type Charger struct {
@@ -95,33 +97,33 @@ type ChargerSession struct {
 }
 
 type BillingSettings struct {
-	ID                        int       `json:"id"`
-	BuildingID                int       `json:"building_id"`
-	NormalPowerPrice          float64   `json:"normal_power_price"`
-	SolarPowerPrice           float64   `json:"solar_power_price"`
-	CarChargingNormalPrice    float64   `json:"car_charging_normal_price"`
-	CarChargingPriorityPrice  float64   `json:"car_charging_priority_price"`
-	Currency                  string    `json:"currency"`
-	ValidFrom                 string    `json:"valid_from"`
-	ValidTo                   string    `json:"valid_to"`
-	IsActive                  bool      `json:"is_active"`
-	CreatedAt                 time.Time `json:"created_at"`
-	UpdatedAt                 time.Time `json:"updated_at"`
+	ID                       int       `json:"id"`
+	BuildingID               int       `json:"building_id"`
+	NormalPowerPrice         float64   `json:"normal_power_price"`
+	SolarPowerPrice          float64   `json:"solar_power_price"`
+	CarChargingNormalPrice   float64   `json:"car_charging_normal_price"`
+	CarChargingPriorityPrice float64   `json:"car_charging_priority_price"`
+	Currency                 string    `json:"currency"`
+	ValidFrom                string    `json:"valid_from"`
+	ValidTo                  string    `json:"valid_to"`
+	IsActive                 bool      `json:"is_active"`
+	CreatedAt                time.Time `json:"created_at"`
+	UpdatedAt                time.Time `json:"updated_at"`
 }
 
 type Invoice struct {
-	ID            int       `json:"id"`
-	InvoiceNumber string    `json:"invoice_number"`
-	UserID        int       `json:"user_id"`
-	BuildingID    int       `json:"building_id"`
-	PeriodStart   string    `json:"period_start"`
-	PeriodEnd     string    `json:"period_end"`
-	TotalAmount   float64   `json:"total_amount"`
-	Currency      string    `json:"currency"`
-	Status        string    `json:"status"`
+	ID            int           `json:"id"`
+	InvoiceNumber string        `json:"invoice_number"`
+	UserID        int           `json:"user_id"`
+	BuildingID    int           `json:"building_id"`
+	PeriodStart   string        `json:"period_start"`
+	PeriodEnd     string        `json:"period_end"`
+	TotalAmount   float64       `json:"total_amount"`
+	Currency      string        `json:"currency"`
+	Status        string        `json:"status"`
 	Items         []InvoiceItem `json:"items,omitempty"`
-	User          *User     `json:"user,omitempty"`
-	GeneratedAt   time.Time `json:"generated_at"`
+	User          *User         `json:"user,omitempty"`
+	GeneratedAt   time.Time     `json:"generated_at"`
 }
 
 type InvoiceItem struct {
@@ -144,18 +146,18 @@ type AdminLog struct {
 }
 
 type DashboardStats struct {
-	TotalUsers            int     `json:"total_users"`
-	TotalBuildings        int     `json:"total_buildings"`
-	TotalMeters           int     `json:"total_meters"`
-	TotalChargers         int     `json:"total_chargers"`
-	ActiveMeters          int     `json:"active_meters"`
-	ActiveChargers        int     `json:"active_chargers"`
-	TodayConsumption      float64 `json:"today_consumption"`
-	MonthConsumption      float64 `json:"month_consumption"`
-	TodaySolar            float64 `json:"today_solar"`
-	MonthSolar            float64 `json:"month_solar"`
-	TodayCharging         float64 `json:"today_charging"`
-	MonthCharging         float64 `json:"month_charging"`
+	TotalUsers       int     `json:"total_users"`
+	TotalBuildings   int     `json:"total_buildings"`
+	TotalMeters      int     `json:"total_meters"`
+	TotalChargers    int     `json:"total_chargers"`
+	ActiveMeters     int     `json:"active_meters"`
+	ActiveChargers   int     `json:"active_chargers"`
+	TodayConsumption float64 `json:"today_consumption"`
+	MonthConsumption float64 `json:"month_consumption"`
+	TodaySolar       float64 `json:"today_solar"`
+	MonthSolar       float64 `json:"month_solar"`
+	TodayCharging    float64 `json:"today_charging"`
+	MonthCharging    float64 `json:"month_charging"`
 }
 
 type ConsumptionData struct {

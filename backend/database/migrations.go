@@ -33,6 +33,8 @@ func RunMigrations(db *sql.DB) error {
 			charger_ids TEXT,
 			notes TEXT,
 			building_id INTEGER,
+			user_type TEXT DEFAULT 'regular',
+			managed_buildings TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (building_id) REFERENCES buildings(id)
@@ -183,8 +185,19 @@ func RunMigrations(db *sql.DB) error {
 	// Add consumption_kwh column if it doesn't exist
 	_, err := db.Exec(`ALTER TABLE meter_readings ADD COLUMN consumption_kwh REAL DEFAULT 0`)
 	if err != nil {
-		// Column might already exist, that's okay
 		log.Printf("Note: consumption_kwh column may already exist: %v", err)
+	}
+
+	// Add user_type column if it doesn't exist
+	_, err = db.Exec(`ALTER TABLE users ADD COLUMN user_type TEXT DEFAULT 'regular'`)
+	if err != nil {
+		log.Printf("Note: user_type column may already exist: %v", err)
+	}
+
+	// Add managed_buildings column if it doesn't exist
+	_, err = db.Exec(`ALTER TABLE users ADD COLUMN managed_buildings TEXT`)
+	if err != nil {
+		log.Printf("Note: managed_buildings column may already exist: %v", err)
 	}
 
 	if err := createDefaultAdmin(db); err != nil {

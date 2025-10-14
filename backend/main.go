@@ -26,7 +26,7 @@ func recoverMiddleware(next http.Handler) http.Handler {
 			if err := recover(); err != nil {
 				log.Printf("PANIC RECOVERED: %v", err)
 				log.Printf("Stack trace: %s", debug.Stack())
-				
+
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
 				json.NewEncoder(w).Encode(map[string]string{
@@ -91,24 +91,29 @@ func main() {
 	api.HandleFunc("/debug/status", debugStatusHandler).Methods("GET")
 	api.HandleFunc("/system/reboot", rebootHandler).Methods("POST")
 
+	// User routes
 	api.HandleFunc("/users", userHandler.List).Methods("GET")
 	api.HandleFunc("/users", userHandler.Create).Methods("POST")
 	api.HandleFunc("/users/{id}", userHandler.Get).Methods("GET")
 	api.HandleFunc("/users/{id}", userHandler.Update).Methods("PUT")
 	api.HandleFunc("/users/{id}", userHandler.Delete).Methods("DELETE")
+	api.HandleFunc("/users/admin-for-buildings", userHandler.GetAdminUsersForBuildings).Methods("GET")
 
+	// Building routes
 	api.HandleFunc("/buildings", buildingHandler.List).Methods("GET")
 	api.HandleFunc("/buildings", buildingHandler.Create).Methods("POST")
 	api.HandleFunc("/buildings/{id}", buildingHandler.Get).Methods("GET")
 	api.HandleFunc("/buildings/{id}", buildingHandler.Update).Methods("PUT")
 	api.HandleFunc("/buildings/{id}", buildingHandler.Delete).Methods("DELETE")
 
+	// Meter routes
 	api.HandleFunc("/meters", meterHandler.List).Methods("GET")
 	api.HandleFunc("/meters", meterHandler.Create).Methods("POST")
 	api.HandleFunc("/meters/{id}", meterHandler.Get).Methods("GET")
 	api.HandleFunc("/meters/{id}", meterHandler.Update).Methods("PUT")
 	api.HandleFunc("/meters/{id}", meterHandler.Delete).Methods("DELETE")
 
+	// Charger routes
 	api.HandleFunc("/chargers", chargerHandler.List).Methods("GET")
 	api.HandleFunc("/chargers", chargerHandler.Create).Methods("POST")
 	api.HandleFunc("/chargers/{id}", chargerHandler.Get).Methods("GET")
@@ -116,6 +121,7 @@ func main() {
 	api.HandleFunc("/chargers/{id}", chargerHandler.Delete).Methods("DELETE")
 	api.HandleFunc("/chargers/sessions/latest", chargerHandler.GetLatestSessions).Methods("GET")
 
+	// Billing routes
 	api.HandleFunc("/billing/settings", billingHandler.GetSettings).Methods("GET")
 	api.HandleFunc("/billing/settings", billingHandler.CreateSettings).Methods("POST")
 	api.HandleFunc("/billing/settings", billingHandler.UpdateSettings).Methods("PUT")
@@ -127,6 +133,7 @@ func main() {
 	api.HandleFunc("/billing/backup", billingHandler.BackupDatabase).Methods("GET")
 	api.HandleFunc("/billing/export", billingHandler.ExportData).Methods("GET")
 
+	// Dashboard routes
 	api.HandleFunc("/dashboard/stats", dashboardHandler.GetStats).Methods("GET")
 	api.HandleFunc("/dashboard/consumption", dashboardHandler.GetConsumption).Methods("GET")
 	api.HandleFunc("/dashboard/consumption-by-building", dashboardHandler.GetConsumptionByBuilding).Methods("GET")
@@ -172,18 +179,18 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 
 func debugStatusHandler(w http.ResponseWriter, r *http.Request) {
 	debugInfo := dataCollector.GetDebugInfo()
-	
+
 	// Add system health information
 	systemHealth := services.GetSystemHealth()
 	debugInfo["system_health"] = systemHealth
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(debugInfo)
 }
 
 func rebootHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("System reboot requested")
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "rebooting"})
@@ -191,7 +198,7 @@ func rebootHandler(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		time.Sleep(1 * time.Second)
 		log.Println("Executing service restart...")
-		
+
 		cmd := exec.Command("systemctl", "restart", "zev-billing.service")
 		if err := cmd.Run(); err != nil {
 			log.Printf("Failed to restart via systemctl: %v", err)
