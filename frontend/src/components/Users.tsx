@@ -795,12 +795,17 @@ export default function Users() {
                       >
                         <input
                           type="checkbox"
-                          checked={(formData.managed_buildings || []).includes(building.id)}
+                          checked={(() => {
+                            const managed = formData.managed_buildings || [];
+                            const managedArray = Array.isArray(managed) ? managed : [];
+                            return managedArray.includes(building.id);
+                          })()}
                           onChange={(e) => {
                             const current = formData.managed_buildings || [];
+                            const currentArray: number[] = Array.isArray(current) ? current : [];
                             const updated = e.target.checked 
-                              ? [...current, building.id]
-                              : current.filter(id => id !== building.id);
+                              ? [...currentArray, building.id]
+                              : currentArray.filter((id: number) => id !== building.id);
                             setFormData({ ...formData, managed_buildings: updated });
                           }}
                           style={{ marginRight: '8px' }}
