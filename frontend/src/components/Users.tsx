@@ -12,8 +12,7 @@ export default function Users() {
   const [showInstructions, setShowInstructions] = useState(false);
   const [editingUser, setEditingUser] = useState<UserType | null>(null);
   const [selectedBuildingId, setSelectedBuildingId] = useState<number | 'all'>('all');
-  const [buildingSearchQuery, setBuildingSearchQuery] = useState('');
-  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [formData, setFormData] = useState<Partial<UserType>>({
     first_name: '', last_name: '', email: '', phone: '',
     address_street: '', address_city: '', address_zip: '', address_country: 'Switzerland',
@@ -33,22 +32,32 @@ export default function Users() {
       api.getBuildings()
     ]);
     setUsers(usersData);
-    setBuildings(buildingsData.filter(b => !b.is_group));
+    // FIXED: Don't filter out complexes - administrators need to see them
+    setBuildings(buildingsData);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      // FIXED: Convert managed_buildings array to JSON string for backend
+      const dataToSend = {
+        ...formData,
+        managed_buildings: formData.user_type === 'administration' && formData.managed_buildings 
+          ? JSON.stringify(formData.managed_buildings)
+          : undefined
+      };
+
       if (editingUser) {
-        await api.updateUser(editingUser.id, formData);
+        await api.updateUser(editingUser.id, dataToSend);
       } else {
-        await api.createUser(formData);
+        await api.createUser(dataToSend);
       }
       setShowModal(false);
       setEditingUser(null);
       resetForm();
       loadData();
     } catch (err) {
+      console.error('Save error:', err);
       alert(t('users.saveFailed'));
     }
   };
@@ -66,9 +75,23 @@ export default function Users() {
 
   const handleEdit = (user: UserType) => {
     setEditingUser(user);
+    // FIXED: Parse managed_buildings from string to array
+    let managedBuildingsArray: number[] = [];
+    if (user.managed_buildings) {
+      try {
+        if (typeof user.managed_buildings === 'string') {
+          managedBuildingsArray = JSON.parse(user.managed_buildings);
+        } else if (Array.isArray(user.managed_buildings)) {
+          managedBuildingsArray = user.managed_buildings;
+        }
+      } catch (e) {
+        console.error('Error parsing managed_buildings:', e);
+      }
+    }
+    
     setFormData({
       ...user,
-      managed_buildings: user.managed_buildings || []
+      managed_buildings: managedBuildingsArray
     });
     setShowModal(true);
   };
@@ -84,16 +107,16 @@ export default function Users() {
     });
   };
 
-  // Filter buildings based on search
+  // FIXED: Single search that filters both buildings in cards AND users in tables
   const filteredBuildingsForCards = buildings.filter(b =>
-    b.name.toLowerCase().includes(buildingSearchQuery.toLowerCase())
+    !b.is_group && b.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Filter users
+  // Filter users based on both building selection and search query
   const filteredUsers = users.filter(user => {
     const matchesBuilding = selectedBuildingId === 'all' || user.building_id === selectedBuildingId;
-    const searchLower = userSearchQuery.toLowerCase();
-    const matchesSearch = userSearchQuery === '' || 
+    const searchLower = searchQuery.toLowerCase();
+    const matchesSearch = searchQuery === '' || 
       `${user.first_name} ${user.last_name}`.toLowerCase().includes(searchLower) ||
       user.email.toLowerCase().includes(searchLower);
     return matchesBuilding && matchesSearch;
@@ -107,12 +130,25 @@ export default function Users() {
     return buildings.find(b => b.id === buildingId)?.name || '-';
   };
 
-  const getManagedBuildingsNames = (managedBuildings?: number[]) => {
-    if (!managedBuildings || managedBuildings.length === 0) return '-';
-    return managedBuildings.map(id => buildings.find(b => b.id === id)?.name || `ID ${id}`).join(', ');
+  const getManagedBuildingsNames = (managedBuildings?: number[] | string) => {
+    let buildingIds: number[] = [];
+    
+    if (!managedBuildings) return '-';
+    
+    try {
+      if (typeof managedBuildings === 'string') {
+        buildingIds = JSON.parse(managedBuildings);
+      } else if (Array.isArray(managedBuildings)) {
+        buildingIds = managedBuildings;
+      }
+    } catch (e) {
+      return '-';
+    }
+    
+    if (buildingIds.length === 0) return '-';
+    return buildingIds.map(id => buildings.find(b => b.id === id)?.name || `ID ${id}`).join(', ');
   };
 
-  // Count users per building
   const getUserCountForBuilding = (buildingId: number) => {
     return users.filter(u => u.building_id === buildingId).length;
   };
@@ -254,15 +290,15 @@ export default function Users() {
         </div>
       </div>
 
-      {/* Building Search */}
+      {/* FIXED: Single unified search bar for both buildings and users */}
       <div style={{ marginBottom: '20px' }}>
         <div style={{ position: 'relative', maxWidth: '400px' }}>
           <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
           <input
             type="text"
-            placeholder={t('users.searchBuildings')}
-            value={buildingSearchQuery}
-            onChange={(e) => setBuildingSearchQuery(e.target.value)}
+            placeholder={t('users.searchUsers')}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             style={{
               width: '100%',
               padding: '10px 10px 10px 40px',
@@ -334,33 +370,6 @@ export default function Users() {
             </div>
           );
         })}
-      </div>
-
-      {/* User Search */}
-      <div style={{ 
-        backgroundColor: 'white', 
-        borderRadius: '12px', 
-        padding: '20px', 
-        marginBottom: '20px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-      }}>
-        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px', color: '#374151' }}>
-          <Search size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-          {t('users.searchUsers')}
-        </label>
-        <input
-          type="text"
-          value={userSearchQuery}
-          onChange={(e) => setUserSearchQuery(e.target.value)}
-          placeholder={t('users.searchUsers')}
-          style={{ 
-            width: '100%', 
-            padding: '10px', 
-            border: '1px solid #ddd', 
-            borderRadius: '6px',
-            fontSize: '14px'
-          }}
-        />
       </div>
 
       {/* Administration Users Section */}
