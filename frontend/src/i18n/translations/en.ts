@@ -39,6 +39,8 @@ export const en: Translations = {
   'common.confirm': 'Confirm',
   'common.required': 'Required',
   'common.optional': 'optional',
+  'common.recommended': 'Recommended',
+  'common.unknownBuilding': 'Unknown Building',
   
   // Dashboard
   'dashboard.title': 'Dashboard',
@@ -55,6 +57,7 @@ export const en: Translations = {
   'dashboard.chargingMonth': 'Charging Month',
   'dashboard.consumptionByBuilding': 'Consumption by Building',
   'dashboard.searchBuildings': 'Search buildings...',
+  'dashboard.allBuildings': 'All Buildings',
   'dashboard.lastHour': 'Last Hour',
   'dashboard.last24Hours': 'Last 24 Hours',
   'dashboard.last7Days': 'Last 7 Days',
@@ -68,6 +71,13 @@ export const en: Translations = {
   'dashboard.metersConfigured': 'Meters are configured but haven\'t collected data yet.',
   'dashboard.noMetersConfigured': 'No meters configured for this building yet.',
   'dashboard.addMeters': 'Add meters in the Meters page to start tracking consumption.',
+  
+  // Export
+  'export.title': 'Export',
+  'export.exportData': 'Export Data',
+  'export.exporting': 'Exporting...',
+  'export.startDate': 'Start Date',
+  'export.endDate': 'End Date',
   
   // Users
   'users.title': 'Users',
@@ -150,6 +160,48 @@ export const en: Translations = {
   'meters.deleteFailed': 'Failed to delete meter',
   'meters.saveFailed': 'Failed to save meter',
   'meters.exportFailed': 'Failed to export data',
+  'meters.metersCount': 'meters',
+  
+  // Meter Instructions
+  'meters.instructions.title': 'Meter Setup Instructions',
+  'meters.instructions.udpTitle': 'UDP Connection (Shared Port - RECOMMENDED!)',
+  'meters.instructions.udpNew': 'NEW: Auto-generated UUID_power_kwh keys for each meter!',
+  'meters.instructions.udpStep1': 'Click "Add Meter" - a unique UUID_power_kwh is generated automatically',
+  'meters.instructions.udpStep2': 'In Loxone Config, create Virtual Output UDP devices',
+  'meters.instructions.udpStep3': 'Set ALL meters to the SAME port (e.g., 8888)',
+  'meters.instructions.udpStep4': 'Each meter uses its auto-generated UUID_power_kwh to identify its data',
+  'meters.instructions.udpStep5': 'Example for Building A with 3 meters:',
+  'meters.instructions.udpExample1Title': 'Apartment Meter 1:',
+  'meters.instructions.udpExample2Title': 'Apartment Meter 2:',
+  'meters.instructions.udpExample3Title': 'Solar Meter:',
+  'meters.instructions.udpBenefits': 'Benefits: Unique UUID_power_kwh keys prevent conflicts, one UDP port per building, cleaner network configuration!',
+  'meters.instructions.httpTitle': 'HTTP Connection (Alternative)',
+  'meters.instructions.httpSetup': 'Loxone Virtual Output Setup:',
+  'meters.instructions.httpStep1': 'In Loxone Config, create a Virtual Output',
+  'meters.instructions.httpStep2': 'Set the address to:',
+  'meters.instructions.httpStep3': 'In the meter configuration, set endpoint to the same URL',
+  'meters.instructions.httpStep4': 'Set power_field to match your JSON field name (default: "power_kwh")',
+  'meters.instructions.httpStep5': 'Loxone should send:',
+  'meters.instructions.modbusTitle': 'Modbus TCP Connection',
+  'meters.instructions.modbusSetup': 'For Modbus-compatible meters:',
+  'meters.instructions.modbusStep1': 'Enter the meter\'s IP address',
+  'meters.instructions.modbusStep2': 'Port (default: 502)',
+  'meters.instructions.modbusStep3': 'Register address where power data is stored',
+  'meters.instructions.modbusStep4': 'Number of registers to read (typically 2 for float values)',
+  'meters.instructions.modbusStep5': 'Unit ID (slave address, typically 1)',
+  'meters.instructions.testingTitle': 'Testing Your Connection',
+  'meters.instructions.testingIntro': 'Check the Admin Logs page to see:',
+  'meters.instructions.testingPoint1': 'Data collection attempts every 15 minutes',
+  'meters.instructions.testingPoint2': 'Successful meter readings with UUID_power_kwh keys',
+  'meters.instructions.testingPoint3': 'Connection errors and debugging information',
+  'meters.instructions.testingPoint4': 'UDP packet reception logs showing which UUID_power_kwh keys were received',
+  'meters.instructions.troubleshootingTitle': 'Troubleshooting',
+  'meters.instructions.troubleshootingFirewall': 'Check firewall:',
+  'meters.instructions.troubleshootingService': 'Verify service:',
+  'meters.instructions.troubleshootingLogs': 'Check logs:',
+  'meters.instructions.troubleshootingNetwork': 'Test network:',
+  'meters.instructions.troubleshootingMonitor': 'Monitor the Admin Logs page in real-time for debugging',
+  'meters.instructions.troubleshootingUDP': 'UDP: Copy the auto-generated UUID_power_kwh exactly into your Loxone config!',
   
   // Chargers
   'chargers.title': 'Car Chargers',
@@ -160,6 +212,9 @@ export const en: Translations = {
   'chargers.exportData': 'Export Data',
   'chargers.brand': 'Brand',
   'chargers.priority': 'Priority',
+  'chargers.lastReading': 'Last Reading',
+  'chargers.currentState': 'Current State',
+  'chargers.currentMode': 'Current Mode',
   'chargers.noChargers': 'No chargers found. Click "Setup Instructions" to learn how to configure your first charger.',
   'chargers.brandPreset': 'Brand / Preset',
   'chargers.weidmuller': 'Weidmüller',
@@ -184,6 +239,7 @@ export const en: Translations = {
   'chargers.deleteFailed': 'Failed to delete charger',
   'chargers.saveFailed': 'Failed to save charger',
   'chargers.exportFailed': 'Failed to export data',
+  'chargers.chargersCount': 'chargers',
   
   // State & Mode Value Mappings
   'chargers.stateValueMappings': 'State Value Mappings',
@@ -197,6 +253,16 @@ export const en: Translations = {
   'chargers.configureModeValues': 'Configure the numeric values your charger sends for each charging mode:',
   'chargers.modeNormal': 'Normal Mode',
   'chargers.modePriority': 'Priority Mode',
+  
+  // Charger state display
+  'chargers.state.cableLocked': 'Cable Locked',
+  'chargers.state.waitingAuth': 'Waiting for Auth',
+  'chargers.state.charging': 'Charging',
+  'chargers.state.idle': 'Idle',
+  'chargers.state.unknown': 'Unknown',
+  'chargers.mode.normal': 'Normal',
+  'chargers.mode.priority': 'Priority',
+  'chargers.mode.unknown': 'Unknown',
   
   // Instruction keys
   'chargers.chargerSetup': 'Charger Setup',
@@ -269,7 +335,7 @@ export const en: Translations = {
   'billing.deleteSuccess': 'Invoice deleted successfully',
   'billing.deleteFailed': 'Failed to delete invoice',
   
-  // NEW: Billing - Sender Information
+  // Billing - Sender Information
   'billing.senderInfo': 'Sender Information',
   'billing.senderName': 'Sender Name / Company',
   'billing.senderAddress': 'Street Address',
@@ -279,7 +345,7 @@ export const en: Translations = {
   'billing.zip': 'ZIP',
   'billing.city': 'City',
   
-  // NEW: Billing - Banking Information
+  // Billing - Banking Information
   'billing.bankingInfo': 'Banking Information',
   'billing.bankName': 'Bank Name',
   'billing.iban': 'IBAN',
@@ -287,7 +353,7 @@ export const en: Translations = {
   'billing.paymentDetails': 'Payment Details',
   'billing.qrNote': 'If banking details are provided, a Swiss QR bill will be generated on a second page',
   
-  // NEW: Billing - Swiss QR
+  // Billing - Swiss QR
   'billing.swissQR': 'Swiss QR Bill',
   'billing.reference': 'Reference',
   

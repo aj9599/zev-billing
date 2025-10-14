@@ -39,6 +39,8 @@ export const de: Translations = {
   'common.confirm': 'Bestätigen',
   'common.required': 'Erforderlich',
   'common.optional': 'optional',
+  'common.recommended': 'Empfohlen',
+  'common.unknownBuilding': 'Unbekanntes Gebäude',
 
   // Dashboard
   'dashboard.title': 'Übersicht',
@@ -55,6 +57,7 @@ export const de: Translations = {
   'dashboard.chargingMonth': 'Laden Monat',
   'dashboard.consumptionByBuilding': 'Verbrauch nach Gebäude',
   'dashboard.searchBuildings': 'Gebäude suchen...',
+  'dashboard.allBuildings': 'Alle Gebäude',
   'dashboard.lastHour': 'Letzte Stunde',
   'dashboard.last24Hours': 'Letzte 24 Stunden',
   'dashboard.last7Days': 'Letzte 7 Tage',
@@ -68,6 +71,13 @@ export const de: Translations = {
   'dashboard.metersConfigured': 'Zähler sind konfiguriert, haben aber noch keine Daten gesammelt.',
   'dashboard.noMetersConfigured': 'Noch keine Zähler für dieses Gebäude konfiguriert.',
   'dashboard.addMeters': 'Fügen Sie Zähler auf der Zähler-Seite hinzu, um den Verbrauch zu verfolgen.',
+
+  // Export
+  'export.title': 'Exportieren',
+  'export.exportData': 'Daten exportieren',
+  'export.exporting': 'Wird exportiert...',
+  'export.startDate': 'Startdatum',
+  'export.endDate': 'Enddatum',
 
   // Users
   'users.title': 'Benutzer',
@@ -150,6 +160,48 @@ export const de: Translations = {
   'meters.deleteFailed': 'Löschen des Zählers fehlgeschlagen',
   'meters.saveFailed': 'Speichern des Zählers fehlgeschlagen',
   'meters.exportFailed': 'Export der Daten fehlgeschlagen',
+  'meters.metersCount': 'Zähler',
+
+  // Meter Instructions
+  'meters.instructions.title': 'Zähler Setup-Anleitung',
+  'meters.instructions.udpTitle': 'UDP-Verbindung (Geteilter Port - EMPFOHLEN!)',
+  'meters.instructions.udpNew': 'NEU: Automatisch generierte UUID_power_kwh-Schlüssel für jeden Zähler!',
+  'meters.instructions.udpStep1': 'Klicken Sie auf "Zähler hinzufügen" - ein eindeutiger UUID_power_kwh wird automatisch generiert',
+  'meters.instructions.udpStep2': 'In Loxone Config, erstellen Sie Virtual Output UDP-Geräte',
+  'meters.instructions.udpStep3': 'Setzen Sie ALLE Zähler auf den GLEICHEN Port (z.B. 8888)',
+  'meters.instructions.udpStep4': 'Jeder Zähler verwendet seinen automatisch generierten UUID_power_kwh zur Identifizierung seiner Daten',
+  'meters.instructions.udpStep5': 'Beispiel für Gebäude A mit 3 Zählern:',
+  'meters.instructions.udpExample1Title': 'Wohnungszähler 1:',
+  'meters.instructions.udpExample2Title': 'Wohnungszähler 2:',
+  'meters.instructions.udpExample3Title': 'Solarzähler:',
+  'meters.instructions.udpBenefits': 'Vorteile: Eindeutige UUID_power_kwh-Schlüssel verhindern Konflikte, ein UDP-Port pro Gebäude, sauberere Netzwerkkonfiguration!',
+  'meters.instructions.httpTitle': 'HTTP-Verbindung (Alternative)',
+  'meters.instructions.httpSetup': 'Loxone Virtual Output Setup:',
+  'meters.instructions.httpStep1': 'In Loxone Config, erstellen Sie einen Virtual Output',
+  'meters.instructions.httpStep2': 'Setzen Sie die Adresse auf:',
+  'meters.instructions.httpStep3': 'In der Zählerkonfiguration, setzen Sie den Endpunkt auf die gleiche URL',
+  'meters.instructions.httpStep4': 'Setzen Sie power_field auf Ihren JSON-Feldnamen (Standard: "power_kwh")',
+  'meters.instructions.httpStep5': 'Loxone sollte senden:',
+  'meters.instructions.modbusTitle': 'Modbus TCP-Verbindung',
+  'meters.instructions.modbusSetup': 'Für Modbus-kompatible Zähler:',
+  'meters.instructions.modbusStep1': 'Geben Sie die IP-Adresse des Zählers ein',
+  'meters.instructions.modbusStep2': 'Port (Standard: 502)',
+  'meters.instructions.modbusStep3': 'Registeradresse, wo Leistungsdaten gespeichert sind',
+  'meters.instructions.modbusStep4': 'Anzahl der zu lesenden Register (typischerweise 2 für Float-Werte)',
+  'meters.instructions.modbusStep5': 'Einheits-ID (Slave-Adresse, typischerweise 1)',
+  'meters.instructions.testingTitle': 'Testen Ihrer Verbindung',
+  'meters.instructions.testingIntro': 'Überprüfen Sie die Admin-Protokolle-Seite, um zu sehen:',
+  'meters.instructions.testingPoint1': 'Datensammlungsversuche alle 15 Minuten',
+  'meters.instructions.testingPoint2': 'Erfolgreiche Zählerablesungen mit UUID_power_kwh-Schlüsseln',
+  'meters.instructions.testingPoint3': 'Verbindungsfehler und Debug-Informationen',
+  'meters.instructions.testingPoint4': 'UDP-Paket-Empfangsprotokoll, das zeigt, welche UUID_power_kwh-Schlüssel empfangen wurden',
+  'meters.instructions.troubleshootingTitle': 'Fehlerbehebung',
+  'meters.instructions.troubleshootingFirewall': 'Firewall prüfen:',
+  'meters.instructions.troubleshootingService': 'Dienst überprüfen:',
+  'meters.instructions.troubleshootingLogs': 'Protokolle prüfen:',
+  'meters.instructions.troubleshootingNetwork': 'Netzwerk testen:',
+  'meters.instructions.troubleshootingMonitor': 'Überwachen Sie die Admin-Protokolle-Seite in Echtzeit für Debugging',
+  'meters.instructions.troubleshootingUDP': 'UDP: Kopieren Sie den automatisch generierten UUID_power_kwh genau in Ihre Loxone-Konfiguration!',
 
   // Chargers
   'chargers.title': 'Ladestationen',
@@ -160,6 +212,9 @@ export const de: Translations = {
   'chargers.exportData': 'Daten exportieren',
   'chargers.brand': 'Marke',
   'chargers.priority': 'Priorität',
+  'chargers.lastReading': 'Letzter Stand',
+  'chargers.currentState': 'Aktueller Status',
+  'chargers.currentMode': 'Aktueller Modus',
   'chargers.noChargers': 'Keine Ladestationen gefunden. Klicken Sie auf "Setup-Anleitung".',
   'chargers.brandPreset': 'Marke / Voreinstellung',
   'chargers.weidmuller': 'Weidmüller',
@@ -184,6 +239,7 @@ export const de: Translations = {
   'chargers.deleteFailed': 'Löschen der Ladestation fehlgeschlagen',
   'chargers.saveFailed': 'Speichern der Ladestation fehlgeschlagen',
   'chargers.exportFailed': 'Export der Daten fehlgeschlagen',
+  'chargers.chargersCount': 'Ladestationen',
 
   // State & Mode Value Mappings
   'chargers.stateValueMappings': 'Status-Wert-Zuordnungen',
@@ -197,6 +253,16 @@ export const de: Translations = {
   'chargers.configureModeValues': 'Konfigurieren Sie die numerischen Werte, die Ihre Ladestation für jeden Lademodus sendet:',
   'chargers.modeNormal': 'Normalmodus',
   'chargers.modePriority': 'Prioritätsmodus',
+
+  // Charger state display
+  'chargers.state.cableLocked': 'Kabel verriegelt',
+  'chargers.state.waitingAuth': 'Warte auf Auth',
+  'chargers.state.charging': 'Lädt',
+  'chargers.state.idle': 'Bereit',
+  'chargers.state.unknown': 'Unbekannt',
+  'chargers.mode.normal': 'Normal',
+  'chargers.mode.priority': 'Priorität',
+  'chargers.mode.unknown': 'Unbekannt',
 
   // Instruction keys
   'chargers.chargerSetup': 'Ladestation Einrichtung',
@@ -269,7 +335,7 @@ export const de: Translations = {
   'billing.deleteSuccess': 'Rechnung erfolgreich gelöscht',
   'billing.deleteFailed': 'Löschen der Rechnung fehlgeschlagen',
 
-  // NEW: Billing - Sender Information
+  // Billing - Sender Information
   'billing.senderInfo': 'Absenderinformationen',
   'billing.senderName': 'Absender / Firma',
   'billing.senderAddress': 'Strasse',
@@ -279,7 +345,7 @@ export const de: Translations = {
   'billing.zip': 'PLZ',
   'billing.city': 'Ort',
 
-  // NEW: Billing - Banking Information
+  // Billing - Banking Information
   'billing.bankingInfo': 'Bankverbindung',
   'billing.bankName': 'Bank',
   'billing.iban': 'IBAN',
@@ -287,7 +353,7 @@ export const de: Translations = {
   'billing.paymentDetails': 'Zahlungsdetails',
   'billing.qrNote': 'Bei Angabe der Bankverbindung wird ein Schweizer QR-Einzahlungsschein auf einer zweiten Seite generiert',
 
-  // NEW: Billing - Swiss QR
+  // Billing - Swiss QR
   'billing.swissQR': 'Schweizer QR-Rechnung',
   'billing.reference': 'Referenz',
 

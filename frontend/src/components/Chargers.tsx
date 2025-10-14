@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import type { Charger, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
 import { CHARGER_PRESETS, getPreset, type PresetConfig } from './chargerPresets';
+import ExportModal from '../components/ExportModal';
 
 interface ChargerConnectionConfig {
   power_endpoint?: string;
@@ -30,20 +31,24 @@ interface ChargerConnectionConfig {
   mode_priority?: string;
 }
 
+interface ChargerSession {
+  charger_id: number;
+  power_kwh: number;
+  state: string;
+  mode: string;
+}
+
 export default function Chargers() {
   const { t } = useTranslation();
   const [chargers, setChargers] = useState<Charger[]>([]);
   const [buildings, setBuildings] = useState<BuildingType[]>([]);
+  const [chargerSessions, setChargerSessions] = useState<Record<number, ChargerSession>>({});
   const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [editingCharger, setEditingCharger] = useState<Charger | null>(null);
-  const [exportDateRange, setExportDateRange] = useState({
-    start_date: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
-    end_date: new Date().toISOString().split('T')[0]
-  });
   const [formData, setFormData] = useState<Partial<Charger>>({
     name: '', brand: 'weidmuller', preset: 'weidmuller', building_id: 0,
     connection_type: 'udp', connection_config: '{}',
@@ -76,6 +81,9 @@ export default function Chargers() {
 
   useEffect(() => {
     loadData();
+    // Load charger sessions every 30 seconds
+    const interval = setInterval(loadChargerSessions, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadData = async () => {
@@ -85,6 +93,30 @@ export default function Chargers() {
     ]);
     setChargers(chargersData);
     setBuildings(buildingsData.filter(b => !b.is_group));
+    loadChargerSessions();
+  };
+
+  const loadChargerSessions = async () => {
+    // Load latest session data for each charger
+    // This would need to be implemented in the API
+    // For now, we'll use mock data structure
+    try {
+      const response = await fetch('/api/chargers/sessions/latest', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (response.ok) {
+        const sessions = await response.json();
+        const sessionsMap: Record<number, ChargerSession> = {};
+        sessions.forEach((session: ChargerSession) => {
+          sessionsMap[session.charger_id] = session;
+        });
+        setChargerSessions(sessionsMap);
+      }
+    } catch (err) {
+      console.error('Failed to load charger sessions:', err);
+    }
   };
 
   const generateUUID = (): string => {
@@ -107,6 +139,36 @@ export default function Chargers() {
 
   const getCurrentPreset = (): PresetConfig => {
     return getPreset(formData.preset || 'weidmuller');
+  };
+
+  const getStateDisplay = (charger: Charger, stateValue?: string): string => {
+    if (!stateValue) return t('chargers.state.unknown');
+    
+    try {
+      const config = JSON.parse(charger.connection_config);
+      if (stateValue === config.state_cable_locked) return t('chargers.state.cableLocked');
+      if (stateValue === config.state_waiting_auth) return t('chargers.state.waitingAuth');
+      if (stateValue === config.state_charging) return t('chargers.state.charging');
+      if (stateValue === config.state_idle) return t('chargers.state.idle');
+    } catch (e) {
+      console.error('Failed to parse charger config:', e);
+    }
+    
+    return t('chargers.state.unknown');
+  };
+
+  const getModeDisplay = (charger: Charger, modeValue?: string): string => {
+    if (!modeValue) return t('chargers.mode.unknown');
+    
+    try {
+      const config = JSON.parse(charger.connection_config);
+      if (modeValue === config.mode_normal) return t('chargers.mode.normal');
+      if (modeValue === config.mode_priority) return t('chargers.mode.priority');
+    } catch (e) {
+      console.error('Failed to parse charger config:', e);
+    }
+    
+    return t('chargers.mode.unknown');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -229,32 +291,28 @@ export default function Chargers() {
     setShowModal(true);
   };
 
-  const handleExport = async () => {
-    try {
-      const params = new URLSearchParams({
-        type: 'chargers',
-        start_date: exportDateRange.start_date,
-        end_date: exportDateRange.end_date
-      });
-      
-      const response = await fetch(`/api/billing/export?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `chargers-export-${exportDateRange.start_date}-to-${exportDateRange.end_date}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-      setShowExportModal(false);
-    } catch (err) {
-      alert(t('chargers.exportFailed'));
-    }
+  const handleExport = async (startDate: string, endDate: string) => {
+    const params = new URLSearchParams({
+      type: 'chargers',
+      start_date: startDate,
+      end_date: endDate
+    });
+    
+    const response = await fetch(`/api/billing/export?${params}`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    });
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `chargers-export-${startDate}-to-${endDate}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    setShowExportModal(false);
   };
 
   const resetForm = () => {
@@ -333,68 +391,6 @@ export default function Chargers() {
     acc[charger.building_id].push(charger);
     return acc;
   }, {} as Record<number, Charger[]>);
-
-  const ExportModal = () => (
-    <div style={{
-      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', 
-      justifyContent: 'center', zIndex: 2000, padding: '20px'
-    }}>
-      <div className="modal-content" style={{
-        backgroundColor: 'white', borderRadius: '12px', padding: '30px',
-        maxWidth: '500px', width: '100%'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>Export Charger Data</h2>
-          <button onClick={() => setShowExportModal(false)} 
-            style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
-            <X size={24} />
-          </button>
-        </div>
-
-        <div style={{ marginBottom: '20px' }}>
-          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-            Start Date *
-          </label>
-          <input 
-            type="date" 
-            required 
-            value={exportDateRange.start_date}
-            onChange={(e) => setExportDateRange({ ...exportDateRange, start_date: e.target.value })}
-            style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} 
-          />
-        </div>
-
-        <div style={{ marginBottom: '20px' }}>
-          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-            End Date *
-          </label>
-          <input 
-            type="date" 
-            required 
-            value={exportDateRange.end_date}
-            onChange={(e) => setExportDateRange({ ...exportDateRange, end_date: e.target.value })}
-            style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} 
-          />
-        </div>
-
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button onClick={handleExport} style={{
-            flex: 1, padding: '12px', backgroundColor: '#28a745', color: 'white',
-            border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
-          }}>
-            Export Data
-          </button>
-          <button onClick={() => setShowExportModal(false)} style={{
-            flex: 1, padding: '12px', backgroundColor: '#6c757d', color: 'white',
-            border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
-          }}>
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 
   const InstructionsModal = () => (
     <div style={{
@@ -564,7 +560,7 @@ export default function Chargers() {
             </h3>
           </div>
           <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
-            {chargers.length} {t('chargers.chargers')}
+            {chargers.length} {t('chargers.chargersCount')}
           </p>
         </div>
 
@@ -592,7 +588,7 @@ export default function Chargers() {
                 </h3>
               </div>
               <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
-                {buildingChargers.length} {t('chargers.chargers')}
+                {buildingChargers.length} {t('chargers.chargersCount')}
               </p>
             </div>
           );
@@ -613,6 +609,7 @@ export default function Chargers() {
             }}>
               {buildingChargers.map(charger => {
                 const chargerPreset = getPreset(charger.preset);
+                const session = chargerSessions[charger.id];
                 return (
                   <div key={charger.id} className="charger-card" style={{
                     backgroundColor: 'white',
@@ -727,6 +724,46 @@ export default function Chargers() {
                           {charger.connection_type}
                         </span>
                       </div>
+                      
+                      {session && (
+                        <>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                            <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>{t('chargers.lastReading')}</span>
+                            <span style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
+                              {session.power_kwh ? `${session.power_kwh.toFixed(2)} kWh` : '-'}
+                            </span>
+                          </div>
+                          
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                            <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>{t('chargers.currentState')}</span>
+                            <span style={{
+                              padding: '4px 12px',
+                              borderRadius: '20px',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              backgroundColor: session.state === 'charging' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(59, 130, 246, 0.1)',
+                              color: session.state === 'charging' ? '#22c55e' : '#3b82f6'
+                            }}>
+                              {getStateDisplay(charger, session.state)}
+                            </span>
+                          </div>
+                          
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                            <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>{t('chargers.currentMode')}</span>
+                            <span style={{
+                              padding: '4px 12px',
+                              borderRadius: '20px',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              backgroundColor: session.mode === 'priority' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(107, 114, 128, 0.1)',
+                              color: session.mode === 'priority' ? '#f59e0b' : '#6b7280'
+                            }}>
+                              {getModeDisplay(charger, session.mode)}
+                            </span>
+                          </div>
+                        </>
+                      )}
+                      
                       {chargerPreset.supportsPriority && (
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                           <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>{t('chargers.priorityMode')}</span>
@@ -739,6 +776,7 @@ export default function Chargers() {
                           </span>
                         </div>
                       )}
+                      
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>{t('common.status')}</span>
                         <span style={{
@@ -775,7 +813,7 @@ export default function Chargers() {
       )}
 
       {showInstructions && <InstructionsModal />}
-      {showExportModal && <ExportModal />}
+      {showExportModal && <ExportModal type="chargers" onClose={() => setShowExportModal(false)} onExport={handleExport} />}
 
       {showModal && (
         <div style={{
