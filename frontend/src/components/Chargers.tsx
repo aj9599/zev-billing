@@ -120,7 +120,7 @@ export default function Chargers() {
   };
 
   const generateUUID = (): string => {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
       const r = Math.random() * 16 | 0;
       const v = c === 'x' ? r : (r & 0x3 | 0x8);
       return v.toString(16);
@@ -143,7 +143,7 @@ export default function Chargers() {
 
   const getStateDisplay = (charger: Charger, stateValue?: string): string => {
     if (!stateValue) return t('chargers.state.unknown');
-    
+
     try {
       const config = JSON.parse(charger.connection_config);
       if (stateValue === config.state_cable_locked) return t('chargers.state.cableLocked');
@@ -153,13 +153,13 @@ export default function Chargers() {
     } catch (e) {
       console.error('Failed to parse charger config:', e);
     }
-    
+
     return t('chargers.state.unknown');
   };
 
   const getModeDisplay = (charger: Charger, modeValue?: string): string => {
     if (!modeValue) return t('chargers.mode.unknown');
-    
+
     try {
       const config = JSON.parse(charger.connection_config);
       if (modeValue === config.mode_normal) return t('chargers.mode.normal');
@@ -167,15 +167,15 @@ export default function Chargers() {
     } catch (e) {
       console.error('Failed to parse charger config:', e);
     }
-    
+
     return t('chargers.mode.unknown');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     let config: ChargerConnectionConfig = {};
-    
+
     if (formData.connection_type === 'http') {
       config = {
         power_endpoint: connectionConfig.power_endpoint,
@@ -220,7 +220,7 @@ export default function Chargers() {
         mode_priority: connectionConfig.mode_priority
       };
     }
-    
+
     const dataToSend = {
       ...formData,
       connection_config: JSON.stringify(config)
@@ -255,11 +255,11 @@ export default function Chargers() {
   const handleEdit = (charger: Charger) => {
     setEditingCharger(charger);
     setFormData(charger);
-    
+
     try {
       const config = JSON.parse(charger.connection_config);
       const preset = getPreset(charger.preset);
-      
+
       setConnectionConfig({
         power_endpoint: config.power_endpoint || '',
         state_endpoint: config.state_endpoint || '',
@@ -287,17 +287,21 @@ export default function Chargers() {
     } catch (e) {
       console.error('Failed to parse config:', e);
     }
-    
+
     setShowModal(true);
   };
 
-  const handleExport = async (startDate: string, endDate: string) => {
+  const handleExport = async (startDate: string, endDate: string, chargerId?: number) => {
     const params = new URLSearchParams({
       type: 'chargers',
       start_date: startDate,
       end_date: endDate
     });
-    
+
+    if (chargerId) {
+      params.append('charger_id', chargerId.toString());
+    }
+
     const response = await fetch(`/api/billing/export?${params}`, {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -307,7 +311,10 @@ export default function Chargers() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `chargers-export-${startDate}-to-${endDate}.csv`;
+
+    const chargerName = chargerId ? chargers.find(c => c.id === chargerId)?.name.replace(/\s+/g, '-') : 'all';
+    a.download = `chargers-${chargerName}-${startDate}-to-${endDate}.csv`;
+
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -360,9 +367,9 @@ export default function Chargers() {
 
   const handlePresetChange = (presetName: string) => {
     const preset = getPreset(presetName);
-    setFormData({ 
-      ...formData, 
-      brand: presetName, 
+    setFormData({
+      ...formData,
+      brand: presetName,
       preset: presetName
     });
     setConnectionConfig({
@@ -392,10 +399,15 @@ export default function Chargers() {
     return acc;
   }, {} as Record<number, Charger[]>);
 
+  const exportItems = chargers.map(c => ({
+    id: c.id,
+    name: c.name
+  }));
+
   const InstructionsModal = () => (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', 
+      backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center',
       justifyContent: 'center', zIndex: 2000, padding: '20px'
     }}>
       <div className="modal-content instructions-modal" style={{
@@ -404,7 +416,7 @@ export default function Chargers() {
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>{t('chargers.setupInstructions')}</h2>
-          <button onClick={() => setShowInstructions(false)} 
+          <button onClick={() => setShowInstructions(false)}
             style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
             <X size={24} />
           </button>
@@ -462,9 +474,9 @@ export default function Chargers() {
     <div className="chargers-container">
       <div className="chargers-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', gap: '15px', flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ 
-            fontSize: '36px', 
-            fontWeight: '800', 
+          <h1 style={{
+            fontSize: '36px',
+            fontWeight: '800',
             marginBottom: '8px',
             display: 'flex',
             alignItems: 'center',
@@ -534,11 +546,11 @@ export default function Chargers() {
         </div>
       </div>
 
-      <div className="building-cards-grid" style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', 
-        gap: '16px', 
-        marginBottom: '30px' 
+      <div className="building-cards-grid" style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+        gap: '16px',
+        marginBottom: '30px'
       }}>
         <div
           onClick={() => setSelectedBuildingId(null)}
@@ -602,10 +614,10 @@ export default function Chargers() {
             <h2 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '16px', color: '#1f2937' }}>
               {building?.name || t('common.unknownBuilding')}
             </h2>
-            <div className="chargers-grid" style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', 
-              gap: '20px' 
+            <div className="chargers-grid" style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+              gap: '20px'
             }}>
               {buildingChargers.map(charger => {
                 const chargerPreset = getPreset(charger.preset);
@@ -620,23 +632,23 @@ export default function Chargers() {
                     position: 'relative',
                     transition: 'all 0.2s ease',
                   }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = '0 8px 12px rgba(0,0,0,0.12)';
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.07)';
-                    e.currentTarget.style.transform = 'translateY(0)';
-                  }}>
-                    <div style={{ 
-                      position: 'absolute', 
-                      top: '16px', 
-                      right: '16px', 
-                      display: 'flex', 
-                      gap: '8px' 
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.boxShadow = '0 8px 12px rgba(0,0,0,0.12)';
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.07)';
+                      e.currentTarget.style.transform = 'translateY(0)';
                     }}>
-                      <button 
-                        onClick={() => handleEdit(charger)} 
+                    <div style={{
+                      position: 'absolute',
+                      top: '16px',
+                      right: '16px',
+                      display: 'flex',
+                      gap: '8px'
+                    }}>
+                      <button
+                        onClick={() => handleEdit(charger)}
                         style={{
                           width: '32px',
                           height: '32px',
@@ -662,8 +674,8 @@ export default function Chargers() {
                       >
                         <Edit2 size={16} />
                       </button>
-                      <button 
-                        onClick={() => handleDelete(charger.id)} 
+                      <button
+                        onClick={() => handleDelete(charger.id)}
                         style={{
                           width: '32px',
                           height: '32px',
@@ -692,18 +704,18 @@ export default function Chargers() {
                     </div>
 
                     <div style={{ paddingRight: '72px' }}>
-                      <h3 style={{ 
-                        fontSize: '20px', 
-                        fontWeight: '600', 
-                        marginBottom: '6px', 
+                      <h3 style={{
+                        fontSize: '20px',
+                        fontWeight: '600',
+                        marginBottom: '6px',
                         color: '#1f2937',
                         lineHeight: '1.3'
                       }}>
                         {charger.name}
                       </h3>
-                      <p style={{ 
-                        fontSize: '14px', 
-                        color: '#6b7280', 
+                      <p style={{
+                        fontSize: '14px',
+                        color: '#6b7280',
                         margin: 0,
                         textTransform: 'capitalize'
                       }}>
@@ -714,9 +726,9 @@ export default function Chargers() {
                     <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #f3f4f6' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                         <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>{t('chargers.connection')}</span>
-                        <span style={{ 
-                          fontSize: '13px', 
-                          fontWeight: '600', 
+                        <span style={{
+                          fontSize: '13px',
+                          fontWeight: '600',
                           color: '#667eea',
                           textTransform: 'uppercase',
                           letterSpacing: '0.5px'
@@ -724,7 +736,7 @@ export default function Chargers() {
                           {charger.connection_type}
                         </span>
                       </div>
-                      
+
                       {session && (
                         <>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
@@ -733,7 +745,7 @@ export default function Chargers() {
                               {session.power_kwh ? `${session.power_kwh.toFixed(2)} kWh` : '-'}
                             </span>
                           </div>
-                          
+
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                             <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>{t('chargers.currentState')}</span>
                             <span style={{
@@ -747,7 +759,7 @@ export default function Chargers() {
                               {getStateDisplay(charger, session.state)}
                             </span>
                           </div>
-                          
+
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                             <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>{t('chargers.currentMode')}</span>
                             <span style={{
@@ -763,20 +775,20 @@ export default function Chargers() {
                           </div>
                         </>
                       )}
-                      
+
                       {chargerPreset.supportsPriority && (
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                           <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>{t('chargers.priorityMode')}</span>
-                          <span style={{ 
-                            fontSize: '13px', 
-                            fontWeight: '600', 
+                          <span style={{
+                            fontSize: '13px',
+                            fontWeight: '600',
                             color: '#22c55e'
                           }}>
                             ✓ {t('chargers.supported')}
                           </span>
                         </div>
                       )}
-                      
+
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>{t('common.status')}</span>
                         <span style={{
@@ -800,11 +812,11 @@ export default function Chargers() {
       })}
 
       {filteredChargers.length === 0 && (
-        <div style={{ 
-          backgroundColor: 'white', 
-          borderRadius: '12px', 
-          padding: '60px 20px', 
-          textAlign: 'center', 
+        <div style={{
+          backgroundColor: 'white',
+          borderRadius: '12px',
+          padding: '60px 20px',
+          textAlign: 'center',
           color: '#999',
           boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
         }}>
@@ -813,7 +825,14 @@ export default function Chargers() {
       )}
 
       {showInstructions && <InstructionsModal />}
-      {showExportModal && <ExportModal type="chargers" onClose={() => setShowExportModal(false)} onExport={handleExport} />}
+      {showExportModal && (
+        <ExportModal
+          type="chargers"
+          items={exportItems}
+          onClose={() => setShowExportModal(false)}
+          onExport={handleExport}
+        />
+      )}
 
       {showModal && (
         <div style={{
@@ -830,7 +849,7 @@ export default function Chargers() {
                 <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>
                   {editingCharger ? t('chargers.editCharger') : t('chargers.addCharger')}
                 </h2>
-                <button 
+                <button
                   onClick={() => setShowInstructions(true)}
                   style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer', color: '#007bff' }}
                   title={t('chargers.setupInstructions')}
@@ -945,12 +964,12 @@ export default function Chargers() {
                       </div>
                     </div>
                     <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '12px', fontFamily: 'monospace', fontSize: '12px', border: '1px solid #e5e7eb' }}>
-                      <strong>{t('chargers.loxoneSendsTo')} {connectionConfig.listen_port || 8888}:</strong><br/>
-                      {"{"}<br/>
-                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.power_key || 'UUID_power'}</span>": &lt;v&gt;,<br/>
-                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.state_key || 'UUID_state'}</span>": 67,<br/>
-                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.user_id_key || 'UUID_user'}</span>": "USER_001",<br/>
-                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.mode_key || 'UUID_mode'}</span>": 2<br/>
+                      <strong>{t('chargers.loxoneSendsTo')} {connectionConfig.listen_port || 8888}:</strong><br />
+                      {"{"}<br />
+                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.power_key || 'UUID_power'}</span>": &lt;v&gt;,<br />
+                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.state_key || 'UUID_state'}</span>": 67,<br />
+                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.user_id_key || 'UUID_user'}</span>": "USER_001",<br />
+                      &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.mode_key || 'UUID_mode'}</span>": 2<br />
                       {"}"}
                     </div>
                   </>

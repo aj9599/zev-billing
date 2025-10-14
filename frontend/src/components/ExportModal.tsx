@@ -2,24 +2,31 @@ import { X } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from '../i18n';
 
-interface ExportModalProps {
-  type: 'meters' | 'chargers';
-  onClose: () => void;
-  onExport: (startDate: string, endDate: string) => Promise<void>;
+interface ExportItem {
+  id: number;
+  name: string;
 }
 
-export default function ExportModal({ type, onClose, onExport }: ExportModalProps) {
+interface ExportModalProps {
+  type: 'meters' | 'chargers';
+  items: ExportItem[];
+  onClose: () => void;
+  onExport: (startDate: string, endDate: string, itemId?: number) => Promise<void>;
+}
+
+export default function ExportModal({ type, items, onClose, onExport }: ExportModalProps) {
   const { t } = useTranslation();
   const [dateRange, setDateRange] = useState({
     start_date: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
     end_date: new Date().toISOString().split('T')[0]
   });
+  const [selectedItemId, setSelectedItemId] = useState<number | undefined>(undefined);
   const [isExporting, setIsExporting] = useState(false);
 
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      await onExport(dateRange.start_date, dateRange.end_date);
+      await onExport(dateRange.start_date, dateRange.end_date, selectedItemId);
     } finally {
       setIsExporting(false);
     }
@@ -43,6 +50,28 @@ export default function ExportModal({ type, onClose, onExport }: ExportModalProp
             style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
             <X size={24} />
           </button>
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+            {type === 'meters' ? t('meters.title') : t('chargers.title')}
+          </label>
+          <select
+            value={selectedItemId || ''}
+            onChange={(e) => setSelectedItemId(e.target.value ? parseInt(e.target.value) : undefined)}
+            style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
+          >
+            <option value="">{t('common.all')} {type === 'meters' ? t('meters.metersCount') : t('chargers.chargersCount')}</option>
+            {items.map(item => (
+              <option key={item.id} value={item.id}>{item.name}</option>
+            ))}
+          </select>
+          <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+            {selectedItemId 
+              ? `Export data for: ${items.find(i => i.id === selectedItemId)?.name}`
+              : `Export data for all ${type}`
+            }
+          </p>
         </div>
 
         <div style={{ marginBottom: '20px' }}>
