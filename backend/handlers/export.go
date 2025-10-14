@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 type ExportHandler struct {
@@ -24,8 +25,24 @@ func (h *ExportHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 	meterIDStr := r.URL.Query().Get("meter_id")
 	chargerIDStr := r.URL.Query().Get("charger_id")
 
+	log.Printf("Export request: type=%s, start=%s, end=%s, meter_id=%s, charger_id=%s", 
+		exportType, startDate, endDate, meterIDStr, chargerIDStr)
+
 	if exportType == "" || startDate == "" || endDate == "" {
-		http.Error(w, "Missing required parameters", http.StatusBadRequest)
+		log.Printf("Missing required parameters")
+		http.Error(w, "Missing required parameters: type, start_date, end_date", http.StatusBadRequest)
+		return
+	}
+
+	// Validate date format
+	if _, err := time.Parse("2006-01-02", startDate); err != nil {
+		log.Printf("Invalid start_date format: %v", err)
+		http.Error(w, "Invalid start_date format. Use YYYY-MM-DD", http.StatusBadRequest)
+		return
+	}
+	if _, err := time.Parse("2006-01-02", endDate); err != nil {
+		log.Printf("Invalid end_date format: %v", err)
+		http.Error(w, "Invalid end_date format. Use YYYY-MM-DD", http.StatusBadRequest)
 		return
 	}
 
@@ -38,20 +55,28 @@ func (h *ExportHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 	case "chargers":
 		data, err = h.exportChargerData(startDate, endDate, chargerIDStr)
 	default:
-		http.Error(w, "Invalid export type", http.StatusBadRequest)
+		log.Printf("Invalid export type: %s", exportType)
+		http.Error(w, "Invalid export type. Must be 'meters' or 'chargers'", http.StatusBadRequest)
 		return
 	}
 
 	if err != nil {
 		log.Printf("Export error: %v", err)
-		http.Error(w, "Failed to export data", http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Failed to export data: %v", err), http.StatusInternalServerError)
 		return
 	}
 
+	if len(data) <= 1 {
+		log.Printf("No data found for export")
+	} else {
+		log.Printf("Exporting %d rows", len(data)-1)
+	}
+
 	// Create CSV
-	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	filename := fmt.Sprintf("%s-export-%s-to-%s.csv", exportType, startDate, endDate)
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	w.Header().Set("Cache-Control", "no-cache")
 
 	writer := csv.NewWriter(w)
 	defer writer.Flush()
@@ -62,6 +87,8 @@ func (h *ExportHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	log.Printf("Export completed successfully: %s", filename)
 }
 
 func (h *ExportHandler) exportMeterData(startDate, endDate, meterIDStr string) ([][]string, error) {
@@ -77,7 +104,7 @@ func (h *ExportHandler) exportMeterData(startDate, endDate, meterIDStr string) (
 			COALESCE(u.first_name || ' ' || u.last_name, 'N/A') as user_name,
 			mr.reading_time,
 			mr.power_kwh,
-			mr.consumption_kwh
+			COALESCE(mr.consumption_kwh, 0) as consumption_kwh
 		FROM meter_readings mr
 		JOIN meters m ON mr.meter_id = m.id
 		JOIN buildings b ON m.building_id = b.id
@@ -93,13 +120,15 @@ func (h *ExportHandler) exportMeterData(startDate, endDate, meterIDStr string) (
 		baseQuery += " AND m.id = ?"
 		baseQuery += " ORDER BY mr.reading_time"
 		rows, err = h.db.Query(baseQuery, startDate, endDate, meterID)
+		if err != nil {
+			return nil, fmt.Errorf("query failed: %v", err)
+		}
 	} else {
 		baseQuery += " ORDER BY m.id, mr.reading_time"
 		rows, err = h.db.Query(baseQuery, startDate, endDate)
-	}
-
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, fmt.Errorf("query failed: %v", err)
+		}
 	}
 	defer rows.Close()
 
@@ -130,6 +159,10 @@ func (h *ExportHandler) exportMeterData(startDate, endDate, meterIDStr string) (
 		})
 	}
 
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("row iteration error: %v", err)
+	}
+
 	return data, nil
 }
 
@@ -144,10 +177,10 @@ func (h *ExportHandler) exportChargerData(startDate, endDate, chargerIDStr strin
 			c.brand,
 			b.name as building_name,
 			cs.session_time,
-			cs.user_id,
+			COALESCE(cs.user_id, 'N/A') as user_id,
 			cs.power_kwh,
-			cs.mode,
-			cs.state
+			COALESCE(cs.mode, 'N/A') as mode,
+			COALESCE(cs.state, 'N/A') as state
 		FROM charger_sessions cs
 		JOIN chargers c ON cs.charger_id = c.id
 		JOIN buildings b ON c.building_id = b.id
@@ -162,13 +195,15 @@ func (h *ExportHandler) exportChargerData(startDate, endDate, chargerIDStr strin
 		baseQuery += " AND c.id = ?"
 		baseQuery += " ORDER BY cs.session_time"
 		rows, err = h.db.Query(baseQuery, startDate, endDate, chargerID)
+		if err != nil {
+			return nil, fmt.Errorf("query failed: %v", err)
+		}
 	} else {
 		baseQuery += " ORDER BY c.id, cs.session_time"
 		rows, err = h.db.Query(baseQuery, startDate, endDate)
-	}
-
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, fmt.Errorf("query failed: %v", err)
+		}
 	}
 	defer rows.Close()
 
@@ -198,6 +233,10 @@ func (h *ExportHandler) exportChargerData(startDate, endDate, chargerIDStr strin
 			mode,
 			state,
 		})
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("row iteration error: %v", err)
 	}
 
 	return data, nil

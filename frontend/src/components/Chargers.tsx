@@ -292,34 +292,45 @@ export default function Chargers() {
   };
 
   const handleExport = async (startDate: string, endDate: string, chargerId?: number) => {
-    const params = new URLSearchParams({
-      type: 'chargers',
-      start_date: startDate,
-      end_date: endDate
-    });
-
-    if (chargerId) {
-      params.append('charger_id', chargerId.toString());
-    }
-
-    const response = await fetch(`/api/export/data?${params}`, {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+    try {
+      const params = new URLSearchParams({
+        type: 'chargers',
+        start_date: startDate,
+        end_date: endDate
+      });
+  
+      if (chargerId) {
+        params.append('charger_id', chargerId.toString());
       }
-    });
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-
-    const chargerName = chargerId ? chargers.find(c => c.id === chargerId)?.name.replace(/\s+/g, '-') : 'all';
-    a.download = `chargers-${chargerName}-${startDate}-to-${endDate}.csv`;
-
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-    setShowExportModal(false);
+  
+      const response = await fetch(`/api/export/data?${params}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+  
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Export failed: ${response.status} - ${errorText}`);
+      }
+  
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+  
+      const chargerName = chargerId ? chargers.find(c => c.id === chargerId)?.name.replace(/\s+/g, '-') : 'all';
+      a.download = `chargers-${chargerName}-${startDate}-to-${endDate}.csv`;
+  
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      setShowExportModal(false);
+    } catch (error) {
+      console.error('Export error:', error);
+      alert(t('chargers.exportFailed') || 'Export failed. Please try again.');
+    }
   };
 
   const resetForm = () => {

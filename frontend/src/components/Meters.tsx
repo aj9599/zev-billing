@@ -173,34 +173,45 @@ export default function Meters() {
   };
 
   const handleExport = async (startDate: string, endDate: string, meterId?: number) => {
-    const params = new URLSearchParams({
-      type: 'meters',
-      start_date: startDate,
-      end_date: endDate
-    });
-
-    if (meterId) {
-      params.append('meter_id', meterId.toString());
-    }
-
-    const response = await fetch(`/api/export/data?${params}`, {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+    try {
+      const params = new URLSearchParams({
+        type: 'meters',
+        start_date: startDate,
+        end_date: endDate
+      });
+  
+      if (meterId) {
+        params.append('meter_id', meterId.toString());
       }
-    });
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-
-    const meterName = meterId ? meters.find(m => m.id === meterId)?.name.replace(/\s+/g, '-') : 'all';
-    a.download = `meters-${meterName}-${startDate}-to-${endDate}.csv`;
-
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-    setShowExportModal(false);
+  
+      const response = await fetch(`/api/export/data?${params}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+  
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Export failed: ${response.status} - ${errorText}`);
+      }
+  
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+  
+      const meterName = meterId ? meters.find(m => m.id === meterId)?.name.replace(/\s+/g, '-') : 'all';
+      a.download = `meters-${meterName}-${startDate}-to-${endDate}.csv`;
+  
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      setShowExportModal(false);
+    } catch (error) {
+      console.error('Export error:', error);
+      alert(t('meters.exportFailed') || 'Export failed. Please try again.');
+    }
   };
 
   const resetForm = () => {

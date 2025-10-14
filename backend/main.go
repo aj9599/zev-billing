@@ -71,6 +71,7 @@ func main() {
 	go dataCollector.Start()
 	go autoBillingScheduler.Start()
 
+	// Initialize all handlers
 	authHandler := handlers.NewAuthHandler(db, cfg.JWTSecret)
 	userHandler := handlers.NewUserHandler(db)
 	buildingHandler := handlers.NewBuildingHandler(db)
@@ -79,6 +80,7 @@ func main() {
 	billingHandler := handlers.NewBillingHandler(db, billingService)
 	autoBillingHandler := handlers.NewAutoBillingHandler(db)
 	dashboardHandler := handlers.NewDashboardHandler(db)
+	exportHandler := handlers.NewExportHandler(db) // FIXED: Added export handler
 
 	r := mux.NewRouter()
 
@@ -135,7 +137,6 @@ func main() {
 	api.HandleFunc("/billing/invoices/{id}", billingHandler.GetInvoice).Methods("GET")
 	api.HandleFunc("/billing/invoices/{id}", billingHandler.DeleteInvoice).Methods("DELETE")
 	api.HandleFunc("/billing/backup", billingHandler.BackupDatabase).Methods("GET")
-	api.HandleFunc("/billing/export", billingHandler.ExportData).Methods("GET")
 
 	// Auto Billing routes
 	api.HandleFunc("/billing/auto-configs", autoBillingHandler.List).Methods("GET")
@@ -149,6 +150,9 @@ func main() {
 	api.HandleFunc("/dashboard/consumption", dashboardHandler.GetConsumption).Methods("GET")
 	api.HandleFunc("/dashboard/consumption-by-building", dashboardHandler.GetConsumptionByBuilding).Methods("GET")
 	api.HandleFunc("/dashboard/logs", dashboardHandler.GetLogs).Methods("GET")
+
+	// FIXED: Export route
+	api.HandleFunc("/export/data", exportHandler.ExportData).Methods("GET")
 
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:5173", "http://localhost:4173", "*"},
