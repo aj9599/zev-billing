@@ -1,27 +1,66 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Building as BuildingIcon, Search, MapPin } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Building, Search, MapPin, Zap, ChevronRight, ChevronDown, Folder, Home, HelpCircle, TrendingUp, TrendingDown, Activity } from 'lucide-react';
 import { api } from '../api/client';
-import type { Building } from '../types';
+import type { Building as BuildingType, Meter, Charger } from '../types';
 import { useTranslation } from '../i18n';
+
+interface BuildingConsumption {
+  building_id: number;
+  building_name: string;
+  meters: Array<{
+    meter_id: number;
+    meter_name: string;
+    meter_type: string;
+    user_name?: string;
+    data: Array<{
+      timestamp: Date;
+      power: number;
+      source: string;
+    }>;
+  }>;
+}
 
 export default function Buildings() {
   const { t } = useTranslation();
-  const [buildings, setBuildings] = useState<Building[]>([]);
+  const [buildings, setBuildings] = useState<BuildingType[]>([]);
+  const [meters, setMeters] = useState<Meter[]>([]);
+  const [chargers, setChargers] = useState<Charger[]>([]);
+  const [consumptionData, setConsumptionData] = useState<BuildingConsumption[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [editingBuilding, setEditingBuilding] = useState<Building | null>(null);
-  const [formData, setFormData] = useState<Partial<Building>>({
-    name: '', address_street: '', address_city: '', address_zip: '',
-    address_country: 'Switzerland', notes: '', is_group: false, group_buildings: []
+  const [showInstructions, setShowInstructions] = useState(false);
+  const [editingBuilding, setEditingBuilding] = useState<BuildingType | null>(null);
+  const [expandedComplexes, setExpandedComplexes] = useState<Set<number>>(new Set());
+  const [formData, setFormData] = useState<Partial<BuildingType>>({
+    name: '',
+    address_street: '',
+    address_city: '',
+    address_zip: '',
+    address_country: 'Switzerland',
+    notes: '',
+    is_group: false,
+    group_buildings: []
   });
 
   useEffect(() => {
-    loadBuildings();
+    loadData();
   }, []);
 
-  const loadBuildings = async () => {
-    const data = await api.getBuildings();
-    setBuildings(data);
+  const loadData = async () => {
+    try {
+      const [buildingsData, metersData, chargersData, consumptionData] = await Promise.all([
+        api.getBuildings(),
+        api.getMeters(),
+        api.getChargers(),
+        api.getConsumptionByBuilding('24h')
+      ]);
+      setBuildings(buildingsData);
+      setMeters(metersData);
+      setChargers(chargersData);
+      setConsumptionData(consumptionData);
+    } catch (err) {
+      console.error('Failed to load data:', err);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,7 +74,7 @@ export default function Buildings() {
       setShowModal(false);
       setEditingBuilding(null);
       resetForm();
-      loadBuildings();
+      loadData();
     } catch (err) {
       alert(t('buildings.saveFailed'));
     }
@@ -45,14 +84,14 @@ export default function Buildings() {
     if (confirm(t('buildings.deleteConfirm'))) {
       try {
         await api.deleteBuilding(id);
-        loadBuildings();
+        loadData();
       } catch (err) {
         alert(t('buildings.deleteFailed'));
       }
     }
   };
 
-  const handleEdit = (building: Building) => {
+  const handleEdit = (building: BuildingType) => {
     setEditingBuilding(building);
     setFormData(building);
     setShowModal(true);
@@ -60,9 +99,25 @@ export default function Buildings() {
 
   const resetForm = () => {
     setFormData({
-      name: '', address_street: '', address_city: '', address_zip: '',
-      address_country: 'Switzerland', notes: '', is_group: false, group_buildings: []
+      name: '',
+      address_street: '',
+      address_city: '',
+      address_zip: '',
+      address_country: 'Switzerland',
+      notes: '',
+      is_group: false,
+      group_buildings: []
     });
+  };
+
+  const toggleComplex = (complexId: number) => {
+    const newExpanded = new Set(expandedComplexes);
+    if (newExpanded.has(complexId)) {
+      newExpanded.delete(complexId);
+    } else {
+      newExpanded.add(complexId);
+    }
+    setExpandedComplexes(newExpanded);
   };
 
   const toggleGroupBuilding = (buildingId: number) => {
@@ -74,16 +129,403 @@ export default function Buildings() {
     }
   };
 
+  const getBuildingMeters = (buildingId: number) => meters.filter(m => m.building_id === buildingId);
+  const getBuildingChargers = (buildingId: number) => chargers.filter(c => c.building_id === buildingId);
+  
+  const getBuildingConsumption = (buildingId: number) => {
+    const data = consumptionData.find(d => d.building_id === buildingId);
+    if (!data) return { total: 0, solar: 0, charging: 0 };
+    
+    const buildingMeters = data.meters || [];
+    let total = 0, solar = 0, charging = 0;
+    
+    buildingMeters.forEach(meter => {
+      const latestData = meter.data?.[meter.data.length - 1];
+      if (!latestData) return;
+      
+      if (meter.meter_type === 'total_meter' || meter.meter_type === 'apartment_meter') {
+        total += latestData.power / 1000;
+      } else if (meter.meter_type === 'solar_meter') {
+        solar += latestData.power / 1000;
+      } else if (meter.meter_type === 'charger') {
+        charging += latestData.power / 1000;
+      }
+    });
+    
+    return { total, solar, charging };
+  };
+
+  const complexes = buildings.filter(b => b.is_group);
+  const standaloneBuildings = buildings.filter(b => !b.is_group && !complexes.some(c => c.group_buildings?.includes(b.id)));
   const availableBuildings = buildings.filter(b => !b.is_group && b.id !== editingBuilding?.id);
 
-  const filteredBuildings = buildings.filter(b =>
+  const filteredComplexes = complexes.filter(c =>
+    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    c.address_street?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    c.address_city?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredStandalone = standaloneBuildings.filter(b =>
     b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    b.address_street.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    b.address_city.toLowerCase().includes(searchQuery.toLowerCase())
+    b.address_street?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    b.address_city?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const BuildingCard = ({ building, isInComplex = false }: { building: BuildingType; isInComplex?: boolean }) => {
+    const buildingMeters = getBuildingMeters(building.id);
+    const buildingChargers = getBuildingChargers(building.id);
+    const consumption = getBuildingConsumption(building.id);
+
+    return (
+      <div style={{
+        backgroundColor: 'white',
+        borderRadius: '16px',
+        padding: '24px',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.07)',
+        border: '1px solid #f0f0f0',
+        position: 'relative',
+        transition: 'all 0.2s ease',
+        marginLeft: isInComplex ? '40px' : '0'
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = '0 8px 12px rgba(0,0,0,0.12)';
+        e.currentTarget.style.transform = 'translateY(-2px)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.07)';
+        e.currentTarget.style.transform = 'translateY(0)';
+      }}>
+        <div style={{ 
+          position: 'absolute', 
+          top: '16px', 
+          right: '16px', 
+          display: 'flex', 
+          gap: '8px' 
+        }}>
+          <button 
+            onClick={() => handleEdit(building)} 
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              border: 'none',
+              backgroundColor: 'rgba(59, 130, 246, 0.1)',
+              color: '#3b82f6',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            title={t('common.edit')}
+          >
+            <Edit2 size={16} />
+          </button>
+          <button 
+            onClick={() => handleDelete(building.id)} 
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              border: 'none',
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              color: '#ef4444',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            title={t('common.delete')}
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+
+        <div style={{ paddingRight: '72px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+            <Home size={20} color="#667eea" />
+            <h3 style={{ 
+              fontSize: '20px', 
+              fontWeight: '600', 
+              margin: 0,
+              color: '#1f2937',
+              lineHeight: '1.3'
+            }}>
+              {building.name}
+            </h3>
+          </div>
+          
+          {(building.address_street || building.address_city) && (
+            <div style={{ display: 'flex', alignItems: 'start', gap: '6px', marginTop: '8px' }}>
+              <MapPin size={14} color="#9ca3af" style={{ marginTop: '2px', flexShrink: 0 }} />
+              <p style={{ 
+                fontSize: '13px', 
+                color: '#6b7280', 
+                margin: 0,
+                lineHeight: '1.5'
+              }}>
+                {building.address_street && <>{building.address_street}<br /></>}
+                {building.address_zip && building.address_city && `${building.address_zip} ${building.address_city}`}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #f3f4f6' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                <Zap size={14} color="#9ca3af" />
+                <span style={{ fontSize: '12px', color: '#9ca3af', fontWeight: '500' }}>
+                  {t('buildings.metersCount')}
+                </span>
+              </div>
+              <span style={{ fontSize: '20px', fontWeight: '700', color: '#1f2937' }}>
+                {buildingMeters.length}
+              </span>
+            </div>
+            
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                <Activity size={14} color="#9ca3af" />
+                <span style={{ fontSize: '12px', color: '#9ca3af', fontWeight: '500' }}>
+                  {t('buildings.chargersCount')}
+                </span>
+              </div>
+              <span style={{ fontSize: '20px', fontWeight: '700', color: '#1f2937' }}>
+                {buildingChargers.length}
+              </span>
+            </div>
+          </div>
+
+          {(consumption.total > 0 || consumption.solar > 0 || consumption.charging > 0) && (
+            <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f3f4f6' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {consumption.total > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <TrendingUp size={14} color="#f59e0b" />
+                      <span style={{ fontSize: '12px', color: '#6b7280' }}>{t('buildings.consumption')}</span>
+                    </div>
+                    <span style={{ fontSize: '14px', fontWeight: '600', color: '#f59e0b' }}>
+                      {consumption.total.toFixed(2)} kW
+                    </span>
+                  </div>
+                )}
+                
+                {consumption.solar > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <TrendingDown size={14} color="#22c55e" />
+                      <span style={{ fontSize: '12px', color: '#6b7280' }}>{t('buildings.solarProduction')}</span>
+                    </div>
+                    <span style={{ fontSize: '14px', fontWeight: '600', color: '#22c55e' }}>
+                      {consumption.solar.toFixed(2)} kW
+                    </span>
+                  </div>
+                )}
+                
+                {consumption.charging > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Zap size={14} color="#3b82f6" />
+                      <span style={{ fontSize: '12px', color: '#6b7280' }}>{t('buildings.charging')}</span>
+                    </div>
+                    <span style={{ fontSize: '14px', fontWeight: '600', color: '#3b82f6' }}>
+                      {consumption.charging.toFixed(2)} kW
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const ComplexCard = ({ complex }: { complex: BuildingType }) => {
+    const isExpanded = expandedComplexes.has(complex.id);
+    const buildingsInComplex = buildings.filter(b => complex.group_buildings?.includes(b.id));
+    
+    return (
+      <div style={{ marginBottom: '20px' }}>
+        <div 
+          onClick={() => toggleComplex(complex.id)}
+          style={{
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            padding: '24px',
+            boxShadow: '0 4px 6px rgba(0,0,0,0.07)',
+            border: '2px solid #667eea',
+            position: 'relative',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.boxShadow = '0 8px 12px rgba(0,0,0,0.12)';
+            e.currentTarget.style.transform = 'translateY(-2px)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.07)';
+            e.currentTarget.style.transform = 'translateY(0)';
+          }}
+        >
+          <div style={{ 
+            position: 'absolute', 
+            top: '16px', 
+            right: '16px', 
+            display: 'flex', 
+            gap: '8px' 
+          }}>
+            <button 
+              onClick={(e) => { e.stopPropagation(); handleEdit(complex); }}
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                border: 'none',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                color: '#3b82f6',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+              title={t('common.edit')}
+            >
+              <Edit2 size={16} />
+            </button>
+            <button 
+              onClick={(e) => { e.stopPropagation(); handleDelete(complex.id); }}
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                border: 'none',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                color: '#ef4444',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+              title={t('common.delete')}
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingRight: '72px' }}>
+            {isExpanded ? <ChevronDown size={24} color="#667eea" /> : <ChevronRight size={24} color="#667eea" />}
+            <Folder size={24} color="#667eea" />
+            <div style={{ flex: 1 }}>
+              <h3 style={{ 
+                fontSize: '22px', 
+                fontWeight: '700', 
+                margin: 0,
+                color: '#667eea',
+                lineHeight: '1.3'
+              }}>
+                {complex.name}
+              </h3>
+              <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>
+                {buildingsInComplex.length} {t('buildings.buildingsInComplex')}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {isExpanded && (
+          <div style={{ 
+            marginTop: '16px',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+            gap: '16px'
+          }}>
+            {buildingsInComplex.map(building => (
+              <BuildingCard key={building.id} building={building} isInComplex={true} />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const InstructionsModal = () => (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', 
+      justifyContent: 'center', zIndex: 2000, padding: '20px'
+    }}>
+      <div style={{
+        backgroundColor: 'white', borderRadius: '12px', padding: '30px',
+        maxWidth: '700px', maxHeight: '90vh', overflow: 'auto', width: '100%'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>{t('buildings.instructions.title')}</h2>
+          <button onClick={() => setShowInstructions(false)} 
+            style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
+            <X size={24} />
+          </button>
+        </div>
+
+        <div style={{ lineHeight: '1.8', color: '#374151' }}>
+          <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #3b82f6' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Home size={20} color="#3b82f6" />
+              {t('buildings.instructions.whatIsBuilding')}
+            </h3>
+            <p>{t('buildings.instructions.buildingDescription')}</p>
+          </div>
+
+          <div style={{ backgroundColor: '#f3e5f5', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #7b1fa2' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Folder size={20} color="#7b1fa2" />
+              {t('buildings.instructions.whatIsComplex')}
+            </h3>
+            <p>{t('buildings.instructions.complexDescription')}</p>
+          </div>
+
+          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
+            {t('buildings.instructions.howToUse')}
+          </h3>
+          <ul style={{ marginLeft: '20px' }}>
+            <li>{t('buildings.instructions.step1')}</li>
+            <li>{t('buildings.instructions.step2')}</li>
+            <li>{t('buildings.instructions.step3')}</li>
+            <li>{t('buildings.instructions.step4')}</li>
+            <li>{t('buildings.instructions.step5')}</li>
+          </ul>
+
+          <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', marginTop: '16px', border: '1px solid #f59e0b' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: '#1f2937' }}>
+              {t('buildings.instructions.tips')}
+            </h3>
+            <ul style={{ marginLeft: '20px', fontSize: '14px' }}>
+              <li>{t('buildings.instructions.tip1')}</li>
+              <li>{t('buildings.instructions.tip2')}</li>
+              <li>{t('buildings.instructions.tip3')}</li>
+            </ul>
+          </div>
+        </div>
+
+        <button onClick={() => setShowInstructions(false)} style={{
+          width: '100%', marginTop: '24px', padding: '12px',
+          backgroundColor: '#007bff', color: 'white', border: 'none',
+          borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
+        }}>
+          {t('common.close')}
+        </button>
+      </div>
+    </div>
   );
 
   return (
-    <div className="buildings-container" style={{ width: '100%', maxWidth: '100%' }}>
+    <div className="buildings-container">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', gap: '15px', flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ 
@@ -98,40 +540,43 @@ export default function Buildings() {
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text'
           }}>
-            <BuildingIcon size={36} style={{ color: '#667eea' }} />
+            <Building size={36} style={{ color: '#667eea' }} />
             {t('buildings.title')}
           </h1>
           <p style={{ color: '#6b7280', fontSize: '16px' }}>
             {t('buildings.subtitle')}
           </p>
         </div>
-        <button
-          onClick={() => { resetForm(); setShowModal(true); }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '10px 20px',
-            backgroundColor: '#007bff',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            fontSize: '14px',
-            cursor: 'pointer'
-          }}
-        >
-          <Plus size={18} />
-          {t('buildings.addBuilding')}
-        </button>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setShowInstructions(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
+              backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
+            }}
+          >
+            <HelpCircle size={18} />
+            {t('buildings.setupInstructions')}
+          </button>
+          <button
+            onClick={() => { resetForm(); setShowModal(true); }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
+              backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
+            }}
+          >
+            <Plus size={18} />
+            {t('buildings.addBuilding')}
+          </button>
+        </div>
       </div>
 
-      {/* Search Bar */}
       <div style={{ marginBottom: '20px' }}>
         <div style={{ position: 'relative', maxWidth: '400px' }}>
           <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
           <input
             type="text"
-            placeholder={t('dashboard.searchBuildings')}
+            placeholder={t('buildings.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -145,104 +590,50 @@ export default function Buildings() {
         </div>
       </div>
 
-      {/* Desktop Table */}
-      <div className="desktop-table" style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden', width: '100%' }}>
-        <table style={{ width: '100%' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.name')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.address')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('buildings.type')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.actions')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredBuildings.map(building => (
-              <tr key={building.id} style={{ borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: '16px', fontWeight: '500' }}>{building.name}</td>
-                <td style={{ padding: '16px' }}>
-                  {building.address_street}, {building.address_zip} {building.address_city}
-                </td>
-                <td style={{ padding: '16px' }}>
-                  <span style={{
-                    padding: '4px 12px', borderRadius: '12px', fontSize: '12px',
-                    backgroundColor: building.is_group ? '#e3f2fd' : '#f3e5f5',
-                    color: building.is_group ? '#1976d2' : '#7b1fa2'
-                  }}>
-                    {building.is_group ? t('buildings.group') : t('buildings.single')}
-                  </span>
-                </td>
-                <td style={{ padding: '16px' }}>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => handleEdit(building)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}>
-                      <Edit2 size={16} color="#007bff" />
-                    </button>
-                    <button onClick={() => handleDelete(building.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}>
-                      <Trash2 size={16} color="#dc3545" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {filteredBuildings.length === 0 && (
-          <div style={{ padding: '60px', textAlign: 'center', color: '#999' }}>
-            {searchQuery ? t('buildings.noResults') : t('buildings.noBuildings')}
-          </div>
-        )}
-      </div>
+      {filteredComplexes.length > 0 && (
+        <div style={{ marginBottom: '30px' }}>
+          <h2 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Folder size={20} color="#667eea" />
+            {t('buildings.complexes')}
+          </h2>
+          {filteredComplexes.map(complex => (
+            <ComplexCard key={complex.id} complex={complex} />
+          ))}
+        </div>
+      )}
 
-      {/* Mobile Cards */}
-      <div className="mobile-cards">
-        {filteredBuildings.map(building => (
-          <div key={building.id} style={{
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            padding: '16px',
-            marginBottom: '16px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+      {filteredStandalone.length > 0 && (
+        <div>
+          <h2 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Home size={20} color="#667eea" />
+            {t('buildings.standaloneBuildings')}
+          </h2>
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', 
+            gap: '20px' 
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
-              <div style={{ flex: 1 }}>
-                <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: '#1f2937' }}>
-                  {building.name}
-                </h3>
-                <div style={{ fontSize: '13px', color: '#6b7280', display: 'flex', alignItems: 'start', gap: '6px', marginBottom: '8px' }}>
-                  <MapPin size={14} style={{ marginTop: '2px', flexShrink: 0 }} />
-                  <span>
-                    {building.address_street}<br />
-                    {building.address_zip} {building.address_city}
-                  </span>
-                </div>
-                <span style={{
-                  padding: '4px 12px',
-                  borderRadius: '12px',
-                  fontSize: '12px',
-                  backgroundColor: building.is_group ? '#e3f2fd' : '#f3e5f5',
-                  color: building.is_group ? '#1976d2' : '#7b1fa2',
-                  display: 'inline-block'
-                }}>
-                  {building.is_group ? t('buildings.group') : t('buildings.single')}
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={() => handleEdit(building)} style={{ padding: '8px', border: 'none', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '6px', cursor: 'pointer' }}>
-                  <Edit2 size={16} color="#3b82f6" />
-                </button>
-                <button onClick={() => handleDelete(building.id)} style={{ padding: '8px', border: 'none', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '6px', cursor: 'pointer' }}>
-                  <Trash2 size={16} color="#ef4444" />
-                </button>
-              </div>
-            </div>
+            {filteredStandalone.map(building => (
+              <BuildingCard key={building.id} building={building} />
+            ))}
           </div>
-        ))}
-        {filteredBuildings.length === 0 && (
-          <div style={{ backgroundColor: 'white', padding: '40px 20px', textAlign: 'center', color: '#999', borderRadius: '12px' }}>
-            {searchQuery ? t('buildings.noResults') : t('buildings.noBuildings')}
-          </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {filteredComplexes.length === 0 && filteredStandalone.length === 0 && (
+        <div style={{ 
+          backgroundColor: 'white', 
+          borderRadius: '12px', 
+          padding: '60px 20px', 
+          textAlign: 'center', 
+          color: '#999',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+        }}>
+          {searchQuery ? t('buildings.noResults') : t('buildings.noBuildings')}
+        </div>
+      )}
+
+      {showInstructions && <InstructionsModal />}
 
       {showModal && (
         <div style={{
@@ -273,7 +664,7 @@ export default function Buildings() {
               <div style={{ marginTop: '16px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                   <input type="checkbox" checked={formData.is_group} onChange={(e) => setFormData({ ...formData, is_group: e.target.checked })} />
-                  <span style={{ fontWeight: '500', fontSize: '14px' }}>{t('buildings.isGroup')}</span>
+                  <span style={{ fontWeight: '500', fontSize: '14px' }}>{t('buildings.isComplex')}</span>
                 </label>
               </div>
 
@@ -301,17 +692,21 @@ export default function Buildings() {
                 </div>
               )}
 
-              <div style={{ marginTop: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('common.address')}</label>
-                <input type="text" value={formData.address_street} onChange={(e) => setFormData({ ...formData, address_street: e.target.value })}
-                  placeholder={t('users.street')} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', marginBottom: '8px' }} />
-                <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '8px' }}>
-                  <input type="text" value={formData.address_zip} onChange={(e) => setFormData({ ...formData, address_zip: e.target.value })}
-                    placeholder={t('users.zip')} style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
-                  <input type="text" value={formData.address_city} onChange={(e) => setFormData({ ...formData, address_city: e.target.value })}
-                    placeholder={t('users.city')} style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
-                </div>
-              </div>
+              {!formData.is_group && (
+                <>
+                  <div style={{ marginTop: '16px' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('common.address')}</label>
+                    <input type="text" value={formData.address_street} onChange={(e) => setFormData({ ...formData, address_street: e.target.value })}
+                      placeholder={t('users.street')} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', marginBottom: '8px' }} />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '8px' }}>
+                      <input type="text" value={formData.address_zip} onChange={(e) => setFormData({ ...formData, address_zip: e.target.value })}
+                        placeholder={t('users.zip')} style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      <input type="text" value={formData.address_city} onChange={(e) => setFormData({ ...formData, address_city: e.target.value })}
+                        placeholder={t('users.city')} style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                    </div>
+                  </div>
+                </>
+              )}
 
               <div style={{ marginTop: '16px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('common.notes')}</label>
@@ -322,13 +717,13 @@ export default function Buildings() {
               <div className="button-group" style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                 <button type="submit" style={{
                   flex: 1, padding: '12px', backgroundColor: '#007bff', color: 'white',
-                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500'
+                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
                 }}>
                   {editingBuilding ? t('common.update') : t('common.create')}
                 </button>
                 <button type="button" onClick={() => { setShowModal(false); setEditingBuilding(null); }} style={{
                   flex: 1, padding: '12px', backgroundColor: '#6c757d', color: 'white',
-                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500'
+                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
                 }}>
                   {t('common.cancel')}
                 </button>

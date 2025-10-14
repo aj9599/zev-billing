@@ -118,6 +118,37 @@ export const de: Translations = {
   'buildings.deleteFailed': 'Löschen des Gebäudes fehlgeschlagen',
   'buildings.saveFailed': 'Speichern des Gebäudes fehlgeschlagen',
 
+  // Buildings - Additional keys
+  'buildings.isComplex': 'Dies ist ein Gebäudekomplex (Ordner mit mehreren Gebäuden)',
+  'buildings.complexes': 'Gebäudekomplexe',
+  'buildings.standaloneBuildings': 'Einzelne Gebäude',
+  'buildings.buildingsInComplex': 'Gebäude',
+  'buildings.metersCount': 'Zähler',
+  'buildings.chargersCount': 'Ladestationen',
+  'buildings.consumption': 'Verbrauch',
+  'buildings.solarProduction': 'Solarproduktion',
+  'buildings.charging': 'Laden',
+  'buildings.searchPlaceholder': 'Gebäude, Komplexe oder Adressen suchen...',
+  'buildings.setupInstructions': 'Setup-Anleitung',
+  'buildings.noResults': 'Keine Ergebnisse gefunden',
+
+  // Building Instructions
+  'buildings.instructions.title': 'Gebäude & Komplexe Anleitung',
+  'buildings.instructions.whatIsBuilding': 'Was ist ein Gebäude?',
+  'buildings.instructions.buildingDescription': 'Ein Gebäude repräsentiert eine einzelne physische Immobilie oder Struktur, in der Sie Zähler und Ladestationen installieren. Jedes Gebäude hat seine eigene Adresse, Zähler und Energieüberwachungsgeräte.',
+  'buildings.instructions.whatIsComplex': 'Was ist ein Gebäudekomplex?',
+  'buildings.instructions.complexDescription': 'Ein Gebäudekomplex ist ein Ordner oder eine Gruppe, die mehrere Gebäude enthält. Verwenden Sie Komplexe, um verwandte Immobilien zu organisieren, wie z.B. Wohngebäude in derselben Nachbarschaft oder Immobilien desselben Eigentümers.',
+  'buildings.instructions.howToUse': 'Wie zu verwenden',
+  'buildings.instructions.step1': 'Erstellen Sie zuerst einzelne Gebäude mit ihren Adressen und Details',
+  'buildings.instructions.step2': 'Um einen Komplex zu erstellen, aktivieren Sie "Dies ist ein Gebäudekomplex" und wählen Sie aus, welche Gebäude dazu gehören',
+  'buildings.instructions.step3': 'Klicken Sie auf eine Komplex-Karte, um sie zu erweitern und alle Gebäude darin anzuzeigen',
+  'buildings.instructions.step4': 'Jede Gebäudekarte zeigt die Anzahl der Zähler, Ladestationen und den Echtzeit-Stromverbrauch',
+  'buildings.instructions.step5': 'Verwenden Sie die Suchleiste, um Gebäude nach Name, Adresse oder Komplex zu finden',
+  'buildings.instructions.tips': 'Tipps',
+  'buildings.instructions.tip1': 'Organisieren Sie Gebäude in Komplexen für einfachere Verwaltung mehrerer Immobilien',
+  'buildings.instructions.tip2': 'Leistungsdaten werden in Echtzeit von Ihren Zählern und Ladestationen aktualisiert',
+  'buildings.instructions.tip3': 'Ein Gebäude kann jeweils nur zu einem Komplex gehören',
+
   // Meters
   'meters.title': 'Stromzähler',
   'meters.subtitle': 'Stromverbrauchszähler überwachen und verwalten',
