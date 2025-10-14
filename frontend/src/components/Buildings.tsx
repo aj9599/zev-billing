@@ -1,24 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, X, Building, Search, MapPin, Zap, ChevronRight, ChevronDown, Folder, Home, HelpCircle, TrendingUp, TrendingDown, Activity } from 'lucide-react';
 import { api } from '../api/client';
-import type { Building as BuildingType, Meter, Charger } from '../types';
+import type { Building as BuildingType, Meter, Charger, BuildingConsumption } from '../types';
 import { useTranslation } from '../i18n';
-
-interface BuildingConsumption {
-  building_id: number;
-  building_name: string;
-  meters: Array<{
-    meter_id: number;
-    meter_name: string;
-    meter_type: string;
-    user_name?: string;
-    data: Array<{
-      timestamp: Date;
-      power: number;
-      source: string;
-    }>;
-  }>;
-}
 
 export default function Buildings() {
   const { t } = useTranslation();
