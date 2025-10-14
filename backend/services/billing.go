@@ -19,6 +19,23 @@ func NewBillingService(db *sql.DB) *BillingService {
 	return &BillingService{db: db}
 }
 
+// FIXED: Helper function to safely extract string from interface{}
+func getConfigString(config map[string]interface{}, key string, defaultValue string) string {
+	if val, ok := config[key]; ok {
+		switch v := val.(type) {
+		case string:
+			if v != "" {
+				return v
+			}
+		case float64:
+			return fmt.Sprintf("%.0f", v)
+		case int:
+			return fmt.Sprintf("%d", v)
+		}
+	}
+	return defaultValue
+}
+
 func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, endDate string) ([]models.Invoice, error) {
 	log.Printf("=== BILL GENERATION START ===")
 	log.Printf("Buildings: %v, Users: %v, Period: %s to %s", buildingIDs, userIDs, startDate, endDate)
@@ -660,34 +677,16 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 			continue
 		}
 
+		// FIXED: Use the helper function for consistent string extraction with proper defaults
 		config := ChargerConfig{
 			ChargerID:        chargerID,
 			ChargerName:      chargerName,
-			StateCableLocked: "65",
-			StateWaitingAuth: "66",
-			StateCharging:    "67",
-			StateIdle:        "50",
-			ModeNormal:       "1",
-			ModePriority:     "2",
-		}
-
-		if val, ok := connConfig["state_cable_locked"].(string); ok && val != "" {
-			config.StateCableLocked = val
-		}
-		if val, ok := connConfig["state_waiting_auth"].(string); ok && val != "" {
-			config.StateWaitingAuth = val
-		}
-		if val, ok := connConfig["state_charging"].(string); ok && val != "" {
-			config.StateCharging = val
-		}
-		if val, ok := connConfig["state_idle"].(string); ok && val != "" {
-			config.StateIdle = val
-		}
-		if val, ok := connConfig["mode_normal"].(string); ok && val != "" {
-			config.ModeNormal = val
-		}
-		if val, ok := connConfig["mode_priority"].(string); ok && val != "" {
-			config.ModePriority = val
+			StateCableLocked: getConfigString(connConfig, "state_cable_locked", "65"),
+			StateWaitingAuth: getConfigString(connConfig, "state_waiting_auth", "66"),
+			StateCharging:    getConfigString(connConfig, "state_charging", "67"),
+			StateIdle:        getConfigString(connConfig, "state_idle", "50"),
+			ModeNormal:       getConfigString(connConfig, "mode_normal", "1"),
+			ModePriority:     getConfigString(connConfig, "mode_priority", "2"),
 		}
 
 		log.Printf("  [CHARGING] Charger %d config: States[locked=%s, auth=%s, charging=%s, idle=%s], Modes[normal=%s, priority=%s]",
@@ -847,8 +846,9 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 		for sessionIdx, session := range sessions {
 			sessionNum := sessionIdx + 1
 			
+			// FIXED: Use exact string comparison with configured values
 			isBillable := true
-			if session.State == config.StateIdle || strings.ToLower(session.State) == "idle" {
+			if session.State == config.StateIdle {
 				isBillable = false
 			}
 			
@@ -859,8 +859,8 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 					log.Printf("  [CHARGING]     [%d] %s: %.2f kWh, mode=%s, state=%s → BILLABLE", 
 						sessionNum, session.SessionTime.Format("15:04"), session.PowerKwh, session.Mode, session.State)
 				} else {
-					log.Printf("  [CHARGING]     [%d] %s: %.2f kWh, mode=%s, state=%s → SKIP (idle)", 
-						sessionNum, session.SessionTime.Format("15:04"), session.PowerKwh, session.Mode, session.State)
+					log.Printf("  [CHARGING]     [%d] %s: %.2f kWh, mode=%s, state=%s → SKIP (idle, config=%s)", 
+						sessionNum, session.SessionTime.Format("15:04"), session.PowerKwh, session.Mode, session.State, config.StateIdle)
 				}
 			}
 			
@@ -899,30 +899,27 @@ func (bs *BillingService) calculateChargingConsumptionFixed(buildingID int, rfid
 			if consumption > 0 {
 				chargerBillable++
 				
-				isNormal := (session.Mode == config.ModeNormal || 
-					strings.ToLower(session.Mode) == "normal" || 
-					session.Mode == "1")
-				isPriority := (session.Mode == config.ModePriority || 
-					strings.ToLower(session.Mode) == "priority" || 
-					session.Mode == "2")
+				// FIXED: Use exact string comparison with configured values
+				isNormal := (session.Mode == config.ModeNormal)
+				isPriority := (session.Mode == config.ModePriority)
 				
 				if isNormal {
 					chargerNormal += consumption
 					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh NORMAL (%.2f → %.2f)", 
-							sessionNum, consumption, previousPower, session.PowerKwh)
+						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh NORMAL (%.2f → %.2f), mode=%s matched config=%s", 
+							sessionNum, consumption, previousPower, session.PowerKwh, session.Mode, config.ModeNormal)
 					}
 				} else if isPriority {
 					chargerPriority += consumption
 					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh PRIORITY (%.2f → %.2f)", 
-							sessionNum, consumption, previousPower, session.PowerKwh)
+						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh PRIORITY (%.2f → %.2f), mode=%s matched config=%s", 
+							sessionNum, consumption, previousPower, session.PowerKwh, session.Mode, config.ModePriority)
 					}
 				} else {
 					chargerNormal += consumption
 					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh UNKNOWN mode '%s' → NORMAL (%.2f → %.2f)", 
-							sessionNum, consumption, session.Mode, previousPower, session.PowerKwh)
+						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh UNKNOWN mode '%s' → NORMAL (%.2f → %.2f), expected normal=%s or priority=%s", 
+							sessionNum, consumption, session.Mode, previousPower, session.PowerKwh, config.ModeNormal, config.ModePriority)
 					}
 				}
 			} else if shouldLog {
