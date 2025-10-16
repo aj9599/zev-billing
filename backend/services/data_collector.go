@@ -57,6 +57,74 @@ type UDPChargerConfig struct {
 	ModeKey   string
 }
 
+// Loxone JSON response structure
+type LoxoneResponse struct {
+	LL LoxoneData `json:"LL"`
+}
+
+type LoxoneData struct {
+	Control string                 `json:"control"`
+	Value   string                 `json:"value"`
+	Code    string                 `json:"Code"`
+	Outputs map[string]LoxoneOutput `json:"-"`
+}
+
+type LoxoneOutput struct {
+	Name  string      `json:"name"`
+	Nr    int         `json:"nr"`
+	Value interface{} `json:"value"`
+}
+
+// Custom unmarshal to handle dynamic output fields
+func (ld *LoxoneData) UnmarshalJSON(data []byte) error {
+	type Alias LoxoneData
+	aux := &struct {
+		*Alias
+	}{
+		Alias: (*Alias)(ld),
+	}
+	
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	
+	ld.Outputs = make(map[string]LoxoneOutput)
+	
+	for key, value := range raw {
+		switch key {
+		case "control":
+			if v, ok := value.(string); ok {
+				ld.Control = v
+			}
+		case "value":
+			if v, ok := value.(string); ok {
+				ld.Value = v
+			}
+		case "Code":
+			if v, ok := value.(string); ok {
+				ld.Code = v
+			}
+		default:
+			if strings.HasPrefix(key, "output") {
+				if outputMap, ok := value.(map[string]interface{}); ok {
+					output := LoxoneOutput{}
+					if name, ok := outputMap["name"].(string); ok {
+						output.Name = name
+					}
+					if nr, ok := outputMap["nr"].(float64); ok {
+						output.Nr = int(nr)
+					}
+					output.Value = outputMap["value"]
+					ld.Outputs[key] = output
+				}
+			}
+		}
+	}
+	
+	return nil
+}
+
 // Helper function to round time to nearest 15-minute interval
 func roundToQuarterHour(t time.Time) time.Time {
 	minutes := t.Minute()
@@ -175,21 +243,24 @@ func (dc *DataCollector) Start() {
 	dc.initializeUDPListeners()
 	dc.logSystemStatus()
 	
+	// FIXED: Wait until the next exact 15-minute interval
 	now := time.Now()
 	nextCollection := getNextQuarterHour(now)
 	waitDuration := nextCollection.Sub(now)
 	
+	log.Printf(">>> Current time: %s <<<", now.Format("15:04:05"))
 	log.Printf(">>> WAITING UNTIL NEXT 15-MINUTE INTERVAL: %s <<<", nextCollection.Format("15:04:05"))
 	log.Printf(">>> Time to wait: %.0f seconds <<<", waitDuration.Seconds())
 	
 	time.Sleep(waitDuration)
 	
-	log.Println(">>> INITIAL DATA COLLECTION <<<")
+	log.Println(">>> INITIAL DATA COLLECTION AT EXACT INTERVAL <<<")
 	dc.collectAllData()
 	log.Println(">>> INITIAL DATA COLLECTION COMPLETED <<<")
 
 	go dc.cleanupStalePartialData()
 
+	// FIXED: Use a ticker that fires every 15 minutes, but we're already aligned
 	ticker := time.NewTicker(15 * time.Minute)
 	defer ticker.Stop()
 
@@ -199,7 +270,8 @@ func (dc *DataCollector) Start() {
 	for {
 		select {
 		case <-ticker.C:
-			log.Printf(">>> 15-minute interval reached - starting collection <<<")
+			currentTime := time.Now()
+			log.Printf(">>> 15-minute interval reached at %s - starting collection <<<", currentTime.Format("15:04:05"))
 			dc.collectAllData()
 			nextRun = getNextQuarterHour(time.Now())
 			log.Printf(">>> Next data collection at %s <<<", nextRun.Format("15:04:05"))
@@ -607,7 +679,7 @@ func (dc *DataCollector) collectAllData() {
 	
 	dc.logToDatabase("Data Collection Started", "15-minute collection cycle initiated")
 
-	// CHANGED: Collect via HTTP for all devices (primary method)
+	// Collect via HTTP for all devices (primary method)
 	dc.collectMeterDataViaHTTP()
 	dc.collectChargerDataViaHTTP()
 	
@@ -621,7 +693,7 @@ func (dc *DataCollector) collectAllData() {
 	dc.logToDatabase("Data Collection Completed", "All active devices polled via HTTP")
 }
 
-// NEW: Collect meter data via HTTP polling at exact 15-minute intervals
+// Collect meter data via HTTP polling at exact 15-minute intervals
 func (dc *DataCollector) collectMeterDataViaHTTP() {
 	rows, err := dc.db.Query(`
 		SELECT id, name, meter_type, connection_type, connection_config, is_active
@@ -658,25 +730,14 @@ func (dc *DataCollector) collectMeterDataViaHTTP() {
 
 		var reading float64
 		
-		// CHANGED: Prefer HTTP, use UDP buffer as fallback
 		if connectionType == "http" {
-			reading = dc.collectHTTPData(name, config)
+			reading = dc.collectLoxoneHTTPData(name, config)
 		} else if connectionType == "udp" {
-			// Check if device also has HTTP endpoint
-			if httpEndpoint, ok := config["http_endpoint"].(string); ok && httpEndpoint != "" {
-				log.Printf("Meter '%s': Using HTTP endpoint instead of UDP for precise reading", name)
-				httpConfig := map[string]interface{}{
-					"endpoint": httpEndpoint,
-					"power_field": config["data_key"],
-				}
-				reading = dc.collectHTTPData(name, httpConfig)
-			} else {
-				// Fallback to UDP buffer
-				log.Printf("Meter '%s': UDP device without HTTP endpoint - using buffered value", name)
-				dc.mu.Lock()
-				reading = dc.udpMeterBuffers[id]
-				dc.mu.Unlock()
-			}
+			// Fallback to UDP buffer
+			log.Printf("Meter '%s': UDP device - using buffered value", name)
+			dc.mu.Lock()
+			reading = dc.udpMeterBuffers[id]
+			dc.mu.Unlock()
 		} else if connectionType == "modbus_tcp" {
 			reading = dc.collectModbusData(name, config)
 		}
@@ -741,7 +802,7 @@ func (dc *DataCollector) collectMeterDataViaHTTP() {
 	log.Printf("Meter collection summary: %d/%d successful via HTTP polling", successCount, meterCount)
 }
 
-// NEW: Collect charger data via HTTP polling at exact 15-minute intervals
+// Collect charger data via HTTP polling at exact 15-minute intervals
 func (dc *DataCollector) collectChargerDataViaHTTP() {
 	rows, err := dc.db.Query(`
 		SELECT id, name, brand, preset, connection_type, connection_config, is_active
@@ -778,26 +839,19 @@ func (dc *DataCollector) collectChargerDataViaHTTP() {
 		var power float64
 		var userID, mode, state string
 
-		// CHANGED: Prefer HTTP, use UDP buffer as fallback
 		if connectionType == "http" || preset == "weidmuller" {
 			power, userID, mode, state = dc.collectWeidmullerData(name, config)
 		} else if connectionType == "udp" {
-			// Check if device has HTTP endpoints
-			if powerEndpoint, ok := config["http_power_endpoint"].(string); ok && powerEndpoint != "" {
-				log.Printf("Charger '%s': Using HTTP endpoints for precise reading", name)
-				power, userID, mode, state = dc.collectChargerDataHTTP(name, config)
-			} else {
-				// Fallback to UDP buffer
-				log.Printf("Charger '%s': UDP device without HTTP endpoints - using buffered value", name)
-				dc.mu.Lock()
-				if data, ok := dc.udpChargerBuffers[id]; ok {
-					power = data.Power
-					userID = data.UserID
-					mode = data.Mode
-					state = data.State
-				}
-				dc.mu.Unlock()
+			// Fallback to UDP buffer
+			log.Printf("Charger '%s': UDP device - using buffered value", name)
+			dc.mu.Lock()
+			if data, ok := dc.udpChargerBuffers[id]; ok {
+				power = data.Power
+				userID = data.UserID
+				mode = data.Mode
+				state = data.State
 			}
+			dc.mu.Unlock()
 		}
 
 		if userID != "" && mode != "" && state != "" {
@@ -843,77 +897,7 @@ func (dc *DataCollector) collectChargerDataViaHTTP() {
 	log.Printf("Charger collection summary: %d/%d successful via HTTP polling", successCount, chargerCount)
 }
 
-// NEW: Collect generic charger data via HTTP
-func (dc *DataCollector) collectChargerDataHTTP(name string, config map[string]interface{}) (power float64, userID, mode, state string) {
-	endpoints := map[string]string{
-		"power":   fmt.Sprintf("%v", config["http_power_endpoint"]),
-		"state":   fmt.Sprintf("%v", config["http_state_endpoint"]),
-		"user_id": fmt.Sprintf("%v", config["http_user_id_endpoint"]),
-		"mode":    fmt.Sprintf("%v", config["http_mode_endpoint"]),
-	}
-
-	powerKey := "power_kwh"
-	if pk, ok := config["power_key"].(string); ok && pk != "" {
-		powerKey = pk
-	}
-
-	if resp, err := dc.httpClient.Get(endpoints["power"]); err == nil {
-		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
-		var data map[string]interface{}
-		if json.Unmarshal(body, &data) == nil {
-			if p, ok := data[powerKey].(float64); ok {
-				power = p
-			}
-		}
-	}
-
-	if resp, err := dc.httpClient.Get(endpoints["state"]); err == nil {
-		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
-		var data map[string]interface{}
-		if json.Unmarshal(body, &data) == nil {
-			switch v := data["state"].(type) {
-			case string:
-				state = v
-			case float64:
-				state = fmt.Sprintf("%.0f", v)
-			}
-		}
-	}
-
-	if resp, err := dc.httpClient.Get(endpoints["user_id"]); err == nil {
-		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
-		var data map[string]interface{}
-		if json.Unmarshal(body, &data) == nil {
-			switch v := data["user_id"].(type) {
-			case string:
-				userID = v
-			case float64:
-				userID = fmt.Sprintf("%.0f", v)
-			}
-		}
-	}
-
-	if resp, err := dc.httpClient.Get(endpoints["mode"]); err == nil {
-		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
-		var data map[string]interface{}
-		if json.Unmarshal(body, &data) == nil {
-			switch v := data["mode"].(type) {
-			case string:
-				mode = v
-			case float64:
-				mode = fmt.Sprintf("%.0f", v)
-			}
-		}
-	}
-
-	return power, userID, mode, state
-}
-
-// CHANGED: UDP buffer save is now backup/fallback only
+// UDP buffer save is now backup/fallback only
 func (dc *DataCollector) saveBufferedUDPDataAsBackup() {
 	dc.mu.Lock()
 	defer dc.mu.Unlock()
@@ -966,23 +950,63 @@ func (dc *DataCollector) saveBufferedUDPDataAsBackup() {
 	}
 }
 
-func (dc *DataCollector) collectHTTPData(name string, config map[string]interface{}) float64 {
-	endpoint, ok := config["endpoint"].(string)
-	if !ok {
-		log.Printf("ERROR: No endpoint configured for meter '%s'", name)
+// NEW: Collect data from Loxone via HTTP with authentication
+func (dc *DataCollector) collectLoxoneHTTPData(name string, config map[string]interface{}) float64 {
+	baseURL, ok := config["http_base_url"].(string)
+	if !ok || baseURL == "" {
+		log.Printf("ERROR: No base URL configured for meter '%s'", name)
 		return 0
 	}
 
-	resp, err := dc.httpClient.Get(endpoint)
+	meterID, ok := config["http_meter_id"].(string)
+	if !ok || meterID == "" {
+		log.Printf("ERROR: No meter ID configured for meter '%s'", name)
+		return 0
+	}
+
+	username := ""
+	if u, ok := config["http_username"].(string); ok {
+		username = u
+	}
+
+	password := ""
+	if p, ok := config["http_password"].(string); ok {
+		password = p
+	}
+
+	// Build the URL: user:password@baseURL/jdev/sps/io/meterID/all
+	var fullURL string
+	if username != "" && password != "" {
+		// Parse base URL to inject credentials
+		baseURL = strings.TrimPrefix(baseURL, "http://")
+		baseURL = strings.TrimPrefix(baseURL, "https://")
+		fullURL = fmt.Sprintf("http://%s:%s@%s/jdev/sps/io/%s/all", username, password, baseURL, meterID)
+	} else {
+		// No authentication
+		if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
+			baseURL = "http://" + baseURL
+		}
+		fullURL = fmt.Sprintf("%s/jdev/sps/io/%s/all", baseURL, meterID)
+	}
+
+	log.Printf("DEBUG: Polling Loxone meter '%s' at %s", name, fullURL)
+
+	req, err := http.NewRequest("GET", fullURL, nil)
 	if err != nil {
-		log.Printf("ERROR: HTTP request failed to %s: %v", endpoint, err)
-		dc.logToDatabase("HTTP Request Failed", fmt.Sprintf("Meter: %s, Endpoint: %s, Error: %v", name, endpoint, err))
+		log.Printf("ERROR: Failed to create request for meter '%s': %v", name, err)
+		return 0
+	}
+
+	resp, err := dc.httpClient.Do(req)
+	if err != nil {
+		log.Printf("ERROR: HTTP request failed to %s: %v", fullURL, err)
+		dc.logToDatabase("HTTP Request Failed", fmt.Sprintf("Meter: %s, URL: %s, Error: %v", name, fullURL, err))
 		return 0
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("ERROR: HTTP request to %s returned status %d", endpoint, resp.StatusCode)
+		log.Printf("ERROR: HTTP request to %s returned status %d", fullURL, resp.StatusCode)
 		return 0
 	}
 
@@ -992,21 +1016,30 @@ func (dc *DataCollector) collectHTTPData(name string, config map[string]interfac
 		return 0
 	}
 
-	var data map[string]interface{}
-	if err := json.Unmarshal(body, &data); err != nil {
-		log.Printf("ERROR: Failed to parse HTTP response as JSON: %v", err)
+	log.Printf("DEBUG: Received response from '%s': %s", name, string(body))
+
+	// Parse Loxone JSON response
+	var loxoneResp LoxoneResponse
+	if err := json.Unmarshal(body, &loxoneResp); err != nil {
+		log.Printf("ERROR: Failed to parse Loxone JSON response: %v", err)
 		return 0
 	}
 
-	fieldName, ok := config["power_field"].(string)
-	if !ok {
-		fieldName = "power_kwh"
+	// Extract output1.value (the kWh reading)
+	if output1, ok := loxoneResp.LL.Outputs["output1"]; ok {
+		switch v := output1.Value.(type) {
+		case float64:
+			log.Printf("SUCCESS: Extracted kWh value from meter '%s': %.3f", name, v)
+			return v
+		case string:
+			if f, err := strconv.ParseFloat(v, 64); err == nil {
+				log.Printf("SUCCESS: Extracted kWh value from meter '%s': %.3f", name, f)
+				return f
+			}
+		}
 	}
 
-	if value, ok := data[fieldName].(float64); ok {
-		return value
-	}
-
+	log.Printf("WARNING: Could not find output1.value in Loxone response for meter '%s'", name)
 	return 0
 }
 
