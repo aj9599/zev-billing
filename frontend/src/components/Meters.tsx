@@ -895,28 +895,18 @@ export default function Meters() {
                       {t('meters.httpAuthHelp')}
                     </p>
 
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                        {t('meters.powerField')} * (UUID_power_kwh)
-                      </label>
-                      <input type="text" required value={connectionConfig.power_field}
-                        onChange={(e) => setConnectionConfig({ ...connectionConfig, power_field: e.target.value })}
-                        placeholder="uuid_power_kwh"
-                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }}
-                        readOnly={!editingMeter} />
-                      <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                        {editingMeter ? t('meters.httpUuidModify') : t('meters.httpUuidAuto')}
-                      </p>
-                    </div>
-
                     <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '12px', fontFamily: 'monospace', fontSize: '12px', border: '1px solid #e5e7eb' }}>
                       <strong>{t('meters.httpLoxoneConfig')}</strong><br />
                       {t('meters.httpVirtualOutput')}<br />
                       {t('meters.httpListensResponds')} {"{\""}
-                      <span style={{ color: '#10b981', fontWeight: 'bold' }}>{connectionConfig.power_field || 'YOUR_UUID_power_kwh'}</span>
+                      <span style={{ color: '#10b981', fontWeight: 'bold' }}>{connectionConfig.power_field || 'UUID_power_kwh'}</span>
                       {"\": <v>}"}<br /><br />
                       <strong>{t('meters.httpPolling')}</strong> {t('meters.httpRaspberryPi')}<br />
                       URL: {connectionConfig.http_base_url || 'http://YOUR_IP'}/api/meter/{connectionConfig.http_meter_id || 'meter_id'}
+                      <br /><br />
+                      <div style={{ backgroundColor: '#f0f9ff', padding: '8px', borderRadius: '4px', fontSize: '11px', color: '#0369a1' }}>
+                        <strong>Note:</strong> The UUID key is auto-generated and will be shown in logs after saving
+                      </div>
                     </div>
                   </>
                 )}
