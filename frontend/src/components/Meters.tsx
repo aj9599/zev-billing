@@ -15,6 +15,11 @@ interface ConnectionConfig {
   unit_id?: number;
   listen_port?: number;
   data_key?: string;
+  // New HTTP authentication fields
+  http_username?: string;
+  http_password?: string;
+  http_meter_id?: string;
+  http_base_url?: string;
 }
 
 export default function Meters() {
@@ -41,7 +46,11 @@ export default function Meters() {
     register_count: 2,
     unit_id: 1,
     listen_port: 8888,
-    data_key: 'power_kwh'
+    data_key: 'power_kwh',
+    http_username: '',
+    http_password: '',
+    http_meter_id: '',
+    http_base_url: ''
   });
 
   useEffect(() => {
@@ -100,7 +109,11 @@ export default function Meters() {
     if (formData.connection_type === 'http') {
       config = {
         endpoint: connectionConfig.endpoint,
-        power_field: connectionConfig.power_field
+        power_field: connectionConfig.power_field,
+        http_username: connectionConfig.http_username,
+        http_password: connectionConfig.http_password,
+        http_meter_id: connectionConfig.http_meter_id,
+        http_base_url: connectionConfig.http_base_url
       };
     } else if (formData.connection_type === 'modbus_tcp') {
       config = {
@@ -163,7 +176,11 @@ export default function Meters() {
         register_count: config.register_count || 2,
         unit_id: config.unit_id || 1,
         listen_port: config.listen_port || 8888,
-        data_key: config.data_key || 'power_kwh'
+        data_key: config.data_key || 'power_kwh',
+        http_username: config.http_username || '',
+        http_password: config.http_password || '',
+        http_meter_id: config.http_meter_id || '',
+        http_base_url: config.http_base_url || ''
       });
     } catch (e) {
       console.error('Failed to parse config:', e);
@@ -228,7 +245,11 @@ export default function Meters() {
       register_count: 2,
       unit_id: 1,
       listen_port: 8888,
-      data_key: 'power_kwh'
+      data_key: 'power_kwh',
+      http_username: '',
+      http_password: '',
+      http_meter_id: '',
+      http_base_url: ''
     });
   };
 
@@ -238,7 +259,7 @@ export default function Meters() {
     setConnectionConfig(prev => ({
       ...prev,
       data_key: uniqueUUID,
-      power_field: uniqueUUID  // Also set for HTTP
+      power_field: uniqueUUID
     }));
     setShowModal(true);
   };
@@ -293,45 +314,48 @@ export default function Meters() {
         <div style={{ lineHeight: '1.8', color: '#374151' }}>
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Plug size={20} color="#10b981" />
-            {t('meters.instructions.httpTitle')} (RECOMMENDED - Raspberry Pi as Master)
+            {t('meters.instructions.httpTitle')}
           </h3>
           <div style={{ backgroundColor: '#d1fae5', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #10b981' }}>
             <p style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Star size={16} fill="#fbbf24" color="#fbbf24" />
-              <strong>NEW: HTTP Polling - Raspberry Pi fetches data from Loxone every 15 minutes!</strong>
+              <strong>{t('meters.instructions.httpNew')}</strong>
             </p>
             <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
-              <li>Click "Add Meter" - a unique UUID_power_kwh is generated automatically</li>
-              <li>Enter Loxone's IP address in the Endpoint URL field</li>
-              <li>The Power Field will use the auto-generated UUID_power_kwh</li>
-              <li>In Loxone Config, create a Virtual Output HTTP</li>
-              <li>Set it to respond to GET requests with JSON: {`{"UUID_power_kwh": <v>}`}</li>
-              <li><strong>Raspberry Pi will poll Loxone every 15 minutes (00, 15, 30, 45)</strong></li>
+              <li>{t('meters.instructions.httpStep1')}</li>
+              <li>{t('meters.instructions.httpStep2')}</li>
+              <li>{t('meters.instructions.httpStep3')}</li>
+              <li>{t('meters.instructions.httpStep4')}</li>
+              <li>{t('meters.instructions.httpStep5')}</li>
+              <li>{t('meters.instructions.httpStep6')}</li>
             </ol>
             <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '10px', fontFamily: 'monospace', fontSize: '13px' }}>
-              <strong>Example Configuration:</strong><br />
-              Meter Name: "Solar Meter"<br />
-              Endpoint URL: http://YOUR_LOXONE_IP/path/to/meter<br />
-              Power Field: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d_power_kwh" (auto-generated)<br /><br />
+              <strong>{t('meters.instructions.httpExampleTitle')}</strong><br />
+              {t('meters.instructions.httpExampleMeterName')}<br />
+              {t('meters.instructions.httpExampleBaseUrl')}<br />
+              {t('meters.instructions.httpExampleMeterId')}<br />
+              {t('meters.instructions.httpExampleUsername')}<br />
+              {t('meters.instructions.httpExamplePassword')}<br />
+              {t('meters.instructions.httpExamplePowerField')}<br /><br />
 
-              <strong>Loxone Virtual Output HTTP Setup:</strong><br />
-              - Address: Listen on port 80 or custom port<br />
-              - Command: Return JSON with meter value<br />
-              - Response: {`{"a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d_power_kwh": <v>}`}<br /><br />
+              <strong>{t('meters.instructions.httpLoxoneSetup')}</strong><br />
+              {t('meters.instructions.httpLoxoneAddress')}<br />
+              {t('meters.instructions.httpLoxoneCommand')}<br />
+              {t('meters.instructions.httpLoxoneResponse')}<br /><br />
 
-              <strong>How it works:</strong><br />
-              Every 15 minutes, Raspberry Pi sends GET request to Loxone<br />
-              → http://YOUR_LOXONE_IP/path/to/meter<br />
-              ← Loxone responds with: {`{"a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d_power_kwh": 123.45}`}
+              <strong>{t('meters.instructions.httpHowItWorks')}</strong><br />
+              {t('meters.instructions.httpPollingExplained')}<br />
+              {t('meters.instructions.httpRequestFormat')}<br />
+              {t('meters.instructions.httpResponseFormat')}
             </div>
             <p style={{ marginTop: '10px', fontSize: '14px', color: '#1f2937' }}>
-              <strong>Benefits:</strong> Raspberry Pi is master and controls timing, no firewall issues, reliable 15-minute polling, Loxone just responds!
+              <strong>{t('meters.instructions.httpBenefits')}</strong> {t('meters.instructions.httpBenefitsDesc')}
             </p>
           </div>
 
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Radio size={20} color="#3b82f6" />
-            {t('meters.instructions.udpTitle')} (Alternative - Loxone Pushes Data)
+            {t('meters.instructions.udpTitle')}
           </h3>
           <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #3b82f6' }}>
             <p style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -387,7 +411,7 @@ export default function Meters() {
               <li>{t('meters.instructions.testingPoint2')}</li>
               <li>{t('meters.instructions.testingPoint3')}</li>
               <li>{t('meters.instructions.testingPoint4')}</li>
-              <li>For HTTP: Check logs for "HTTP request to..." and "SUCCESS: Collected meter data"</li>
+              <li>{t('meters.instructions.testingHttpAuth')}</li>
             </ul>
           </div>
 
@@ -397,9 +421,9 @@ export default function Meters() {
           </h3>
           <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', border: '1px solid #f59e0b' }}>
             <ul style={{ marginLeft: '20px' }}>
-              <li><strong>HTTP:</strong> Ensure Loxone is accessible from Raspberry Pi (test with curl or browser)</li>
-              <li><strong>HTTP:</strong> Check Loxone Virtual Output is configured to respond to GET requests</li>
-              <li><strong>HTTP:</strong> Verify the UUID_power_kwh matches exactly in both systems</li>
+              <li><strong>HTTP:</strong> {t('meters.instructions.troubleshootingHttpAccess')}</li>
+              <li><strong>HTTP:</strong> {t('meters.instructions.troubleshootingHttpAuth')}</li>
+              <li><strong>HTTP:</strong> {t('meters.instructions.troubleshootingHttpMeterId')}</li>
               <li>{t('meters.instructions.troubleshootingService')} <code style={{ backgroundColor: '#fff', padding: '2px 6px', borderRadius: '4px' }}>sudo systemctl status zev-billing</code></li>
               <li>{t('meters.instructions.troubleshootingLogs')} <code style={{ backgroundColor: '#fff', padding: '2px 6px', borderRadius: '4px' }}>journalctl -u zev-billing -f</code></li>
               <li>{t('meters.instructions.troubleshootingNetwork')} <code style={{ backgroundColor: '#fff', padding: '2px 6px', borderRadius: '4px' }}>ping YOUR_LOXONE_IP</code></li>
@@ -801,8 +825,8 @@ export default function Meters() {
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('meters.connectionType')} *</label>
                 <select required value={formData.connection_type} onChange={(e) => setFormData({ ...formData, connection_type: e.target.value })}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
-                  <option value="http">{t('meters.http')} - Recommended (Raspberry Pi Polls)</option>
-                  <option value="udp">{t('meters.udp')} - Alternative (Loxone Pushes)</option>
+                  <option value="http">{t('meters.httpRecommended')}</option>
+                  <option value="udp">{t('meters.udpAlternative')}</option>
                   <option value="modbus_tcp">{t('meters.modbusTcp')}</option>
                 </select>
               </div>
@@ -817,21 +841,60 @@ export default function Meters() {
                     <div style={{ backgroundColor: '#d1fae5', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #10b981', display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <Star size={16} fill="#fbbf24" color="#fbbf24" />
                       <p style={{ fontSize: '13px', color: '#065f46', margin: 0 }}>
-                        <strong>HTTP Polling: Raspberry Pi fetches data from Loxone every 15 minutes!</strong>
+                        <strong>{t('meters.httpPollingInfo')}</strong>
                       </p>
                     </div>
+                    
                     <div style={{ marginBottom: '12px' }}>
                       <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                        Loxone IP Address / Endpoint URL *
+                        {t('meters.httpBaseUrl')} *
                       </label>
-                      <input type="text" required value={connectionConfig.endpoint}
-                        onChange={(e) => setConnectionConfig({ ...connectionConfig, endpoint: e.target.value })}
-                        placeholder="http://YOUR_LOXONE_IP/path/to/meter"
+                      <input type="text" required value={connectionConfig.http_base_url}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, http_base_url: e.target.value })}
+                        placeholder="http://192.168.1.100"
                         style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                        Raspberry Pi will GET this URL every 15 minutes
+                        {t('meters.httpBaseUrlHelp')}
                       </p>
                     </div>
+
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                        {t('meters.httpMeterId')} *
+                      </label>
+                      <input type="text" required value={connectionConfig.http_meter_id}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, http_meter_id: e.target.value })}
+                        placeholder="meter_001"
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                        {t('meters.httpMeterIdHelp')}
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('meters.httpUsername')}
+                        </label>
+                        <input type="text" value={connectionConfig.http_username}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, http_username: e.target.value })}
+                          placeholder="admin"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('meters.httpPassword')}
+                        </label>
+                        <input type="password" value={connectionConfig.http_password}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, http_password: e.target.value })}
+                          placeholder="••••••••"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                    </div>
+                    <p style={{ fontSize: '11px', color: '#666', marginBottom: '12px' }}>
+                      {t('meters.httpAuthHelp')}
+                    </p>
+
                     <div>
                       <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
                         {t('meters.powerField')} * (UUID_power_kwh)
@@ -842,16 +905,18 @@ export default function Meters() {
                         style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }}
                         readOnly={!editingMeter} />
                       <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                        {editingMeter ? 'You can modify the UUID if needed' : 'Auto-generated unique identifier (UUID_power_kwh format)'}
+                        {editingMeter ? t('meters.httpUuidModify') : t('meters.httpUuidAuto')}
                       </p>
                     </div>
+
                     <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '12px', fontFamily: 'monospace', fontSize: '12px', border: '1px solid #e5e7eb' }}>
-                      <strong>Loxone Configuration:</strong><br />
-                      Virtual Output HTTP<br />
-                      Listens and responds with: {"{\""}
+                      <strong>{t('meters.httpLoxoneConfig')}</strong><br />
+                      {t('meters.httpVirtualOutput')}<br />
+                      {t('meters.httpListensResponds')} {"{\""}
                       <span style={{ color: '#10b981', fontWeight: 'bold' }}>{connectionConfig.power_field || 'YOUR_UUID_power_kwh'}</span>
                       {"\": <v>}"}<br /><br />
-                      <strong>Polling:</strong> Raspberry Pi → GET → Loxone every 15 min
+                      <strong>{t('meters.httpPolling')}</strong> {t('meters.httpRaspberryPi')}<br />
+                      URL: {connectionConfig.http_base_url || 'http://YOUR_IP'}/api/meter/{connectionConfig.http_meter_id || 'meter_id'}
                     </div>
                   </>
                 )}
