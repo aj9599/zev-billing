@@ -1001,21 +1001,36 @@ func (dc *DataCollector) collectLoxoneHTTPData(name string, config map[string]in
 		return 0
 	}
 
-	// Extract output1.value (the kWh reading)
+	// Try Format 1: Direct value in loxoneResp.LL.Value (simpler format)
+	// Example: {"LL": {"control": "dev/sps/io/.../all", "value": "5338.905", "Code": "200"}}
+	if loxoneResp.LL.Value != "" {
+		log.Printf("DEBUG: Found direct value in response: %s", loxoneResp.LL.Value)
+		if f, err := strconv.ParseFloat(loxoneResp.LL.Value, 64); err == nil {
+			log.Printf("SUCCESS: Extracted kWh value from meter '%s' (direct): %.3f", name, f)
+			return f
+		} else {
+			log.Printf("WARNING: Failed to parse direct value: %v", err)
+		}
+	}
+
+	// Try Format 2: Value in output1 object (complex format)
+	// Example: {"LL": {"control": "...", "output1": {"name": "...", "value": 123.45}}}
 	if output1, ok := loxoneResp.LL.Outputs["output1"]; ok {
+		log.Printf("DEBUG: Found output1 in response")
 		switch v := output1.Value.(type) {
 		case float64:
-			log.Printf("SUCCESS: Extracted kWh value from meter '%s': %.3f", name, v)
+			log.Printf("SUCCESS: Extracted kWh value from meter '%s' (output1): %.3f", name, v)
 			return v
 		case string:
 			if f, err := strconv.ParseFloat(v, 64); err == nil {
-				log.Printf("SUCCESS: Extracted kWh value from meter '%s': %.3f", name, f)
+				log.Printf("SUCCESS: Extracted kWh value from meter '%s' (output1): %.3f", name, f)
 				return f
 			}
 		}
 	}
 
-	log.Printf("WARNING: Could not find output1.value in Loxone response for meter '%s'", name)
+	log.Printf("WARNING: Could not extract value from Loxone response for meter '%s'", name)
+	log.Printf("DEBUG: Response had - Direct value: '%s', Outputs count: %d", loxoneResp.LL.Value, len(loxoneResp.LL.Outputs))
 	return 0
 }
 

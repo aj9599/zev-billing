@@ -1152,30 +1152,66 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 			}
 
 			log.Printf("   ✅ This is a device data response!")
-			log.Printf("   Number of outputs: %d", len(response.LL.Outputs))
+			
+			var reading float64
+			var readingSource string
 
-			// Extract output1 value (kWh reading)
-			if output1, ok := response.LL.Outputs["output1"]; ok {
-				log.Printf("   Found output1:")
-				log.Printf("      Name: %s", output1.Name)
-				log.Printf("      Value: %v (type: %T)", output1.Value, output1.Value)
-
-				var reading float64
-
-				switch v := output1.Value.(type) {
-				case float64:
-					reading = v
-				case string:
-					if f, err := strconv.ParseFloat(v, 64); err == nil {
-						reading = f
-					} else {
-						log.Printf("      ⚠️  Failed to parse string value: %v", err)
-					}
-				default:
-					log.Printf("      ⚠️  Unexpected value type: %T", v)
+			// Try Format 1: Direct value in response.LL.Value (simpler format)
+			// Example: {"LL": {"control": "dev/sps/io/.../all", "value": "5338.905", "Code": "200"}}
+			if response.LL.Value != "" {
+				log.Printf("   Found direct value in LL.Value")
+				log.Printf("      Value: %s (type: string)", response.LL.Value)
+				
+				if f, err := strconv.ParseFloat(response.LL.Value, 64); err == nil {
+					reading = f
+					readingSource = "direct_value"
+					log.Printf("      ✅ Parsed successfully: %.3f kWh", reading)
+				} else {
+					log.Printf("      ⚠️  Failed to parse direct value: %v", err)
 				}
+			}
 
-				if reading > 0 {
+			// Try Format 2: Value in output1 object (complex format with outputs)
+			// Example: {"LL": {"control": "...", "output1": {"name": "...", "value": 123.45}}}
+			if reading == 0 && len(response.LL.Outputs) > 0 {
+				log.Printf("   Number of outputs: %d", len(response.LL.Outputs))
+				
+				if output1, ok := response.LL.Outputs["output1"]; ok {
+					log.Printf("   Found output1:")
+					log.Printf("      Name: %s", output1.Name)
+					log.Printf("      Value: %v (type: %T)", output1.Value, output1.Value)
+
+					switch v := output1.Value.(type) {
+					case float64:
+						reading = v
+						readingSource = "output1"
+					case string:
+						if f, err := strconv.ParseFloat(v, 64); err == nil {
+							reading = f
+							readingSource = "output1"
+						} else {
+							log.Printf("      ⚠️  Failed to parse string value: %v", err)
+						}
+					default:
+						log.Printf("      ⚠️  Unexpected value type: %T", v)
+					}
+					
+					if reading > 0 {
+						log.Printf("      ✅ Parsed successfully: %.3f kWh", reading)
+					}
+				} else {
+					log.Printf("   ⚠️  WARNING: No output1 found in response")
+					availableOutputs := []string{}
+					for k := range response.LL.Outputs {
+						availableOutputs = append(availableOutputs, k)
+					}
+					log.Printf("   Available outputs: %v", availableOutputs)
+				}
+			}
+
+			// Process the reading if we got one
+			if reading > 0 {
+				log.Printf("   📊 Reading source: %s", readingSource)
 					conn.mu.Lock()
 					conn.lastReading = reading
 					conn.lastUpdate = time.Now()
@@ -1276,12 +1312,18 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 					log.Printf("      ⚠️  Reading is 0 or negative, not saving")
 				}
 			} else {
-				log.Printf("   ⚠️  WARNING: No output1 found in response")
-				availableOutputs := []string{}
-				for k := range response.LL.Outputs {
-					availableOutputs = append(availableOutputs, k)
+				// No reading found in either format
+				log.Printf("   ❌ WARNING: Could not extract reading from response")
+				log.Printf("   Response format check:")
+				log.Printf("      - Direct LL.Value: '%s'", response.LL.Value)
+				log.Printf("      - Outputs count: %d", len(response.LL.Outputs))
+				if len(response.LL.Outputs) > 0 {
+					availableOutputs := []string{}
+					for k := range response.LL.Outputs {
+						availableOutputs = append(availableOutputs, k)
+					}
+					log.Printf("      - Available outputs: %v", availableOutputs)
 				}
-				log.Printf("   Available outputs: %v", availableOutputs)
 			}
 		}
 	}
