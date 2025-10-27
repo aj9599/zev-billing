@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Info, HelpCircle, Zap, Download, Search, Building, Radio, Plug, Settings, AlertCircle, Star } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Info, HelpCircle, Zap, Download, Search, Building, Radio, Plug, Settings, AlertCircle, Star, Wifi, WifiOff } from 'lucide-react';
 import { api } from '../api/client';
 import type { Meter, Building as BuildingType, User } from '../types';
 import { useTranslation } from '../i18n';
@@ -22,6 +22,18 @@ interface ConnectionConfig {
   loxone_device_id?: string;
 }
 
+interface LoxoneConnectionStatus {
+  [meterId: number]: {
+    meter_name: string;
+    host: string;
+    device_id: string;
+    is_connected: boolean;
+    last_reading: number;
+    last_update: string;
+    last_error?: string;
+  };
+}
+
 export default function Meters() {
   const { t } = useTranslation();
   const [meters, setMeters] = useState<Meter[]>([]);
@@ -33,6 +45,7 @@ export default function Meters() {
   const [showInstructions, setShowInstructions] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
+  const [loxoneStatus, setLoxoneStatus] = useState<LoxoneConnectionStatus>({});
   const [formData, setFormData] = useState<Partial<Meter>>({
     name: '', meter_type: 'total_meter', building_id: 0, user_id: undefined,
     connection_type: 'udp', connection_config: '{}', notes: '', is_active: true
@@ -55,6 +68,11 @@ export default function Meters() {
 
   useEffect(() => {
     loadData();
+    fetchLoxoneStatus();
+    
+    // Poll for Loxone status every 30 seconds
+    const interval = setInterval(fetchLoxoneStatus, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadData = async () => {
@@ -66,6 +84,17 @@ export default function Meters() {
     setMeters(metersData);
     setBuildings(buildingsData.filter(b => !b.is_group));
     setUsers(usersData);
+  };
+
+  const fetchLoxoneStatus = async () => {
+    try {
+      const debugData = await api.getDebugStatus();
+      if (debugData.loxone_connections) {
+        setLoxoneStatus(debugData.loxone_connections);
+      }
+    } catch (error) {
+      console.error('Failed to fetch Loxone status:', error);
+    }
   };
 
   const generateUUID = (): string => {
@@ -143,6 +172,8 @@ export default function Meters() {
       setEditingMeter(null);
       resetForm();
       loadData();
+      // Refresh Loxone status after creating/updating
+      setTimeout(fetchLoxoneStatus, 2000);
     } catch (err) {
       alert(t('meters.saveFailed'));
     }
@@ -153,6 +184,7 @@ export default function Meters() {
       try {
         await api.deleteMeter(id);
         loadData();
+        fetchLoxoneStatus();
       } catch (err) {
         alert(t('meters.deleteFailed'));
       }
@@ -262,6 +294,74 @@ export default function Meters() {
     setShowModal(true);
   };
 
+  const getLoxoneConnectionStatus = (meterId: number) => {
+    return loxoneStatus[meterId];
+  };
+
+  const renderConnectionStatus = (meter: Meter) => {
+    if (meter.connection_type === 'loxone_api') {
+      const status = getLoxoneConnectionStatus(meter.id);
+      if (status) {
+        return (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 12px',
+            backgroundColor: status.is_connected ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+            borderRadius: '8px',
+            marginTop: '12px'
+          }}>
+            {status.is_connected ? (
+              <>
+                <Wifi size={16} style={{ color: '#22c55e' }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#22c55e' }}>
+                    {t('meters.loxoneConnected')}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
+                    {t('meters.lastUpdate')}: {new Date(status.last_update).toLocaleTimeString()}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <WifiOff size={16} style={{ color: '#ef4444' }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#ef4444' }}>
+                    {t('meters.loxoneDisconnected')}
+                  </div>
+                  {status.last_error && (
+                    <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
+                      {status.last_error}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        );
+      }
+      return (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '8px 12px',
+          backgroundColor: 'rgba(156, 163, 175, 0.1)',
+          borderRadius: '8px',
+          marginTop: '12px'
+        }}>
+          <Wifi size={16} style={{ color: '#9ca3af' }} />
+          <div style={{ fontSize: '12px', color: '#6b7280' }}>
+            {t('meters.loxoneConnecting')}
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
   const meterTypes = [
     { value: 'total_meter', label: t('meters.totalMeter') },
     { value: 'solar_meter', label: t('meters.solarMeter') },
@@ -311,10 +411,38 @@ export default function Meters() {
 
         <div style={{ lineHeight: '1.8', color: '#374151' }}>
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Plug size={20} color="#10b981" />
-            {t('meters.instructions.httpTitle')}
+            <Wifi size={20} color="#10b981" />
+            {t('meters.instructions.loxoneTitle')}
           </h3>
           <div style={{ backgroundColor: '#d1fae5', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #10b981' }}>
+            <p style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Star size={16} fill="#fbbf24" color="#fbbf24" />
+              <strong>{t('meters.instructions.loxoneRecommended')}</strong>
+            </p>
+            <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
+              <li>{t('meters.instructions.loxoneStep1')}</li>
+              <li>{t('meters.instructions.loxoneStep2')}</li>
+              <li>{t('meters.instructions.loxoneStep3')}</li>
+              <li>{t('meters.instructions.loxoneStep4')}</li>
+              <li>{t('meters.instructions.loxoneStep5')}</li>
+            </ol>
+            <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '10px', fontFamily: 'monospace', fontSize: '13px' }}>
+              <strong>{t('meters.instructions.loxoneExample')}</strong><br />
+              {t('meters.instructions.loxoneExampleHost')}<br />
+              {t('meters.instructions.loxoneExampleDevice')}<br />
+              {t('meters.instructions.loxoneExampleCredentials')}<br /><br />
+              <strong>{t('meters.instructions.loxoneBenefits')}</strong><br />
+              {t('meters.instructions.loxoneBenefit1')}<br />
+              {t('meters.instructions.loxoneBenefit2')}<br />
+              {t('meters.instructions.loxoneBenefit3')}
+            </div>
+          </div>
+
+          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Plug size={20} color="#3b82f6" />
+            {t('meters.instructions.httpTitle')}
+          </h3>
+          <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #3b82f6' }}>
             <p style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Star size={16} fill="#fbbf24" color="#fbbf24" />
               <strong>{t('meters.instructions.httpNew')}</strong>
@@ -352,13 +480,13 @@ export default function Meters() {
           </div>
 
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Radio size={20} color="#3b82f6" />
+            <Radio size={20} color="#f59e0b" />
             {t('meters.instructions.udpTitle')}
           </h3>
-          <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #3b82f6' }}>
+          <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #f59e0b' }}>
             <p style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Star size={16} fill="#fbbf24" color="#fbbf24" />
-              <strong>{t('meters.instructions.udpNew')}</strong>
+              <AlertCircle size={16} color="#f59e0b" />
+              <strong>{t('meters.instructions.udpDeprecated')}</strong>
             </p>
             <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
               <li>{t('meters.instructions.udpStep1')}</li>
@@ -378,13 +506,10 @@ export default function Meters() {
               Data Key: "f6e5d4c3-b2a1-4098-7654-321fedcba098_power_kwh" (auto-generated)<br />
               Loxone sends: {"{\"f6e5d4c3-b2a1-4098-7654-321fedcba098_power_kwh\": <v>}"}
             </div>
-            <p style={{ marginTop: '10px', fontSize: '14px', color: '#1f2937' }}>
-              <strong>Benefits:</strong> {t('meters.instructions.udpBenefits')}
-            </p>
           </div>
 
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Zap size={20} color="#f59e0b" />
+            <Zap size={20} color="#6b7280" />
             {t('meters.instructions.modbusTitle')}
           </h3>
           <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
@@ -419,6 +544,9 @@ export default function Meters() {
           </h3>
           <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', border: '1px solid #f59e0b' }}>
             <ul style={{ marginLeft: '20px' }}>
+              <li><strong>Loxone WebSocket:</strong> {t('meters.instructions.troubleshootingLoxoneWebSocket')}</li>
+              <li><strong>Loxone WebSocket:</strong> {t('meters.instructions.troubleshootingLoxoneAuth')}</li>
+              <li><strong>Loxone WebSocket:</strong> {t('meters.instructions.troubleshootingLoxoneDevice')}</li>
               <li><strong>HTTP:</strong> {t('meters.instructions.troubleshootingHttpAccess')}</li>
               <li><strong>HTTP:</strong> {t('meters.instructions.troubleshootingHttpAuth')}</li>
               <li><strong>HTTP:</strong> {t('meters.instructions.troubleshootingHttpMeterId')}</li>
@@ -701,7 +829,7 @@ export default function Meters() {
                         textTransform: 'uppercase',
                         letterSpacing: '0.5px'
                       }}>
-                        {meter.connection_type}
+                        {meter.connection_type === 'loxone_api' ? 'Loxone WebSocket' : meter.connection_type}
                       </span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
@@ -724,6 +852,8 @@ export default function Meters() {
                       </span>
                     </div>
                   </div>
+
+                  {renderConnectionStatus(meter)}
                 </div>
               ))}
             </div>
@@ -823,7 +953,7 @@ export default function Meters() {
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('meters.connectionType')} *</label>
                 <select required value={formData.connection_type} onChange={(e) => setFormData({ ...formData, connection_type: e.target.value })}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
-                  <option value="loxone_api">{t('meters.loxoneApi')}</option>
+                  <option value="loxone_api">{t('meters.loxoneApiRecommended')}</option>
                   <option value="udp">{t('meters.udpAlternative')}</option>
                   <option value="modbus_tcp">{t('meters.modbusTcp')}</option>
                 </select>
@@ -837,42 +967,42 @@ export default function Meters() {
                 {formData.connection_type === 'loxone_api' && (
                   <>
                     <div style={{ backgroundColor: '#d1fae5', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #10b981', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Star size={16} fill="#fbbf24" color="#fbbf24" />
+                      <Wifi size={16} color="#10b981" />
                       <p style={{ fontSize: '13px', color: '#065f46', margin: 0 }}>
-                        <strong>Loxone WebSocket API - Real-time connection with online/offline status</strong>
+                        <strong>{t('meters.loxoneApiDescription')}</strong>
                       </p>
                     </div>
                     
                     <div style={{ marginBottom: '12px' }}>
                       <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                        Loxone Host (IP Address) *
+                        {t('meters.loxoneHost')} *
                       </label>
                       <input type="text" required value={connectionConfig.loxone_host || ''}
                         onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_host: e.target.value })}
                         placeholder="192.168.1.100"
                         style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                        IP address of your Loxone Miniserver (without http://)
+                        {t('meters.loxoneHostDescription')}
                       </p>
                     </div>
 
                     <div style={{ marginBottom: '12px' }}>
                       <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                        Device UUID *
+                        {t('meters.loxoneDeviceId')} *
                       </label>
                       <input type="text" required value={connectionConfig.loxone_device_id || ''}
                         onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_device_id: e.target.value })}
                         placeholder="1e475b8d-017e-c7b5-ffff336efb88726d"
                         style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace' }} />
                       <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                        UUID of the virtual output in Loxone (find it in Loxone Config)
+                        {t('meters.loxoneDeviceIdDescription')}
                       </p>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          Username
+                          {t('meters.loxoneUsername')}
                         </label>
                         <input type="text" value={connectionConfig.loxone_username || ''}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_username: e.target.value })}
@@ -881,7 +1011,7 @@ export default function Meters() {
                       </div>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          Password
+                          {t('meters.loxonePassword')}
                         </label>
                         <input type="password" value={connectionConfig.loxone_password || ''}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_password: e.target.value })}
@@ -890,19 +1020,20 @@ export default function Meters() {
                       </div>
                     </div>
                     <p style={{ fontSize: '11px', color: '#666', marginBottom: '12px' }}>
-                      Loxone Miniserver credentials for WebSocket authentication
+                      {t('meters.loxoneCredentialsDescription')}
                     </p>
 
                     <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '12px', fontFamily: 'monospace', fontSize: '12px', border: '1px solid #e5e7eb' }}>
-                      <strong>What you need from Loxone Config:</strong><br />
-                      1. Find your Virtual Output in the program tree<br />
-                      2. Right-click → Properties → Copy the UUID<br />
-                      3. The system will read <strong>output1.value</strong> (kWh) from this device<br />
-                      4. Connection status will be shown on the meter card (🟢 online / 🔴 offline)<br /><br />
+                      <strong>{t('meters.loxoneSetupGuide')}</strong><br />
+                      {t('meters.loxoneSetupStep1')}<br />
+                      {t('meters.loxoneSetupStep2')}<br />
+                      {t('meters.loxoneSetupStep3')}<br />
+                      {t('meters.loxoneSetupStep4')}<br /><br />
                       <div style={{ backgroundColor: '#d1fae5', padding: '8px', borderRadius: '4px', fontSize: '11px', color: '#065f46' }}>
-                        <strong>✓ Real-time updates via WebSocket</strong><br />
-                        <strong>✓ Automatic reconnection on disconnects</strong><br />
-                        <strong>✓ Visual online/offline status indicator</strong>
+                        <strong>{t('meters.loxoneFeatures')}</strong><br />
+                        {t('meters.loxoneFeature1')}<br />
+                        {t('meters.loxoneFeature2')}<br />
+                        {t('meters.loxoneFeature3')}
                       </div>
                     </div>
                   </>
@@ -910,10 +1041,10 @@ export default function Meters() {
 
                 {formData.connection_type === 'udp' && (
                   <>
-                    <div style={{ backgroundColor: '#dbeafe', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #3b82f6', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Star size={16} fill="#fbbf24" color="#fbbf24" />
-                      <p style={{ fontSize: '13px', color: '#1e40af', margin: 0 }}>
-                        <strong>{editingMeter ? t('chargers.existingUuidKeys') : t('meters.instructions.udpNew')}</strong>
+                    <div style={{ backgroundColor: '#fef3c7', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #f59e0b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <AlertCircle size={16} color="#f59e0b" />
+                      <p style={{ fontSize: '13px', color: '#92400e', margin: 0 }}>
+                        <strong>{editingMeter ? t('chargers.existingUuidKeys') : t('meters.udpDeprecatedWarning')}</strong>
                       </p>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
@@ -939,14 +1070,14 @@ export default function Meters() {
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }}
                           readOnly={!editingMeter} />
                         <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                          {editingMeter ? 'You can modify the UUID if needed' : 'Auto-generated unique identifier (UUID_power_kwh format)'}
+                          {editingMeter ? t('meters.dataKeyModifiable') : t('meters.dataKeyAutoGenerated')}
                         </p>
                       </div>
                     </div>
                     <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '12px', fontFamily: 'monospace', fontSize: '12px', border: '1px solid #e5e7eb' }}>
-                      <strong>Loxone Configuration:</strong><br />
-                      Virtual Output UDP to {connectionConfig.listen_port || 8888}<br />
-                      Command: {"{\""}
+                      <strong>{t('meters.loxoneConfiguration')}</strong><br />
+                      {t('meters.udpVirtualOutput')} {connectionConfig.listen_port || 8888}<br />
+                      {t('meters.udpCommand')} {"{\""}
                       <span style={{ color: '#3b82f6', fontWeight: 'bold' }}>{connectionConfig.data_key || 'YOUR_UUID_power_kwh'}</span>
                       {"\": <v>}"}
                     </div>

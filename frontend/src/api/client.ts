@@ -288,6 +288,11 @@ class ApiClient {
   async getLogs(limit: number = 100): Promise<AdminLog[]> {
     return this.request(`/dashboard/logs?limit=${limit}`);
   }
+
+  // Debug/System
+  async getDebugStatus(): Promise<any> {
+    return this.request('/debug/status');
+  }
 }
 
 export const api = new ApiClient();
