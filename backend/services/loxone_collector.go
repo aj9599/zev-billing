@@ -501,17 +501,31 @@ func (conn *LoxoneConnection) authenticate() error {
 
 	// Hash password with key
 	log.Printf("🔐 Authentication Step 2: Hashing password...")
-	pwHash := conn.hashPassword(conn.Password, key)
-	log.Printf("   ✓ Hash generated: %s...", pwHash[:min(len(pwHash), 16)])
+	
+	// First hash: password + key
+	h := sha1.New()
+	h.Write([]byte(conn.Password + ":" + key))
+	pwHash := strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
+	log.Printf("   ✓ Password hash: %s...", pwHash[:min(len(pwHash), 16)])
 
 	// Authenticate
 	log.Printf("🔐 Authentication Step 3: Sending credentials...")
-	authCmd := fmt.Sprintf("authenticate/%s", pwHash)
+	
+	var authCmd string
 	if conn.Username != "" {
-		authCmd = fmt.Sprintf("jdev/sys/authenticate/%s", pwHash)
-		log.Printf("   → Sent: jdev/sys/authenticate/[hash]")
+		// User authentication with double hash
+		h = sha1.New()
+		h.Write([]byte(conn.Username + ":" + pwHash))
+		userHash := strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
+		log.Printf("   ✓ User hash: %s...", userHash[:min(len(userHash), 16)])
+		authCmd = fmt.Sprintf("authenticate/%s", userHash)
+		log.Printf("   → Sent: authenticate/[user-hash]")
+		log.Printf("   ℹ️  Using user-based authentication (username: %s)", conn.Username)
 	} else {
-		log.Printf("   → Sent: authenticate/[hash]")
+		// Admin authentication (password only)
+		authCmd = fmt.Sprintf("authenticate/%s", pwHash)
+		log.Printf("   → Sent: authenticate/[password-hash]")
+		log.Printf("   ℹ️  Using admin authentication (no username)")
 	}
 
 	if err := conn.ws.WriteMessage(websocket.TextMessage, []byte(authCmd)); err != nil {
@@ -586,22 +600,6 @@ func min(a, b int) int {
 		return a
 	}
 	return b
-}
-
-func (conn *LoxoneConnection) hashPassword(password, key string) string {
-	// Loxone password hashing: SHA1(password + ":" + key)
-	h := sha1.New()
-	h.Write([]byte(password + ":" + key))
-	pwHash := hex.EncodeToString(h.Sum(nil))
-	
-	// Then hash again: SHA1(username + ":" + pwHash)
-	if conn.Username != "" {
-		h = sha1.New()
-		h.Write([]byte(conn.Username + ":" + pwHash))
-		return strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
-	}
-	
-	return strings.ToUpper(pwHash)
 }
 
 func (conn *LoxoneConnection) requestData() {
