@@ -792,12 +792,48 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 
 	messageCount := 0
 
-	// Set read deadline
-	conn.mu.Lock()
-	if conn.ws != nil {
-		conn.ws.SetReadDeadline(time.Now().Add(90 * time.Second))
+	// Create a channel for read results to avoid blocking the select
+	type readResult struct {
+		msgType  byte
+		jsonData []byte
+		err      error
 	}
-	conn.mu.Unlock()
+	readChan := make(chan readResult, 1)
+
+	// Start a goroutine that continuously reads from WebSocket
+	go func() {
+		for {
+			conn.mu.Lock()
+			ws := conn.ws
+			isConnected := conn.isConnected
+			conn.mu.Unlock()
+
+			if ws == nil || !isConnected {
+				return
+			}
+
+			// Set read deadline before each read
+			conn.mu.Lock()
+			if conn.ws != nil {
+				conn.ws.SetReadDeadline(time.Now().Add(90 * time.Second))
+			}
+			conn.mu.Unlock()
+
+			msgType, jsonData, err := conn.readLoxoneMessage()
+			
+			// Try to send result, but don't block if channel is full
+			select {
+			case readChan <- readResult{msgType, jsonData, err}:
+			default:
+				// Channel full, skip this reading
+			}
+
+			// If there was an error, stop reading
+			if err != nil {
+				return
+			}
+		}
+	}()
 
 	for {
 		select {
@@ -816,67 +852,42 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 					return
 				}
 				log.Printf("💓 [%s] Keep-alive sent", conn.MeterName)
-				conn.ws.SetReadDeadline(time.Now().Add(90 * time.Second))
 			}
 			conn.mu.Unlock()
-			continue 
 
-		default:
-			conn.mu.Lock()
-			ws := conn.ws
-			isConnected := conn.isConnected 
-			conn.mu.Unlock()
-
-			if ws == nil || !isConnected {   // ✅ Return if disconnected
-				log.Printf("⚠️  Connection no longer valid, closing listener")
-				return
-			}
-
-			// Read Loxone message
-			msgType, jsonData, err := conn.readLoxoneMessage()
-			if err != nil {
+		case result := <-readChan:
+			// Handle read result
+			if result.err != nil {
 				// Check if it's a timeout (expected for keep-alive)
-				if strings.Contains(err.Error(), "i/o timeout") || strings.Contains(err.Error(), "deadline") {
-					conn.mu.Lock()
-					if conn.ws != nil {
-						conn.ws.SetReadDeadline(time.Now().Add(90 * time.Second))
-					}
-					conn.mu.Unlock()
+				if strings.Contains(result.err.Error(), "i/o timeout") || strings.Contains(result.err.Error(), "deadline") {
 					continue
 				}
 
-				if strings.Contains(err.Error(), "websocket: close") {
+				if strings.Contains(result.err.Error(), "websocket: close") {
 					log.Printf("ℹ️  [%s] WebSocket closed normally", conn.MeterName)
 				} else {
-					log.Printf("❌ [%s] Read error: %v", conn.MeterName, err)
+					log.Printf("❌ [%s] Read error: %v", conn.MeterName, result.err)
 					conn.mu.Lock()
-					conn.lastError = fmt.Sprintf("Read error: %v", err)
+					conn.lastError = fmt.Sprintf("Read error: %v", result.err)
 					conn.mu.Unlock()
 				}
 				return
 			}
 
-			// Reset read deadline after successful read
-			conn.mu.Lock()
-			if conn.ws != nil {
-				conn.ws.SetReadDeadline(time.Now().Add(90 * time.Second))
-			}
-			conn.mu.Unlock()
-
 			// Skip binary messages (event tables, etc.)
-			if jsonData == nil {
-				log.Printf("   ℹ️  [%s] Binary message (type %d) - skipping", conn.MeterName, msgType)
+			if result.jsonData == nil {
+				log.Printf("   ℹ️  [%s] Binary message (type %d) - skipping", conn.MeterName, result.msgType)
 				continue
 			}
 
 			messageCount++
-			log.Printf("📨 [%s] Received message #%d (type %d)", conn.MeterName, messageCount, msgType)
+			log.Printf("📨 [%s] Received message #%d (type %d)", conn.MeterName, messageCount, result.msgType)
 
 			// Parse Loxone response
 			var response LoxoneResponse
-			if err := json.Unmarshal(jsonData, &response); err != nil {
+			if err := json.Unmarshal(result.jsonData, &response); err != nil {
 				log.Printf("⚠️  [%s] Failed to parse JSON response: %v", conn.MeterName, err)
-				log.Printf("   JSON: %s", string(jsonData[:min(len(jsonData), 200)]))
+				log.Printf("   JSON: %s", string(result.jsonData[:min(len(result.jsonData), 200)]))
 				continue
 			}
 
