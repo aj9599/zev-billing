@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,10 +41,10 @@ type LoxoneResponse struct {
 }
 
 type LoxoneLLData struct {
-	Control string                    `json:"control"`
-	Value   string                    `json:"value"`
-	Code    string                    `json:"Code"`
-	Outputs map[string]LoxoneOutput   `json:"-"`
+	Control string                  `json:"control"`
+	Value   string                  `json:"value"`
+	Code    string                  `json:"Code"`
+	Outputs map[string]LoxoneOutput `json:"-"`
 }
 
 type LoxoneOutput struct {
@@ -56,20 +55,13 @@ type LoxoneOutput struct {
 
 // Custom unmarshal to handle dynamic output fields
 func (ld *LoxoneLLData) UnmarshalJSON(data []byte) error {
-	type Alias LoxoneLLData
-	aux := &struct {
-		*Alias
-	}{
-		Alias: (*Alias)(ld),
-	}
-	
 	var raw map[string]interface{}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
-	
+
 	ld.Outputs = make(map[string]LoxoneOutput)
-	
+
 	for key, value := range raw {
 		switch key {
 		case "control":
@@ -100,7 +92,7 @@ func (ld *LoxoneLLData) UnmarshalJSON(data []byte) error {
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -115,9 +107,9 @@ func (lc *LoxoneCollector) Start() {
 	log.Println("===================================")
 	log.Println("Loxone WebSocket Collector Starting")
 	log.Println("===================================")
-	
+
 	lc.initializeConnections()
-	
+
 	// Monitor and reconnect dropped connections
 	go lc.monitorConnections()
 }
@@ -125,7 +117,7 @@ func (lc *LoxoneCollector) Start() {
 func (lc *LoxoneCollector) Stop() {
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
-	
+
 	for _, conn := range lc.connections {
 		conn.Close()
 	}
@@ -155,7 +147,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 	for rows.Next() {
 		var id int
 		var name, connectionConfig string
-		
+
 		if err := rows.Scan(&id, &name, &connectionConfig); err != nil {
 			continue
 		}
@@ -294,8 +286,8 @@ func (conn *LoxoneConnection) Connect(db *sql.DB) {
 	log.Printf("SUCCESS: Connected to Loxone meter '%s' (Device: %s)", conn.MeterName, conn.DeviceID)
 
 	// Update meter status in database
-	db.Exec(`UPDATE meters SET notes = ? WHERE id = ?`, 
-		fmt.Sprintf("Connected at %s", time.Now().Format("2006-01-02 15:04:05")), 
+	db.Exec(`UPDATE meters SET notes = ? WHERE id = ?`,
+		fmt.Sprintf("Connected at %s", time.Now().Format("2006-01-02 15:04:05")),
 		conn.MeterID)
 
 	// Start reading data
@@ -376,14 +368,14 @@ func (conn *LoxoneConnection) hashPassword(password, key string) string {
 	h := sha1.New()
 	h.Write([]byte(password + ":" + key))
 	pwHash := hex.EncodeToString(h.Sum(nil))
-	
+
 	// Then hash again: SHA1(username + ":" + pwHash)
 	if conn.Username != "" {
 		h = sha1.New()
 		h.Write([]byte(conn.Username + ":" + pwHash))
 		return strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
 	}
-	
+
 	return strings.ToUpper(pwHash)
 }
 
@@ -393,15 +385,15 @@ func (conn *LoxoneConnection) requestData() {
 		now := time.Now()
 		next := getNextQuarterHour(now)
 		waitDuration := next.Sub(now)
-		
+
 		time.Sleep(waitDuration)
-		
+
 		conn.mu.Lock()
 		if !conn.isConnected || conn.ws == nil {
 			conn.mu.Unlock()
 			return
 		}
-		
+
 		// Request device data
 		cmd := fmt.Sprintf("jdev/sps/io/%s/all", conn.DeviceID)
 		if err := conn.ws.WriteMessage(websocket.TextMessage, []byte(cmd)); err != nil {
@@ -411,7 +403,7 @@ func (conn *LoxoneConnection) requestData() {
 			return
 		}
 		conn.mu.Unlock()
-		
+
 		log.Printf("DEBUG: Requested data from Loxone meter '%s' (Device: %s)", conn.MeterName, conn.DeviceID)
 	}
 }
@@ -435,7 +427,7 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 			conn.mu.Lock()
 			ws := conn.ws
 			conn.mu.Unlock()
-			
+
 			if ws == nil {
 				return
 			}
@@ -463,7 +455,7 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 			// Extract output1 value (kWh reading)
 			if output1, ok := response.LL.Outputs["output1"]; ok {
 				var reading float64
-				
+
 				switch v := output1.Value.(type) {
 				case float64:
 					reading = v
@@ -480,8 +472,8 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 					conn.mu.Unlock()
 
 					currentTime := roundToQuarterHour(time.Now())
-					
-					log.Printf("SUCCESS: Loxone meter '%s' reading: %.3f kWh at %s", 
+
+					log.Printf("SUCCESS: Loxone meter '%s' reading: %.3f kWh at %s",
 						conn.MeterName, reading, currentTime.Format("15:04:05"))
 
 					// Get last reading for interpolation
@@ -496,23 +488,23 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 					if err == nil && !lastTime.IsZero() {
 						// Interpolate missing intervals
 						interpolated := interpolateReadings(lastTime, lastReading, currentTime, reading)
-						
+
 						if len(interpolated) > 0 {
-							log.Printf("Loxone meter '%s': Interpolating %d missing intervals", 
+							log.Printf("Loxone meter '%s': Interpolating %d missing intervals",
 								conn.MeterName, len(interpolated))
 						}
-						
+
 						for _, point := range interpolated {
 							consumption := point.value - lastReading
 							if consumption < 0 {
 								consumption = 0
 							}
-							
+
 							db.Exec(`
 								INSERT INTO meter_readings (meter_id, reading_time, power_kwh, consumption_kwh)
 								VALUES (?, ?, ?, ?)
 							`, conn.MeterID, point.time, point.value, consumption)
-							
+
 							lastReading = point.value
 						}
 					}
@@ -537,7 +529,7 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 							SET last_reading = ?, last_reading_time = ?, 
 							    notes = ?
 							WHERE id = ?
-						`, reading, currentTime, 
+						`, reading, currentTime,
 							fmt.Sprintf("Last update: %s (Connected)", time.Now().Format("2006-01-02 15:04:05")),
 							conn.MeterID)
 					}
@@ -558,7 +550,7 @@ func (conn *LoxoneConnection) IsConnected() bool {
 func (conn *LoxoneConnection) Close() {
 	conn.mu.Lock()
 	defer conn.mu.Unlock()
-	
+
 	close(conn.stopChan)
 	if conn.ws != nil {
 		conn.ws.Close()
