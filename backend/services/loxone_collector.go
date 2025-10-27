@@ -361,18 +361,8 @@ func (lc *LoxoneCollector) GetConnectionStatus() map[int]map[string]interface{} 
 
 // readLoxoneMessage handles Loxone's binary protocol
 func (conn *LoxoneConnection) readLoxoneMessage() (messageType byte, jsonData []byte, err error) {
-	// Validate connection before attempting to read
-	conn.mu.Lock()
-	ws := conn.ws
-	isConnected := conn.isConnected
-	conn.mu.Unlock()
-	
-	if ws == nil || !isConnected {
-		return 0, nil, fmt.Errorf("connection is not active")
-	}
-	
 	// Read the message
-	wsMessageType, message, err := ws.ReadMessage()
+	wsMessageType, message, err := conn.ws.ReadMessage()
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to read message: %v", err)
 	}
@@ -781,15 +771,6 @@ func (conn *LoxoneConnection) requestData() {
 
 func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 	defer func() {
-		// Recover from any panics to prevent crashing the entire service
-		if r := recover(); r != nil {
-			log.Printf("❌ [%s] PANIC RECOVERED in readLoop: %v", conn.MeterName, r)
-			conn.mu.Lock()
-			conn.lastError = fmt.Sprintf("Panic: %v", r)
-			conn.mu.Unlock()
-		}
-		
-		// Clean up connection
 		conn.mu.Lock()
 		if conn.ws != nil {
 			conn.ws.Close()
@@ -805,16 +786,16 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 
 	log.Printf("👂 [%s] DATA LISTENER ACTIVE - waiting for messages...", conn.MeterName)
 
-	// Set up keep-alive ticker (every 2 minutes)
-	keepAliveTicker := time.NewTicker(2 * time.Minute)
+	// Set up keep-alive ticker
+	keepAliveTicker := time.NewTicker(30 * time.Second)
 	defer keepAliveTicker.Stop()
 
 	messageCount := 0
 
-	// Set read deadline (5 minutes - gives 2 keep-alive cycles before timeout)
+	// Set read deadline
 	conn.mu.Lock()
 	if conn.ws != nil {
-		conn.ws.SetReadDeadline(time.Now().Add(5 * time.Minute))
+		conn.ws.SetReadDeadline(time.Now().Add(90 * time.Second))
 	}
 	conn.mu.Unlock()
 
@@ -825,36 +806,29 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 			return
 
 		case <-keepAliveTicker.C:
-			// Send keep-alive using a valid Loxone command
+			// Send keep-alive (simple text command)
 			conn.mu.Lock()
-			if conn.ws != nil && conn.isConnected {
-				// Use "jdev/sps/LoxAPPversion" as keep-alive - it's a lightweight command
-				err := conn.ws.WriteMessage(websocket.TextMessage, []byte("jdev/sps/LoxAPPversion"))
+			if conn.ws != nil {
+				err := conn.ws.WriteMessage(websocket.TextMessage, []byte("keepalive"))
 				if err != nil {
 					log.Printf("⚠️  [%s] Keep-alive failed: %v", conn.MeterName, err)
-					// Close the connection and mark as disconnected
-					conn.ws.Close()
-					conn.ws = nil
-					conn.isConnected = false
-					conn.lastError = fmt.Sprintf("Keep-alive failed: %v", err)
 					conn.mu.Unlock()
 					return
 				}
 				log.Printf("💓 [%s] Keep-alive sent", conn.MeterName)
-				conn.ws.SetReadDeadline(time.Now().Add(5 * time.Minute))
+				conn.ws.SetReadDeadline(time.Now().Add(90 * time.Second))
 			}
 			conn.mu.Unlock()
+			continue 
 
 		default:
-			// Double-check connection is still valid before reading
 			conn.mu.Lock()
 			ws := conn.ws
-			isConnected := conn.isConnected
+			isConnected := conn.isConnected 
 			conn.mu.Unlock()
 
-			if ws == nil || !isConnected {
-				log.Printf("⚠️  [%s] Connection invalid (ws=%v, connected=%v), closing listener", 
-					conn.MeterName, ws != nil, isConnected)
+			if ws == nil || !isConnected {   // ✅ Return if disconnected
+				log.Printf("⚠️  Connection no longer valid, closing listener")
 				return
 			}
 
@@ -865,7 +839,7 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 				if strings.Contains(err.Error(), "i/o timeout") || strings.Contains(err.Error(), "deadline") {
 					conn.mu.Lock()
 					if conn.ws != nil {
-						conn.ws.SetReadDeadline(time.Now().Add(5 * time.Minute))
+						conn.ws.SetReadDeadline(time.Now().Add(90 * time.Second))
 					}
 					conn.mu.Unlock()
 					continue
@@ -885,7 +859,7 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 			// Reset read deadline after successful read
 			conn.mu.Lock()
 			if conn.ws != nil {
-				conn.ws.SetReadDeadline(time.Now().Add(5 * time.Minute))
+				conn.ws.SetReadDeadline(time.Now().Add(90 * time.Second))
 			}
 			conn.mu.Unlock()
 
