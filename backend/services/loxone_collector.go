@@ -597,7 +597,7 @@ func (conn *LoxoneConnection) authenticateWithToken() error {
 				Token      string `json:"token"`
 				ValidUntil int64  `json:"validUntil"`
 				Rights     int    `json:"rights"`
-				Unsecure   int    `json:"unsecurePass"`
+				Unsecure   bool   `json:"unsecurePass"`
 			} `json:"value"`
 		} `json:"LL"`
 	}
@@ -619,6 +619,9 @@ func (conn *LoxoneConnection) authenticateWithToken() error {
 	log.Printf("   ✓ Token received: %s...", tokenData.Token[:min(len(tokenData.Token), 16)])
 	log.Printf("   ✓ Valid until: %v", time.Unix(tokenData.ValidUntil, 0).Format("2006-01-02 15:04:05"))
 	log.Printf("   ✓ Rights: %d", tokenData.Rights)
+	if tokenData.Unsecure {
+		log.Printf("   ⚠️  WARNING: Unsecure password flag is set - consider using a stronger password")
+	}
 
 	// Store token
 	conn.mu.Lock()
