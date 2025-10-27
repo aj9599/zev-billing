@@ -47,7 +47,7 @@ type LoxoneResponse struct {
 type LoxoneLLData struct {
 	Control string                    `json:"control"`
 	Value   string                    `json:"value"`
-	Code    string                    `json:"Code"`
+	Code    string                    `json:"code"`
 	Outputs map[string]LoxoneOutput   `json:"-"`
 }
 
@@ -84,7 +84,7 @@ func (ld *LoxoneLLData) UnmarshalJSON(data []byte) error {
 			if v, ok := value.(string); ok {
 				ld.Value = v
 			}
-		case "Code":
+		case "code", "Code":  // Handle both lowercase and uppercase
 			if v, ok := value.(string); ok {
 				ld.Code = v
 			}
@@ -495,12 +495,12 @@ func (conn *LoxoneConnection) authenticateWithToken() error {
 	
 	log.Printf("   ← Received key response")
 
-	// Parse the key response
+	// Parse the key response - value is an object, not a string
 	var keyResp struct {
 		LL struct {
-			Control string `json:"control"`
-			Code    string `json:"Code"`
-			Value   string `json:"value"`
+			Control string               `json:"control"`
+			Code    string               `json:"code"`
+			Value   LoxoneKeyResponse    `json:"value"`
 		} `json:"LL"`
 	}
 
@@ -514,11 +514,8 @@ func (conn *LoxoneConnection) authenticateWithToken() error {
 		return fmt.Errorf("getkey2 failed with code: %s", keyResp.LL.Code)
 	}
 
-	// Parse the value which contains key, salt, etc.
-	var keyData LoxoneKeyResponse
-	if err := json.Unmarshal([]byte(keyResp.LL.Value), &keyData); err != nil {
-		return fmt.Errorf("failed to parse key data: %v", err)
-	}
+	// Get the key data directly from the response
+	keyData := keyResp.LL.Value
 
 	log.Printf("   ✓ Received key: %s...", keyData.Key[:min(len(keyData.Key), 16)])
 	log.Printf("   ✓ Received salt: %s...", keyData.Salt[:min(len(keyData.Salt), 16)])
@@ -581,8 +578,13 @@ func (conn *LoxoneConnection) authenticateWithToken() error {
 	var tokenResp struct {
 		LL struct {
 			Control string `json:"control"`
-			Code    string `json:"Code"`
-			Value   string `json:"value"`
+			Code    string `json:"code"`
+			Value   struct {
+				Token      string `json:"token"`
+				ValidUntil int64  `json:"validUntil"`
+				Rights     int    `json:"rights"`
+				Unsecure   int    `json:"unsecurePass"`
+			} `json:"value"`
 		} `json:"LL"`
 	}
 
@@ -591,24 +593,14 @@ func (conn *LoxoneConnection) authenticateWithToken() error {
 	}
 
 	log.Printf("   ← Response code: %s", tokenResp.LL.Code)
-	log.Printf("   ← Response value: %s", tokenResp.LL.Value)
 
 	if tokenResp.LL.Code != "200" {
-		return fmt.Errorf("gettoken failed with code: %s, value: %s", 
-			tokenResp.LL.Code, tokenResp.LL.Value)
+		return fmt.Errorf("gettoken failed with code: %s", 
+			tokenResp.LL.Code)
 	}
 
-	// Parse token data
-	var tokenData struct {
-		Token     string `json:"token"`
-		ValidUntil int64 `json:"validUntil"`
-		Rights    int    `json:"rights"`
-		Unsecure  int    `json:"unsecurePass"`
-	}
-
-	if err := json.Unmarshal([]byte(tokenResp.LL.Value), &tokenData); err != nil {
-		return fmt.Errorf("failed to parse token data: %v", err)
-	}
+	// Get token data directly from response
+	tokenData := tokenResp.LL.Value
 
 	log.Printf("   ✓ Token received: %s...", tokenData.Token[:min(len(tokenData.Token), 16)])
 	log.Printf("   ✓ Valid until: %v", time.Unix(tokenData.ValidUntil, 0).Format("2006-01-02 15:04:05"))
@@ -639,7 +631,7 @@ func (conn *LoxoneConnection) authenticateWithToken() error {
 	var authResp struct {
 		LL struct {
 			Control string `json:"control"`
-			Code    string `json:"Code"`
+			Code    string `json:"code"`
 			Value   string `json:"value"`
 		} `json:"LL"`
 	}
@@ -649,6 +641,7 @@ func (conn *LoxoneConnection) authenticateWithToken() error {
 	}
 
 	log.Printf("   ← Response code: %s", authResp.LL.Code)
+	log.Printf("   ← Response value: %s", authResp.LL.Value)
 
 	if authResp.LL.Code != "200" {
 		return fmt.Errorf("authwithtoken failed with code: %s, value: %s", 
