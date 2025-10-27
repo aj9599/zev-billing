@@ -501,6 +501,10 @@ func (conn *LoxoneConnection) Connect(db *sql.DB) {
 
 	log.Printf("⏰ Starting data request scheduler for %s...", conn.MeterName)
 	go conn.requestData()
+
+	// Start token expiry monitor
+	log.Printf("🔐 Starting token expiry monitor for %s...", conn.MeterName)
+	go conn.monitorTokenExpiry(db)
 }
 
 func (conn *LoxoneConnection) authenticateWithToken() error {
@@ -666,6 +670,167 @@ func (conn *LoxoneConnection) authenticateWithToken() error {
 }
 
 // extractJSON extracts JSON data from Loxone message
+
+func (conn *LoxoneConnection) refreshToken() error {
+	log.Printf("🔄 TOKEN REFRESH - Starting refresh for %s", conn.MeterName)
+	conn.mu.Lock()
+	if conn.ws == nil {
+		conn.mu.Unlock()
+		return fmt.Errorf("WebSocket not connected")
+	}
+	// Step 1: Get new key and salt
+	getKeyCmd := fmt.Sprintf("jdev/sys/getkey2/%s", conn.Username)
+	log.Printf("   → Requesting new key: %s", getKeyCmd)
+	if err := conn.ws.WriteMessage(websocket.TextMessage, []byte(getKeyCmd)); err != nil {
+		conn.mu.Unlock()
+		return fmt.Errorf("failed to request key: %v", err)
+	}
+	conn.mu.Unlock()
+	// Read key response
+	msgType, jsonData, err := conn.readLoxoneMessage()
+	if err != nil {
+		return fmt.Errorf("failed to read key response: %v", err)
+	}
+	if jsonData == nil {
+		return fmt.Errorf("no JSON data in key response")
+	}
+	log.Printf("   ← Received key response (type %d)", msgType)
+	// Parse the key response
+	var keyResp struct {
+		LL struct {
+			Control string            `json:"control"`
+			Code    string            `json:"code"`
+			Value   LoxoneKeyResponse `json:"value"`
+		} `json:"LL"`
+	}
+	if err := json.Unmarshal(jsonData, &keyResp); err != nil {
+		return fmt.Errorf("failed to parse key response: %v", err)
+	}
+	if keyResp.LL.Code != "200" {
+		return fmt.Errorf("getkey2 failed with code: %s", keyResp.LL.Code)
+	}
+	keyData := keyResp.LL.Value
+	log.Printf("   ✓ Received key and salt")
+	// Step 2: Hash password with salt
+	pwSaltStr := conn.Password + ":" + keyData.Salt
+	var pwHashHex string
+	switch strings.ToUpper(keyData.HashAlg) {
+	case "SHA256":
+		pwHash := sha256.Sum256([]byte(pwSaltStr))
+		pwHashHex = strings.ToUpper(hex.EncodeToString(pwHash[:]))
+	case "SHA1":
+		pwHash := sha1.Sum([]byte(pwSaltStr))
+		pwHashHex = strings.ToUpper(hex.EncodeToString(pwHash[:]))
+	default:
+		return fmt.Errorf("unsupported hash algorithm: %s", keyData.HashAlg)
+	}
+	// Step 3: Create HMAC
+	keyBytes, err := hex.DecodeString(keyData.Key)
+	if err != nil {
+		return fmt.Errorf("failed to decode key: %v", err)
+	}
+	hmacMessage := conn.Username + ":" + pwHashHex
+	h := hmac.New(sha1.New, keyBytes)
+	h.Write([]byte(hmacMessage))
+	hmacHash := hex.EncodeToString(h.Sum(nil))
+	// Step 4: Refresh token using refreshtoken command
+	refreshTokenCmd := fmt.Sprintf("jdev/sys/refreshtoken/%s/%s", hmacHash, conn.Username)
+	log.Printf("   → Sending refresh token request")
+	conn.mu.Lock()
+	if err := conn.ws.WriteMessage(websocket.TextMessage, []byte(refreshTokenCmd)); err != nil {
+		conn.mu.Unlock()
+		return fmt.Errorf("failed to request token refresh: %v", err)
+	}
+	conn.mu.Unlock()
+	// Read token response
+	msgType, jsonData, err = conn.readLoxoneMessage()
+	if err != nil {
+		return fmt.Errorf("failed to read token refresh response: %v", err)
+	}
+	if jsonData == nil {
+		return fmt.Errorf("no JSON data in token refresh response")
+	}
+	log.Printf("   ← Received token refresh response (type %d)", msgType)
+	var tokenResp struct {
+		LL struct {
+			Control string              `json:"control"`
+			Code    string              `json:"code"`
+			Value   LoxoneTokenResponse `json:"value"`
+		} `json:"LL"`
+	}
+	if err := json.Unmarshal(jsonData, &tokenResp); err != nil {
+		return fmt.Errorf("failed to parse token refresh response: %v", err)
+	}
+	if tokenResp.LL.Code != "200" {
+		return fmt.Errorf("refreshtoken failed with code: %s", tokenResp.LL.Code)
+	}
+	tokenData := tokenResp.LL.Value
+	// Parse new token validity
+	newTokenValidTime := loxoneEpoch.Add(time.Duration(tokenData.ValidUntil) * time.Second)
+	// Store new token
+	conn.mu.Lock()
+	oldValidTime := conn.tokenValid
+	conn.token = tokenData.Token
+	conn.tokenValid = newTokenValidTime
+	conn.mu.Unlock()
+	log.Printf("   ✅ TOKEN REFRESHED SUCCESSFULLY!")
+	log.Printf("   Old expiry: %s", oldValidTime.Format("2006-01-02 15:04:05"))
+	log.Printf("   New expiry: %s", newTokenValidTime.Format("2006-01-02 15:04:05"))
+	log.Printf("   New token valid for: %.1f hours", time.Until(newTokenValidTime).Hours())
+	return nil
+}
+func (conn *LoxoneConnection) monitorTokenExpiry(db *sql.DB) {
+	log.Printf("🔐 TOKEN MONITOR STARTED for %s", conn.MeterName)
+	// Check token expiry every 10 minutes
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-conn.stopChan:
+			log.Printf("🛑 [%s] Token monitor stopping", conn.MeterName)
+			return
+		case <-ticker.C:
+			conn.mu.Lock()
+			isConnected := conn.isConnected
+			tokenValid := conn.tokenValid
+			conn.mu.Unlock()
+			if !isConnected {
+				log.Printf("⚠️  [%s] Not connected, token monitor stopping", conn.MeterName)
+				return
+			}
+			// Check if token expires in less than 1 hour
+			timeUntilExpiry := time.Until(tokenValid)
+			if timeUntilExpiry < 1*time.Hour {
+				log.Printf("⚠️  [%s] Token expiring in %.1f minutes, refreshing...", 
+					conn.MeterName, timeUntilExpiry.Minutes())
+				if err := conn.refreshToken(); err != nil {
+					log.Printf("❌ [%s] Failed to refresh token: %v", conn.MeterName, err)
+					log.Printf("   Will attempt to reconnect...")
+					// Failed to refresh, disconnect and let monitor reconnect
+					conn.mu.Lock()
+					conn.isConnected = false
+					conn.lastError = fmt.Sprintf("Token refresh failed: %v", err)
+					if conn.ws != nil {
+						conn.ws.Close()
+					}
+					conn.mu.Unlock()
+					db.Exec(`UPDATE meters SET notes = ? WHERE id = ?`,
+						fmt.Sprintf("🔄 Token refresh failed, reconnecting..."),
+						conn.MeterID)
+					return
+				}
+				// Update database with new token info
+				db.Exec(`UPDATE meters SET notes = ? WHERE id = ?`,
+					fmt.Sprintf("🟢 Token refreshed at %s", time.Now().Format("2006-01-02 15:04:05")),
+					conn.MeterID)
+			} else {
+				log.Printf("✅ [%s] Token valid for %.1f hours", 
+					conn.MeterName, timeUntilExpiry.Hours())
+			}
+		}
+	}
+}
+
 func (conn *LoxoneConnection) extractJSON(message []byte) []byte {
 	if len(message) == 0 {
 		return nil
@@ -742,13 +907,7 @@ func (conn *LoxoneConnection) requestData() {
 			return
 		}
 
-		// Check if token is still valid (with 1 hour buffer)
-		if time.Now().Add(1 * time.Hour).After(conn.tokenValid) {
-			log.Printf("⚠️  [%s] Token expiring soon, need to re-authenticate", conn.MeterName)
-			conn.isConnected = false
-			conn.mu.Unlock()
-			return
-		}
+			// Token expiry is now handled by monitorTokenExpiry goroutine
 
 		// Request device data
 		cmd := fmt.Sprintf("jdev/sps/io/%s/all", conn.DeviceID)
