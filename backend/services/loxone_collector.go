@@ -169,7 +169,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 		}
 
 		meterCount++
-		log.Println("─────────────────────────────────────")
+		log.Println("─────────────────────────────────")
 		log.Printf("📊 FOUND LOXONE METER #%d", meterCount)
 		log.Printf("   Name: '%s'", name)
 		log.Printf("   ID: %d", id)
@@ -251,7 +251,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 		log.Println("   2. Add new meter")
 		log.Println("   3. Select 'Loxone WebSocket API' as connection type")
 	} else {
-		log.Println("─────────────────────────────────────")
+		log.Println("─────────────────────────────────")
 		log.Printf("✓ INITIALIZED %d LOXONE WEBSOCKET CONNECTIONS", meterCount)
 	}
 }
@@ -267,7 +267,7 @@ func (lc *LoxoneCollector) monitorConnections() {
 		disconnectedCount := 0
 		connectedCount := 0
 		
-		log.Println("─────────────────────────────────────")
+		log.Println("─────────────────────────────────")
 		log.Println("📊 LOXONE CONNECTION STATUS CHECK")
 		
 		for meterID, conn := range lc.connections {
@@ -298,7 +298,7 @@ func (lc *LoxoneCollector) monitorConnections() {
 		lc.mu.RUnlock()
 		
 		log.Printf("📊 Summary: %d connected, %d disconnected", connectedCount, disconnectedCount)
-		log.Println("─────────────────────────────────────")
+		log.Println("─────────────────────────────────")
 	}
 }
 
@@ -321,6 +321,57 @@ func (lc *LoxoneCollector) GetConnectionStatus() map[int]map[string]interface{} 
 		conn.mu.Unlock()
 	}
 	return status
+}
+
+// readLoxoneMessage handles Loxone's binary protocol
+// Loxone sends messages in two parts:
+//   1. Binary header (8 bytes): [type][pad][pad][pad][length as uint32]
+//   2. JSON payload (text message)
+func (conn *LoxoneConnection) readLoxoneMessage() ([]byte, error) {
+	// Read first message
+	messageType, message, err := conn.ws.ReadMessage()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read message: %v", err)
+	}
+	
+	log.Printf("   ← Received message type: %d, length: %d bytes", messageType, len(message))
+	
+	// Check if this is a binary header (8 bytes, type 0x03 for text event)
+	if messageType == websocket.BinaryMessage && len(message) == 8 {
+		headerType := message[0]
+		// Bytes 4-7 contain the payload length in little-endian format
+		payloadLength := uint32(message[4]) | 
+		                 uint32(message[5])<<8 | 
+		                 uint32(message[6])<<16 | 
+		                 uint32(message[7])<<24
+		
+		log.Printf("   ℹ️  Binary header detected:")
+		log.Printf("      Type: 0x%02X", headerType)
+		log.Printf("      Payload length: %d bytes", payloadLength)
+		
+		// Read the actual JSON payload in the next message
+		messageType, message, err = conn.ws.ReadMessage()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read JSON payload: %v", err)
+		}
+		
+		log.Printf("   ← Received payload type: %d, length: %d bytes", messageType, len(message))
+	}
+	
+	// Display first 100 chars of the message
+	displayLen := len(message)
+	if displayLen > 100 {
+		displayLen = 100
+	}
+	log.Printf("   ← Message preview: %s", string(message[:displayLen]))
+	
+	// Extract JSON (handle both direct JSON and with extra padding)
+	jsonData := conn.extractJSON(message)
+	if jsonData == nil {
+		return nil, fmt.Errorf("could not extract JSON from message")
+	}
+	
+	return jsonData, nil
 }
 
 func (conn *LoxoneConnection) Connect(db *sql.DB) {
@@ -394,7 +445,7 @@ func (conn *LoxoneConnection) Connect(db *sql.DB) {
 	log.Println("╔═══════════════════════════════════╗")
 	log.Printf("║ ✅ CONNECTION ESTABLISHED!         ║")
 	log.Printf("║ Meter: %-25s║", conn.MeterName)
-	log.Printf("║ Device: %-24s║", conn.DeviceID[:24])
+	log.Printf("║ Device: %-24s║", conn.DeviceID[:min(len(conn.DeviceID), 24)])
 	log.Printf("║ Host: %-27s║", conn.Host)
 	log.Println("╚═══════════════════════════════════╝")
 
@@ -420,20 +471,10 @@ func (conn *LoxoneConnection) authenticate() error {
 	}
 	log.Printf("   → Sent: jdev/sys/getkey")
 
-	// Read key response
-	messageType, message, err := conn.ws.ReadMessage()
+	// Read key response using binary protocol handler
+	jsonData, err := conn.readLoxoneMessage()
 	if err != nil {
-		return fmt.Errorf("failed to read key: %v", err)
-	}
-	
-	log.Printf("   ← Received message type: %d, length: %d bytes", messageType, len(message))
-	log.Printf("   ← Raw message (first 50 bytes): %q", string(message[:min(len(message), 50)]))
-	
-	// Parse the message - handle both text and binary
-	jsonData := conn.extractJSON(message)
-	if jsonData == nil {
-		log.Printf("   ⚠️  Could not extract JSON from message")
-		return fmt.Errorf("failed to extract JSON from key response")
+		return fmt.Errorf("failed to read key response: %v", err)
 	}
 	
 	log.Printf("   ← Extracted JSON: %s", string(jsonData[:min(len(jsonData), 100)]))
@@ -477,18 +518,10 @@ func (conn *LoxoneConnection) authenticate() error {
 		return fmt.Errorf("failed to send auth: %v", err)
 	}
 
-	// Read auth response
-	messageType, message, err = conn.ws.ReadMessage()
+	// Read auth response using binary protocol handler
+	jsonData, err = conn.readLoxoneMessage()
 	if err != nil {
 		return fmt.Errorf("failed to read auth response: %v", err)
-	}
-	
-	log.Printf("   ← Received message type: %d, length: %d bytes", messageType, len(message))
-	
-	// Parse the message
-	jsonData = conn.extractJSON(message)
-	if jsonData == nil {
-		return fmt.Errorf("failed to extract JSON from auth response")
 	}
 
 	var authResponse struct {
@@ -523,17 +556,15 @@ func (conn *LoxoneConnection) extractJSON(message []byte) []byte {
 		return message
 	}
 	
-	// Loxone binary format: header (8 bytes) + JSON payload
-	// Header: identifier(1) + type(1) + estimated_length(1) + padding(1) + length(4)
-	// Try to skip header and find JSON
+	// Try to find JSON start
 	for i := 0; i < len(message)-1 && i < 20; i++ {
 		if message[i] == '{' {
-			log.Printf("   ℹ️  Found JSON at offset %d (skipped %d header bytes)", i, i)
+			log.Printf("   ℹ️  Found JSON at offset %d", i)
 			return message[i:]
 		}
 	}
 	
-	// If we still can't find it, try looking for "LL" pattern which is in all responses
+	// Look for "LL" pattern which is in all responses
 	jsonStr := string(message)
 	if idx := strings.Index(jsonStr, "{\"LL\""); idx != -1 {
 		log.Printf("   ℹ️  Found JSON at offset %d (searched for LL pattern)", idx)
@@ -546,7 +577,7 @@ func (conn *LoxoneConnection) extractJSON(message []byte) []byte {
 		return message[idx:]
 	}
 	
-	log.Printf("   ⚠️  Could not find JSON in message, raw data: %q", string(message[:min(len(message), 100)]))
+	log.Printf("   ⚠️  Could not find JSON in message")
 	return nil
 }
 
@@ -597,7 +628,7 @@ func (conn *LoxoneConnection) requestData() {
 		
 		// Request device data
 		cmd := fmt.Sprintf("jdev/sps/io/%s/all", conn.DeviceID)
-		log.Println("─────────────────────────────────────")
+		log.Println("─────────────────────────────────")
 		log.Printf("📡 [%s] REQUESTING DATA", conn.MeterName)
 		log.Printf("   Command: %s", cmd)
 		log.Printf("   Time: %s", time.Now().Format("15:04:05"))
@@ -648,31 +679,27 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 				return
 			}
 
-			messageType, message, err := ws.ReadMessage()
+			// Use readLoxoneMessage to handle binary protocol
+			jsonData, err := conn.readLoxoneMessage()
 			if err != nil {
-				log.Printf("❌ [%s] WebSocket read error: %v", conn.MeterName, err)
-				conn.mu.Lock()
-				conn.lastError = fmt.Sprintf("Read error: %v", err)
-				conn.mu.Unlock()
+				if strings.Contains(err.Error(), "websocket: close") {
+					log.Printf("ℹ️  [%s] WebSocket closed normally", conn.MeterName)
+				} else {
+					log.Printf("❌ [%s] Read error: %v", conn.MeterName, err)
+					conn.mu.Lock()
+					conn.lastError = fmt.Sprintf("Read error: %v", err)
+					conn.mu.Unlock()
+				}
 				return
 			}
 
 			messageCount++
-			log.Printf("📨 [%s] Received message #%d (type: %d, length: %d bytes)", 
-				conn.MeterName, messageCount, messageType, len(message))
-
-			// Extract JSON from message (handles binary format)
-			jsonData := conn.extractJSON(message)
-			if jsonData == nil {
-				log.Printf("⚠️  [%s] Could not extract JSON from message", conn.MeterName)
-				continue
-			}
+			log.Printf("📨 [%s] Received message #%d", conn.MeterName, messageCount)
 
 			// Parse Loxone response
 			var response LoxoneResponse
 			if err := json.Unmarshal(jsonData, &response); err != nil {
 				log.Printf("⚠️  [%s] Failed to parse JSON response: %v", conn.MeterName, err)
-				log.Printf("   Extracted JSON: %s", string(jsonData[:min(len(jsonData), 200)]))
 				continue
 			}
 
@@ -720,7 +747,7 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 
 					currentTime := roundToQuarterHour(time.Now())
 					
-					log.Println("─────────────────────────────────────")
+					log.Println("─────────────────────────────────")
 					log.Printf("✅ [%s] READING RECEIVED!", conn.MeterName)
 					log.Printf("   Value: %.3f kWh", reading)
 					log.Printf("   Timestamp: %s", currentTime.Format("2006-01-02 15:04:05"))
@@ -795,7 +822,7 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 						
 						log.Printf("   ✅ Saved to database successfully")
 					}
-					log.Println("─────────────────────────────────────")
+					log.Println("─────────────────────────────────")
 				} else {
 					log.Printf("      ⚠️  Reading is 0 or negative, not saving")
 				}
