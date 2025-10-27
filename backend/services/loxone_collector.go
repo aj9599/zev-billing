@@ -522,9 +522,9 @@ func (conn *LoxoneConnection) authenticate() error {
 		log.Printf("   ✓ Message: %s:****** (user:password)", conn.Username)
 		log.Printf("   ✓ Hash: %s...", hash[:min(len(hash), 16)])
 		
-		// FIXED: For user authentication, include username in the command
-		authCmd = fmt.Sprintf("jdev/sys/authenticate/%s:%s", conn.Username, hash)
-		log.Printf("   → Will send: jdev/sys/authenticate/%s:[hash]", conn.Username)
+		// FIXED: Auth command should NOT have jdev/sys prefix
+		authCmd = fmt.Sprintf("authenticate/%s", hash)
+		log.Printf("   → Will send: authenticate/[hash]")
 		log.Printf("   ℹ️  Using user-based authentication (username: %s)", conn.Username)
 	} else {
 		// Admin authentication: HMAC-SHA1(password, key)
@@ -538,8 +538,8 @@ func (conn *LoxoneConnection) authenticate() error {
 		log.Printf("   ✓ Hash: %s...", hash[:min(len(hash), 16)])
 		
 		// For admin, just send the hash
-		authCmd = fmt.Sprintf("jdev/sys/authenticate/%s", hash)
-		log.Printf("   → Will send: jdev/sys/authenticate/[hash]")
+		authCmd = fmt.Sprintf("authenticate/%s", hash)
+		log.Printf("   → Will send: authenticate/[hash]")
 		log.Printf("   ℹ️  Using admin authentication (no username)")
 	}
 
