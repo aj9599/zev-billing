@@ -632,8 +632,9 @@ func (conn *LoxoneConnection) authenticateWithToken() error {
 	// Step 5: Authenticate with token
 	log.Printf("🔐 TOKEN AUTHENTICATION - Step 5: Authenticate with token")
 	
-	authTokenCmd := fmt.Sprintf("jdev/sys/authwithtoken/%s/%s", tokenData.Token, conn.Username)
-	log.Printf("   → Sending: jdev/sys/authwithtoken/[token]/%s", conn.Username)
+	// Use the simple authenticate command with token
+	authTokenCmd := fmt.Sprintf("authenticate/%s", tokenData.Token)
+	log.Printf("   → Sending: authenticate/[token]")
 
 	if err := conn.ws.WriteMessage(websocket.TextMessage, []byte(authTokenCmd)); err != nil {
 		return fmt.Errorf("failed to authenticate with token: %v", err)
