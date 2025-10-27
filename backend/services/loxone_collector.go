@@ -63,12 +63,12 @@ type LoxoneKeyResponse struct {
 	Key             string `json:"key"`
 	Salt            string `json:"salt"`
 	HashAlg         string `json:"hashAlg"`
-	TokenValidUntil int64  `json:"tokenValidUntil"`
+	TokenValidUntil int64  `json:"tokenValidUntil"` // Seconds since 2009-01-01 00:00:00 (Loxone epoch)
 }
 
 type LoxoneTokenResponse struct {
 	Token      string `json:"token"`
-	ValidUntil int64  `json:"validUntil"`
+	ValidUntil int64  `json:"validUntil"` // Seconds since 2009-01-01 00:00:00 (Loxone epoch)
 	Rights     int    `json:"rights"`
 	Unsecure   bool   `json:"unsecurePass"`
 }
@@ -81,6 +81,9 @@ const (
 	LoxoneMsgTypeTextEvent    = 3 // Text event (header + JSON)
 	LoxoneMsgTypeDaytimerEvent = 6 // Daytimer event (binary)
 )
+
+// Loxone epoch: Loxone timestamps are in seconds since January 1, 2009, not Unix epoch
+var loxoneEpoch = time.Date(2009, 1, 1, 0, 0, 0, 0, time.UTC)
 
 // Custom unmarshal to handle dynamic output fields
 func (ld *LoxoneLLData) UnmarshalJSON(data []byte) error {
@@ -633,33 +636,13 @@ func (conn *LoxoneConnection) authenticateWithToken() error {
 
 	log.Printf("   ✓ Token received: %s...", tokenData.Token[:min(len(tokenData.Token), 16)])
 
-	// Parse token validity - try both seconds and milliseconds
-	// Loxone typically sends Unix timestamp in seconds
-	var tokenValidTime time.Time
+	// Parse token validity
+	// IMPORTANT: Loxone uses a custom epoch of January 1, 2009, NOT Unix epoch!
+	// validUntil is seconds since 2009-01-01 00:00:00
+	tokenValidTime := loxoneEpoch.Add(time.Duration(tokenData.ValidUntil) * time.Second)
 	
-	// Check if it looks like milliseconds (> year 2100 in seconds = 4102444800)
-	if tokenData.ValidUntil > 4102444800 {
-		// Likely milliseconds
-		tokenValidTime = time.Unix(0, tokenData.ValidUntil*int64(time.Millisecond))
-		log.Printf("   ✓ Valid until: %v (parsed as milliseconds)", tokenValidTime.Format("2006-01-02 15:04:05"))
-	} else {
-		// Likely seconds
-		tokenValidTime = time.Unix(tokenData.ValidUntil, 0)
-		log.Printf("   ✓ Valid until: %v (parsed as seconds)", tokenValidTime.Format("2006-01-02 15:04:05"))
-	}
-
-	// Sanity check - token should be valid in the future
-	if tokenValidTime.Before(time.Now()) {
-		log.Printf("   ⚠️  WARNING: Token appears to be expired or incorrectly parsed")
-		log.Printf("   ⚠️  Raw validUntil value: %d", tokenData.ValidUntil)
-		// Try the other interpretation
-		if tokenData.ValidUntil > 4102444800 {
-			tokenValidTime = time.Unix(tokenData.ValidUntil, 0)
-		} else {
-			tokenValidTime = time.Unix(0, tokenData.ValidUntil*int64(time.Millisecond))
-		}
-		log.Printf("   → Trying alternative parsing: %v", tokenValidTime.Format("2006-01-02 15:04:05"))
-	}
+	log.Printf("   ✓ Valid until: %v", tokenValidTime.Format("2006-01-02 15:04:05"))
+	log.Printf("   ✓ Raw validUntil: %d seconds since 2009-01-01", tokenData.ValidUntil)
 
 	log.Printf("   ✓ Rights: %d", tokenData.Rights)
 	if tokenData.Unsecure {
