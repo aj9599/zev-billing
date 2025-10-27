@@ -145,12 +145,12 @@ func (lc *LoxoneCollector) Start() {
 
 	lc.initializeConnections()
 
-	log.Printf("✓ Loxone Collector initialized with %d connections", len(lc.connections))
+	log.Printf("✅ Loxone Collector initialized with %d connections", len(lc.connections))
 
 	// Monitor and reconnect dropped connections
 	go lc.monitorConnections()
 
-	log.Println("✓ Loxone connection monitor started")
+	log.Println("✅ Loxone connection monitor started")
 	log.Println("===================================")
 }
 
@@ -164,7 +164,7 @@ func (lc *LoxoneCollector) Stop() {
 		conn.Close()
 	}
 	lc.connections = make(map[int]*LoxoneConnection)
-	log.Println("✓ All Loxone connections stopped")
+	log.Println("✅ All Loxone connections stopped")
 }
 
 func (lc *LoxoneCollector) RestartConnections() {
@@ -253,7 +253,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 			continue
 		}
 
-		log.Printf("   └─ ✓ Configuration valid, initiating connection...")
+		log.Printf("   └─ ✅ Configuration valid, initiating connection...")
 
 		conn := &LoxoneConnection{
 			MeterID:   id,
@@ -281,7 +281,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 		log.Println("   3. Select 'Loxone WebSocket API' as connection type")
 	} else {
 		log.Println("─────────────────────────────────")
-		log.Printf("✓ INITIALIZED %d LOXONE WEBSOCKET CONNECTIONS", meterCount)
+		log.Printf("✅ INITIALIZED %d LOXONE WEBSOCKET CONNECTIONS", meterCount)
 	}
 }
 
@@ -388,6 +388,8 @@ func (conn *LoxoneConnection) readLoxoneMessage() (messageType byte, jsonData []
 			// Extract clean JSON
 			jsonData = conn.extractJSON(message)
 			if jsonData == nil {
+				// Log the raw message for debugging
+				log.Printf("   ⚠️  Raw message (first 100 bytes): %s", string(message[:min(len(message), 100)]))
 				return headerType, nil, fmt.Errorf("could not extract JSON from text event")
 			}
 			return headerType, jsonData, nil
@@ -409,6 +411,8 @@ func (conn *LoxoneConnection) readLoxoneMessage() (messageType byte, jsonData []
 		log.Printf("   ← Text message received: %d bytes", len(message))
 		jsonData = conn.extractJSON(message)
 		if jsonData == nil {
+			// Log the raw message for debugging
+			log.Printf("   ⚠️  Raw message: %s", string(message))
 			return 0, nil, fmt.Errorf("could not extract JSON from text message")
 		}
 		return LoxoneMsgTypeText, jsonData, nil
@@ -459,7 +463,7 @@ func (conn *LoxoneConnection) Connect(db *sql.DB) {
 	conn.ws = ws
 	conn.mu.Unlock()
 
-	log.Printf("✓ WebSocket connected successfully")
+	log.Printf("✅ WebSocket connected successfully")
 	log.Printf("Step 2: Starting token-based authentication")
 
 	// Authenticate using token-based method
@@ -551,9 +555,9 @@ func (conn *LoxoneConnection) authenticateWithToken() error {
 
 	keyData := keyResp.LL.Value
 
-	log.Printf("   ✓ Received key: %s...", keyData.Key[:min(len(keyData.Key), 16)])
-	log.Printf("   ✓ Received salt: %s...", keyData.Salt[:min(len(keyData.Salt), 16)])
-	log.Printf("   ✓ Hash algorithm: %s", keyData.HashAlg)
+	log.Printf("   ✅ Received key: %s...", keyData.Key[:min(len(keyData.Key), 16)])
+	log.Printf("   ✅ Received salt: %s...", keyData.Salt[:min(len(keyData.Salt), 16)])
+	log.Printf("   ✅ Hash algorithm: %s", keyData.HashAlg)
 
 	// Step 2: Hash password with salt
 	log.Printf("🔐 TOKEN AUTHENTICATION - Step 2: Hash password with salt")
@@ -565,16 +569,16 @@ func (conn *LoxoneConnection) authenticateWithToken() error {
 	case "SHA256":
 		pwHash := sha256.Sum256([]byte(pwSaltStr))
 		pwHashHex = strings.ToUpper(hex.EncodeToString(pwHash[:]))
-		log.Printf("   ✓ Using SHA256 for password hash")
+		log.Printf("   ✅ Using SHA256 for password hash")
 	case "SHA1":
 		pwHash := sha1.Sum([]byte(pwSaltStr))
 		pwHashHex = strings.ToUpper(hex.EncodeToString(pwHash[:]))
-		log.Printf("   ✓ Using SHA1 for password hash")
+		log.Printf("   ✅ Using SHA1 for password hash")
 	default:
 		return fmt.Errorf("unsupported hash algorithm: %s", keyData.HashAlg)
 	}
 
-	log.Printf("   ✓ Password hashed with salt")
+	log.Printf("   ✅ Password hashed with salt")
 
 	// Step 3: Create HMAC
 	log.Printf("🔐 TOKEN AUTHENTICATION - Step 3: Create HMAC token")
@@ -589,7 +593,7 @@ func (conn *LoxoneConnection) authenticateWithToken() error {
 	h.Write([]byte(hmacMessage))
 	hmacHash := hex.EncodeToString(h.Sum(nil))
 
-	log.Printf("   ✓ HMAC created")
+	log.Printf("   ✅ HMAC created")
 
 	// Step 4: Get token
 	log.Printf("🔐 TOKEN AUTHENTICATION - Step 4: Request authentication token")
@@ -638,17 +642,17 @@ func (conn *LoxoneConnection) authenticateWithToken() error {
 
 	tokenData := tokenResp.LL.Value
 
-	log.Printf("   ✓ Token received: %s...", tokenData.Token[:min(len(tokenData.Token), 16)])
+	log.Printf("   ✅ Token received: %s...", tokenData.Token[:min(len(tokenData.Token), 16)])
 
 	// Parse token validity
 	// IMPORTANT: Loxone uses a custom epoch of January 1, 2009, NOT Unix epoch!
 	// validUntil is seconds since 2009-01-01 00:00:00
 	tokenValidTime := loxoneEpoch.Add(time.Duration(tokenData.ValidUntil) * time.Second)
 	
-	log.Printf("   ✓ Valid until: %v", tokenValidTime.Format("2006-01-02 15:04:05"))
-	log.Printf("   ✓ Raw validUntil: %d seconds since 2009-01-01", tokenData.ValidUntil)
+	log.Printf("   ✅ Valid until: %v", tokenValidTime.Format("2006-01-02 15:04:05"))
+	log.Printf("   ✅ Raw validUntil: %d seconds since 2009-01-01", tokenData.ValidUntil)
 
-	log.Printf("   ✓ Rights: %d", tokenData.Rights)
+	log.Printf("   ✅ Rights: %d", tokenData.Rights)
 	if tokenData.Unsecure {
 		log.Printf("   ⚠️  WARNING: Unsecure password flag is set")
 	}
@@ -669,7 +673,112 @@ func (conn *LoxoneConnection) authenticateWithToken() error {
 	return nil
 }
 
-// extractJSON extracts JSON data from Loxone message
+// extractJSON extracts JSON data from Loxone message - improved version
+func (conn *LoxoneConnection) extractJSON(message []byte) []byte {
+	if len(message) == 0 {
+		return nil
+	}
+
+	// Try to parse the entire message as JSON first
+	var testJSON map[string]interface{}
+	if err := json.Unmarshal(message, &testJSON); err == nil {
+		// The entire message is valid JSON
+		return message
+	}
+
+	// Check if it's already JSON
+	if message[0] == '{' {
+		// Find the end of the JSON object
+		depth := 0
+		inString := false
+		escape := false
+
+		for i, b := range message {
+			if escape {
+				escape = false
+				continue
+			}
+
+			if b == '\\' {
+				escape = true
+				continue
+			}
+
+			if b == '"' {
+				inString = !inString
+				continue
+			}
+
+			if !inString {
+				if b == '{' {
+					depth++
+				} else if b == '}' {
+					depth--
+					if depth == 0 {
+						// Validate it's actually JSON
+						candidate := message[:i+1]
+						if json.Unmarshal(candidate, &testJSON) == nil {
+							return candidate
+						}
+					}
+				}
+			}
+		}
+		
+		// If we couldn't find proper closing, try parsing the whole thing
+		if json.Unmarshal(message, &testJSON) == nil {
+			return message
+		}
+	}
+
+	// Try to find JSON start within first 100 bytes
+	for i := 0; i < len(message) && i < 100; i++ {
+		if message[i] == '{' {
+			// Find the matching closing brace
+			depth := 0
+			inString := false
+			escape := false
+
+			for j := i; j < len(message); j++ {
+				b := message[j]
+
+				if escape {
+					escape = false
+					continue
+				}
+
+				if b == '\\' {
+					escape = true
+					continue
+				}
+
+				if b == '"' {
+					inString = !inString
+					continue
+				}
+
+				if !inString {
+					if b == '{' {
+						depth++
+					} else if b == '}' {
+						depth--
+						if depth == 0 {
+							candidate := message[i : j+1]
+							// Validate it's actually JSON
+							if json.Unmarshal(candidate, &testJSON) == nil {
+								log.Printf("   ℹ️  Found and validated JSON at offset %d, length %d", i, j-i+1)
+								return candidate
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	log.Printf("   ⚠️  Could not find valid JSON in message")
+	return nil
+}
 
 func (conn *LoxoneConnection) refreshToken() error {
 	log.Printf("🔄 TOKEN REFRESH - Starting refresh for %s", conn.MeterName)
@@ -710,7 +819,7 @@ func (conn *LoxoneConnection) refreshToken() error {
 		return fmt.Errorf("getkey2 failed with code: %s", keyResp.LL.Code)
 	}
 	keyData := keyResp.LL.Value
-	log.Printf("   ✓ Received key and salt")
+	log.Printf("   ✅ Received key and salt")
 	// Step 2: Hash password with salt
 	pwSaltStr := conn.Password + ":" + keyData.Salt
 	var pwHashHex string
@@ -779,6 +888,7 @@ func (conn *LoxoneConnection) refreshToken() error {
 	log.Printf("   New token valid for: %.1f hours", time.Until(newTokenValidTime).Hours())
 	return nil
 }
+
 func (conn *LoxoneConnection) monitorTokenExpiry(db *sql.DB) {
 	log.Printf("🔐 TOKEN MONITOR STARTED for %s", conn.MeterName)
 	// Check token expiry every 10 minutes
@@ -831,53 +941,6 @@ func (conn *LoxoneConnection) monitorTokenExpiry(db *sql.DB) {
 	}
 }
 
-func (conn *LoxoneConnection) extractJSON(message []byte) []byte {
-	if len(message) == 0 {
-		return nil
-	}
-
-	// Check if it's already JSON
-	if message[0] == '{' {
-		// Find the end of the JSON object
-		depth := 0
-		for i, b := range message {
-			if b == '{' {
-				depth++
-			} else if b == '}' {
-				depth--
-				if depth == 0 {
-					return message[:i+1]
-				}
-			}
-		}
-		return message
-	}
-
-	// Try to find JSON start
-	for i := 0; i < len(message) && i < 100; i++ {
-		if message[i] == '{' {
-			// Find the matching closing brace
-			depth := 0
-			for j := i; j < len(message); j++ {
-				if message[j] == '{' {
-					depth++
-				} else if message[j] == '}' {
-					depth--
-					if depth == 0 {
-						log.Printf("   ℹ️  Found JSON at offset %d, length %d", i, j-i+1)
-						return message[i : j+1]
-					}
-				}
-			}
-			// If we found an opening brace but no matching close, return from start
-			return message[i:]
-		}
-	}
-
-	log.Printf("   ⚠️  Could not find valid JSON in message")
-	return nil
-}
-
 func min(a, b int) int {
 	if a < b {
 		return a
@@ -907,8 +970,6 @@ func (conn *LoxoneConnection) requestData() {
 			return
 		}
 
-			// Token expiry is now handled by monitorTokenExpiry goroutine
-
 		// Request device data
 		cmd := fmt.Sprintf("jdev/sps/io/%s/all", conn.DeviceID)
 		log.Println("─────────────────────────────────")
@@ -923,7 +984,7 @@ func (conn *LoxoneConnection) requestData() {
 			conn.mu.Unlock()
 			return
 		}
-		log.Printf("   ✓ Request sent successfully")
+		log.Printf("   ✅ Request sent successfully")
 		conn.mu.Unlock()
 	}
 }
@@ -945,10 +1006,6 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 
 	log.Printf("👂 [%s] DATA LISTENER ACTIVE - waiting for messages...", conn.MeterName)
 
-	// Set up keep-alive ticker
-	keepAliveTicker := time.NewTicker(30 * time.Second)
-	defer keepAliveTicker.Stop()
-
 	messageCount := 0
 
 	// Create a channel for read results to avoid blocking the select
@@ -957,7 +1014,7 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 		jsonData []byte
 		err      error
 	}
-	readChan := make(chan readResult, 1)
+	readChan := make(chan readResult, 10) // Buffered to prevent blocking
 
 	// Start a goroutine that continuously reads from WebSocket
 	go func() {
@@ -971,20 +1028,22 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 				return
 			}
 
-			// Set read deadline before each read
+			// Set read deadline - 20 minutes (longer than our 15-minute polling interval)
+			// This prevents premature timeouts between data requests
 			conn.mu.Lock()
 			if conn.ws != nil {
-				conn.ws.SetReadDeadline(time.Now().Add(90 * time.Second))
+				conn.ws.SetReadDeadline(time.Now().Add(20 * time.Minute))
 			}
 			conn.mu.Unlock()
 
 			msgType, jsonData, err := conn.readLoxoneMessage()
 			
-			// Try to send result, but don't block if channel is full
+			// Send result (non-blocking)
 			select {
 			case readChan <- readResult{msgType, jsonData, err}:
 			default:
 				// Channel full, skip this reading
+				log.Printf("⚠️  [%s] Read channel full, dropping message", conn.MeterName)
 			}
 
 			// If there was an error, stop reading
@@ -1000,25 +1059,12 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 			log.Printf("🛑 [%s] Received stop signal, closing listener", conn.MeterName)
 			return
 
-		case <-keepAliveTicker.C:
-			// Send keep-alive (simple text command)
-			conn.mu.Lock()
-			if conn.ws != nil {
-				err := conn.ws.WriteMessage(websocket.TextMessage, []byte("keepalive"))
-				if err != nil {
-					log.Printf("⚠️  [%s] Keep-alive failed: %v", conn.MeterName, err)
-					conn.mu.Unlock()
-					return
-				}
-				log.Printf("💓 [%s] Keep-alive sent", conn.MeterName)
-			}
-			conn.mu.Unlock()
-
 		case result := <-readChan:
 			// Handle read result
 			if result.err != nil {
-				// Check if it's a timeout (expected for keep-alive)
+				// Check if it's a timeout (expected between data requests)
 				if strings.Contains(result.err.Error(), "i/o timeout") || strings.Contains(result.err.Error(), "deadline") {
+					log.Printf("⏱️  [%s] Read timeout (expected between data requests)", conn.MeterName)
 					continue
 				}
 
@@ -1060,7 +1106,7 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 				continue
 			}
 
-			log.Printf("   ✓ This is a device data response!")
+			log.Printf("   ✅ This is a device data response!")
 			log.Printf("   Number of outputs: %d", len(response.LL.Outputs))
 
 			// Extract output1 value (kWh reading)
@@ -1200,5 +1246,5 @@ func (conn *LoxoneConnection) Close() {
 		conn.ws = nil
 	}
 	conn.isConnected = false
-	log.Printf("   ✓ Connection closed")
+	log.Printf("   ✅ Connection closed")
 }
