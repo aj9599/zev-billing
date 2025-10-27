@@ -629,43 +629,8 @@ func (conn *LoxoneConnection) authenticateWithToken() error {
 	conn.tokenValid = time.Unix(tokenData.ValidUntil, 0)
 	conn.mu.Unlock()
 
-	// Step 5: Authenticate with token
-	log.Printf("🔐 TOKEN AUTHENTICATION - Step 5: Authenticate with token")
-	
-	// Use the simple authenticate command with token
-	authTokenCmd := fmt.Sprintf("authenticate/%s", tokenData.Token)
-	log.Printf("   → Sending: authenticate/[token]")
-
-	if err := conn.ws.WriteMessage(websocket.TextMessage, []byte(authTokenCmd)); err != nil {
-		return fmt.Errorf("failed to authenticate with token: %v", err)
-	}
-
-	// Read auth response
-	jsonData, err = conn.readLoxoneMessage()
-	if err != nil {
-		return fmt.Errorf("failed to read auth response: %v", err)
-	}
-
-	var authResp struct {
-		LL struct {
-			Control string `json:"control"`
-			Code    string `json:"code"`
-			Value   string `json:"value"`
-		} `json:"LL"`
-	}
-
-	if err := json.Unmarshal(jsonData, &authResp); err != nil {
-		return fmt.Errorf("failed to parse auth response: %v", err)
-	}
-
-	log.Printf("   ← Response code: %s", authResp.LL.Code)
-	log.Printf("   ← Response value: %s", authResp.LL.Value)
-
-	if authResp.LL.Code != "200" {
-		return fmt.Errorf("authwithtoken failed with code: %s, value: %s", 
-			authResp.LL.Code, authResp.LL.Value)
-	}
-
+	// After receiving the token, the WebSocket is already authenticated!
+	// No need for an additional authenticate step
 	log.Printf("   ✅ AUTHENTICATION SUCCESSFUL!")
 	log.Printf("   Token is valid until: %s", conn.tokenValid.Format("2006-01-02 15:04:05"))
 	
