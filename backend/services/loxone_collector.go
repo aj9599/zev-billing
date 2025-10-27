@@ -98,10 +98,13 @@ func (ld *LoxoneLLData) UnmarshalJSON(data []byte) error {
 }
 
 func NewLoxoneCollector(db *sql.DB) *LoxoneCollector {
-	return &LoxoneCollector{
+	log.Println("🔧 LOXONE COLLECTOR: NewLoxoneCollector() called")
+	lc := &LoxoneCollector{
 		db:          db,
 		connections: make(map[int]*LoxoneConnection),
 	}
+	log.Println("🔧 LOXONE COLLECTOR: Instance created successfully")
+	return lc
 }
 
 func (lc *LoxoneCollector) Start() {
@@ -166,7 +169,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 		}
 
 		meterCount++
-		log.Println("───────────────────────────────────")
+		log.Println("─────────────────────────────────────")
 		log.Printf("📊 FOUND LOXONE METER #%d", meterCount)
 		log.Printf("   Name: '%s'", name)
 		log.Printf("   ID: %d", id)
@@ -248,7 +251,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 		log.Println("   2. Add new meter")
 		log.Println("   3. Select 'Loxone WebSocket API' as connection type")
 	} else {
-		log.Println("───────────────────────────────────")
+		log.Println("─────────────────────────────────────")
 		log.Printf("✓ INITIALIZED %d LOXONE WEBSOCKET CONNECTIONS", meterCount)
 	}
 }
@@ -264,7 +267,7 @@ func (lc *LoxoneCollector) monitorConnections() {
 		disconnectedCount := 0
 		connectedCount := 0
 		
-		log.Println("───────────────────────────────────")
+		log.Println("─────────────────────────────────────")
 		log.Println("📊 LOXONE CONNECTION STATUS CHECK")
 		
 		for meterID, conn := range lc.connections {
@@ -295,7 +298,7 @@ func (lc *LoxoneCollector) monitorConnections() {
 		lc.mu.RUnlock()
 		
 		log.Printf("📊 Summary: %d connected, %d disconnected", connectedCount, disconnectedCount)
-		log.Println("───────────────────────────────────")
+		log.Println("─────────────────────────────────────")
 	}
 }
 
@@ -321,9 +324,9 @@ func (lc *LoxoneCollector) GetConnectionStatus() map[int]map[string]interface{} 
 }
 
 func (conn *LoxoneConnection) Connect(db *sql.DB) {
-	log.Println("═══════════════════════════════════")
-	log.Printf("🔗 CONNECTING: %s (ID: %d)", conn.MeterName, conn.MeterID)
-	log.Println("═══════════════════════════════════")
+	log.Println("╔═══════════════════════════════════╗")
+	log.Printf("║ 🔗 CONNECTING: %s (ID: %d)", conn.MeterName, conn.MeterID)
+	log.Println("╚═══════════════════════════════════╝")
 	
 	conn.mu.Lock()
 	if conn.isConnected {
@@ -388,12 +391,12 @@ func (conn *LoxoneConnection) Connect(db *sql.DB) {
 	conn.lastError = ""
 	conn.mu.Unlock()
 
-	log.Println("═══════════════════════════════════")
-	log.Printf("✅ CONNECTION ESTABLISHED!")
-	log.Printf("   Meter: %s", conn.MeterName)
-	log.Printf("   Device: %s", conn.DeviceID)
-	log.Printf("   Host: %s", conn.Host)
-	log.Println("═══════════════════════════════════")
+	log.Println("╔═══════════════════════════════════╗")
+	log.Printf("║ ✅ CONNECTION ESTABLISHED!         ║")
+	log.Printf("║ Meter: %-25s║", conn.MeterName)
+	log.Printf("║ Device: %-24s║", conn.DeviceID[:24])
+	log.Printf("║ Host: %-27s║", conn.Host)
+	log.Println("╚═══════════════════════════════════╝")
 
 	// Update meter status in database
 	db.Exec(`UPDATE meters SET notes = ? WHERE id = ?`, 
@@ -536,7 +539,7 @@ func (conn *LoxoneConnection) requestData() {
 		
 		// Request device data
 		cmd := fmt.Sprintf("jdev/sps/io/%s/all", conn.DeviceID)
-		log.Println("───────────────────────────────────")
+		log.Println("─────────────────────────────────────")
 		log.Printf("📡 [%s] REQUESTING DATA", conn.MeterName)
 		log.Printf("   Command: %s", cmd)
 		log.Printf("   Time: %s", time.Now().Format("15:04:05"))
@@ -652,7 +655,7 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 
 					currentTime := roundToQuarterHour(time.Now())
 					
-					log.Println("───────────────────────────────────")
+					log.Println("─────────────────────────────────────")
 					log.Printf("✅ [%s] READING RECEIVED!", conn.MeterName)
 					log.Printf("   Value: %.3f kWh", reading)
 					log.Printf("   Timestamp: %s", currentTime.Format("2006-01-02 15:04:05"))
@@ -727,7 +730,7 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 						
 						log.Printf("   ✅ Saved to database successfully")
 					}
-					log.Println("───────────────────────────────────")
+					log.Println("─────────────────────────────────────")
 				} else {
 					log.Printf("      ⚠️  Reading is 0 or negative, not saving")
 				}

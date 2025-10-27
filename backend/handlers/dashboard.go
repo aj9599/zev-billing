@@ -21,7 +21,7 @@ func NewDashboardHandler(db *sql.DB) *DashboardHandler {
 	return &DashboardHandler{db: db}
 }
 
-// FIXED: Helper function to round time to nearest 15-minute interval
+// Helper function to round time to nearest 15-minute interval
 func roundTo15Min(t time.Time) time.Time {
 	minutes := t.Minute()
 	var roundedMinutes int
@@ -320,7 +320,6 @@ func (h *DashboardHandler) GetConsumption(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(consumption)
 }
 
-// FIXED: GetConsumptionByBuilding now works with 15-minute intervals
 func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -465,7 +464,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				}
 			}
 
-			// FIXED: Get data at 15-minute intervals and convert consumption to power
+			// Get data at 15-minute intervals and convert consumption to power
 			var dataRows *sql.Rows
 			dataRows, err = h.db.QueryContext(ctx, `
 				SELECT reading_time, power_kwh, consumption_kwh
@@ -489,8 +488,6 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				building.Meters = append(building.Meters, meterData)
 				continue
 			}
-
-			var lastTime time.Time
 			
 			for dataRows.Next() {
 				var timestamp time.Time
@@ -509,8 +506,6 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					Power:     powerW,
 					Source:    mi.meterType,
 				})
-				
-				lastTime = timestamp
 			}
 			dataRows.Close()
 
@@ -598,7 +593,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						log.Printf("      Error getting user name for user %s: %v", ui.userID, err)
 					}
 
-					// FIXED: Get charger data at 15-minute intervals
+					// Get charger data at 15-minute intervals
 					var sessionRows *sql.Rows
 					sessionRows, err = h.db.QueryContext(ctx, `
 						SELECT session_time, power_kwh, state
@@ -738,3 +733,10 @@ func (h *DashboardHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(logs)
 }
+
+
+
+
+
+
+
