@@ -40,6 +40,7 @@ type LoxoneConnection struct {
 	lastError   string
 	stopChan    chan bool
 	mu          sync.Mutex
+	db          *sql.DB
 }
 
 type LoxoneResponse struct {
@@ -142,10 +143,13 @@ func (lc *LoxoneCollector) Start() {
 	log.Println("===================================")
 	log.Println("🔌 LOXONE WEBSOCKET COLLECTOR STARTING")
 	log.Println("===================================")
+	
+	lc.logToDatabase("Loxone Collector Started", "Initializing Loxone WebSocket connections")
 
 	lc.initializeConnections()
 
 	log.Printf("✅ Loxone Collector initialized with %d connections", len(lc.connections))
+	lc.logToDatabase("Loxone Collector Ready", fmt.Sprintf("Initialized %d Loxone connections", len(lc.connections)))
 
 	// Monitor and reconnect dropped connections
 	go lc.monitorConnections()
@@ -156,6 +160,8 @@ func (lc *LoxoneCollector) Start() {
 
 func (lc *LoxoneCollector) Stop() {
 	log.Println("🛑 STOPPING ALL LOXONE CONNECTIONS")
+	lc.logToDatabase("Loxone Collector Stopping", "Closing all Loxone connections")
+	
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
 
@@ -165,14 +171,19 @@ func (lc *LoxoneCollector) Stop() {
 	}
 	lc.connections = make(map[int]*LoxoneConnection)
 	log.Println("✅ All Loxone connections stopped")
+	lc.logToDatabase("Loxone Collector Stopped", "All connections closed")
 }
 
 func (lc *LoxoneCollector) RestartConnections() {
 	log.Println("=== RESTARTING LOXONE CONNECTIONS ===")
+	lc.logToDatabase("Loxone Connections Restarting", "Reinitializing all Loxone connections")
+	
 	lc.Stop()
 	time.Sleep(500 * time.Millisecond)
 	lc.initializeConnections()
+	
 	log.Println("=== LOXONE CONNECTIONS RESTARTED ===")
+	lc.logToDatabase("Loxone Connections Restarted", fmt.Sprintf("Successfully restarted %d connections", len(lc.connections)))
 }
 
 func (lc *LoxoneCollector) initializeConnections() {
@@ -185,6 +196,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 	`)
 	if err != nil {
 		log.Printf("❌ ERROR: Failed to query Loxone meters: %v", err)
+		lc.logToDatabase("Loxone Query Error", fmt.Sprintf("Failed to query meters: %v", err))
 		return
 	}
 	defer rows.Close()
@@ -208,6 +220,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 		var config map[string]interface{}
 		if err := json.Unmarshal([]byte(connectionConfig), &config); err != nil {
 			log.Printf("❌ ERROR: Failed to parse config for meter '%s': %v", name, err)
+			lc.logToDatabase("Loxone Config Error", fmt.Sprintf("Meter '%s': %v", name, err))
 			continue
 		}
 
@@ -250,6 +263,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 		if host == "" || deviceID == "" {
 			log.Printf("   └─ ⚠️  WARNING: Incomplete config - missing host or device_id")
 			log.Printf("      Skipping this meter")
+			lc.logToDatabase("Loxone Config Incomplete", fmt.Sprintf("Meter '%s' missing required config", name))
 			continue
 		}
 
@@ -263,6 +277,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 			Password:  password,
 			DeviceID:  deviceID,
 			stopChan:  make(chan bool),
+			db:        lc.db,
 		}
 
 		lc.mu.Lock()
@@ -279,9 +294,11 @@ func (lc *LoxoneCollector) initializeConnections() {
 		log.Println("   1. Go to Meters page")
 		log.Println("   2. Add new meter")
 		log.Println("   3. Select 'Loxone WebSocket API' as connection type")
+		lc.logToDatabase("Loxone No Meters", "No Loxone API meters found in database")
 	} else {
 		log.Println("─────────────────────────────────")
 		log.Printf("✅ INITIALIZED %d LOXONE WEBSOCKET CONNECTIONS", meterCount)
+		lc.logToDatabase("Loxone Meters Initialized", fmt.Sprintf("Successfully initialized %d meters", meterCount))
 	}
 }
 
@@ -333,6 +350,11 @@ func (lc *LoxoneCollector) monitorConnections() {
 
 		log.Printf("📊 Summary: %d connected, %d disconnected", connectedCount, disconnectedCount)
 		log.Println("─────────────────────────────────")
+		
+		// Log to database if there are disconnected meters
+		if disconnectedCount > 0 {
+			lc.logToDatabase("Loxone Status Check", fmt.Sprintf("%d connected, %d disconnected (attempting reconnect)", connectedCount, disconnectedCount))
+		}
 	}
 }
 
@@ -357,6 +379,13 @@ func (lc *LoxoneCollector) GetConnectionStatus() map[int]map[string]interface{} 
 		conn.mu.Unlock()
 	}
 	return status
+}
+
+func (lc *LoxoneCollector) logToDatabase(action, details string) {
+	lc.db.Exec(`
+		INSERT INTO admin_logs (action, details, ip_address)
+		VALUES (?, ?, 'loxone-system')
+	`, action, details)
 }
 
 // readLoxoneMessage handles Loxone's binary protocol
@@ -456,6 +485,8 @@ func (conn *LoxoneConnection) Connect(db *sql.DB) {
 		db.Exec(`UPDATE meters SET notes = ? WHERE id = ?`,
 			fmt.Sprintf("🔴 Connection failed: %v", err),
 			conn.MeterID)
+		
+		conn.logToDatabase("Loxone Connection Failed", fmt.Sprintf("Meter '%s': %v", conn.MeterName, err))
 		return
 	}
 
@@ -479,6 +510,8 @@ func (conn *LoxoneConnection) Connect(db *sql.DB) {
 		db.Exec(`UPDATE meters SET notes = ? WHERE id = ?`,
 			fmt.Sprintf("🔴 Auth failed: %v", err),
 			conn.MeterID)
+		
+		conn.logToDatabase("Loxone Auth Failed", fmt.Sprintf("Meter '%s': %v", conn.MeterName, err))
 		return
 	}
 
@@ -498,6 +531,8 @@ func (conn *LoxoneConnection) Connect(db *sql.DB) {
 	db.Exec(`UPDATE meters SET notes = ? WHERE id = ?`,
 		fmt.Sprintf("🟢 Connected at %s", time.Now().Format("2006-01-02 15:04:05")),
 		conn.MeterID)
+	
+	conn.logToDatabase("Loxone Connected", fmt.Sprintf("Meter '%s' connected successfully", conn.MeterName))
 
 	// Start reading data
 	log.Printf("🎧 Starting data listener for %s...", conn.MeterName)
@@ -507,7 +542,7 @@ func (conn *LoxoneConnection) Connect(db *sql.DB) {
 	go conn.requestData()
 
 	// Start token expiry monitor
-	log.Printf("🔐 Starting token expiry monitor for %s...", conn.MeterName)
+	log.Printf("🔒 Starting token expiry monitor for %s...", conn.MeterName)
 	go conn.monitorTokenExpiry(db)
 }
 
@@ -886,11 +921,13 @@ func (conn *LoxoneConnection) refreshToken() error {
 	log.Printf("   Old expiry: %s", oldValidTime.Format("2006-01-02 15:04:05"))
 	log.Printf("   New expiry: %s", newTokenValidTime.Format("2006-01-02 15:04:05"))
 	log.Printf("   New token valid for: %.1f hours", time.Until(newTokenValidTime).Hours())
+	
+	conn.logToDatabase("Loxone Token Refreshed", fmt.Sprintf("Meter '%s' token refreshed successfully", conn.MeterName))
 	return nil
 }
 
 func (conn *LoxoneConnection) monitorTokenExpiry(db *sql.DB) {
-	log.Printf("🔐 TOKEN MONITOR STARTED for %s", conn.MeterName)
+	log.Printf("🔒 TOKEN MONITOR STARTED for %s", conn.MeterName)
 	// Check token expiry every 10 minutes
 	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
@@ -913,9 +950,13 @@ func (conn *LoxoneConnection) monitorTokenExpiry(db *sql.DB) {
 			if timeUntilExpiry < 1*time.Hour {
 				log.Printf("⚠️  [%s] Token expiring in %.1f minutes, refreshing...", 
 					conn.MeterName, timeUntilExpiry.Minutes())
+				conn.logToDatabase("Loxone Token Expiring", fmt.Sprintf("Meter '%s' token expiring soon, refreshing...", conn.MeterName))
+				
 				if err := conn.refreshToken(); err != nil {
 					log.Printf("❌ [%s] Failed to refresh token: %v", conn.MeterName, err)
 					log.Printf("   Will attempt to reconnect...")
+					conn.logToDatabase("Loxone Token Refresh Failed", fmt.Sprintf("Meter '%s': %v", conn.MeterName, err))
+					
 					// Failed to refresh, disconnect and let monitor reconnect
 					conn.mu.Lock()
 					conn.isConnected = false
@@ -981,6 +1022,7 @@ func (conn *LoxoneConnection) requestData() {
 			log.Printf("❌ [%s] Failed to request data: %v", conn.MeterName, err)
 			conn.isConnected = false
 			conn.lastError = fmt.Sprintf("Data request failed: %v", err)
+			conn.logToDatabase("Loxone Data Request Failed", fmt.Sprintf("Meter '%s': %v", conn.MeterName, err))
 			conn.mu.Unlock()
 			return
 		}
@@ -1002,6 +1044,8 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 		db.Exec(`UPDATE meters SET notes = ? WHERE id = ?`,
 			fmt.Sprintf("🔴 Offline since %s", time.Now().Format("2006-01-02 15:04:05")),
 			conn.MeterID)
+		
+		conn.logToDatabase("Loxone Disconnected", fmt.Sprintf("Meter '%s' disconnected", conn.MeterName))
 	}()
 
 	log.Printf("👂 [%s] DATA LISTENER ACTIVE - waiting for messages...", conn.MeterName)
@@ -1075,6 +1119,7 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 					conn.mu.Lock()
 					conn.lastError = fmt.Sprintf("Read error: %v", result.err)
 					conn.mu.Unlock()
+					conn.logToDatabase("Loxone Read Error", fmt.Sprintf("Meter '%s': %v", conn.MeterName, result.err))
 				}
 				return
 			}
@@ -1152,6 +1197,9 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 						ORDER BY reading_time DESC LIMIT 1
 					`, conn.MeterID).Scan(&lastReading, &lastTime)
 
+					var consumption float64
+					isFirstReading := false
+
 					if err == nil && !lastTime.IsZero() {
 						log.Printf("   Last reading: %.3f kWh at %s", lastReading, lastTime.Format("15:04:05"))
 
@@ -1163,29 +1211,32 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 						}
 
 						for i, point := range interpolated {
-							consumption := point.value - lastReading
-							if consumption < 0 {
-								consumption = 0
+							intervalConsumption := point.value - lastReading
+							if intervalConsumption < 0 {
+								intervalConsumption = 0
 							}
 
 							log.Printf("      Interval %d: %s = %.3f kWh (consumption: %.3f)",
-								i+1, point.time.Format("15:04:05"), point.value, consumption)
+								i+1, point.time.Format("15:04:05"), point.value, intervalConsumption)
 
 							db.Exec(`
 								INSERT INTO meter_readings (meter_id, reading_time, power_kwh, consumption_kwh)
 								VALUES (?, ?, ?, ?)
-							`, conn.MeterID, point.time, point.value, consumption)
+							`, conn.MeterID, point.time, point.value, intervalConsumption)
 
 							lastReading = point.value
 						}
+						
+						// Calculate consumption for current reading
+						consumption = reading - lastReading
+						if consumption < 0 {
+							consumption = 0
+						}
 					} else {
-						log.Printf("   → First reading for this meter")
-					}
-
-					// Save current reading
-					consumption := reading - lastReading
-					if consumption < 0 {
-						consumption = reading
+						// FIRST READING: Set consumption to 0
+						log.Printf("   → First reading for this meter - consumption set to 0")
+						consumption = 0
+						isFirstReading = true
 					}
 
 					log.Printf("   Current consumption: %.3f kWh", consumption)
@@ -1200,6 +1251,7 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 						conn.mu.Lock()
 						conn.lastError = fmt.Sprintf("DB save failed: %v", err)
 						conn.mu.Unlock()
+						conn.logToDatabase("Loxone Save Failed", fmt.Sprintf("Meter '%s': %v", conn.MeterName, err))
 					} else {
 						// Update meter last reading
 						db.Exec(`
@@ -1212,6 +1264,12 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 							conn.MeterID)
 
 						log.Printf("   ✅ Saved to database successfully")
+						
+						if isFirstReading {
+							conn.logToDatabase("Loxone First Reading", fmt.Sprintf("Meter '%s' first reading: %.3f kWh", conn.MeterName, reading))
+						} else {
+							conn.logToDatabase("Loxone Reading Saved", fmt.Sprintf("Meter '%s': %.3f kWh (consumption: %.3f kWh)", conn.MeterName, reading, consumption))
+						}
 					}
 					log.Println("─────────────────────────────────")
 				} else {
@@ -1226,6 +1284,15 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 				log.Printf("   Available outputs: %v", availableOutputs)
 			}
 		}
+	}
+}
+
+func (conn *LoxoneConnection) logToDatabase(action, details string) {
+	if conn.db != nil {
+		conn.db.Exec(`
+			INSERT INTO admin_logs (action, details, ip_address)
+			VALUES (?, ?, ?)
+		`, action, details, fmt.Sprintf("loxone-%s", conn.Host))
 	}
 }
 
@@ -1247,4 +1314,6 @@ func (conn *LoxoneConnection) Close() {
 	}
 	conn.isConnected = false
 	log.Printf("   ✅ Connection closed")
+	
+	conn.logToDatabase("Loxone Connection Closed", fmt.Sprintf("Meter '%s' connection closed", conn.MeterName))
 }

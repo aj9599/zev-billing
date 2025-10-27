@@ -699,6 +699,9 @@ func (dc *DataCollector) collectMeterDataViaHTTP() {
 				ORDER BY reading_time DESC LIMIT 1
 			`, id).Scan(&lastReading, &lastTime)
 
+			var consumption float64
+			isFirstReading := false
+
 			if err == nil {
 				interpolated := interpolateReadings(lastTime, lastReading, currentTime, reading)
 				
@@ -707,23 +710,29 @@ func (dc *DataCollector) collectMeterDataViaHTTP() {
 				}
 				
 				for _, point := range interpolated {
-					consumption := point.value - lastReading
-					if consumption < 0 {
-						consumption = 0
+					intervalConsumption := point.value - lastReading
+					if intervalConsumption < 0 {
+						intervalConsumption = 0
 					}
 					
 					dc.db.Exec(`
 						INSERT INTO meter_readings (meter_id, reading_time, power_kwh, consumption_kwh)
 						VALUES (?, ?, ?, ?)
-					`, id, point.time, point.value, consumption)
+					`, id, point.time, point.value, intervalConsumption)
 					
 					lastReading = point.value
 				}
-			}
-
-			consumption := reading - lastReading
-			if consumption < 0 {
-				consumption = reading
+				
+				// Calculate consumption for current reading
+				consumption = reading - lastReading
+				if consumption < 0 {
+					consumption = 0
+				}
+			} else {
+				// FIRST READING: Set consumption to 0
+				log.Printf("Meter '%s': First reading - consumption set to 0", name)
+				consumption = 0
+				isFirstReading = true
 			}
 
 			_, err = dc.db.Exec(`
@@ -740,7 +749,11 @@ func (dc *DataCollector) collectMeterDataViaHTTP() {
 					WHERE id = ?
 				`, reading, currentTime, id)
 
-				log.Printf("SUCCESS: Collected meter data: '%s' = %.2f kWh (consumption: %.2f kWh)", name, reading, consumption)
+				if isFirstReading {
+					log.Printf("SUCCESS: First reading for meter '%s' = %.2f kWh (consumption: 0 kWh)", name, reading)
+				} else {
+					log.Printf("SUCCESS: Collected meter data: '%s' = %.2f kWh (consumption: %.2f kWh)", name, reading, consumption)
+				}
 				successCount++
 			}
 		}
@@ -831,6 +844,9 @@ func (dc *DataCollector) collectChargerDataViaHTTP() {
 						VALUES (?, ?, ?, ?, ?, ?)
 					`, id, userID, point.time, point.value, mode, state)
 				}
+			} else {
+				// First reading for this charger/user combination
+				log.Printf("Charger '%s': First reading for user %s", name, userID)
 			}
 
 			_, err = dc.db.Exec(`
@@ -876,15 +892,21 @@ func (dc *DataCollector) saveBufferedUDPDataAsBackup() {
 				
 				var lastReading float64
 				var lastTime time.Time
-				dc.db.QueryRow(`
+				err := dc.db.QueryRow(`
 					SELECT power_kwh, reading_time FROM meter_readings 
 					WHERE meter_id = ? 
 					ORDER BY reading_time DESC LIMIT 1
 				`, meterID).Scan(&lastReading, &lastTime)
 
-				consumption := reading - lastReading
-				if consumption < 0 {
-					consumption = reading
+				var consumption float64
+				if err == nil {
+					consumption = reading - lastReading
+					if consumption < 0 {
+						consumption = 0
+					}
+				} else {
+					// First reading
+					consumption = 0
 				}
 
 				dc.db.Exec(`
