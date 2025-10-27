@@ -1,6 +1,7 @@
 package services
 
 import (
+	"crypto/hmac"
 	"crypto/sha1"
 	"database/sql"
 	"encoding/hex"
@@ -195,7 +196,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 			username = u
 			log.Printf("   ├─ Username: %s", username)
 		} else {
-			log.Printf("   ├─ Username: (none)")
+			log.Printf("   ├─ Username: (none - admin mode)")
 		}
 
 		password := ""
@@ -499,35 +500,48 @@ func (conn *LoxoneConnection) authenticate() error {
 	key := keyResponse.LL.Value
 	log.Printf("   ✓ Key received: %s...", key[:min(len(key), 16)])
 
-	// Hash password with key
-	log.Printf("🔐 Authentication Step 2: Hashing password...")
+	// FIXED: Decode the hex key to binary for HMAC
+	log.Printf("🔐 Authentication Step 2: Creating HMAC-SHA1 hash...")
 	
-	// First hash: password + key
-	h := sha1.New()
-	h.Write([]byte(conn.Password + ":" + key))
-	pwHash := strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
-	log.Printf("   ✓ Password hash: %s...", pwHash[:min(len(pwHash), 16)])
+	keyBytes, err := hex.DecodeString(key)
+	if err != nil {
+		return fmt.Errorf("failed to decode key from hex: %v", err)
+	}
+	log.Printf("   ✓ Key decoded from hex (%d bytes)", len(keyBytes))
 
-	// Authenticate
-	log.Printf("🔐 Authentication Step 3: Sending credentials...")
-	
+	// FIXED: Use HMAC-SHA1 instead of plain SHA1
 	var authCmd string
 	if conn.Username != "" {
-		// User authentication with double hash
-		h = sha1.New()
-		h.Write([]byte(conn.Username + ":" + pwHash))
-		userHash := strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
-		log.Printf("   ✓ User hash: %s...", userHash[:min(len(userHash), 16)])
-		authCmd = fmt.Sprintf("authenticate/%s", userHash)
+		// User authentication: HMAC-SHA1(username:password, key)
+		message := []byte(conn.Username + ":" + conn.Password)
+		h := hmac.New(sha1.New, keyBytes)
+		h.Write(message)
+		hash := hex.EncodeToString(h.Sum(nil))
+		
+		log.Printf("   ✓ User hash created using HMAC-SHA1")
+		log.Printf("   ✓ Message: %s:****** (user:password)", conn.Username)
+		log.Printf("   ✓ Hash: %s...", hash[:min(len(hash), 16)])
+		
+		authCmd = fmt.Sprintf("authenticate/%s", hash)
 		log.Printf("   → Sent: authenticate/[user-hash]")
 		log.Printf("   ℹ️  Using user-based authentication (username: %s)", conn.Username)
 	} else {
-		// Admin authentication (password only)
-		authCmd = fmt.Sprintf("authenticate/%s", pwHash)
+		// Admin authentication: HMAC-SHA1(password, key)
+		message := []byte(conn.Password)
+		h := hmac.New(sha1.New, keyBytes)
+		h.Write(message)
+		hash := hex.EncodeToString(h.Sum(nil))
+		
+		log.Printf("   ✓ Admin hash created using HMAC-SHA1")
+		log.Printf("   ✓ Message: ****** (password only)")
+		log.Printf("   ✓ Hash: %s...", hash[:min(len(hash), 16)])
+		
+		authCmd = fmt.Sprintf("authenticate/%s", hash)
 		log.Printf("   → Sent: authenticate/[password-hash]")
 		log.Printf("   ℹ️  Using admin authentication (no username)")
 	}
 
+	log.Printf("🔐 Authentication Step 3: Sending credentials...")
 	if err := conn.ws.WriteMessage(websocket.TextMessage, []byte(authCmd)); err != nil {
 		return fmt.Errorf("failed to send auth: %v", err)
 	}
@@ -550,9 +564,11 @@ func (conn *LoxoneConnection) authenticate() error {
 	}
 
 	log.Printf("   ← Received response code: %s", authResponse.LL.Code)
+	log.Printf("   ← Response value: %s", authResponse.LL.Value)
 
 	if authResponse.LL.Code != "200" {
-		return fmt.Errorf("authentication failed with code: %s (check username/password)", authResponse.LL.Code)
+		return fmt.Errorf("authentication failed with code: %s, value: %s (check username/password)", 
+			authResponse.LL.Code, authResponse.LL.Value)
 	}
 
 	log.Printf("   ✅ AUTHENTICATION SUCCESSFUL!")
