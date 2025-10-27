@@ -31,6 +31,8 @@ type LoxoneConnection struct {
 	DeviceID    string
 	ws          *websocket.Conn
 	isConnected bool
+	token       string // Store authentication token
+	tokenValid  time.Time
 	lastReading float64
 	lastUpdate  time.Time
 	lastError   string
@@ -53,6 +55,14 @@ type LoxoneOutput struct {
 	Name  string      `json:"name"`
 	Nr    int         `json:"nr"`
 	Value interface{} `json:"value"`
+}
+
+// Key response structure for getkey2
+type LoxoneKeyResponse struct {
+	Key              string `json:"key"`
+	Salt             string `json:"salt"`
+	HashAlg          string `json:"hashAlg"`
+	TokenValidUntil  int64  `json:"tokenValidUntil"`
 }
 
 // Custom unmarshal to handle dynamic output fields
@@ -318,6 +328,8 @@ func (lc *LoxoneCollector) GetConnectionStatus() map[int]map[string]interface{} 
 			"last_reading": conn.lastReading,
 			"last_update":  conn.lastUpdate.Format("2006-01-02 15:04:05"),
 			"last_error":   conn.lastError,
+			"has_token":    conn.token != "",
+			"token_valid":  conn.tokenValid.Format("2006-01-02 15:04:05"),
 		}
 		conn.mu.Unlock()
 	}
@@ -419,10 +431,10 @@ func (conn *LoxoneConnection) Connect(db *sql.DB) {
 	conn.mu.Unlock()
 
 	log.Printf("✓ WebSocket connected successfully")
-	log.Printf("Step 2: Starting authentication process")
+	log.Printf("Step 2: Starting token-based authentication")
 
-	// Authenticate
-	if err := conn.authenticate(); err != nil {
+	// Authenticate using token-based method (Loxone API v2)
+	if err := conn.authenticateWithToken(); err != nil {
 		errMsg := fmt.Sprintf("Authentication failed: %v", err)
 		log.Printf("❌ %s", errMsg)
 		ws.Close()
@@ -463,118 +475,189 @@ func (conn *LoxoneConnection) Connect(db *sql.DB) {
 	go conn.requestData()
 }
 
-func (conn *LoxoneConnection) authenticate() error {
-	log.Printf("🔐 Authentication Step 1: Requesting key exchange...")
+func (conn *LoxoneConnection) authenticateWithToken() error {
+	log.Printf("🔐 TOKEN AUTHENTICATION - Step 1: Request key exchange")
+	log.Printf("   Using Loxone API v2 (getkey2)")
 	
-	// Request key exchange
-	if err := conn.ws.WriteMessage(websocket.TextMessage, []byte("jdev/sys/getkey")); err != nil {
+	// Step 1: Get key and salt using getkey2
+	getKeyCmd := fmt.Sprintf("jdev/sys/getkey2/%s", conn.Username)
+	log.Printf("   → Sending: %s", getKeyCmd)
+	
+	if err := conn.ws.WriteMessage(websocket.TextMessage, []byte(getKeyCmd)); err != nil {
 		return fmt.Errorf("failed to request key: %v", err)
 	}
-	log.Printf("   → Sent: jdev/sys/getkey")
 
-	// Read key response using binary protocol handler
+	// Read key response
 	jsonData, err := conn.readLoxoneMessage()
 	if err != nil {
 		return fmt.Errorf("failed to read key response: %v", err)
 	}
 	
-	log.Printf("   ← Extracted JSON: %s", string(jsonData[:min(len(jsonData), 100)]))
+	log.Printf("   ← Received key response")
 
-	var keyResponse struct {
+	// Parse the key response
+	var keyResp struct {
 		LL struct {
-			Value string `json:"value"`
-			Code  string `json:"Code"`
+			Control string `json:"control"`
+			Code    string `json:"Code"`
+			Value   string `json:"value"`
 		} `json:"LL"`
 	}
 
-	if err := json.Unmarshal(jsonData, &keyResponse); err != nil {
+	if err := json.Unmarshal(jsonData, &keyResp); err != nil {
 		return fmt.Errorf("failed to parse key response: %v", err)
 	}
 
-	log.Printf("   ← Received response code: %s", keyResponse.LL.Code)
+	log.Printf("   ← Response code: %s", keyResp.LL.Code)
 
-	if keyResponse.LL.Code != "200" {
-		return fmt.Errorf("key exchange failed with code: %s", keyResponse.LL.Code)
+	if keyResp.LL.Code != "200" {
+		return fmt.Errorf("getkey2 failed with code: %s", keyResp.LL.Code)
 	}
 
-	key := keyResponse.LL.Value
-	log.Printf("   ✓ Key received: %s...", key[:min(len(key), 16)])
+	// Parse the value which contains key, salt, etc.
+	var keyData LoxoneKeyResponse
+	if err := json.Unmarshal([]byte(keyResp.LL.Value), &keyData); err != nil {
+		return fmt.Errorf("failed to parse key data: %v", err)
+	}
 
-	// Decode the hex key to binary for HMAC
-	log.Printf("🔐 Authentication Step 2: Creating HMAC-SHA1 hash...")
+	log.Printf("   ✓ Received key: %s...", keyData.Key[:min(len(keyData.Key), 16)])
+	log.Printf("   ✓ Received salt: %s...", keyData.Salt[:min(len(keyData.Salt), 16)])
+	log.Printf("   ✓ Hash algorithm: %s", keyData.HashAlg)
+
+	// Step 2: Hash password with salt
+	log.Printf("🔐 TOKEN AUTHENTICATION - Step 2: Hash password with salt")
 	
-	keyBytes, err := hex.DecodeString(key)
+	// Hash = SHA1(password + ":" + salt)
+	pwSaltStr := conn.Password + ":" + keyData.Salt
+	pwHash := sha1.Sum([]byte(pwSaltStr))
+	pwHashHex := strings.ToUpper(hex.EncodeToString(pwHash[:]))
+	
+	log.Printf("   ✓ Password hashed with salt")
+	log.Printf("   ✓ Hash: %s...", pwHashHex[:min(len(pwHashHex), 16)])
+
+	// Step 3: Create HMAC
+	log.Printf("🔐 TOKEN AUTHENTICATION - Step 3: Create HMAC token")
+	
+	// Decode the hex key
+	keyBytes, err := hex.DecodeString(keyData.Key)
 	if err != nil {
-		return fmt.Errorf("failed to decode key from hex: %v", err)
-	}
-	log.Printf("   ✓ Key decoded from hex (%d bytes)", len(keyBytes))
-
-	// Create HMAC hash
-	var authCmd string
-	if conn.Username != "" {
-		// User authentication: HMAC-SHA1(username:password, key)
-		message := []byte(conn.Username + ":" + conn.Password)
-		h := hmac.New(sha1.New, keyBytes)
-		h.Write(message)
-		hash := hex.EncodeToString(h.Sum(nil))
-		
-		log.Printf("   ✓ User hash created using HMAC-SHA1")
-		log.Printf("   ✓ Message: %s:****** (user:password)", conn.Username)
-		log.Printf("   ✓ Hash: %s...", hash[:min(len(hash), 16)])
-		
-		// FIXED: Auth command should NOT have jdev/sys prefix
-		authCmd = fmt.Sprintf("authenticate/%s", hash)
-		log.Printf("   → Will send: authenticate/[hash]")
-		log.Printf("   ℹ️  Using user-based authentication (username: %s)", conn.Username)
-	} else {
-		// Admin authentication: HMAC-SHA1(password, key)
-		message := []byte(conn.Password)
-		h := hmac.New(sha1.New, keyBytes)
-		h.Write(message)
-		hash := hex.EncodeToString(h.Sum(nil))
-		
-		log.Printf("   ✓ Admin hash created using HMAC-SHA1")
-		log.Printf("   ✓ Message: ****** (password only)")
-		log.Printf("   ✓ Hash: %s...", hash[:min(len(hash), 16)])
-		
-		// For admin, just send the hash
-		authCmd = fmt.Sprintf("authenticate/%s", hash)
-		log.Printf("   → Will send: authenticate/[hash]")
-		log.Printf("   ℹ️  Using admin authentication (no username)")
+		return fmt.Errorf("failed to decode key: %v", err)
 	}
 
-	log.Printf("🔐 Authentication Step 3: Sending credentials...")
-	if err := conn.ws.WriteMessage(websocket.TextMessage, []byte(authCmd)); err != nil {
-		return fmt.Errorf("failed to send auth: %v", err)
-	}
-	log.Printf("   → Sent: %s", authCmd[:min(len(authCmd), 50)])
+	// HMAC = HMAC-SHA1(username + ":" + hash, key)
+	hmacMessage := conn.Username + ":" + pwHashHex
+	h := hmac.New(sha1.New, keyBytes)
+	h.Write([]byte(hmacMessage))
+	hmacHash := hex.EncodeToString(h.Sum(nil))
+	
+	log.Printf("   ✓ HMAC created")
+	log.Printf("   ✓ HMAC: %s...", hmacHash[:min(len(hmacHash), 16)])
 
-	// Read auth response using binary protocol handler
+	// Step 4: Get token
+	log.Printf("🔐 TOKEN AUTHENTICATION - Step 4: Request authentication token")
+	
+	// gettoken/hash/username/permission/uuid/info
+	// For basic usage: gettoken/hash/username/2/uuid/deviceName
+	uuid := "zev-billing-system"
+	info := "ZEV-Billing"
+	permission := "2" // 2 = app permission level
+	
+	getTokenCmd := fmt.Sprintf("jdev/sys/gettoken/%s/%s/%s/%s/%s", 
+		hmacHash, conn.Username, permission, uuid, info)
+	
+	log.Printf("   → Sending: jdev/sys/gettoken/[hash]/%s/%s/%s/%s", 
+		conn.Username, permission, uuid, info)
+
+	if err := conn.ws.WriteMessage(websocket.TextMessage, []byte(getTokenCmd)); err != nil {
+		return fmt.Errorf("failed to request token: %v", err)
+	}
+
+	// Read token response
+	jsonData, err = conn.readLoxoneMessage()
+	if err != nil {
+		return fmt.Errorf("failed to read token response: %v", err)
+	}
+
+	var tokenResp struct {
+		LL struct {
+			Control string `json:"control"`
+			Code    string `json:"Code"`
+			Value   string `json:"value"`
+		} `json:"LL"`
+	}
+
+	if err := json.Unmarshal(jsonData, &tokenResp); err != nil {
+		return fmt.Errorf("failed to parse token response: %v", err)
+	}
+
+	log.Printf("   ← Response code: %s", tokenResp.LL.Code)
+	log.Printf("   ← Response value: %s", tokenResp.LL.Value)
+
+	if tokenResp.LL.Code != "200" {
+		return fmt.Errorf("gettoken failed with code: %s, value: %s", 
+			tokenResp.LL.Code, tokenResp.LL.Value)
+	}
+
+	// Parse token data
+	var tokenData struct {
+		Token     string `json:"token"`
+		ValidUntil int64 `json:"validUntil"`
+		Rights    int    `json:"rights"`
+		Unsecure  int    `json:"unsecurePass"`
+	}
+
+	if err := json.Unmarshal([]byte(tokenResp.LL.Value), &tokenData); err != nil {
+		return fmt.Errorf("failed to parse token data: %v", err)
+	}
+
+	log.Printf("   ✓ Token received: %s...", tokenData.Token[:min(len(tokenData.Token), 16)])
+	log.Printf("   ✓ Valid until: %v", time.Unix(tokenData.ValidUntil, 0).Format("2006-01-02 15:04:05"))
+	log.Printf("   ✓ Rights: %d", tokenData.Rights)
+
+	// Store token
+	conn.mu.Lock()
+	conn.token = tokenData.Token
+	conn.tokenValid = time.Unix(tokenData.ValidUntil, 0)
+	conn.mu.Unlock()
+
+	// Step 5: Authenticate with token
+	log.Printf("🔐 TOKEN AUTHENTICATION - Step 5: Authenticate with token")
+	
+	authTokenCmd := fmt.Sprintf("jdev/sys/authwithtoken/%s/%s", tokenData.Token, conn.Username)
+	log.Printf("   → Sending: jdev/sys/authwithtoken/[token]/%s", conn.Username)
+
+	if err := conn.ws.WriteMessage(websocket.TextMessage, []byte(authTokenCmd)); err != nil {
+		return fmt.Errorf("failed to authenticate with token: %v", err)
+	}
+
+	// Read auth response
 	jsonData, err = conn.readLoxoneMessage()
 	if err != nil {
 		return fmt.Errorf("failed to read auth response: %v", err)
 	}
 
-	var authResponse struct {
+	var authResp struct {
 		LL struct {
-			Value string `json:"value"`
-			Code  string `json:"Code"`
+			Control string `json:"control"`
+			Code    string `json:"Code"`
+			Value   string `json:"value"`
 		} `json:"LL"`
 	}
 
-	if err := json.Unmarshal(jsonData, &authResponse); err != nil {
+	if err := json.Unmarshal(jsonData, &authResp); err != nil {
 		return fmt.Errorf("failed to parse auth response: %v", err)
 	}
 
-	log.Printf("   ← Received response code: %s", authResponse.LL.Code)
-	log.Printf("   ← Response value: %s", authResponse.LL.Value)
+	log.Printf("   ← Response code: %s", authResp.LL.Code)
 
-	if authResponse.LL.Code != "200" {
-		return fmt.Errorf("authentication failed with code: %s, value: %s (check username/password)", 
-			authResponse.LL.Code, authResponse.LL.Value)
+	if authResp.LL.Code != "200" {
+		return fmt.Errorf("authwithtoken failed with code: %s, value: %s", 
+			authResp.LL.Code, authResp.LL.Value)
 	}
 
 	log.Printf("   ✅ AUTHENTICATION SUCCESSFUL!")
+	log.Printf("   Token is valid until: %s", conn.tokenValid.Format("2006-01-02 15:04:05"))
+	
 	return nil
 }
 
@@ -639,6 +722,14 @@ func (conn *LoxoneConnection) requestData() {
 		conn.mu.Lock()
 		if !conn.isConnected || conn.ws == nil {
 			log.Printf("⚠️  [%s] Not connected, skipping data request", conn.MeterName)
+			conn.mu.Unlock()
+			return
+		}
+		
+		// Check if token is still valid
+		if time.Now().After(conn.tokenValid) {
+			log.Printf("⚠️  [%s] Token expired, need to re-authenticate", conn.MeterName)
+			conn.isConnected = false
 			conn.mu.Unlock()
 			return
 		}
