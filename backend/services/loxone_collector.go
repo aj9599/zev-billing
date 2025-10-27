@@ -500,7 +500,7 @@ func (conn *LoxoneConnection) authenticate() error {
 	key := keyResponse.LL.Value
 	log.Printf("   ✓ Key received: %s...", key[:min(len(key), 16)])
 
-	// FIXED: Decode the hex key to binary for HMAC
+	// Decode the hex key to binary for HMAC
 	log.Printf("🔐 Authentication Step 2: Creating HMAC-SHA1 hash...")
 	
 	keyBytes, err := hex.DecodeString(key)
@@ -509,7 +509,7 @@ func (conn *LoxoneConnection) authenticate() error {
 	}
 	log.Printf("   ✓ Key decoded from hex (%d bytes)", len(keyBytes))
 
-	// FIXED: Use HMAC-SHA1 instead of plain SHA1
+	// Create HMAC hash
 	var authCmd string
 	if conn.Username != "" {
 		// User authentication: HMAC-SHA1(username:password, key)
@@ -522,8 +522,9 @@ func (conn *LoxoneConnection) authenticate() error {
 		log.Printf("   ✓ Message: %s:****** (user:password)", conn.Username)
 		log.Printf("   ✓ Hash: %s...", hash[:min(len(hash), 16)])
 		
-		authCmd = fmt.Sprintf("authenticate/%s", hash)
-		log.Printf("   → Sent: authenticate/[user-hash]")
+		// FIXED: For user authentication, include username in the command
+		authCmd = fmt.Sprintf("jdev/sys/authenticate/%s:%s", conn.Username, hash)
+		log.Printf("   → Will send: jdev/sys/authenticate/%s:[hash]", conn.Username)
 		log.Printf("   ℹ️  Using user-based authentication (username: %s)", conn.Username)
 	} else {
 		// Admin authentication: HMAC-SHA1(password, key)
@@ -536,8 +537,9 @@ func (conn *LoxoneConnection) authenticate() error {
 		log.Printf("   ✓ Message: ****** (password only)")
 		log.Printf("   ✓ Hash: %s...", hash[:min(len(hash), 16)])
 		
-		authCmd = fmt.Sprintf("authenticate/%s", hash)
-		log.Printf("   → Sent: authenticate/[password-hash]")
+		// For admin, just send the hash
+		authCmd = fmt.Sprintf("jdev/sys/authenticate/%s", hash)
+		log.Printf("   → Will send: jdev/sys/authenticate/[hash]")
 		log.Printf("   ℹ️  Using admin authentication (no username)")
 	}
 
@@ -545,6 +547,7 @@ func (conn *LoxoneConnection) authenticate() error {
 	if err := conn.ws.WriteMessage(websocket.TextMessage, []byte(authCmd)); err != nil {
 		return fmt.Errorf("failed to send auth: %v", err)
 	}
+	log.Printf("   → Sent: %s", authCmd[:min(len(authCmd), 50)])
 
 	// Read auth response using binary protocol handler
 	jsonData, err = conn.readLoxoneMessage()
