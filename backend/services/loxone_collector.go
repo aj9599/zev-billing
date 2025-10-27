@@ -3,6 +3,7 @@ package services
 import (
 	"crypto/hmac"
 	"crypto/sha1"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
@@ -521,13 +522,26 @@ func (conn *LoxoneConnection) authenticateWithToken() error {
 	log.Printf("   ✓ Received salt: %s...", keyData.Salt[:min(len(keyData.Salt), 16)])
 	log.Printf("   ✓ Hash algorithm: %s", keyData.HashAlg)
 
-	// Step 2: Hash password with salt
+	// Step 2: Hash password with salt using the specified algorithm
 	log.Printf("🔐 TOKEN AUTHENTICATION - Step 2: Hash password with salt")
 	
-	// Hash = SHA1(password + ":" + salt)
+	// Hash = HASH(password + ":" + salt) where HASH is specified by hashAlg
 	pwSaltStr := conn.Password + ":" + keyData.Salt
-	pwHash := sha1.Sum([]byte(pwSaltStr))
-	pwHashHex := strings.ToUpper(hex.EncodeToString(pwHash[:]))
+	var pwHashHex string
+	
+	// Use the hash algorithm specified by the Miniserver
+	switch strings.ToUpper(keyData.HashAlg) {
+	case "SHA256":
+		pwHash := sha256.Sum256([]byte(pwSaltStr))
+		pwHashHex = strings.ToUpper(hex.EncodeToString(pwHash[:]))
+		log.Printf("   ✓ Using SHA256 for password hash")
+	case "SHA1":
+		pwHash := sha1.Sum([]byte(pwSaltStr))
+		pwHashHex = strings.ToUpper(hex.EncodeToString(pwHash[:]))
+		log.Printf("   ✓ Using SHA1 for password hash")
+	default:
+		return fmt.Errorf("unsupported hash algorithm: %s", keyData.HashAlg)
+	}
 	
 	log.Printf("   ✓ Password hashed with salt")
 	log.Printf("   ✓ Hash: %s...", pwHashHex[:min(len(pwHashHex), 16)])
