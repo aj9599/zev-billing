@@ -617,7 +617,18 @@ func (conn *LoxoneConnection) authenticateWithToken() error {
 	tokenData := tokenResp.LL.Value
 
 	log.Printf("   ✓ Token received: %s...", tokenData.Token[:min(len(tokenData.Token), 16)])
-	log.Printf("   ✓ Valid until: %v", time.Unix(tokenData.ValidUntil, 0).Format("2006-01-02 15:04:05"))
+	
+	// Loxone may send validUntil in seconds or milliseconds - try to detect which
+	tokenValidTime := time.Unix(tokenData.ValidUntil, 0)
+	
+	// If the year is before 2000, it's probably milliseconds, not seconds
+	if tokenValidTime.Year() < 2000 {
+		tokenValidTime = time.Unix(tokenData.ValidUntil/1000, 0)
+		log.Printf("   ✓ Valid until: %v (parsed as milliseconds)", tokenValidTime.Format("2006-01-02 15:04:05"))
+	} else {
+		log.Printf("   ✓ Valid until: %v (parsed as seconds)", tokenValidTime.Format("2006-01-02 15:04:05"))
+	}
+	
 	log.Printf("   ✓ Rights: %d", tokenData.Rights)
 	if tokenData.Unsecure {
 		log.Printf("   ⚠️  WARNING: Unsecure password flag is set - consider using a stronger password")
@@ -626,13 +637,23 @@ func (conn *LoxoneConnection) authenticateWithToken() error {
 	// Store token
 	conn.mu.Lock()
 	conn.token = tokenData.Token
-	conn.tokenValid = time.Unix(tokenData.ValidUntil, 0)
+	conn.tokenValid = tokenValidTime  // Use the corrected time
 	conn.mu.Unlock()
 
 	// After receiving the token, the WebSocket is already authenticated!
 	// No need for an additional authenticate step
 	log.Printf("   ✅ AUTHENTICATION SUCCESSFUL!")
-	log.Printf("   Token is valid until: %s", conn.tokenValid.Format("2006-01-02 15:04:05"))
+	log.Printf("   Token is valid until: %s", tokenValidTime.Format("2006-01-02 15:04:05"))
+	
+	// Enable status updates to keep the WebSocket alive and receive data
+	log.Printf("🔔 Enabling status updates...")
+	enableCmd := "jdev/sps/enablebinstatusupdate"
+	if err := conn.ws.WriteMessage(websocket.TextMessage, []byte(enableCmd)); err != nil {
+		log.Printf("   ⚠️  Warning: Failed to enable status updates: %v", err)
+		// Don't fail authentication - this is optional
+	} else {
+		log.Printf("   ✓ Status updates enabled")
+	}
 	
 	return nil
 }
@@ -747,12 +768,40 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 
 	log.Printf("👂 [%s] DATA LISTENER ACTIVE - waiting for messages...", conn.MeterName)
 
+	// Set up keep-alive ticker to prevent connection timeout
+	keepAliveTicker := time.NewTicker(60 * time.Second)
+	defer keepAliveTicker.Stop()
+
 	messageCount := 0
+	
+	// Set read deadline to allow keep-alive to send
+	conn.mu.Lock()
+	if conn.ws != nil {
+		conn.ws.SetReadDeadline(time.Now().Add(90 * time.Second))
+	}
+	conn.mu.Unlock()
+	
 	for {
 		select {
 		case <-conn.stopChan:
 			log.Printf("🛑 [%s] Received stop signal, closing listener", conn.MeterName)
 			return
+		case <-keepAliveTicker.C:
+			// Send keep-alive message
+			conn.mu.Lock()
+			if conn.ws != nil {
+				// Send a simple keepalive command
+				err := conn.ws.WriteMessage(websocket.TextMessage, []byte("keepalive"))
+				if err != nil {
+					log.Printf("⚠️  [%s] Keep-alive failed: %v", conn.MeterName, err)
+					conn.mu.Unlock()
+					return
+				}
+				log.Printf("💓 [%s] Keep-alive sent", conn.MeterName)
+				// Reset read deadline after keep-alive
+				conn.ws.SetReadDeadline(time.Now().Add(90 * time.Second))
+			}
+			conn.mu.Unlock()
 		default:
 			conn.mu.Lock()
 			ws := conn.ws
@@ -766,6 +815,17 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 			// Use readLoxoneMessage to handle binary protocol
 			jsonData, err := conn.readLoxoneMessage()
 			if err != nil {
+				// Check if it's a timeout (expected for keep-alive)
+				if strings.Contains(err.Error(), "i/o timeout") || strings.Contains(err.Error(), "deadline") {
+					// Timeout is normal - reset deadline and continue
+					conn.mu.Lock()
+					if conn.ws != nil {
+						conn.ws.SetReadDeadline(time.Now().Add(90 * time.Second))
+					}
+					conn.mu.Unlock()
+					continue
+				}
+				
 				if strings.Contains(err.Error(), "websocket: close") {
 					log.Printf("ℹ️  [%s] WebSocket closed normally", conn.MeterName)
 				} else {
@@ -776,6 +836,13 @@ func (conn *LoxoneConnection) readLoop(db *sql.DB) {
 				}
 				return
 			}
+
+			// Reset read deadline after successful read
+			conn.mu.Lock()
+			if conn.ws != nil {
+				conn.ws.SetReadDeadline(time.Now().Add(90 * time.Second))
+			}
+			conn.mu.Unlock()
 
 			messageCount++
 			log.Printf("📨 [%s] Received message #%d", conn.MeterName, messageCount)
