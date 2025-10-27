@@ -15,11 +15,11 @@ interface ConnectionConfig {
   unit_id?: number;
   listen_port?: number;
   data_key?: string;
-  // New HTTP authentication fields
-  http_username?: string;
-  http_password?: string;
-  http_meter_id?: string;
-  http_base_url?: string;
+  // Loxone API fields
+  loxone_host?: string;
+  loxone_username?: string;
+  loxone_password?: string;
+  loxone_device_id?: string;
 }
 
 export default function Meters() {
@@ -47,10 +47,10 @@ export default function Meters() {
     unit_id: 1,
     listen_port: 8888,
     data_key: 'power_kwh',
-    http_username: '',
-    http_password: '',
-    http_meter_id: '',
-    http_base_url: ''
+    loxone_host: '',
+    loxone_username: '',
+    loxone_password: '',
+    loxone_device_id: ''
   });
 
   useEffect(() => {
@@ -106,14 +106,12 @@ export default function Meters() {
 
     let config: ConnectionConfig = {};
 
-    if (formData.connection_type === 'http') {
+    if (formData.connection_type === 'loxone_api') {
       config = {
-        endpoint: connectionConfig.endpoint,
-        power_field: connectionConfig.power_field,
-        http_username: connectionConfig.http_username,
-        http_password: connectionConfig.http_password,
-        http_meter_id: connectionConfig.http_meter_id,
-        http_base_url: connectionConfig.http_base_url
+        loxone_host: connectionConfig.loxone_host,
+        loxone_username: connectionConfig.loxone_username,
+        loxone_password: connectionConfig.loxone_password,
+        loxone_device_id: connectionConfig.loxone_device_id
       };
     } else if (formData.connection_type === 'modbus_tcp') {
       config = {
@@ -177,10 +175,10 @@ export default function Meters() {
         unit_id: config.unit_id || 1,
         listen_port: config.listen_port || 8888,
         data_key: config.data_key || 'power_kwh',
-        http_username: config.http_username || '',
-        http_password: config.http_password || '',
-        http_meter_id: config.http_meter_id || '',
-        http_base_url: config.http_base_url || ''
+        loxone_host: config.loxone_host || '',
+        loxone_username: config.loxone_username || '',
+        loxone_password: config.loxone_password || '',
+        loxone_device_id: config.loxone_device_id || ''
       });
     } catch (e) {
       console.error('Failed to parse config:', e);
@@ -246,10 +244,10 @@ export default function Meters() {
       unit_id: 1,
       listen_port: 8888,
       data_key: 'power_kwh',
-      http_username: '',
-      http_password: '',
-      http_meter_id: '',
-      http_base_url: ''
+      loxone_host: '',
+      loxone_username: '',
+      loxone_password: '',
+      loxone_device_id: ''
     });
   };
 
@@ -825,7 +823,7 @@ export default function Meters() {
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('meters.connectionType')} *</label>
                 <select required value={formData.connection_type} onChange={(e) => setFormData({ ...formData, connection_type: e.target.value })}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
-                  <option value="http">{t('meters.httpRecommended')}</option>
+                  <option value="loxone_api">{t('meters.loxoneApi')}</option>
                   <option value="udp">{t('meters.udpAlternative')}</option>
                   <option value="modbus_tcp">{t('meters.modbusTcp')}</option>
                 </select>
@@ -836,76 +834,75 @@ export default function Meters() {
                   {t('meters.connectionConfig')}
                 </h3>
 
-                {formData.connection_type === 'http' && (
+                {formData.connection_type === 'loxone_api' && (
                   <>
                     <div style={{ backgroundColor: '#d1fae5', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #10b981', display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <Star size={16} fill="#fbbf24" color="#fbbf24" />
                       <p style={{ fontSize: '13px', color: '#065f46', margin: 0 }}>
-                        <strong>{t('meters.httpPollingInfo')}</strong>
+                        <strong>Loxone WebSocket API - Real-time connection with online/offline status</strong>
                       </p>
                     </div>
                     
                     <div style={{ marginBottom: '12px' }}>
                       <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                        {t('meters.httpBaseUrl')} *
+                        Loxone Host (IP Address) *
                       </label>
-                      <input type="text" required value={connectionConfig.http_base_url}
-                        onChange={(e) => setConnectionConfig({ ...connectionConfig, http_base_url: e.target.value })}
-                        placeholder="http://192.168.1.100"
+                      <input type="text" required value={connectionConfig.loxone_host || ''}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_host: e.target.value })}
+                        placeholder="192.168.1.100"
                         style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                        {t('meters.httpBaseUrlHelp')}
+                        IP address of your Loxone Miniserver (without http://)
                       </p>
                     </div>
 
                     <div style={{ marginBottom: '12px' }}>
                       <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                        {t('meters.httpMeterId')} *
+                        Device UUID *
                       </label>
-                      <input type="text" required value={connectionConfig.http_meter_id}
-                        onChange={(e) => setConnectionConfig({ ...connectionConfig, http_meter_id: e.target.value })}
-                        placeholder="meter_001"
-                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      <input type="text" required value={connectionConfig.loxone_device_id || ''}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_device_id: e.target.value })}
+                        placeholder="1e475b8d-017e-c7b5-ffff336efb88726d"
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace' }} />
                       <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                        {t('meters.httpMeterIdHelp')}
+                        UUID of the virtual output in Loxone (find it in Loxone Config)
                       </p>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          {t('meters.httpUsername')}
+                          Username
                         </label>
-                        <input type="text" value={connectionConfig.http_username}
-                          onChange={(e) => setConnectionConfig({ ...connectionConfig, http_username: e.target.value })}
+                        <input type="text" value={connectionConfig.loxone_username || ''}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_username: e.target.value })}
                           placeholder="admin"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          {t('meters.httpPassword')}
+                          Password
                         </label>
-                        <input type="password" value={connectionConfig.http_password}
-                          onChange={(e) => setConnectionConfig({ ...connectionConfig, http_password: e.target.value })}
+                        <input type="password" value={connectionConfig.loxone_password || ''}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_password: e.target.value })}
                           placeholder="••••••••"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
                     </div>
                     <p style={{ fontSize: '11px', color: '#666', marginBottom: '12px' }}>
-                      {t('meters.httpAuthHelp')}
+                      Loxone Miniserver credentials for WebSocket authentication
                     </p>
 
                     <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '12px', fontFamily: 'monospace', fontSize: '12px', border: '1px solid #e5e7eb' }}>
-                      <strong>{t('meters.httpLoxoneConfig')}</strong><br />
-                      {t('meters.httpVirtualOutput')}<br />
-                      {t('meters.httpListensResponds')} {"{\""}
-                      <span style={{ color: '#10b981', fontWeight: 'bold' }}>{connectionConfig.power_field || 'UUID_power_kwh'}</span>
-                      {"\": <v>}"}<br /><br />
-                      <strong>{t('meters.httpPolling')}</strong> {t('meters.httpRaspberryPi')}<br />
-                      URL: {connectionConfig.http_base_url || 'http://YOUR_IP'}/api/meter/{connectionConfig.http_meter_id || 'meter_id'}
-                      <br /><br />
-                      <div style={{ backgroundColor: '#f0f9ff', padding: '8px', borderRadius: '4px', fontSize: '11px', color: '#0369a1' }}>
-                        <strong>Note:</strong> The UUID key is auto-generated and will be shown in logs after saving
+                      <strong>What you need from Loxone Config:</strong><br />
+                      1. Find your Virtual Output in the program tree<br />
+                      2. Right-click → Properties → Copy the UUID<br />
+                      3. The system will read <strong>output1.value</strong> (kWh) from this device<br />
+                      4. Connection status will be shown on the meter card (🟢 online / 🔴 offline)<br /><br />
+                      <div style={{ backgroundColor: '#d1fae5', padding: '8px', borderRadius: '4px', fontSize: '11px', color: '#065f46' }}>
+                        <strong>✓ Real-time updates via WebSocket</strong><br />
+                        <strong>✓ Automatic reconnection on disconnects</strong><br />
+                        <strong>✓ Visual online/offline status indicator</strong>
                       </div>
                     </div>
                   </>

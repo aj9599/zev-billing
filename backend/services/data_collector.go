@@ -15,16 +15,17 @@ import (
 )
 
 type DataCollector struct {
-	db               *sql.DB
-	udpListeners     map[int]*net.UDPConn
-	udpMeterBuffers  map[int]float64
+	db                *sql.DB
+	udpListeners      map[int]*net.UDPConn
+	udpMeterBuffers   map[int]float64
 	udpChargerBuffers map[int]ChargerData
 	partialChargerData map[int]*PartialChargerData
-	mu               sync.Mutex
-	lastCollection   time.Time
-	udpPorts         []int
-	restartChannel   chan bool
-	httpClient       *http.Client
+	loxoneCollector   *LoxoneCollector
+	mu                sync.Mutex
+	lastCollection    time.Time
+	udpPorts          []int
+	restartChannel    chan bool
+	httpClient        *http.Client
 }
 
 type ChargerData struct {
@@ -199,7 +200,7 @@ func stripControlCharacters(str string) string {
 }
 
 func NewDataCollector(db *sql.DB) *DataCollector {
-	return &DataCollector{
+	dc := &DataCollector{
 		db:                 db,
 		udpListeners:       make(map[int]*net.UDPConn),
 		udpMeterBuffers:    make(map[int]float64),
@@ -211,10 +212,15 @@ func NewDataCollector(db *sql.DB) *DataCollector {
 			Timeout: 10 * time.Second,
 		},
 	}
+	
+	// Initialize Loxone collector
+	dc.loxoneCollector = NewLoxoneCollector(db)
+	
+	return dc
 }
 
 func (dc *DataCollector) RestartUDPListeners() {
-	log.Println("=== Restarting UDP Listeners ===")
+	log.Println("=== Restarting UDP Listeners and Loxone Connections ===")
 	
 	dc.mu.Lock()
 	for port, conn := range dc.udpListeners {
@@ -228,19 +234,24 @@ func (dc *DataCollector) RestartUDPListeners() {
 	time.Sleep(500 * time.Millisecond)
 
 	dc.initializeUDPListeners()
+	dc.loxoneCollector.RestartConnections()
 	
-	log.Println("=== UDP Listeners Restarted ===")
-	dc.logToDatabase("UDP Listeners Restarted", "All UDP listeners have been reinitialized")
+	log.Println("=== UDP Listeners and Loxone Connections Restarted ===")
+	dc.logToDatabase("Listeners Restarted", "All UDP listeners and Loxone connections have been reinitialized")
 }
 
 func (dc *DataCollector) Start() {
 	log.Println("===================================")
 	log.Println("ZEV Data Collector Starting")
-	log.Println("Collection Mode: HTTP Polling (primary) + UDP Monitoring (backup)")
+	log.Println("Collection Mode: HTTP Polling (primary) + UDP Monitoring (backup) + Loxone WebSocket (real-time)")
 	log.Println("Collection Interval: 15 minutes (fixed at :00, :15, :30, :45)")
 	log.Println("===================================")
 
 	dc.initializeUDPListeners()
+	
+	// Start Loxone WebSocket collector
+	go dc.loxoneCollector.Start()
+	
 	dc.logSystemStatus()
 	
 	// FIXED: Wait until the next exact 15-minute interval
@@ -358,6 +369,9 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 	}
 	dc.mu.Unlock()
 
+	// Get Loxone connection status
+	loxoneStatus := dc.loxoneCollector.GetConnectionStatus()
+
 	return map[string]interface{}{
 		"active_meters":           activeMeters,
 		"total_meters":            totalMeters,
@@ -367,10 +381,11 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 		"next_collection":         nextCollection.Format("2006-01-02 15:04:05"),
 		"next_collection_minutes": minutesToNext,
 		"udp_listeners":           dc.udpPorts,
+		"loxone_connections":      loxoneStatus,
 		"recent_errors":           recentErrors,
 		"charger_buffers":         chargerBufferStatus,
 		"partial_charger_data":    partialStatus,
-		"collection_mode":         "HTTP Polling + UDP Monitoring",
+		"collection_mode":         "HTTP Polling + UDP Monitoring + Loxone WebSocket",
 	}
 }
 
@@ -697,7 +712,7 @@ func (dc *DataCollector) collectAllData() {
 func (dc *DataCollector) collectMeterDataViaHTTP() {
 	rows, err := dc.db.Query(`
 		SELECT id, name, meter_type, connection_type, connection_config, is_active
-		FROM meters WHERE is_active = 1
+		FROM meters WHERE is_active = 1 AND connection_type != 'loxone_api'
 	`)
 	if err != nil {
 		log.Printf("ERROR: Failed to query meters: %v", err)
@@ -800,6 +815,13 @@ func (dc *DataCollector) collectMeterDataViaHTTP() {
 	}
 
 	log.Printf("Meter collection summary: %d/%d successful via HTTP polling", successCount, meterCount)
+	
+	// Note: Loxone API meters are collected via WebSocket in real-time
+	var loxoneCount int
+	dc.db.QueryRow("SELECT COUNT(*) FROM meters WHERE is_active = 1 AND connection_type = 'loxone_api'").Scan(&loxoneCount)
+	if loxoneCount > 0 {
+		log.Printf("Loxone API meters: %d active (collected via WebSocket real-time)", loxoneCount)
+	}
 }
 
 // Collect charger data via HTTP polling at exact 15-minute intervals

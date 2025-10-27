@@ -129,6 +129,12 @@ func (h *MeterHandler) Create(w http.ResponseWriter, r *http.Request) {
 		log.Printf("New UDP meter created, restarting UDP listeners...")
 		go h.dataCollector.RestartUDPListeners()
 	}
+	
+	// If it's a Loxone API meter, restart Loxone connections
+	if m.ConnectionType == "loxone_api" {
+		log.Printf("New Loxone API meter created, restarting Loxone connections...")
+		go h.dataCollector.RestartUDPListeners() // This also restarts Loxone connections
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -170,6 +176,12 @@ func (h *MeterHandler) Update(w http.ResponseWriter, r *http.Request) {
 		log.Printf("UDP meter updated, restarting UDP listeners...")
 		go h.dataCollector.RestartUDPListeners()
 	}
+	
+	// If it's a Loxone API meter, restart Loxone connections
+	if m.ConnectionType == "loxone_api" {
+		log.Printf("Loxone API meter updated, restarting Loxone connections...")
+		go h.dataCollector.RestartUDPListeners() // This also restarts Loxone connections
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(m)
@@ -183,7 +195,7 @@ func (h *MeterHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if it's a UDP meter
+	// Check if it's a UDP or Loxone API meter
 	var connectionType string
 	h.db.QueryRow("SELECT connection_type FROM meters WHERE id = ?", id).Scan(&connectionType)
 
@@ -197,6 +209,12 @@ func (h *MeterHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if connectionType == "udp" {
 		log.Printf("UDP meter deleted, restarting UDP listeners...")
 		go h.dataCollector.RestartUDPListeners()
+	}
+	
+	// If it was a Loxone API meter, restart Loxone connections
+	if connectionType == "loxone_api" {
+		log.Printf("Loxone API meter deleted, restarting Loxone connections...")
+		go h.dataCollector.RestartUDPListeners() // This also restarts Loxone connections
 	}
 
 	w.WriteHeader(http.StatusNoContent)
