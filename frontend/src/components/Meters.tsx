@@ -977,18 +977,18 @@ export default function Meters() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          {t('meters.loxoneUsername')}
+                          {t('meters.loxoneUsername')} *
                         </label>
-                        <input type="text" value={connectionConfig.loxone_username || ''}
+                        <input type="text" required value={connectionConfig.loxone_username || ''}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_username: e.target.value })}
                           placeholder="admin"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          {t('meters.loxonePassword')}
+                          {t('meters.loxonePassword')} *
                         </label>
-                        <input type="password" value={connectionConfig.loxone_password || ''}
+                        <input type="password" required value={connectionConfig.loxone_password || ''}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_password: e.target.value })}
                           placeholder="••••••••"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
