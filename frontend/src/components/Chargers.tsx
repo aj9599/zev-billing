@@ -109,7 +109,7 @@ export default function Chargers() {
   useEffect(() => {
     loadData();
     fetchLoxoneStatus();
-    
+
     // Poll for Loxone status and sessions every 30 seconds
     const interval = setInterval(() => {
       fetchLoxoneStatus();
@@ -186,10 +186,15 @@ export default function Chargers() {
 
     try {
       const config = JSON.parse(charger.connection_config);
-      if (stateValue === config.state_cable_locked) return t('chargers.state.cableLocked');
-      if (stateValue === config.state_waiting_auth) return t('chargers.state.waitingAuth');
-      if (stateValue === config.state_charging) return t('chargers.state.charging');
-      if (stateValue === config.state_idle) return t('chargers.state.idle');
+      // Convert both values to strings for comparison to handle number/string mismatches
+      const stateStr = String(stateValue).trim();
+      if (stateStr === String(config.state_cable_locked).trim()) return t('chargers.state.cableLocked');
+      if (stateStr === String(config.state_waiting_auth).trim()) return t('chargers.state.waitingAuth');
+      if (stateStr === String(config.state_charging).trim()) return t('chargers.state.charging');
+      if (stateStr === String(config.state_idle).trim()) return t('chargers.state.idle');
+
+      // Log for debugging if no match found
+      console.log(`State value '${stateStr}' did not match any configured states for charger ${charger.name}`);
     } catch (e) {
       console.error('Failed to parse charger config:', e);
     }
@@ -199,15 +204,26 @@ export default function Chargers() {
 
   const getModeDisplay = (charger: Charger, modeValue?: string): string => {
     if (!modeValue) return t('chargers.mode.unknown');
-
+  
     try {
       const config = JSON.parse(charger.connection_config);
-      if (modeValue === config.mode_normal) return t('chargers.mode.normal');
-      if (modeValue === config.mode_priority) return t('chargers.mode.priority');
+      // Convert both values to strings for comparison to handle number/string mismatches
+      const modeStr = String(modeValue).trim();
+      if (modeStr === String(config.mode_normal).trim()) return t('chargers.mode.normal');
+      if (modeStr === String(config.mode_priority).trim()) return t('chargers.mode.priority');
+      
+      // Log for debugging if no match found
+      console.log(`Mode value '${modeStr}' did not match any configured modes for charger ${charger.name}`, {
+        received: modeStr,
+        configured: {
+          normal: String(config.mode_normal).trim(),
+          priority: String(config.mode_priority).trim()
+        }
+      });
     } catch (e) {
       console.error('Failed to parse charger config:', e);
     }
-
+  
     return t('chargers.mode.unknown');
   };
 
@@ -364,30 +380,30 @@ export default function Chargers() {
         start_date: startDate,
         end_date: endDate
       });
-  
+
       if (chargerId) {
         params.append('charger_id', chargerId.toString());
       }
-  
+
       const response = await fetch(`/api/export/data?${params}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-  
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Export failed: ${response.status} - ${errorText}`);
       }
-  
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-  
+
       const chargerName = chargerId ? chargers.find(c => c.id === chargerId)?.name.replace(/\s+/g, '-') : 'all';
       a.download = `chargers-${chargerName}-${startDate}-to-${endDate}.csv`;
-  
+
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -584,7 +600,7 @@ export default function Chargers() {
               <Star size={16} fill="#fbbf24" color="#fbbf24" />
               <strong>{t('chargers.instructions.loxoneRecommended')}</strong>
             </p>
-            
+
             <h4 style={{ fontSize: '15px', fontWeight: '600', marginTop: '16px', marginBottom: '8px' }}>
               {t('chargers.instructions.loxoneUuidTitle')}
             </h4>
@@ -597,7 +613,7 @@ export default function Chargers() {
               <li><strong>{t('chargers.instructions.loxoneUserIdUuid')}</strong></li>
               <li><strong>{t('chargers.instructions.loxoneModeUuid')}</strong></li>
             </ul>
-            
+
             <h4 style={{ fontSize: '15px', fontWeight: '600', marginTop: '16px', marginBottom: '8px' }}>
               {t('chargers.instructions.loxoneFindingUuid')}
             </h4>
@@ -618,7 +634,7 @@ export default function Chargers() {
               <li>{t('chargers.instructions.loxoneStep4')}</li>
               <li>{t('chargers.instructions.loxoneStep5')}</li>
             </ol>
-            
+
             <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '10px', fontFamily: 'monospace', fontSize: '12px' }}>
               <strong>{t('chargers.instructions.loxoneExample')}</strong><br />
               {t('chargers.instructions.loxoneExampleHost')}<br />
@@ -1127,7 +1143,7 @@ export default function Chargers() {
                         <strong>{t('chargers.loxoneApiDescription')}</strong>
                       </p>
                     </div>
-                    
+
                     <div style={{ marginBottom: '12px' }}>
                       <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
                         {t('chargers.loxoneHost')} *

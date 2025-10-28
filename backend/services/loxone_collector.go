@@ -520,26 +520,56 @@ func (lc *LoxoneCollector) GetConnectionStatus() map[string]interface{} {
 	for _, conn := range lc.connections {
 		conn.mu.Lock()
 		for _, device := range conn.devices {
-			deviceInfo := map[string]interface{}{
-				"device_name":            device.Name,
-				"host":                   conn.Host,
-				"is_connected":           conn.isConnected,
-				"token_valid":            conn.tokenValid,
-				"token_expiry":           conn.tokenExpiry.Format("2006-01-02 15:04:05"),
-				"last_reading":           device.lastReading,
-				"last_update":            device.lastUpdate.Format("2006-01-02 15:04:05"),
-				"reading_gaps":           device.readingGaps,
-				"last_error":             conn.lastError,
-				"consecutive_auth_fails": conn.consecutiveAuthFails,
-				"total_auth_failures":    conn.totalAuthFailures,
-				"total_reconnects":       conn.totalReconnects,
-				"last_successful_auth":   conn.lastSuccessfulAuth.Format("2006-01-02 15:04:05"),
+			// Format last_update properly, handle zero time
+			lastUpdateStr := ""
+			if !device.lastUpdate.IsZero() {
+				lastUpdateStr = device.lastUpdate.Format("2006-01-02 15:04:05")
+			}
+
+			// Format token_expiry properly, handle zero time
+			tokenExpiryStr := ""
+			if !conn.tokenExpiry.IsZero() {
+				tokenExpiryStr = conn.tokenExpiry.Format("2006-01-02 15:04:05")
+			}
+
+			// Format last_successful_auth properly, handle zero time
+			lastSuccessfulAuthStr := ""
+			if !conn.lastSuccessfulAuth.IsZero() {
+				lastSuccessfulAuthStr = conn.lastSuccessfulAuth.Format("2006-01-02 15:04:05")
 			}
 
 			if device.Type == "meter" {
-				meterStatus[device.ID] = deviceInfo
+				meterStatus[device.ID] = map[string]interface{}{
+					"meter_name":             device.Name,
+					"host":                   conn.Host,
+					"is_connected":           conn.isConnected,
+					"token_valid":            conn.tokenValid,
+					"token_expiry":           tokenExpiryStr,
+					"last_reading":           device.lastReading,
+					"last_update":            lastUpdateStr,
+					"reading_gaps":           device.readingGaps,
+					"last_error":             conn.lastError,
+					"consecutive_auth_fails": conn.consecutiveAuthFails,
+					"total_auth_failures":    conn.totalAuthFailures,
+					"total_reconnects":       conn.totalReconnects,
+					"last_successful_auth":   lastSuccessfulAuthStr,
+				}
 			} else if device.Type == "charger" {
-				chargerStatus[device.ID] = deviceInfo
+				chargerStatus[device.ID] = map[string]interface{}{
+					"charger_name":           device.Name,
+					"host":                   conn.Host,
+					"is_connected":           conn.isConnected,
+					"token_valid":            conn.tokenValid,
+					"token_expiry":           tokenExpiryStr,
+					"last_reading":           device.lastReading,
+					"last_update":            lastUpdateStr,
+					"reading_gaps":           device.readingGaps,
+					"last_error":             conn.lastError,
+					"consecutive_auth_fails": conn.consecutiveAuthFails,
+					"total_auth_failures":    conn.totalAuthFailures,
+					"total_reconnects":       conn.totalReconnects,
+					"last_successful_auth":   lastSuccessfulAuthStr,
+				}
 			}
 		}
 		conn.mu.Unlock()
