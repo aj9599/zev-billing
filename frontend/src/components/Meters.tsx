@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Info, HelpCircle, Zap, Download, Search, Building, Radio, Plug, Settings, AlertCircle, Star, Wifi, WifiOff } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Info, HelpCircle, Zap, Download, Search, Building, Radio, Settings, AlertCircle, Star, Wifi, WifiOff } from 'lucide-react';
 import { api } from '../api/client';
 import type { Meter, Building as BuildingType, User } from '../types';
 import { useTranslation } from '../i18n';
