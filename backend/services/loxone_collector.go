@@ -347,10 +347,10 @@ func (lc *LoxoneCollector) initializeConnections() {
 			host, _ := config["loxone_host"].(string)
 			username, _ := config["loxone_username"].(string)
 			password, _ := config["loxone_password"].(string)
-			powerUUID, _ := config["power_output_key_UUID"].(string)
-			stateUUID, _ := config["state_output_key_UUID"].(string)
-			userIDUUID, _ := config["user_id_output_key_UUID"].(string)
-			modeUUID, _ := config["mode_output_key_UUID"].(string)
+			powerUUID, _ := config["loxone_power_uuid"].(string)
+			stateUUID, _ := config["loxone_state_uuid"].(string)
+			userIDUUID, _ := config["loxone_user_id_uuid"].(string)
+			modeUUID, _ := config["loxone_mode_uuid"].(string)
 
 			log.Printf("   ├─ Host: %s", host)
 			log.Printf("   ├─ Username: %s", username)
@@ -659,7 +659,7 @@ func (conn *LoxoneWebSocketConnection) ConnectWithBackoff(db *sql.DB) {
 		conn.mu.Lock()
 	}
 	conn.mu.Unlock()
-	
+
     conn.mu.Lock()
     if conn.isConnected {
         conn.mu.Unlock()
