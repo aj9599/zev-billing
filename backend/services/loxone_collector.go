@@ -1441,6 +1441,7 @@ func (conn *LoxoneWebSocketConnection) readLoop(db *sql.DB) {
 			var response LoxoneResponse
 			if err := json.Unmarshal(result.jsonData, &response); err != nil {
 				log.Printf("⚠️  [%s] Failed to parse JSON response: %v", conn.Host, err)
+				log.Printf("⚠️  Raw JSON (first 500 chars): %s", string(result.jsonData[:min(len(result.jsonData), 500)]))
 				continue
 			}
 
@@ -1484,6 +1485,8 @@ func (conn *LoxoneWebSocketConnection) readLoop(db *sql.DB) {
 					for uuid, fieldName := range uuidMap {
 						expectedControl := fmt.Sprintf("dev/sps/io/%s/all", uuid)
 						if strings.Contains(response.LL.Control, expectedControl) {
+							log.Printf("   🎯 [%s] Matched UUID for field '%s': %s", device.Name, fieldName, uuid)
+							
 							if chargerData[device.ID] == nil {
 								chargerData[device.ID] = &ChargerDataCollection{}
 								log.Printf("   📋 [%s] Created new data collection for charger", device.Name)
@@ -1595,7 +1598,20 @@ func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, re
 }
 
 func (conn *LoxoneWebSocketConnection) processChargerField(device *LoxoneDevice, response LoxoneResponse, fieldName string, collection *ChargerDataCollection, db *sql.DB) {
+	// Debug: Show what we received
+	log.Printf("   🔍 [%s] Processing field '%s'", device.Name, fieldName)
+	log.Printf("   🔍 Response Control: %s", response.LL.Control)
+	log.Printf("   🔍 Response Code: %s", response.LL.Code)
+	log.Printf("   🔍 Response Value: %s", response.LL.Value)
+	log.Printf("   🔍 Number of outputs: %d", len(response.LL.Outputs))
+	
+	// List all output keys
+	for key := range response.LL.Outputs {
+		log.Printf("   🔍 Found output key: %s", key)
+	}
+	
 	if output1, ok := response.LL.Outputs["output1"]; ok {
+		log.Printf("   🔍 output1 found - Value type: %T, Value: %v", output1.Value, output1.Value)
 		switch fieldName {
 		case "power":
 			var power float64
@@ -1663,6 +1679,56 @@ func (conn *LoxoneWebSocketConnection) processChargerField(device *LoxoneDevice,
 			collection.State = nil
 			collection.UserID = nil
 			collection.Mode = nil
+		}
+	} else {
+		// output1 not found - try alternative: check if value is in response.LL.Value directly
+		log.Printf("   ⚠️  [%s] output1 not found in response for field '%s'", device.Name, fieldName)
+		
+		if response.LL.Value != "" {
+			log.Printf("   🔍 Trying to use response.LL.Value: %s", response.LL.Value)
+			
+			switch fieldName {
+			case "power":
+				if f, err := strconv.ParseFloat(response.LL.Value, 64); err == nil {
+					collection.Power = &f
+					log.Printf("   🔋 [%s] Received power from Value: %.4f kWh", device.Name, f)
+				}
+			case "state":
+				state := response.LL.Value
+				collection.State = &state
+				log.Printf("   📊 [%s] Received state from Value: %s", device.Name, state)
+			case "user_id":
+				userID := response.LL.Value
+				collection.UserID = &userID
+				log.Printf("   👤 [%s] Received user_id from Value: %s", device.Name, userID)
+			case "mode":
+				mode := response.LL.Value
+				collection.Mode = &mode
+				log.Printf("   ⚙️  [%s] Received mode from Value: %s", device.Name, mode)
+			}
+			
+			// Check if we have all 4 fields
+			hasAll := collection.Power != nil && collection.State != nil && 
+					  collection.UserID != nil && collection.Mode != nil
+					  
+			log.Printf("   📦 [%s] Collection status: Power=%v State=%v UserID=%v Mode=%v (Complete=%v)",
+				device.Name,
+				collection.Power != nil, collection.State != nil,
+				collection.UserID != nil, collection.Mode != nil,
+				hasAll)
+
+			if hasAll {
+				log.Printf("   ✅ [%s] All fields collected, saving to database", device.Name)
+				conn.saveChargerData(device, collection, db)
+
+				// Reset collection
+				collection.Power = nil
+				collection.State = nil
+				collection.UserID = nil
+				collection.Mode = nil
+			}
+		} else {
+			log.Printf("   ❌ [%s] No data found for field '%s' in response", device.Name, fieldName)
 		}
 	}
 }
