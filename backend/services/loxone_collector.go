@@ -507,22 +507,17 @@ func (lc *LoxoneCollector) monitorConnections() {
 	}
 }
 
-func (lc *LoxoneCollector) GetConnectionStatus() map[int]map[string]interface{} {
+func (lc *LoxoneCollector) GetConnectionStatus() map[string]interface{} {
 	lc.mu.RLock()
 	defer lc.mu.RUnlock()
 
-	status := make(map[int]map[string]interface{})
+	meterStatus := make(map[int]map[string]interface{})
+	chargerStatus := make(map[int]map[string]interface{})
 
 	for _, conn := range lc.connections {
 		conn.mu.Lock()
 		for _, device := range conn.devices {
-			deviceKey := device.ID
-			if device.Type == "charger" {
-				deviceKey = device.ID + 10000
-			}
-
-			status[deviceKey] = map[string]interface{}{
-				"device_type":            device.Type,
+			deviceInfo := map[string]interface{}{
 				"device_name":            device.Name,
 				"host":                   conn.Host,
 				"is_connected":           conn.isConnected,
@@ -537,10 +532,20 @@ func (lc *LoxoneCollector) GetConnectionStatus() map[int]map[string]interface{} 
 				"total_reconnects":       conn.totalReconnects,
 				"last_successful_auth":   conn.lastSuccessfulAuth.Format("2006-01-02 15:04:05"),
 			}
+
+			if device.Type == "meter" {
+				meterStatus[device.ID] = deviceInfo
+			} else if device.Type == "charger" {
+				chargerStatus[device.ID] = deviceInfo
+			}
 		}
 		conn.mu.Unlock()
 	}
-	return status
+
+	return map[string]interface{}{
+		"loxone_connections":         meterStatus,
+		"loxone_charger_connections": chargerStatus,
+	}
 }
 
 func (lc *LoxoneCollector) logToDatabase(action, details string) {
