@@ -21,9 +21,13 @@ import (
 )
 
 type LoxoneCollector struct {
-	db          *sql.DB
-	connections map[string]*LoxoneWebSocketConnection
-	mu          sync.RWMutex
+	db                *sql.DB
+	connections       map[string]*LoxoneWebSocketConnection
+	mu                sync.RWMutex
+	restartMu         sync.Mutex  // NEW: Prevents concurrent restarts
+	isRestarting      bool        // NEW: Tracks if restart is in progress
+	lastRestartTime   time.Time   // NEW: Tracks when last restart occurred
+	restartDebounce   time.Duration // NEW: Minimum time between restarts
 }
 
 type LoxoneWebSocketConnection struct {
@@ -171,10 +175,11 @@ func (ld *LoxoneLLData) UnmarshalJSON(data []byte) error {
 }
 
 func NewLoxoneCollector(db *sql.DB) *LoxoneCollector {
-	log.Println("🔧 LOXONE COLLECTOR: Initializing with enhanced auth health management")
+	log.Println("🔧 LOXONE COLLECTOR: Initializing with enhanced auth health management and restart protection")
 	lc := &LoxoneCollector{
-		db:          db,
-		connections: make(map[string]*LoxoneWebSocketConnection),
+		db:              db,
+		connections:     make(map[string]*LoxoneWebSocketConnection),
+		restartDebounce: 2 * time.Second, // NEW: Minimum 2 seconds between restarts
 	}
 	log.Println("🔧 LOXONE COLLECTOR: Instance created successfully")
 	return lc
@@ -183,10 +188,10 @@ func NewLoxoneCollector(db *sql.DB) *LoxoneCollector {
 func (lc *LoxoneCollector) Start() {
 	log.Println("===================================")
 	log.Println("🔌 LOXONE WEBSOCKET COLLECTOR STARTING")
-	log.Println("   Features: Auth health checks, exponential backoff, metrics, keepalive")
+	log.Println("   Features: Auth health checks, exponential backoff, metrics, keepalive, restart protection")
 	log.Println("===================================")
 
-	lc.logToDatabase("Loxone Collector Started", "Enhanced version with robust auth management and keepalive")
+	lc.logToDatabase("Loxone Collector Started", "Enhanced version with robust auth management and restart protection")
 
 	lc.initializeConnections()
 
@@ -215,15 +220,53 @@ func (lc *LoxoneCollector) Stop() {
 	lc.logToDatabase("Loxone Collector Stopped", "All connections closed")
 }
 
+// NEW: RestartConnections with proper synchronization and debouncing
 func (lc *LoxoneCollector) RestartConnections() {
-	log.Println("=== RESTARTING LOXONE CONNECTIONS ===")
-	lc.logToDatabase("Loxone Connections Restarting", "Reinitializing all Loxone connections")
+	// CRITICAL: Use mutex to prevent concurrent restart operations
+	lc.restartMu.Lock()
+	
+	// Check if a restart is already in progress
+	if lc.isRestarting {
+		log.Println("⚠️ RESTART ALREADY IN PROGRESS - Skipping duplicate restart request")
+		lc.restartMu.Unlock()
+		return
+	}
+	
+	// Check debounce - prevent restarts that are too frequent
+	timeSinceLastRestart := time.Since(lc.lastRestartTime)
+	if timeSinceLastRestart < lc.restartDebounce {
+		log.Printf("⚠️ RESTART TOO SOON (%.1fs since last) - Skipping (debounce: %.1fs)",
+			timeSinceLastRestart.Seconds(), lc.restartDebounce.Seconds())
+		lc.restartMu.Unlock()
+		return
+	}
+	
+	// Mark restart as in progress
+	lc.isRestarting = true
+	lc.lastRestartTime = time.Now()
+	lc.restartMu.Unlock()
+	
+	// Ensure we always clear the flag when done
+	defer func() {
+		lc.restartMu.Lock()
+		lc.isRestarting = false
+		lc.restartMu.Unlock()
+	}()
+	
+	log.Println("=== RESTARTING LOXONE CONNECTIONS (SYNCHRONIZED) ===")
+	lc.logToDatabase("Loxone Connections Restarting", "Reinitializing all Loxone connections (synchronized)")
 
+	// Stop all existing connections and wait for them to fully close
 	lc.Stop()
-	time.Sleep(500 * time.Millisecond)
+	
+	// Wait longer to ensure all goroutines and connections are fully closed
+	log.Println("⏳ Waiting for all connections to fully close...")
+	time.Sleep(1 * time.Second)
+	
+	// Initialize new connections
 	lc.initializeConnections()
 
-	log.Println("=== LOXONE CONNECTIONS RESTARTED ===")
+	log.Println("=== LOXONE CONNECTIONS RESTARTED (SYNCHRONIZED) ===")
 	lc.logToDatabase("Loxone Connections Restarted", fmt.Sprintf("Successfully restarted %d connections", len(lc.connections)))
 }
 
@@ -785,9 +828,9 @@ func (conn *LoxoneWebSocketConnection) ConnectWithBackoff(db *sql.DB) {
 	}
 	conn.mu.Unlock()
 
-	log.Println("╔══════════════════════════════════╗")
+	log.Println("╔═══════════════════════════════════╗")
 	log.Printf("║ 🔗 CONNECTING: %s", conn.Host)
-	log.Println("╚══════════════════════════════════╝")
+	log.Println("╚═══════════════════════════════════╝")
 
 	wsURL := fmt.Sprintf("ws://%s/ws/rfc6455", conn.Host)
 
@@ -866,11 +909,11 @@ func (conn *LoxoneWebSocketConnection) ConnectWithBackoff(db *sql.DB) {
 	deviceCount := len(conn.devices)
 	conn.mu.Unlock()
 
-	log.Println("╔══════════════════════════════════╗")
+	log.Println("╔═══════════════════════════════════╗")
 	log.Printf("║ ✅ CONNECTION ESTABLISHED!         ║")
 	log.Printf("║ Host: %-27s║", conn.Host)
 	log.Printf("║ Devices: %-24d║", deviceCount)
-	log.Println("╚══════════════════════════════════╝")
+	log.Println("╚═══════════════════════════════════╝")
 
 	conn.updateDeviceStatus(db, fmt.Sprintf("🟢 Connected at %s", time.Now().Format("2006-01-02 15:04:05")))
 	conn.logToDatabase("Loxone Connected",
@@ -885,7 +928,7 @@ func (conn *LoxoneWebSocketConnection) ConnectWithBackoff(db *sql.DB) {
 	conn.goroutinesWg.Add(1)
 	go conn.requestData()
 
-	log.Printf("🔑 Starting token expiry monitor for %s...", conn.Host)
+	log.Printf("🔒 Starting token expiry monitor for %s...", conn.Host)
 	conn.goroutinesWg.Add(1)
 	go conn.monitorTokenExpiry(db)
 	
@@ -1213,7 +1256,7 @@ func (conn *LoxoneWebSocketConnection) keepalive() {
 func (conn *LoxoneWebSocketConnection) monitorTokenExpiry(db *sql.DB) {
 	defer conn.goroutinesWg.Done()
 	
-	log.Printf("🔑 TOKEN MONITOR STARTED for %s (proactive checking)", conn.Host)
+	log.Printf("🔒 TOKEN MONITOR STARTED for %s (proactive checking)", conn.Host)
 
 	ticker := time.NewTicker(5 * time.Minute) // More frequent checking
 	defer ticker.Stop()
@@ -1585,7 +1628,7 @@ func (conn *LoxoneWebSocketConnection) readLoop(db *sql.DB) {
 							
 							if chargerData[device.ID] == nil {
 								chargerData[device.ID] = &ChargerDataCollection{}
-								log.Printf("   📋 [%s] Created new data collection for charger", device.Name)
+								log.Printf("   🔋 [%s] Created new data collection for charger", device.Name)
 							}
 
 							conn.processChargerField(device, response, fieldName, chargerData[device.ID], db)
@@ -1597,6 +1640,9 @@ func (conn *LoxoneWebSocketConnection) readLoop(db *sql.DB) {
 		}
 	}
 }
+
+// The rest of the file (processMeterData, processChargerField, saveChargerData, logToDatabase, IsConnected, Close) 
+// remains exactly the same as in the original file...
 
 func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, response LoxoneResponse, db *sql.DB) {
 	if output1, ok := response.LL.Outputs["output1"]; ok {

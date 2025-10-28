@@ -15,7 +15,6 @@ export interface User {
   notes: string;
   building_id?: number;
   user_type: 'regular' | 'administration';
-  // FIXED: Can be either string (from backend JSON) or number array (in frontend state)
   managed_buildings?: number[] | string;
   created_at: string;
   updated_at: string;
