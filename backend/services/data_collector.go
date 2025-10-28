@@ -301,27 +301,23 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 	}
 	dc.mu.Unlock()
 
-	// Get Loxone connection status for meters
-	loxoneMeterStatus := dc.loxoneCollector.GetConnectionStatus()
-	
-	// Get Loxone connection status for chargers
-	loxoneChargerStatus := dc.loxoneCollector.GetChargerConnectionStatus()
+	// Get Loxone connection status
+	loxoneStatus := dc.loxoneCollector.GetConnectionStatus()
 
 	return map[string]interface{}{
-		"active_meters":              activeMeters,
-		"total_meters":               totalMeters,
-		"active_chargers":            activeChargers,
-		"total_chargers":             totalChargers,
-		"last_collection":            dc.lastCollection.Format("2006-01-02 15:04:05"),
-		"next_collection":            nextCollection.Format("2006-01-02 15:04:05"),
-		"next_collection_minutes":    minutesToNext,
-		"udp_listeners":              dc.udpPorts,
-		"loxone_meter_connections":   loxoneMeterStatus,
-		"loxone_charger_connections": loxoneChargerStatus,
-		"recent_errors":              recentErrors,
-		"charger_buffers":            chargerBufferStatus,
-		"partial_charger_data":       partialStatus,
-		"collection_mode":            "HTTP Polling + UDP Monitoring + Loxone WebSocket",
+		"active_meters":           activeMeters,
+		"total_meters":            totalMeters,
+		"active_chargers":         activeChargers,
+		"total_chargers":          totalChargers,
+		"last_collection":         dc.lastCollection.Format("2006-01-02 15:04:05"),
+		"next_collection":         nextCollection.Format("2006-01-02 15:04:05"),
+		"next_collection_minutes": minutesToNext,
+		"udp_listeners":           dc.udpPorts,
+		"loxone_connections":      loxoneStatus,
+		"recent_errors":           recentErrors,
+		"charger_buffers":         chargerBufferStatus,
+		"partial_charger_data":    partialStatus,
+		"collection_mode":         "HTTP Polling + UDP Monitoring + Loxone WebSocket",
 	}
 }
 
@@ -777,7 +773,7 @@ func (dc *DataCollector) collectMeterDataViaHTTP() {
 func (dc *DataCollector) collectChargerDataViaHTTP() {
 	rows, err := dc.db.Query(`
 		SELECT id, name, brand, preset, connection_type, connection_config, is_active
-		FROM chargers WHERE is_active = 1 AND connection_type != 'loxone_api'
+		FROM chargers WHERE is_active = 1
 	`)
 	if err != nil {
 		log.Printf("ERROR: Failed to query chargers: %v", err)
@@ -799,7 +795,7 @@ func (dc *DataCollector) collectChargerDataViaHTTP() {
 		}
 
 		chargerCount++
-		log.Printf("Processing charger [%d]: '%s' (%s via %s)", chargerCount, name, brand, connectionType)
+		log.Printf("Processing charger [%d]: '%s' (%s)", chargerCount, name, brand)
 
 		var config map[string]interface{}
 		if err := json.Unmarshal([]byte(connectionConfig), &config); err != nil {
@@ -823,9 +819,6 @@ func (dc *DataCollector) collectChargerDataViaHTTP() {
 				state = data.State
 			}
 			dc.mu.Unlock()
-		} else if connectionType == "modbus_tcp" {
-			log.Printf("INFO: Modbus TCP collection not yet implemented for charger '%s'", name)
-			continue
 		}
 
 		if userID != "" && mode != "" && state != "" {
@@ -872,13 +865,6 @@ func (dc *DataCollector) collectChargerDataViaHTTP() {
 	}
 
 	log.Printf("Charger collection summary: %d/%d successful via HTTP polling", successCount, chargerCount)
-	
-	// Note: Loxone API chargers are collected via WebSocket in real-time
-	var loxoneCount int
-	dc.db.QueryRow("SELECT COUNT(*) FROM chargers WHERE is_active = 1 AND connection_type = 'loxone_api'").Scan(&loxoneCount)
-	if loxoneCount > 0 {
-		log.Printf("Loxone API chargers: %d active (collected via WebSocket real-time)", loxoneCount)
-	}
 }
 
 // UDP buffer save is now backup/fallback only
