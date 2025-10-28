@@ -646,6 +646,8 @@ func (conn *LoxoneWebSocketConnection) ConnectWithBackoff(db *sql.DB) {
 		return
 	}
 
+	conn.stopChan = make(chan bool)
+
 	// Apply backoff with jitter
 	if conn.reconnectBackoff > 1*time.Second {
 		jitter := time.Duration(rand.Float64() * float64(conn.reconnectBackoff) * 0.3)
@@ -657,6 +659,14 @@ func (conn *LoxoneWebSocketConnection) ConnectWithBackoff(db *sql.DB) {
 		conn.mu.Lock()
 	}
 	conn.mu.Unlock()
+	
+    conn.mu.Lock()
+    if conn.isConnected {
+        conn.mu.Unlock()
+        log.Printf("ℹ️  [%s] Another goroutine connected during backoff, skipping", conn.Host)
+        return
+    }
+    conn.mu.Unlock()
 
 	log.Println("╔═══════════════════════════════════╗")
 	log.Printf("║ 🔗 CONNECTING: %s", conn.Host)
