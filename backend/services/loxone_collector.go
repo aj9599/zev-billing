@@ -120,7 +120,10 @@ const (
 	LoxoneMsgTypeBinary        = 1
 	LoxoneMsgTypeEventTable    = 2
 	LoxoneMsgTypeTextEvent     = 3
-	LoxoneMsgTypeDaytimerEvent = 6
+	LoxoneMsgTypeDaytimerEvent = 4
+	LoxoneMsgTypeOutOfService  = 5
+	LoxoneMsgTypeKeepalive     = 6
+	LoxoneMsgTypeWeather       = 7
 )
 
 var loxoneEpoch = time.Date(2009, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -597,40 +600,87 @@ func (conn *LoxoneWebSocketConnection) readLoxoneMessage() (messageType byte, js
 
 	if wsMessageType == websocket.BinaryMessage && len(message) >= 8 {
 		headerType := message[0]
+		headerInfo := message[1]
 		payloadLength := binary.LittleEndian.Uint32(message[4:8])
 
-		log.Printf("   📦 Binary header: Type=0x%02X, PayloadLen=%d", headerType, payloadLength)
+		log.Printf("   📦 Binary header: Type=0x%02X (Info=0x%02X), PayloadLen=%d", headerType, headerInfo, payloadLength)
 
+		// Handle keepalive response (identifier 6) - header only, no payload
+		if headerType == LoxoneMsgTypeKeepalive {
+			log.Printf("   💓 Keepalive response received (header-only message)")
+			return headerType, nil, nil
+		}
+
+		// Handle out-of-service indicator (identifier 5) - header only
+		if headerType == LoxoneMsgTypeOutOfService {
+			log.Printf("   ⚠️  Out-of-service indicator received")
+			return headerType, nil, nil
+		}
+
+		// Handle event table and daytimer events - these are binary data, not JSON
+		if headerType == LoxoneMsgTypeEventTable || headerType == LoxoneMsgTypeDaytimerEvent || headerType == LoxoneMsgTypeWeather {
+			log.Printf("   ℹ️  Binary event message (type %d) - ignoring", headerType)
+			return headerType, nil, nil
+		}
+
+		// Handle text event (identifier 3) - has a JSON payload
 		if headerType == LoxoneMsgTypeTextEvent {
+			// If payload length is 0, it's just a header-only message
+			if payloadLength == 0 {
+				log.Printf("   ℹ️  Text event with no payload (header-only)")
+				return headerType, nil, nil
+			}
+
+			// Read the JSON payload
 			wsMessageType, message, err = conn.ws.ReadMessage()
 			if err != nil {
 				return 0, nil, fmt.Errorf("failed to read JSON payload: %v", err)
 			}
 			log.Printf("   ← JSON payload received: %d bytes", len(message))
 
+			// Show hex dump for very short messages
+			if len(message) < 50 {
+				log.Printf("   🔍 Hex dump: % X", message)
+				log.Printf("   🔍 String: %q", string(message))
+			}
+
 			jsonData = conn.extractJSON(message)
 			if jsonData == nil {
-				log.Printf("   ⚠️  Raw message (first 100 bytes): %s", string(message[:min(len(message), 100)]))
-				return headerType, nil, fmt.Errorf("could not extract JSON from text event")
+				log.Printf("   ⚠️  Could not extract JSON from text event")
+				log.Printf("   🔍 Raw message (first 200 bytes): %q", string(message[:min(len(message), 200)]))
+				// Return nil data but no error - let the caller handle empty responses
+				return headerType, nil, nil
 			}
 			return headerType, jsonData, nil
 		}
 
-		if headerType == LoxoneMsgTypeEventTable || headerType == LoxoneMsgTypeDaytimerEvent {
-			log.Printf("   ℹ️  Binary event message (type %d) - ignoring", headerType)
+		// Handle binary file (identifier 1)
+		if headerType == LoxoneMsgTypeBinary {
+			log.Printf("   ℹ️  Binary file message - ignoring")
 			return headerType, nil, nil
 		}
 
+		// Unknown message type
 		log.Printf("   ⚠️  Unknown binary message type: 0x%02X", headerType)
 		return headerType, nil, nil
 	}
 
+	// Handle text messages (no binary header)
 	if wsMessageType == websocket.TextMessage {
 		log.Printf("   ← Text message received: %d bytes", len(message))
+		
+		// Show hex dump for very short messages
+		if len(message) < 50 {
+			log.Printf("   🔍 Hex dump: % X", message)
+			log.Printf("   🔍 String: %q", string(message))
+		}
+		
 		jsonData = conn.extractJSON(message)
 		if jsonData == nil {
-			log.Printf("   ⚠️  Raw message: %s", string(message))
-			return 0, nil, fmt.Errorf("could not extract JSON from text message")
+			log.Printf("   ⚠️  Could not extract JSON from text message")
+			log.Printf("   🔍 Raw message: %q", string(message))
+			// Return nil data but no error - let the caller handle empty responses
+			return LoxoneMsgTypeText, nil, nil
 		}
 		return LoxoneMsgTypeText, jsonData, nil
 	}
@@ -981,11 +1031,19 @@ func (conn *LoxoneWebSocketConnection) extractJSON(message []byte) []byte {
 		return nil
 	}
 
+	// Try direct unmarshal first
 	var testJSON map[string]interface{}
 	if err := json.Unmarshal(message, &testJSON); err == nil {
 		return message
 	}
 
+	// For very short messages, they might be status codes or empty responses
+	if len(message) < 3 {
+		log.Printf("   🔍 Message too short to be JSON (%d bytes)", len(message))
+		return nil
+	}
+
+	// Look for JSON starting with '{'
 	if message[0] == '{' {
 		depth := 0
 		inString := false
@@ -1022,11 +1080,13 @@ func (conn *LoxoneWebSocketConnection) extractJSON(message []byte) []byte {
 			}
 		}
 
+		// Try the whole message
 		if json.Unmarshal(message, &testJSON) == nil {
 			return message
 		}
 	}
 
+	// Search for '{' in the first 100 bytes
 	for i := 0; i < len(message) && i < 100; i++ {
 		if message[i] == '{' {
 			depth := 0
@@ -1068,6 +1128,7 @@ func (conn *LoxoneWebSocketConnection) extractJSON(message []byte) []byte {
 		}
 	}
 
+	log.Printf("   🔍 No valid JSON found in message")
 	return nil
 }
 
@@ -1395,6 +1456,8 @@ func (conn *LoxoneWebSocketConnection) readLoop(db *sql.DB) {
 
 			select {
 			case readChan <- readResult{msgType, jsonData, err}:
+				// Small delay to prevent tight loop and allow responses to be processed
+				time.Sleep(10 * time.Millisecond)
 			default:
 				log.Printf("⚠️  [%s] Read channel full, dropping message", conn.Host)
 			}
@@ -1432,7 +1495,9 @@ func (conn *LoxoneWebSocketConnection) readLoop(db *sql.DB) {
 				return
 			}
 
+			// If jsonData is nil, it might be an empty response or keepalive ACK - just continue
 			if result.jsonData == nil {
+				log.Printf("   ℹ️  [%s] Empty response received (likely keepalive ACK or status message)", conn.Host)
 				continue
 			}
 
@@ -1442,6 +1507,7 @@ func (conn *LoxoneWebSocketConnection) readLoop(db *sql.DB) {
 			if err := json.Unmarshal(result.jsonData, &response); err != nil {
 				log.Printf("⚠️  [%s] Failed to parse JSON response: %v", conn.Host, err)
 				log.Printf("⚠️  Raw JSON (first 500 chars): %s", string(result.jsonData[:min(len(result.jsonData), 500)]))
+				// Don't disconnect on parse errors - just skip this message
 				continue
 			}
 
