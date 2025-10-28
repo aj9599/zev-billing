@@ -129,6 +129,12 @@ func (h *ChargerHandler) Create(w http.ResponseWriter, r *http.Request) {
 		log.Printf("New UDP charger created, restarting UDP listeners...")
 		go h.dataCollector.RestartUDPListeners()
 	}
+	
+	// If it's a Loxone API charger, restart Loxone connections
+	if c.ConnectionType == "loxone_api" {
+		log.Printf("New Loxone API charger created, restarting Loxone connections...")
+		go h.dataCollector.RestartUDPListeners() // This also restarts Loxone connections
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -171,6 +177,12 @@ func (h *ChargerHandler) Update(w http.ResponseWriter, r *http.Request) {
 		log.Printf("UDP charger updated, restarting UDP listeners...")
 		go h.dataCollector.RestartUDPListeners()
 	}
+	
+	// If it's a Loxone API charger, restart Loxone connections
+	if c.ConnectionType == "loxone_api" {
+		log.Printf("Loxone API charger updated, restarting Loxone connections...")
+		go h.dataCollector.RestartUDPListeners() // This also restarts Loxone connections
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(c)
@@ -184,7 +196,7 @@ func (h *ChargerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if it's a UDP charger
+	// Check if it's a UDP or Loxone API charger
 	var connectionType string
 	h.db.QueryRow("SELECT connection_type FROM chargers WHERE id = ?", id).Scan(&connectionType)
 
@@ -198,6 +210,12 @@ func (h *ChargerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if connectionType == "udp" {
 		log.Printf("UDP charger deleted, restarting UDP listeners...")
 		go h.dataCollector.RestartUDPListeners()
+	}
+	
+	// If it was a Loxone API charger, restart Loxone connections
+	if connectionType == "loxone_api" {
+		log.Printf("Loxone API charger deleted, restarting Loxone connections...")
+		go h.dataCollector.RestartUDPListeners() // This also restarts Loxone connections
 	}
 
 	w.WriteHeader(http.StatusNoContent)

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, HelpCircle, Info, Car, Download, Search, Building, Radio, Settings, Star } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, HelpCircle, Info, Car, Download, Search, Building, Radio, Settings, Star, Wifi, WifiOff, AlertCircle } from 'lucide-react';
 import { api } from '../api/client';
 import type { Charger, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
@@ -29,6 +29,14 @@ interface ChargerConnectionConfig {
   state_idle?: string;
   mode_normal?: string;
   mode_priority?: string;
+  // Loxone API fields
+  loxone_host?: string;
+  loxone_username?: string;
+  loxone_password?: string;
+  loxone_power_uuid?: string;
+  loxone_state_uuid?: string;
+  loxone_user_id_uuid?: string;
+  loxone_mode_uuid?: string;
 }
 
 interface ChargerSession {
@@ -38,11 +46,23 @@ interface ChargerSession {
   mode: string;
 }
 
+interface LoxoneConnectionStatus {
+  [chargerId: number]: {
+    charger_name: string;
+    host: string;
+    is_connected: boolean;
+    last_reading: number;
+    last_update: string;
+    last_error?: string;
+  };
+}
+
 export default function Chargers() {
   const { t } = useTranslation();
   const [chargers, setChargers] = useState<Charger[]>([]);
   const [buildings, setBuildings] = useState<BuildingType[]>([]);
   const [chargerSessions, setChargerSessions] = useState<Record<number, ChargerSession>>({});
+  const [loxoneStatus, setLoxoneStatus] = useState<LoxoneConnectionStatus>({});
   const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -51,7 +71,7 @@ export default function Chargers() {
   const [editingCharger, setEditingCharger] = useState<Charger | null>(null);
   const [formData, setFormData] = useState<Partial<Charger>>({
     name: '', brand: 'weidmuller', preset: 'weidmuller', building_id: 0,
-    connection_type: 'udp', connection_config: '{}',
+    connection_type: 'loxone_api', connection_config: '{}',
     notes: '', is_active: true
   });
   const [connectionConfig, setConnectionConfig] = useState<ChargerConnectionConfig>({
@@ -76,13 +96,25 @@ export default function Chargers() {
     state_charging: '67',
     state_idle: '50',
     mode_normal: '1',
-    mode_priority: '2'
+    mode_priority: '2',
+    loxone_host: '',
+    loxone_username: '',
+    loxone_password: '',
+    loxone_power_uuid: '',
+    loxone_state_uuid: '',
+    loxone_user_id_uuid: '',
+    loxone_mode_uuid: ''
   });
 
   useEffect(() => {
     loadData();
-    // Load charger sessions every 30 seconds
-    const interval = setInterval(loadChargerSessions, 30000);
+    fetchLoxoneStatus();
+    
+    // Poll for Loxone status and sessions every 30 seconds
+    const interval = setInterval(() => {
+      fetchLoxoneStatus();
+      loadChargerSessions();
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -96,10 +128,18 @@ export default function Chargers() {
     loadChargerSessions();
   };
 
+  const fetchLoxoneStatus = async () => {
+    try {
+      const debugData = await api.getDebugStatus();
+      if (debugData.loxone_charger_connections) {
+        setLoxoneStatus(debugData.loxone_charger_connections);
+      }
+    } catch (error) {
+      console.error('Failed to fetch Loxone charger status:', error);
+    }
+  };
+
   const loadChargerSessions = async () => {
-    // Load latest session data for each charger
-    // This would need to be implemented in the API
-    // For now, we'll use mock data structure
     try {
       const response = await fetch('/api/chargers/sessions/latest', {
         headers: {
@@ -176,7 +216,23 @@ export default function Chargers() {
 
     let config: ChargerConnectionConfig = {};
 
-    if (formData.connection_type === 'http') {
+    if (formData.connection_type === 'loxone_api') {
+      config = {
+        loxone_host: connectionConfig.loxone_host,
+        loxone_username: connectionConfig.loxone_username,
+        loxone_password: connectionConfig.loxone_password,
+        loxone_power_uuid: connectionConfig.loxone_power_uuid,
+        loxone_state_uuid: connectionConfig.loxone_state_uuid,
+        loxone_user_id_uuid: connectionConfig.loxone_user_id_uuid,
+        loxone_mode_uuid: connectionConfig.loxone_mode_uuid,
+        state_cable_locked: connectionConfig.state_cable_locked,
+        state_waiting_auth: connectionConfig.state_waiting_auth,
+        state_charging: connectionConfig.state_charging,
+        state_idle: connectionConfig.state_idle,
+        mode_normal: connectionConfig.mode_normal,
+        mode_priority: connectionConfig.mode_priority
+      };
+    } else if (formData.connection_type === 'http') {
       config = {
         power_endpoint: connectionConfig.power_endpoint,
         state_endpoint: connectionConfig.state_endpoint,
@@ -236,6 +292,8 @@ export default function Chargers() {
       setEditingCharger(null);
       resetForm();
       loadData();
+      // Refresh Loxone status after creating/updating
+      setTimeout(fetchLoxoneStatus, 2000);
     } catch (err) {
       alert(t('chargers.saveFailed'));
     }
@@ -246,6 +304,7 @@ export default function Chargers() {
       try {
         await api.deleteCharger(id);
         loadData();
+        fetchLoxoneStatus();
       } catch (err) {
         alert(t('chargers.deleteFailed'));
       }
@@ -282,7 +341,14 @@ export default function Chargers() {
         state_charging: config.state_charging || preset.defaultStateMappings.charging,
         state_idle: config.state_idle || preset.defaultStateMappings.idle,
         mode_normal: config.mode_normal || preset.defaultModeMappings.normal,
-        mode_priority: config.mode_priority || preset.defaultModeMappings.priority
+        mode_priority: config.mode_priority || preset.defaultModeMappings.priority,
+        loxone_host: config.loxone_host || '',
+        loxone_username: config.loxone_username || '',
+        loxone_password: config.loxone_password || '',
+        loxone_power_uuid: config.loxone_power_uuid || '',
+        loxone_state_uuid: config.loxone_state_uuid || '',
+        loxone_user_id_uuid: config.loxone_user_id_uuid || '',
+        loxone_mode_uuid: config.loxone_mode_uuid || ''
       });
     } catch (e) {
       console.error('Failed to parse config:', e);
@@ -337,7 +403,7 @@ export default function Chargers() {
     const preset = getPreset('weidmuller');
     setFormData({
       name: '', brand: 'weidmuller', preset: 'weidmuller', building_id: 0,
-      connection_type: 'udp', connection_config: '{}',
+      connection_type: 'loxone_api', connection_config: '{}',
       notes: '', is_active: true
     });
     setConnectionConfig({
@@ -362,7 +428,14 @@ export default function Chargers() {
       state_charging: preset.defaultStateMappings.charging,
       state_idle: preset.defaultStateMappings.idle,
       mode_normal: preset.defaultModeMappings.normal,
-      mode_priority: preset.defaultModeMappings.priority
+      mode_priority: preset.defaultModeMappings.priority,
+      loxone_host: '',
+      loxone_username: '',
+      loxone_password: '',
+      loxone_power_uuid: '',
+      loxone_state_uuid: '',
+      loxone_user_id_uuid: '',
+      loxone_mode_uuid: ''
     });
   };
 
@@ -392,6 +465,74 @@ export default function Chargers() {
       mode_normal: preset.defaultModeMappings.normal,
       mode_priority: preset.defaultModeMappings.priority
     });
+  };
+
+  const getLoxoneConnectionStatus = (chargerId: number) => {
+    return loxoneStatus[chargerId];
+  };
+
+  const renderConnectionStatus = (charger: Charger) => {
+    if (charger.connection_type === 'loxone_api') {
+      const status = getLoxoneConnectionStatus(charger.id);
+      if (status) {
+        return (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 12px',
+            backgroundColor: status.is_connected ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+            borderRadius: '8px',
+            marginTop: '12px'
+          }}>
+            {status.is_connected ? (
+              <>
+                <Wifi size={16} style={{ color: '#22c55e' }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#22c55e' }}>
+                    {t('chargers.loxoneConnected')}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
+                    {t('chargers.lastUpdate')}: {new Date(status.last_update).toLocaleTimeString()}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <WifiOff size={16} style={{ color: '#ef4444' }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#ef4444' }}>
+                    {t('chargers.loxoneDisconnected')}
+                  </div>
+                  {status.last_error && (
+                    <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
+                      {status.last_error}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        );
+      }
+      return (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '8px 12px',
+          backgroundColor: 'rgba(156, 163, 175, 0.1)',
+          borderRadius: '8px',
+          marginTop: '12px'
+        }}>
+          <Wifi size={16} style={{ color: '#9ca3af' }} />
+          <div style={{ fontSize: '12px', color: '#6b7280' }}>
+            {t('chargers.loxoneConnecting')}
+          </div>
+        </div>
+      );
+    }
+    return null;
   };
 
   const filteredBuildings = buildings.filter(b =>
@@ -426,7 +567,7 @@ export default function Chargers() {
         maxWidth: '800px', maxHeight: '90vh', overflow: 'auto', width: '100%'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>{t('chargers.setupInstructions')}</h2>
+          <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>{t('chargers.instructions.title')}</h2>
           <button onClick={() => setShowInstructions(false)}
             style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
             <X size={24} />
@@ -435,38 +576,96 @@ export default function Chargers() {
 
         <div style={{ lineHeight: '1.8', color: '#374151' }}>
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Car size={20} color="#667eea" />
-            {getCurrentPreset().label} {t('chargers.chargerSetup')}
+            <Wifi size={20} color="#10b981" />
+            {t('chargers.instructions.loxoneTitle')}
           </h3>
-          <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
-            <p><strong>{t('chargers.requiresFourDataPoints')}</strong></p>
-            <ul style={{ marginLeft: '20px', marginTop: '10px' }}>
-              <li><strong>{t('chargers.powerUuidPower')}:</strong> {t('chargers.powerDescription')}</li>
-              <li><strong>{t('chargers.stateUuidState')}:</strong> {t('chargers.stateDescription')}</li>
-              <li><strong>{t('chargers.userIdUuidUser')}:</strong> {t('chargers.userIdDescription')}</li>
-              <li><strong>{t('chargers.modeUuidMode')}:</strong> {t('chargers.modeDescription')}</li>
+          <div style={{ backgroundColor: '#d1fae5', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #10b981' }}>
+            <p style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <Star size={16} fill="#fbbf24" color="#fbbf24" />
+              <strong>{t('chargers.instructions.loxoneRecommended')}</strong>
+            </p>
+            
+            <h4 style={{ fontSize: '15px', fontWeight: '600', marginTop: '16px', marginBottom: '8px' }}>
+              {t('chargers.instructions.loxoneUuidTitle')}
+            </h4>
+            <p style={{ fontSize: '13px', marginBottom: '8px' }}>
+              {t('chargers.instructions.loxoneChargerRequires')}
+            </p>
+            <ul style={{ marginLeft: '20px', marginBottom: '12px', fontSize: '13px' }}>
+              <li><strong>{t('chargers.instructions.loxonePowerUuid')}</strong></li>
+              <li><strong>{t('chargers.instructions.loxoneStateUuid')}</strong></li>
+              <li><strong>{t('chargers.instructions.loxoneUserIdUuid')}</strong></li>
+              <li><strong>{t('chargers.instructions.loxoneModeUuid')}</strong></li>
             </ul>
+            
+            <h4 style={{ fontSize: '15px', fontWeight: '600', marginTop: '16px', marginBottom: '8px' }}>
+              {t('chargers.instructions.loxoneFindingUuid')}
+            </h4>
+            <ol style={{ marginLeft: '20px', marginBottom: '12px', fontSize: '13px' }}>
+              <li>{t('chargers.instructions.loxoneUuidStep1')}</li>
+              <li>{t('chargers.instructions.loxoneUuidStep2')}</li>
+              <li>{t('chargers.instructions.loxoneUuidStep3')}</li>
+              <li>{t('chargers.instructions.loxoneUuidStep4')}</li>
+            </ol>
+
+            <h4 style={{ fontSize: '15px', fontWeight: '600', marginTop: '16px', marginBottom: '8px' }}>
+              {t('chargers.instructions.loxoneSetupTitle')}
+            </h4>
+            <ol style={{ marginLeft: '20px', marginTop: '10px', fontSize: '13px' }}>
+              <li>{t('chargers.instructions.loxoneStep1')}</li>
+              <li>{t('chargers.instructions.loxoneStep2')}</li>
+              <li>{t('chargers.instructions.loxoneStep3')}</li>
+              <li>{t('chargers.instructions.loxoneStep4')}</li>
+              <li>{t('chargers.instructions.loxoneStep5')}</li>
+            </ol>
+            
+            <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '10px', fontFamily: 'monospace', fontSize: '12px' }}>
+              <strong>{t('chargers.instructions.loxoneExample')}</strong><br />
+              {t('chargers.instructions.loxoneExampleHost')}<br />
+              {t('chargers.instructions.loxoneExampleUuids')}<br />
+              {t('chargers.instructions.loxoneExampleCredentials')}<br /><br />
+              <strong>{t('chargers.instructions.loxoneBenefits')}</strong><br />
+              {t('chargers.instructions.loxoneBenefit1')}<br />
+              {t('chargers.instructions.loxoneBenefit2')}<br />
+              {t('chargers.instructions.loxoneBenefit3')}
+            </div>
           </div>
 
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Radio size={20} color="#3b82f6" />
-            {t('chargers.udpConnection')}
+            <Radio size={20} color="#f59e0b" />
+            {t('chargers.instructions.udpTitle')}
           </h3>
-          <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #3b82f6' }}>
+          <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #f59e0b' }}>
             <p style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Star size={16} fill="#fbbf24" color="#fbbf24" />
-              <strong>{t('chargers.autoGeneratedUuidKeys')}</strong>
+              <AlertCircle size={16} color="#f59e0b" />
+              <strong>{t('chargers.instructions.udpDeprecated')}</strong>
             </p>
-            <p style={{ marginTop: '10px' }}>{t('chargers.udpInstructions')}</p>
+            <p style={{ marginTop: '10px', fontSize: '13px' }}>{t('chargers.instructions.udpDescription')}</p>
           </div>
 
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Settings size={20} color="#6b7280" />
-            {t('chargers.stateAndModeValues')}
+            {t('chargers.instructions.stateAndModeTitle')}
           </h3>
-          <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '1px solid #f59e0b' }}>
-            <p><strong>{t('chargers.configureNumericValues')}</strong></p>
-            <p style={{ marginTop: '10px' }}>{t('chargers.valueMappingsDescription')}</p>
+          <div style={{ backgroundColor: '#f3f4f6', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
+            <p style={{ fontSize: '13px' }}><strong>{t('chargers.instructions.stateModeDescription')}</strong></p>
+            <p style={{ marginTop: '10px', fontSize: '13px' }}>{t('chargers.instructions.stateModeInfo')}</p>
+          </div>
+
+          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertCircle size={20} color="#f59e0b" />
+            {t('chargers.instructions.troubleshootingTitle')}
+          </h3>
+          <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', border: '1px solid #f59e0b' }}>
+            <ul style={{ marginLeft: '20px', fontSize: '13px' }}>
+              <li><strong>Loxone WebSocket:</strong> {t('chargers.instructions.troubleshootingLoxoneWebSocket')}</li>
+              <li><strong>Loxone WebSocket:</strong> {t('chargers.instructions.troubleshootingLoxoneAuth')}</li>
+              <li><strong>Loxone WebSocket:</strong> {t('chargers.instructions.troubleshootingLoxoneUuids')}</li>
+              <li>{t('chargers.instructions.troubleshootingService')} <code style={{ backgroundColor: '#fff', padding: '2px 6px', borderRadius: '4px' }}>sudo systemctl status zev-billing</code></li>
+              <li>{t('chargers.instructions.troubleshootingLogs')} <code style={{ backgroundColor: '#fff', padding: '2px 6px', borderRadius: '4px' }}>journalctl -u zev-billing -f</code></li>
+              <li>{t('chargers.instructions.troubleshootingNetwork')} <code style={{ backgroundColor: '#fff', padding: '2px 6px', borderRadius: '4px' }}>ping YOUR_LOXONE_IP</code></li>
+              <li>{t('chargers.instructions.troubleshootingMonitor')}</li>
+            </ul>
           </div>
         </div>
 
@@ -744,7 +943,7 @@ export default function Chargers() {
                           textTransform: 'uppercase',
                           letterSpacing: '0.5px'
                         }}>
-                          {charger.connection_type}
+                          {charger.connection_type === 'loxone_api' ? 'Loxone WebSocket' : charger.connection_type}
                         </span>
                       </div>
 
@@ -814,6 +1013,8 @@ export default function Chargers() {
                         </span>
                       </div>
                     </div>
+
+                    {renderConnectionStatus(charger)}
                   </div>
                 );
               })}
@@ -906,7 +1107,8 @@ export default function Chargers() {
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('meters.connectionType')} *</label>
                 <select required value={formData.connection_type} onChange={(e) => setFormData({ ...formData, connection_type: e.target.value })}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
-                  <option value="udp">{t('meters.udp')} ({t('common.recommended')})</option>
+                  <option value="loxone_api">{t('chargers.loxoneApiRecommended')}</option>
+                  <option value="udp">{t('chargers.udpAlternative')}</option>
                   <option value="http">{t('meters.http')}</option>
                   <option value="modbus_tcp">{t('meters.modbusTcp')}</option>
                 </select>
@@ -917,12 +1119,120 @@ export default function Chargers() {
                   {t('chargers.connectionConfig')}
                 </h3>
 
+                {formData.connection_type === 'loxone_api' && (
+                  <>
+                    <div style={{ backgroundColor: '#d1fae5', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #10b981', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Wifi size={16} color="#10b981" />
+                      <p style={{ fontSize: '13px', color: '#065f46', margin: 0 }}>
+                        <strong>{t('chargers.loxoneApiDescription')}</strong>
+                      </p>
+                    </div>
+                    
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                        {t('chargers.loxoneHost')} *
+                      </label>
+                      <input type="text" required value={connectionConfig.loxone_host || ''}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_host: e.target.value })}
+                        placeholder="192.168.1.100"
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                        {t('chargers.loxoneHostDescription')}
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('chargers.loxonePowerUuid')} *
+                        </label>
+                        <input type="text" required value={connectionConfig.loxone_power_uuid || ''}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_power_uuid: e.target.value })}
+                          placeholder="1a2b3c4d-..."
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('chargers.loxoneStateUuid')} *
+                        </label>
+                        <input type="text" required value={connectionConfig.loxone_state_uuid || ''}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_state_uuid: e.target.value })}
+                          placeholder="2b3c4d5e-..."
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('chargers.loxoneUserIdUuid')} *
+                        </label>
+                        <input type="text" required value={connectionConfig.loxone_user_id_uuid || ''}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_user_id_uuid: e.target.value })}
+                          placeholder="3c4d5e6f-..."
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('chargers.loxoneModeUuid')} *
+                        </label>
+                        <input type="text" required value={connectionConfig.loxone_mode_uuid || ''}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_mode_uuid: e.target.value })}
+                          placeholder="4d5e6f7g-..."
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} />
+                      </div>
+                    </div>
+
+                    <p style={{ fontSize: '11px', color: '#666', marginBottom: '12px' }}>
+                      {t('chargers.loxoneUuidsDescription')}
+                    </p>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('chargers.loxoneUsername')} *
+                        </label>
+                        <input type="text" required value={connectionConfig.loxone_username || ''}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_username: e.target.value })}
+                          placeholder="admin"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('chargers.loxonePassword')} *
+                        </label>
+                        <input type="password" required value={connectionConfig.loxone_password || ''}
+                          onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_password: e.target.value })}
+                          placeholder="••••••••"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      </div>
+                    </div>
+                    <p style={{ fontSize: '11px', color: '#666', marginBottom: '12px' }}>
+                      {t('chargers.loxoneCredentialsDescription')}
+                    </p>
+
+                    <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '12px', fontFamily: 'monospace', fontSize: '12px', border: '1px solid #e5e7eb' }}>
+                      <strong>{t('chargers.loxoneSetupGuide')}</strong><br />
+                      {t('chargers.loxoneSetupStep1')}<br />
+                      {t('chargers.loxoneSetupStep2')}<br />
+                      {t('chargers.loxoneSetupStep3')}<br />
+                      {t('chargers.loxoneSetupStep4')}<br /><br />
+                      <div style={{ backgroundColor: '#d1fae5', padding: '8px', borderRadius: '4px', fontSize: '11px', color: '#065f46' }}>
+                        <strong>{t('chargers.loxoneFeatures')}</strong><br />
+                        {t('chargers.loxoneFeature1')}<br />
+                        {t('chargers.loxoneFeature2')}<br />
+                        {t('chargers.loxoneFeature3')}
+                      </div>
+                    </div>
+                  </>
+                )}
+
                 {formData.connection_type === 'udp' && (
                   <>
-                    <div style={{ backgroundColor: '#dbeafe', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #3b82f6', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Star size={16} fill="#fbbf24" color="#fbbf24" />
-                      <p style={{ fontSize: '13px', color: '#1e40af', margin: 0 }}>
-                        <strong>{editingCharger ? t('chargers.existingUuidKeys') : t('chargers.autoGeneratedUuidKeys')}</strong>
+                    <div style={{ backgroundColor: '#fef3c7', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #f59e0b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <AlertCircle size={16} color="#f59e0b" />
+                      <p style={{ fontSize: '13px', color: '#92400e', margin: 0 }}>
+                        <strong>{editingCharger ? t('chargers.existingUuidKeys') : t('chargers.udpDeprecatedWarning')}</strong>
                       </p>
                     </div>
                     <div style={{ marginBottom: '12px' }}>

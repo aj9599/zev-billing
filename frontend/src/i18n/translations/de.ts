@@ -406,6 +406,98 @@ export const de: Translations = {
   'meters.instructions.troubleshootingHttpAuth': 'Überprüfen Sie HTTP-Zugangsdaten, falls Authentifizierung aktiviert ist',
   'meters.instructions.troubleshootingHttpMeterId': 'Überprüfen Sie, dass die Zähler-ID im URL-Pfad mit Ihrer Loxone-Konfiguration übereinstimmt',
 
+
+  // Connection types
+  'chargers.loxoneApiRecommended': 'Loxone WebSocket API (Empfohlen)',
+  'chargers.udpAlternative': 'UDP (Veraltet)',
+  
+  // Loxone configuration
+  'chargers.loxoneApiDescription': 'Echtzeit-WebSocket-Verbindung mit automatischer Wiederverbindung und Statusüberwachung',
+  'chargers.loxoneHost': 'Loxone Host (IP-Adresse)',
+  'chargers.loxoneHostDescription': 'IP-Adresse oder Hostname Ihres Loxone Miniservers',
+  'chargers.loxoneUsername': 'Benutzername',
+  'chargers.loxonePassword': 'Passwort',
+  'chargers.loxoneCredentialsDescription': 'Loxone Miniserver Anmeldedaten für WebSocket-Authentifizierung',
+  
+  // UUID fields
+  'chargers.loxonePowerUuid': 'Leistungs-UUID',
+  'chargers.loxoneStateUuid': 'Status-UUID',
+  'chargers.loxoneUserIdUuid': 'Benutzer-ID UUID',
+  'chargers.loxoneModeUuid': 'Modus-UUID',
+  'chargers.loxoneUuidsDescription': 'Diese UUIDs finden Sie in Loxone Config oder in der LoxAPP3.json Strukturdatei',
+  
+  // Connection status
+  'chargers.loxoneConnected': 'Loxone Verbunden',
+  'chargers.loxoneDisconnected': 'Loxone Getrennt',
+  'chargers.loxoneConnecting': 'Verbindung zu Loxone...',
+  'chargers.lastUpdate': 'Letztes Update',
+  
+  // Setup guide
+  'chargers.loxoneSetupGuide': 'Schnellstart-Anleitung:',
+  'chargers.loxoneSetupStep1': '1. Geben Sie die IP-Adresse Ihres Loxone Miniservers ein',
+  'chargers.loxoneSetupStep2': '2. Geben Sie die 4 UUIDs für Leistung, Status, Benutzer-ID und Modus ein',
+  'chargers.loxoneSetupStep3': '3. Geben Sie die Loxone-Anmeldedaten ein (wie bei Loxone Config)',
+  'chargers.loxoneSetupStep4': '4. Konfigurieren Sie die Werte-Zuordnungen für Status und Modus unten',
+  
+  // Features
+  'chargers.loxoneFeatures': 'Hauptmerkmale:',
+  'chargers.loxoneFeature1': '✓ Echtzeit bidirektionale Kommunikation',
+  'chargers.loxoneFeature2': '✓ Automatische Wiederverbindung bei Verbindungsverlust',
+  'chargers.loxoneFeature3': '✓ Verbindungsstatus-Überwachung',
+  
+  // Instructions modal
+  'chargers.instructions.title': 'Ladestation Einrichtungsanleitung',
+  'chargers.instructions.loxoneTitle': 'Loxone WebSocket API Verbindung',
+  'chargers.instructions.loxoneRecommended': 'Empfohlen: Beste Leistung und Zuverlässigkeit',
+  'chargers.instructions.loxoneChargerRequires': 'Jede Ladestation benötigt 4 separate UUIDs aus Ihrem Loxone-System:',
+  'chargers.instructions.loxonePowerUuid': 'Leistungs-UUID - Aktueller Stromverbrauchswert',
+  'chargers.instructions.loxoneStateUuid': 'Status-UUID - Ladestationsstatus (Kabel verriegelt, lädt, Leerlauf, etc.)',
+  'chargers.instructions.loxoneUserIdUuid': 'Benutzer-ID UUID - Authentifizierte Benutzerkennung',
+  'chargers.instructions.loxoneModeUuid': 'Modus-UUID - Lademodus (Normal oder Priorität)',
+  
+  'chargers.instructions.loxoneFindingUuid': 'So finden Sie UUIDs:',
+  'chargers.instructions.loxoneUuidStep1': '1. Öffnen Sie Loxone Config und verbinden Sie sich mit Ihrem Miniserver',
+  'chargers.instructions.loxoneUuidStep2': '2. Finden Sie die virtuellen Ausgänge Ihrer Ladestation in der Programmierung',
+  'chargers.instructions.loxoneUuidStep3': '3. Rechtsklick auf jeden Ausgang und wählen Sie "UUID kopieren"',
+  'chargers.instructions.loxoneUuidStep4': '4. Alternativ öffnen Sie http://IHRE_MINISERVER_IP/data/LoxAPP3.json um alle UUIDs zu sehen',
+  
+  'chargers.instructions.loxoneSetupTitle': 'Konfigurationsschritte:',
+  'chargers.instructions.loxoneStep1': '1. Wählen Sie "Loxone WebSocket API" als Verbindungstyp',
+  'chargers.instructions.loxoneStep2': '2. Geben Sie die IP-Adresse Ihres Miniservers ein (z.B. 192.168.1.100)',
+  'chargers.instructions.loxoneStep3': '3. Fügen Sie die 4 UUIDs für Leistung, Status, Benutzer-ID und Modus ein',
+  'chargers.instructions.loxoneStep4': '4. Geben Sie Ihren Loxone Benutzernamen und Passwort ein',
+  'chargers.instructions.loxoneStep5': '5. Konfigurieren Sie die Werte-Zuordnungen für Status und Modus basierend auf Ihrer Ladestation',
+  
+  'chargers.instructions.loxoneExample': 'Beispiel-Konfiguration:',
+  'chargers.instructions.loxoneExampleHost': 'Host: 192.168.1.100',
+  'chargers.instructions.loxoneExampleUuids': 'UUIDs: 4 separate UUIDs für Leistung, Status, Benutzer-ID und Modus',
+  'chargers.instructions.loxoneExampleCredentials': 'Benutzername/Passwort: Ihre Loxone Config Anmeldedaten',
+  
+  'chargers.instructions.loxoneBenefits': 'Vorteile:',
+  'chargers.instructions.loxoneBenefit1': '✓ Echtzeit-Updates via WebSocket',
+  'chargers.instructions.loxoneBenefit2': '✓ Automatische Wiederverbindung bei Verbindungsverlust',
+  'chargers.instructions.loxoneBenefit3': '✓ Live-Verbindungsstatus-Überwachung',
+  
+  'chargers.instructions.udpTitle': 'UDP-Verbindung (Veraltet)',
+  'chargers.instructions.udpDeprecated': 'UDP ist veraltet. Verwenden Sie Loxone WebSocket API für bessere Zuverlässigkeit.',
+  'chargers.instructions.udpDescription': 'UDP-Verbindung erfordert eindeutige automatisch generierte Schlüssel für jede Ladestation. Nicht empfohlen für neue Installationen.',
+  
+  'chargers.instructions.stateAndModeTitle': 'Status- und Modus-Werte-Zuordnungen',
+  'chargers.instructions.stateModeDescription': 'Konfigurieren Sie die numerischen Werte, die Ihre Ladestation für verschiedene Zustände und Modi verwendet',
+  'chargers.instructions.stateModeInfo': 'Diese Werte sind spezifisch für Ihre Ladestationsmarke. Prüfen Sie die Dokumentation Ihrer Ladestation oder verwenden Sie die Voreinstellungs-Standardwerte.',
+  
+  'chargers.instructions.troubleshootingTitle': 'Fehlerbehebung',
+  'chargers.instructions.troubleshootingLoxoneWebSocket': 'Überprüfen Sie, ob die Miniserver-IP erreichbar ist und WebSocket aktiviert ist',
+  'chargers.instructions.troubleshootingLoxoneAuth': 'Prüfen Sie, ob Benutzername/Passwort korrekt sind (wie bei Loxone Config)',
+  'chargers.instructions.troubleshootingLoxoneUuids': 'Überprüfen Sie, ob alle 4 UUIDs korrekt sind und in Ihrer Loxone-Konfiguration existieren',
+  'chargers.instructions.troubleshootingService': 'Service-Protokolle prüfen:',
+  'chargers.instructions.troubleshootingLogs': 'Echtzeit-Protokolle anzeigen:',
+  'chargers.instructions.troubleshootingNetwork': 'Netzwerkkonnektivität testen:',
+  'chargers.instructions.troubleshootingMonitor': 'Überwachen Sie die Verbindungsstatusanzeigen auf jeder Ladestationskarte',
+  
+  // Warnings
+  'chargers.udpDeprecatedWarning': 'UDP-Verbindung ist veraltet. Erwägen Sie die Migration zu Loxone WebSocket API.',
+
   // Chargers
   'chargers.title': 'Ladestationen',
   'chargers.subtitle': 'E-Fahrzeug Ladeinfrastruktur verwalten',
