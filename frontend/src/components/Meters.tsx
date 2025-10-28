@@ -48,7 +48,7 @@ export default function Meters() {
   const [loxoneStatus, setLoxoneStatus] = useState<LoxoneConnectionStatus>({});
   const [formData, setFormData] = useState<Partial<Meter>>({
     name: '', meter_type: 'total_meter', building_id: 0, user_id: undefined,
-    connection_type: 'udp', connection_config: '{}', notes: '', is_active: true
+    connection_type: 'loxone_api', connection_config: '{}', notes: '', is_active: true
   });
   const [connectionConfig, setConnectionConfig] = useState<ConnectionConfig>({
     endpoint: '',
@@ -264,7 +264,7 @@ export default function Meters() {
   const resetForm = () => {
     setFormData({
       name: '', meter_type: 'total_meter', building_id: 0, user_id: undefined,
-      connection_type: 'udp', connection_config: '{}', notes: '', is_active: true
+      connection_type: 'loxone_api', connection_config: '{}', notes: '', is_active: true
     });
     setConnectionConfig({
       endpoint: '',
@@ -415,10 +415,29 @@ export default function Meters() {
             {t('meters.instructions.loxoneTitle')}
           </h3>
           <div style={{ backgroundColor: '#d1fae5', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #10b981' }}>
-            <p style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <p style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
               <Star size={16} fill="#fbbf24" color="#fbbf24" />
               <strong>{t('meters.instructions.loxoneRecommended')}</strong>
             </p>
+            
+            <h4 style={{ fontSize: '15px', fontWeight: '600', marginTop: '16px', marginBottom: '8px' }}>
+              {t('meters.instructions.loxoneUuidTitle')}
+            </h4>
+            <ol style={{ marginLeft: '20px', marginBottom: '12px' }}>
+              <li>{t('meters.instructions.loxoneUuidStep1')}</li>
+              <li>{t('meters.instructions.loxoneUuidStep2')}</li>
+              <li>{t('meters.instructions.loxoneUuidStep3')}</li>
+              <li>{t('meters.instructions.loxoneUuidStep4')}</li>
+            </ol>
+            
+            <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginBottom: '12px', fontFamily: 'monospace', fontSize: '13px' }}>
+              <strong>{t('meters.instructions.loxoneUuidExample')}</strong><br />
+              http://192.168.1.100/data/LoxAPP3.json
+            </div>
+
+            <h4 style={{ fontSize: '15px', fontWeight: '600', marginTop: '16px', marginBottom: '8px' }}>
+              {t('meters.instructions.loxoneSetupTitle')}
+            </h4>
             <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
               <li>{t('meters.instructions.loxoneStep1')}</li>
               <li>{t('meters.instructions.loxoneStep2')}</li>
@@ -426,6 +445,7 @@ export default function Meters() {
               <li>{t('meters.instructions.loxoneStep4')}</li>
               <li>{t('meters.instructions.loxoneStep5')}</li>
             </ol>
+            
             <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '10px', fontFamily: 'monospace', fontSize: '13px' }}>
               <strong>{t('meters.instructions.loxoneExample')}</strong><br />
               {t('meters.instructions.loxoneExampleHost')}<br />
@@ -436,47 +456,6 @@ export default function Meters() {
               {t('meters.instructions.loxoneBenefit2')}<br />
               {t('meters.instructions.loxoneBenefit3')}
             </div>
-          </div>
-
-          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Plug size={20} color="#3b82f6" />
-            {t('meters.instructions.httpTitle')}
-          </h3>
-          <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #3b82f6' }}>
-            <p style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Star size={16} fill="#fbbf24" color="#fbbf24" />
-              <strong>{t('meters.instructions.httpNew')}</strong>
-            </p>
-            <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
-              <li>{t('meters.instructions.httpStep1')}</li>
-              <li>{t('meters.instructions.httpStep2')}</li>
-              <li>{t('meters.instructions.httpStep3')}</li>
-              <li>{t('meters.instructions.httpStep4')}</li>
-              <li>{t('meters.instructions.httpStep5')}</li>
-              <li>{t('meters.instructions.httpStep6')}</li>
-            </ol>
-            <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '10px', fontFamily: 'monospace', fontSize: '13px' }}>
-              <strong>{t('meters.instructions.httpExampleTitle')}</strong><br />
-              {t('meters.instructions.httpExampleMeterName')}<br />
-              {t('meters.instructions.httpExampleBaseUrl')}<br />
-              {t('meters.instructions.httpExampleMeterId')}<br />
-              {t('meters.instructions.httpExampleUsername')}<br />
-              {t('meters.instructions.httpExamplePassword')}<br />
-              {t('meters.instructions.httpExamplePowerField')}<br /><br />
-
-              <strong>{t('meters.instructions.httpLoxoneSetup')}</strong><br />
-              {t('meters.instructions.httpLoxoneAddress')}<br />
-              {t('meters.instructions.httpLoxoneCommand')}<br />
-              {t('meters.instructions.httpLoxoneResponse')}<br /><br />
-
-              <strong>{t('meters.instructions.httpHowItWorks')}</strong><br />
-              {t('meters.instructions.httpPollingExplained')}<br />
-              {t('meters.instructions.httpRequestFormat')}<br />
-              {t('meters.instructions.httpResponseFormat')}
-            </div>
-            <p style={{ marginTop: '10px', fontSize: '14px', color: '#1f2937' }}>
-              <strong>{t('meters.instructions.httpBenefits')}</strong> {t('meters.instructions.httpBenefitsDesc')}
-            </p>
           </div>
 
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -534,7 +513,6 @@ export default function Meters() {
               <li>{t('meters.instructions.testingPoint2')}</li>
               <li>{t('meters.instructions.testingPoint3')}</li>
               <li>{t('meters.instructions.testingPoint4')}</li>
-              <li>{t('meters.instructions.testingHttpAuth')}</li>
             </ul>
           </div>
 
@@ -547,9 +525,6 @@ export default function Meters() {
               <li><strong>Loxone WebSocket:</strong> {t('meters.instructions.troubleshootingLoxoneWebSocket')}</li>
               <li><strong>Loxone WebSocket:</strong> {t('meters.instructions.troubleshootingLoxoneAuth')}</li>
               <li><strong>Loxone WebSocket:</strong> {t('meters.instructions.troubleshootingLoxoneDevice')}</li>
-              <li><strong>HTTP:</strong> {t('meters.instructions.troubleshootingHttpAccess')}</li>
-              <li><strong>HTTP:</strong> {t('meters.instructions.troubleshootingHttpAuth')}</li>
-              <li><strong>HTTP:</strong> {t('meters.instructions.troubleshootingHttpMeterId')}</li>
               <li>{t('meters.instructions.troubleshootingService')} <code style={{ backgroundColor: '#fff', padding: '2px 6px', borderRadius: '4px' }}>sudo systemctl status zev-billing</code></li>
               <li>{t('meters.instructions.troubleshootingLogs')} <code style={{ backgroundColor: '#fff', padding: '2px 6px', borderRadius: '4px' }}>journalctl -u zev-billing -f</code></li>
               <li>{t('meters.instructions.troubleshootingNetwork')} <code style={{ backgroundColor: '#fff', padding: '2px 6px', borderRadius: '4px' }}>ping YOUR_LOXONE_IP</code></li>
