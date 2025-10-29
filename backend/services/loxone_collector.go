@@ -1283,19 +1283,19 @@ func (conn *LoxoneWebSocketConnection) monitorTokenExpiry(db *sql.DB) {
 					if conn.ws != nil {
 						conn.ws.Close()
 					}
+					isShuttingDown := conn.isShuttingDown
 					conn.mu.Unlock()
 
-		isShuttingDown := conn.isShuttingDown
 
 					conn.updateDeviceStatus(db, "ðŸ”„ Auth failed, reconnecting...")
 
 					// Only trigger reconnect if not shutting down
-		if !isShuttingDown {
-			log.Printf("🔄 [%s] Triggering automatic reconnect", conn.Host)
-			go conn.ConnectWithBackoff(db)
-		} else {
-			log.Printf("ℹ️  [%s] Not reconnecting - connection is shutting down", conn.Host)
-		}
+					if !isShuttingDown {
+						log.Printf("🔄 [%s] Triggering automatic reconnect", conn.Host)
+						go conn.ConnectWithBackoff(db)
+					} else {
+						log.Printf("ℹ️  [%s] Not reconnecting - connection is shutting down", conn.Host)
+					}
 					return
 				}
 
@@ -1348,8 +1348,7 @@ func (conn *LoxoneWebSocketConnection) requestData() {
 			conn.mu.Lock()
 			conn.isConnected = false
 			conn.tokenValid = false
-		isShuttingDown := conn.isShuttingDown
-		conn.mu.Unlock()
+			conn.mu.Unlock()
 
 			go conn.ConnectWithBackoff(conn.db)
 			return
@@ -1477,8 +1476,6 @@ func (conn *LoxoneWebSocketConnection) readLoop(db *sql.DB) {
 		conn.tokenValid = false
 		isShuttingDown := conn.isShuttingDown
 		conn.mu.Unlock()
-
-		isShuttingDown := conn.isShuttingDown
 
 		log.Printf("ðŸ”´ [%s] DISCONNECTED from Loxone", conn.Host)
 
@@ -1968,8 +1965,7 @@ func (conn *LoxoneWebSocketConnection) Close() {
 	}
 	conn.isConnected = false
 	conn.tokenValid = false
-		isShuttingDown := conn.isShuttingDown
-		conn.mu.Unlock()
+	conn.mu.Unlock()
 	
 	// Wait for all goroutines to finish
 	log.Printf("   â³ Waiting for goroutines to finish...")
