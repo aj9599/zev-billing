@@ -767,7 +767,7 @@ export const de: Translations = {
   'pricing.validTo': 'Gültig bis',
   'pricing.activeUseForBilling': 'Aktiv (für Abrechnung verwenden)',
   'pricing.noPricing': 'Keine Preise konfiguriert. Fügen Sie Ihren ersten Preis hinzu.',
-  'pricing.normalKwh': 'Solar kWh',
+  'pricing.normalKwh': 'Normal kWh',
   'pricing.solarKwh': 'Solar kWh',
   'pricing.ongoing': 'laufend',
   'pricing.to': 'bis',
