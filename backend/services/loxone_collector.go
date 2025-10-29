@@ -615,34 +615,117 @@ func (lc *LoxoneCollector) logToDatabase(action, details string) {
 // CRITICAL: ensureAuth - Check auth health before any operation
 func (conn *LoxoneWebSocketConnection) ensureAuth() error {
 	conn.mu.Lock()
-	defer conn.mu.Unlock()
-
+	
 	// Check if we're connected
 	if conn.ws == nil || !conn.isConnected {
+		conn.mu.Unlock()
 		return fmt.Errorf("not connected")
 	}
 
 	// Check token validity with 30-second safety margin
-	if !conn.tokenValid || time.Now().After(conn.tokenExpiry.Add(-30*time.Second)) {
-		log.Printf("⚠️  [%s] Token invalid or expiring soon, re-authenticating...", conn.Host)
+	tokenNeedsRefresh := !conn.tokenValid || time.Now().After(conn.tokenExpiry.Add(-30*time.Second))
+	hasToken := conn.token != ""
+	tokenStillValid := conn.tokenValid
+	
+	if tokenNeedsRefresh {
+		// If we have a token AND it's still marked as valid (just expiring soon), try fast refresh first
+		if hasToken && tokenStillValid {
+			log.Printf("🔄 [%s] Token expiring soon, attempting fast refresh...", conn.Host)
+			
+			// Release lock during token refresh
+			conn.mu.Unlock()
+			err := conn.refreshToken()
+			
+			if err == nil {
+				log.Printf("✅ [%s] Token refresh successful", conn.Host)
+				return nil
+			}
+			
+			log.Printf("⚠️  [%s] Token refresh failed: %v, falling back to full re-auth", conn.Host, err)
+		} else {
+			log.Printf("⚠️  [%s] Token invalid or missing, performing full re-authentication...", conn.Host)
+			conn.mu.Unlock()
+		}
 
-		// Release lock during authentication
-		conn.mu.Unlock()
+		// Token refresh failed or token was invalid - do full re-authentication
 		err := conn.authenticateWithToken()
-		conn.mu.Lock()
 
+		conn.mu.Lock()
 		if err != nil {
 			conn.tokenValid = false
 			conn.consecutiveAuthFails++
 			conn.totalAuthFailures++
 			conn.lastError = fmt.Sprintf("Auth failed: %v", err)
+			conn.mu.Unlock()
 			log.Printf("❌ [%s] Re-authentication failed: %v", conn.Host, err)
 			return fmt.Errorf("authentication failed: %v", err)
 		}
 
 		log.Printf("✅ [%s] Re-authentication successful", conn.Host)
+		conn.mu.Unlock()
+		return nil
 	}
 
+	conn.mu.Unlock()
+	return nil
+}
+
+// refreshToken uses an existing token to refresh the session (fast refresh)
+func (conn *LoxoneWebSocketConnection) refreshToken() error {
+	log.Printf("🔄 TOKEN REFRESH - Using existing token")
+	
+	// Use jdev/sys/fenc/{token} to refresh/authenticate with existing token
+	authCmd := fmt.Sprintf("jdev/sys/fenc/%s", conn.token)
+	log.Printf("   → Sending: jdev/sys/fenc/***")
+	
+	if err := conn.ws.WriteMessage(websocket.TextMessage, []byte(authCmd)); err != nil {
+		return fmt.Errorf("failed to send token refresh: %v", err)
+	}
+	
+	// Read the refresh response
+	msgType, jsonData, err := conn.readLoxoneMessage()
+	if err != nil {
+		return fmt.Errorf("failed to read refresh response: %v", err)
+	}
+	if jsonData == nil {
+		return fmt.Errorf("no JSON data in refresh response")
+	}
+	
+	log.Printf("   ← Received refresh response (type %d)", msgType)
+	
+	var refreshResp struct {
+		LL struct {
+			Control string `json:"control"`
+			Code    string `json:"code"`
+			Value   struct {
+				ValidUntil int64 `json:"validUntil"`
+			} `json:"value"`
+		} `json:"LL"`
+	}
+	
+	if err := json.Unmarshal(jsonData, &refreshResp); err != nil {
+		return fmt.Errorf("failed to parse refresh response: %v", err)
+	}
+	
+	log.Printf("   ← Refresh response code: %s", refreshResp.LL.Code)
+	
+	if refreshResp.LL.Code != "200" {
+		return fmt.Errorf("token refresh failed with code: %s", refreshResp.LL.Code)
+	}
+	
+	// Update token expiry
+	newTokenValidTime := loxoneEpoch.Add(time.Duration(refreshResp.LL.Value.ValidUntil) * time.Second)
+	
+	conn.mu.Lock()
+	conn.tokenValid = true
+	conn.tokenExpiry = newTokenValidTime
+	conn.lastSuccessfulAuth = time.Now()
+	conn.mu.Unlock()
+	
+	log.Printf("   ✅ Token refreshed successfully")
+	log.Printf("   New expiry: %v", newTokenValidTime.Format("2006-01-02 15:04:05"))
+	log.Printf("   Token valid for: %.1f hours", time.Until(newTokenValidTime).Hours())
+	
 	return nil
 }
 
@@ -1129,47 +1212,12 @@ func (conn *LoxoneWebSocketConnection) authenticateWithToken() error {
 		log.Printf("   ⚠️  WARNING: Unsecure password flag is set")
 	}
 
-	// CRITICAL FIX: Step 5 - Actually use the token to authenticate the session!
-	log.Printf("🔐 TOKEN AUTHENTICATION - Step 5: Authenticate session with token")
+	// Store the token - the session is now authenticated!
+	// Note: jdev/sys/fenc/{token} is ONLY used for:
+	// 1. Refreshing an existing token that's about to expire
+	// 2. Authenticating with a previously saved token on reconnection
+	// After gettoken, the session is already authenticated and ready to use.
 	
-	authCmd := fmt.Sprintf("jdev/sys/fenc/%s", tokenData.Token)
-	log.Printf("   → Sending: %s", authCmd)
-	
-	if err := conn.ws.WriteMessage(websocket.TextMessage, []byte(authCmd)); err != nil {
-		return fmt.Errorf("failed to send token auth: %v", err)
-	}
-	
-	// Read the authentication response
-	msgType, jsonData, err = conn.readLoxoneMessage()
-	if err != nil {
-		return fmt.Errorf("failed to read auth response: %v", err)
-	}
-	if jsonData == nil {
-		return fmt.Errorf("no JSON data in auth response")
-	}
-	
-	log.Printf("   ← Received auth response (type %d)", msgType)
-	
-	var authResp struct {
-		LL struct {
-			Control string `json:"control"`
-			Code    string `json:"code"`
-			Value   string `json:"value"`
-		} `json:"LL"`
-	}
-	
-	if err := json.Unmarshal(jsonData, &authResp); err != nil {
-		return fmt.Errorf("failed to parse auth response: %v", err)
-	}
-	
-	log.Printf("   ← Auth response code: %s", authResp.LL.Code)
-	
-	if authResp.LL.Code != "200" {
-		return fmt.Errorf("token authentication failed with code: %s", authResp.LL.Code)
-	}
-	
-	log.Printf("   ✅ Session authenticated with token!")
-
 	conn.mu.Lock()
 	conn.token = tokenData.Token
 	conn.tokenValid = true
@@ -1177,6 +1225,7 @@ func (conn *LoxoneWebSocketConnection) authenticateWithToken() error {
 	conn.mu.Unlock()
 
 	log.Printf("   ✅ AUTHENTICATION SUCCESSFUL!")
+	log.Printf("   Session is now authenticated and ready")
 	log.Printf("   Token valid for: %.1f hours", time.Until(tokenValidTime).Hours())
 
 	return nil
