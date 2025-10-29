@@ -559,6 +559,7 @@ func (lc *LoxoneCollector) GetConnectionStatus() map[string]interface{} {
 
 			if device.Type == "meter" {
 				meterStatus[device.ID] = map[string]interface{}{
+					"device_id": 			  device.DeviceID,
 					"meter_name":             device.Name,
 					"host":                   conn.Host,
 					"is_connected":           conn.isConnected,
@@ -575,6 +576,10 @@ func (lc *LoxoneCollector) GetConnectionStatus() map[string]interface{} {
 				}
 			} else if device.Type == "charger" {
 				chargerStatus[device.ID] = map[string]interface{}{
+					"power_uuid":   		  device.PowerUUID,
+					"state_uuid":   		  device.StateUUID,
+					"user_id_uuid": 		  device.UserIDUUID,
+					"mode_uuid":    		  device.ModeUUID,
 					"charger_name":           device.Name,
 					"host":                   conn.Host,
 					"is_connected":           conn.isConnected,

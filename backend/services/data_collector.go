@@ -304,7 +304,7 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 	// Get Loxone connection status
 	loxoneStatus := dc.loxoneCollector.GetConnectionStatus()
 
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"active_meters":           activeMeters,
 		"total_meters":            totalMeters,
 		"active_chargers":         activeChargers,
@@ -319,6 +319,13 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 		"partial_charger_data":    partialStatus,
 		"collection_mode":         "HTTP Polling + UDP Monitoring + Loxone WebSocket",
 	}
+   
+	// Merge loxone status directly to avoid double-nesting
+	for key, value := range loxoneStatus {
+		result[key] = value
+	}
+	
+	return result
 }
 
 func (dc *DataCollector) initializeUDPListeners() {
