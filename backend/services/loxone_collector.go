@@ -309,12 +309,12 @@ func (lc *LoxoneCollector) initializeConnections() {
 					devices:          []*LoxoneDevice{},
 					stopChan:         make(chan bool),
 					db:               lc.db,
-					reconnectBackoff: 1 * time.Second,
+					reconnectBackoff: 2 * time.Second,
 					maxBackoff:       30 * time.Second,
 					isShuttingDown:   false,
 				}
 				connectionDevices[connKey] = conn
-				log.Printf("   🔡 Created new WebSocket connection for %s", host)
+				log.Printf("   📡 Created new WebSocket connection for %s", host)
 			} else {
 				log.Printf("   ♻️  Reusing existing WebSocket connection for %s", host)
 			}
@@ -398,12 +398,12 @@ func (lc *LoxoneCollector) initializeConnections() {
 					devices:          []*LoxoneDevice{},
 					stopChan:         make(chan bool),
 					db:               lc.db,
-					reconnectBackoff: 1 * time.Second,
+					reconnectBackoff: 2 * time.Second,
 					maxBackoff:       30 * time.Second,
 					isShuttingDown:   false,
 				}
 				connectionDevices[connKey] = conn
-				log.Printf("   🔡 Created new WebSocket connection for %s", host)
+				log.Printf("   📡 Created new WebSocket connection for %s", host)
 			} else {
 				log.Printf("   ♻️  Reusing existing WebSocket connection for %s", host)
 			}
@@ -746,7 +746,7 @@ func (conn *LoxoneWebSocketConnection) Connect(db *sql.DB) {
 	conn.ConnectWithBackoff(db)
 }
 
-// ConnectWithBackoff - Connect with exponential backoff and jitter
+// ConnectWithBackoff - Connect with exponential backoff and jitter, with retry loop
 func (conn *LoxoneWebSocketConnection) ConnectWithBackoff(db *sql.DB) {
 	conn.mu.Lock()
 	
@@ -795,63 +795,114 @@ func (conn *LoxoneWebSocketConnection) ConnectWithBackoff(db *sql.DB) {
 	// Wait for existing goroutines to finish
 	conn.goroutinesWg.Wait()
 
-	// Apply backoff with jitter
-	conn.mu.Lock()
-	backoff := conn.reconnectBackoff
-	conn.mu.Unlock()
-	
-	if backoff > 1*time.Second {
-		jitter := time.Duration(rand.Float64() * float64(backoff) * 0.3)
-		backoffWithJitter := backoff + jitter
-		log.Printf("⏳ [%s] Waiting %.1fs (backoff with jitter) before reconnect attempt...",
-			conn.Host, backoffWithJitter.Seconds())
-		time.Sleep(backoffWithJitter)
-	}
-
-	conn.mu.Lock()
-	if conn.isConnected {
-		conn.mu.Unlock()
-		log.Printf("ℹ️  [%s] Another goroutine connected during backoff, skipping", conn.Host)
-		return
-	}
-	conn.mu.Unlock()
-
-	log.Println("┌────────────────────────────────────┐")
-	log.Printf("│ 🔗 CONNECTING: %s", conn.Host)
-	log.Println("└────────────────────────────────────┘")
-
-	wsURL := fmt.Sprintf("ws://%s/ws/rfc6455", conn.Host)
-
-	log.Printf("Step 1: Establishing WebSocket connection")
-	log.Printf("   URL: %s", wsURL)
-
-	dialer := websocket.Dialer{
-		HandshakeTimeout: 10 * time.Second,
-	}
-
-	ws, _, err := dialer.Dial(wsURL, nil)
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to connect: %v", err)
-		log.Printf("❌ %s", errMsg)
-
+	// Retry loop for connection attempts
+	maxRetries := 10 // Try up to 10 times before giving up temporarily
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		// Check if we should stop
 		conn.mu.Lock()
-		conn.isConnected = false
-		conn.lastError = errMsg
-		conn.consecutiveConnFails++
-
-		// Exponential backoff: 1s → 2s → 5s → 10s → 30s (cap)
-		conn.reconnectBackoff = time.Duration(math.Min(
-			float64(conn.reconnectBackoff*2),
-			float64(conn.maxBackoff),
-		))
+		if conn.isShuttingDown {
+			conn.mu.Unlock()
+			log.Printf("ℹ️  [%s] Stopping reconnection attempts - shutting down", conn.Host)
+			return
+		}
+		
+		if conn.isConnected {
+			conn.mu.Unlock()
+			log.Printf("ℹ️  [%s] Already connected, stopping retry loop", conn.Host)
+			return
+		}
 		conn.mu.Unlock()
 
-		conn.updateDeviceStatus(db, fmt.Sprintf("🔴 Connection failed: %v", err))
-		conn.logToDatabase("Loxone Connection Failed",
-			fmt.Sprintf("Host '%s': %v (backoff: %.1fs)", conn.Host, err, conn.reconnectBackoff.Seconds()))
-		return
-	}
+		// Apply backoff with jitter (except on first attempt)
+		if attempt > 1 {
+			conn.mu.Lock()
+			backoff := conn.reconnectBackoff
+			conn.mu.Unlock()
+			
+			jitter := time.Duration(rand.Float64() * float64(backoff) * 0.3)
+			backoffWithJitter := backoff + jitter
+			log.Printf("⏳ [%s] Waiting %.1fs (backoff with jitter) before retry attempt %d/%d...",
+				conn.Host, backoffWithJitter.Seconds(), attempt, maxRetries)
+			time.Sleep(backoffWithJitter)
+		}
 
+		log.Println("┌────────────────────────────────────┐")
+		log.Printf("│ 🔗 CONNECTING: %s (attempt %d/%d)", conn.Host, attempt, maxRetries)
+		log.Println("└────────────────────────────────────┘")
+
+		wsURL := fmt.Sprintf("ws://%s/ws/rfc6455", conn.Host)
+
+		log.Printf("Step 1: Establishing WebSocket connection")
+		log.Printf("   URL: %s", wsURL)
+
+		dialer := websocket.Dialer{
+			HandshakeTimeout: 10 * time.Second,
+		}
+
+		ws, _, err := dialer.Dial(wsURL, nil)
+		if err != nil {
+			errMsg := fmt.Sprintf("Failed to connect: %v", err)
+			log.Printf("❌ %s", errMsg)
+
+			conn.mu.Lock()
+			conn.isConnected = false
+			conn.lastError = errMsg
+			conn.consecutiveConnFails++
+
+			// Exponential backoff: 2s → 5s → 10s → 20s → 30s (cap)
+			if conn.reconnectBackoff < 2*time.Second {
+				conn.reconnectBackoff = 2 * time.Second
+			} else {
+				conn.reconnectBackoff = time.Duration(math.Min(
+					float64(conn.reconnectBackoff*2),
+					float64(conn.maxBackoff),
+				))
+			}
+			conn.mu.Unlock()
+
+			conn.updateDeviceStatus(db, fmt.Sprintf("🔴 Connection failed (attempt %d): %v", attempt, err))
+			conn.logToDatabase("Loxone Connection Failed",
+				fmt.Sprintf("Host '%s': %v (attempt %d, backoff: %.1fs)", conn.Host, err, attempt, conn.reconnectBackoff.Seconds()))
+			
+			// Continue to next retry
+			continue
+		}
+
+		// Connection successful, proceed with authentication
+		if conn.performConnection(ws, db) {
+			// Successfully connected and authenticated
+			return
+		}
+		
+		// Authentication failed, retry
+	}
+	
+	// All retries exhausted
+	log.Printf("❌ [%s] All %d connection attempts failed, will retry later", conn.Host, maxRetries)
+	conn.logToDatabase("Loxone Connection Exhausted",
+		fmt.Sprintf("Host '%s': All %d connection attempts failed", conn.Host, maxRetries))
+	
+	// Schedule another reconnection attempt after max backoff
+	go func() {
+		conn.mu.Lock()
+		backoff := conn.maxBackoff
+		conn.mu.Unlock()
+		
+		time.Sleep(backoff)
+		
+		conn.mu.Lock()
+		isShuttingDown := conn.isShuttingDown
+		conn.mu.Unlock()
+		
+		if !isShuttingDown {
+			log.Printf("🔄 [%s] Scheduling new reconnection attempt after cooldown", conn.Host)
+			go conn.ConnectWithBackoff(db)
+		}
+	}()
+}
+
+// performConnection handles the connection setup after websocket is established
+func (conn *LoxoneWebSocketConnection) performConnection(ws *websocket.Conn, db *sql.DB) bool {
 	conn.mu.Lock()
 	conn.ws = ws
 	conn.consecutiveConnFails = 0 // Reset on successful connection
@@ -867,6 +918,7 @@ func (conn *LoxoneWebSocketConnection) ConnectWithBackoff(db *sql.DB) {
 		ws.Close()
 
 		conn.mu.Lock()
+		conn.ws = nil
 		conn.isConnected = false
 		conn.tokenValid = false
 		conn.lastError = errMsg
@@ -883,7 +935,7 @@ func (conn *LoxoneWebSocketConnection) ConnectWithBackoff(db *sql.DB) {
 		conn.updateDeviceStatus(db, fmt.Sprintf("🔴 Auth failed: %v", err))
 		conn.logToDatabase("Loxone Auth Failed",
 			fmt.Sprintf("Host '%s': %v (failures: %d)", conn.Host, err, conn.consecutiveAuthFails))
-		return
+		return false
 	}
 
 	conn.mu.Lock()
@@ -891,7 +943,7 @@ func (conn *LoxoneWebSocketConnection) ConnectWithBackoff(db *sql.DB) {
 	conn.tokenValid = true
 	conn.lastError = ""
 	conn.consecutiveAuthFails = 0           // Reset on successful auth
-	conn.reconnectBackoff = 1 * time.Second // Reset backoff on success
+	conn.reconnectBackoff = 2 * time.Second // Reset backoff on success
 	conn.totalReconnects++
 	conn.lastSuccessfulAuth = time.Now()
 	deviceCount := len(conn.devices)
@@ -923,6 +975,8 @@ func (conn *LoxoneWebSocketConnection) ConnectWithBackoff(db *sql.DB) {
 	log.Printf("💓 Starting keepalive for %s...", conn.Host)
 	conn.goroutinesWg.Add(1)
 	go conn.keepalive()
+	
+	return true
 }
 
 func (conn *LoxoneWebSocketConnection) updateDeviceStatus(db *sql.DB, status string) {
@@ -958,7 +1012,7 @@ func (conn *LoxoneWebSocketConnection) authenticateWithToken() error {
 		return fmt.Errorf("no JSON data in key response")
 	}
 
-	log.Printf("   ↓ Received key response (type %d)", msgType)
+	log.Printf("   ← Received key response (type %d)", msgType)
 
 	var keyResp struct {
 		LL struct {
@@ -972,7 +1026,7 @@ func (conn *LoxoneWebSocketConnection) authenticateWithToken() error {
 		return fmt.Errorf("failed to parse key response: %v", err)
 	}
 
-	log.Printf("   ↓ Response code: %s", keyResp.LL.Code)
+	log.Printf("   ← Response code: %s", keyResp.LL.Code)
 
 	if keyResp.LL.Code != "200" {
 		return fmt.Errorf("getkey2 failed with code: %s", keyResp.LL.Code)
@@ -1041,7 +1095,7 @@ func (conn *LoxoneWebSocketConnection) authenticateWithToken() error {
 		return fmt.Errorf("no JSON data in token response")
 	}
 
-	log.Printf("   ↓ Received token response (type %d)", msgType)
+	log.Printf("   ← Received token response (type %d)", msgType)
 
 	var tokenResp struct {
 		LL struct {
@@ -1055,7 +1109,7 @@ func (conn *LoxoneWebSocketConnection) authenticateWithToken() error {
 		return fmt.Errorf("failed to parse token response: %v", err)
 	}
 
-	log.Printf("   ↓ Response code: %s", tokenResp.LL.Code)
+	log.Printf("   ← Response code: %s", tokenResp.LL.Code)
 
 	if tokenResp.LL.Code != "200" {
 		return fmt.Errorf("gettoken failed with code: %s", tokenResp.LL.Code)
@@ -1074,6 +1128,47 @@ func (conn *LoxoneWebSocketConnection) authenticateWithToken() error {
 	if tokenData.Unsecure {
 		log.Printf("   ⚠️  WARNING: Unsecure password flag is set")
 	}
+
+	// CRITICAL FIX: Step 5 - Actually use the token to authenticate the session!
+	log.Printf("🔐 TOKEN AUTHENTICATION - Step 5: Authenticate session with token")
+	
+	authCmd := fmt.Sprintf("jdev/sys/fenc/%s", tokenData.Token)
+	log.Printf("   → Sending: %s", authCmd)
+	
+	if err := conn.ws.WriteMessage(websocket.TextMessage, []byte(authCmd)); err != nil {
+		return fmt.Errorf("failed to send token auth: %v", err)
+	}
+	
+	// Read the authentication response
+	msgType, jsonData, err = conn.readLoxoneMessage()
+	if err != nil {
+		return fmt.Errorf("failed to read auth response: %v", err)
+	}
+	if jsonData == nil {
+		return fmt.Errorf("no JSON data in auth response")
+	}
+	
+	log.Printf("   ← Received auth response (type %d)", msgType)
+	
+	var authResp struct {
+		LL struct {
+			Control string `json:"control"`
+			Code    string `json:"code"`
+			Value   string `json:"value"`
+		} `json:"LL"`
+	}
+	
+	if err := json.Unmarshal(jsonData, &authResp); err != nil {
+		return fmt.Errorf("failed to parse auth response: %v", err)
+	}
+	
+	log.Printf("   ← Auth response code: %s", authResp.LL.Code)
+	
+	if authResp.LL.Code != "200" {
+		return fmt.Errorf("token authentication failed with code: %s", authResp.LL.Code)
+	}
+	
+	log.Printf("   ✅ Session authenticated with token!")
 
 	conn.mu.Lock()
 	conn.token = tokenData.Token
@@ -1291,7 +1386,6 @@ func (conn *LoxoneWebSocketConnection) monitorTokenExpiry(db *sql.DB) {
 					isShuttingDown := conn.isShuttingDown
 					conn.mu.Unlock()
 
-
 					conn.updateDeviceStatus(db, "🔄 Auth failed, reconnecting...")
 
 					// Only trigger reconnect if not shutting down
@@ -1370,7 +1464,7 @@ func (conn *LoxoneWebSocketConnection) requestData() {
 		conn.mu.Unlock()
 
 		log.Println("────────────────────────────────────")
-		log.Printf("🔡 [%s] REQUESTING DATA FOR %d DEVICES", conn.Host, len(devices))
+		log.Printf("📡 [%s] REQUESTING DATA FOR %d DEVICES", conn.Host, len(devices))
 		log.Printf("   Time: %s", time.Now().Format("15:04:05"))
 
 		requestFailed := false
@@ -1775,7 +1869,7 @@ func (conn *LoxoneWebSocketConnection) processChargerField(device *LoxoneDevice,
 				state = fmt.Sprintf("%.0f", v)
 			}
 			collection.State = &state
-			log.Printf("   📐 [%s] Received state: %s", device.Name, state)
+			log.Printf("   🔍 [%s] Received state: %s", device.Name, state)
 
 		case "user_id":
 			var userID string
@@ -1836,7 +1930,7 @@ func (conn *LoxoneWebSocketConnection) processChargerField(device *LoxoneDevice,
 			case "state":
 				state := response.LL.Value
 				collection.State = &state
-				log.Printf("   📐 [%s] Received state from Value: %s", device.Name, state)
+				log.Printf("   🔍 [%s] Received state from Value: %s", device.Name, state)
 			case "user_id":
 				userID := response.LL.Value
 				collection.UserID = &userID
