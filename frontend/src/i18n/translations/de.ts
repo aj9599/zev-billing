@@ -758,7 +758,7 @@ export const de: Translations = {
   'pricing.subtitle': 'Strom- und Ladetarife konfigurieren',
   'pricing.addPricing': 'Preis hinzufügen',
   'pricing.editPricing': 'Preis bearbeiten',
-  'pricing.normalPower': 'Solar (CHF/kWh)',
+  'pricing.normalPower': 'Normal (CHF/kWh)',
   'pricing.solarPower': 'Solarstrom (CHF/kWh)',
   'pricing.chargingNormal': 'Laden Solar (CHF/kWh)',
   'pricing.chargingPriority': 'Laden Priorität (CHF/kWh)',

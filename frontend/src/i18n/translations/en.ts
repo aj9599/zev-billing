@@ -758,7 +758,7 @@ export const en: Translations = {
   'pricing.subtitle': 'Configure electricity and charging rates',
   'pricing.addPricing': 'Add Pricing',
   'pricing.editPricing': 'Edit Pricing',
-  'pricing.normalPower': 'Solar Power (CHF/kWh)',
+  'pricing.normalPower': 'Noraml Power (CHF/kWh)',
   'pricing.solarPower': 'Solar Power (CHF/kWh)',
   'pricing.chargingNormal': 'Car Charging Solar (CHF/kWh)',
   'pricing.chargingPriority': 'Car Charging Priority (CHF/kWh)',
