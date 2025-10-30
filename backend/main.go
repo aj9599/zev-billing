@@ -249,7 +249,12 @@ func createBackupHandler(dbPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Println("Database backup requested")
 
-		backupDir := "/home/pi/zev-billing-backups"
+		// Try to use home directory, fall back to current directory
+		backupDir := "./backups"
+		if homeDir, err := os.UserHomeDir(); err == nil {
+			backupDir = filepath.Join(homeDir, "zev-billing-backups")
+		}
+		
 		if err := os.MkdirAll(backupDir, 0755); err != nil {
 			log.Printf("Failed to create backup directory: %v", err)
 			http.Error(w, "Failed to create backup directory", http.StatusInternalServerError)
@@ -304,7 +309,14 @@ func downloadBackupHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Security: prevent path traversal
 	backupName = filepath.Base(backupName)
-	backupPath := filepath.Join("/home/pi/zev-billing-backups", backupName)
+	
+	// Try to use home directory, fall back to current directory
+	backupDir := "./backups"
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		backupDir = filepath.Join(homeDir, "zev-billing-backups")
+	}
+	
+	backupPath := filepath.Join(backupDir, backupName)
 
 	// Check if file exists
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
@@ -339,8 +351,9 @@ func restoreBackupHandler(dbPath string) http.HandlerFunc {
 
 		log.Printf("Restoring from backup: %s", handler.Filename)
 
-		// Create temporary file
-		tempPath := dbPath + ".restore.tmp"
+		// Create temporary file in same directory as database
+		dbDir := filepath.Dir(dbPath)
+		tempPath := filepath.Join(dbDir, "restore.tmp")
 		tempFile, err := os.Create(tempPath)
 		if err != nil {
 			log.Printf("Failed to create temp file: %v", err)
@@ -399,13 +412,20 @@ func restoreBackupHandler(dbPath string) http.HandlerFunc {
 func checkUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Checking for updates...")
 
+	// Try to detect repository path
 	repoPath := "/home/pi/zev-billing"
+	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+		// Try current directory
+		if cwd, err := os.Getwd(); err == nil {
+			repoPath = cwd
+		}
+	}
 
 	// Fetch latest changes
 	fetchCmd := exec.Command("git", "-C", repoPath, "fetch", "origin", "main")
-	if err := fetchCmd.Run(); err != nil {
-		log.Printf("Failed to fetch updates: %v", err)
-		http.Error(w, "Failed to fetch updates", http.StatusInternalServerError)
+	if output, err := fetchCmd.CombinedOutput(); err != nil {
+		log.Printf("Failed to fetch updates: %v, output: %s", err, string(output))
+		http.Error(w, fmt.Sprintf("Failed to fetch updates: %s", string(output)), http.StatusInternalServerError)
 		return
 	}
 
@@ -447,6 +467,7 @@ func checkUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		"current_commit":    currentCommit[:7],
 		"remote_commit":     remoteCommit[:7],
 		"commit_log":        commitLog,
+		"repo_path":         repoPath,
 	})
 }
 
@@ -464,10 +485,23 @@ func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		time.Sleep(1 * time.Second)
 		
+		// Try to detect repository path
 		repoPath := "/home/pi/zev-billing"
-		logFile := "/home/pi/zev-billing-update.log"
+		if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+			if cwd, err := os.Getwd(); err == nil {
+				repoPath = cwd
+			}
+		}
+		
+		// Try to detect home directory for log file
+		logFile := "./zev-billing-update.log"
+		if homeDir, err := os.UserHomeDir(); err == nil {
+			logFile = filepath.Join(homeDir, "zev-billing-update.log")
+		}
 		
 		log.Println("Starting update process...")
+		log.Printf("Repository path: %s", repoPath)
+		log.Printf("Log file: %s", logFile)
 
 		// Create log file
 		f, err := os.Create(logFile)
