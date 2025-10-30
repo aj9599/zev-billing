@@ -415,9 +415,20 @@ func checkUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	// Try to detect repository path
 	repoPath := "/home/pi/zev-billing"
 	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
-		// Try current directory
+		// Try to find the repository root by looking for .git directory
 		if cwd, err := os.Getwd(); err == nil {
-			repoPath = cwd
+			// If we're in the backend directory, go up one level
+			if filepath.Base(cwd) == "backend" {
+				repoPath = filepath.Dir(cwd)
+			} else {
+				repoPath = cwd
+			}
+			
+			// Verify we found the right directory by checking for .git
+			if _, err := os.Stat(filepath.Join(repoPath, ".git")); os.IsNotExist(err) {
+				// Try going up one more level
+				repoPath = filepath.Dir(repoPath)
+			}
 		}
 	}
 
@@ -488,8 +499,20 @@ func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		// Try to detect repository path
 		repoPath := "/home/pi/zev-billing"
 		if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+			// Try to find the repository root by looking for .git directory
 			if cwd, err := os.Getwd(); err == nil {
-				repoPath = cwd
+				// If we're in the backend directory, go up one level
+				if filepath.Base(cwd) == "backend" {
+					repoPath = filepath.Dir(cwd)
+				} else {
+					repoPath = cwd
+				}
+				
+				// Verify we found the right directory by checking for .git
+				if _, err := os.Stat(filepath.Join(repoPath, ".git")); os.IsNotExist(err) {
+					// Try going up one more level
+					repoPath = filepath.Dir(repoPath)
+				}
 			}
 		}
 		
@@ -518,13 +541,7 @@ func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 			f.WriteString(logMsg)
 		}
 
-		// Stop service
-		writeLog("Stopping zev-billing service...")
-		stopCmd := exec.Command("systemctl", "stop", "zev-billing.service")
-		if err := stopCmd.Run(); err != nil {
-			writeLog(fmt.Sprintf("Failed to stop service: %v", err))
-			return
-		}
+		writeLog(fmt.Sprintf("Repository path: %s", repoPath))
 
 		// Stash local changes
 		writeLog("Stashing local changes...")
@@ -540,8 +557,6 @@ func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		pullCmd.Stderr = f
 		if err := pullCmd.Run(); err != nil {
 			writeLog(fmt.Sprintf("Failed to pull changes: %v", err))
-			// Try to restart service anyway
-			exec.Command("systemctl", "start", "zev-billing.service").Run()
 			return
 		}
 
@@ -555,7 +570,6 @@ func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		buildCmd.Stderr = f
 		if err := buildCmd.Run(); err != nil {
 			writeLog(fmt.Sprintf("Failed to build backend: %v", err))
-			exec.Command("systemctl", "start", "zev-billing.service").Run()
 			return
 		}
 
@@ -579,11 +593,11 @@ func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 			writeLog(fmt.Sprintf("Failed to build frontend: %v", err))
 		}
 
-		// Start service
-		writeLog("Starting zev-billing service...")
-		startCmd := exec.Command("systemctl", "start", "zev-billing.service")
-		if err := startCmd.Run(); err != nil {
-			writeLog(fmt.Sprintf("Failed to start service: %v", err))
+		// Restart service (this will cleanly replace the running process)
+		writeLog("Restarting zev-billing service...")
+		restartCmd := exec.Command("systemctl", "restart", "zev-billing.service")
+		if err := restartCmd.Run(); err != nil {
+			writeLog(fmt.Sprintf("Failed to restart service: %v", err))
 			return
 		}
 
