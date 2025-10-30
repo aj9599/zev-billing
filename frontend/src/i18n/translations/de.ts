@@ -888,9 +888,9 @@ export const de: Translations = {
   'logs.updateCompleteReload': 'Update abgeschlossen! Die Seite wird jetzt neu geladen...',
   'logs.updateFailed': 'Update fehlgeschlagen. Bitte überprüfen Sie die Systemprotokolle oder versuchen Sie ein manuelles Update.',
 
-  "cpuLow": "Niedrige Auslastung",
-  "cpuModerate": "Mittlere Auslastung",
-  "cpuHigh": "Hohe Auslastung",
+  "logs.cpuLow": "Niedrige Auslastung",
+  "logs.cpuModerate": "Mittlere Auslastung",
+  "logs.cpuHigh": "Hohe Auslastung",
 
   // Settings
   'settings.title': 'Einstellungen',

@@ -888,9 +888,9 @@ export const en: Translations = {
   'logs.updateCompleteReload': 'Update complete! Reloading the page now...',
   'logs.updateFailed': 'Update failed. Please check the system logs or try updating manually.',
 
-  "cpuLow": "Low usage",
-  "cpuModerate": "Moderate usage",
-  "cpuHigh": "High usage",
+  "logs.cpuLow": "Low usage",
+  "logs.cpuModerate": "Moderate usage",
+  "logs.cpuHigh": "High usage",
 
   // Settings
   'settings.title': 'Settings',
