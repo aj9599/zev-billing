@@ -293,6 +293,49 @@ class ApiClient {
   async getDebugStatus(): Promise<any> {
     return this.request('/debug/status');
   }
+
+  // NEW: Backup methods
+  async createBackup(): Promise<{ status: string; backup_name: string; backup_path: string }> {
+    return this.request('/system/backup', { method: 'POST' });
+  }
+
+  async downloadBackup(fileName: string): string {
+    return `${API_BASE}/system/backup/download?file=${encodeURIComponent(fileName)}`;
+  }
+
+  async restoreBackup(file: File): Promise<{ status: string; message: string }> {
+    const formData = new FormData();
+    formData.append('backup', file);
+
+    const response = await fetch(`${API_BASE}/system/backup/restore`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(error || 'Restore failed');
+    }
+
+    return response.json();
+  }
+
+  // NEW: Update methods
+  async checkForUpdates(): Promise<{
+    updates_available: boolean;
+    current_commit: string;
+    remote_commit: string;
+    commit_log: string;
+  }> {
+    return this.request('/system/update/check');
+  }
+
+  async applyUpdate(): Promise<{ status: string; message: string }> {
+    return this.request('/system/update/apply', { method: 'POST' });
+  }
 }
 
 export const api = new ApiClient();

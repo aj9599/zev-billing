@@ -2,11 +2,15 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/aj9599/zev-billing/backend/config"
@@ -81,7 +85,7 @@ func main() {
 	autoBillingHandler := handlers.NewAutoBillingHandler(db)
 	dashboardHandler := handlers.NewDashboardHandler(db)
 	exportHandler := handlers.NewExportHandler(db)
-	webhookHandler := handlers.NewWebhookHandler(db) // NEW: Webhook handler
+	webhookHandler := handlers.NewWebhookHandler(db)
 
 	r := mux.NewRouter()
 
@@ -92,8 +96,7 @@ func main() {
 	r.HandleFunc("/api/auth/login", authHandler.Login).Methods("POST")
 	r.HandleFunc("/api/health", healthCheck).Methods("GET")
 
-	// NEW: Webhook routes for receiving data from devices (NO AUTHENTICATION)
-	// These endpoints allow devices to push data to the system
+	// Webhook routes for receiving data from devices (NO AUTHENTICATION)
 	r.HandleFunc("/webhook/meter", webhookHandler.ReceiveMeterReading).Methods("GET", "POST")
 	r.HandleFunc("/webhook/charger", webhookHandler.ReceiveChargerData).Methods("GET", "POST")
 
@@ -104,6 +107,13 @@ func main() {
 	api.HandleFunc("/auth/change-password", authHandler.ChangePassword).Methods("POST")
 	api.HandleFunc("/debug/status", debugStatusHandler).Methods("GET")
 	api.HandleFunc("/system/reboot", rebootHandler).Methods("POST")
+	
+	// NEW: Backup and Update endpoints
+	api.HandleFunc("/system/backup", createBackupHandler(cfg.DatabasePath)).Methods("POST")
+	api.HandleFunc("/system/backup/download", downloadBackupHandler).Methods("GET")
+	api.HandleFunc("/system/backup/restore", restoreBackupHandler(cfg.DatabasePath)).Methods("POST")
+	api.HandleFunc("/system/update/check", checkUpdateHandler).Methods("GET")
+	api.HandleFunc("/system/update/apply", applyUpdateHandler).Methods("POST")
 
 	// User routes
 	api.HandleFunc("/users", userHandler.List).Methods("GET")
@@ -232,4 +242,343 @@ func rebootHandler(w http.ResponseWriter, r *http.Request) {
 			os.Exit(0)
 		}
 	}()
+}
+
+// NEW: Backup handler
+func createBackupHandler(dbPath string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		log.Println("Database backup requested")
+
+		backupDir := "/home/pi/zev-billing-backups"
+		if err := os.MkdirAll(backupDir, 0755); err != nil {
+			log.Printf("Failed to create backup directory: %v", err)
+			http.Error(w, "Failed to create backup directory", http.StatusInternalServerError)
+			return
+		}
+
+		timestamp := time.Now().Format("2006-01-02_15-04-05")
+		backupName := fmt.Sprintf("zev-billing-backup_%s.db", timestamp)
+		backupPath := filepath.Join(backupDir, backupName)
+
+		// Copy database file
+		source, err := os.Open(dbPath)
+		if err != nil {
+			log.Printf("Failed to open database: %v", err)
+			http.Error(w, "Failed to open database", http.StatusInternalServerError)
+			return
+		}
+		defer source.Close()
+
+		destination, err := os.Create(backupPath)
+		if err != nil {
+			log.Printf("Failed to create backup file: %v", err)
+			http.Error(w, "Failed to create backup file", http.StatusInternalServerError)
+			return
+		}
+		defer destination.Close()
+
+		if _, err := io.Copy(destination, source); err != nil {
+			log.Printf("Failed to copy database: %v", err)
+			http.Error(w, "Failed to copy database", http.StatusInternalServerError)
+			return
+		}
+
+		log.Printf("Backup created successfully: %s", backupName)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":      "success",
+			"backup_name": backupName,
+			"backup_path": backupPath,
+		})
+	}
+}
+
+// NEW: Download backup handler
+func downloadBackupHandler(w http.ResponseWriter, r *http.Request) {
+	backupName := r.URL.Query().Get("file")
+	if backupName == "" {
+		http.Error(w, "Backup file name required", http.StatusBadRequest)
+		return
+	}
+
+	// Security: prevent path traversal
+	backupName = filepath.Base(backupName)
+	backupPath := filepath.Join("/home/pi/zev-billing-backups", backupName)
+
+	// Check if file exists
+	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+		http.Error(w, "Backup file not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", backupName))
+	http.ServeFile(w, r, backupPath)
+}
+
+// NEW: Restore backup handler
+func restoreBackupHandler(dbPath string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		log.Println("Database restore requested")
+
+		// Parse multipart form
+		if err := r.ParseMultipartForm(100 << 20); err != nil { // 100 MB max
+			log.Printf("Failed to parse form: %v", err)
+			http.Error(w, "Failed to parse form", http.StatusBadRequest)
+			return
+		}
+
+		file, handler, err := r.FormFile("backup")
+		if err != nil {
+			log.Printf("Failed to get file from form: %v", err)
+			http.Error(w, "No backup file provided", http.StatusBadRequest)
+			return
+		}
+		defer file.Close()
+
+		log.Printf("Restoring from backup: %s", handler.Filename)
+
+		// Create temporary file
+		tempPath := dbPath + ".restore.tmp"
+		tempFile, err := os.Create(tempPath)
+		if err != nil {
+			log.Printf("Failed to create temp file: %v", err)
+			http.Error(w, "Failed to create temp file", http.StatusInternalServerError)
+			return
+		}
+		defer tempFile.Close()
+
+		// Copy uploaded file to temp location
+		if _, err := io.Copy(tempFile, file); err != nil {
+			log.Printf("Failed to copy backup file: %v", err)
+			os.Remove(tempPath)
+			http.Error(w, "Failed to copy backup file", http.StatusInternalServerError)
+			return
+		}
+
+		// Create backup of current database before restore
+		backupCurrent := dbPath + ".before-restore." + time.Now().Format("2006-01-02_15-04-05") + ".db"
+		if err := copyFile(dbPath, backupCurrent); err != nil {
+			log.Printf("Failed to backup current database: %v", err)
+			os.Remove(tempPath)
+			http.Error(w, "Failed to backup current database", http.StatusInternalServerError)
+			return
+		}
+
+		// Replace current database with restored one
+		if err := os.Rename(tempPath, dbPath); err != nil {
+			log.Printf("Failed to replace database: %v", err)
+			// Restore from backup
+			copyFile(backupCurrent, dbPath)
+			os.Remove(tempPath)
+			http.Error(w, "Failed to replace database", http.StatusInternalServerError)
+			return
+		}
+
+		log.Println("Database restored successfully, restarting service...")
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":  "success",
+			"message": "Database restored, service restarting",
+		})
+
+		// Restart service after successful restore
+		go func() {
+			time.Sleep(1 * time.Second)
+			cmd := exec.Command("systemctl", "restart", "zev-billing.service")
+			if err := cmd.Run(); err != nil {
+				log.Printf("Failed to restart service: %v", err)
+			}
+		}()
+	}
+}
+
+// NEW: Check for updates handler
+func checkUpdateHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("Checking for updates...")
+
+	repoPath := "/home/pi/zev-billing"
+
+	// Fetch latest changes
+	fetchCmd := exec.Command("git", "-C", repoPath, "fetch", "origin", "main")
+	if err := fetchCmd.Run(); err != nil {
+		log.Printf("Failed to fetch updates: %v", err)
+		http.Error(w, "Failed to fetch updates", http.StatusInternalServerError)
+		return
+	}
+
+	// Get current commit
+	currentCmd := exec.Command("git", "-C", repoPath, "rev-parse", "HEAD")
+	currentOutput, err := currentCmd.Output()
+	if err != nil {
+		log.Printf("Failed to get current commit: %v", err)
+		http.Error(w, "Failed to get current commit", http.StatusInternalServerError)
+		return
+	}
+	currentCommit := strings.TrimSpace(string(currentOutput))
+
+	// Get remote commit
+	remoteCmd := exec.Command("git", "-C", repoPath, "rev-parse", "origin/main")
+	remoteOutput, err := remoteCmd.Output()
+	if err != nil {
+		log.Printf("Failed to get remote commit: %v", err)
+		http.Error(w, "Failed to get remote commit", http.StatusInternalServerError)
+		return
+	}
+	remoteCommit := strings.TrimSpace(string(remoteOutput))
+
+	updatesAvailable := currentCommit != remoteCommit
+
+	// Get commit log if updates available
+	var commitLog string
+	if updatesAvailable {
+		logCmd := exec.Command("git", "-C", repoPath, "log", "--oneline", currentCommit+".."+remoteCommit)
+		logOutput, err := logCmd.Output()
+		if err == nil {
+			commitLog = string(logOutput)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"updates_available": updatesAvailable,
+		"current_commit":    currentCommit[:7],
+		"remote_commit":     remoteCommit[:7],
+		"commit_log":        commitLog,
+	})
+}
+
+// NEW: Apply update handler
+func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("Applying system update...")
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":  "updating",
+		"message": "Update process started. This may take a few minutes.",
+	})
+
+	go func() {
+		time.Sleep(1 * time.Second)
+		
+		repoPath := "/home/pi/zev-billing"
+		logFile := "/home/pi/zev-billing-update.log"
+		
+		log.Println("Starting update process...")
+
+		// Create log file
+		f, err := os.Create(logFile)
+		if err != nil {
+			log.Printf("Failed to create log file: %v", err)
+			return
+		}
+		defer f.Close()
+
+		writeLog := func(message string) {
+			timestamp := time.Now().Format("2006-01-02 15:04:05")
+			logMsg := fmt.Sprintf("[%s] %s\n", timestamp, message)
+			log.Print(logMsg)
+			f.WriteString(logMsg)
+		}
+
+		// Stop service
+		writeLog("Stopping zev-billing service...")
+		stopCmd := exec.Command("systemctl", "stop", "zev-billing.service")
+		if err := stopCmd.Run(); err != nil {
+			writeLog(fmt.Sprintf("Failed to stop service: %v", err))
+			return
+		}
+
+		// Stash local changes
+		writeLog("Stashing local changes...")
+		stashCmd := exec.Command("git", "-C", repoPath, "stash")
+		stashCmd.Stdout = f
+		stashCmd.Stderr = f
+		stashCmd.Run() // Don't fail if nothing to stash
+
+		// Pull latest changes
+		writeLog("Pulling latest changes from GitHub...")
+		pullCmd := exec.Command("git", "-C", repoPath, "pull", "origin", "main")
+		pullCmd.Stdout = f
+		pullCmd.Stderr = f
+		if err := pullCmd.Run(); err != nil {
+			writeLog(fmt.Sprintf("Failed to pull changes: %v", err))
+			// Try to restart service anyway
+			exec.Command("systemctl", "start", "zev-billing.service").Run()
+			return
+		}
+
+		// Build backend
+		writeLog("Building backend...")
+		backendPath := filepath.Join(repoPath, "backend")
+		buildCmd := exec.Command("go", "build", "-o", "zev-billing")
+		buildCmd.Dir = backendPath
+		buildCmd.Env = append(os.Environ(), "CGO_ENABLED=1")
+		buildCmd.Stdout = f
+		buildCmd.Stderr = f
+		if err := buildCmd.Run(); err != nil {
+			writeLog(fmt.Sprintf("Failed to build backend: %v", err))
+			exec.Command("systemctl", "start", "zev-billing.service").Run()
+			return
+		}
+
+		// Build frontend
+		writeLog("Installing frontend dependencies...")
+		frontendPath := filepath.Join(repoPath, "frontend")
+		npmInstallCmd := exec.Command("npm", "install")
+		npmInstallCmd.Dir = frontendPath
+		npmInstallCmd.Stdout = f
+		npmInstallCmd.Stderr = f
+		if err := npmInstallCmd.Run(); err != nil {
+			writeLog(fmt.Sprintf("Failed to install npm packages: %v", err))
+		}
+
+		writeLog("Building frontend...")
+		npmBuildCmd := exec.Command("npm", "run", "build")
+		npmBuildCmd.Dir = frontendPath
+		npmBuildCmd.Stdout = f
+		npmBuildCmd.Stderr = f
+		if err := npmBuildCmd.Run(); err != nil {
+			writeLog(fmt.Sprintf("Failed to build frontend: %v", err))
+		}
+
+		// Start service
+		writeLog("Starting zev-billing service...")
+		startCmd := exec.Command("systemctl", "start", "zev-billing.service")
+		if err := startCmd.Run(); err != nil {
+			writeLog(fmt.Sprintf("Failed to start service: %v", err))
+			return
+		}
+
+		// Restart nginx
+		writeLog("Restarting nginx...")
+		nginxCmd := exec.Command("systemctl", "restart", "nginx")
+		if err := nginxCmd.Run(); err != nil {
+			writeLog(fmt.Sprintf("Failed to restart nginx: %v", err))
+		}
+
+		writeLog("Update completed successfully!")
+		writeLog("System is now running the latest version.")
+	}()
+}
+
+// Helper function to copy files
+func copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, sourceFile)
+	return err
 }

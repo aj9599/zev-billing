@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Activity, RefreshCw, AlertCircle, CheckCircle, Info, Power, Cpu, HardDrive, Thermometer, Clock } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Activity, RefreshCw, AlertCircle, CheckCircle, Info, Power, Cpu, HardDrive, Thermometer, Clock, Database, Download, Upload, RotateCcw } from 'lucide-react';
 import { api } from '../api/client';
 import type { AdminLog } from '../types';
 import { useTranslation } from '../i18n';
@@ -16,18 +16,32 @@ interface SystemHealth {
   uptime: string;
 }
 
+interface UpdateInfo {
+  updates_available: boolean;
+  current_commit: string;
+  remote_commit: string;
+  commit_log: string;
+}
+
 export default function AdminLogs() {
   const { t } = useTranslation();
   const [logs, setLogs] = useState<AdminLog[]>([]);
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [rebooting, setRebooting] = useState(false);
+  const [backing, setBacking] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadLogs();
     loadDebugInfo();
+    checkForUpdates();
   }, []);
 
   useEffect(() => {
@@ -69,6 +83,18 @@ export default function AdminLogs() {
     }
   };
 
+  const checkForUpdates = async () => {
+    setCheckingUpdates(true);
+    try {
+      const data = await api.checkForUpdates();
+      setUpdateInfo(data);
+    } catch (err) {
+      console.error('Failed to check for updates:', err);
+    } finally {
+      setCheckingUpdates(false);
+    }
+  };
+
   const handleReboot = async () => {
     if (!confirm(t('logs.rebootConfirm'))) {
       return;
@@ -95,6 +121,89 @@ export default function AdminLogs() {
     } catch (err) {
       alert(t('logs.rebootFailed'));
       setRebooting(false);
+    }
+  };
+
+  const handleBackup = async () => {
+    setBacking(true);
+    try {
+      const result = await api.createBackup();
+      alert(t('logs.backupSuccess'));
+      
+      // Automatically download the backup
+      const downloadUrl = api.downloadBackup(result.backup_name);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = result.backup_name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      alert(t('logs.backupFailed'));
+      console.error('Backup failed:', err);
+    } finally {
+      setBacking(false);
+    }
+  };
+
+  const handleRestoreClick = () => {
+    if (confirm(t('logs.restoreConfirm'))) {
+      fileInputRef.current?.click();
+    }
+  };
+
+  const handleRestoreFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.db')) {
+      alert(t('logs.invalidBackupFile'));
+      return;
+    }
+
+    setRestoring(true);
+    try {
+      await api.restoreBackup(file);
+      alert(t('logs.restoreSuccess'));
+      setTimeout(() => {
+        window.location.reload();
+      }, 3000);
+    } catch (err) {
+      alert(t('logs.restoreFailed'));
+      console.error('Restore failed:', err);
+      setRestoring(false);
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!updateInfo?.updates_available) {
+      alert(t('logs.noUpdatesAvailable'));
+      return;
+    }
+
+    if (!confirm(t('logs.updateConfirm'))) {
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      await api.applyUpdate();
+      alert(t('logs.updateStarted'));
+      
+      // Wait 30 seconds then try to reload
+      setTimeout(() => {
+        alert(t('logs.updateCompleteReload'));
+        window.location.reload();
+      }, 30000);
+    } catch (err) {
+      alert(t('logs.updateFailed'));
+      console.error('Update failed:', err);
+      setUpdating(false);
     }
   };
 
@@ -250,11 +359,213 @@ export default function AdminLogs() {
         </div>
       </div>
 
+      {/* System Management Buttons */}
+      <div style={{ marginBottom: '30px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+        <button
+          onClick={handleBackup}
+          disabled={backing}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '12px 20px',
+            background: backing ? '#9ca3af' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '10px',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: backing ? 'not-allowed' : 'pointer',
+            boxShadow: backing ? 'none' : '0 4px 12px rgba(102, 126, 234, 0.3)',
+            transition: 'all 0.3s ease'
+          }}
+          onMouseEnter={(e) => {
+            if (!backing) {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 6px 16px rgba(102, 126, 234, 0.4)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!backing) {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
+            }
+          }}
+        >
+          <Database size={18} />
+          <span>{backing ? t('logs.creatingBackup') : t('logs.createBackup')}</span>
+        </button>
+
+        <button
+          onClick={handleRestoreClick}
+          disabled={restoring}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '12px 20px',
+            background: restoring ? '#9ca3af' : 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '10px',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: restoring ? 'not-allowed' : 'pointer',
+            boxShadow: restoring ? 'none' : '0 4px 12px rgba(250, 112, 154, 0.3)',
+            transition: 'all 0.3s ease'
+          }}
+          onMouseEnter={(e) => {
+            if (!restoring) {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 6px 16px rgba(250, 112, 154, 0.4)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!restoring) {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(250, 112, 154, 0.3)';
+            }
+          }}
+        >
+          <Upload size={18} />
+          <span>{restoring ? t('logs.restoringBackup') : t('logs.restoreBackup')}</span>
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".db"
+          onChange={handleRestoreFile}
+          style={{ display: 'none' }}
+        />
+
+        <button
+          onClick={checkForUpdates}
+          disabled={checkingUpdates}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '12px 20px',
+            background: checkingUpdates ? '#9ca3af' : '#10b981',
+            color: 'white',
+            border: 'none',
+            borderRadius: '10px',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: checkingUpdates ? 'not-allowed' : 'pointer',
+            boxShadow: checkingUpdates ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.3)',
+            transition: 'all 0.3s ease'
+          }}
+          onMouseEnter={(e) => {
+            if (!checkingUpdates) {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 6px 16px rgba(16, 185, 129, 0.4)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!checkingUpdates) {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
+            }
+          }}
+        >
+          <RefreshCw size={18} />
+          <span>{checkingUpdates ? t('logs.checkingUpdates') : t('logs.checkUpdates')}</span>
+        </button>
+
+        {updateInfo && (
+          <button
+            onClick={handleUpdate}
+            disabled={updating || !updateInfo.updates_available}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 20px',
+              background: updating ? '#9ca3af' : !updateInfo.updates_available ? '#6b7280' : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '10px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: (updating || !updateInfo.updates_available) ? 'not-allowed' : 'pointer',
+              boxShadow: (updating || !updateInfo.updates_available) ? 'none' : '0 4px 12px rgba(240, 147, 251, 0.3)',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseEnter={(e) => {
+              if (!updating && updateInfo.updates_available) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 6px 16px rgba(240, 147, 251, 0.4)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!updating && updateInfo.updates_available) {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(240, 147, 251, 0.3)';
+              }
+            }}
+          >
+            <RotateCcw size={18} />
+            <span>
+              {updating ? t('logs.updating') : 
+               updateInfo.updates_available ? t('logs.applyUpdate') : t('logs.upToDate')}
+            </span>
+          </button>
+        )}
+      </div>
+
+      {/* Update Info Card */}
+      {updateInfo && (
+        <div style={{ 
+          marginBottom: '30px',
+          backgroundColor: updateInfo.updates_available ? '#fef3c7' : '#d1fae5',
+          padding: '20px',
+          borderRadius: '12px',
+          border: `2px solid ${updateInfo.updates_available ? '#fbbf24' : '#10b981'}`
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+            <Info size={24} color={updateInfo.updates_available ? '#f59e0b' : '#10b981'} />
+            <div style={{ fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>
+              {updateInfo.updates_available ? t('logs.updatesAvailable') : t('logs.systemUpToDate')}
+            </div>
+          </div>
+          <div style={{ fontSize: '14px', color: '#4b5563' }}>
+            <div style={{ marginBottom: '8px' }}>
+              <strong>{t('logs.currentVersion')}:</strong> {updateInfo.current_commit}
+            </div>
+            {updateInfo.updates_available && (
+              <>
+                <div style={{ marginBottom: '8px' }}>
+                  <strong>{t('logs.latestVersion')}:</strong> {updateInfo.remote_commit}
+                </div>
+                {updateInfo.commit_log && (
+                  <div style={{ 
+                    marginTop: '12px',
+                    padding: '12px',
+                    backgroundColor: 'white',
+                    borderRadius: '8px',
+                    fontFamily: 'monospace',
+                    fontSize: '12px',
+                    whiteSpace: 'pre-wrap',
+                    maxHeight: '200px',
+                    overflow: 'auto'
+                  }}>
+                    <strong>{t('logs.changeLog')}:</strong>
+                    <br />
+                    {updateInfo.commit_log}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* System Health Cards */}
       {systemHealth && (
         <div style={{ marginBottom: '30px', width: '100%' }}>
           <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '16px', color: '#1f2937' }}>
-            Device Health
+            {t('logs.deviceHealth')}
           </h2>
           <div className="debug-grid" style={{
             display: 'grid',
@@ -274,7 +585,7 @@ export default function AdminLogs() {
             onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
                 <Cpu size={24} color={getHealthColor(systemHealth.cpu_usage)} />
-                <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>CPU Usage</div>
+                <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>{t('logs.cpuUsage')}</div>
               </div>
               <div style={{ fontSize: '28px', fontWeight: '800', color: getHealthColor(systemHealth.cpu_usage) }}>
                 {systemHealth.cpu_usage.toFixed(1)}%
@@ -296,7 +607,7 @@ export default function AdminLogs() {
             onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
                 <Activity size={24} color={getHealthColor(systemHealth.memory_percent)} />
-                <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>Memory Usage</div>
+                <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>{t('logs.memoryUsage')}</div>
               </div>
               <div style={{ fontSize: '28px', fontWeight: '800', color: getHealthColor(systemHealth.memory_percent) }}>
                 {systemHealth.memory_percent.toFixed(1)}%
@@ -321,7 +632,7 @@ export default function AdminLogs() {
             onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
                 <HardDrive size={24} color={getHealthColor(systemHealth.disk_percent)} />
-                <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>Disk Usage</div>
+                <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>{t('logs.diskUsage')}</div>
               </div>
               <div style={{ fontSize: '28px', fontWeight: '800', color: getHealthColor(systemHealth.disk_percent) }}>
                 {systemHealth.disk_percent.toFixed(1)}%
@@ -347,13 +658,13 @@ export default function AdminLogs() {
               onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
                   <Thermometer size={24} color={getTempColor(systemHealth.temperature)} />
-                  <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>CPU Temperature</div>
+                  <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>{t('logs.cpuTemperature')}</div>
                 </div>
                 <div style={{ fontSize: '28px', fontWeight: '800', color: getTempColor(systemHealth.temperature) }}>
                   {systemHealth.temperature.toFixed(1)}°C
                 </div>
                 <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
-                  {systemHealth.temperature < 70 ? 'Normal' : systemHealth.temperature < 80 ? 'Warm' : 'Hot'}
+                  {systemHealth.temperature < 70 ? t('logs.tempNormal') : systemHealth.temperature < 80 ? t('logs.tempWarm') : t('logs.tempHot')}
                 </div>
               </div>
             )}
@@ -370,13 +681,13 @@ export default function AdminLogs() {
             onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
                 <Clock size={24} color="#3b82f6" />
-                <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>System Uptime</div>
+                <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>{t('logs.systemUptime')}</div>
               </div>
               <div style={{ fontSize: '28px', fontWeight: '800', color: '#3b82f6' }}>
                 {systemHealth.uptime}
               </div>
               <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
-                Since last restart
+                {t('logs.sinceLastRestart')}
               </div>
             </div>
           </div>
