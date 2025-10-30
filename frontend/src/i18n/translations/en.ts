@@ -410,7 +410,7 @@ export const en: Translations = {
   // Connection types
   'chargers.loxoneApiRecommended': 'Loxone WebSocket API (Recommended)',
   'chargers.udpAlternative': 'UDP (Legacy)',
-  
+
   // Loxone configuration
   'chargers.loxoneApiDescription': 'Real-time WebSocket connection with automatic reconnection and status monitoring',
   'chargers.loxoneHost': 'Loxone Host (IP Address)',
@@ -418,33 +418,33 @@ export const en: Translations = {
   'chargers.loxoneUsername': 'Username',
   'chargers.loxonePassword': 'Password',
   'chargers.loxoneCredentialsDescription': 'Loxone Miniserver login credentials for WebSocket authentication',
-  
+
   // UUID fields
   'chargers.loxonePowerUuid': 'Power UUID',
   'chargers.loxoneStateUuid': 'State UUID',
   'chargers.loxoneUserIdUuid': 'User ID UUID',
   'chargers.loxoneModeUuid': 'Mode UUID',
   'chargers.loxoneUuidsDescription': 'Find these UUIDs in Loxone Config or in the LoxAPP3.json structure file',
-  
+
   // Connection status
   'chargers.loxoneConnected': 'Loxone Connected',
   'chargers.loxoneDisconnected': 'Loxone Disconnected',
   'chargers.loxoneConnecting': 'Connecting to Loxone...',
   'chargers.lastUpdate': 'Last Update',
-  
+
   // Setup guide
   'chargers.loxoneSetupGuide': 'Quick Setup Guide:',
   'chargers.loxoneSetupStep1': '1. Enter your Loxone Miniserver IP address',
   'chargers.loxoneSetupStep2': '2. Enter the 4 UUIDs for power, state, user ID, and mode',
   'chargers.loxoneSetupStep3': '3. Provide Loxone credentials (same as Loxone Config login)',
   'chargers.loxoneSetupStep4': '4. Configure state and mode value mappings below',
-  
+
   // Features
   'chargers.loxoneFeatures': 'Key Features:',
   'chargers.loxoneFeature1': '✓ Real-time bidirectional communication',
   'chargers.loxoneFeature2': '✓ Automatic reconnection on connection loss',
   'chargers.loxoneFeature3': '✓ Connection status monitoring',
-  
+
   // Instructions modal
   'chargers.instructions.title': 'Charger Setup Instructions',
   'chargers.instructions.loxoneTitle': 'Loxone WebSocket API Connection',
@@ -454,38 +454,38 @@ export const en: Translations = {
   'chargers.instructions.loxoneStateUuid': 'State UUID - Charger state (cable locked, charging, idle, etc.)',
   'chargers.instructions.loxoneUserIdUuid': 'User ID UUID - Authenticated user identifier',
   'chargers.instructions.loxoneModeUuid': 'Mode UUID - Charging mode (normal or priority)',
-  
+
   'chargers.instructions.loxoneFindingUuid': 'How to Find UUIDs:',
   'chargers.instructions.loxoneUuidStep1': '1. Open Loxone Config and connect to your Miniserver',
   'chargers.instructions.loxoneUuidStep2': '2. Find your charger\'s virtual outputs in the programming',
   'chargers.instructions.loxoneUuidStep3': '3. Right-click each output and select "Copy UUID"',
   'chargers.instructions.loxoneUuidStep4': '4. Alternatively, browse to http://YOUR_MINISERVER_IP/data/LoxAPP3.json to see all UUIDs',
-  
+
   'chargers.instructions.loxoneSetupTitle': 'Configuration Steps:',
   'chargers.instructions.loxoneStep1': '1. Select "Loxone WebSocket API" as connection type',
   'chargers.instructions.loxoneStep2': '2. Enter your Miniserver IP address (e.g., 192.168.1.100)',
   'chargers.instructions.loxoneStep3': '3. Paste the 4 UUIDs for power, state, user ID, and mode',
   'chargers.instructions.loxoneStep4': '4. Enter your Loxone username and password',
   'chargers.instructions.loxoneStep5': '5. Configure state and mode value mappings based on your charger',
-  
+
   'chargers.instructions.loxoneExample': 'Example Configuration:',
   'chargers.instructions.loxoneExampleHost': 'Host: 192.168.1.100',
   'chargers.instructions.loxoneExampleUuids': 'UUIDs: 4 separate UUIDs for power, state, user_id, and mode',
   'chargers.instructions.loxoneExampleCredentials': 'Username/Password: Your Loxone Config credentials',
-  
+
   'chargers.instructions.loxoneBenefits': 'Benefits:',
   'chargers.instructions.loxoneBenefit1': '✓ Real-time updates via WebSocket',
   'chargers.instructions.loxoneBenefit2': '✓ Automatic reconnection on connection loss',
   'chargers.instructions.loxoneBenefit3': '✓ Live connection status monitoring',
-  
+
   'chargers.instructions.udpTitle': 'UDP Connection (Legacy)',
   'chargers.instructions.udpDeprecated': 'UDP is deprecated. Use Loxone WebSocket API for better reliability.',
   'chargers.instructions.udpDescription': 'UDP connection requires unique auto-generated keys for each charger. Not recommended for new installations.',
-  
+
   'chargers.instructions.stateAndModeTitle': 'State and Mode Value Mappings',
   'chargers.instructions.stateModeDescription': 'Configure the numeric values your charger uses for different states and modes',
   'chargers.instructions.stateModeInfo': 'These values are specific to your charger brand. Check your charger documentation or use the preset defaults.',
-  
+
   'chargers.instructions.troubleshootingTitle': 'Troubleshooting',
   'chargers.instructions.troubleshootingLoxoneWebSocket': 'Verify Miniserver IP is reachable and WebSocket is enabled',
   'chargers.instructions.troubleshootingLoxoneAuth': 'Check username/password are correct (same as Loxone Config)',
@@ -494,7 +494,7 @@ export const en: Translations = {
   'chargers.instructions.troubleshootingLogs': 'View real-time logs:',
   'chargers.instructions.troubleshootingNetwork': 'Test network connectivity:',
   'chargers.instructions.troubleshootingMonitor': 'Monitor the connection status indicators on each charger card',
-  
+
   // Warnings
   'chargers.udpDeprecatedWarning': 'UDP connection is deprecated. Consider migrating to Loxone WebSocket API.',
 
@@ -846,7 +846,7 @@ export const en: Translations = {
   'logs.rebootFailed': 'System reboot failed',
   'logs.loadFailed': 'Failed to load logs:',
   'logs.debugInfoFailed': 'Failed to load debug information:',
-  
+
   // Device Health
   'logs.deviceHealth': 'Device Health',
   'logs.cpuUsage': 'CPU Usage',
@@ -858,7 +858,7 @@ export const en: Translations = {
   'logs.tempNormal': 'Normal',
   'logs.tempWarm': 'Warm',
   'logs.tempHot': 'Hot',
-  
+
   // Backup & Restore
   'logs.createBackup': 'Create Backup',
   'logs.creatingBackup': 'Creating Backup...',
@@ -870,7 +870,7 @@ export const en: Translations = {
   'logs.restoreSuccess': 'Database restored successfully! The system will restart in a few seconds.',
   'logs.restoreFailed': 'Failed to restore backup. Please check the file and try again.',
   'logs.invalidBackupFile': 'Invalid backup file. Please select a .db file.',
-  
+
   // Software Updates
   'logs.checkUpdates': 'Check for Updates',
   'logs.checkingUpdates': 'Checking...',
@@ -887,6 +887,10 @@ export const en: Translations = {
   'logs.updateStarted': 'Update started! The system will rebuild and restart. This may take a few minutes. The page will reload automatically.',
   'logs.updateCompleteReload': 'Update complete! Reloading the page now...',
   'logs.updateFailed': 'Update failed. Please check the system logs or try updating manually.',
+
+  "cpuLow": "Low usage",
+  "cpuModerate": "Moderate usage",
+  "cpuHigh": "High usage",
 
   // Settings
   'settings.title': 'Settings',

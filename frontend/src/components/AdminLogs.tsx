@@ -590,6 +590,9 @@ export default function AdminLogs() {
               <div style={{ fontSize: '28px', fontWeight: '800', color: getHealthColor(systemHealth.cpu_usage) }}>
                 {systemHealth.cpu_usage.toFixed(1)}%
               </div>
+              <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
+                {systemHealth.cpu_usage < 50 ? t('logs.cpuLow') : systemHealth.cpu_usage < 80 ? t('logs.cpuModerate') : t('logs.cpuHigh')}
+              </div>
               <div style={{ width: '100%', height: '8px', backgroundColor: '#e5e7eb', borderRadius: '4px', marginTop: '12px', overflow: 'hidden' }}>
                 <div style={{ width: `${systemHealth.cpu_usage}%`, height: '100%', backgroundColor: getHealthColor(systemHealth.cpu_usage), transition: 'width 0.3s ease' }}></div>
               </div>
