@@ -846,6 +846,47 @@ export const de: Translations = {
   'logs.rebootFailed': 'Neustart des Systems fehlgeschlagen',
   'logs.loadFailed': 'Laden der Protokolle fehlgeschlagen:',
   'logs.debugInfoFailed': 'Laden der Debug-Informationen fehlgeschlagen:',
+  
+  // Device Health
+  'logs.deviceHealth': 'Gerätezustand',
+  'logs.cpuUsage': 'CPU-Auslastung',
+  'logs.memoryUsage': 'Speicherauslastung',
+  'logs.diskUsage': 'Festplattenauslastung',
+  'logs.cpuTemperature': 'CPU-Temperatur',
+  'logs.systemUptime': 'Systembetriebszeit',
+  'logs.sinceLastRestart': 'Seit letztem Neustart',
+  'logs.tempNormal': 'Normal',
+  'logs.tempWarm': 'Warm',
+  'logs.tempHot': 'Heiß',
+  
+  // Backup & Restore
+  'logs.createBackup': 'Backup erstellen',
+  'logs.creatingBackup': 'Backup wird erstellt...',
+  'logs.restoreBackup': 'Backup wiederherstellen',
+  'logs.restoringBackup': 'Wird wiederhergestellt...',
+  'logs.backupSuccess': 'Backup erfolgreich erstellt! Die Datei wird automatisch heruntergeladen.',
+  'logs.backupFailed': 'Backup-Erstellung fehlgeschlagen. Bitte versuchen Sie es erneut.',
+  'logs.restoreConfirm': 'Sind Sie sicher, dass Sie ein Backup wiederherstellen möchten? Dies ersetzt die aktuelle Datenbank und startet das System neu. Stellen Sie sicher, dass Sie zuerst ein aktuelles Backup haben!',
+  'logs.restoreSuccess': 'Datenbank erfolgreich wiederhergestellt! Das System wird in wenigen Sekunden neu gestartet.',
+  'logs.restoreFailed': 'Wiederherstellung des Backups fehlgeschlagen. Bitte überprüfen Sie die Datei und versuchen Sie es erneut.',
+  'logs.invalidBackupFile': 'Ungültige Backup-Datei. Bitte wählen Sie eine .db-Datei aus.',
+  
+  // Software Updates
+  'logs.checkUpdates': 'Nach Updates suchen',
+  'logs.checkingUpdates': 'Wird überprüft...',
+  'logs.applyUpdate': 'Update anwenden',
+  'logs.updating': 'Aktualisierung läuft...',
+  'logs.upToDate': 'Aktuell',
+  'logs.updatesAvailable': 'Updates verfügbar',
+  'logs.systemUpToDate': 'System ist aktuell',
+  'logs.currentVersion': 'Aktuelle Version',
+  'logs.latestVersion': 'Neueste Version',
+  'logs.changeLog': 'Änderungsprotokoll',
+  'logs.noUpdatesAvailable': 'Keine Updates verfügbar. Ihr System ist auf dem neuesten Stand.',
+  'logs.updateConfirm': 'Sind Sie sicher, dass Sie das System aktualisieren möchten? Dieser Vorgang wird:\n\n1. Den Dienst stoppen\n2. Den neuesten Code von GitHub herunterladen\n3. Backend und Frontend neu erstellen\n4. Den Dienst neu starten\n\nDies kann 2-5 Minuten dauern. Fortfahren?',
+  'logs.updateStarted': 'Update gestartet! Das System wird neu erstellt und neu gestartet. Dies kann einige Minuten dauern. Die Seite wird automatisch neu geladen.',
+  'logs.updateCompleteReload': 'Update abgeschlossen! Die Seite wird jetzt neu geladen...',
+  'logs.updateFailed': 'Update fehlgeschlagen. Bitte überprüfen Sie die Systemprotokolle oder versuchen Sie ein manuelles Update.',
 
   // Settings
   'settings.title': 'Einstellungen',
