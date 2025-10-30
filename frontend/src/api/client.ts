@@ -299,7 +299,7 @@ class ApiClient {
     return this.request('/system/backup', { method: 'POST' });
   }
 
-  async downloadBackup(fileName: string): string {
+  downloadBackup(fileName: string): string {
     return `${API_BASE}/system/backup/download?file=${encodeURIComponent(fileName)}`;
   }
 

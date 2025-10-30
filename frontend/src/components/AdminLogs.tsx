@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Activity, RefreshCw, AlertCircle, CheckCircle, Info, Power, Cpu, HardDrive, Thermometer, Clock, Database, Download, Upload, RotateCcw } from 'lucide-react';
+import { Activity, RefreshCw, AlertCircle, CheckCircle, Info, Power, Cpu, HardDrive, Thermometer, Clock, Database, Upload, RotateCcw } from 'lucide-react';
 import { api } from '../api/client';
 import type { AdminLog } from '../types';
 import { useTranslation } from '../i18n';
