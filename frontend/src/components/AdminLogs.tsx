@@ -770,7 +770,7 @@ export default function AdminLogs() {
                   <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>{t('logs.cpuTemperature')}</div>
                 </div>
                 <div style={{ fontSize: '28px', fontWeight: '800', color: getTempColor(systemHealth.temperature) }}>
-                  {systemHealth.temperature.toFixed(1)}Â°C
+                  {systemHealth.temperature.toFixed(1)}°C
                 </div>
                 <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
                   {systemHealth.temperature < 70 ? t('logs.tempNormal') : systemHealth.temperature < 80 ? t('logs.tempWarm') : t('logs.tempHot')}
