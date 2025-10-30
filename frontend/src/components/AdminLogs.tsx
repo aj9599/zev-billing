@@ -195,11 +195,11 @@ export default function AdminLogs() {
       await api.applyUpdate();
       alert(t('logs.updateStarted'));
       
-      // Wait 30 seconds then try to reload
+      // Wait 10 seconds then try to reload (service should restart faster now)
       setTimeout(() => {
         alert(t('logs.updateCompleteReload'));
         window.location.reload();
-      }, 30000);
+      }, 10000);
     } catch (err) {
       alert(t('logs.updateFailed'));
       console.error('Update failed:', err);
@@ -664,7 +664,7 @@ export default function AdminLogs() {
                   <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>{t('logs.cpuTemperature')}</div>
                 </div>
                 <div style={{ fontSize: '28px', fontWeight: '800', color: getTempColor(systemHealth.temperature) }}>
-                  {systemHealth.temperature.toFixed(1)}°C
+                  {systemHealth.temperature.toFixed(1)}Â°C
                 </div>
                 <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
                   {systemHealth.temperature < 70 ? t('logs.tempNormal') : systemHealth.temperature < 80 ? t('logs.tempWarm') : t('logs.tempHot')}
@@ -721,7 +721,7 @@ export default function AdminLogs() {
             onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
               <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>{t('logs.dataCollectorStatus')}</div>
               <div style={{ fontSize: '28px', fontWeight: '800', color: '#10b981', marginBottom: '8px' }}>
-                ● {t('logs.running')}
+                â— {t('logs.running')}
               </div>
               <div style={{ fontSize: '12px', color: '#6b7280' }}>
                 {t('logs.collectionInterval')}

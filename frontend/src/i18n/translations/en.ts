@@ -890,7 +890,7 @@ export const en: Translations = {
 
   "logs.cpuLow": "Low usage",
   "logs.cpuModerate": "Moderate usage",
-  "logs.cpuHigh": "High usage!",
+  "logs.cpuHigh": "High usage",
 
   // Settings
   'settings.title': 'Settings',

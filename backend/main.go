@@ -593,23 +593,19 @@ func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 			writeLog(fmt.Sprintf("Failed to build frontend: %v", err))
 		}
 
-		// Restart service (this will cleanly replace the running process)
-		writeLog("Restarting zev-billing service...")
-		restartCmd := exec.Command("systemctl", "restart", "zev-billing.service")
-		if err := restartCmd.Run(); err != nil {
-			writeLog(fmt.Sprintf("Failed to restart service: %v", err))
-			return
-		}
-
 		// Restart nginx
 		writeLog("Restarting nginx...")
 		nginxCmd := exec.Command("systemctl", "restart", "nginx")
 		if err := nginxCmd.Run(); err != nil {
-			writeLog(fmt.Sprintf("Failed to restart nginx: %v", err))
+			writeLog(fmt.Sprintf("Warning: Failed to restart nginx: %v", err))
 		}
 
 		writeLog("Update completed successfully!")
-		writeLog("System is now running the latest version.")
+		writeLog("Exiting process - systemd will restart the service automatically...")
+		
+		// Exit the process - systemd will restart it automatically with the new binary
+		time.Sleep(500 * time.Millisecond)
+		os.Exit(0)
 	}()
 }
 
