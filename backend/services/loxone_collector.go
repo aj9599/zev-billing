@@ -670,15 +670,18 @@ func (conn *LoxoneWebSocketConnection) ensureAuth() error {
 	return nil
 }
 
-// refreshToken uses an existing token to refresh the session (fast refresh)
+// refreshToken uses the correct Loxone API to refresh the token
+// This replaces the old method that was using jdev/sys/fenc (which is for authentication, not refresh)
 func (conn *LoxoneWebSocketConnection) refreshToken() error {
-	log.Printf("🔄 TOKEN REFRESH - Using existing token")
+	log.Printf("🔄 TOKEN REFRESH - Requesting new token with extended lifespan")
 	
-	// Use jdev/sys/fenc/{token} to refresh/authenticate with existing token
-	authCmd := fmt.Sprintf("jdev/sys/fenc/%s", conn.token)
-	log.Printf("   → Sending: jdev/sys/fenc/***")
+	// Use the correct Loxone API command for token refresh (not authentication)
+	// According to Loxone documentation page 31: jdev/sys/refreshjwt/{token}/{user}
+	// Since version 11.2, the token can be sent in plaintext (no hashing required)
+	refreshCmd := fmt.Sprintf("jdev/sys/refreshjwt/%s/%s", conn.token, conn.Username)
+	log.Printf("   → Sending: jdev/sys/refreshjwt/***/%s", conn.Username)
 	
-	if err := conn.ws.WriteMessage(websocket.TextMessage, []byte(authCmd)); err != nil {
+	if err := conn.ws.WriteMessage(websocket.TextMessage, []byte(refreshCmd)); err != nil {
 		return fmt.Errorf("failed to send token refresh: %v", err)
 	}
 	
@@ -693,12 +696,16 @@ func (conn *LoxoneWebSocketConnection) refreshToken() error {
 	
 	log.Printf("   ← Received refresh response (type %d)", msgType)
 	
+	// Parse the refreshjwt response which contains a NEW token with extended lifespan
 	var refreshResp struct {
 		LL struct {
 			Control string `json:"control"`
 			Code    string `json:"code"`
 			Value   struct {
-				ValidUntil int64 `json:"validUntil"`
+				Token      string `json:"token"`      // NEW token returned by refresh
+				ValidUntil int64  `json:"validUntil"` // New expiry time
+				Rights     int    `json:"tokenRights"`
+				Unsecure   bool   `json:"unsecurePass"`
 			} `json:"value"`
 		} `json:"LL"`
 	}
@@ -713,18 +720,29 @@ func (conn *LoxoneWebSocketConnection) refreshToken() error {
 		return fmt.Errorf("token refresh failed with code: %s", refreshResp.LL.Code)
 	}
 	
-	// Update token expiry
+	// The response contains a NEW token with extended lifespan
+	newToken := refreshResp.LL.Value.Token
+	if newToken == "" {
+		return fmt.Errorf("no token returned in refresh response")
+	}
+	
 	newTokenValidTime := loxoneEpoch.Add(time.Duration(refreshResp.LL.Value.ValidUntil) * time.Second)
 	
 	conn.mu.Lock()
+	conn.token = newToken // Store the NEW token - this is critical!
 	conn.tokenValid = true
 	conn.tokenExpiry = newTokenValidTime
 	conn.lastSuccessfulAuth = time.Now()
 	conn.mu.Unlock()
 	
 	log.Printf("   ✅ Token refreshed successfully")
+	log.Printf("   New token received: %s...", newToken[:min(len(newToken), 16)])
 	log.Printf("   New expiry: %v", newTokenValidTime.Format("2006-01-02 15:04:05"))
 	log.Printf("   Token valid for: %.1f hours", time.Until(newTokenValidTime).Hours())
+	
+	if refreshResp.LL.Value.Unsecure {
+		log.Printf("   ⚠️  WARNING: Unsecure password flag is set")
+	}
 	
 	return nil
 }
@@ -1768,11 +1786,11 @@ func (conn *LoxoneWebSocketConnection) readLoop(db *sql.DB) {
 					for uuid, fieldName := range uuidMap {
 						expectedControl := fmt.Sprintf("dev/sps/io/%s/all", uuid)
 						if strings.Contains(response.LL.Control, expectedControl) {
-							log.Printf("   ðŸŽ¯ [%s] Matched UUID for field '%s': %s", device.Name, fieldName, uuid)
+							log.Printf("   🎯 [%s] Matched UUID for field '%s': %s", device.Name, fieldName, uuid)
 							
 							if chargerData[device.ID] == nil {
 								chargerData[device.ID] = &ChargerDataCollection{}
-								log.Printf("   ðŸ“‹ [%s] Created new data collection for charger", device.Name)
+								log.Printf("   📋 [%s] Created new data collection for charger", device.Name)
 							}
 
 							conn.processChargerField(device, response, fieldName, chargerData[device.ID], db)
