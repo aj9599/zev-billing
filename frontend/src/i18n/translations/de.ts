@@ -890,7 +890,7 @@ export const de: Translations = {
 
   "logs.cpuLow": "Niedrige Auslastung",
   "logs.cpuModerate": "Mittlere Auslastung",
-  "logs.cpuHigh": "Hohe Auslastung",
+  "logs.cpuHigh": "Hohe Auslastung!",
   "logs.updatingSystem": 'System wird aktualisiert',
   "logs.updateInProgress": 'Bitte warten Sie, während das System aktualisiert wird. Dies dauert etwa 40 Sekunden.',
   "logs.doNotCloseWindow": 'Bitte schließen Sie dieses Fenster nicht und navigieren Sie nicht weg.',
