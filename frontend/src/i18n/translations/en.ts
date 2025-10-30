@@ -890,7 +890,7 @@ export const en: Translations = {
 
   "logs.cpuLow": "Low usage",
   "logs.cpuModerate": "Moderate usage",
-  "logs.cpuHigh": "High usage!",
+  "logs.cpuHigh": "High usage",
   "logs.updatingSystem": 'Updating System',
   "logs.updateInProgress": 'Please wait while the system is being updated. This will take approximately 20 seconds.',
   "logs.doNotCloseWindow": 'Please do not close this window or navigate away.',
