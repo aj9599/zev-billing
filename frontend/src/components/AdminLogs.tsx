@@ -199,8 +199,8 @@ export default function AdminLogs() {
     try {
       await api.applyUpdate();
       
-      // Animate progress bar over 20 seconds
-      const duration = 20000; // 20 seconds
+      // Animate progress bar over 40 seconds
+      const duration = 40000; // 40 seconds
       const steps = 100;
       const interval = duration / steps;
       
@@ -214,7 +214,7 @@ export default function AdminLogs() {
         }
       }, interval);
       
-      // Wait 20 seconds for service to restart
+      // Wait 40 seconds for service to restart
       setTimeout(() => {
         window.location.reload();
       }, duration);
