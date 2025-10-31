@@ -188,6 +188,55 @@ func (h *ChargerHandler) Update(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(c)
 }
 
+// GetDeletionImpact returns information about what will be deleted
+func (h *ChargerHandler) GetDeletionImpact(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	// Get charger info
+	var chargerName string
+	err = h.db.QueryRow("SELECT name FROM chargers WHERE id = ?", id).Scan(&chargerName)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Charger not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	// Count charger sessions
+	var sessionsCount int
+	err = h.db.QueryRow("SELECT COUNT(*) FROM charger_sessions WHERE charger_id = ?", id).Scan(&sessionsCount)
+	if err != nil {
+		sessionsCount = 0
+	}
+
+	// Get date range of sessions
+	var oldestSession, newestSession sql.NullString
+	h.db.QueryRow(`
+		SELECT MIN(session_time), MAX(session_time) 
+		FROM charger_sessions 
+		WHERE charger_id = ?
+	`, id).Scan(&oldestSession, &newestSession)
+
+	impact := map[string]interface{}{
+		"charger_id":      id,
+		"charger_name":    chargerName,
+		"sessions_count":  sessionsCount,
+		"oldest_session":  oldestSession.String,
+		"newest_session":  newestSession.String,
+		"has_data":        sessionsCount > 0,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(impact)
+}
+
 func (h *ChargerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, err := strconv.Atoi(vars["id"])
@@ -196,15 +245,53 @@ func (h *ChargerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if it's a UDP or Loxone API charger
-	var connectionType string
-	h.db.QueryRow("SELECT connection_type FROM chargers WHERE id = ?", id).Scan(&connectionType)
-
-	_, err = h.db.Exec("DELETE FROM chargers WHERE id = ?", id)
+	// Check if it's a UDP or Loxone API charger before deletion
+	var connectionType, chargerName string
+	err = h.db.QueryRow("SELECT connection_type, name FROM chargers WHERE id = ?", id).Scan(&connectionType, &chargerName)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Charger not found", http.StatusNotFound)
+		return
+	}
 	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	// Start a transaction for cascade deletion
+	tx, err := h.db.Begin()
+	if err != nil {
+		log.Printf("Failed to start transaction: %v", err)
+		http.Error(w, "Failed to start deletion", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	// Delete all charger sessions first
+	result, err := tx.Exec("DELETE FROM charger_sessions WHERE charger_id = ?", id)
+	if err != nil {
+		log.Printf("Failed to delete charger sessions: %v", err)
+		http.Error(w, "Failed to delete charger sessions", http.StatusInternalServerError)
+		return
+	}
+	rowsAffected, _ := result.RowsAffected()
+	log.Printf("Deleted %d charger sessions for charger %d (%s)", rowsAffected, id, chargerName)
+
+	// Delete the charger
+	_, err = tx.Exec("DELETE FROM chargers WHERE id = ?", id)
+	if err != nil {
+		log.Printf("Failed to delete charger: %v", err)
 		http.Error(w, "Failed to delete charger", http.StatusInternalServerError)
 		return
 	}
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		log.Printf("Failed to commit transaction: %v", err)
+		http.Error(w, "Failed to commit deletion", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("Successfully deleted charger %d (%s) and %d sessions", id, chargerName, rowsAffected)
 
 	// If it was a UDP charger, restart UDP listeners
 	if connectionType == "udp" {

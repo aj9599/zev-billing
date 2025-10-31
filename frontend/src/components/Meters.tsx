@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Info, HelpCircle, Zap, Download, Search, Building, Radio, Settings, AlertCircle, Star, Wifi, WifiOff } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Info, HelpCircle, Zap, Download, Search, Building, Radio, Settings, AlertCircle, Star, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 import { api } from '../api/client';
 import type { Meter, Building as BuildingType, User } from '../types';
 import { useTranslation } from '../i18n';
@@ -34,6 +34,15 @@ interface LoxoneConnectionStatus {
   };
 }
 
+interface DeletionImpact {
+  meter_id: number;
+  meter_name: string;
+  readings_count: number;
+  oldest_reading: string;
+  newest_reading: string;
+  has_data: boolean;
+}
+
 export default function Meters() {
   const { t } = useTranslation();
   const [meters, setMeters] = useState<Meter[]>([]);
@@ -44,6 +53,11 @@ export default function Meters() {
   const [showModal, setShowModal] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [meterToDelete, setMeterToDelete] = useState<Meter | null>(null);
+  const [deletionImpact, setDeletionImpact] = useState<DeletionImpact | null>(null);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
+  const [deleteUnderstandChecked, setDeleteUnderstandChecked] = useState(false);
   const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
   const [loxoneStatus, setLoxoneStatus] = useState<LoxoneConnectionStatus>({});
   const [formData, setFormData] = useState<Partial<Meter>>({
@@ -179,15 +193,53 @@ export default function Meters() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (confirm(t('meters.deleteConfirm'))) {
-      try {
-        await api.deleteMeter(id);
-        loadData();
-        fetchLoxoneStatus();
-      } catch (err) {
-        alert(t('meters.deleteFailed'));
-      }
+  const handleDeleteClick = async (meter: Meter) => {
+    setMeterToDelete(meter);
+    setDeleteConfirmationText('');
+    setDeleteUnderstandChecked(false);
+    
+    try {
+      const impact = await api.getMeterDeletionImpact(meter.id);
+      setDeletionImpact(impact);
+      setShowDeleteConfirmation(true);
+    } catch (err) {
+      console.error('Failed to get deletion impact:', err);
+      // If we can't get the impact, still allow deletion but without the details
+      setDeletionImpact({
+        meter_id: meter.id,
+        meter_name: meter.name,
+        readings_count: 0,
+        oldest_reading: '',
+        newest_reading: '',
+        has_data: false
+      });
+      setShowDeleteConfirmation(true);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!meterToDelete || !deletionImpact) return;
+    
+    // Validate confirmation
+    if (deleteConfirmationText !== deletionImpact.meter_name) {
+      alert(t('meters.deleteNameMismatch') || 'The meter name does not match. Please type it exactly as shown.');
+      return;
+    }
+    
+    if (!deleteUnderstandChecked) {
+      alert(t('meters.deleteCheckRequired') || 'Please check the confirmation box to proceed.');
+      return;
+    }
+
+    try {
+      await api.deleteMeter(meterToDelete.id);
+      setShowDeleteConfirmation(false);
+      setMeterToDelete(null);
+      setDeletionImpact(null);
+      loadData();
+      fetchLoxoneStatus();
+    } catch (err) {
+      alert(t('meters.deleteFailed'));
     }
   };
 
@@ -395,6 +447,145 @@ export default function Meters() {
       building_name: building?.name || 'Unknown Building'
     };
   });
+
+  const DeleteConfirmationModal = () => (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center',
+      justifyContent: 'center', zIndex: 2500, padding: '20px'
+    }}>
+      <div style={{
+        backgroundColor: 'white', borderRadius: '16px', padding: '32px',
+        maxWidth: '550px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+          <div style={{
+            width: '48px', height: '48px', borderRadius: '50%',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center'
+          }}>
+            <AlertTriangle size={24} color="#ef4444" />
+          </div>
+          <div>
+            <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1f2937', margin: 0 }}>
+              {t('meters.deleteConfirmTitle') || 'Confirm Deletion'}
+            </h2>
+            <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>
+              {t('meters.deleteWarning') || 'This action cannot be undone'}
+            </p>
+          </div>
+        </div>
+
+        {deletionImpact && (
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{
+              backgroundColor: '#fef3c7', border: '2px solid #f59e0b',
+              borderRadius: '12px', padding: '16px', marginBottom: '16px'
+            }}>
+              <p style={{ fontSize: '14px', fontWeight: '600', color: '#92400e', marginBottom: '12px' }}>
+                {t('meters.deleteImpactTitle') || 'The following will be permanently deleted:'}
+              </p>
+              <ul style={{ margin: 0, paddingLeft: '20px', color: '#92400e' }}>
+                <li style={{ marginBottom: '8px' }}>
+                  <strong>{deletionImpact.meter_name}</strong> {t('meters.meterWillBeDeleted') || '(Meter configuration)'}
+                </li>
+                {deletionImpact.has_data && (
+                  <li style={{ marginBottom: '8px' }}>
+                    <strong>{deletionImpact.readings_count.toLocaleString()}</strong> {t('meters.readingsWillBeDeleted') || 'readings'}
+                    {deletionImpact.oldest_reading && deletionImpact.newest_reading && (
+                      <div style={{ fontSize: '12px', marginTop: '4px', color: '#78350f' }}>
+                        {t('meters.dataRange') || 'Data from'} {new Date(deletionImpact.oldest_reading).toLocaleDateString()} {t('common.to') || 'to'} {new Date(deletionImpact.newest_reading).toLocaleDateString()}
+                      </div>
+                    )}
+                  </li>
+                )}
+              </ul>
+            </div>
+
+            <div style={{
+              backgroundColor: '#fee2e2', border: '2px solid #ef4444',
+              borderRadius: '12px', padding: '16px', marginBottom: '16px'
+            }}>
+              <p style={{ fontSize: '13px', fontWeight: '600', color: '#991b1b', margin: 0 }}>
+                ⚠️ {t('meters.dataLossWarning') || 'Warning: All historical data for this meter will be permanently lost. This cannot be recovered.'}
+              </p>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#374151' }}>
+                {t('meters.typeToConfirm') || 'Type the meter name to confirm:'}
+              </label>
+              <div style={{
+                padding: '8px 12px', backgroundColor: '#f3f4f6',
+                borderRadius: '6px', marginBottom: '8px', fontFamily: 'monospace',
+                fontSize: '14px', fontWeight: '600', color: '#1f2937'
+              }}>
+                {deletionImpact.meter_name}
+              </div>
+              <input
+                type="text"
+                value={deleteConfirmationText}
+                onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                placeholder={t('meters.typeMeterName') || 'Type meter name here...'}
+                style={{
+                  width: '100%', padding: '12px', border: '2px solid #e5e7eb',
+                  borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit'
+                }}
+                autoFocus
+              />
+            </div>
+
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: '12px',
+              padding: '12px', backgroundColor: '#f9fafb',
+              borderRadius: '8px', cursor: 'pointer', marginBottom: '16px'
+            }}>
+              <input
+                type="checkbox"
+                checked={deleteUnderstandChecked}
+                onChange={(e) => setDeleteUnderstandChecked(e.target.checked)}
+                style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                {t('meters.understandDataLoss') || 'I understand that this will permanently delete all data and cannot be undone'}
+              </span>
+            </label>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button
+            onClick={() => {
+              setShowDeleteConfirmation(false);
+              setMeterToDelete(null);
+              setDeletionImpact(null);
+            }}
+            style={{
+              flex: 1, padding: '12px', backgroundColor: '#f3f4f6',
+              color: '#374151', border: 'none', borderRadius: '8px',
+              fontSize: '14px', fontWeight: '600', cursor: 'pointer'
+            }}
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            onClick={handleDeleteConfirm}
+            disabled={!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.meter_name}
+            style={{
+              flex: 1, padding: '12px',
+              backgroundColor: (!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.meter_name) ? '#fca5a5' : '#ef4444',
+              color: 'white', border: 'none', borderRadius: '8px',
+              fontSize: '14px', fontWeight: '600',
+              cursor: (!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.meter_name) ? 'not-allowed' : 'pointer',
+              opacity: (!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.meter_name) ? 0.6 : 1
+            }}
+          >
+            {t('meters.deletePermanently') || 'Delete Permanently'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   const InstructionsModal = () => (
     <div style={{
@@ -751,7 +942,7 @@ export default function Meters() {
                       <Edit2 size={16} />
                     </button>
                     <button
-                      onClick={() => handleDelete(meter.id)}
+                      onClick={() => handleDeleteClick(meter)}
                       style={{
                         width: '32px',
                         height: '32px',
@@ -855,6 +1046,7 @@ export default function Meters() {
       )}
 
       {showInstructions && <InstructionsModal />}
+      {showDeleteConfirmation && <DeleteConfirmationModal />}
       {showExportModal && (
         <ExportModal
           type="meters"
@@ -996,7 +1188,7 @@ export default function Meters() {
                         </label>
                         <input type="password" required value={connectionConfig.loxone_password || ''}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_password: e.target.value })}
-                          placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                          placeholder="••••••••"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
                     </div>
