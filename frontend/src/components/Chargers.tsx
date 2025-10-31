@@ -1015,7 +1015,7 @@ export default function Chargers() {
                             fontWeight: '600',
                             color: '#22c55e'
                           }}>
-                            âœ“ {t('chargers.supported')}
+                            ✓ {t('chargers.supported')}
                           </span>
                         </div>
                       )}
