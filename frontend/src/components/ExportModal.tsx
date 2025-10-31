@@ -55,14 +55,14 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
       const buildingName = selectedBuildingId 
         ? buildings.find(b => b.id === selectedBuildingId)?.name 
         : t('dashboard.allBuildings').toLowerCase();
-      return t('export.exportingAllFrom', { 
-        type: type === 'meters' ? t('meters.title') : t('chargers.title'),
-        building: buildingName
-      });
+      const typeLabel = type === 'meters' ? t('meters.title') : t('chargers.title');
+      return `${t('export.exportingAll')} ${typeLabel} ${t('common.from')} ${buildingName}`;
     }
     const item = items.find(i => i.id === selectedItemId);
     return item ? `${item.building_name} - ${item.name}` : '';
   };
+
+  const typeLabel = type === 'meters' ? t('meters.title') : t('chargers.title');
 
   return (
     <div style={{
@@ -101,7 +101,7 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
               {t('export.title')}
             </h2>
             <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
-              {t('export.subtitle', { type: type === 'meters' ? t('meters.title') : t('chargers.title') })}
+              {t('export.subtitle')} {typeLabel}
             </p>
           </div>
           <button 
@@ -173,7 +173,7 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
             ))}
           </select>
           <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px', marginLeft: '2px' }}>
-            {t('export.filterByBuilding', { type: type === 'meters' ? t('meters.title') : t('chargers.title') })}
+            {t('export.filterByBuilding')} {typeLabel}
           </p>
         </div>
 
@@ -186,7 +186,7 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
             fontSize: '14px',
             color: '#374151'
           }}>
-            {type === 'meters' ? t('meters.title') : t('chargers.title')}
+            {typeLabel}
           </label>
           <select
             value={selectedItemId || ''}
