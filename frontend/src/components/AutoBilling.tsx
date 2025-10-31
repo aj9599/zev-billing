@@ -10,6 +10,7 @@ interface AutoBillingConfig {
   user_ids: number[];
   frequency: 'monthly' | 'quarterly' | 'half_yearly' | 'yearly';
   generation_day: number;
+  first_execution_date?: string;
   is_active: boolean;
   last_run?: string;
   next_run?: string;
@@ -53,6 +54,7 @@ export default function AutoBilling() {
     user_ids: [] as number[],
     frequency: 'monthly' as 'monthly' | 'quarterly' | 'half_yearly' | 'yearly',
     generation_day: 1,
+    first_execution_date: '',
     is_active: true,
     sender_name: '',
     sender_address: '',
@@ -112,6 +114,7 @@ export default function AutoBilling() {
       user_ids: config.user_ids,
       frequency: config.frequency,
       generation_day: config.generation_day,
+      first_execution_date: config.first_execution_date || '',
       is_active: config.is_active,
       sender_name: config.sender_name || '',
       sender_address: config.sender_address || '',
@@ -156,6 +159,7 @@ export default function AutoBilling() {
       user_ids: [],
       frequency: 'monthly',
       generation_day: 1,
+      first_execution_date: '',
       is_active: true,
       sender_name: '',
       sender_address: '',
@@ -194,6 +198,24 @@ export default function AutoBilling() {
     return new Date(dateStr).toLocaleDateString('de-CH');
   };
 
+  const getBuildingNames = (buildingIds: number[]) => {
+    return buildingIds
+      .map(id => buildings.find(b => b.id === id)?.name)
+      .filter(Boolean)
+      .join(', ');
+  };
+
+  const getUserNames = (userIds: number[]) => {
+    if (userIds.length === 0) return t('autoBilling.allUsers');
+    return userIds
+      .map(id => {
+        const user = users.find(u => u.id === id);
+        return user ? `${user.first_name} ${user.last_name}` : null;
+      })
+      .filter(Boolean)
+      .join(', ');
+  };
+
   const InstructionsModal = () => (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -213,7 +235,7 @@ export default function AutoBilling() {
         </div>
 
         <div style={{ lineHeight: '1.8', color: '#374151' }}>
-          <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #3b82f6' }}>
+          <div style={{ backgroundColor: 'rgba(219, 234, 254, 0.5)', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid rgba(59, 130, 246, 0.3)' }}>
             <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Calendar size={20} color="#3b82f6" />
               {t('autoBilling.instructions.whatIsAutoBilling')}
@@ -252,7 +274,7 @@ export default function AutoBilling() {
             <li>{t('autoBilling.instructions.step5')}</li>
           </ul>
 
-          <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', marginTop: '16px', border: '1px solid #f59e0b' }}>
+          <div style={{ backgroundColor: 'rgba(254, 243, 199, 0.5)', padding: '16px', borderRadius: '8px', marginTop: '16px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
             <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: '#1f2937' }}>
               {t('autoBilling.instructions.important')}
             </h3>
@@ -264,7 +286,7 @@ export default function AutoBilling() {
             </ul>
           </div>
 
-          <div style={{ backgroundColor: '#f0fdf4', padding: '16px', borderRadius: '8px', marginTop: '16px', border: '1px solid #10b981' }}>
+          <div style={{ backgroundColor: 'rgba(240, 253, 244, 0.5)', padding: '16px', borderRadius: '8px', marginTop: '16px', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
             <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: '#1f2937' }}>
               {t('autoBilling.instructions.tips')}
             </h3>
@@ -316,9 +338,11 @@ export default function AutoBilling() {
             onClick={() => setShowInstructions(true)}
             style={{
               display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
-              backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '6px',
-              fontSize: '14px', cursor: 'pointer'
+              backgroundColor: 'rgba(23, 162, 184, 0.9)', color: 'white', border: 'none', borderRadius: '6px',
+              fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s'
             }}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(23, 162, 184, 1)'}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(23, 162, 184, 0.9)'}
           >
             <HelpCircle size={18} />
             {t('autoBilling.setupInstructions')}
@@ -327,9 +351,11 @@ export default function AutoBilling() {
             onClick={() => { resetForm(); setShowModal(true); }}
             style={{
               display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
-              backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '6px',
-              fontSize: '14px', cursor: 'pointer'
+              backgroundColor: 'rgba(40, 167, 69, 0.9)', color: 'white', border: 'none', borderRadius: '6px',
+              fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s'
             }}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(40, 167, 69, 1)'}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(40, 167, 69, 0.9)'}
           >
             <Plus size={18} />
             {t('autoBilling.addConfig')}
@@ -347,16 +373,17 @@ export default function AutoBilling() {
       ) : (
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
           gap: '20px'
         }}>
           {configs.map(config => (
             <div key={config.id} style={{
               backgroundColor: 'white',
               borderRadius: '12px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-              padding: '20px',
-              border: config.is_active ? '2px solid #28a745' : '2px solid #ddd'
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              padding: '24px',
+              border: config.is_active ? '2px solid rgba(40, 167, 69, 0.3)' : '2px solid rgba(221, 221, 221, 0.5)',
+              transition: 'all 0.3s'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                 <div style={{ flex: 1 }}>
@@ -374,59 +401,70 @@ export default function AutoBilling() {
                   onClick={() => toggleActive(config)}
                   style={{
                     padding: '8px',
-                    backgroundColor: config.is_active ? '#28a745' : '#6c757d',
+                    backgroundColor: config.is_active ? 'rgba(40, 167, 69, 0.9)' : 'rgba(108, 117, 125, 0.9)',
                     color: 'white',
                     border: 'none',
                     borderRadius: '6px',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '4px'
+                    gap: '4px',
+                    transition: 'all 0.2s'
                   }}
                   title={config.is_active ? t('autoBilling.pause') : t('autoBilling.activate')}
+                  onMouseOver={(e) => e.currentTarget.style.opacity = '1'}
+                  onMouseOut={(e) => e.currentTarget.style.opacity = '0.9'}
                 >
                   {config.is_active ? <PauseCircle size={16} /> : <PlayCircle size={16} />}
                 </button>
               </div>
 
               <div style={{ marginBottom: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                  <Building size={16} color="#6b7280" />
-                  <span style={{ fontSize: '13px', fontWeight: '600', color: '#6b7280' }}>
-                    {config.building_ids.length} {config.building_ids.length === 1 ? t('buildings.title').slice(0, -1) : t('buildings.title')}
-                  </span>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '10px', padding: '10px', backgroundColor: 'rgba(249, 250, 251, 0.8)', borderRadius: '6px' }}>
+                  <Building size={16} color="#6b7280" style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
+                      {config.building_ids.length} {config.building_ids.length === 1 ? t('autoBilling.building') : t('autoBilling.buildings')}:
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#374151' }}>
+                      {getBuildingNames(config.building_ids) || t('autoBilling.noBuildings')}
+                    </div>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                  <Users size={16} color="#6b7280" />
-                  <span style={{ fontSize: '13px', color: '#6b7280' }}>
-                    {config.user_ids.length === 0 
-                      ? t('autoBilling.allUsers') 
-                      : `${config.user_ids.length} ${config.user_ids.length === 1 ? t('users.user') : t('users.users')}`}
-                  </span>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '10px', backgroundColor: 'rgba(249, 250, 251, 0.8)', borderRadius: '6px' }}>
+                  <Users size={16} color="#6b7280" style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
+                      {config.user_ids.length === 0 ? t('autoBilling.users') : `${config.user_ids.length} ${config.user_ids.length === 1 ? t('autoBilling.user') : t('autoBilling.users')}`}:
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#374151' }}>
+                      {getUserNames(config.user_ids)}
+                    </div>
+                  </div>
                 </div>
               </div>
 
               <div style={{
                 padding: '12px',
-                backgroundColor: '#f9f9f9',
+                backgroundColor: 'rgba(243, 244, 246, 0.6)',
                 borderRadius: '8px',
                 marginBottom: '12px'
               }}>
-                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>
-                  {t('autoBilling.lastRun')}: <strong>{formatDate(config.last_run)}</strong>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '6px' }}>
+                  {t('autoBilling.lastRun')}: <strong style={{ color: '#374151' }}>{formatDate(config.last_run)}</strong>
                 </div>
                 <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                  {t('autoBilling.nextRun')}: <strong style={{ color: '#28a745' }}>{formatDate(config.next_run)}</strong>
+                  {t('autoBilling.nextRun')}: <strong style={{ color: 'rgba(40, 167, 69, 0.9)', fontWeight: '600' }}>{formatDate(config.next_run)}</strong>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid #f3f4f6', paddingTop: '12px' }}>
+              <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid rgba(243, 244, 246, 0.8)', paddingTop: '12px' }}>
                 <button
                   onClick={() => handleEdit(config)}
                   style={{
                     flex: 1,
                     padding: '8px',
-                    backgroundColor: '#007bff',
+                    backgroundColor: 'rgba(0, 123, 255, 0.9)',
                     color: 'white',
                     border: 'none',
                     borderRadius: '6px',
@@ -435,8 +473,11 @@ export default function AutoBilling() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '4px'
+                    gap: '4px',
+                    transition: 'all 0.2s'
                   }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(0, 123, 255, 1)'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(0, 123, 255, 0.9)'}
                 >
                   <Edit2 size={14} />
                   {t('common.edit')}
@@ -446,7 +487,7 @@ export default function AutoBilling() {
                   style={{
                     flex: 1,
                     padding: '8px',
-                    backgroundColor: '#dc3545',
+                    backgroundColor: 'rgba(220, 53, 69, 0.9)',
                     color: 'white',
                     border: 'none',
                     borderRadius: '6px',
@@ -455,8 +496,11 @@ export default function AutoBilling() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '4px'
+                    gap: '4px',
+                    transition: 'all 0.2s'
                   }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(220, 53, 69, 1)'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(220, 53, 69, 0.9)'}
                 >
                   <Trash2 size={14} />
                   {t('common.delete')}
@@ -499,9 +543,9 @@ export default function AutoBilling() {
 
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', marginBottom: '12px', fontWeight: '600', fontSize: '15px' }}>
-                  {t('autoBilling.selectBuildings')} * ({t('billing.atLeastOne')})
+                  {t('autoBilling.selectBuildings')} * ({t('autoBilling.atLeastOne')})
                 </label>
-                <div style={{ padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '8px', maxHeight: '200px', overflow: 'auto' }}>
+                <div style={{ padding: '16px', backgroundColor: 'rgba(249, 249, 249, 0.8)', borderRadius: '8px', maxHeight: '200px', overflow: 'auto' }}>
                   {buildings.map(b => (
                     <label key={b.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', cursor: 'pointer' }}>
                       <input
@@ -517,9 +561,9 @@ export default function AutoBilling() {
 
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', marginBottom: '12px', fontWeight: '600', fontSize: '15px' }}>
-                  {t('autoBilling.selectUsers')} ({t('billing.leaveEmptyForAll')})
+                  {t('autoBilling.selectUsers')} ({t('autoBilling.leaveEmptyForAll')})
                 </label>
-                <div style={{ padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '8px', maxHeight: '200px', overflow: 'auto' }}>
+                <div style={{ padding: '16px', backgroundColor: 'rgba(249, 249, 249, 0.8)', borderRadius: '8px', maxHeight: '200px', overflow: 'auto' }}>
                   {users.filter(u => formData.building_ids.includes(u.building_id || 0)).map(u => (
                     <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', cursor: 'pointer' }}>
                       <input
@@ -565,7 +609,20 @@ export default function AutoBilling() {
                 </div>
               </div>
 
-              <div style={{ marginBottom: '16px', padding: '16px', backgroundColor: '#f0f4ff', borderRadius: '8px' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                  {t('autoBilling.firstExecutionDate')}
+                </label>
+                <input
+                  type="date"
+                  value={formData.first_execution_date}
+                  onChange={(e) => setFormData({ ...formData, first_execution_date: e.target.value })}
+                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
+                />
+                <small style={{ fontSize: '12px', color: '#666' }}>{t('autoBilling.firstExecutionDateHelp')}</small>
+              </div>
+
+              <div style={{ marginBottom: '16px', padding: '16px', backgroundColor: 'rgba(240, 244, 255, 0.5)', borderRadius: '8px' }}>
                 <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>{t('billing.senderInfo')}</h3>
                 <div style={{ marginBottom: '12px' }}>
                   <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.senderName')}</label>
@@ -611,7 +668,7 @@ export default function AutoBilling() {
                 </div>
               </div>
 
-              <div style={{ marginBottom: '16px', padding: '16px', backgroundColor: '#f0fff4', borderRadius: '8px' }}>
+              <div style={{ marginBottom: '16px', padding: '16px', backgroundColor: 'rgba(240, 253, 244, 0.5)', borderRadius: '8px' }}>
                 <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>{t('billing.bankingInfo')}</h3>
                 <div style={{ marginBottom: '12px' }}>
                   <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.bankName')}</label>
@@ -647,13 +704,13 @@ export default function AutoBilling() {
 
               <div className="button-group" style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                 <button onClick={handleSubmit} style={{
-                  flex: 1, padding: '12px', backgroundColor: '#28a745', color: 'white',
+                  flex: 1, padding: '12px', backgroundColor: 'rgba(40, 167, 69, 0.9)', color: 'white',
                   border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
                 }}>
                   {editingConfig ? t('common.update') : t('common.create')}
                 </button>
                 <button onClick={() => { setShowModal(false); resetForm(); }} style={{
-                  flex: 1, padding: '12px', backgroundColor: '#6c757d', color: 'white',
+                  flex: 1, padding: '12px', backgroundColor: 'rgba(108, 117, 125, 0.9)', color: 'white',
                   border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
                 }}>
                   {t('common.cancel')}

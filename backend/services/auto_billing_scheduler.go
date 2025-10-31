@@ -58,8 +58,9 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 
 	rows, err := s.db.Query(`
 		SELECT id, name, building_ids, user_ids, frequency, generation_day,
-		       next_run, sender_name, sender_address, sender_city, sender_zip,
-		       sender_country, bank_name, bank_iban, bank_account_holder
+		       next_run, first_execution_date, sender_name, sender_address, 
+		       sender_city, sender_zip, sender_country, bank_name, bank_iban, 
+		       bank_account_holder
 		FROM auto_billing_configs
 		WHERE is_active = 1 AND next_run <= ?
 	`, now)
@@ -76,12 +77,13 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 		var name, buildingIDsStr, userIDsStr, frequency string
 		var generationDay int
 		var nextRun time.Time
+		var firstExecutionDate sql.NullString
 		var senderName, senderAddress, senderCity, senderZip, senderCountry sql.NullString
 		var bankName, bankIBAN, bankAccountHolder sql.NullString
 
 		err := rows.Scan(&id, &name, &buildingIDsStr, &userIDsStr, &frequency,
-			&generationDay, &nextRun, &senderName, &senderAddress, &senderCity,
-			&senderZip, &senderCountry, &bankName, &bankIBAN, &bankAccountHolder)
+			&generationDay, &nextRun, &firstExecutionDate, &senderName, &senderAddress, 
+			&senderCity, &senderZip, &senderCountry, &bankName, &bankIBAN, &bankAccountHolder)
 
 		if err != nil {
 			log.Printf("ERROR: Failed to scan config: %v", err)
@@ -132,8 +134,8 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 
 		log.Printf("SUCCESS: Generated %d invoices for config %s", len(invoices), name)
 
-		// Update last_run and calculate next_run
-		nextRunTime := calculateNextRun(frequency, generationDay, &now)
+		// Calculate next_run based on current execution
+		nextRunTime := calculateNextRun(frequency, generationDay, now)
 
 		_, err = s.db.Exec(`
 			UPDATE auto_billing_configs
@@ -186,46 +188,106 @@ func parseIDList(idStr string) []int {
 }
 
 // Helper function to calculate next run date
-func calculateNextRun(frequency string, generationDay int, lastRun *time.Time) time.Time {
-	now := time.Now()
+func calculateNextRun(frequency string, generationDay int, currentTime time.Time) time.Time {
 	var nextRun time.Time
-
-	// Start from last run if available, otherwise start from now
-	if lastRun != nil {
-		nextRun = *lastRun
-	} else {
-		nextRun = now
-	}
 
 	switch frequency {
 	case "monthly":
-		nextRun = nextRun.AddDate(0, 1, 0)
+		// Start with next month
+		nextRun = currentTime.AddDate(0, 1, 0)
 		nextRun = time.Date(nextRun.Year(), nextRun.Month(), generationDay, 0, 0, 0, 0, nextRun.Location())
 
 	case "quarterly":
-		nextRun = nextRun.AddDate(0, 3, 0)
+		// Start with 3 months later
+		nextRun = currentTime.AddDate(0, 3, 0)
 		nextRun = time.Date(nextRun.Year(), nextRun.Month(), generationDay, 0, 0, 0, 0, nextRun.Location())
 
 	case "half_yearly":
-		nextRun = nextRun.AddDate(0, 6, 0)
+		// Start with 6 months later
+		nextRun = currentTime.AddDate(0, 6, 0)
 		nextRun = time.Date(nextRun.Year(), nextRun.Month(), generationDay, 0, 0, 0, 0, nextRun.Location())
 
 	case "yearly":
-		nextRun = nextRun.AddDate(1, 0, 0)
+		// Start with next year
+		nextRun = currentTime.AddDate(1, 0, 0)
 		nextRun = time.Date(nextRun.Year(), time.January, generationDay, 0, 0, 0, 0, nextRun.Location())
 	}
 
-	// If next run is in the past, keep adding intervals until we're in the future
-	for nextRun.Before(now) {
-		switch frequency {
-		case "monthly":
+	return nextRun
+}
+
+// Calculate initial next_run when config is created or updated
+func CalculateInitialNextRun(frequency string, generationDay int, firstExecutionDate string) time.Time {
+	now := time.Now()
+
+	// If first execution date is provided and in the future, use it
+	if firstExecutionDate != "" {
+		if parsedDate, err := time.Parse("2006-01-02", firstExecutionDate); err == nil {
+			if parsedDate.After(now) {
+				return parsedDate
+			}
+		}
+	}
+
+	// Otherwise, calculate based on generation day and frequency
+	var nextRun time.Time
+
+	switch frequency {
+	case "monthly":
+		// Try current month first
+		nextRun = time.Date(now.Year(), now.Month(), generationDay, 0, 0, 0, 0, now.Location())
+		// If that's in the past, use next month
+		if nextRun.Before(now) {
 			nextRun = nextRun.AddDate(0, 1, 0)
-		case "quarterly":
-			nextRun = nextRun.AddDate(0, 3, 0)
-		case "half_yearly":
-			nextRun = nextRun.AddDate(0, 6, 0)
-		case "yearly":
-			nextRun = nextRun.AddDate(1, 0, 0)
+		}
+
+	case "quarterly":
+		// Find next quarter month (Jan, Apr, Jul, Oct)
+		currentMonth := int(now.Month())
+		quarterMonths := []int{1, 4, 7, 10}
+		nextQuarterMonth := 1 // Default to January next year
+
+		for _, qm := range quarterMonths {
+			if qm > currentMonth {
+				nextQuarterMonth = qm
+				break
+			}
+		}
+
+		if nextQuarterMonth < currentMonth {
+			// Next occurrence is in January next year
+			nextRun = time.Date(now.Year()+1, time.Month(nextQuarterMonth), generationDay, 0, 0, 0, 0, now.Location())
+		} else {
+			// Next occurrence is this year
+			nextRun = time.Date(now.Year(), time.Month(nextQuarterMonth), generationDay, 0, 0, 0, 0, now.Location())
+			// If that's in the past, move to next quarter
+			if nextRun.Before(now) {
+				nextRun = nextRun.AddDate(0, 3, 0)
+			}
+		}
+
+	case "half_yearly":
+		// Find next half-year month (Jan, Jul)
+		currentMonth := int(now.Month())
+		
+		if currentMonth < 7 {
+			// Next occurrence is July this year
+			nextRun = time.Date(now.Year(), time.July, generationDay, 0, 0, 0, 0, now.Location())
+			if nextRun.Before(now) {
+				// July is past, use January next year
+				nextRun = time.Date(now.Year()+1, time.January, generationDay, 0, 0, 0, 0, now.Location())
+			}
+		} else {
+			// Next occurrence is January next year
+			nextRun = time.Date(now.Year()+1, time.January, generationDay, 0, 0, 0, 0, now.Location())
+		}
+
+	case "yearly":
+		// Next occurrence is January
+		nextRun = time.Date(now.Year(), time.January, generationDay, 0, 0, 0, 0, now.Location())
+		// If that's in the past, use next year
+		if nextRun.Before(now) {
+			nextRun = time.Date(now.Year()+1, time.January, generationDay, 0, 0, 0, 0, now.Location())
 		}
 	}
 

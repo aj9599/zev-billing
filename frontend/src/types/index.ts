@@ -105,6 +105,29 @@ export interface InvoiceItem {
   item_type: string;
 }
 
+export interface AutoBillingConfig {
+  id: number;
+  name: string;
+  building_ids: number[];
+  user_ids: number[];
+  frequency: 'monthly' | 'quarterly' | 'half_yearly' | 'yearly';
+  generation_day: number;
+  first_execution_date?: string;
+  is_active: boolean;
+  last_run?: string;
+  next_run?: string;
+  sender_name?: string;
+  sender_address?: string;
+  sender_city?: string;
+  sender_zip?: string;
+  sender_country?: string;
+  bank_name?: string;
+  bank_iban?: string;
+  bank_account_holder?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DashboardStats {
   total_users: number;
   total_buildings: number;

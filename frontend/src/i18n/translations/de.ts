@@ -690,71 +690,99 @@ export const de: Translations = {
   'billing.instructions.tip3': 'Absender- und Bankverbindung werden gespeichert - sie bleiben über Sitzungen hinweg erhalten',
   'billing.instructions.tip4': 'Verwenden Sie die Ansehen-Schaltfläche zur Vorschau vor PDF-Download',
   'billing.instructions.tip5': 'Exportieren Sie Zähler- und Ladestationsdaten für Aufzeichnungen und Analysen',
+  
+  // Navigation
+  'nav.autoBilling': 'Auto-Abrechnung',
 
-  // Auto Billing  
-  'nav.autoBilling': 'Automatische Abrechnung',
+  // Main page
   'autoBilling.title': 'Automatische Rechnungserstellung',
-  'autoBilling.subtitle': 'Automatisierte Abrechnungszeitpläne konfigurieren',
+  'autoBilling.subtitle': 'Automatisierte Abrechnungspläne konfigurieren',
   'autoBilling.addConfig': 'Konfiguration hinzufügen',
   'autoBilling.editConfig': 'Konfiguration bearbeiten',
-  'autoBilling.setupInstructions': 'Setup-Anleitung',
+  'autoBilling.setupInstructions': 'Einrichtungsanleitung',
   'autoBilling.noConfigs': 'Keine automatischen Abrechnungskonfigurationen. Erstellen Sie Ihre erste Konfiguration, um die Rechnungserstellung zu automatisieren.',
+  
+  // Form labels
   'autoBilling.configName': 'Konfigurationsname',
   'autoBilling.configNamePlaceholder': 'z.B. Monatliche Abrechnung für Gebäude A',
   'autoBilling.selectBuildings': 'Gebäude auswählen',
   'autoBilling.selectUsers': 'Benutzer auswählen',
+  'autoBilling.atLeastOne': 'mindestens eines',
+  'autoBilling.leaveEmptyForAll': 'leer lassen für alle Benutzer',
   'autoBilling.selectAtLeastOneBuilding': 'Bitte wählen Sie mindestens ein Gebäude aus',
-  'autoBilling.frequency': 'Abrechnungsfrequenz',
+  
+  // Frequency options
+  'autoBilling.frequency': 'Abrechnungshäufigkeit',
   'autoBilling.frequency.monthly': 'Monatlich',
-  'autoBilling.frequency.quarterly': 'Quartalsweise (Alle 3 Monate)',
+  'autoBilling.frequency.quarterly': 'Vierteljährlich (Alle 3 Monate)',
   'autoBilling.frequency.half_yearly': 'Halbjährlich (Alle 6 Monate)',
   'autoBilling.frequency.yearly': 'Jährlich',
+  
+  // Date and scheduling
   'autoBilling.generationDay': 'Erstellungstag',
   'autoBilling.generationDayHelp': 'Tag des Monats zur Rechnungserstellung (1-28)',
+  'autoBilling.firstExecutionDate': 'Erste Ausführung',
+  'autoBilling.firstExecutionDateHelp': 'Optional: Legen Sie ein spezifisches Datum für die erste Ausführung fest. Wenn leer, wird basierend auf dem Erstellungstag ausgeführt.',
   'autoBilling.day': 'Tag',
-  'autoBilling.allUsers': 'Alle Benutzer in ausgewählten Gebäuden',
   'autoBilling.lastRun': 'Letzte Ausführung',
   'autoBilling.nextRun': 'Nächste Ausführung',
+  
+  // Card display
+  'autoBilling.building': 'Gebäude',
+  'autoBilling.buildings': 'Gebäude',
+  'autoBilling.user': 'Benutzer',
+  'autoBilling.users': 'Benutzer',
+  'autoBilling.allUsers': 'Alle Benutzer in ausgewählten Gebäuden',
+  'autoBilling.noBuildings': 'Keine Gebäude ausgewählt',
+  
+  // Actions
   'autoBilling.pause': 'Pausieren',
   'autoBilling.activate': 'Aktivieren',
-  'autoBilling.createSuccess': 'Automatische Abrechnungskonfiguration erfolgreich erstellt!',
-  'autoBilling.updateSuccess': 'Automatische Abrechnungskonfiguration erfolgreich aktualisiert!',
-  'autoBilling.saveFailed': 'Speichern der Konfiguration fehlgeschlagen',
-  'autoBilling.deleteConfirm': 'Sind Sie sicher, dass Sie diese automatische Abrechnungskonfiguration löschen möchten?',
-  'autoBilling.deleteSuccess': 'Automatische Abrechnungskonfiguration erfolgreich gelöscht',
-  'autoBilling.deleteFailed': 'Löschen der Konfiguration fehlgeschlagen',
-  'autoBilling.toggleFailed': 'Umschalten des Konfigurationsstatus fehlgeschlagen',
+  
+  // Messages
+  'autoBilling.createSuccess': 'Auto-Abrechnungskonfiguration erfolgreich erstellt!',
+  'autoBilling.updateSuccess': 'Auto-Abrechnungskonfiguration erfolgreich aktualisiert!',
+  'autoBilling.saveFailed': 'Fehler beim Speichern der Konfiguration',
+  'autoBilling.deleteConfirm': 'Sind Sie sicher, dass Sie diese Auto-Abrechnungskonfiguration löschen möchten?',
+  'autoBilling.deleteSuccess': 'Auto-Abrechnungskonfiguration erfolgreich gelöscht',
+  'autoBilling.deleteFailed': 'Fehler beim Löschen der Konfiguration',
+  'autoBilling.toggleFailed': 'Fehler beim Ändern des Konfigurationsstatus',
 
-  // Auto Billing Instructions
-  'autoBilling.instructions.title': 'Automatische Abrechnung Anleitung',
+  // Instructions modal
+  'autoBilling.instructions.title': 'Anleitung zur automatischen Abrechnung',
   'autoBilling.instructions.whatIsAutoBilling': 'Was ist automatische Abrechnung?',
-  'autoBilling.instructions.autoBillingDescription': 'Automatische Abrechnungszeitpläne generieren Rechnungen in regelmäßigen Abständen ohne manuellen Eingriff. Konfigurieren Sie wann und wie oft Rechnungen erstellt werden sollen, und das System erstellt sie automatisch nach Zeitplan.',
-  'autoBilling.instructions.howItWorks': 'Wie es funktioniert',
-  'autoBilling.instructions.work1': 'Das System überprüft täglich aktive Konfigurationen',
-  'autoBilling.instructions.work2': 'Wenn der geplante Tag kommt, werden Rechnungen automatisch erstellt',
-  'autoBilling.instructions.work3': 'Rechnungen erscheinen auf der regulären Abrechnungsseite neben manuellen Rechnungen',
+  'autoBilling.instructions.autoBillingDescription': 'Automatische Abrechnungspläne erstellen Rechnungen in regelmäßigen Abständen ohne manuelles Eingreifen. Konfigurieren Sie wann und wie oft Rechnungen erstellt werden sollen, und das System erstellt sie automatisch nach Plan.',
+  
+  'autoBilling.instructions.howItWorks': 'So funktioniert es',
+  'autoBilling.instructions.work1': 'Das System überprüft aktive Konfigurationen stündlich',
+  'autoBilling.instructions.work2': 'Wenn der geplante Tag erreicht ist, werden Rechnungen automatisch erstellt',
+  'autoBilling.instructions.work3': 'Rechnungen erscheinen auf der normalen Abrechnungsseite neben manuellen Rechnungen',
   'autoBilling.instructions.work4': 'Sie können Zeitpläne jederzeit pausieren, ändern oder löschen',
-  'autoBilling.instructions.frequencies': 'Abrechnungsfrequenzen',
-  'autoBilling.instructions.freq1': 'Rechnungen werden am selben Tag jeden Monat erstellt',
+  
+  'autoBilling.instructions.frequencies': 'Abrechnungshäufigkeiten',
+  'autoBilling.instructions.freq1': 'Rechnungen werden am gleichen Tag jeden Monat erstellt',
   'autoBilling.instructions.freq2': 'Rechnungen werden alle 3 Monate erstellt (Jan, Apr, Jul, Okt)',
   'autoBilling.instructions.freq3': 'Rechnungen werden zweimal pro Jahr erstellt (Jan, Jul)',
   'autoBilling.instructions.freq4': 'Rechnungen werden einmal pro Jahr im Januar erstellt',
-  'autoBilling.instructions.howToUse': 'Wie zu verwenden',
-  'autoBilling.instructions.step1': 'Klicken Sie auf "Konfiguration hinzufügen", um einen neuen Abrechnungszeitplan zu erstellen',
-  'autoBilling.instructions.step2': 'Wählen Sie Gebäude und optional bestimmte Benutzer zur Abrechnung aus',
-  'autoBilling.instructions.step3': 'Wählen Sie Frequenz (monatlich, quartalsweise usw.) und Erstellungstag',
+  
+  'autoBilling.instructions.howToUse': 'Anwendung',
+  'autoBilling.instructions.step1': 'Klicken Sie auf "Konfiguration hinzufügen", um einen neuen Abrechnungsplan zu erstellen',
+  'autoBilling.instructions.step2': 'Wählen Sie Gebäude und optional bestimmte Benutzer für die Abrechnung aus',
+  'autoBilling.instructions.step3': 'Wählen Sie Häufigkeit (monatlich, vierteljährlich usw.) und Erstellungstag',
   'autoBilling.instructions.step4': 'Fügen Sie Absender- und Bankinformationen für Rechnungen hinzu',
   'autoBilling.instructions.step5': 'Aktivieren Sie die Konfiguration - Rechnungen werden automatisch erstellt',
+  
   'autoBilling.instructions.important': 'Wichtig',
-  'autoBilling.instructions.important1': 'Stellen Sie sicher, dass aktive Preise für alle Gebäude vor der Planung konfiguriert sind',
-  'autoBilling.instructions.important2': 'Benutzer müssen Wohnungszähler für die Verbrauchsverfolgung haben',
+  'autoBilling.instructions.important1': 'Stellen Sie sicher, dass aktive Preise für alle Gebäude konfiguriert sind, bevor Sie planen',
+  'autoBilling.instructions.important2': 'Benutzer müssen Wohnungszähler für die Verbrauchserfassung haben',
   'autoBilling.instructions.important3': 'Konfigurationen können pausiert werden, ohne sie zu löschen',
-  'autoBilling.instructions.important4': 'Überprüfen Sie die Abrechnungsseite regelmäßig, um generierte Rechnungen zu verifizieren',
+  'autoBilling.instructions.important4': 'Überprüfen Sie die Abrechnungsseite regelmäßig, um erstellte Rechnungen zu verifizieren',
+  
   'autoBilling.instructions.tips': 'Tipps',
   'autoBilling.instructions.tip1': 'Setzen Sie den Erstellungstag auf den 1.-5. des Monats für zuverlässigste Ergebnisse',
   'autoBilling.instructions.tip2': 'Verwenden Sie separate Konfigurationen für verschiedene Gebäudegruppen',
-  'autoBilling.instructions.tip3': 'Bankinformationen in Konfigurationen füllen automatisch Rechnungs-QR-Codes',
-  'autoBilling.instructions.tip4': 'Sowohl automatische als auch manuelle Rechnungen erscheinen auf derselben Abrechnungsseite',
+  'autoBilling.instructions.tip3': 'Bankinfo in Konfigurationen füllt automatisch Rechnungs-QR-Codes aus',
+  'autoBilling.instructions.tip4': 'Sowohl automatische als auch manuelle Rechnungen erscheinen auf der gleichen Abrechnungsseite',
 
   // Pricing
   'pricing.title': 'Preiseinstellungen',

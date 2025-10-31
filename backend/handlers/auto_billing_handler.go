@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/aj9599/zev-billing/backend/models"
+	"github.com/aj9599/zev-billing/backend/services"
 	"github.com/gorilla/mux"
 )
 
@@ -36,63 +37,12 @@ func parseIDList(idStr string) []int {
 	return ids
 }
 
-// Helper function to calculate next run date
-func calculateNextRun(frequency string, generationDay int, lastRun *time.Time) time.Time {
-	now := time.Now()
-	var nextRun time.Time
-
-	// Start from last run if available, otherwise start from now
-	if lastRun != nil {
-		nextRun = *lastRun
-	} else {
-		nextRun = now
-	}
-
-	switch frequency {
-	case "monthly":
-		// Move to next month
-		nextRun = nextRun.AddDate(0, 1, 0)
-		nextRun = time.Date(nextRun.Year(), nextRun.Month(), generationDay, 0, 0, 0, 0, nextRun.Location())
-
-	case "quarterly":
-		// Move to next quarter (3 months)
-		nextRun = nextRun.AddDate(0, 3, 0)
-		nextRun = time.Date(nextRun.Year(), nextRun.Month(), generationDay, 0, 0, 0, 0, nextRun.Location())
-
-	case "half_yearly":
-		// Move to next half year (6 months)
-		nextRun = nextRun.AddDate(0, 6, 0)
-		nextRun = time.Date(nextRun.Year(), nextRun.Month(), generationDay, 0, 0, 0, 0, nextRun.Location())
-
-	case "yearly":
-		// Move to next year
-		nextRun = nextRun.AddDate(1, 0, 0)
-		nextRun = time.Date(nextRun.Year(), time.January, generationDay, 0, 0, 0, 0, nextRun.Location())
-	}
-
-	// If next run is in the past, keep adding intervals until we're in the future
-	for nextRun.Before(now) {
-		switch frequency {
-		case "monthly":
-			nextRun = nextRun.AddDate(0, 1, 0)
-		case "quarterly":
-			nextRun = nextRun.AddDate(0, 3, 0)
-		case "half_yearly":
-			nextRun = nextRun.AddDate(0, 6, 0)
-		case "yearly":
-			nextRun = nextRun.AddDate(1, 0, 0)
-		}
-	}
-
-	return nextRun
-}
-
 func (h *AutoBillingHandler) List(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Query(`
 		SELECT id, name, building_ids, user_ids, frequency, generation_day, 
-		       is_active, last_run, next_run, sender_name, sender_address, 
-		       sender_city, sender_zip, sender_country, bank_name, bank_iban, 
-		       bank_account_holder, created_at, updated_at
+		       first_execution_date, is_active, last_run, next_run, 
+		       sender_name, sender_address, sender_city, sender_zip, sender_country, 
+		       bank_name, bank_iban, bank_account_holder, created_at, updated_at
 		FROM auto_billing_configs
 		ORDER BY created_at DESC
 	`)
@@ -107,14 +57,15 @@ func (h *AutoBillingHandler) List(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var config models.AutoBillingConfig
 		var buildingIDsStr, userIDsStr string
+		var firstExecutionDate sql.NullString
 		var lastRun, nextRun sql.NullTime
 		var senderName, senderAddress, senderCity, senderZip, senderCountry sql.NullString
 		var bankName, bankIBAN, bankAccountHolder sql.NullString
 
 		err := rows.Scan(
 			&config.ID, &config.Name, &buildingIDsStr, &userIDsStr,
-			&config.Frequency, &config.GenerationDay, &config.IsActive,
-			&lastRun, &nextRun,
+			&config.Frequency, &config.GenerationDay, &firstExecutionDate,
+			&config.IsActive, &lastRun, &nextRun,
 			&senderName, &senderAddress, &senderCity, &senderZip, &senderCountry,
 			&bankName, &bankIBAN, &bankAccountHolder,
 			&config.CreatedAt, &config.UpdatedAt,
@@ -140,6 +91,9 @@ func (h *AutoBillingHandler) List(w http.ResponseWriter, r *http.Request) {
 			"updated_at":      config.UpdatedAt,
 		}
 
+		if firstExecutionDate.Valid {
+			configMap["first_execution_date"] = firstExecutionDate.String
+		}
 		if lastRun.Valid {
 			configMap["last_run"] = lastRun.Time.Format(time.RFC3339)
 		}
@@ -188,20 +142,21 @@ func (h *AutoBillingHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	var config models.AutoBillingConfig
 	var buildingIDsStr, userIDsStr string
+	var firstExecutionDate sql.NullString
 	var lastRun, nextRun sql.NullTime
 	var senderName, senderAddress, senderCity, senderZip, senderCountry sql.NullString
 	var bankName, bankIBAN, bankAccountHolder sql.NullString
 
 	err = h.db.QueryRow(`
 		SELECT id, name, building_ids, user_ids, frequency, generation_day, 
-		       is_active, last_run, next_run, sender_name, sender_address, 
-		       sender_city, sender_zip, sender_country, bank_name, bank_iban, 
-		       bank_account_holder, created_at, updated_at
+		       first_execution_date, is_active, last_run, next_run, 
+		       sender_name, sender_address, sender_city, sender_zip, sender_country, 
+		       bank_name, bank_iban, bank_account_holder, created_at, updated_at
 		FROM auto_billing_configs WHERE id = ?
 	`, id).Scan(
 		&config.ID, &config.Name, &buildingIDsStr, &userIDsStr,
-		&config.Frequency, &config.GenerationDay, &config.IsActive,
-		&lastRun, &nextRun,
+		&config.Frequency, &config.GenerationDay, &firstExecutionDate,
+		&config.IsActive, &lastRun, &nextRun,
 		&senderName, &senderAddress, &senderCity, &senderZip, &senderCountry,
 		&bankName, &bankIBAN, &bankAccountHolder,
 		&config.CreatedAt, &config.UpdatedAt,
@@ -232,6 +187,9 @@ func (h *AutoBillingHandler) Get(w http.ResponseWriter, r *http.Request) {
 		"updated_at":      config.UpdatedAt,
 	}
 
+	if firstExecutionDate.Valid {
+		response["first_execution_date"] = firstExecutionDate.String
+	}
 	if lastRun.Valid {
 		response["last_run"] = lastRun.Time.Format(time.RFC3339)
 	}
@@ -269,20 +227,21 @@ func (h *AutoBillingHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 func (h *AutoBillingHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name              string `json:"name"`
-		BuildingIDs       []int  `json:"building_ids"`
-		UserIDs           []int  `json:"user_ids"`
-		Frequency         string `json:"frequency"`
-		GenerationDay     int    `json:"generation_day"`
-		IsActive          bool   `json:"is_active"`
-		SenderName        string `json:"sender_name"`
-		SenderAddress     string `json:"sender_address"`
-		SenderCity        string `json:"sender_city"`
-		SenderZip         string `json:"sender_zip"`
-		SenderCountry     string `json:"sender_country"`
-		BankName          string `json:"bank_name"`
-		BankIBAN          string `json:"bank_iban"`
-		BankAccountHolder string `json:"bank_account_holder"`
+		Name               string `json:"name"`
+		BuildingIDs        []int  `json:"building_ids"`
+		UserIDs            []int  `json:"user_ids"`
+		Frequency          string `json:"frequency"`
+		GenerationDay      int    `json:"generation_day"`
+		FirstExecutionDate string `json:"first_execution_date"`
+		IsActive           bool   `json:"is_active"`
+		SenderName         string `json:"sender_name"`
+		SenderAddress      string `json:"sender_address"`
+		SenderCity         string `json:"sender_city"`
+		SenderZip          string `json:"sender_zip"`
+		SenderCountry      string `json:"sender_country"`
+		BankName           string `json:"bank_name"`
+		BankIBAN           string `json:"bank_iban"`
+		BankAccountHolder  string `json:"bank_account_holder"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -308,17 +267,27 @@ func (h *AutoBillingHandler) Create(w http.ResponseWriter, r *http.Request) {
 		userIDsStr += strconv.Itoa(id)
 	}
 
-	// Calculate next run
-	nextRun := calculateNextRun(req.Frequency, req.GenerationDay, nil)
+	// Calculate next run using the scheduler's function
+	nextRun := services.CalculateInitialNextRun(req.Frequency, req.GenerationDay, req.FirstExecutionDate)
+
+	// Prepare first_execution_date for database
+	var firstExecDateValue interface{}
+	if req.FirstExecutionDate != "" {
+		firstExecDateValue = req.FirstExecutionDate
+	} else {
+		firstExecDateValue = nil
+	}
 
 	result, err := h.db.Exec(`
 		INSERT INTO auto_billing_configs (
 			name, building_ids, user_ids, frequency, generation_day, 
-			is_active, next_run, sender_name, sender_address, sender_city, 
-			sender_zip, sender_country, bank_name, bank_iban, bank_account_holder
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			first_execution_date, is_active, next_run, 
+			sender_name, sender_address, sender_city, sender_zip, sender_country, 
+			bank_name, bank_iban, bank_account_holder
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, req.Name, buildingIDsStr, userIDsStr, req.Frequency, req.GenerationDay,
-		req.IsActive, nextRun, req.SenderName, req.SenderAddress, req.SenderCity,
+		firstExecDateValue, req.IsActive, nextRun,
+		req.SenderName, req.SenderAddress, req.SenderCity,
 		req.SenderZip, req.SenderCountry, req.BankName, req.BankIBAN, req.BankAccountHolder)
 
 	if err != nil {
@@ -349,6 +318,10 @@ func (h *AutoBillingHandler) Create(w http.ResponseWriter, r *http.Request) {
 		"bank_account_holder": req.BankAccountHolder,
 	}
 
+	if req.FirstExecutionDate != "" {
+		response["first_execution_date"] = req.FirstExecutionDate
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(response)
@@ -363,20 +336,21 @@ func (h *AutoBillingHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name              string `json:"name"`
-		BuildingIDs       []int  `json:"building_ids"`
-		UserIDs           []int  `json:"user_ids"`
-		Frequency         string `json:"frequency"`
-		GenerationDay     int    `json:"generation_day"`
-		IsActive          bool   `json:"is_active"`
-		SenderName        string `json:"sender_name"`
-		SenderAddress     string `json:"sender_address"`
-		SenderCity        string `json:"sender_city"`
-		SenderZip         string `json:"sender_zip"`
-		SenderCountry     string `json:"sender_country"`
-		BankName          string `json:"bank_name"`
-		BankIBAN          string `json:"bank_iban"`
-		BankAccountHolder string `json:"bank_account_holder"`
+		Name               string `json:"name"`
+		BuildingIDs        []int  `json:"building_ids"`
+		UserIDs            []int  `json:"user_ids"`
+		Frequency          string `json:"frequency"`
+		GenerationDay      int    `json:"generation_day"`
+		FirstExecutionDate string `json:"first_execution_date"`
+		IsActive           bool   `json:"is_active"`
+		SenderName         string `json:"sender_name"`
+		SenderAddress      string `json:"sender_address"`
+		SenderCity         string `json:"sender_city"`
+		SenderZip          string `json:"sender_zip"`
+		SenderCountry      string `json:"sender_country"`
+		BankName           string `json:"bank_name"`
+		BankIBAN           string `json:"bank_iban"`
+		BankAccountHolder  string `json:"bank_account_holder"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -402,28 +376,29 @@ func (h *AutoBillingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		userIDsStr += strconv.Itoa(id)
 	}
 
-	// Get current last_run to calculate next_run
-	var lastRun sql.NullTime
-	h.db.QueryRow("SELECT last_run FROM auto_billing_configs WHERE id = ?", id).Scan(&lastRun)
+	// Calculate next run using the scheduler's function
+	nextRun := services.CalculateInitialNextRun(req.Frequency, req.GenerationDay, req.FirstExecutionDate)
 
-	var lastRunPtr *time.Time
-	if lastRun.Valid {
-		lastRunPtr = &lastRun.Time
+	// Prepare first_execution_date for database
+	var firstExecDateValue interface{}
+	if req.FirstExecutionDate != "" {
+		firstExecDateValue = req.FirstExecutionDate
+	} else {
+		firstExecDateValue = nil
 	}
-
-	nextRun := calculateNextRun(req.Frequency, req.GenerationDay, lastRunPtr)
 
 	_, err = h.db.Exec(`
 		UPDATE auto_billing_configs SET
 			name = ?, building_ids = ?, user_ids = ?, frequency = ?, 
-			generation_day = ?, is_active = ?, next_run = ?,
+			generation_day = ?, first_execution_date = ?, is_active = ?, next_run = ?,
 			sender_name = ?, sender_address = ?, sender_city = ?, 
 			sender_zip = ?, sender_country = ?, bank_name = ?, 
 			bank_iban = ?, bank_account_holder = ?,
 			updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`, req.Name, buildingIDsStr, userIDsStr, req.Frequency, req.GenerationDay,
-		req.IsActive, nextRun, req.SenderName, req.SenderAddress, req.SenderCity,
+		firstExecDateValue, req.IsActive, nextRun,
+		req.SenderName, req.SenderAddress, req.SenderCity,
 		req.SenderZip, req.SenderCountry, req.BankName, req.BankIBAN,
 		req.BankAccountHolder, id)
 
@@ -452,6 +427,10 @@ func (h *AutoBillingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		"bank_name":       req.BankName,
 		"bank_iban":       req.BankIBAN,
 		"bank_account_holder": req.BankAccountHolder,
+	}
+
+	if req.FirstExecutionDate != "" {
+		response["first_execution_date"] = req.FirstExecutionDate
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -137,25 +137,26 @@ type InvoiceItem struct {
 }
 
 type AutoBillingConfig struct {
-	ID                  int       `json:"id"`
-	Name                string    `json:"name"`
-	BuildingIDs         string    `json:"building_ids"`
-	UserIDs             string    `json:"user_ids"`
-	Frequency           string    `json:"frequency"`
-	GenerationDay       int       `json:"generation_day"`
-	IsActive            bool      `json:"is_active"`
-	LastRun             *time.Time `json:"last_run"`
-	NextRun             *time.Time `json:"next_run"`
-	SenderName          string    `json:"sender_name"`
-	SenderAddress       string    `json:"sender_address"`
-	SenderCity          string    `json:"sender_city"`
-	SenderZip           string    `json:"sender_zip"`
-	SenderCountry       string    `json:"sender_country"`
-	BankName            string    `json:"bank_name"`
-	BankIBAN            string    `json:"bank_iban"`
-	BankAccountHolder   string    `json:"bank_account_holder"`
-	CreatedAt           time.Time `json:"created_at"`
-	UpdatedAt           time.Time `json:"updated_at"`
+	ID                  int        `json:"id"`
+	Name                string     `json:"name"`
+	BuildingIDs         string     `json:"building_ids"`
+	UserIDs             string     `json:"user_ids"`
+	Frequency           string     `json:"frequency"`
+	GenerationDay       int        `json:"generation_day"`
+	FirstExecutionDate  *string    `json:"first_execution_date,omitempty"` // NEW FIELD
+	IsActive            bool       `json:"is_active"`
+	LastRun             *time.Time `json:"last_run,omitempty"`
+	NextRun             *time.Time `json:"next_run,omitempty"`
+	SenderName          string     `json:"sender_name,omitempty"`
+	SenderAddress       string     `json:"sender_address,omitempty"`
+	SenderCity          string     `json:"sender_city,omitempty"`
+	SenderZip           string     `json:"sender_zip,omitempty"`
+	SenderCountry       string     `json:"sender_country,omitempty"`
+	BankName            string     `json:"bank_name,omitempty"`
+	BankIBAN            string     `json:"bank_iban,omitempty"`
+	BankAccountHolder   string     `json:"bank_account_holder,omitempty"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
 type AdminLog struct {

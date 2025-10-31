@@ -166,6 +166,7 @@ func RunMigrations(db *sql.DB) error {
 			user_ids TEXT,
 			frequency TEXT NOT NULL,
 			generation_day INTEGER NOT NULL,
+			first_execution_date DATE,
 			is_active INTEGER DEFAULT 1,
 			last_run DATETIME,
 			next_run DATETIME,
@@ -221,6 +222,12 @@ func RunMigrations(db *sql.DB) error {
 	_, err = db.Exec(`ALTER TABLE users ADD COLUMN managed_buildings TEXT`)
 	if err != nil {
 		log.Printf("Note: managed_buildings column may already exist: %v", err)
+	}
+
+	// Add first_execution_date column if it doesn't exist
+	_, err = db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN first_execution_date DATE`)
+	if err != nil {
+		log.Printf("Note: first_execution_date column may already exist: %v", err)
 	}
 
 	if err := createDefaultAdmin(db); err != nil {
