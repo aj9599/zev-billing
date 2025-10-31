@@ -14,7 +14,7 @@ export default function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps
   const [hasInteracted, setHasInteracted] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const validationTimeoutRef = useRef<NodeJS.Timeout>();
+  const validationTimeoutRef = useRef<number>();
 
   const generateNewChallenge = useCallback(() => {
     const newTarget = Math.floor(Math.random() * 60) + 20;
