@@ -21,10 +21,8 @@ function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps) {
   const [hasAnswered, setHasAnswered] = useState(false);
   const isInitializedRef = useRef(false);
 
-  // Keep ref up to date without triggering re-renders
-  useEffect(() => {
-    onValidationChangeRef.current = onValidationChange;
-  });
+  // Keep ref up to date - this doesn't cause re-renders
+  onValidationChangeRef.current = onValidationChange;
 
   const generateMathQuestion = useCallback((): MathQuestion => {
     const operations = [
@@ -91,14 +89,15 @@ function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps) {
     onValidationChangeRef.current(false);
   }, [generateMathQuestion, isValid]);
 
-  // Only generate on initial mount
+  // Only generate on initial mount - NO dependencies that could trigger re-initialization
   useEffect(() => {
     if (!isInitializedRef.current) {
       isInitializedRef.current = true;
       const newQuestion = generateMathQuestion();
       setMathQuestion(newQuestion);
     }
-  }, [generateMathQuestion]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleAnswerSelect = useCallback((answer: number) => {
     // Prevent answering if already valid
@@ -323,5 +322,9 @@ function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps) {
   );
 }
 
-// Memoize the component to prevent unnecessary re-renders when parent re-renders
-export default memo(DeleteCaptcha);
+// Custom comparison function that ALWAYS returns true to prevent re-renders
+// We handle updates via ref, so we don't need the component to re-render when props change
+const arePropsEqual = () => true;
+
+// Memoize the component with custom comparison to prevent ALL re-renders from parent
+export default memo(DeleteCaptcha, arePropsEqual);
