@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { RefreshCw, ShieldCheck, Calculator } from 'lucide-react';
 import { useTranslation } from '../i18n';
 
@@ -14,16 +14,22 @@ interface MathQuestion {
 
 export default function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps) {
   const { t } = useTranslation();
+  const onValidationChangeRef = useRef(onValidationChange);
   const [mathQuestion, setMathQuestion] = useState<MathQuestion | null>(null);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [isValid, setIsValid] = useState(false);
   const [hasAnswered, setHasAnswered] = useState(false);
 
+  // Keep ref up to date
+  useEffect(() => {
+    onValidationChangeRef.current = onValidationChange;
+  }, [onValidationChange]);
+
   const generateMathQuestion = useCallback((): MathQuestion => {
     const operations = [
       { type: 'add', symbol: '+', fn: (a: number, b: number) => a + b },
       { type: 'subtract', symbol: '-', fn: (a: number, b: number) => a - b },
-      { type: 'multiply', symbol: '×', fn: (a: number, b: number) => a * b }
+      { type: 'multiply', symbol: 'Ã—', fn: (a: number, b: number) => a * b }
     ];
 
     const operation = operations[Math.floor(Math.random() * operations.length)];
@@ -76,12 +82,13 @@ export default function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps
     setSelectedAnswer(null);
     setIsValid(false);
     setHasAnswered(false);
-    onValidationChange(false);
-  }, [generateMathQuestion, onValidationChange]);
+    onValidationChangeRef.current(false);
+  }, [generateMathQuestion]);
 
   useEffect(() => {
     generateNewChallenge();
-  }, [generateNewChallenge]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleAnswerSelect = (answer: number) => {
     setSelectedAnswer(answer);
@@ -89,7 +96,7 @@ export default function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps
     
     const correct = mathQuestion ? answer === mathQuestion.correctAnswer : false;
     setIsValid(correct);
-    onValidationChange(correct);
+    onValidationChangeRef.current(correct);
   };
 
   const getButtonStyle = (answer: number) => {
@@ -258,10 +265,10 @@ export default function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps
             >
               {option}
               {hasAnswered && option === mathQuestion.correctAnswer && (
-                <span style={{ marginLeft: '8px' }}>✓</span>
+                <span style={{ marginLeft: '8px' }}>âœ“</span>
               )}
               {hasAnswered && option === selectedAnswer && option !== mathQuestion.correctAnswer && (
-                <span style={{ marginLeft: '8px' }}>✗</span>
+                <span style={{ marginLeft: '8px' }}>âœ—</span>
               )}
             </button>
           ))}
@@ -281,7 +288,7 @@ export default function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps
             alignItems: 'center',
             gap: '6px'
           }}>
-            ✓ {t('captcha.success')}
+            âœ“ {t('captcha.success')}
           </span>
         )}
         {hasAnswered && !isValid && (
@@ -293,7 +300,7 @@ export default function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps
             alignItems: 'center',
             gap: '6px'
           }}>
-            ✗ {t('captcha.tryAgain')}
+            âœ— {t('captcha.tryAgain')}
           </span>
         )}
       </div>
