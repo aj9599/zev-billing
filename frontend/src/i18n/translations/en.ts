@@ -86,6 +86,13 @@ export const en: Translations = {
   'export.filterByBuilding': 'Filter {{type}} by building',
   'export.exportingAllFrom': 'All {{type}} from {{building}}',
 
+  // Captcha
+  'captcha.title': '🔒 Security Check - Complete to Continue',
+  'captcha.instruction': 'Slide to align the shapes',
+  'captcha.new': 'New',
+  'captcha.footer': 'Match the shapes to enable deletion',
+  'captcha.success': 'Verified!',
+
   // Users
   'users.title': 'Users',
   'users.subtitle': 'Manage tenants and building occupants',

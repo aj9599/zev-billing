@@ -157,6 +157,17 @@ class ApiClient {
     return this.request(`/meters/${id}`, { method: 'DELETE' });
   }
 
+  async getMeterDeletionImpact(id: number): Promise<{
+    meter_id: number;
+    meter_name: string;
+    readings_count: number;
+    oldest_reading: string;
+    newest_reading: string;
+    has_data: boolean;
+  }> {
+    return this.request(`/meters/${id}/deletion-impact`);
+  }
+
   // Chargers
   async getChargers(building_id?: number): Promise<Charger[]> {
     const query = building_id ? `?building_id=${building_id}` : '';
@@ -183,6 +194,17 @@ class ApiClient {
 
   async deleteCharger(id: number) {
     return this.request(`/chargers/${id}`, { method: 'DELETE' });
+  }
+
+  async getChargerDeletionImpact(id: number): Promise<{
+    charger_id: number;
+    charger_name: string;
+    sessions_count: number;
+    oldest_session: string;
+    newest_session: string;
+    has_data: boolean;
+  }> {
+    return this.request(`/chargers/${id}/deletion-impact`);
   }
 
   // Billing
