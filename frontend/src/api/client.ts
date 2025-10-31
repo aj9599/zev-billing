@@ -294,7 +294,7 @@ class ApiClient {
     return this.request('/debug/status');
   }
 
-  // NEW: Backup methods
+  // Backup methods
   async createBackup(): Promise<{ status: string; backup_name: string; backup_path: string }> {
     return this.request('/system/backup', { method: 'POST' });
   }
@@ -323,7 +323,7 @@ class ApiClient {
     return response.json();
   }
 
-  // NEW: Update methods
+  // Update methods
   async checkForUpdates(): Promise<{
     updates_available: boolean;
     current_commit: string;

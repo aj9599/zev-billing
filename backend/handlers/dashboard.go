@@ -54,14 +54,34 @@ func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 
 	var stats models.DashboardStats
 
+	// Count all users
 	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users").Scan(&stats.TotalUsers); err != nil {
 		log.Printf("Error counting users: %v", err)
 		stats.TotalUsers = 0
 	}
 	
-	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM buildings").Scan(&stats.TotalBuildings); err != nil {
+	// Count regular users
+	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users WHERE COALESCE(user_type, 'regular') = 'regular'").Scan(&stats.RegularUsers); err != nil {
+		log.Printf("Error counting regular users: %v", err)
+		stats.RegularUsers = 0
+	}
+	
+	// Count admin users
+	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users WHERE user_type = 'administration'").Scan(&stats.AdminUsers); err != nil {
+		log.Printf("Error counting admin users: %v", err)
+		stats.AdminUsers = 0
+	}
+	
+	// Count buildings (excluding groups/complexes)
+	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM buildings WHERE COALESCE(is_group, 0) = 0").Scan(&stats.TotalBuildings); err != nil {
 		log.Printf("Error counting buildings: %v", err)
 		stats.TotalBuildings = 0
+	}
+	
+	// Count complexes (building groups)
+	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM buildings WHERE is_group = 1").Scan(&stats.TotalComplexes); err != nil {
+		log.Printf("Error counting complexes: %v", err)
+		stats.TotalComplexes = 0
 	}
 	
 	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM meters").Scan(&stats.TotalMeters); err != nil {
@@ -733,10 +753,3 @@ func (h *DashboardHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(logs)
 }
-
-
-
-
-
-
-

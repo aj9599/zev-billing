@@ -130,7 +130,10 @@ export interface AutoBillingConfig {
 
 export interface DashboardStats {
   total_users: number;
+  regular_users: number;
+  admin_users: number;
   total_buildings: number;
+  total_complexes: number;
   total_meters: number;
   total_chargers: number;
   active_meters: number;

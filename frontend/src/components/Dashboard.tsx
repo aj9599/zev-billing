@@ -150,7 +150,7 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // NEW: Track visible meters for each building
+  // Track visible meters for each building
   const [visibleMetersByBuilding, setVisibleMetersByBuilding] = useState<Map<number, Set<string>>>(new Map());
 
   const loadData = React.useCallback(async () => {
@@ -210,7 +210,7 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [loadData]);
 
-  // NEW: Toggle meter visibility
+  // Toggle meter visibility
   const toggleMeterVisibility = (buildingId: number, meterKey: string) => {
     setVisibleMetersByBuilding(prev => {
       const newMap = new Map(prev);
@@ -227,7 +227,7 @@ export default function Dashboard() {
     });
   };
 
-  // NEW: Check if meter is visible
+  // Check if meter is visible
   const isMeterVisible = (buildingId: number, meterKey: string): boolean => {
     const buildingVisible = visibleMetersByBuilding.get(buildingId);
     return buildingVisible ? buildingVisible.has(meterKey) : true;
@@ -277,16 +277,69 @@ export default function Dashboard() {
   }
 
   const statCards = [
-    { icon: Users, label: t('dashboard.totalUsers'), value: stats?.total_users || 0, color: '#007bff' },
-    { icon: Building, label: t('dashboard.buildings'), value: stats?.total_buildings || 0, color: '#28a745' },
-    { icon: Zap, label: t('dashboard.activeMeters'), value: `${stats?.active_meters}/${stats?.total_meters}`, color: '#ffc107' },
-    { icon: Car, label: t('dashboard.activeChargers'), value: `${stats?.active_chargers}/${stats?.total_chargers}`, color: '#6f42c1' },
-    { icon: Activity, label: t('dashboard.consumptionToday'), value: `${stats?.today_consumption.toFixed(2)} kWh`, color: '#dc3545' },
-    { icon: TrendingUp, label: t('dashboard.consumptionMonth'), value: `${stats?.month_consumption.toFixed(2)} kWh`, color: '#e74c3c' },
-    { icon: Sun, label: t('dashboard.solarToday'), value: `${stats?.today_solar.toFixed(2)} kWh`, color: '#f39c12' },
-    { icon: TrendingDown, label: t('dashboard.solarMonth'), value: `${stats?.month_solar.toFixed(2)} kWh`, color: '#e67e22' },
-    { icon: Battery, label: t('dashboard.chargingToday'), value: `${stats?.today_charging.toFixed(2)} kWh`, color: '#9b59b6' },
-    { icon: Zap, label: t('dashboard.chargingMonth'), value: `${stats?.month_charging.toFixed(2)} kWh`, color: '#8e44ad' },
+    { 
+      icon: Users, 
+      label: t('dashboard.totalUsers'), 
+      value: stats?.total_users || 0,
+      subValue: `${stats?.regular_users || 0} / ${stats?.admin_users || 0}`,
+      subLabel: 'Residents / Admin',
+      color: '#007bff' 
+    },
+    { 
+      icon: Building, 
+      label: t('dashboard.buildings'), 
+      value: stats?.total_buildings || 0,
+      subValue: stats?.total_complexes ? `${stats.total_complexes} ${stats.total_complexes === 1 ? 'Complex' : 'Complexes'}` : undefined,
+      color: '#28a745' 
+    },
+    { 
+      icon: Zap, 
+      label: t('dashboard.activeMeters'), 
+      value: `${stats?.active_meters}/${stats?.total_meters}`, 
+      color: '#ffc107' 
+    },
+    { 
+      icon: Car, 
+      label: t('dashboard.activeChargers'), 
+      value: `${stats?.active_chargers}/${stats?.total_chargers}`, 
+      color: '#6f42c1' 
+    },
+    { 
+      icon: Activity, 
+      label: t('dashboard.consumptionToday'), 
+      value: `${stats?.today_consumption.toFixed(2)} kWh`, 
+      color: '#dc3545' 
+    },
+    { 
+      icon: TrendingUp, 
+      label: t('dashboard.consumptionMonth'), 
+      value: `${stats?.month_consumption.toFixed(2)} kWh`, 
+      color: '#e74c3c' 
+    },
+    { 
+      icon: Sun, 
+      label: t('dashboard.solarToday'), 
+      value: `${stats?.today_solar.toFixed(2)} kWh`, 
+      color: '#f39c12' 
+    },
+    { 
+      icon: TrendingDown, 
+      label: t('dashboard.solarMonth'), 
+      value: `${stats?.month_solar.toFixed(2)} kWh`, 
+      color: '#e67e22' 
+    },
+    { 
+      icon: Battery, 
+      label: t('dashboard.chargingToday'), 
+      value: `${stats?.today_charging.toFixed(2)} kWh`, 
+      color: '#9b59b6' 
+    },
+    { 
+      icon: Zap, 
+      label: t('dashboard.chargingMonth'), 
+      value: `${stats?.month_charging.toFixed(2)} kWh`, 
+      color: '#8e44ad' 
+    },
   ];
 
   return (
@@ -346,13 +399,26 @@ export default function Dashboard() {
               }}>
                 <Icon size={24} color={card.color} />
               </div>
-              <div style={{ minWidth: 0 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
                 <div className="stat-label" style={{ fontSize: '14px', color: '#666', marginBottom: '4px' }}>
                   {card.label}
                 </div>
                 <div className="stat-value" style={{ fontSize: '24px', fontWeight: 'bold' }}>
                   {card.value}
                 </div>
+                {card.subValue && (
+                  <div style={{ 
+                    fontSize: '12px', 
+                    color: '#9ca3af', 
+                    marginTop: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}>
+                    {card.subLabel && <span style={{ fontSize: '11px' }}>{card.subLabel}:</span>}
+                    <span style={{ fontWeight: '600', color: '#6b7280' }}>{card.subValue}</span>
+                  </div>
+                )}
               </div>
             </div>
           );
