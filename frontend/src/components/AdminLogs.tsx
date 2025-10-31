@@ -431,7 +431,7 @@ export default function AdminLogs() {
               alignItems: 'center',
               gap: '8px',
               padding: '12px 20px',
-              background: backing ? '#9ca3af' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: backing ? '#9ca3af' : '#667eea',
               color: 'white',
               border: 'none',
               borderRadius: '10px',
@@ -466,26 +466,26 @@ export default function AdminLogs() {
               alignItems: 'center',
               gap: '8px',
               padding: '12px 20px',
-              background: restoring ? '#9ca3af' : 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+              background: restoring ? '#9ca3af' : '#f59e0b',
               color: 'white',
               border: 'none',
               borderRadius: '10px',
               fontSize: '14px',
               fontWeight: '600',
               cursor: restoring ? 'not-allowed' : 'pointer',
-              boxShadow: restoring ? 'none' : '0 4px 12px rgba(250, 112, 154, 0.3)',
+              boxShadow: restoring ? 'none' : '0 4px 12px rgba(245, 158, 11, 0.3)',
               transition: 'all 0.3s ease'
             }}
             onMouseEnter={(e) => {
               if (!restoring) {
                 e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 6px 16px rgba(250, 112, 154, 0.4)';
+                e.currentTarget.style.boxShadow = '0 6px 16px rgba(245, 158, 11, 0.4)';
               }
             }}
             onMouseLeave={(e) => {
               if (!restoring) {
                 e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(250, 112, 154, 0.3)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(245, 158, 11, 0.3)';
               }
             }}
           >
@@ -544,26 +544,26 @@ export default function AdminLogs() {
                 alignItems: 'center',
                 gap: '8px',
                 padding: '12px 20px',
-                background: updating ? '#9ca3af' : !updateInfo.updates_available ? '#6b7280' : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                background: updating ? '#9ca3af' : !updateInfo.updates_available ? '#6b7280' : '#ec4899',
                 color: 'white',
                 border: 'none',
                 borderRadius: '10px',
                 fontSize: '14px',
                 fontWeight: '600',
                 cursor: (updating || !updateInfo.updates_available) ? 'not-allowed' : 'pointer',
-                boxShadow: (updating || !updateInfo.updates_available) ? 'none' : '0 4px 12px rgba(240, 147, 251, 0.3)',
+                boxShadow: (updating || !updateInfo.updates_available) ? 'none' : '0 4px 12px rgba(236, 72, 153, 0.3)',
                 transition: 'all 0.3s ease'
               }}
               onMouseEnter={(e) => {
                 if (!updating && updateInfo.updates_available) {
                   e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 6px 16px rgba(240, 147, 251, 0.4)';
+                  e.currentTarget.style.boxShadow = '0 6px 16px rgba(236, 72, 153, 0.4)';
                 }
               }}
               onMouseLeave={(e) => {
                 if (!updating && updateInfo.updates_available) {
                   e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(240, 147, 251, 0.3)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(236, 72, 153, 0.3)';
                 }
               }}
             >
@@ -584,26 +584,26 @@ export default function AdminLogs() {
               alignItems: 'center', 
               gap: '8px', 
               padding: '12px 20px',
-              background: rebooting ? '#9ca3af' : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+              background: rebooting ? '#9ca3af' : '#ef4444',
               color: 'white', 
               border: 'none',
               borderRadius: '10px', 
               fontSize: '14px',
               fontWeight: '600',
               cursor: rebooting ? 'not-allowed' : 'pointer',
-              boxShadow: rebooting ? 'none' : '0 4px 12px rgba(240, 147, 251, 0.3)',
+              boxShadow: rebooting ? 'none' : '0 4px 12px rgba(239, 68, 68, 0.3)',
               transition: 'all 0.3s ease'
             }}
             onMouseEnter={(e) => {
               if (!rebooting) {
                 e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 6px 16px rgba(240, 147, 251, 0.4)';
+                e.currentTarget.style.boxShadow = '0 6px 16px rgba(239, 68, 68, 0.4)';
               }
             }}
             onMouseLeave={(e) => {
               if (!rebooting) {
                 e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(240, 147, 251, 0.3)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.3)';
               }
             }}
           >
@@ -652,7 +652,7 @@ export default function AdminLogs() {
               }}
               title="Dismiss notification"
             >
-              ×
+              Ã—
             </button>
           )}
           
@@ -797,7 +797,7 @@ export default function AdminLogs() {
                   <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>{t('logs.cpuTemperature')}</div>
                 </div>
                 <div style={{ fontSize: '28px', fontWeight: '800', color: getTempColor(systemHealth.temperature) }}>
-                  {systemHealth.temperature.toFixed(1)}°C
+                  {systemHealth.temperature.toFixed(1)}Â°C
                 </div>
                 <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
                   {systemHealth.temperature < 70 ? t('logs.tempNormal') : systemHealth.temperature < 80 ? t('logs.tempWarm') : t('logs.tempHot')}
@@ -854,7 +854,7 @@ export default function AdminLogs() {
             onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
               <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>{t('logs.dataCollectorStatus')}</div>
               <div style={{ fontSize: '28px', fontWeight: '800', color: '#10b981', marginBottom: '8px' }}>
-                ● {t('logs.running')}
+                â— {t('logs.running')}
               </div>
               <div style={{ fontSize: '12px', color: '#6b7280' }}>
                 {t('logs.collectionInterval')}
