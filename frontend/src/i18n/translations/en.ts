@@ -846,7 +846,7 @@ export const en: Translations = {
   'logs.title': 'System Logs',
   'logs.subtitle': 'Monitor system activity and debug information',
   'logs.refresh': 'Refresh',
-  'logs.rebootSystem': 'Reboot System',
+  'logs.rebootSystem': 'Reboot',
   'logs.rebooting': 'Rebooting...',
   'logs.autoRefresh': 'Auto-refresh (30s)',
   'logs.timestamp': 'Timestamp',

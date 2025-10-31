@@ -846,7 +846,7 @@ export const de: Translations = {
   'logs.title': 'Systemprotokolle',
   'logs.subtitle': 'Systemaktivität und Debug-Informationen überwachen',
   'logs.refresh': 'Aktualisieren',
-  'logs.rebootSystem': 'System neu starten',
+  'logs.rebootSystem': 'Neustart',
   'logs.rebooting': 'Wird neu gestartet...',
   'logs.autoRefresh': 'Auto-Aktualisierung (30s)',
   'logs.timestamp': 'Zeitstempel',
@@ -893,7 +893,7 @@ export const de: Translations = {
   // Backup & Restore
   'logs.createBackup': 'Backup erstellen',
   'logs.creatingBackup': 'Backup wird erstellt...',
-  'logs.restoreBackup': 'Backup wiederherstellen',
+  'logs.restoreBackup': 'Backup laden',
   'logs.restoringBackup': 'Wird wiederhergestellt...',
   'logs.backupSuccess': 'Backup erfolgreich erstellt! Die Datei wird automatisch heruntergeladen.',
   'logs.backupFailed': 'Backup-Erstellung fehlgeschlagen. Bitte versuchen Sie es erneut.',
@@ -903,7 +903,7 @@ export const de: Translations = {
   'logs.invalidBackupFile': 'Ungültige Backup-Datei. Bitte wählen Sie eine .db-Datei aus.',
 
   // Software Updates
-  'logs.checkUpdates': 'Nach Updates suchen',
+  'logs.checkUpdates': 'Updates suchen',
   'logs.checkingUpdates': 'Wird überprüft...',
   'logs.applyUpdate': 'Update anwenden',
   'logs.updating': 'Aktualisierung läuft...',
