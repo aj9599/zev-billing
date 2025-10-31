@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Activity, RefreshCw, AlertCircle, CheckCircle, Info, Power, Cpu, HardDrive, Thermometer, Clock, Database, Upload, RotateCcw } from 'lucide-react';
+import { Activity, AlertCircle, CheckCircle, Info, Power, Cpu, HardDrive, Thermometer, Clock, Database, Upload, RotateCcw, RefreshCw } from 'lucide-react';
 import { api } from '../api/client';
 import type { AdminLog } from '../types';
 import { useTranslation } from '../i18n';
@@ -30,7 +30,6 @@ export default function AdminLogs() {
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [loading, setLoading] = useState(true);
-  const [autoRefresh, setAutoRefresh] = useState(false);
   const [rebooting, setRebooting] = useState(false);
   const [backing, setBacking] = useState(false);
   const [restoring, setRestoring] = useState(false);
@@ -38,31 +37,35 @@ export default function AdminLogs() {
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [showUpdateOverlay, setShowUpdateOverlay] = useState(false);
   const [updateProgress, setUpdateProgress] = useState(0);
+  const [isLive, setIsLive] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Initial load
   useEffect(() => {
     loadLogs();
     loadDebugInfo();
     checkForUpdates();
   }, []);
 
+  // Live refresh every 5 seconds
   useEffect(() => {
-    if (autoRefresh) {
-      const interval = setInterval(() => {
-        loadLogs();
-        loadDebugInfo();
-      }, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [autoRefresh]);
+    const interval = setInterval(() => {
+      loadLogs();
+      loadDebugInfo();
+    }, 5000); // 5 seconds for live monitoring
+
+    return () => clearInterval(interval);
+  }, []);
 
   const loadLogs = async () => {
     setLoading(true);
     try {
       const data = await api.getLogs(200);
       setLogs(data);
+      setIsLive(true);
     } catch (err) {
       console.error('Failed to load logs:', err);
+      setIsLive(false);
     } finally {
       setLoading(false);
     }
@@ -370,63 +373,189 @@ export default function AdminLogs() {
             <Activity size={36} style={{ color: '#667eea' }} />
             {t('logs.title')}
           </h1>
-          <p className="logs-subtitle" style={{ color: '#6b7280', fontSize: '16px' }}>
+          <p className="logs-subtitle" style={{ 
+            color: '#6b7280', 
+            fontSize: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
             {t('logs.subtitle')}
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 12px',
+              backgroundColor: isLive ? '#d1fae5' : '#fee2e2',
+              color: isLive ? '#065f46' : '#991b1b',
+              borderRadius: '12px',
+              fontSize: '12px',
+              fontWeight: '600'
+            }}>
+              <span style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                backgroundColor: isLive ? '#10b981' : '#dc3545',
+                animation: isLive ? 'pulse 2s infinite' : 'none'
+              }}></span>
+              {isLive ? 'LIVE' : 'OFFLINE'}
+            </span>
           </p>
         </div>
         <div className="logs-actions" style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <label style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '8px', 
-            fontSize: '14px',
-            fontWeight: '500',
-            color: '#374151',
-            whiteSpace: 'nowrap'
-          }}>
-            <input 
-              type="checkbox" 
-              checked={autoRefresh} 
-              onChange={(e) => setAutoRefresh(e.target.checked)}
-            />
-            {t('logs.autoRefresh')}
-          </label>
           <button
-            onClick={() => { loadLogs(); loadDebugInfo(); }}
-            disabled={loading}
-            className="refresh-button"
+            onClick={handleBackup}
+            disabled={backing}
             style={{
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '8px', 
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
               padding: '12px 20px',
-              backgroundColor: '#007bff', 
-              color: 'white', 
+              background: backing ? '#9ca3af' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
               border: 'none',
-              borderRadius: '10px', 
+              borderRadius: '10px',
               fontSize: '14px',
               fontWeight: '600',
-              opacity: loading ? 0.7 : 1,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              boxShadow: '0 4px 12px rgba(0, 123, 255, 0.3)',
+              cursor: backing ? 'not-allowed' : 'pointer',
+              boxShadow: backing ? 'none' : '0 4px 12px rgba(102, 126, 234, 0.3)',
               transition: 'all 0.3s ease'
             }}
             onMouseEnter={(e) => {
-              if (!loading) {
+              if (!backing) {
                 e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 123, 255, 0.4)';
+                e.currentTarget.style.boxShadow = '0 6px 16px rgba(102, 126, 234, 0.4)';
               }
             }}
             onMouseLeave={(e) => {
-              if (!loading) {
+              if (!backing) {
                 e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 123, 255, 0.3)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
+              }
+            }}
+          >
+            <Database size={18} />
+            <span className="button-text">{backing ? t('logs.creatingBackup') : t('logs.createBackup')}</span>
+          </button>
+
+          <button
+            onClick={handleRestoreClick}
+            disabled={restoring}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 20px',
+              background: restoring ? '#9ca3af' : 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '10px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: restoring ? 'not-allowed' : 'pointer',
+              boxShadow: restoring ? 'none' : '0 4px 12px rgba(250, 112, 154, 0.3)',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseEnter={(e) => {
+              if (!restoring) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 6px 16px rgba(250, 112, 154, 0.4)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!restoring) {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(250, 112, 154, 0.3)';
+              }
+            }}
+          >
+            <Upload size={18} />
+            <span className="button-text">{restoring ? t('logs.restoringBackup') : t('logs.restoreBackup')}</span>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".db"
+            onChange={handleRestoreFile}
+            style={{ display: 'none' }}
+          />
+
+          <button
+            onClick={checkForUpdates}
+            disabled={checkingUpdates}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 20px',
+              background: checkingUpdates ? '#9ca3af' : '#10b981',
+              color: 'white',
+              border: 'none',
+              borderRadius: '10px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: checkingUpdates ? 'not-allowed' : 'pointer',
+              boxShadow: checkingUpdates ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.3)',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseEnter={(e) => {
+              if (!checkingUpdates) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 6px 16px rgba(16, 185, 129, 0.4)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!checkingUpdates) {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
               }
             }}
           >
             <RefreshCw size={18} />
-            <span className="button-text">{t('logs.refresh')}</span>
+            <span className="button-text">{checkingUpdates ? t('logs.checkingUpdates') : t('logs.checkUpdates')}</span>
           </button>
+
+          {updateInfo && (
+            <button
+              onClick={handleUpdate}
+              disabled={updating || !updateInfo.updates_available}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '12px 20px',
+                background: updating ? '#9ca3af' : !updateInfo.updates_available ? '#6b7280' : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '10px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: (updating || !updateInfo.updates_available) ? 'not-allowed' : 'pointer',
+                boxShadow: (updating || !updateInfo.updates_available) ? 'none' : '0 4px 12px rgba(240, 147, 251, 0.3)',
+                transition: 'all 0.3s ease'
+              }}
+              onMouseEnter={(e) => {
+                if (!updating && updateInfo.updates_available) {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 6px 16px rgba(240, 147, 251, 0.4)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!updating && updateInfo.updates_available) {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(240, 147, 251, 0.3)';
+                }
+              }}
+            >
+              <RotateCcw size={18} />
+              <span className="button-text">
+                {updating ? t('logs.updating') : 
+                 updateInfo.updates_available ? t('logs.applyUpdate') : t('logs.upToDate')}
+              </span>
+            </button>
+          )}
+
           <button
             onClick={handleReboot}
             disabled={rebooting}
@@ -463,161 +592,6 @@ export default function AdminLogs() {
             <span className="button-text">{rebooting ? t('logs.rebooting') : t('logs.rebootSystem')}</span>
           </button>
         </div>
-      </div>
-
-      {/* System Management Buttons */}
-      <div style={{ marginBottom: '30px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-        <button
-          onClick={handleBackup}
-          disabled={backing}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '12px 20px',
-            background: backing ? '#9ca3af' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '10px',
-            fontSize: '14px',
-            fontWeight: '600',
-            cursor: backing ? 'not-allowed' : 'pointer',
-            boxShadow: backing ? 'none' : '0 4px 12px rgba(102, 126, 234, 0.3)',
-            transition: 'all 0.3s ease'
-          }}
-          onMouseEnter={(e) => {
-            if (!backing) {
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 6px 16px rgba(102, 126, 234, 0.4)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!backing) {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
-            }
-          }}
-        >
-          <Database size={18} />
-          <span>{backing ? t('logs.creatingBackup') : t('logs.createBackup')}</span>
-        </button>
-
-        <button
-          onClick={handleRestoreClick}
-          disabled={restoring}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '12px 20px',
-            background: restoring ? '#9ca3af' : 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '10px',
-            fontSize: '14px',
-            fontWeight: '600',
-            cursor: restoring ? 'not-allowed' : 'pointer',
-            boxShadow: restoring ? 'none' : '0 4px 12px rgba(250, 112, 154, 0.3)',
-            transition: 'all 0.3s ease'
-          }}
-          onMouseEnter={(e) => {
-            if (!restoring) {
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 6px 16px rgba(250, 112, 154, 0.4)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!restoring) {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(250, 112, 154, 0.3)';
-            }
-          }}
-        >
-          <Upload size={18} />
-          <span>{restoring ? t('logs.restoringBackup') : t('logs.restoreBackup')}</span>
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".db"
-          onChange={handleRestoreFile}
-          style={{ display: 'none' }}
-        />
-
-        <button
-          onClick={checkForUpdates}
-          disabled={checkingUpdates}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '12px 20px',
-            background: checkingUpdates ? '#9ca3af' : '#10b981',
-            color: 'white',
-            border: 'none',
-            borderRadius: '10px',
-            fontSize: '14px',
-            fontWeight: '600',
-            cursor: checkingUpdates ? 'not-allowed' : 'pointer',
-            boxShadow: checkingUpdates ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.3)',
-            transition: 'all 0.3s ease'
-          }}
-          onMouseEnter={(e) => {
-            if (!checkingUpdates) {
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 6px 16px rgba(16, 185, 129, 0.4)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!checkingUpdates) {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
-            }
-          }}
-        >
-          <RefreshCw size={18} />
-          <span>{checkingUpdates ? t('logs.checkingUpdates') : t('logs.checkUpdates')}</span>
-        </button>
-
-        {updateInfo && (
-          <button
-            onClick={handleUpdate}
-            disabled={updating || !updateInfo.updates_available}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '12px 20px',
-              background: updating ? '#9ca3af' : !updateInfo.updates_available ? '#6b7280' : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '10px',
-              fontSize: '14px',
-              fontWeight: '600',
-              cursor: (updating || !updateInfo.updates_available) ? 'not-allowed' : 'pointer',
-              boxShadow: (updating || !updateInfo.updates_available) ? 'none' : '0 4px 12px rgba(240, 147, 251, 0.3)',
-              transition: 'all 0.3s ease'
-            }}
-            onMouseEnter={(e) => {
-              if (!updating && updateInfo.updates_available) {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 6px 16px rgba(240, 147, 251, 0.4)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!updating && updateInfo.updates_available) {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(240, 147, 251, 0.3)';
-              }
-            }}
-          >
-            <RotateCcw size={18} />
-            <span>
-              {updating ? t('logs.updating') : 
-               updateInfo.updates_available ? t('logs.applyUpdate') : t('logs.upToDate')}
-            </span>
-          </button>
-        )}
       </div>
 
       {/* Update Info Card */}
@@ -839,6 +813,7 @@ export default function AdminLogs() {
               padding: '24px', 
               borderRadius: '16px',
               boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+              border: '2px solid #667eea',
               transition: 'all 0.3s ease'
             }}
             onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
@@ -857,6 +832,7 @@ export default function AdminLogs() {
               padding: '24px', 
               borderRadius: '16px',
               boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+              border: '2px solid #764ba2',
               transition: 'all 0.3s ease'
             }}
             onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
@@ -875,12 +851,13 @@ export default function AdminLogs() {
               padding: '24px', 
               borderRadius: '16px',
               boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+              border: '2px solid #f59e0b',
               transition: 'all 0.3s ease'
             }}
             onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
             onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
               <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>{t('logs.lastCollection')}</div>
-              <div style={{ fontSize: '28px', fontWeight: '800', color: '#1f2937' }}>
+              <div style={{ fontSize: '28px', fontWeight: '800', color: '#f59e0b' }}>
                 {debugInfo.last_collection ? new Date(debugInfo.last_collection).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' }) : t('logs.never')}
               </div>
               <div style={{ fontSize: '12px', color: '#6b7280' }}>
@@ -914,6 +891,7 @@ export default function AdminLogs() {
               padding: '24px', 
               borderRadius: '16px',
               boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+              border: `2px solid ${debugInfo.recent_errors > 0 ? '#dc3545' : '#10b981'}`,
               transition: 'all 0.3s ease'
             }}
             onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
@@ -1097,6 +1075,11 @@ export default function AdminLogs() {
           100% { transform: rotate(360deg); }
         }
 
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+
         .admin-logs-container {
           width: 100%;
           max-width: 100%;
@@ -1115,6 +1098,8 @@ export default function AdminLogs() {
 
           .admin-logs-container .logs-subtitle {
             font-size: 14px !important;
+            flex-direction: column;
+            align-items: flex-start !important;
           }
 
           .logs-header {
@@ -1127,13 +1112,7 @@ export default function AdminLogs() {
             flex-direction: column !important;
           }
 
-          .logs-actions label {
-            width: 100%;
-            justify-content: center;
-          }
-
-          .refresh-button,
-          .reboot-button {
+          .logs-actions button {
             width: 100% !important;
             justify-content: center !important;
           }
@@ -1166,6 +1145,10 @@ export default function AdminLogs() {
           .mobile-cards {
             display: block;
           }
+
+          .button-text {
+            display: inline !important;
+          }
         }
 
         @media (min-width: 769px) {
@@ -1193,14 +1176,9 @@ export default function AdminLogs() {
             font-size: 13px !important;
           }
 
-          .refresh-button,
-          .reboot-button {
+          .logs-actions button {
             padding: 10px 16px !important;
             font-size: 13px !important;
-          }
-
-          .button-text {
-            display: inline !important;
           }
 
           .debug-card {
