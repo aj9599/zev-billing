@@ -79,6 +79,9 @@ export const en: Translations = {
   'export.exporting': 'Exporting...',
   'export.startDate': 'Start Date',
   'export.endDate': 'End Date',
+  'export.subtitle': 'Export {{type}} data to CSV',
+  'export.filterByBuilding': 'Filter {{type}} by building',
+  'export.exportingAllFrom': 'All {{type}} from {{building}}',
 
   // Users
   'users.title': 'Users',

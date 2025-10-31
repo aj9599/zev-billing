@@ -51,7 +51,15 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
   }, {} as Record<number, ExportItem[]>);
 
   const getSelectedItemDisplay = () => {
-    if (!selectedItemId) return `All ${type} from ${selectedBuildingId ? buildings.find(b => b.id === selectedBuildingId)?.name : 'all buildings'}`;
+    if (!selectedItemId) {
+      const buildingName = selectedBuildingId 
+        ? buildings.find(b => b.id === selectedBuildingId)?.name 
+        : t('dashboard.allBuildings').toLowerCase();
+      return t('export.exportingAllFrom', { 
+        type: type === 'meters' ? t('meters.title') : t('chargers.title'),
+        building: buildingName
+      });
+    }
     const item = items.find(i => i.id === selectedItemId);
     return item ? `${item.building_name} - ${item.name}` : '';
   };
@@ -93,7 +101,7 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
               {t('export.title')}
             </h2>
             <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
-              Export {type === 'meters' ? t('meters.title') : t('chargers.title')} data to CSV
+              {t('export.subtitle', { type: type === 'meters' ? t('meters.title') : t('chargers.title') })}
             </p>
           </div>
           <button 
@@ -165,7 +173,7 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
             ))}
           </select>
           <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px', marginLeft: '2px' }}>
-            Filter {type} by building
+            {t('export.filterByBuilding', { type: type === 'meters' ? t('meters.title') : t('chargers.title') })}
           </p>
         </div>
 
@@ -213,7 +221,7 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
               Object.entries(itemsByBuilding).map(([buildingId, buildingItems]) => {
                 const building = buildings.find(b => b.id === parseInt(buildingId));
                 return (
-                  <optgroup key={buildingId} label={building?.name || 'Unknown Building'}>
+                  <optgroup key={buildingId} label={building?.name || t('common.unknownBuilding')}>
                     {buildingItems.map(item => (
                       <option key={item.id} value={item.id}>
                         {item.name}
