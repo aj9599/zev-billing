@@ -4,7 +4,7 @@ import { api } from '../api/client';
 import type { Meter, Building as BuildingType, User } from '../types';
 import { useTranslation } from '../i18n';
 import ExportModal from '../components/ExportModal';
-import DeleteCaptcha from '../components/DeleteCaptcha';
+import DeleteCaptcha from './DeleteCaptcha';
 
 interface ConnectionConfig {
   endpoint?: string;

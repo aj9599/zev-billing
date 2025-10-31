@@ -5,7 +5,7 @@ import type { Charger, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
 import { CHARGER_PRESETS, getPreset, type PresetConfig } from './chargerPresets';
 import ExportModal from '../components/ExportModal';
-import DeleteCaptcha from '../components/DeleteCaptcha';
+import DeleteCaptcha from './DeleteCaptcha';
 
 interface ChargerConnectionConfig {
   power_endpoint?: string;
