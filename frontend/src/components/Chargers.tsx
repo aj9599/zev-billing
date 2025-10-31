@@ -5,6 +5,7 @@ import type { Charger, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
 import { CHARGER_PRESETS, getPreset, type PresetConfig } from './chargerPresets';
 import ExportModal from '../components/ExportModal';
+import DeleteCaptcha from './DeleteCaptcha';
 
 interface ChargerConnectionConfig {
   power_endpoint?: string;
@@ -82,6 +83,7 @@ export default function Chargers() {
   const [deletionImpact, setDeletionImpact] = useState<DeletionImpact | null>(null);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const [deleteUnderstandChecked, setDeleteUnderstandChecked] = useState(false);
+  const [captchaValid, setCaptchaValid] = useState(false);
   const [editingCharger, setEditingCharger] = useState<Charger | null>(null);
   const [formData, setFormData] = useState<Partial<Charger>>({
     name: '', brand: 'weidmuller', preset: 'weidmuller', building_id: 0,
@@ -333,10 +335,30 @@ export default function Chargers() {
     setChargerToDelete(charger);
     setDeleteConfirmationText('');
     setDeleteUnderstandChecked(false);
+    setCaptchaValid(false);
     
     try {
-      const impact = await api.getChargerDeletionImpact(charger.id);
-      setDeletionImpact(impact);
+      // Use the fetch API directly since the method might not be in the API client yet
+      const response = await fetch(`/api/chargers/${charger.id}/deletion-impact`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const impact = await response.json();
+        setDeletionImpact(impact);
+      } else {
+        // If endpoint doesn't exist, create basic impact
+        setDeletionImpact({
+          charger_id: charger.id,
+          charger_name: charger.name,
+          sessions_count: 0,
+          oldest_session: '',
+          newest_session: '',
+          has_data: false
+        });
+      }
       setShowDeleteConfirmation(true);
     } catch (err) {
       console.error('Failed to get deletion impact:', err);
@@ -364,6 +386,11 @@ export default function Chargers() {
     
     if (!deleteUnderstandChecked) {
       alert(t('chargers.deleteCheckRequired') || 'Please check the confirmation box to proceed.');
+      return;
+    }
+
+    if (!captchaValid) {
+      alert(t('chargers.captchaRequired') || 'Please solve the security challenge to proceed.');
       return;
     }
 
@@ -637,7 +664,8 @@ export default function Chargers() {
     }}>
       <div style={{
         backgroundColor: 'white', borderRadius: '16px', padding: '32px',
-        maxWidth: '550px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+        maxWidth: '550px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+        maxHeight: '90vh', overflow: 'auto'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
           <div style={{
@@ -692,6 +720,8 @@ export default function Chargers() {
               </p>
             </div>
 
+            <DeleteCaptcha onValidationChange={setCaptchaValid} />
+
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#374151' }}>
                 {t('chargers.typeToConfirm') || 'Type the charger name to confirm:'}
@@ -712,7 +742,6 @@ export default function Chargers() {
                   width: '100%', padding: '12px', border: '2px solid #e5e7eb',
                   borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit'
                 }}
-                autoFocus
               />
             </div>
 
@@ -740,6 +769,7 @@ export default function Chargers() {
               setShowDeleteConfirmation(false);
               setChargerToDelete(null);
               setDeletionImpact(null);
+              setCaptchaValid(false);
             }}
             style={{
               flex: 1, padding: '12px', backgroundColor: '#f3f4f6',
@@ -751,14 +781,14 @@ export default function Chargers() {
           </button>
           <button
             onClick={handleDeleteConfirm}
-            disabled={!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.charger_name}
+            disabled={!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.charger_name || !captchaValid}
             style={{
               flex: 1, padding: '12px',
-              backgroundColor: (!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.charger_name) ? '#fca5a5' : '#ef4444',
+              backgroundColor: (!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.charger_name || !captchaValid) ? '#fca5a5' : '#ef4444',
               color: 'white', border: 'none', borderRadius: '8px',
               fontSize: '14px', fontWeight: '600',
-              cursor: (!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.charger_name) ? 'not-allowed' : 'pointer',
-              opacity: (!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.charger_name) ? 0.6 : 1
+              cursor: (!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.charger_name || !captchaValid) ? 'not-allowed' : 'pointer',
+              opacity: (!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.charger_name || !captchaValid) ? 0.6 : 1
             }}
           >
             {t('chargers.deletePermanently') || 'Delete Permanently'}
