@@ -652,7 +652,7 @@ export default function AdminLogs() {
               }}
               title="Dismiss notification"
             >
-              Ã—
+              ×
             </button>
           )}
           
