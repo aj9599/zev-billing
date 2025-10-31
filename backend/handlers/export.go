@@ -154,8 +154,8 @@ func (h *ExportHandler) exportMeterData(startDate, endDate, meterIDStr string) (
 			buildingName,
 			userName,
 			readingTime,
-			fmt.Sprintf("%.2f", powerKWh),
-			fmt.Sprintf("%.2f", consumptionKWh),
+			fmt.Sprintf("%.3f", powerKWh),
+			fmt.Sprintf("%.3f", consumptionKWh),
 		})
 	}
 
@@ -229,7 +229,7 @@ func (h *ExportHandler) exportChargerData(startDate, endDate, chargerIDStr strin
 			buildingName,
 			sessionTime,
 			userID,
-			fmt.Sprintf("%.2f", powerKWh),
+			fmt.Sprintf("%.3f", powerKWh),
 			mode,
 			state,
 		})

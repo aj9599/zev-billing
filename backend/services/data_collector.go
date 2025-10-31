@@ -516,7 +516,7 @@ func (dc *DataCollector) startUDPListener(port int, meters []UDPMeterConfig, cha
 					dc.mu.Lock()
 					dc.udpMeterBuffers[meter.MeterID] = reading
 					dc.mu.Unlock()
-					log.Printf("DEBUG: UDP monitoring data for meter '%s': %.2f kWh from %s", 
+					log.Printf("DEBUG: UDP monitoring data for meter '%s': %.3f kWh from %s", 
 						meter.Name, reading, remoteAddr.IP)
 				}
 			}
@@ -757,9 +757,9 @@ func (dc *DataCollector) collectMeterDataViaHTTP() {
 				`, reading, currentTime, id)
 
 				if isFirstReading {
-					log.Printf("SUCCESS: First reading for meter '%s' = %.2f kWh (consumption: 0 kWh)", name, reading)
+					log.Printf("SUCCESS: First reading for meter '%s' = %.3f kWh (consumption: 0 kWh)", name, reading)
 				} else {
-					log.Printf("SUCCESS: Collected meter data: '%s' = %.2f kWh (consumption: %.2f kWh)", name, reading, consumption)
+					log.Printf("SUCCESS: Collected meter data: '%s' = %.3f kWh (consumption: %.3f kWh)", name, reading, consumption)
 				}
 				successCount++
 			}
@@ -864,7 +864,7 @@ func (dc *DataCollector) collectChargerDataViaHTTP() {
 			if err != nil {
 				log.Printf("ERROR: Failed to save charger session for '%s': %v", name, err)
 			} else {
-				log.Printf("SUCCESS: Collected charger data: '%s' = %.2f kWh (user: %s, mode: %s)", 
+				log.Printf("SUCCESS: Collected charger data: '%s' = %.3f kWh (user: %s, mode: %s)", 
 					name, power, userID, mode)
 				successCount++
 			}
@@ -895,7 +895,7 @@ func (dc *DataCollector) saveBufferedUDPDataAsBackup() {
 			`, meterID, currentTime).Scan(&count)
 			
 			if count == 0 {
-				log.Printf("Using UDP backup data for meter ID %d: %.2f kWh", meterID, reading)
+				log.Printf("Using UDP backup data for meter ID %d: %.3f kWh", meterID, reading)
 				
 				var lastReading float64
 				var lastTime time.Time

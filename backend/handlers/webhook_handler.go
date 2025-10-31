@@ -134,7 +134,7 @@ func (h *WebhookHandler) ReceiveMeterReading(w http.ResponseWriter, r *http.Requ
 	}
 
 	if powerKwh <= 0 {
-		log.Printf("WARNING: Zero or negative power value %.2f received for meter %d from %s", 
+		log.Printf("WARNING: Zero or negative power value %.3f received for meter %d from %s", 
 			powerKwh, meterID, r.RemoteAddr)
 	}
 

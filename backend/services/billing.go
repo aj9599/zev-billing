@@ -151,7 +151,7 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 			}
 
 			invoices = append(invoices, *invoice)
-			log.Printf("  ✓ Generated invoice %s: %s %.2f", invoice.InvoiceNumber, settings.Currency, invoice.TotalAmount)
+			log.Printf("  ✓ Generated invoice %s: %s %.3f", invoice.InvoiceNumber, settings.Currency, invoice.TotalAmount)
 		}
 		userRows.Close()
 		
@@ -172,8 +172,8 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 	normalPower, solarPower, totalConsumption := bs.calculateZEVConsumption(userID, buildingID, start, end)
 
 	log.Printf("  Meter: %s", meterName)
-	log.Printf("  Reading from: %.2f kWh, Reading to: %.2f kWh", meterReadingFrom, meterReadingTo)
-	log.Printf("  Calculated consumption: %.2f kWh (Normal: %.2f, Solar: %.2f)", 
+	log.Printf("  Reading from: %.3f kWh, Reading to: %.3f kWh", meterReadingFrom, meterReadingTo)
+	log.Printf("  Calculated consumption: %.3f kWh (Normal: %.3f, Solar: %.3f)", 
 		totalConsumption, normalPower, solarPower)
 
 	if totalConsumption > 0 {
@@ -186,7 +186,7 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 		})
 
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  Reading from %s: %.2f kWh", start.Format("02.01.2006"), meterReadingFrom),
+			Description: fmt.Sprintf("  Reading from %s: %.3f kWh", start.Format("02.01.2006"), meterReadingFrom),
 			Quantity:    0,
 			UnitPrice:   0,
 			TotalPrice:  0,
@@ -194,7 +194,7 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 		})
 
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  Reading to %s: %.2f kWh", end.Format("02.01.2006"), meterReadingTo),
+			Description: fmt.Sprintf("  Reading to %s: %.3f kWh", end.Format("02.01.2006"), meterReadingTo),
 			Quantity:    0,
 			UnitPrice:   0,
 			TotalPrice:  0,
@@ -202,7 +202,7 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 		})
 
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  Total Consumption: %.2f kWh", totalConsumption),
+			Description: fmt.Sprintf("  Total Consumption: %.3f kWh", totalConsumption),
 			Quantity:    totalConsumption,
 			UnitPrice:   0,
 			TotalPrice:  0,
@@ -222,33 +222,33 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 		solarCost := solarPower * settings.SolarPowerPrice
 		totalAmount += solarCost
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("Solar Power: %.2f kWh × %.3f %s/kWh", solarPower, settings.SolarPowerPrice, settings.Currency),
+			Description: fmt.Sprintf("Solar Power: %.3f kWh × %.3f %s/kWh", solarPower, settings.SolarPowerPrice, settings.Currency),
 			Quantity:    solarPower,
 			UnitPrice:   settings.SolarPowerPrice,
 			TotalPrice:  solarCost,
 			ItemType:    "solar_power",
 		})
-		log.Printf("  Solar Cost: %.2f kWh × %.3f = %.2f %s", solarPower, settings.SolarPowerPrice, solarCost, settings.Currency)
+		log.Printf("  Solar Cost: %.3f kWh × %.3f = %.3f %s", solarPower, settings.SolarPowerPrice, solarCost, settings.Currency)
 	}
 
 	if normalPower > 0 {
 		normalCost := normalPower * settings.NormalPowerPrice
 		totalAmount += normalCost
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("Normal Power (Grid): %.2f kWh × %.3f %s/kWh", normalPower, settings.NormalPowerPrice, settings.Currency),
+			Description: fmt.Sprintf("Normal Power (Grid): %.3f kWh × %.3f %s/kWh", normalPower, settings.NormalPowerPrice, settings.Currency),
 			Quantity:    normalPower,
 			UnitPrice:   settings.NormalPowerPrice,
 			TotalPrice:  normalCost,
 			ItemType:    "normal_power",
 		})
-		log.Printf("  Normal Cost: %.2f kWh × %.3f = %.2f %s", normalPower, settings.NormalPowerPrice, normalCost, settings.Currency)
+		log.Printf("  Normal Cost: %.3f kWh × %.3f = %.3f %s", normalPower, settings.NormalPowerPrice, normalCost, settings.Currency)
 	}
 
 	if rfidCards != "" {
 		log.Printf("  [CHARGING] Starting charging calculation for RFID cards: '%s'", rfidCards)
 		normalCharging, priorityCharging, firstSession, lastSession := bs.calculateChargingConsumption(buildingID, rfidCards, start, end)
 
-		log.Printf("  [CHARGING] Results: Solar=%.2f kWh, Priority=%.2f kWh", normalCharging, priorityCharging)
+		log.Printf("  [CHARGING] Results: Solar=%.3f kWh, Priority=%.3f kWh", normalCharging, priorityCharging)
 
 		if normalCharging > 0 || priorityCharging > 0 {
 			items = append(items, models.InvoiceItem{
@@ -286,7 +286,7 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 
 				totalCharged := normalCharging + priorityCharging
 				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("  Total Charged: %.2f kWh", totalCharged),
+					Description: fmt.Sprintf("  Total Charged: %.3f kWh", totalCharged),
 					Quantity:    totalCharged,
 					UnitPrice:   0,
 					TotalPrice:  0,
@@ -306,33 +306,33 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 				normalChargingCost := normalCharging * settings.CarChargingNormalPrice
 				totalAmount += normalChargingCost
 				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("Solar Mode: %.2f kWh × %.3f %s/kWh", normalCharging, settings.CarChargingNormalPrice, settings.Currency),
+					Description: fmt.Sprintf("Solar Mode: %.3f kWh × %.3f %s/kWh", normalCharging, settings.CarChargingNormalPrice, settings.Currency),
 					Quantity:    normalCharging,
 					UnitPrice:   settings.CarChargingNormalPrice,
 					TotalPrice:  normalChargingCost,
 					ItemType:    "car_charging_normal",
 				})
-				log.Printf("  Solar Charging: %.2f kWh × %.3f = %.2f %s", normalCharging, settings.CarChargingNormalPrice, normalChargingCost, settings.Currency)
+				log.Printf("  Solar Charging: %.3f kWh × %.3f = %.3f %s", normalCharging, settings.CarChargingNormalPrice, normalChargingCost, settings.Currency)
 			}
 
 			if priorityCharging > 0 {
 				priorityChargingCost := priorityCharging * settings.CarChargingPriorityPrice
 				totalAmount += priorityChargingCost
 				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("Priority Mode: %.2f kWh × %.3f %s/kWh", priorityCharging, settings.CarChargingPriorityPrice, settings.Currency),
+					Description: fmt.Sprintf("Priority Mode: %.3f kWh × %.3f %s/kWh", priorityCharging, settings.CarChargingPriorityPrice, settings.Currency),
 					Quantity:    priorityCharging,
 					UnitPrice:   settings.CarChargingPriorityPrice,
 					TotalPrice:  priorityChargingCost,
 					ItemType:    "car_charging_priority",
 				})
-				log.Printf("  Priority Charging: %.2f kWh × %.3f = %.2f %s", priorityCharging, settings.CarChargingPriorityPrice, priorityChargingCost, settings.Currency)
+				log.Printf("  Priority Charging: %.3f kWh × %.3f = %.3f %s", priorityCharging, settings.CarChargingPriorityPrice, priorityChargingCost, settings.Currency)
 			}
 		}
 	} else {
 		log.Printf("  [CHARGING] No RFID cards configured for this user - skipping charging calculation")
 	}
 
-	log.Printf("  INVOICE TOTAL: %s %.2f", settings.Currency, totalAmount)
+	log.Printf("  INVOICE TOTAL: %s %.3f", settings.Currency, totalAmount)
 
 	result, err := bs.db.Exec(`
 		INSERT INTO invoices (
@@ -408,7 +408,7 @@ func (bs *BillingService) getMeterReadings(userID int, start, end time.Time) (fl
 	if err != nil {
 		log.Printf("WARNING: No reading found before start date for meter %d, will use 0", meterID)
 	} else {
-		log.Printf("  Found start reading: %.2f kWh at %s", readingFrom.Float64, readingFromTime.Format("2006-01-02 15:04:05"))
+		log.Printf("  Found start reading: %.3f kWh at %s", readingFrom.Float64, readingFromTime.Format("2006-01-02 15:04:05"))
 	}
 
 	var readingTo sql.NullFloat64
@@ -425,7 +425,7 @@ func (bs *BillingService) getMeterReadings(userID int, start, end time.Time) (fl
 	if err != nil {
 		log.Printf("WARNING: No reading found before end date for meter %d", meterID)
 	} else {
-		log.Printf("  Found end reading: %.2f kWh at %s", readingTo.Float64, readingToTime.Format("2006-01-02 15:04:05"))
+		log.Printf("  Found end reading: %.3f kWh at %s", readingTo.Float64, readingToTime.Format("2006-01-02 15:04:05"))
 	}
 
 	from := 0.0
@@ -439,7 +439,7 @@ func (bs *BillingService) getMeterReadings(userID int, start, end time.Time) (fl
 	}
 
 	if to < from {
-		log.Printf("ERROR: End reading (%.2f) < start reading (%.2f) for meter %d", to, from, meterID)
+		log.Printf("ERROR: End reading (%.3f) < start reading (%.3f) for meter %d", to, from, meterID)
 		return from, from, meterName
 	}
 
@@ -587,7 +587,7 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 	} else {
 		log.Printf("    [ZEV] Processed %d intervals (15-minute fixed intervals)", intervalCount)
 		if totalConsumption > 0 {
-			log.Printf("    [ZEV] RESULT - Total: %.2f kWh, Solar: %.2f kWh (%.1f%%), Grid: %.2f kWh (%.1f%%)", 
+			log.Printf("    [ZEV] RESULT - Total: %.3f kWh, Solar: %.3f kWh (%.1f%%), Grid: %.3f kWh (%.1f%%)", 
 				totalConsumption, totalSolar, (totalSolar/totalConsumption)*100, totalNormal, (totalNormal/totalConsumption)*100)
 		}
 	}
@@ -747,7 +747,7 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 		totalSessionsFound++
 
 		if totalSessionsFound <= 10 {
-			log.Printf("  [CHARGING] Session #%d: charger=%d, user='%s', time=%s, power=%.2f, mode='%s', state='%s'",
+			log.Printf("  [CHARGING] Session #%d: charger=%d, user='%s', time=%s, power=%.3f, mode='%s', state='%s'",
 				totalSessionsFound, chargerID, sessionUserID, sessionTime.Format("2006-01-02 15:04"), 
 				power, mode, state)
 		}
@@ -817,10 +817,10 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 			
 			if shouldLog {
 				if isBillable {
-					log.Printf("  [CHARGING]     [%d] %s: %.2f kWh, mode=%s, state=%s → BILLABLE", 
+					log.Printf("  [CHARGING]     [%d] %s: %.3f kWh, mode=%s, state=%s → BILLABLE", 
 						sessionNum, session.SessionTime.Format("15:04"), session.PowerKwh, session.Mode, session.State)
 				} else {
-					log.Printf("  [CHARGING]     [%d] %s: %.2f kWh, mode=%s, state=%s → SKIP (idle)", 
+					log.Printf("  [CHARGING]     [%d] %s: %.3f kWh, mode=%s, state=%s → SKIP (idle)", 
 						sessionNum, session.SessionTime.Format("15:04"), session.PowerKwh, session.Mode, session.State)
 				}
 			}
@@ -841,7 +841,7 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 				previousPower = session.PowerKwh
 				hasPreviousPower = true
 				if shouldLog {
-					log.Printf("  [CHARGING]     [%d] Established baseline at %.2f kWh", sessionNum, session.PowerKwh)
+					log.Printf("  [CHARGING]     [%d] Established baseline at %.3f kWh", sessionNum, session.PowerKwh)
 				}
 				continue
 			}
@@ -850,7 +850,7 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 			
 			if consumption < 0 {
 				if shouldLog {
-					log.Printf("  [CHARGING]     [%d] NEGATIVE consumption %.2f kWh - meter reset, resetting baseline", 
+					log.Printf("  [CHARGING]     [%d] NEGATIVE consumption %.3f kWh - meter reset, resetting baseline", 
 						sessionNum, consumption)
 				}
 				previousPower = session.PowerKwh
@@ -866,13 +866,13 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 				if isNormal {
 					chargerNormal += consumption
 					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh NORMAL (%.2f → %.2f)", 
+						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh NORMAL (%.3f → %.3f)", 
 							sessionNum, consumption, previousPower, session.PowerKwh)
 					}
 				} else if isPriority {
 					chargerPriority += consumption
 					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh PRIORITY (%.2f → %.2f)", 
+						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh PRIORITY (%.3f → %.3f)", 
 							sessionNum, consumption, previousPower, session.PowerKwh)
 					}
 				} else {
@@ -883,14 +883,14 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 					}
 				}
 			} else if shouldLog {
-				log.Printf("  [CHARGING]     [%d] Zero consumption (%.2f → %.2f)", 
+				log.Printf("  [CHARGING]     [%d] Zero consumption (%.3f → %.3f)", 
 					sessionNum, previousPower, session.PowerKwh)
 			}
 			
 			previousPower = session.PowerKwh
 		}
 		
-		log.Printf("  [CHARGING] Charger %d summary: %d billable, %d skipped, %.2f kWh normal, %.2f kWh priority", 
+		log.Printf("  [CHARGING] Charger %d summary: %d billable, %d skipped, %.3f kWh normal, %.3f kWh priority", 
 			chargerID, chargerBillable, chargerSkipped, chargerNormal, chargerPriority)
 		
 		normalTotal += chargerNormal
@@ -904,9 +904,9 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 	log.Printf("  [CHARGING] Total sessions found: %d (at 15-min intervals)", totalSessionsFound)
 	log.Printf("  [CHARGING] Billable sessions: %d", totalBillableSessions)
 	log.Printf("  [CHARGING] Skipped sessions: %d", totalSkippedSessions)
-	log.Printf("  [CHARGING] Normal charging: %.2f kWh", normalTotal)
-	log.Printf("  [CHARGING] Priority charging: %.2f kWh", priorityTotal)
-	log.Printf("  [CHARGING] Total charging: %.2f kWh", normalTotal+priorityTotal)
+	log.Printf("  [CHARGING] Normal charging: %.3f kWh", normalTotal)
+	log.Printf("  [CHARGING] Priority charging: %.3f kWh", priorityTotal)
+	log.Printf("  [CHARGING] Total charging: %.3f kWh", normalTotal+priorityTotal)
 	if !firstSession.IsZero() {
 		log.Printf("  [CHARGING] First session: %s", firstSession.Format("2006-01-02 15:04"))
 		log.Printf("  [CHARGING] Last session: %s", lastSession.Format("2006-01-02 15:04"))
