@@ -88,10 +88,13 @@ export const de: Translations = {
 
   //Captcha
   'captcha.title': '🔒 Sicherheitsprüfung - Zum Fortfahren abschließen',
-  'captcha.instruction': 'Schieben Sie, um die Formen auszurichten',
+  'captcha.instruction': 'Schieben Sie den Regler, um die Formen auszurichten',
   'captcha.new': 'Neu',
+  'captcha.refreshTitle': 'Neue Herausforderung generieren',
   'captcha.footer': 'Formen anpassen, um Löschung zu aktivieren',
   'captcha.success': 'Verifiziert!',
+  'captcha.almostThere': 'Fast geschafft!',
+  'captcha.away': 'entfernt',
 
   // Users
   'users.title': 'Benutzer',

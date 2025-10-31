@@ -90,8 +90,11 @@ export const en: Translations = {
   'captcha.title': '🔒 Security Check - Complete to Continue',
   'captcha.instruction': 'Slide to align the shapes',
   'captcha.new': 'New',
-  'captcha.footer': 'Match the shapes to enable deletion',
+  'captcha.refreshTitle': 'Generate new challeng',
+  'captcha.footer': 'Align shapes to enable deletion',
   'captcha.success': 'Verified!',
+  'captcha.almostThere': 'Almost there!',
+  'captcha.away': 'away',
 
   // Users
   'users.title': 'Users',
