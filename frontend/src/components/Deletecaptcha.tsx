@@ -1,39 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 import { RefreshCw } from 'lucide-react';
+import { useTranslation } from '../i18n';
 
 interface DeleteCaptchaProps {
   onValidationChange: (isValid: boolean) => void;
-  language?: 'en' | 'de';
 }
 
-const translations = {
-  en: {
-    'captcha.title': '🔒 Security Check - Complete to Continue',
-    'captcha.instruction': 'Slide to align the shapes',
-    'captcha.new': 'New',
-    'captcha.footer': 'Match the shapes to enable deletion',
-    'captcha.success': 'Verified!',
-  },
-  de: {
-    'captcha.title': '🔒 Sicherheitsprüfung - Zum Fortfahren abschließen',
-    'captcha.instruction': 'Schieben Sie, um die Formen auszurichten',
-    'captcha.new': 'Neu',
-    'captcha.footer': 'Formen anpassen, um Löschung zu aktivieren',
-    'captcha.success': 'Verifiziert!',
-  },
-};
-
-export default function DeleteCaptcha({ onValidationChange, language = 'en' }: DeleteCaptchaProps) {
+export default function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps) {
+  const { t } = useTranslation();
   const [targetPosition, setTargetPosition] = useState(50);
   const [sliderValue, setSliderValue] = useState(0);
   const [isValid, setIsValid] = useState(false);
   const [hasInteracted, setHasInteracted] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const t = (key: keyof typeof translations.en) => translations[language][key];
-
   const generateNewChallenge = () => {
-    // Generate a random target position between 20 and 80
     const newTarget = Math.floor(Math.random() * 60) + 20;
     setTargetPosition(newTarget);
     setSliderValue(0);
@@ -47,7 +28,6 @@ export default function DeleteCaptcha({ onValidationChange, language = 'en' }: D
   }, []);
 
   useEffect(() => {
-    // Check if slider is within tolerance (±5 units)
     const tolerance = 5;
     const valid = Math.abs(sliderValue - targetPosition) <= tolerance;
     setIsValid(valid);
@@ -61,7 +41,6 @@ export default function DeleteCaptcha({ onValidationChange, language = 'en' }: D
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Draw track
@@ -75,7 +54,7 @@ export default function DeleteCaptcha({ onValidationChange, language = 'en' }: D
     ctx.fillRect(targetX - 15, 35, 30, 30);
     ctx.globalAlpha = 1;
 
-    // Draw target shape (circle)
+    // Draw target circle
     ctx.fillStyle = '#3b82f6';
     ctx.beginPath();
     ctx.arc(targetX, 50, 12, 0, Math.PI * 2);
@@ -84,7 +63,7 @@ export default function DeleteCaptcha({ onValidationChange, language = 'en' }: D
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Draw slider shape (square)
+    // Draw slider square
     const sliderX = (sliderValue / 100) * (canvas.width - 20) + 10;
     ctx.fillStyle = hasInteracted ? (isValid ? '#22c55e' : '#ef4444') : '#6b7280';
     ctx.fillRect(sliderX - 12, 38, 24, 24);
@@ -92,7 +71,7 @@ export default function DeleteCaptcha({ onValidationChange, language = 'en' }: D
     ctx.lineWidth = 2;
     ctx.strokeRect(sliderX - 12, 38, 24, 24);
 
-    // Draw center lines for alignment help
+    // Draw alignment helper lines
     if (hasInteracted && !isValid) {
       ctx.strokeStyle = '#9ca3af';
       ctx.lineWidth = 1;
