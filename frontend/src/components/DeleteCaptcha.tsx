@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { RefreshCw, ShieldCheck, Calculator } from 'lucide-react';
 import { useTranslation } from '../i18n';
 
@@ -12,24 +12,25 @@ interface MathQuestion {
   options: number[];
 }
 
-export default function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps) {
+function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps) {
   const { t } = useTranslation();
   const onValidationChangeRef = useRef(onValidationChange);
   const [mathQuestion, setMathQuestion] = useState<MathQuestion | null>(null);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [isValid, setIsValid] = useState(false);
   const [hasAnswered, setHasAnswered] = useState(false);
+  const isInitializedRef = useRef(false);
 
-  // Keep ref up to date
+  // Keep ref up to date without triggering re-renders
   useEffect(() => {
     onValidationChangeRef.current = onValidationChange;
-  }, [onValidationChange]);
+  });
 
   const generateMathQuestion = useCallback((): MathQuestion => {
     const operations = [
       { type: 'add', symbol: '+', fn: (a: number, b: number) => a + b },
       { type: 'subtract', symbol: '-', fn: (a: number, b: number) => a - b },
-      { type: 'multiply', symbol: 'Ã—', fn: (a: number, b: number) => a * b }
+      { type: 'multiply', symbol: '×', fn: (a: number, b: number) => a * b }
     ];
 
     const operation = operations[Math.floor(Math.random() * operations.length)];
@@ -77,27 +78,41 @@ export default function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps
   }, []);
 
   const generateNewChallenge = useCallback(() => {
+    // Don't regenerate if already valid (user solved it correctly)
+    if (isValid) {
+      return;
+    }
+    
     const newQuestion = generateMathQuestion();
     setMathQuestion(newQuestion);
     setSelectedAnswer(null);
     setIsValid(false);
     setHasAnswered(false);
     onValidationChangeRef.current(false);
+  }, [generateMathQuestion, isValid]);
+
+  // Only generate on initial mount
+  useEffect(() => {
+    if (!isInitializedRef.current) {
+      isInitializedRef.current = true;
+      const newQuestion = generateMathQuestion();
+      setMathQuestion(newQuestion);
+    }
   }, [generateMathQuestion]);
 
-  useEffect(() => {
-    generateNewChallenge();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const handleAnswerSelect = useCallback((answer: number) => {
+    // Prevent answering if already valid
+    if (isValid) {
+      return;
+    }
 
-  const handleAnswerSelect = (answer: number) => {
     setSelectedAnswer(answer);
     setHasAnswered(true);
     
     const correct = mathQuestion ? answer === mathQuestion.correctAnswer : false;
     setIsValid(correct);
     onValidationChangeRef.current(correct);
-  };
+  }, [mathQuestion, isValid]);
 
   const getButtonStyle = (answer: number) => {
     const baseStyle = {
@@ -245,7 +260,7 @@ export default function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps
             <button
               key={option}
               type="button"
-              onClick={() => !isValid && handleAnswerSelect(option)}
+              onClick={() => handleAnswerSelect(option)}
               disabled={isValid}
               style={getButtonStyle(option)}
               onMouseEnter={(e) => {
@@ -265,10 +280,10 @@ export default function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps
             >
               {option}
               {hasAnswered && option === mathQuestion.correctAnswer && (
-                <span style={{ marginLeft: '8px' }}>âœ“</span>
+                <span style={{ marginLeft: '8px' }}>✓</span>
               )}
               {hasAnswered && option === selectedAnswer && option !== mathQuestion.correctAnswer && (
-                <span style={{ marginLeft: '8px' }}>âœ—</span>
+                <span style={{ marginLeft: '8px' }}>✗</span>
               )}
             </button>
           ))}
@@ -288,7 +303,7 @@ export default function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps
             alignItems: 'center',
             gap: '6px'
           }}>
-            âœ“ {t('captcha.success')}
+            ✓ {t('captcha.success')}
           </span>
         )}
         {hasAnswered && !isValid && (
@@ -300,10 +315,13 @@ export default function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps
             alignItems: 'center',
             gap: '6px'
           }}>
-            âœ— {t('captcha.tryAgain')}
+            ✗ {t('captcha.tryAgain')}
           </span>
         )}
       </div>
     </div>
   );
 }
+
+// Memoize the component to prevent unnecessary re-renders when parent re-renders
+export default memo(DeleteCaptcha);
