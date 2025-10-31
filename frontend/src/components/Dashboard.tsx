@@ -282,14 +282,14 @@ export default function Dashboard() {
       label: t('dashboard.totalUsers'), 
       value: stats?.total_users || 0,
       subValue: `${stats?.regular_users || 0} / ${stats?.admin_users || 0}`,
-      subLabel: 'Residents / Admin',
+      subLabel: t('dashboard.residentsAdmin'),
       color: '#007bff' 
     },
     { 
       icon: Building, 
       label: t('dashboard.buildings'), 
       value: stats?.total_buildings || 0,
-      subValue: stats?.total_complexes ? `${stats.total_complexes} ${stats.total_complexes === 1 ? 'Complex' : 'Complexes'}` : undefined,
+      subValue: stats?.total_complexes ? `${stats.total_complexes} ${stats.total_complexes === 1 ? t('dashboard.complex') : t('dashboard.complexes')}` : undefined,
       color: '#28a745' 
     },
     { 

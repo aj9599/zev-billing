@@ -72,6 +72,9 @@ export const de: Translations = {
   'dashboard.metersConfigured': 'Zähler sind konfiguriert, haben aber noch keine Daten gesammelt.',
   'dashboard.noMetersConfigured': 'Noch keine Zähler für dieses Gebäude konfiguriert.',
   'dashboard.addMeters': 'Fügen Sie Zähler auf der Zähler-Seite hinzu, um den Verbrauch zu verfolgen.',
+  'dashboard.residentsAdmin': 'Bewohner / Admin',
+  'dashboard.complex': 'Komplex',
+  'dashboard.complexes': 'Komplexe',
 
   // Export
   'export.title': 'Exportieren',

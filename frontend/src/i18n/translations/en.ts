@@ -72,6 +72,9 @@ export const en: Translations = {
   'dashboard.metersConfigured': 'Meters are configured but haven\'t collected data yet.',
   'dashboard.noMetersConfigured': 'No meters configured for this building yet.',
   'dashboard.addMeters': 'Add meters in the Meters page to start tracking consumption.',
+  'dashboard.residentsAdmin': 'Residents / Admin',
+  'dashboard.complex': 'Complex',
+  'dashboard.complexes': 'Complexes',
 
   // Export
   'export.title': 'Export',
