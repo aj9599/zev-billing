@@ -401,7 +401,7 @@ export default function AutoBilling() {
                   onClick={() => toggleActive(config)}
                   style={{
                     padding: '8px',
-                    backgroundColor: config.is_active ? 'rgba(40, 167, 69, 0.9)' : 'rgba(108, 117, 125, 0.9)',
+                    backgroundColor: config.is_active ? 'rgba(40, 167, 69, 0.2)' : 'rgba(108, 117, 125, 0.9)',
                     color: 'white',
                     border: 'none',
                     borderRadius: '6px',
@@ -464,7 +464,7 @@ export default function AutoBilling() {
                   style={{
                     flex: 1,
                     padding: '8px',
-                    backgroundColor: 'rgba(0, 123, 255, 0.9)',
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
                     color: 'white',
                     border: 'none',
                     borderRadius: '6px',
@@ -476,8 +476,8 @@ export default function AutoBilling() {
                     gap: '4px',
                     transition: 'all 0.2s'
                   }}
-                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(0, 123, 255, 1)'}
-                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(0, 123, 255, 0.9)'}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(0, 123, 255, 0.1)'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(0, 123, 255, 0.2)'}
                 >
                   <Edit2 size={14} />
                   {t('common.edit')}
@@ -487,7 +487,7 @@ export default function AutoBilling() {
                   style={{
                     flex: 1,
                     padding: '8px',
-                    backgroundColor: 'rgba(220, 53, 69, 0.9)',
+                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
                     color: 'white',
                     border: 'none',
                     borderRadius: '6px',
@@ -499,8 +499,8 @@ export default function AutoBilling() {
                     gap: '4px',
                     transition: 'all 0.2s'
                   }}
-                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(220, 53, 69, 1)'}
-                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(220, 53, 69, 0.9)'}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(220, 53, 69, 0.1)'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(220, 53, 69, 0.2)'}
                 >
                   <Trash2 size={14} />
                   {t('common.delete')}
