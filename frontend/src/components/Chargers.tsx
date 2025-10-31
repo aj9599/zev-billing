@@ -968,7 +968,7 @@ export default function Chargers() {
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                             <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>{t('chargers.lastReading')}</span>
                             <span style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
-                              {session.power_kwh ? `${session.power_kwh.toFixed(2)} kWh` : '-'}
+                              {session.power_kwh ? `${session.power_kwh.toFixed(3)} kWh` : '-'}
                             </span>
                           </div>
 

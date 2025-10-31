@@ -810,7 +810,7 @@ export default function Meters() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                       <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>{t('meters.lastReading')}</span>
                       <span style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
-                        {meter.last_reading ? `${meter.last_reading.toFixed(2)} kWh` : '-'}
+                        {meter.last_reading ? `${meter.last_reading.toFixed(3)} kWh` : '-'}
                       </span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
