@@ -199,7 +199,7 @@ export const de: Translations = {
   'meters.subtitle': 'Verwalten Sie Ihre Energiezähler und überwachen Sie den Verbrauch',
   'meters.addMeter': 'Zähler hinzufügen',
   'meters.editMeter': 'Zähler bearbeiten',
-  'meters.setupInstructions': 'Einrichtungsanleitung',
+  'meters.setupInstructions': 'Setup-Anleitung',
   'meters.exportData': 'Daten exportieren',
   'meters.metersCount': 'Zähler',
   'meters.noMeters': 'Keine Zähler gefunden',
@@ -244,7 +244,7 @@ export const de: Translations = {
   'meters.loxoneDisconnected': 'Getrennt',
   'meters.loxoneConnecting': 'Verbinde...',
 
-  // Loxone-Einrichtungsanleitung
+  // Loxone-Setup-Anleitung
   'meters.loxoneSetupGuide': 'Schnelleinrichtung:',
   'meters.loxoneSetupStep1': '1. Loxone IP-Adresse eingeben',
   'meters.loxoneSetupStep2': '2. Geräte-UUID eingeben (siehe Anleitung unten)',
@@ -274,7 +274,7 @@ export const de: Translations = {
   'meters.unitId': 'Geräte-ID',
 
   // Anleitungs-Modal
-  'meters.instructions.title': 'Zähler-Einrichtungsanleitung',
+  'meters.instructions.title': 'Zähler-Setup-Anleitung',
 
   // Loxone-Anleitung
   'meters.instructions.loxoneTitle': 'Loxone WebSocket API (Empfohlen)',
@@ -449,7 +449,7 @@ export const de: Translations = {
   'chargers.loxoneFeature3': '✓ Verbindungsstatus-Überwachung',
 
   // Instructions modal
-  'chargers.instructions.title': 'Ladestation Einrichtungsanleitung',
+  'chargers.instructions.title': 'Ladestation Setup-Anleitung',
   'chargers.instructions.loxoneTitle': 'Loxone WebSocket API Verbindung',
   'chargers.instructions.loxoneRecommended': 'Empfohlen: Beste Leistung und Zuverlässigkeit',
   'chargers.instructions.loxoneChargerRequires': 'Jede Ladestation benötigt 4 separate UUIDs aus Ihrem Loxone-System:',
@@ -699,7 +699,7 @@ export const de: Translations = {
   'autoBilling.subtitle': 'Automatisierte Abrechnungspläne konfigurieren',
   'autoBilling.addConfig': 'Konfiguration hinzufügen',
   'autoBilling.editConfig': 'Konfiguration bearbeiten',
-  'autoBilling.setupInstructions': 'Einrichtungsanleitung',
+  'autoBilling.setupInstructions': 'Setup-Anleitung',
   'autoBilling.noConfigs': 'Keine automatischen Abrechnungskonfigurationen. Erstellen Sie Ihre erste Konfiguration, um die Rechnungserstellung zu automatisieren.',
   
   // Form labels
