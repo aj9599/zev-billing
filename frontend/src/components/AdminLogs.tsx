@@ -38,6 +38,7 @@ export default function AdminLogs() {
   const [showUpdateOverlay, setShowUpdateOverlay] = useState(false);
   const [updateProgress, setUpdateProgress] = useState(0);
   const [isLive, setIsLive] = useState(true);
+  const [showUpdateCard, setShowUpdateCard] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Initial load
@@ -56,6 +57,23 @@ export default function AdminLogs() {
 
     return () => clearInterval(interval);
   }, []);
+
+  // Auto-hide update card after 5 seconds if system is up to date
+  useEffect(() => {
+    if (updateInfo) {
+      setShowUpdateCard(true); // Show card when new update info arrives
+      
+      if (!updateInfo.updates_available) {
+        // If system is up to date, hide after 5 seconds
+        const timer = setTimeout(() => {
+          setShowUpdateCard(false);
+        }, 5000);
+        
+        return () => clearTimeout(timer);
+      }
+      // If updates are available, keep card visible (no timer)
+    }
+  }, [updateInfo]);
 
   const loadLogs = async () => {
     setLoading(true);
@@ -90,6 +108,7 @@ export default function AdminLogs() {
 
   const checkForUpdates = async () => {
     setCheckingUpdates(true);
+    setShowUpdateCard(true); // Always show card when manually checking
     try {
       const data = await api.checkForUpdates();
       setUpdateInfo(data);
@@ -595,14 +614,48 @@ export default function AdminLogs() {
       </div>
 
       {/* Update Info Card */}
-      {updateInfo && (
+      {updateInfo && showUpdateCard && (
         <div style={{ 
           marginBottom: '30px',
           backgroundColor: updateInfo.updates_available ? '#fef3c7' : '#d1fae5',
           padding: '20px',
           borderRadius: '12px',
-          border: `2px solid ${updateInfo.updates_available ? '#fbbf24' : '#10b981'}`
+          border: `2px solid ${updateInfo.updates_available ? '#fbbf24' : '#10b981'}`,
+          animation: 'fadeIn 0.3s ease-in',
+          position: 'relative'
         }}>
+          {/* Close button - only show if updates are available */}
+          {updateInfo.updates_available && (
+            <button
+              onClick={() => setShowUpdateCard(false)}
+              style={{
+                position: 'absolute',
+                top: '12px',
+                right: '12px',
+                background: 'none',
+                border: 'none',
+                fontSize: '20px',
+                color: '#9ca3af',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                lineHeight: '1',
+                borderRadius: '4px',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.05)';
+                e.currentTarget.style.color = '#4b5563';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = '#9ca3af';
+              }}
+              title="Dismiss notification"
+            >
+              ×
+            </button>
+          )}
+          
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
             <Info size={24} color={updateInfo.updates_available ? '#f59e0b' : '#10b981'} />
             <div style={{ fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>
@@ -1078,6 +1131,17 @@ export default function AdminLogs() {
         @keyframes pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.5; }
+        }
+
+        @keyframes fadeIn {
+          from { 
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to { 
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
 
         .admin-logs-container {
