@@ -386,10 +386,15 @@ export default function Meters() {
     return acc;
   }, {} as Record<number, Meter[]>);
 
-  const exportItems = meters.map(m => ({
-    id: m.id,
-    name: m.name
-  }));
+  const exportItems = meters.map(m => {
+    const building = buildings.find(b => b.id === m.building_id);
+    return {
+      id: m.id,
+      name: m.name,
+      building_id: m.building_id,
+      building_name: building?.name || 'Unknown Building'
+    };
+  });
 
   const InstructionsModal = () => (
     <div style={{
@@ -854,6 +859,7 @@ export default function Meters() {
         <ExportModal
           type="meters"
           items={exportItems}
+          buildings={buildings.map(b => ({ id: b.id, name: b.name }))}
           onClose={() => setShowExportModal(false)}
           onExport={handleExport}
         />
@@ -990,7 +996,7 @@ export default function Meters() {
                         </label>
                         <input type="password" required value={connectionConfig.loxone_password || ''}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_password: e.target.value })}
-                          placeholder="••••••••"
+                          placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
                     </div>

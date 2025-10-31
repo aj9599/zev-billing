@@ -567,10 +567,15 @@ export default function Chargers() {
     return acc;
   }, {} as Record<number, Charger[]>);
 
-  const exportItems = chargers.map(c => ({
-    id: c.id,
-    name: c.name
-  }));
+  const exportItems = chargers.map(c => {
+    const building = buildings.find(b => b.id === c.building_id);
+    return {
+      id: c.id,
+      name: c.name,
+      building_id: c.building_id,
+      building_name: building?.name || 'Unknown Building'
+    };
+  });
 
   const InstructionsModal = () => (
     <div style={{
@@ -1010,7 +1015,7 @@ export default function Chargers() {
                             fontWeight: '600',
                             color: '#22c55e'
                           }}>
-                            ✓ {t('chargers.supported')}
+                            âœ“ {t('chargers.supported')}
                           </span>
                         </div>
                       )}
@@ -1057,6 +1062,7 @@ export default function Chargers() {
         <ExportModal
           type="chargers"
           items={exportItems}
+          buildings={buildings.map(b => ({ id: b.id, name: b.name }))}
           onClose={() => setShowExportModal(false)}
           onExport={handleExport}
         />
@@ -1219,7 +1225,7 @@ export default function Chargers() {
                         </label>
                         <input type="password" required value={connectionConfig.loxone_password || ''}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_password: e.target.value })}
-                          placeholder="••••••••"
+                          placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
                     </div>
