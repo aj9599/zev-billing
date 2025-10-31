@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import type { Meter, Building as BuildingType, User } from '../types';
 import { useTranslation } from '../i18n';
 import ExportModal from '../components/ExportModal';
+import DeleteCaptcha from '../components/DeleteCaptcha';
 
 interface ConnectionConfig {
   endpoint?: string;
@@ -58,6 +59,7 @@ export default function Meters() {
   const [deletionImpact, setDeletionImpact] = useState<DeletionImpact | null>(null);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const [deleteUnderstandChecked, setDeleteUnderstandChecked] = useState(false);
+  const [captchaValid, setCaptchaValid] = useState(false);
   const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
   const [loxoneStatus, setLoxoneStatus] = useState<LoxoneConnectionStatus>({});
   const [formData, setFormData] = useState<Partial<Meter>>({
@@ -197,6 +199,7 @@ export default function Meters() {
     setMeterToDelete(meter);
     setDeleteConfirmationText('');
     setDeleteUnderstandChecked(false);
+    setCaptchaValid(false);
     
     try {
       const impact = await api.getMeterDeletionImpact(meter.id);
@@ -228,6 +231,11 @@ export default function Meters() {
     
     if (!deleteUnderstandChecked) {
       alert(t('meters.deleteCheckRequired') || 'Please check the confirmation box to proceed.');
+      return;
+    }
+
+    if (!captchaValid) {
+      alert(t('meters.captchaRequired') || 'Please solve the security challenge to proceed.');
       return;
     }
 
@@ -456,7 +464,8 @@ export default function Meters() {
     }}>
       <div style={{
         backgroundColor: 'white', borderRadius: '16px', padding: '32px',
-        maxWidth: '550px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+        maxWidth: '550px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+        maxHeight: '90vh', overflow: 'auto'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
           <div style={{
@@ -511,6 +520,8 @@ export default function Meters() {
               </p>
             </div>
 
+            <DeleteCaptcha onValidationChange={setCaptchaValid} />
+
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#374151' }}>
                 {t('meters.typeToConfirm') || 'Type the meter name to confirm:'}
@@ -531,7 +542,6 @@ export default function Meters() {
                   width: '100%', padding: '12px', border: '2px solid #e5e7eb',
                   borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit'
                 }}
-                autoFocus
               />
             </div>
 
@@ -559,6 +569,7 @@ export default function Meters() {
               setShowDeleteConfirmation(false);
               setMeterToDelete(null);
               setDeletionImpact(null);
+              setCaptchaValid(false);
             }}
             style={{
               flex: 1, padding: '12px', backgroundColor: '#f3f4f6',
@@ -570,14 +581,14 @@ export default function Meters() {
           </button>
           <button
             onClick={handleDeleteConfirm}
-            disabled={!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.meter_name}
+            disabled={!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.meter_name || !captchaValid}
             style={{
               flex: 1, padding: '12px',
-              backgroundColor: (!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.meter_name) ? '#fca5a5' : '#ef4444',
+              backgroundColor: (!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.meter_name || !captchaValid) ? '#fca5a5' : '#ef4444',
               color: 'white', border: 'none', borderRadius: '8px',
               fontSize: '14px', fontWeight: '600',
-              cursor: (!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.meter_name) ? 'not-allowed' : 'pointer',
-              opacity: (!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.meter_name) ? 0.6 : 1
+              cursor: (!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.meter_name || !captchaValid) ? 'not-allowed' : 'pointer',
+              opacity: (!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.meter_name || !captchaValid) ? 0.6 : 1
             }}
           >
             {t('meters.deletePermanently') || 'Delete Permanently'}
