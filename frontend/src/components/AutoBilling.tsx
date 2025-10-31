@@ -338,11 +338,11 @@ export default function AutoBilling() {
             onClick={() => setShowInstructions(true)}
             style={{
               display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
-              backgroundColor: 'rgba(23, 162, 184, 0.1)', color: '#17a2b8', border: 'none', borderRadius: '6px',
+              backgroundColor: 'rgba(23, 162, 184, 0.9)', color: 'white', border: 'none', borderRadius: '6px',
               fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s'
             }}
-            onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(23, 162, 184, 0.2)'}
-            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(23, 162, 184, 0.1)'}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(23, 162, 184, 1)'}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(23, 162, 184, 0.9)'}
           >
             <HelpCircle size={18} />
             {t('autoBilling.setupInstructions')}
@@ -351,11 +351,11 @@ export default function AutoBilling() {
             onClick={() => { resetForm(); setShowModal(true); }}
             style={{
               display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
-              backgroundColor: 'rgba(40, 167, 69, 0.1)', color: '#28a745', border: 'none', borderRadius: '6px',
+              backgroundColor: 'rgba(40, 167, 69, 0.9)', color: 'white', border: 'none', borderRadius: '6px',
               fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s'
             }}
-            onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(40, 167, 69, 0.2)'}
-            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(40, 167, 69, 0.1)'}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(40, 167, 69, 1)'}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(40, 167, 69, 0.9)'}
           >
             <Plus size={18} />
             {t('autoBilling.addConfig')}
