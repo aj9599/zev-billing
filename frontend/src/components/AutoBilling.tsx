@@ -401,8 +401,8 @@ export default function AutoBilling() {
                   onClick={() => toggleActive(config)}
                   style={{
                     padding: '8px',
-                    backgroundColor: config.is_active ? 'rgba(40, 167, 69, 0.2)' : 'rgba(108, 117, 125, 0.9)',
-                    color: 'white',
+                    backgroundColor: config.is_active ? 'rgba(34, 197, 94, 0.1)' : 'rgba(156, 163, 175, 0.1)',
+                    color: config.is_active ? '#22c55e' : '#9ca3af',
                     border: 'none',
                     borderRadius: '6px',
                     cursor: 'pointer',
@@ -412,8 +412,12 @@ export default function AutoBilling() {
                     transition: 'all 0.2s'
                   }}
                   title={config.is_active ? t('autoBilling.pause') : t('autoBilling.activate')}
-                  onMouseOver={(e) => e.currentTarget.style.opacity = '1'}
-                  onMouseOut={(e) => e.currentTarget.style.opacity = '0.9'}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.backgroundColor = config.is_active ? 'rgba(34, 197, 94, 0.2)' : 'rgba(156, 163, 175, 0.2)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.backgroundColor = config.is_active ? 'rgba(34, 197, 94, 0.1)' : 'rgba(156, 163, 175, 0.1)';
+                  }}
                 >
                   {config.is_active ? <PauseCircle size={16} /> : <PlayCircle size={16} />}
                 </button>
@@ -464,8 +468,8 @@ export default function AutoBilling() {
                   style={{
                     flex: 1,
                     padding: '8px',
-                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
-                    color: 'white',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    color: '#3b82f6',
                     border: 'none',
                     borderRadius: '6px',
                     fontSize: '13px',
@@ -476,8 +480,8 @@ export default function AutoBilling() {
                     gap: '4px',
                     transition: 'all 0.2s'
                   }}
-                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(0, 123, 255, 0.1)'}
-                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(0, 123, 255, 0.2)'}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.2)'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.1)'}
                 >
                   <Edit2 size={14} />
                   {t('common.edit')}
@@ -487,8 +491,8 @@ export default function AutoBilling() {
                   style={{
                     flex: 1,
                     padding: '8px',
-                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                    color: 'white',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    color: '#ef4444',
                     border: 'none',
                     borderRadius: '6px',
                     fontSize: '13px',
@@ -499,8 +503,8 @@ export default function AutoBilling() {
                     gap: '4px',
                     transition: 'all 0.2s'
                   }}
-                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(220, 53, 69, 0.1)'}
-                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(220, 53, 69, 0.2)'}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'}
                 >
                   <Trash2 size={14} />
                   {t('common.delete')}
