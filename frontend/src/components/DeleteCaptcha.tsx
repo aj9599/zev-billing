@@ -87,7 +87,7 @@ export default function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps
     setSelectedAnswer(answer);
     setHasAnswered(true);
     
-    const correct = mathQuestion && answer === mathQuestion.correctAnswer;
+    const correct = mathQuestion ? answer === mathQuestion.correctAnswer : false;
     setIsValid(correct);
     onValidationChange(correct);
   };
