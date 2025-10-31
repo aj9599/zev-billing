@@ -86,15 +86,24 @@ export const de: Translations = {
   'export.filterByBuilding': '{{type}} nach Gebäude filtern',
   'export.exportingAllFrom': 'Alle {{type}} von {{building}}',
 
-  //Captcha
+  // Math CAPTCHA
   'captcha.title': '🔒 Sicherheitsprüfung - Zum Fortfahren abschließen',
-  'captcha.instruction': 'Schieben Sie den Regler, um die Formen auszurichten',
+  'captcha.mathInstruction': 'Lösen Sie die Rechenaufgabe, um fortzufahren',
+  'captcha.mathFooter': 'Wählen Sie die richtige Antwort',
   'captcha.new': 'Neu',
-  'captcha.refreshTitle': 'Neue Herausforderung generieren',
-  'captcha.footer': 'Formen anpassen, um Löschung zu aktivieren',
+  'captcha.refreshTitle': 'Neue Aufgabe generieren',
   'captcha.success': 'Verifiziert!',
-  'captcha.almostThere': 'Fast geschafft!',
-  'captcha.away': 'entfernt',
+  'captcha.tryAgain': 'Falsch, versuchen Sie es erneut',
+
+  // Meters Delete Confirmation
+  'meters.deleteConfirmTitle': 'Zähler löschen',
+  'meters.deleteWarning': '⚠️ Achtung: Diese Aktion kann nicht rückgängig gemacht werden',
+  'meters.deleteImpactTitle': 'Was wird gelöscht:',
+  'meters.meterWillBeDeleted': 'Der Zähler wird dauerhaft entfernt',
+  'meters.dataLossWarning': 'Alle Zählerstände und historischen Daten gehen verloren',
+  'meters.typeToConfirm': 'Geben Sie den Namen des Zählers ein, um zu bestätigen:',
+  'meters.typeMeterName': 'Zählername eingeben...',
+  'meters.understandDataLoss': 'Ich verstehe, dass alle Daten unwiderruflich gelöscht werden',
 
   // Users
   'users.title': 'Benutzer',

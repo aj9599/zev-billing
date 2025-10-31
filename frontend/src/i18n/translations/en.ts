@@ -86,15 +86,24 @@ export const en: Translations = {
   'export.filterByBuilding': 'Filter {{type}} by building',
   'export.exportingAllFrom': 'All {{type}} from {{building}}',
 
-  // Captcha
+  // Math CAPTCHA
   'captcha.title': '🔒 Security Check - Complete to Continue',
-  'captcha.instruction': 'Slide to align the shapes',
+  'captcha.mathInstruction': 'Solve the math problem to continue',
+  'captcha.mathFooter': 'Select the correct answer',
   'captcha.new': 'New',
-  'captcha.refreshTitle': 'Generate new challeng',
-  'captcha.footer': 'Align shapes to enable deletion',
+  'captcha.refreshTitle': 'Generate new question',
   'captcha.success': 'Verified!',
-  'captcha.almostThere': 'Almost there!',
-  'captcha.away': 'away',
+  'captcha.tryAgain': 'Wrong, try again',
+
+  // Meters Delete Confirmation
+  'meters.deleteConfirmTitle': 'Delete Meter',
+  'meters.deleteWarning': '⚠️ Warning: This action cannot be undone',
+  'meters.deleteImpactTitle': 'What will be deleted:',
+  'meters.meterWillBeDeleted': 'The meter will be permanently removed',
+  'meters.dataLossWarning': 'All meter readings and historical data will be lost',
+  'meters.typeToConfirm': 'Type the meter name to confirm:',
+  'meters.typeMeterName': 'Enter meter name...',
+  'meters.understandDataLoss': 'I understand that all data will be permanently deleted',
 
   // Users
   'users.title': 'Users',
@@ -669,7 +678,7 @@ export const en: Translations = {
   'billing.bankNamePlaceholder': 'Bank Name',
   'billing.ibanPlaceholder': 'CH93 0076 2011 6238 5295 7',
   'billing.accountHolderPlaceholder': 'Account Holder Name',
-  
+
   // Navigation
   'nav.autoBilling': 'Auto Billing',
 
@@ -680,7 +689,7 @@ export const en: Translations = {
   'autoBilling.editConfig': 'Edit Configuration',
   'autoBilling.setupInstructions': 'Setup Instructions',
   'autoBilling.noConfigs': 'No automatic billing configurations. Create your first configuration to automate bill generation.',
-  
+
   // Form labels
   'autoBilling.configName': 'Configuration Name',
   'autoBilling.configNamePlaceholder': 'e.g., Monthly Billing for Building A',
@@ -689,14 +698,14 @@ export const en: Translations = {
   'autoBilling.atLeastOne': 'at least one',
   'autoBilling.leaveEmptyForAll': 'leave empty for all users',
   'autoBilling.selectAtLeastOneBuilding': 'Please select at least one building',
-  
+
   // Frequency options
   'autoBilling.frequency': 'Billing Frequency',
   'autoBilling.frequency.monthly': 'Monthly',
   'autoBilling.frequency.quarterly': 'Quarterly (Every 3 months)',
   'autoBilling.frequency.half_yearly': 'Half-Yearly (Every 6 months)',
   'autoBilling.frequency.yearly': 'Yearly',
-  
+
   // Date and scheduling
   'autoBilling.generationDay': 'Generation Day',
   'autoBilling.generationDayHelp': 'Day of month to generate bills (1-28)',
@@ -705,7 +714,7 @@ export const en: Translations = {
   'autoBilling.day': 'Day',
   'autoBilling.lastRun': 'Last Run',
   'autoBilling.nextRun': 'Next Run',
-  
+
   // Card display
   'autoBilling.building': 'Building',
   'autoBilling.buildings': 'Buildings',
@@ -713,11 +722,11 @@ export const en: Translations = {
   'autoBilling.users': 'Users',
   'autoBilling.allUsers': 'All users in selected buildings',
   'autoBilling.noBuildings': 'No buildings selected',
-  
+
   // Actions
   'autoBilling.pause': 'Pause',
   'autoBilling.activate': 'Activate',
-  
+
   // Messages
   'autoBilling.createSuccess': 'Auto billing configuration created successfully!',
   'autoBilling.updateSuccess': 'Auto billing configuration updated successfully!',
@@ -731,32 +740,32 @@ export const en: Translations = {
   'autoBilling.instructions.title': 'Automatic Billing Guide',
   'autoBilling.instructions.whatIsAutoBilling': 'What is Automatic Billing?',
   'autoBilling.instructions.autoBillingDescription': 'Automatic billing schedules bill generation at regular intervals without manual intervention. Configure when and how often to generate invoices, and the system will automatically create them on schedule.',
-  
+
   'autoBilling.instructions.howItWorks': 'How It Works',
   'autoBilling.instructions.work1': 'The system checks active configurations every hour',
   'autoBilling.instructions.work2': 'When the scheduled day arrives, bills are automatically generated',
   'autoBilling.instructions.work3': 'Bills appear in the regular Billing page alongside manual bills',
   'autoBilling.instructions.work4': 'You can pause, modify, or delete schedules at any time',
-  
+
   'autoBilling.instructions.frequencies': 'Billing Frequencies',
   'autoBilling.instructions.freq1': 'Bills generated on the same day each month',
   'autoBilling.instructions.freq2': 'Bills generated every 3 months (Jan, Apr, Jul, Oct)',
   'autoBilling.instructions.freq3': 'Bills generated twice per year (Jan, Jul)',
   'autoBilling.instructions.freq4': 'Bills generated once per year in January',
-  
+
   'autoBilling.instructions.howToUse': 'How to Use',
   'autoBilling.instructions.step1': 'Click "Add Configuration" to create a new billing schedule',
   'autoBilling.instructions.step2': 'Select buildings and optionally specific users to bill',
   'autoBilling.instructions.step3': 'Choose frequency (monthly, quarterly, etc.) and generation day',
   'autoBilling.instructions.step4': 'Add sender and banking information for invoices',
   'autoBilling.instructions.step5': 'Activate the configuration - bills will be generated automatically',
-  
+
   'autoBilling.instructions.important': 'Important',
   'autoBilling.instructions.important1': 'Ensure active pricing is configured for all buildings before scheduling',
   'autoBilling.instructions.important2': 'Users must have apartment meters for consumption tracking',
   'autoBilling.instructions.important3': 'Configurations can be paused without deleting them',
   'autoBilling.instructions.important4': 'Review the Billing page regularly to verify generated invoices',
-  
+
   'autoBilling.instructions.tips': 'Tips',
   'autoBilling.instructions.tip1': 'Set generation day to 1st-5th of month for most reliable results',
   'autoBilling.instructions.tip2': 'Use separate configurations for different building groups',
