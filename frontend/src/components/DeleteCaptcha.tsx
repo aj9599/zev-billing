@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, memo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { RefreshCw, ShieldCheck, Calculator } from 'lucide-react';
 import { useTranslation } from '../i18n';
 
@@ -12,18 +12,23 @@ interface MathQuestion {
   options: number[];
 }
 
-function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps) {
+export default function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps) {
   const { t } = useTranslation();
-  const onValidationChangeRef = useRef(onValidationChange);
   const [mathQuestion, setMathQuestion] = useState<MathQuestion | null>(null);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [isValid, setIsValid] = useState(false);
   const [hasAnswered, setHasAnswered] = useState(false);
+  
+  // Use refs to avoid unnecessary effect triggers
   const isInitializedRef = useRef(false);
+  const onValidationChangeRef = useRef(onValidationChange);
 
-  // Keep ref up to date - this doesn't cause re-renders
-  onValidationChangeRef.current = onValidationChange;
+  // Keep callback ref updated without triggering effects
+  useEffect(() => {
+    onValidationChangeRef.current = onValidationChange;
+  }, [onValidationChange]);
 
+  // Stable function to generate questions - no dependencies
   const generateMathQuestion = useCallback((): MathQuestion => {
     const operations = [
       { type: 'add', symbol: '+', fn: (a: number, b: number) => a + b },
@@ -75,6 +80,7 @@ function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps) {
     };
   }, []);
 
+  // Generate new challenge - only when user clicks refresh
   const generateNewChallenge = useCallback(() => {
     // Don't regenerate if already valid (user solved it correctly)
     if (isValid) {
@@ -89,16 +95,16 @@ function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps) {
     onValidationChangeRef.current(false);
   }, [generateMathQuestion, isValid]);
 
-  // Only generate on initial mount - NO dependencies that could trigger re-initialization
+  // Initialize only once on mount
   useEffect(() => {
     if (!isInitializedRef.current) {
       isInitializedRef.current = true;
       const newQuestion = generateMathQuestion();
       setMathQuestion(newQuestion);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // Empty deps - only run once
 
+  // Handle answer selection
   const handleAnswerSelect = useCallback((answer: number) => {
     // Prevent answering if already valid
     if (isValid) {
@@ -113,6 +119,7 @@ function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps) {
     onValidationChangeRef.current(correct);
   }, [mathQuestion, isValid]);
 
+  // Styling functions
   const getButtonStyle = (answer: number) => {
     const baseStyle = {
       padding: '16px 24px',
@@ -321,10 +328,3 @@ function DeleteCaptcha({ onValidationChange }: DeleteCaptchaProps) {
     </div>
   );
 }
-
-// Custom comparison function that ALWAYS returns true to prevent re-renders
-// We handle updates via ref, so we don't need the component to re-render when props change
-const arePropsEqual = () => true;
-
-// Memoize the component with custom comparison to prevent ALL re-renders from parent
-export default memo(DeleteCaptcha, arePropsEqual);
