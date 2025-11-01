@@ -95,16 +95,39 @@ export const en: Translations = {
   'captcha.success': 'Verified!',
   'captcha.tryAgain': 'Wrong, try again',
 
-  // Meters Delete Confirmation
+  /// Meters Delete Confirmation
   'meters.deleteConfirmTitle': 'Delete Meter',
   'meters.deleteWarning': '⚠️ Warning: This action cannot be undone',
   'meters.deleteImpactTitle': 'What will be deleted:',
   'meters.meterWillBeDeleted': 'The meter will be permanently removed',
+  'meters.readingsWillBeDeleted': 'readings',
+  'meters.dataRange': 'Data from',
   'meters.dataLossWarning': 'All meter readings and historical data will be lost',
   'meters.typeToConfirm': 'Type the meter name to confirm:',
-  'meters.typeMeterName': 'Enter meter name...',
-  'meters.understandDataLoss': 'I understand that all data will be permanently deleted',
+  'meters.typeMeterName': 'Type meter name here...',
+  'meters.understandDataLoss': 'I understand that all data will be irrevocably deleted',
   'meters.deletePermanently': 'Delete Permanently',
+  'meters.deleteNameMismatch': 'The meter name does not match. Please type it exactly as shown.',
+  'meters.deleteCheckRequired': 'Please check the confirmation box to proceed.',
+  'meters.captchaRequired': 'Please solve the security challenge to proceed.',
+  'meters.deleteFailed': 'Failed to delete meter. Please try again.',
+
+  // Chargers Delete Confirmation
+  'chargers.deleteConfirmTitle': 'Delete Charger',
+  'chargers.deleteWarning': '⚠️ Warning: This action cannot be undone',
+  'chargers.deleteImpactTitle': 'What will be deleted:',
+  'chargers.chargerWillBeDeleted': 'The charger will be permanently removed',
+  'chargers.sessionsWillBeDeleted': 'charging sessions',
+  'chargers.dataRange': 'Data from',
+  'chargers.dataLossWarning': 'All charging sessions and historical data will be lost',
+  'chargers.typeToConfirm': 'Type the charger name to confirm:',
+  'chargers.typeChargerName': 'Type charger name here...',
+  'chargers.understandDataLoss': 'I understand that all data will be irrevocably deleted',
+  'chargers.deletePermanently': 'Delete Permanently',
+  'chargers.deleteNameMismatch': 'The charger name does not match. Please type it exactly as shown.',
+  'chargers.deleteCheckRequired': 'Please check the confirmation box to proceed.',
+  'chargers.captchaRequired': 'Please solve the security challenge to proceed.',
+  'chargers.deleteFailed': 'Failed to delete charger. Please try again.',
 
   // Users
   'users.title': 'Users',
