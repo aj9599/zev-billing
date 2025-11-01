@@ -87,7 +87,7 @@ export const de: Translations = {
   'export.exportingAllFrom': 'Alle {{type}} von {{building}}',
 
   // Math CAPTCHA
-  'captcha.title': '🔒 Sicherheitsprüfung - Zum Fortfahren abschließen',
+  'captcha.title': '🔒 Sicherheitsprüfung - Zum Fortfahren abschliessen',
   'captcha.mathInstruction': 'Lösen Sie die Rechenaufgabe, um fortzufahren',
   'captcha.mathFooter': 'Wählen Sie die richtige Antwort',
   'captcha.new': 'Neu',
@@ -104,6 +104,7 @@ export const de: Translations = {
   'meters.typeToConfirm': 'Geben Sie den Namen des Zählers ein, um zu bestätigen:',
   'meters.typeMeterName': 'Zählername eingeben...',
   'meters.understandDataLoss': 'Ich verstehe, dass alle Daten unwiderruflich gelöscht werden',
+  "meters.deletePermanently": "Endgültig löschen",
 
   // Users
   'users.title': 'Benutzer',
@@ -171,7 +172,7 @@ export const de: Translations = {
   'users.instructions.tips': 'Tipps',
   'users.instructions.tip1': 'Reguläre Benutzer sind Mieter, die in Gebäuden wohnen und Ladestationen nutzen',
   'users.instructions.tip2': 'Verwaltungsbenutzer verwalten Gebäude und erstellen Rechnungen für Mieter',
-  'users.instructions.tip3': 'Halten Sie RFID-Kartennummern genau, um die ordnungsgemäße Verfolgung von Ladevorgängen sicherzustellen',
+  'users.instructions.tip3': 'Halten Sie RFID-Kartennummern genau, um die ordnungsgemässe Verfolgung von Ladevorgängen sicherzustellen',
 
   // Buildings
   'buildings.title': 'Gebäude',
@@ -344,7 +345,7 @@ export const de: Translations = {
   'meters.instructions.modbusStep2': 'Ermitteln Sie die IP-Adresse des Zählers',
   'meters.instructions.modbusStep3': 'Überprüfen Sie die Dokumentation für Registeradressen',
   'meters.instructions.modbusStep4': 'Der Standard-Port ist normalerweise 502',
-  'meters.instructions.modbusStep5': 'Konfigurieren Sie die Geräte-ID gemäß Ihrem Gerät',
+  'meters.instructions.modbusStep5': 'Konfigurieren Sie die Geräte-ID gemäss Ihrem Gerät',
 
   // Test-Anleitung
   'meters.instructions.testingTitle': 'Testen & Überprüfung',
@@ -707,7 +708,7 @@ export const de: Translations = {
   'billing.instructions.invoice4': 'Detaillierte Kostenberechnungen mit Tarifen',
   'billing.instructions.invoice5': 'Gesamtbetrag mit Schweizer QR-Rechnung (falls Bankverbindung angegeben)',
   'billing.instructions.tips': 'Tipps',
-  'billing.instructions.tip1': 'Erstellen Sie Rechnungen in regelmäßigen Abständen (monatlich, quartalsweise) für Konsistenz',
+  'billing.instructions.tip1': 'Erstellen Sie Rechnungen in regelmässigen Abständen (monatlich, quartalsweise) für Konsistenz',
   'billing.instructions.tip2': 'Überprüfen Sie Zählerdaten vor Erstellung für genaue Ablesungen',
   'billing.instructions.tip3': 'Absender- und Bankverbindung werden gespeichert - sie bleiben über Sitzungen hinweg erhalten',
   'billing.instructions.tip4': 'Verwenden Sie die Ansehen-Schaltfläche zur Vorschau vor PDF-Download',
@@ -773,7 +774,7 @@ export const de: Translations = {
   // Instructions modal
   'autoBilling.instructions.title': 'Anleitung zur automatischen Abrechnung',
   'autoBilling.instructions.whatIsAutoBilling': 'Was ist automatische Abrechnung?',
-  'autoBilling.instructions.autoBillingDescription': 'Automatische Abrechnungspläne erstellen Rechnungen in regelmäßigen Abständen ohne manuelles Eingreifen. Konfigurieren Sie wann und wie oft Rechnungen erstellt werden sollen, und das System erstellt sie automatisch nach Plan.',
+  'autoBilling.instructions.autoBillingDescription': 'Automatische Abrechnungspläne erstellen Rechnungen in regelmässigen Abständen ohne manuelles Eingreifen. Konfigurieren Sie wann und wie oft Rechnungen erstellt werden sollen, und das System erstellt sie automatisch nach Plan.',
 
   'autoBilling.instructions.howItWorks': 'So funktioniert es',
   'autoBilling.instructions.work1': 'Das System überprüft aktive Konfigurationen stündlich',
@@ -798,7 +799,7 @@ export const de: Translations = {
   'autoBilling.instructions.important1': 'Stellen Sie sicher, dass aktive Preise für alle Gebäude konfiguriert sind, bevor Sie planen',
   'autoBilling.instructions.important2': 'Benutzer müssen Wohnungszähler für die Verbrauchserfassung haben',
   'autoBilling.instructions.important3': 'Konfigurationen können pausiert werden, ohne sie zu löschen',
-  'autoBilling.instructions.important4': 'Überprüfen Sie die Abrechnungsseite regelmäßig, um erstellte Rechnungen zu verifizieren',
+  'autoBilling.instructions.important4': 'Überprüfen Sie die Abrechnungsseite regelmässig, um erstellte Rechnungen zu verifizieren',
 
   'autoBilling.instructions.tips': 'Tipps',
   'autoBilling.instructions.tip1': 'Setzen Sie den Erstellungstag auf den 1.-5. des Monats für zuverlässigste Ergebnisse',
@@ -910,7 +911,7 @@ export const de: Translations = {
   'logs.sinceLastRestart': 'Seit letztem Neustart',
   'logs.tempNormal': 'Normal',
   'logs.tempWarm': 'Warm',
-  'logs.tempHot': 'Heiß',
+  'logs.tempHot': 'Heiss',
 
   // Backup & Restore
   'logs.createBackup': 'Backup erstellen',
@@ -946,7 +947,7 @@ export const de: Translations = {
   "logs.cpuHigh": "Hohe Auslastung!",
   "logs.updatingSystem": 'System wird aktualisiert',
   "logs.updateInProgress": 'Bitte warten Sie, während das System aktualisiert wird. Dies dauert etwa 40 Sekunden.',
-  "logs.doNotCloseWindow": 'Bitte schließen Sie dieses Fenster nicht und navigieren Sie nicht weg.',
+  "logs.doNotCloseWindow": 'Bitte schliessen Sie dieses Fenster nicht und navigieren Sie nicht weg.',
 
   // Settings
   'settings.title': 'Einstellungen',

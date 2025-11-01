@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo, useCallback } from 'react';
 import { Plus, Edit2, Trash2, X, HelpCircle, Info, Car, Download, Search, Building, Radio, Settings, Star, Wifi, WifiOff, AlertCircle, AlertTriangle } from 'lucide-react';
 import { api } from '../api/client';
 import type { Charger, Building as BuildingType } from '../types';
@@ -67,6 +67,174 @@ interface DeletionImpact {
   has_data: boolean;
 }
 
+
+// Modal component props interface
+interface DeleteConfirmationModalProps {
+  deletionImpact: DeletionImpact | null;
+  deleteConfirmationText: string;
+  deleteUnderstandChecked: boolean;
+  captchaValid: boolean;
+  onConfirmationTextChange: (text: string) => void;
+  onUnderstandCheckChange: (checked: boolean) => void;
+  onCaptchaValidationChange: (isValid: boolean) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+  t: (key: string) => string;
+}
+
+const DeleteConfirmationModal = memo(({
+  deletionImpact,
+  deleteConfirmationText,
+  deleteUnderstandChecked,
+  captchaValid,
+  onConfirmationTextChange,
+  onUnderstandCheckChange,
+  onCaptchaValidationChange,
+  onCancel,
+  onConfirm,
+  t
+}: DeleteConfirmationModalProps) => {
+  return (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center',
+      justifyContent: 'center', zIndex: 2500, padding: '20px'
+    }}>
+      <div style={{
+        backgroundColor: 'white', borderRadius: '16px', padding: '32px',
+        maxWidth: '550px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+        maxHeight: '90vh', overflow: 'auto'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+          <div style={{
+            width: '48px', height: '48px', borderRadius: '50%',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center'
+          }}>
+            <AlertTriangle size={24} color="#ef4444" />
+          </div>
+          <div>
+            <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1f2937', margin: 0 }}>
+              {t('chargers.deleteConfirmTitle') || 'Confirm Deletion'}
+            </h2>
+            <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>
+              {t('chargers.deleteWarning') || 'This action cannot be undone'}
+            </p>
+          </div>
+        </div>
+
+        {deletionImpact && (
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{
+              backgroundColor: '#fef3c7', border: '2px solid #f59e0b',
+              borderRadius: '12px', padding: '16px', marginBottom: '16px'
+            }}>
+              <p style={{ fontSize: '14px', fontWeight: '600', color: '#92400e', marginBottom: '12px' }}>
+                {t('chargers.deleteImpactTitle') || 'The following will be permanently deleted:'}
+              </p>
+              <ul style={{ margin: 0, paddingLeft: '20px', color: '#92400e' }}>
+                <li style={{ marginBottom: '8px' }}>
+                  <strong>{deletionImpact.charger_name}</strong> {t('chargers.chargerWillBeDeleted') || '(Charger configuration)'}
+                </li>
+                {deletionImpact.has_data && (
+                  <li style={{ marginBottom: '8px' }}>
+                    <strong>{deletionImpact.sessions_count.toLocaleString()}</strong> {t('chargers.sessionsWillBeDeleted') || 'charging sessions'}
+                    {deletionImpact.oldest_session && deletionImpact.newest_session && (
+                      <div style={{ fontSize: '12px', marginTop: '4px', color: '#78350f' }}>
+                        {t('chargers.dataRange') || 'Data from'} {new Date(deletionImpact.oldest_session).toLocaleDateString()} {t('common.to') || 'to'} {new Date(deletionImpact.newest_session).toLocaleDateString()}
+                      </div>
+                    )}
+                  </li>
+                )}
+              </ul>
+            </div>
+
+            <div style={{
+              backgroundColor: '#fee2e2', border: '2px solid #ef4444',
+              borderRadius: '12px', padding: '16px', marginBottom: '16px'
+            }}>
+              <p style={{ fontSize: '13px', fontWeight: '600', color: '#991b1b', margin: 0 }}>
+                ⚠️ {t('chargers.dataLossWarning') || 'Warning: All historical data for this charger will be permanently lost. This cannot be recovered.'}
+              </p>
+            </div>
+
+            <DeleteCaptcha onValidationChange={onCaptchaValidationChange} />
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#374151' }}>
+                {t('chargers.typeToConfirm') || 'Type the charger name to confirm:'}
+              </label>
+              <div style={{
+                padding: '8px 12px', backgroundColor: '#f3f4f6',
+                borderRadius: '6px', marginBottom: '8px', fontFamily: 'monospace',
+                fontSize: '14px', fontWeight: '600', color: '#1f2937'
+              }}>
+                {deletionImpact.charger_name}
+              </div>
+              <input
+                type="text"
+                value={deleteConfirmationText}
+                onChange={(e) => onConfirmationTextChange(e.target.value)}
+                placeholder={t('chargers.typeChargerName') || 'Type charger name here...'}
+                style={{
+                  width: '100%', padding: '12px', border: '2px solid #e5e7eb',
+                  borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit'
+                }}
+              />
+            </div>
+
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: '12px',
+              padding: '12px', backgroundColor: '#f9fafb',
+              borderRadius: '8px', cursor: 'pointer', marginBottom: '16px'
+            }}>
+              <input
+                type="checkbox"
+                checked={deleteUnderstandChecked}
+                onChange={(e) => onUnderstandCheckChange(e.target.checked)}
+                style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                {t('chargers.understandDataLoss') || 'I understand that this will permanently delete all data and cannot be undone'}
+              </span>
+            </label>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button
+            onClick={onCancel}
+            style={{
+              flex: 1, padding: '12px', backgroundColor: '#f3f4f6',
+              color: '#374151', border: 'none', borderRadius: '8px',
+              fontSize: '14px', fontWeight: '600', cursor: 'pointer'
+            }}
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.charger_name || !captchaValid}
+            style={{
+              flex: 1, padding: '12px',
+              backgroundColor: (!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.charger_name || !captchaValid) ? '#fca5a5' : '#ef4444',
+              color: 'white', border: 'none', borderRadius: '8px',
+              fontSize: '14px', fontWeight: '600',
+              cursor: (!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.charger_name || !captchaValid) ? 'not-allowed' : 'pointer',
+              opacity: (!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.charger_name || !captchaValid) ? 0.6 : 1
+            }}
+          >
+            {t('chargers.deletePermanently') || 'Delete Permanently'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+DeleteConfirmationModal.displayName = 'DeleteConfirmationModal';
+
+
 export default function Chargers() {
   const { t } = useTranslation();
   const [chargers, setChargers] = useState<Charger[]>([]);
@@ -121,6 +289,17 @@ export default function Chargers() {
     loxone_user_id_uuid: '',
     loxone_mode_uuid: ''
   });
+
+  // Memoize the cancel handler
+  const handleDeleteCancel = useCallback(() => {
+    setShowDeleteConfirmation(false);
+    setChargerToDelete(null);
+    setDeletionImpact(null);
+    setDeleteConfirmationText('');
+    setDeleteUnderstandChecked(false);
+    setCaptchaValid(false);
+  }, []);
+
 
   useEffect(() => {
     loadData();
@@ -399,6 +578,9 @@ export default function Chargers() {
       setShowDeleteConfirmation(false);
       setChargerToDelete(null);
       setDeletionImpact(null);
+      setDeleteConfirmationText('');
+      setDeleteUnderstandChecked(false);
+      setCaptchaValid(false);
       loadData();
       fetchLoxoneStatus();
     } catch (err) {
@@ -656,147 +838,6 @@ export default function Chargers() {
     };
   });
 
-  const DeleteConfirmationModal = () => (
-    <div style={{
-      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center',
-      justifyContent: 'center', zIndex: 2500, padding: '20px'
-    }}>
-      <div style={{
-        backgroundColor: 'white', borderRadius: '16px', padding: '32px',
-        maxWidth: '550px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-        maxHeight: '90vh', overflow: 'auto'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-          <div style={{
-            width: '48px', height: '48px', borderRadius: '50%',
-            backgroundColor: 'rgba(239, 68, 68, 0.1)', display: 'flex',
-            alignItems: 'center', justifyContent: 'center'
-          }}>
-            <AlertTriangle size={24} color="#ef4444" />
-          </div>
-          <div>
-            <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1f2937', margin: 0 }}>
-              {t('chargers.deleteConfirmTitle') || 'Confirm Deletion'}
-            </h2>
-            <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>
-              {t('chargers.deleteWarning') || 'This action cannot be undone'}
-            </p>
-          </div>
-        </div>
-
-        {deletionImpact && (
-          <div style={{ marginBottom: '24px' }}>
-            <div style={{
-              backgroundColor: '#fef3c7', border: '2px solid #f59e0b',
-              borderRadius: '12px', padding: '16px', marginBottom: '16px'
-            }}>
-              <p style={{ fontSize: '14px', fontWeight: '600', color: '#92400e', marginBottom: '12px' }}>
-                {t('chargers.deleteImpactTitle') || 'The following will be permanently deleted:'}
-              </p>
-              <ul style={{ margin: 0, paddingLeft: '20px', color: '#92400e' }}>
-                <li style={{ marginBottom: '8px' }}>
-                  <strong>{deletionImpact.charger_name}</strong> {t('chargers.chargerWillBeDeleted') || '(Charger configuration)'}
-                </li>
-                {deletionImpact.has_data && (
-                  <li style={{ marginBottom: '8px' }}>
-                    <strong>{deletionImpact.sessions_count.toLocaleString()}</strong> {t('chargers.sessionsWillBeDeleted') || 'charging sessions'}
-                    {deletionImpact.oldest_session && deletionImpact.newest_session && (
-                      <div style={{ fontSize: '12px', marginTop: '4px', color: '#78350f' }}>
-                        {t('chargers.dataRange') || 'Data from'} {new Date(deletionImpact.oldest_session).toLocaleDateString()} {t('common.to') || 'to'} {new Date(deletionImpact.newest_session).toLocaleDateString()}
-                      </div>
-                    )}
-                  </li>
-                )}
-              </ul>
-            </div>
-
-            <div style={{
-              backgroundColor: '#fee2e2', border: '2px solid #ef4444',
-              borderRadius: '12px', padding: '16px', marginBottom: '16px'
-            }}>
-              <p style={{ fontSize: '13px', fontWeight: '600', color: '#991b1b', margin: 0 }}>
-                ⚠️ {t('chargers.dataLossWarning') || 'Warning: All historical data for this charger will be permanently lost. This cannot be recovered.'}
-              </p>
-            </div>
-
-            <DeleteCaptcha onValidationChange={setCaptchaValid} />
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#374151' }}>
-                {t('chargers.typeToConfirm') || 'Type the charger name to confirm:'}
-              </label>
-              <div style={{
-                padding: '8px 12px', backgroundColor: '#f3f4f6',
-                borderRadius: '6px', marginBottom: '8px', fontFamily: 'monospace',
-                fontSize: '14px', fontWeight: '600', color: '#1f2937'
-              }}>
-                {deletionImpact.charger_name}
-              </div>
-              <input
-                type="text"
-                value={deleteConfirmationText}
-                onChange={(e) => setDeleteConfirmationText(e.target.value)}
-                placeholder={t('chargers.typeChargerName') || 'Type charger name here...'}
-                style={{
-                  width: '100%', padding: '12px', border: '2px solid #e5e7eb',
-                  borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit'
-                }}
-              />
-            </div>
-
-            <label style={{
-              display: 'flex', alignItems: 'center', gap: '12px',
-              padding: '12px', backgroundColor: '#f9fafb',
-              borderRadius: '8px', cursor: 'pointer', marginBottom: '16px'
-            }}>
-              <input
-                type="checkbox"
-                checked={deleteUnderstandChecked}
-                onChange={(e) => setDeleteUnderstandChecked(e.target.checked)}
-                style={{ width: '20px', height: '20px', cursor: 'pointer' }}
-              />
-              <span style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>
-                {t('chargers.understandDataLoss') || 'I understand that this will permanently delete all data and cannot be undone'}
-              </span>
-            </label>
-          </div>
-        )}
-
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button
-            onClick={() => {
-              setShowDeleteConfirmation(false);
-              setChargerToDelete(null);
-              setDeletionImpact(null);
-              setCaptchaValid(false);
-            }}
-            style={{
-              flex: 1, padding: '12px', backgroundColor: '#f3f4f6',
-              color: '#374151', border: 'none', borderRadius: '8px',
-              fontSize: '14px', fontWeight: '600', cursor: 'pointer'
-            }}
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            onClick={handleDeleteConfirm}
-            disabled={!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.charger_name || !captchaValid}
-            style={{
-              flex: 1, padding: '12px',
-              backgroundColor: (!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.charger_name || !captchaValid) ? '#fca5a5' : '#ef4444',
-              color: 'white', border: 'none', borderRadius: '8px',
-              fontSize: '14px', fontWeight: '600',
-              cursor: (!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.charger_name || !captchaValid) ? 'not-allowed' : 'pointer',
-              opacity: (!deleteUnderstandChecked || deleteConfirmationText !== deletionImpact?.charger_name || !captchaValid) ? 0.6 : 1
-            }}
-          >
-            {t('chargers.deletePermanently') || 'Delete Permanently'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 
   const InstructionsModal = () => (
     <div style={{
@@ -1279,7 +1320,20 @@ export default function Chargers() {
       )}
 
       {showInstructions && <InstructionsModal />}
-      {showDeleteConfirmation && <DeleteConfirmationModal />}
+      {showDeleteConfirmation && deletionImpact && (
+        <DeleteConfirmationModal
+          deletionImpact={deletionImpact}
+          deleteConfirmationText={deleteConfirmationText}
+          deleteUnderstandChecked={deleteUnderstandChecked}
+          captchaValid={captchaValid}
+          onConfirmationTextChange={setDeleteConfirmationText}
+          onUnderstandCheckChange={setDeleteUnderstandChecked}
+          onCaptchaValidationChange={setCaptchaValid}
+          onCancel={handleDeleteCancel}
+          onConfirm={handleDeleteConfirm}
+          t={t}
+        />
+      )}
       {showExportModal && (
         <ExportModal
           type="chargers"

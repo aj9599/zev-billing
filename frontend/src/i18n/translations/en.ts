@@ -104,6 +104,7 @@ export const en: Translations = {
   'meters.typeToConfirm': 'Type the meter name to confirm:',
   'meters.typeMeterName': 'Enter meter name...',
   'meters.understandDataLoss': 'I understand that all data will be permanently deleted',
+  'meters.deletePermanently': 'Delete Permanently',
 
   // Users
   'users.title': 'Users',
