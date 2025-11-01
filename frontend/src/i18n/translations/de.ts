@@ -250,7 +250,6 @@ export const de: Translations = {
   'meters.metersCount': 'Zähler',
   'meters.noMeters': 'Keine Zähler gefunden',
   'meters.saveFailed': 'Zähler konnte nicht gespeichert werden',
-  'meters.deleteFailed': 'Zähler konnte nicht gelöscht werden',
   'meters.deleteConfirm': 'Möchten Sie diesen Zähler wirklich löschen?',
   'meters.exportFailed': 'Export fehlgeschlagen',
 
@@ -580,7 +579,6 @@ export const de: Translations = {
   'chargers.supportsPriority': 'Unterstützt Prioritätsladen',
   'chargers.sharedPortInfo': 'Geteilter UDP-Port: Ladestationen können denselben Port wie Zähler verwenden! Verwenden Sie eindeutige JSON-Schlüssel für die 4 Datenpunkte.',
   'chargers.deleteConfirm': 'Sind Sie sicher, dass Sie diese Ladestation löschen möchten?',
-  'chargers.deleteFailed': 'Löschen der Ladestation fehlgeschlagen',
   'chargers.saveFailed': 'Speichern der Ladestation fehlgeschlagen',
   'chargers.exportFailed': 'Export der Daten fehlgeschlagen',
   'chargers.chargersCount': 'Ladestationen',

@@ -95,7 +95,7 @@ export const en: Translations = {
   'captcha.success': 'Verified!',
   'captcha.tryAgain': 'Wrong, try again',
 
-  /// Meters Delete Confirmation
+  // Meters Delete Confirmation
   'meters.deleteConfirmTitle': 'Delete Meter',
   'meters.deleteWarning': '⚠️ Warning: This action cannot be undone',
   'meters.deleteImpactTitle': 'What will be deleted:',
@@ -250,7 +250,6 @@ export const en: Translations = {
   'meters.metersCount': 'meters',
   'meters.noMeters': 'No meters found',
   'meters.saveFailed': 'Failed to save meter',
-  'meters.deleteFailed': 'Failed to delete meter',
   'meters.deleteConfirm': 'Are you sure you want to delete this meter?',
   'meters.exportFailed': 'Export failed',
 
@@ -580,7 +579,6 @@ export const en: Translations = {
   'chargers.supportsPriority': 'Supports Priority Charging',
   'chargers.sharedPortInfo': 'Shared UDP Port: Chargers can share the same port as meters! Use unique JSON keys for the 4 data points.',
   'chargers.deleteConfirm': 'Are you sure you want to delete this charger?',
-  'chargers.deleteFailed': 'Failed to delete charger',
   'chargers.saveFailed': 'Failed to save charger',
   'chargers.exportFailed': 'Failed to export data',
   'chargers.chargersCount': 'chargers',
