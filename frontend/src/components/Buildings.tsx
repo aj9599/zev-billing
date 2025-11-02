@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Building, Search, MapPin, Zap, ChevronRight, ChevronDown, Folder, Home, HelpCircle, Activity, Sun, Grid, ArrowRight, ArrowLeft, Layers, GripVertical, Check } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Building, Search, MapPin, Zap, ChevronRight, ChevronDown, Folder, Home, HelpCircle, Activity, Sun, Grid, ArrowRight, ArrowLeft, Layers, Check } from 'lucide-react';
 import { api } from '../api/client';
 import type { Building as BuildingType, Meter, Charger, BuildingConsumption } from '../types';
 import { useTranslation } from '../i18n';
@@ -671,8 +671,6 @@ export default function Buildings() {
     const [editingApt, setEditingApt] = useState<{floorIdx: number, aptIdx: number} | null>(null);
     const [editValue, setEditValue] = useState('');
 
-    const uid = () => Math.random().toString(36).slice(2, 10);
-
     const DRAG_TYPES = {
       PALETTE_FLOOR: 'palette/floor',
       PALETTE_APT: 'palette/apartment',
@@ -711,7 +709,6 @@ export default function Buildings() {
 
     const addApartmentToFloor = (floorIndex: number) => {
       const floors = [...(formData.floors_config || [])];
-      const apartmentCount = floors[floorIndex].apartments.length;
       const newAptName = `Apt ${Math.floor(Math.random() * 90) + 10}`;
       floors[floorIndex].apartments = [...floors[floorIndex].apartments, newAptName];
       setFormData({ ...formData, floors_config: floors });
