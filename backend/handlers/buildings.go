@@ -22,7 +22,9 @@ func NewBuildingHandler(db *sql.DB) *BuildingHandler {
 func (h *BuildingHandler) List(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Query(`
 		SELECT id, name, address_street, address_city, address_zip, 
-		       address_country, notes, COALESCE(is_group, 0), created_at, updated_at
+		       address_country, notes, COALESCE(is_group, 0), 
+		       COALESCE(has_apartments, 0), COALESCE(floors_config, ''), 
+		       created_at, updated_at
 		FROM buildings
 		ORDER BY name
 	`)
@@ -37,27 +39,43 @@ func (h *BuildingHandler) List(w http.ResponseWriter, r *http.Request) {
 	buildings := []models.Building{}
 	for rows.Next() {
 		var b models.Building
+		var floorsConfigStr string
+
 		err := rows.Scan(
 			&b.ID, &b.Name, &b.AddressStreet, &b.AddressCity, &b.AddressZip,
-			&b.AddressCountry, &b.Notes, &b.IsGroup, &b.CreatedAt, &b.UpdatedAt,
+			&b.AddressCountry, &b.Notes, &b.IsGroup, &b.HasApartments, 
+			&floorsConfigStr, &b.CreatedAt, &b.UpdatedAt,
 		)
 		if err != nil {
 			log.Printf("Error scanning building: %v", err)
 			continue
 		}
 
+		// Parse floors configuration
+		if floorsConfigStr != "" && b.HasApartments {
+			var floorsConfig []models.FloorConfig
+			if err := json.Unmarshal([]byte(floorsConfigStr), &floorsConfig); err == nil {
+				b.FloorsConfig = floorsConfig
+			} else {
+				log.Printf("Error parsing floors config for building %d: %v", b.ID, err)
+				b.FloorsConfig = []models.FloorConfig{}
+			}
+		} else {
+			b.FloorsConfig = []models.FloorConfig{}
+		}
+
+		// Get group buildings if this is a group
 		if b.IsGroup {
 			b.GroupBuildings = []int{}
 			groupRows, err := h.db.Query("SELECT building_id FROM building_groups WHERE group_id = ?", b.ID)
 			if err == nil {
-				// FIXED: Properly close groupRows with defer
 				for groupRows.Next() {
 					var buildingID int
 					if err := groupRows.Scan(&buildingID); err == nil {
 						b.GroupBuildings = append(b.GroupBuildings, buildingID)
 					}
 				}
-				groupRows.Close() // Close immediately after use
+				groupRows.Close()
 			}
 		} else {
 			b.GroupBuildings = []int{}
@@ -79,13 +97,18 @@ func (h *BuildingHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var b models.Building
+	var floorsConfigStr string
+
 	err = h.db.QueryRow(`
 		SELECT id, name, address_street, address_city, address_zip, 
-		       address_country, notes, COALESCE(is_group, 0), created_at, updated_at
+		       address_country, notes, COALESCE(is_group, 0), 
+		       COALESCE(has_apartments, 0), COALESCE(floors_config, ''), 
+		       created_at, updated_at
 		FROM buildings WHERE id = ?
 	`, id).Scan(
 		&b.ID, &b.Name, &b.AddressStreet, &b.AddressCity, &b.AddressZip,
-		&b.AddressCountry, &b.Notes, &b.IsGroup, &b.CreatedAt, &b.UpdatedAt,
+		&b.AddressCountry, &b.Notes, &b.IsGroup, &b.HasApartments,
+		&floorsConfigStr, &b.CreatedAt, &b.UpdatedAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -96,6 +119,19 @@ func (h *BuildingHandler) Get(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error getting building: %v", err)
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
+	}
+
+	// Parse floors configuration
+	if floorsConfigStr != "" && b.HasApartments {
+		var floorsConfig []models.FloorConfig
+		if err := json.Unmarshal([]byte(floorsConfigStr), &floorsConfig); err == nil {
+			b.FloorsConfig = floorsConfig
+		} else {
+			log.Printf("Error parsing floors config: %v", err)
+			b.FloorsConfig = []models.FloorConfig{}
+		}
+	} else {
+		b.FloorsConfig = []models.FloorConfig{}
 	}
 
 	b.GroupBuildings = []int{}
@@ -125,24 +161,40 @@ func (h *BuildingHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Creating building: %s, is_group: %v", b.Name, b.IsGroup)
+	log.Printf("Creating building: %s, is_group: %v, has_apartments: %v", b.Name, b.IsGroup, b.HasApartments)
 
 	isGroupVal := 0
 	if b.IsGroup {
 		isGroupVal = 1
 	}
 
+	hasApartmentsVal := 0
+	if b.HasApartments {
+		hasApartmentsVal = 1
+	}
+
 	if b.AddressCountry == "" {
 		b.AddressCountry = "Switzerland"
+	}
+
+	// Serialize floors configuration
+	var floorsConfigStr string
+	if b.HasApartments && len(b.FloorsConfig) > 0 {
+		floorsJSON, err := json.Marshal(b.FloorsConfig)
+		if err != nil {
+			log.Printf("Error marshaling floors config: %v", err)
+		} else {
+			floorsConfigStr = string(floorsJSON)
+		}
 	}
 
 	result, err := h.db.Exec(`
 		INSERT INTO buildings (
 			name, address_street, address_city, address_zip, 
-			address_country, notes, is_group
-		) VALUES (?, ?, ?, ?, ?, ?, ?)
+			address_country, notes, is_group, has_apartments, floors_config
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, b.Name, b.AddressStreet, b.AddressCity, b.AddressZip,
-		b.AddressCountry, b.Notes, isGroupVal)
+		b.AddressCountry, b.Notes, isGroupVal, hasApartmentsVal, floorsConfigStr)
 
 	if err != nil {
 		log.Printf("Error creating building: %v", err)
@@ -153,6 +205,7 @@ func (h *BuildingHandler) Create(w http.ResponseWriter, r *http.Request) {
 	id, _ := result.LastInsertId()
 	b.ID = int(id)
 	b.IsGroup = isGroupVal == 1
+	b.HasApartments = hasApartmentsVal == 1
 
 	if b.GroupBuildings == nil {
 		b.GroupBuildings = []int{}
@@ -194,13 +247,31 @@ func (h *BuildingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		isGroupVal = 1
 	}
 
+	hasApartmentsVal := 0
+	if b.HasApartments {
+		hasApartmentsVal = 1
+	}
+
+	// Serialize floors configuration
+	var floorsConfigStr string
+	if b.HasApartments && len(b.FloorsConfig) > 0 {
+		floorsJSON, err := json.Marshal(b.FloorsConfig)
+		if err != nil {
+			log.Printf("Error marshaling floors config: %v", err)
+		} else {
+			floorsConfigStr = string(floorsJSON)
+		}
+	}
+
 	_, err = h.db.Exec(`
 		UPDATE buildings SET
 			name = ?, address_street = ?, address_city = ?, address_zip = ?,
-			address_country = ?, notes = ?, is_group = ?, updated_at = CURRENT_TIMESTAMP
+			address_country = ?, notes = ?, is_group = ?, has_apartments = ?, 
+			floors_config = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`, b.Name, b.AddressStreet, b.AddressCity, b.AddressZip,
-		b.AddressCountry, b.Notes, isGroupVal, id)
+		b.AddressCountry, b.Notes, isGroupVal, hasApartmentsVal, 
+		floorsConfigStr, id)
 
 	if err != nil {
 		log.Printf("Error updating building: %v", err)
@@ -221,8 +292,12 @@ func (h *BuildingHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	b.ID = id
 	b.IsGroup = isGroupVal == 1
+	b.HasApartments = hasApartmentsVal == 1
 	if b.GroupBuildings == nil {
 		b.GroupBuildings = []int{}
+	}
+	if b.FloorsConfig == nil {
+		b.FloorsConfig = []models.FloorConfig{}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -14,10 +14,18 @@ export interface User {
   charger_ids: string;
   notes: string;
   building_id?: number;
+  apartment_unit?: string;
   user_type: 'regular' | 'administration';
   managed_buildings?: number[] | string;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface FloorConfig {
+  floor_number: number;
+  floor_name: string;
+  apartments: string[];
 }
 
 export interface Building {
@@ -30,6 +38,8 @@ export interface Building {
   notes: string;
   is_group: boolean;
   group_buildings?: number[];
+  has_apartments: boolean;
+  floors_config?: FloorConfig[];
   created_at: string;
   updated_at: string;
 }
@@ -132,6 +142,8 @@ export interface DashboardStats {
   total_users: number;
   regular_users: number;
   admin_users: number;
+  active_users: number;
+  inactive_users: number;
   total_buildings: number;
   total_complexes: number;
   total_meters: number;

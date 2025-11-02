@@ -33,8 +33,10 @@ func RunMigrations(db *sql.DB) error {
 			charger_ids TEXT,
 			notes TEXT,
 			building_id INTEGER,
+			apartment_unit TEXT,
 			user_type TEXT DEFAULT 'regular',
 			managed_buildings TEXT,
+			is_active INTEGER DEFAULT 1,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (building_id) REFERENCES buildings(id)
@@ -49,6 +51,8 @@ func RunMigrations(db *sql.DB) error {
 			address_country TEXT DEFAULT 'Switzerland',
 			notes TEXT,
 			is_group INTEGER DEFAULT 0,
+			has_apartments INTEGER DEFAULT 0,
+			floors_config TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
@@ -198,6 +202,8 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_invoices_building ON invoices(building_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_auto_billing_next_run ON auto_billing_configs(next_run)`,
+		`CREATE INDEX IF NOT EXISTS idx_users_building ON users(building_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)`,
 	}
 
 	for _, migration := range migrations {
@@ -206,28 +212,23 @@ func RunMigrations(db *sql.DB) error {
 		}
 	}
 
-	// Add consumption_kwh column if it doesn't exist
-	_, err := db.Exec(`ALTER TABLE meter_readings ADD COLUMN consumption_kwh REAL DEFAULT 0`)
-	if err != nil {
-		log.Printf("Note: consumption_kwh column may already exist: %v", err)
+	// Add new columns to existing tables
+	addColumns := []string{
+		`ALTER TABLE meter_readings ADD COLUMN consumption_kwh REAL DEFAULT 0`,
+		`ALTER TABLE users ADD COLUMN user_type TEXT DEFAULT 'regular'`,
+		`ALTER TABLE users ADD COLUMN managed_buildings TEXT`,
+		`ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1`,
+		`ALTER TABLE users ADD COLUMN apartment_unit TEXT`,
+		`ALTER TABLE buildings ADD COLUMN has_apartments INTEGER DEFAULT 0`,
+		`ALTER TABLE buildings ADD COLUMN floors_config TEXT`,
+		`ALTER TABLE auto_billing_configs ADD COLUMN first_execution_date DATE`,
 	}
 
-	// Add user_type column if it doesn't exist
-	_, err = db.Exec(`ALTER TABLE users ADD COLUMN user_type TEXT DEFAULT 'regular'`)
-	if err != nil {
-		log.Printf("Note: user_type column may already exist: %v", err)
-	}
-
-	// Add managed_buildings column if it doesn't exist
-	_, err = db.Exec(`ALTER TABLE users ADD COLUMN managed_buildings TEXT`)
-	if err != nil {
-		log.Printf("Note: managed_buildings column may already exist: %v", err)
-	}
-
-	// Add first_execution_date column if it doesn't exist
-	_, err = db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN first_execution_date DATE`)
-	if err != nil {
-		log.Printf("Note: first_execution_date column may already exist: %v", err)
+	for _, stmt := range addColumns {
+		_, err := db.Exec(stmt)
+		if err != nil {
+			log.Printf("Note: Column may already exist: %v", err)
+		}
 	}
 
 	if err := createDefaultAdmin(db); err != nil {

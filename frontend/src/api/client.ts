@@ -75,8 +75,11 @@ class ApiClient {
   }
 
   // Users
-  async getUsers(building_id?: number): Promise<User[]> {
-    const query = building_id ? `?building_id=${building_id}` : '';
+  async getUsers(building_id?: number, include_inactive?: boolean): Promise<User[]> {
+    const params = new URLSearchParams();
+    if (building_id) params.append('building_id', building_id.toString());
+    if (include_inactive) params.append('include_inactive', 'true');
+    const query = params.toString() ? `?${params}` : '';
     return this.request(`/users${query}`);
   }
 

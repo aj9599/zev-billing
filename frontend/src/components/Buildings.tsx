@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Building, Search, MapPin, Zap, ChevronRight, ChevronDown, Folder, Home, HelpCircle, TrendingUp, TrendingDown, Activity } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Building, Search, MapPin, Zap, ChevronRight, ChevronDown, Folder, Home, HelpCircle, TrendingUp, TrendingDown, Activity, Minus } from 'lucide-react';
 import { api } from '../api/client';
-import type { Building as BuildingType, Meter, Charger, BuildingConsumption } from '../types';
+import type { Building as BuildingType, Meter, Charger, BuildingConsumption, FloorConfig } from '../types';
 import { useTranslation } from '../i18n';
 
 export default function Buildings() {
@@ -23,7 +23,9 @@ export default function Buildings() {
     address_country: 'Switzerland',
     notes: '',
     is_group: false,
-    group_buildings: []
+    group_buildings: [],
+    has_apartments: false,
+    floors_config: []
   });
 
   useEffect(() => {
@@ -77,7 +79,10 @@ export default function Buildings() {
 
   const handleEdit = (building: BuildingType) => {
     setEditingBuilding(building);
-    setFormData(building);
+    setFormData({
+      ...building,
+      floors_config: building.floors_config || []
+    });
     setShowModal(true);
   };
 
@@ -90,7 +95,9 @@ export default function Buildings() {
       address_country: 'Switzerland',
       notes: '',
       is_group: false,
-      group_buildings: []
+      group_buildings: [],
+      has_apartments: false,
+      floors_config: []
     });
   };
 
@@ -111,6 +118,56 @@ export default function Buildings() {
     } else {
       setFormData({ ...formData, group_buildings: [...current, buildingId] });
     }
+  };
+
+  // Floor/Apartment management functions
+  const addFloor = () => {
+    const floors = formData.floors_config || [];
+    const newFloorNumber = floors.length + 1;
+    setFormData({
+      ...formData,
+      floors_config: [
+        ...floors,
+        {
+          floor_number: newFloorNumber,
+          floor_name: `Floor ${newFloorNumber}`,
+          apartments: []
+        }
+      ]
+    });
+  };
+
+  const removeFloor = (index: number) => {
+    const floors = formData.floors_config || [];
+    setFormData({
+      ...formData,
+      floors_config: floors.filter((_, i) => i !== index)
+    });
+  };
+
+  const updateFloorName = (index: number, name: string) => {
+    const floors = [...(formData.floors_config || [])];
+    floors[index] = { ...floors[index], floor_name: name };
+    setFormData({ ...formData, floors_config: floors });
+  };
+
+  const addApartment = (floorIndex: number, apartmentName: string) => {
+    if (!apartmentName.trim()) return;
+    const floors = [...(formData.floors_config || [])];
+    const floor = floors[floorIndex];
+    if (!floor.apartments.includes(apartmentName.trim())) {
+      floor.apartments = [...floor.apartments, apartmentName.trim()];
+      floors[floorIndex] = floor;
+      setFormData({ ...formData, floors_config: floors });
+    }
+  };
+
+  const removeApartment = (floorIndex: number, apartmentIndex: number) => {
+    const floors = [...(formData.floors_config || [])];
+    const floor = floors[floorIndex];
+    floor.apartments = floor.apartments.filter((_, i) => i !== apartmentIndex);
+    floors[floorIndex] = floor;
+    setFormData({ ...formData, floors_config: floors });
   };
 
   const getBuildingMeters = (buildingId: number) => meters.filter(m => m.building_id === buildingId);
@@ -238,6 +295,18 @@ export default function Buildings() {
             }}>
               {building.name}
             </h3>
+            {building.has_apartments && (
+              <span style={{
+                fontSize: '11px',
+                padding: '2px 6px',
+                backgroundColor: '#dbeafe',
+                color: '#1e40af',
+                borderRadius: '4px',
+                fontWeight: '600'
+              }}>
+                APARTMENTS
+              </span>
+            )}
           </div>
           
           {(building.address_street || building.address_city) && (
@@ -474,6 +543,14 @@ export default function Buildings() {
             <p>{t('buildings.instructions.complexDescription')}</p>
           </div>
 
+          <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #f59e0b' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Building size={20} color="#f59e0b" />
+              Apartment Management
+            </h3>
+            <p>Enable apartment management for buildings with rental units. Configure floors and apartments to track which users live where. Only one active user can be assigned per apartment.</p>
+          </div>
+
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
             {t('buildings.instructions.howToUse')}
           </h3>
@@ -483,6 +560,8 @@ export default function Buildings() {
             <li>{t('buildings.instructions.step3')}</li>
             <li>{t('buildings.instructions.step4')}</li>
             <li>{t('buildings.instructions.step5')}</li>
+            <li>Enable apartments, add floors, and configure apartment names</li>
+            <li>Assign users to specific apartments in the Users page</li>
           </ul>
 
           <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', marginTop: '16px', border: '1px solid #f59e0b' }}>
@@ -493,6 +572,7 @@ export default function Buildings() {
               <li>{t('buildings.instructions.tip1')}</li>
               <li>{t('buildings.instructions.tip2')}</li>
               <li>{t('buildings.instructions.tip3')}</li>
+              <li>Use descriptive apartment names like "Left", "Right", "Apt 1A", etc.</li>
             </ul>
           </div>
         </div>
@@ -619,6 +699,7 @@ export default function Buildings() {
 
       {showInstructions && <InstructionsModal />}
 
+      {/* Modal */}
       {showModal && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -627,7 +708,7 @@ export default function Buildings() {
         }}>
           <div className="modal-content" style={{
             backgroundColor: 'white', borderRadius: '12px', padding: '30px',
-            width: '90%', maxWidth: '600px', maxHeight: '90vh', overflow: 'auto'
+            width: '90%', maxWidth: '700px', maxHeight: '90vh', overflow: 'auto'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>
@@ -688,6 +769,149 @@ export default function Buildings() {
                       <input type="text" value={formData.address_city} onChange={(e) => setFormData({ ...formData, address_city: e.target.value })}
                         placeholder={t('users.city')} style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                     </div>
+                  </div>
+
+                  {/* Apartment Management Section */}
+                  <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: '12px' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={formData.has_apartments} 
+                        onChange={(e) => setFormData({ ...formData, has_apartments: e.target.checked, floors_config: e.target.checked ? formData.floors_config : [] })} 
+                      />
+                      <span style={{ fontWeight: '600', fontSize: '14px', color: '#0369a1' }}>
+                        Enable Apartment Management
+                      </span>
+                    </label>
+                    <p style={{ fontSize: '12px', color: '#0369a1', marginTop: '4px', marginBottom: '12px' }}>
+                      Configure floors and apartments for better user organization in rental buildings
+                    </p>
+
+                    {formData.has_apartments && (
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                          <span style={{ fontWeight: '500', fontSize: '14px', color: '#1f2937' }}>
+                            Floors & Apartments
+                          </span>
+                          <button
+                            type="button"
+                            onClick={addFloor}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px',
+                              backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px',
+                              fontSize: '12px', cursor: 'pointer'
+                            }}
+                          >
+                            <Plus size={14} />
+                            Add Floor
+                          </button>
+                        </div>
+
+                        <div style={{ maxHeight: '300px', overflowY: 'auto', backgroundColor: 'white', borderRadius: '6px', border: '1px solid #bae6fd' }}>
+                          {(formData.floors_config || []).length === 0 ? (
+                            <div style={{ padding: '20px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>
+                              No floors configured. Click "Add Floor" to start.
+                            </div>
+                          ) : (
+                            <div style={{ padding: '12px' }}>
+                              {(formData.floors_config || []).map((floor, floorIndex) => (
+                                <div key={floorIndex} style={{ marginBottom: '16px', padding: '12px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px' }}>
+                                    <div style={{ flex: 1, marginRight: '8px' }}>
+                                      <label style={{ display: 'block', fontSize: '12px', fontWeight: '500', color: '#6b7280', marginBottom: '4px' }}>
+                                        Floor Name
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={floor.floor_name}
+                                        onChange={(e) => updateFloorName(floorIndex, e.target.value)}
+                                        placeholder="e.g., Ground Floor, 1st Floor"
+                                        style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '13px' }}
+                                      />
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeFloor(floorIndex)}
+                                      style={{
+                                        padding: '8px', border: 'none', background: 'rgba(239, 68, 68, 0.1)',
+                                        borderRadius: '4px', cursor: 'pointer', marginTop: '20px'
+                                      }}
+                                      title="Remove floor"
+                                    >
+                                      <Trash2 size={14} color="#ef4444" />
+                                    </button>
+                                  </div>
+
+                                  <div>
+                                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '500', color: '#6b7280', marginBottom: '6px' }}>
+                                      Apartments
+                                    </label>
+                                    <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
+                                      <input
+                                        type="text"
+                                        placeholder="Apartment name (e.g., Apt 1, Left, Right)"
+                                        onKeyPress={(e) => {
+                                          if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            addApartment(floorIndex, e.currentTarget.value);
+                                            e.currentTarget.value = '';
+                                          }
+                                        }}
+                                        style={{ flex: 1, padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '12px' }}
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                                          if (input && input.value.trim()) {
+                                            addApartment(floorIndex, input.value);
+                                            input.value = '';
+                                          }
+                                        }}
+                                        style={{
+                                          padding: '6px 12px', backgroundColor: '#22c55e', color: 'white',
+                                          border: 'none', borderRadius: '4px', fontSize: '12px', cursor: 'pointer'
+                                        }}
+                                      >
+                                        Add
+                                      </button>
+                                    </div>
+
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                      {floor.apartments.map((apt, aptIndex) => (
+                                        <div key={aptIndex} style={{
+                                          display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                          padding: '4px 8px', backgroundColor: '#dbeafe', color: '#1e40af',
+                                          borderRadius: '4px', fontSize: '12px'
+                                        }}>
+                                          <Home size={12} />
+                                          {apt}
+                                          <button
+                                            type="button"
+                                            onClick={() => removeApartment(floorIndex, aptIndex)}
+                                            style={{
+                                              marginLeft: '4px', padding: '2px', border: 'none',
+                                              background: 'none', cursor: 'pointer', display: 'flex'
+                                            }}
+                                          >
+                                            <X size={12} color="#1e40af" />
+                                          </button>
+                                        </div>
+                                      ))}
+                                      {floor.apartments.length === 0 && (
+                                        <span style={{ fontSize: '12px', color: '#9ca3af', fontStyle: 'italic' }}>
+                                          No apartments added yet
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </>
               )}

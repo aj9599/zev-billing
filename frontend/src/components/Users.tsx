@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Users as UsersIcon, Mail, Phone, MapPin, CreditCard, Search, Building, User, HelpCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Users as UsersIcon, Mail, Phone, MapPin, CreditCard, Search, Building, User, HelpCircle, Archive, CheckCircle, XCircle, Home } from 'lucide-react';
 import { api } from '../api/client';
-import type { User as UserType, Building as BuildingType } from '../types';
+import type { User as UserType, Building as BuildingType, FloorConfig } from '../types';
 import { useTranslation } from '../i18n';
 
 export default function Users() {
@@ -13,33 +13,33 @@ export default function Users() {
   const [editingUser, setEditingUser] = useState<UserType | null>(null);
   const [selectedBuildingId, setSelectedBuildingId] = useState<number | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showArchive, setShowArchive] = useState(false);
   const [formData, setFormData] = useState<Partial<UserType>>({
     first_name: '', last_name: '', email: '', phone: '',
     address_street: '', address_city: '', address_zip: '', address_country: 'Switzerland',
     bank_name: '', bank_iban: '', bank_account_holder: '',
-    charger_ids: '', notes: '', building_id: undefined,
+    charger_ids: '', notes: '', building_id: undefined, apartment_unit: '',
     user_type: 'regular',
-    managed_buildings: []
+    managed_buildings: [],
+    is_active: true
   });
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [showArchive]);
 
   const loadData = async () => {
     const [usersData, buildingsData] = await Promise.all([
-      api.getUsers(),
+      api.getUsers(undefined, showArchive),
       api.getBuildings()
     ]);
     setUsers(usersData);
-    // FIXED: Don't filter out complexes - administrators need to see them
     setBuildings(buildingsData);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // FIXED: Convert managed_buildings array to JSON string for backend
       const dataToSend = {
         ...formData,
         managed_buildings: formData.user_type === 'administration' && formData.managed_buildings 
@@ -56,9 +56,9 @@ export default function Users() {
       setEditingUser(null);
       resetForm();
       loadData();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Save error:', err);
-      alert(t('users.saveFailed'));
+      alert(err.message || t('users.saveFailed'));
     }
   };
 
@@ -73,9 +73,17 @@ export default function Users() {
     }
   };
 
+  const handleToggleActive = async (user: UserType) => {
+    try {
+      await api.updateUser(user.id, { ...user, is_active: !user.is_active });
+      loadData();
+    } catch (err) {
+      alert('Failed to update user status');
+    }
+  };
+
   const handleEdit = (user: UserType) => {
     setEditingUser(user);
-    // FIXED: Parse managed_buildings from string to array
     let managedBuildingsArray: number[] = [];
     if (user.managed_buildings) {
       try {
@@ -101,24 +109,24 @@ export default function Users() {
       first_name: '', last_name: '', email: '', phone: '',
       address_street: '', address_city: '', address_zip: '', address_country: 'Switzerland',
       bank_name: '', bank_iban: '', bank_account_holder: '',
-      charger_ids: '', notes: '', building_id: undefined,
+      charger_ids: '', notes: '', building_id: undefined, apartment_unit: '',
       user_type: 'regular',
-      managed_buildings: []
+      managed_buildings: [],
+      is_active: true
     });
   };
 
-  // FIXED: Single search that filters both buildings in cards AND users in tables
   const filteredBuildingsForCards = buildings.filter(b =>
     !b.is_group && b.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Filter users based on both building selection and search query
   const filteredUsers = users.filter(user => {
     const matchesBuilding = selectedBuildingId === 'all' || user.building_id === selectedBuildingId;
     const searchLower = searchQuery.toLowerCase();
     const matchesSearch = searchQuery === '' || 
       `${user.first_name} ${user.last_name}`.toLowerCase().includes(searchLower) ||
-      user.email.toLowerCase().includes(searchLower);
+      user.email.toLowerCase().includes(searchLower) ||
+      (user.apartment_unit && user.apartment_unit.toLowerCase().includes(searchLower));
     return matchesBuilding && matchesSearch;
   });
 
@@ -150,7 +158,28 @@ export default function Users() {
   };
 
   const getUserCountForBuilding = (buildingId: number) => {
-    return users.filter(u => u.building_id === buildingId).length;
+    return users.filter(u => u.building_id === buildingId && u.is_active).length;
+  };
+
+  const getAvailableApartments = (buildingId?: number): string[] => {
+    if (!buildingId) return [];
+    
+    const building = buildings.find(b => b.id === buildingId);
+    if (!building || !building.has_apartments || !building.floors_config) return [];
+    
+    const allApartments: string[] = [];
+    building.floors_config.forEach(floor => {
+      floor.apartments.forEach(apt => {
+        allApartments.push(`${floor.floor_name} - ${apt}`);
+      });
+    });
+    
+    // Filter out occupied apartments (only by active users, excluding current user if editing)
+    const occupiedApartments = users
+      .filter(u => u.building_id === buildingId && u.is_active && u.apartment_unit && u.id !== editingUser?.id)
+      .map(u => u.apartment_unit);
+    
+    return allApartments.filter(apt => !occupiedApartments.includes(apt));
   };
 
   const InstructionsModal = () => (
@@ -188,6 +217,14 @@ export default function Users() {
             <p>{t('users.instructions.adminUserDescription')}</p>
           </div>
 
+          <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #f59e0b' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Home size={20} color="#f59e0b" />
+              Apartments & Status
+            </h3>
+            <p>Users can be assigned to specific apartments in buildings that have apartment management enabled. You can also mark users as Active or Inactive - inactive users are moved to the archive and their apartments become available.</p>
+          </div>
+
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
             {t('users.instructions.howToUse')}
           </h3>
@@ -197,6 +234,8 @@ export default function Users() {
             <li>{t('users.instructions.step3')}</li>
             <li>{t('users.instructions.step4')}</li>
             <li>{t('users.instructions.step5')}</li>
+            <li>Use the Archive view to see inactive users</li>
+            <li>Apartments can only have one active user at a time</li>
           </ul>
 
           <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', marginTop: '16px', border: '1px solid #f59e0b' }}>
@@ -219,6 +258,7 @@ export default function Users() {
               <li>{t('users.instructions.tip1')}</li>
               <li>{t('users.instructions.tip2')}</li>
               <li>{t('users.instructions.tip3')}</li>
+              <li>Set users to inactive instead of deleting them to preserve history</li>
             </ul>
           </div>
         </div>
@@ -255,10 +295,21 @@ export default function Users() {
             {t('users.title')}
           </h1>
           <p style={{ color: '#6b7280', fontSize: '16px' }}>
-            {t('users.subtitle')}
+            {showArchive ? 'Archived Users' : t('users.subtitle')}
           </p>
         </div>
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setShowArchive(!showArchive)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
+              backgroundColor: showArchive ? '#6b7280' : '#8b5cf6', color: 'white', 
+              border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
+            }}
+          >
+            <Archive size={18} />
+            {showArchive ? 'Show Active' : 'Show Archive'}
+          </button>
           <button
             onClick={() => setShowInstructions(true)}
             style={{
@@ -290,13 +341,13 @@ export default function Users() {
         </div>
       </div>
 
-      {/* FIXED: Single unified search bar for both buildings and users */}
+      {/* Search bar */}
       <div style={{ marginBottom: '20px' }}>
         <div style={{ position: 'relative', maxWidth: '400px' }}>
           <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
           <input
             type="text"
-            placeholder={t('users.searchUsers')}
+            placeholder="Search users by name, email, or apartment..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -337,7 +388,7 @@ export default function Users() {
             </h3>
           </div>
           <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
-            {users.length} {users.length === 1 ? t('users.user') : t('users.users')}
+            {users.filter(u => u.is_active).length} active
           </p>
         </div>
 
@@ -365,7 +416,7 @@ export default function Users() {
                 </h3>
               </div>
               <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
-                {userCount} {userCount === 1 ? t('users.user') : t('users.users')}
+                {userCount} active {userCount === 1 ? t('users.user') : t('users.users')}
               </p>
             </div>
           );
@@ -399,6 +450,7 @@ export default function Users() {
           <table style={{ width: '100%' }}>
             <thead>
               <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Status</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.name')}</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.email')}</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.managedBuildings')}</th>
@@ -407,7 +459,14 @@ export default function Users() {
             </thead>
             <tbody>
               {adminUsers.map(user => (
-                <tr key={user.id} style={{ borderBottom: '1px solid #eee' }}>
+                <tr key={user.id} style={{ borderBottom: '1px solid #eee', opacity: user.is_active ? 1 : 0.5 }}>
+                  <td style={{ padding: '16px' }}>
+                    {user.is_active ? (
+                      <CheckCircle size={20} color="#22c55e" title="Active" />
+                    ) : (
+                      <XCircle size={20} color="#ef4444" title="Inactive" />
+                    )}
+                  </td>
                   <td style={{ padding: '16px' }}>{user.first_name} {user.last_name}</td>
                   <td style={{ padding: '16px' }}>{user.email}</td>
                   <td style={{ padding: '16px', fontSize: '13px', color: '#6b7280' }}>
@@ -415,6 +474,13 @@ export default function Users() {
                   </td>
                   <td style={{ padding: '16px' }}>
                     <div style={{ display: 'flex', gap: '8px' }}>
+                      <button 
+                        onClick={() => handleToggleActive(user)}
+                        style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}
+                        title={user.is_active ? 'Deactivate' : 'Activate'}
+                      >
+                        <Archive size={16} color="#8b5cf6" />
+                      </button>
                       <button onClick={() => handleEdit(user)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}>
                         <Edit2 size={16} color="#007bff" />
                       </button>
@@ -429,7 +495,7 @@ export default function Users() {
           </table>
           {adminUsers.length === 0 && (
             <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>
-              {t('users.noAdminUsers')}
+              {showArchive ? 'No archived admin users' : t('users.noAdminUsers')}
             </div>
           )}
         </div>
@@ -442,21 +508,28 @@ export default function Users() {
               borderRadius: '12px',
               padding: '16px',
               marginBottom: '16px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+              opacity: user.is_active ? 1 : 0.5
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ 
-                    display: 'inline-block',
-                    padding: '2px 8px',
-                    backgroundColor: '#f0f9ff',
-                    color: '#0369a1',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    marginBottom: '6px'
-                  }}>
-                    {t('users.administration')}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                    {user.is_active ? (
+                      <CheckCircle size={18} color="#22c55e" />
+                    ) : (
+                      <XCircle size={18} color="#ef4444" />
+                    )}
+                    <div style={{ 
+                      display: 'inline-block',
+                      padding: '2px 8px',
+                      backgroundColor: '#f0f9ff',
+                      color: '#0369a1',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: '600'
+                    }}>
+                      {t('users.administration')}
+                    </div>
                   </div>
                   <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '4px', color: '#1f2937' }}>
                     {user.first_name} {user.last_name}
@@ -476,7 +549,10 @@ export default function Users() {
                     <strong>{t('users.manages')}:</strong> {getManagedBuildingsNames(user.managed_buildings)}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <button onClick={() => handleToggleActive(user)} style={{ padding: '8px', border: 'none', background: 'rgba(139, 92, 246, 0.1)', borderRadius: '6px', cursor: 'pointer' }}>
+                    <Archive size={16} color="#8b5cf6" />
+                  </button>
                   <button onClick={() => handleEdit(user)} style={{ padding: '8px', border: 'none', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '6px', cursor: 'pointer' }}>
                     <Edit2 size={16} color="#3b82f6" />
                   </button>
@@ -489,7 +565,7 @@ export default function Users() {
           ))}
           {adminUsers.length === 0 && (
             <div style={{ backgroundColor: 'white', padding: '40px 20px', textAlign: 'center', color: '#999', borderRadius: '12px' }}>
-              {t('users.noAdminUsers')}
+              {showArchive ? 'No archived admin users' : t('users.noAdminUsers')}
             </div>
           )}
         </div>
@@ -522,8 +598,10 @@ export default function Users() {
           <table style={{ width: '100%' }}>
             <thead>
               <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Status</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.name')}</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.email')}</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Apartment</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>RFID Card(s)</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.building')}</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.actions')}</th>
@@ -531,9 +609,33 @@ export default function Users() {
             </thead>
             <tbody>
               {regularUsers.map(user => (
-                <tr key={user.id} style={{ borderBottom: '1px solid #eee' }}>
+                <tr key={user.id} style={{ borderBottom: '1px solid #eee', opacity: user.is_active ? 1 : 0.5 }}>
+                  <td style={{ padding: '16px' }}>
+                    {user.is_active ? (
+                      <CheckCircle size={20} color="#22c55e" title="Active" />
+                    ) : (
+                      <XCircle size={20} color="#ef4444" title="Inactive" />
+                    )}
+                  </td>
                   <td style={{ padding: '16px' }}>{user.first_name} {user.last_name}</td>
                   <td style={{ padding: '16px' }}>{user.email}</td>
+                  <td style={{ padding: '16px' }}>
+                    {user.apartment_unit ? (
+                      <span style={{ 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        gap: '4px',
+                        padding: '4px 8px',
+                        backgroundColor: '#f0fdf4',
+                        color: '#15803d',
+                        borderRadius: '4px',
+                        fontSize: '13px'
+                      }}>
+                        <Home size={14} />
+                        {user.apartment_unit}
+                      </span>
+                    ) : '-'}
+                  </td>
                   <td style={{ padding: '16px' }}>
                     {user.charger_ids ? (
                       <span style={{ 
@@ -555,6 +657,13 @@ export default function Users() {
                   <td style={{ padding: '16px' }}>{getBuildingName(user.building_id)}</td>
                   <td style={{ padding: '16px' }}>
                     <div style={{ display: 'flex', gap: '8px' }}>
+                      <button 
+                        onClick={() => handleToggleActive(user)}
+                        style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}
+                        title={user.is_active ? 'Deactivate' : 'Activate'}
+                      >
+                        <Archive size={16} color="#8b5cf6" />
+                      </button>
                       <button onClick={() => handleEdit(user)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}>
                         <Edit2 size={16} color="#007bff" />
                       </button>
@@ -569,7 +678,7 @@ export default function Users() {
           </table>
           {regularUsers.length === 0 && (
             <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>
-              {t('users.noRegularUsers')}
+              {showArchive ? 'No archived regular users' : t('users.noRegularUsers')}
             </div>
           )}
         </div>
@@ -582,21 +691,28 @@ export default function Users() {
               borderRadius: '12px',
               padding: '16px',
               marginBottom: '16px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+              opacity: user.is_active ? 1 : 0.5
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ 
-                    display: 'inline-block',
-                    padding: '2px 8px',
-                    backgroundColor: '#f0fdf4',
-                    color: '#15803d',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    marginBottom: '6px'
-                  }}>
-                    {t('users.regular')}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                    {user.is_active ? (
+                      <CheckCircle size={18} color="#22c55e" />
+                    ) : (
+                      <XCircle size={18} color="#ef4444" />
+                    )}
+                    <div style={{ 
+                      display: 'inline-block',
+                      padding: '2px 8px',
+                      backgroundColor: '#f0fdf4',
+                      color: '#15803d',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: '600'
+                    }}>
+                      {t('users.regular')}
+                    </div>
                   </div>
                   <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '4px', color: '#1f2937' }}>
                     {user.first_name} {user.last_name}
@@ -609,6 +725,12 @@ export default function Users() {
                     <div style={{ fontSize: '13px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                       <Phone size={14} />
                       {user.phone}
+                    </div>
+                  )}
+                  {user.apartment_unit && (
+                    <div style={{ fontSize: '13px', color: '#15803d', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                      <Home size={14} />
+                      Apartment: {user.apartment_unit}
                     </div>
                   )}
                   {user.charger_ids && (
@@ -624,7 +746,10 @@ export default function Users() {
                     </div>
                   )}
                 </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <button onClick={() => handleToggleActive(user)} style={{ padding: '8px', border: 'none', background: 'rgba(139, 92, 246, 0.1)', borderRadius: '6px', cursor: 'pointer' }}>
+                    <Archive size={16} color="#8b5cf6" />
+                  </button>
                   <button onClick={() => handleEdit(user)} style={{ padding: '8px', border: 'none', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '6px', cursor: 'pointer' }}>
                     <Edit2 size={16} color="#3b82f6" />
                   </button>
@@ -637,7 +762,7 @@ export default function Users() {
           ))}
           {regularUsers.length === 0 && (
             <div style={{ backgroundColor: 'white', padding: '40px 20px', textAlign: 'center', color: '#999', borderRadius: '12px' }}>
-              {t('users.noRegularUsers')}
+              {showArchive ? 'No archived regular users' : t('users.noRegularUsers')}
             </div>
           )}
         </div>
@@ -717,6 +842,21 @@ export default function Users() {
                 </div>
               </div>
 
+              {/* Active Status */}
+              <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: '#f9fafb', borderRadius: '6px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={formData.is_active}
+                    onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                  />
+                  <span style={{ fontWeight: '500', fontSize: '14px' }}>Active User</span>
+                </label>
+                <small style={{ display: 'block', marginTop: '4px', marginLeft: '28px', color: '#6b7280', fontSize: '12px' }}>
+                  Inactive users are archived and their apartments become available
+                </small>
+              </div>
+
               {/* Basic Information */}
               <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div>
@@ -748,7 +888,10 @@ export default function Users() {
                 <>
                   <div style={{ marginTop: '16px' }}>
                     <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('users.building')}</label>
-                    <select value={formData.building_id || ''} onChange={(e) => setFormData({ ...formData, building_id: e.target.value ? parseInt(e.target.value) : undefined })}
+                    <select value={formData.building_id || ''} onChange={(e) => {
+                      const buildingId = e.target.value ? parseInt(e.target.value) : undefined;
+                      setFormData({ ...formData, building_id: buildingId, apartment_unit: '' });
+                    }}
                       style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
                       <option value="">{t('users.selectBuilding')}</option>
                       {buildings.filter(b => !b.is_group).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -757,6 +900,32 @@ export default function Users() {
                       {t('users.canChargeAnywhere')}
                     </small>
                   </div>
+
+                  {/* Apartment Selection */}
+                  {formData.building_id && buildings.find(b => b.id === formData.building_id)?.has_apartments && (
+                    <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#15803d' }}>
+                        <Home size={18} />
+                        Apartment / Unit
+                      </label>
+                      <select 
+                        value={formData.apartment_unit || ''} 
+                        onChange={(e) => setFormData({ ...formData, apartment_unit: e.target.value })}
+                        style={{ width: '100%', padding: '10px', border: '1px solid #bbf7d0', borderRadius: '6px' }}
+                      >
+                        <option value="">No apartment assigned</option>
+                        {getAvailableApartments(formData.building_id).map(apt => (
+                          <option key={apt} value={apt}>{apt}</option>
+                        ))}
+                        {editingUser?.apartment_unit && formData.apartment_unit === editingUser.apartment_unit && (
+                          <option value={editingUser.apartment_unit}>{editingUser.apartment_unit} (Current)</option>
+                        )}
+                      </select>
+                      <small style={{ display: 'block', marginTop: '6px', color: '#15803d', fontSize: '12px' }}>
+                        Only available apartments are shown
+                      </small>
+                    </div>
+                  )}
 
                   <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#0369a1' }}>
