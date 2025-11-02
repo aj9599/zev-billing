@@ -202,8 +202,6 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_invoices_building ON invoices(building_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_auto_billing_next_run ON auto_billing_configs(next_run)`,
-		`CREATE INDEX IF NOT EXISTS idx_users_building ON users(building_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)`,
 	}
 
 	for _, migration := range migrations {
@@ -228,6 +226,19 @@ func RunMigrations(db *sql.DB) error {
 		_, err := db.Exec(stmt)
 		if err != nil {
 			log.Printf("Note: Column may already exist: %v", err)
+		}
+	}
+
+	// Create indexes for new columns AFTER adding the columns
+	newIndexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_users_building ON users(building_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)`,
+	}
+
+	for _, idx := range newIndexes {
+		_, err := db.Exec(idx)
+		if err != nil {
+			log.Printf("Note: Index may already exist: %v", err)
 		}
 	}
 
