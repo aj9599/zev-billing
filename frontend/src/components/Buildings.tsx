@@ -191,7 +191,7 @@ export default function Buildings() {
     b.address_city?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Energy Flow Card Component with FIXED logic
+  // Energy Flow Card Component with FIXED logic and improved spacing
   const EnergyFlowCard = ({ building }: { building: BuildingType }) => {
     const consumption = getBuildingConsumption(building.id);
     const { actualHouseConsumption, gridPower, solarProduction, solarToGrid } = consumption;
@@ -203,6 +203,10 @@ export default function Buildings() {
     // Check if building has a solar meter configured
     const buildingMeters = meters.filter(m => m.building_id === building.id);
     const hasSolarMeter = buildingMeters.some(m => m.meter_type === 'solar_meter');
+
+    // Get charger data for this building
+    const buildingChargers = chargers.filter(c => c.building_id === building.id);
+    const activeCharger = buildingChargers.find(c => consumption.charging > 0);
 
     return (
       <div style={{
@@ -318,12 +322,12 @@ export default function Buildings() {
           )}
         </div>
 
-        {/* Energy Flow Diagram - FIXED LOGIC */}
+        {/* Energy Flow Diagram - FIXED LOGIC with IMPROVED SPACING */}
         <div style={{ 
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
-          gap: '24px',
+          gap: '40px', // Increased from 24px to 40px
           marginBottom: '32px',
           minHeight: '200px',
           position: 'relative'
@@ -356,9 +360,12 @@ export default function Buildings() {
                 <span style={{ fontSize: '24px', fontWeight: '800', color: '#f59e0b' }}>
                   {solarProduction.toFixed(3)} kW
                 </span>
-                <span style={{ fontSize: '12px', color: '#22c55e', fontWeight: '600' }}>
-                  {t('buildings.energyFlow.production')}
-                </span>
+                {/* Only show "Producing" label when actually producing */}
+                {solarProduction > 0 && (
+                  <span style={{ fontSize: '12px', color: '#22c55e', fontWeight: '600' }}>
+                    {t('buildings.energyFlow.production')}
+                  </span>
+                )}
               </div>
 
               {/* Arrow from Solar to Building */}
@@ -506,10 +513,12 @@ export default function Buildings() {
           )}
         </div>
 
-        {/* Stats Row */}
+        {/* Stats Row - Dynamic Grid */}
         <div style={{ 
           display: 'grid', 
-          gridTemplateColumns: building.has_apartments ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)', 
+          gridTemplateColumns: building.has_apartments 
+            ? (consumption.charging > 0 ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)')
+            : (consumption.charging > 0 ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)'), 
           gap: '16px',
           paddingTop: '24px',
           borderTop: '2px solid #f3f4f6'
@@ -563,6 +572,14 @@ export default function Buildings() {
               <span style={{ fontSize: '24px', fontWeight: '800', color: '#22c55e' }}>
                 {consumption.charging.toFixed(2)} kW
               </span>
+              {/* Show charger info if available */}
+              {activeCharger && (
+                <div style={{ marginTop: '8px' }}>
+                  <span style={{ fontSize: '11px', color: '#6b7280', display: 'block' }}>
+                    {activeCharger.name}
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -866,8 +883,12 @@ export default function Buildings() {
                 <Layers size={24} color="#3b82f6" />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: '700', fontSize: '16px', color: '#1f2937' }}>Floor</div>
-                <div style={{ fontSize: '12px', color: '#6b7280' }}>Drag to building</div>
+                <div style={{ fontWeight: '700', fontSize: '16px', color: '#1f2937' }}>
+                  {t('buildings.apartmentConfig.paletteFloor')}
+                </div>
+                <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                  {t('buildings.apartmentConfig.dragToBuilding')}
+                </div>
               </div>
             </div>
             <div style={{
@@ -879,7 +900,7 @@ export default function Buildings() {
               textAlign: 'center',
               fontWeight: '600'
             }}>
-              🗂️ Add New Level
+              {t('buildings.apartmentConfig.addNewLevel')}
             </div>
           </div>
 
@@ -914,8 +935,12 @@ export default function Buildings() {
                 <Home size={24} color="#f59e0b" />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: '700', fontSize: '16px', color: '#1f2937' }}>Apartment</div>
-                <div style={{ fontSize: '12px', color: '#6b7280' }}>Drag to floor</div>
+                <div style={{ fontWeight: '700', fontSize: '16px', color: '#1f2937' }}>
+                  {t('buildings.apartmentConfig.paletteApartment')}
+                </div>
+                <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                  {t('buildings.apartmentConfig.dragToFloor')}
+                </div>
               </div>
             </div>
             <div style={{
@@ -927,7 +952,7 @@ export default function Buildings() {
               textAlign: 'center',
               fontWeight: '600'
             }}>
-              🏠  Add Unit
+              {t('buildings.apartmentConfig.addUnit')}
             </div>
           </div>
 
@@ -939,17 +964,21 @@ export default function Buildings() {
             border: '2px dashed #e5e7eb'
           }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#6b7280', marginBottom: '12px' }}>
-              Building Stats
+              {t('buildings.apartmentConfig.buildingStats')}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>Floors:</span>
+                <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                  {t('buildings.apartmentConfig.floorsLabel')}
+                </span>
                 <span style={{ fontSize: '16px', fontWeight: '700', color: '#3b82f6' }}>
                   {(formData.floors_config || []).length}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>Apartments:</span>
+                <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                  {t('buildings.apartmentConfig.apartmentsLabel')}
+                </span>
                 <span style={{ fontSize: '16px', fontWeight: '700', color: '#f59e0b' }}>
                   {(formData.floors_config || []).reduce((sum, f) => sum + f.apartments.length, 0)}
                 </span>
@@ -965,12 +994,12 @@ export default function Buildings() {
             border: '1px solid #fef3c7'
           }}>
             <div style={{ fontSize: '11px', color: '#92400e', lineHeight: '1.6' }}>
-              <strong>💡 Tips:</strong><br/>
-              • Drag floors to stack levels<br/>
-              • Drag apartments onto floors<br/>
-              • Move apartments between floors<br/>
-              • Click pencil to rename<br/>
-              • Click X to delete
+              <strong>{t('buildings.apartmentConfig.tips')}</strong><br/>
+              {t('buildings.apartmentConfig.tip1')}<br/>
+              {t('buildings.apartmentConfig.tip2')}<br/>
+              {t('buildings.apartmentConfig.tip3')}<br/>
+              {t('buildings.apartmentConfig.tip4')}<br/>
+              {t('buildings.apartmentConfig.tip5')}
             </div>
           </div>
         </div>
@@ -998,7 +1027,7 @@ export default function Buildings() {
           }}>
             <Building size={24} color="#667eea" />
             <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#1f2937', margin: 0 }}>
-              Building Layout
+              {t('buildings.apartmentConfig.buildingLayout')}
             </h3>
           </div>
 
@@ -1016,7 +1045,7 @@ export default function Buildings() {
                 {t('buildings.apartmentConfig.noFloors')}
               </p>
               <p style={{ fontSize: '14px', color: '#94a3b8', textAlign: 'center' }}>
-                Drag a <strong>Floor</strong> from the palette to start building
+                {t('buildings.apartmentConfig.clickAddFloor')}
               </p>
             </div>
           ) : (
@@ -1148,7 +1177,7 @@ export default function Buildings() {
                                 fontWeight: '600',
                                 color: '#6b7280'
                               }}>
-                                {floor.apartments.length} units
+                                {floor.apartments.length} {t('buildings.apartmentConfig.unitsLabel')}
                               </div>
                               <button
                                 onClick={() => removeFloor(floorIdx)}
@@ -1169,10 +1198,10 @@ export default function Buildings() {
                         )}
                       </div>
 
-                      {/* Apartments Grid */}
+                      {/* Apartments Grid - FLEXIBLE WIDTH */}
                       <div style={{ 
-                        display: 'grid', 
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                        display: 'flex',
+                        flexWrap: 'wrap',
                         gap: '12px'
                       }}>
                         {floor.apartments.map((apt, aptIdx) => (
@@ -1189,7 +1218,9 @@ export default function Buildings() {
                               cursor: 'grab',
                               transition: 'all 0.2s',
                               boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-                              userSelect: 'none'
+                              userSelect: 'none',
+                              minWidth: 'fit-content',
+                              maxWidth: '200px'
                             }}
                             onMouseEnter={(e) => {
                               e.currentTarget.style.transform = 'translateY(-2px)';
@@ -1249,14 +1280,14 @@ export default function Buildings() {
                                     fontSize: '13px', 
                                     fontWeight: '700', 
                                     color: '#92400e',
+                                    whiteSpace: 'nowrap',
                                     overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap'
+                                    textOverflow: 'ellipsis'
                                   }}>
                                     {apt}
                                   </span>
                                 </div>
-                                <div style={{ display: 'flex', gap: '4px' }}>
+                                <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -1297,7 +1328,7 @@ export default function Buildings() {
                         ))}
                         {floor.apartments.length === 0 && (
                           <div style={{
-                            gridColumn: '1 / -1',
+                            width: '100%',
                             padding: '20px',
                             textAlign: 'center',
                             color: '#94a3b8',
@@ -1307,7 +1338,7 @@ export default function Buildings() {
                             borderRadius: '8px',
                             border: '2px dashed #e2e8f0'
                           }}>
-                            Drag an <strong>Apartment</strong> here
+                            {t('buildings.apartmentConfig.dragHereHint')}
                           </div>
                         )}
                       </div>
@@ -1335,7 +1366,7 @@ export default function Buildings() {
               pointerEvents: 'none',
               zIndex: 100
             }}>
-              🗂️ Release to add a new Floor
+              {t('buildings.apartmentConfig.releaseToAdd')}
             </div>
           )}
         </div>
