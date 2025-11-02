@@ -87,7 +87,7 @@ export const en: Translations = {
   'export.exportingAllFrom': 'All {{type}} from {{building}}',
 
   // Math CAPTCHA
-  'captcha.title': '🔒 Security Check - Complete to Continue',
+  'captcha.title': 'ðŸ”’ Security Check - Complete to Continue',
   'captcha.mathInstruction': 'Solve the math problem to continue',
   'captcha.mathFooter': 'Select the correct answer',
   'captcha.new': 'New',
@@ -97,7 +97,7 @@ export const en: Translations = {
 
   // Meters Delete Confirmation
   'meters.deleteConfirmTitle': 'Delete Meter',
-  'meters.deleteWarning': '⚠️ Warning: This action cannot be undone',
+  'meters.deleteWarning': 'âš ï¸ Warning: This action cannot be undone',
   'meters.deleteImpactTitle': 'What will be deleted:',
   'meters.meterWillBeDeleted': 'The meter will be permanently removed',
   'meters.readingsWillBeDeleted': 'readings',
@@ -114,7 +114,7 @@ export const en: Translations = {
 
   // Chargers Delete Confirmation
   'chargers.deleteConfirmTitle': 'Delete Charger',
-  'chargers.deleteWarning': '⚠️ Warning: This action cannot be undone',
+  'chargers.deleteWarning': 'âš ï¸ Warning: This action cannot be undone',
   'chargers.deleteImpactTitle': 'What will be deleted:',
   'chargers.chargerWillBeDeleted': 'The charger will be permanently removed',
   'chargers.sessionsWillBeDeleted': 'charging sessions',
@@ -218,27 +218,65 @@ export const en: Translations = {
   'buildings.buildingsInComplex': 'buildings',
   'buildings.metersCount': 'Meters',
   'buildings.chargersCount': 'Chargers',
+  'buildings.apartmentsCount': 'Apartments',
+  'buildings.apartmentBuilding': 'APARTMENTS',
   'buildings.consumption': 'Consumption',
   'buildings.solarProduction': 'Solar Production',
   'buildings.charging': 'Charging',
   'buildings.searchPlaceholder': 'Search buildings, complexes, or addresses...',
   'buildings.setupInstructions': 'Setup Instructions',
   'buildings.noResults': 'No results found',
+  'buildings.floor': 'Floor',
+  
+  // Energy Flow
+  'buildings.energyFlow.solar': 'Solar',
+  'buildings.energyFlow.consumption': 'Building',
+  'buildings.energyFlow.grid': 'Grid',
+  'buildings.energyFlow.production': 'Producing',
+  'buildings.energyFlow.solarCoverage': 'Solar Coverage',
+  'buildings.energyFlow.feedIn': 'Feed-in',
+  'buildings.energyFlow.gridPower': 'From Grid',
+  'buildings.energyFlow.buying': 'Buying',
+  'buildings.energyFlow.selling': 'Selling',
+  
+  // Apartment Configuration
+  'buildings.apartmentConfig.title': 'Visual Apartment Configuration',
+  'buildings.apartmentConfig.description': 'Build your apartment structure floor by floor',
+  'buildings.apartmentConfig.enable': 'Enable Apartment Management',
+  'buildings.apartmentConfig.enableDescription': 'Configure floors and apartments for rental buildings',
+  'buildings.apartmentConfig.addFloor': 'Add Floor',
+  'buildings.apartmentConfig.removeFloor': 'Remove Floor',
+  'buildings.apartmentConfig.floorNamePlaceholder': 'e.g., Ground Floor, 1st Floor',
+  'buildings.apartmentConfig.apartments': 'Apartments',
+  'buildings.apartmentConfig.apartmentNamePlaceholder': 'e.g., Apt 1, Left, Right',
+  'buildings.apartmentConfig.add': 'Add',
+  'buildings.apartmentConfig.noFloors': 'No floors configured yet',
+  'buildings.apartmentConfig.clickAddFloor': 'Click "Add Floor" to start building your apartment structure',
+  'buildings.apartmentConfig.noApartments': 'Click to add apartments',
+  'buildings.apartmentConfig.helpText': 'Click on a floor to add apartments. Drag and arrange floors visually. Each apartment can be assigned to a user.',
+  
+  // Instructions
   'buildings.instructions.title': 'Buildings & Complexes Guide',
   'buildings.instructions.whatIsBuilding': 'What is a Building?',
   'buildings.instructions.buildingDescription': 'A building represents a single physical property or structure where you install meters and chargers. Each building has its own address, meters, and energy monitoring equipment.',
   'buildings.instructions.whatIsComplex': 'What is a Building Complex?',
   'buildings.instructions.complexDescription': 'A building complex is a folder or group that contains multiple buildings. Use complexes to organize related properties, such as apartment buildings in the same neighborhood, or properties owned by the same entity.',
+  'buildings.instructions.apartmentTitle': 'Apartment Management',
+  'buildings.instructions.apartmentDescription': 'Enable apartment management for buildings with rental units. Configure floors and apartments visually using the LEGO-style builder. Each apartment can be assigned to one active user.',
+  'buildings.instructions.energyFlowTitle': 'Energy Flow Visualization',
+  'buildings.instructions.energyFlowDescription': 'Each building displays a real-time energy flow diagram showing solar production, building consumption, and grid interaction (buying or selling power). The diagram updates automatically every 15 minutes.',
   'buildings.instructions.howToUse': 'How to Use',
   'buildings.instructions.step1': 'Create individual buildings first with their addresses and details',
   'buildings.instructions.step2': 'To create a complex, check "This is a building complex" and select which buildings belong to it',
-  'buildings.instructions.step3': 'Click on a complex card to expand and view all buildings within it',
-  'buildings.instructions.step4': 'Each building card shows the number of meters, chargers, and real-time power consumption',
-  'buildings.instructions.step5': 'Use the search bar to find buildings by name, address, or complex',
+  'buildings.instructions.step3': 'Enable apartment management and build your floor structure visually',
+  'buildings.instructions.step4': 'Click on a complex card to expand and view all buildings within it',
+  'buildings.instructions.step5': 'Each building card shows real-time energy flow and consumption',
+  'buildings.instructions.step6': 'Use the search bar to find buildings by name, address, or complex',
   'buildings.instructions.tips': 'Tips',
   'buildings.instructions.tip1': 'Organize buildings into complexes for easier management of multiple properties',
-  'buildings.instructions.tip2': 'Power data is updated in real-time from your meters and chargers',
-  'buildings.instructions.tip3': 'A building can only belong to one complex at a time',
+  'buildings.instructions.tip2': 'Energy flow data is updated in real-time from your meters and chargers',
+  'buildings.instructions.tip3': 'Use descriptive floor and apartment names for easier user management',
+  'buildings.instructions.tip4': 'The visual apartment builder shows your building structure at a glance',
 
   // Meters - General
   'meters.title': 'Meters',
@@ -296,9 +334,9 @@ export const en: Translations = {
   'meters.loxoneSetupStep3': '3. Enter username/password (optional)',
   'meters.loxoneSetupStep4': '4. Save and the system will connect automatically',
   'meters.loxoneFeatures': 'Benefits:',
-  'meters.loxoneFeature1': '✓ Real-time data updates',
-  'meters.loxoneFeature2': '✓ Automatic reconnection',
-  'meters.loxoneFeature3': '✓ Secure WebSocket connection',
+  'meters.loxoneFeature1': 'âœ“ Real-time data updates',
+  'meters.loxoneFeature2': 'âœ“ Automatic reconnection',
+  'meters.loxoneFeature3': 'âœ“ Secure WebSocket connection',
 
   // UDP Connection
   'meters.udpDeprecatedWarning': 'UDP is deprecated. Please use Loxone WebSocket API for new meters.',
@@ -345,9 +383,9 @@ export const en: Translations = {
   'meters.instructions.loxoneExampleCredentials': 'Username: admin / Password: your-password',
 
   'meters.instructions.loxoneBenefits': 'Why Loxone WebSocket?',
-  'meters.instructions.loxoneBenefit1': '✓ Real-time data updates every 15 minutes',
-  'meters.instructions.loxoneBenefit2': '✓ Automatic reconnection on connection loss',
-  'meters.instructions.loxoneBenefit3': '✓ No Loxone configuration required',
+  'meters.instructions.loxoneBenefit1': 'âœ“ Real-time data updates every 15 minutes',
+  'meters.instructions.loxoneBenefit2': 'âœ“ Automatic reconnection on connection loss',
+  'meters.instructions.loxoneBenefit3': 'âœ“ No Loxone configuration required',
 
   // UDP Instructions
   'meters.instructions.udpTitle': 'UDP Connection (Legacy)',
@@ -420,7 +458,7 @@ export const en: Translations = {
   'meters.httpVirtualOutput': 'Virtual Output HTTP',
   'meters.httpListensResponds': 'Listens and responds with:',
   'meters.httpPolling': 'Polling:',
-  'meters.httpRaspberryPi': 'Raspberry Pi → GET → Loxone every 15 min',
+  'meters.httpRaspberryPi': 'Raspberry Pi â†’ GET â†’ Loxone every 15 min',
 
   // HTTP Instructions
   'meters.instructions.httpNew': 'NEW: HTTP Polling with Authentication - Raspberry Pi is the master!',
@@ -443,8 +481,8 @@ export const en: Translations = {
   'meters.instructions.httpLoxoneResponse': '- Response: {"UUID_power_kwh": <v>}',
   'meters.instructions.httpHowItWorks': 'How it works:',
   'meters.instructions.httpPollingExplained': 'Every 15 minutes, Raspberry Pi sends GET request to Loxone',
-  'meters.instructions.httpRequestFormat': '→ http://192.168.1.100/api/meter/solar_meter (with Basic Auth if configured)',
-  'meters.instructions.httpResponseFormat': '← Loxone responds with: {"a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d_power_kwh": 123.45}',
+  'meters.instructions.httpRequestFormat': 'â†’ http://192.168.1.100/api/meter/solar_meter (with Basic Auth if configured)',
+  'meters.instructions.httpResponseFormat': 'â† Loxone responds with: {"a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d_power_kwh": 123.45}',
   'meters.instructions.httpBenefits': 'Benefits:',
   'meters.instructions.httpBenefitsDesc': 'Raspberry Pi is master and controls timing, no firewall issues, reliable 15-minute polling, supports HTTP authentication, Loxone just responds!',
 
@@ -489,9 +527,9 @@ export const en: Translations = {
 
   // Features
   'chargers.loxoneFeatures': 'Key Features:',
-  'chargers.loxoneFeature1': '✓ Real-time bidirectional communication',
-  'chargers.loxoneFeature2': '✓ Automatic reconnection on connection loss',
-  'chargers.loxoneFeature3': '✓ Connection status monitoring',
+  'chargers.loxoneFeature1': 'âœ“ Real-time bidirectional communication',
+  'chargers.loxoneFeature2': 'âœ“ Automatic reconnection on connection loss',
+  'chargers.loxoneFeature3': 'âœ“ Connection status monitoring',
 
   // Instructions modal
   'chargers.instructions.title': 'Charger Setup Instructions',
@@ -522,9 +560,9 @@ export const en: Translations = {
   'chargers.instructions.loxoneExampleCredentials': 'Username/Password: Your Loxone Config credentials',
 
   'chargers.instructions.loxoneBenefits': 'Benefits:',
-  'chargers.instructions.loxoneBenefit1': '✓ Real-time updates via WebSocket',
-  'chargers.instructions.loxoneBenefit2': '✓ Automatic reconnection on connection loss',
-  'chargers.instructions.loxoneBenefit3': '✓ Live connection status monitoring',
+  'chargers.instructions.loxoneBenefit1': 'âœ“ Real-time updates via WebSocket',
+  'chargers.instructions.loxoneBenefit2': 'âœ“ Automatic reconnection on connection loss',
+  'chargers.instructions.loxoneBenefit3': 'âœ“ Live connection status monitoring',
 
   'chargers.instructions.udpTitle': 'UDP Connection (Legacy)',
   'chargers.instructions.udpDeprecated': 'UDP is deprecated. Use Loxone WebSocket API for better reliability.',
@@ -560,9 +598,9 @@ export const en: Translations = {
   'chargers.currentMode': 'Current Mode',
   'chargers.noChargers': 'No chargers found. Click "Setup Instructions" to learn how to configure your first charger.',
   'chargers.brandPreset': 'Brand / Preset',
-  'chargers.weidmuller': 'Weidmüller',
-  'chargers.weidmullerHelp': 'Weidmüller chargers require 4 data points: power, state, user ID, and mode',
-  'chargers.connectionConfig': 'Connection Configuration (Weidmüller - 4 Data Points)',
+  'chargers.weidmuller': 'WeidmÃ¼ller',
+  'chargers.weidmullerHelp': 'WeidmÃ¼ller chargers require 4 data points: power, state, user ID, and mode',
+  'chargers.connectionConfig': 'Connection Configuration (WeidmÃ¼ller - 4 Data Points)',
   'chargers.powerEndpoint': 'Power Consumed Endpoint',
   'chargers.stateEndpoint': 'State Endpoint',
   'chargers.userIdEndpoint': 'User ID Endpoint',
