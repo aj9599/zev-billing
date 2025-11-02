@@ -748,37 +748,37 @@ export default function Buildings() {
       setFormData({ ...formData, floors_config: floors });
     };
 
-    const onPaletteDragStart = (e: React.DragEvent, type: string) => {
+    const onPaletteDragStart = (e: React.DragEvent<HTMLDivElement>, type: string) => {
       e.dataTransfer.effectAllowed = 'copy';
       setDragType(type);
     };
 
-    const onApartmentDragStart = (e: React.DragEvent, floorIdx: number, aptIdx: number) => {
+    const onApartmentDragStart = (e: React.DragEvent<HTMLDivElement>, floorIdx: number, aptIdx: number) => {
       e.dataTransfer.effectAllowed = 'move';
       setDragType(DRAG_TYPES.EXISTING_APT);
       setDragData({ floorIdx, aptIdx });
     };
 
-    const onFloorDragStart = (e: React.DragEvent, floorIdx: number) => {
+    const onFloorDragStart = (e: React.DragEvent<HTMLDivElement>, floorIdx: number) => {
       e.dataTransfer.effectAllowed = 'move';
       setDragType(DRAG_TYPES.REORDER_FLOOR);
       setDraggedFloorIndex(floorIdx);
-      e.currentTarget.style.opacity = '0.5';
+      (e.currentTarget as HTMLElement).style.opacity = '0.5';
     };
 
-    const onFloorDragEnd = (e: React.DragEvent) => {
-      e.currentTarget.style.opacity = '1';
+    const onFloorDragEnd = (e: React.DragEvent<HTMLDivElement>) => {
+      (e.currentTarget as HTMLElement).style.opacity = '1';
       setDraggedFloorIndex(null);
     };
 
-    const onFloorDragOver = (e: React.DragEvent, targetFloorIdx: number) => {
+    const onFloorDragOver = (e: React.DragEvent<HTMLDivElement>, targetFloorIdx: number) => {
       e.preventDefault();
       if (dragType === DRAG_TYPES.REORDER_FLOOR && draggedFloorIndex !== null && draggedFloorIndex !== targetFloorIdx) {
         e.dataTransfer.dropEffect = 'move';
       }
     };
 
-    const onFloorDrop = (floorIdx: number, e: React.DragEvent) => {
+    const onFloorDrop = (floorIdx: number, e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
       e.stopPropagation();
       
@@ -800,7 +800,7 @@ export default function Buildings() {
       setDraggedFloorIndex(null);
     };
 
-    const onBuildingDrop = (e: React.DragEvent) => {
+    const onBuildingDrop = (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
       if (dragType === DRAG_TYPES.PALETTE_FLOOR) {
         addFloor();
@@ -808,7 +808,7 @@ export default function Buildings() {
       onDragEndGlobal();
     };
 
-    const allowDrop = (e: React.DragEvent) => {
+    const allowDrop = (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
     };
