@@ -879,7 +879,7 @@ export default function Buildings() {
               textAlign: 'center',
               fontWeight: '600'
             }}>
-              ðŸ—ï¸ Add New Level
+              🗂️ Add New Level
             </div>
           </div>
 
@@ -927,7 +927,7 @@ export default function Buildings() {
               textAlign: 'center',
               fontWeight: '600'
             }}>
-              ðŸ  Add Unit
+              🏠  Add Unit
             </div>
           </div>
 
@@ -965,12 +965,12 @@ export default function Buildings() {
             border: '1px solid #fef3c7'
           }}>
             <div style={{ fontSize: '11px', color: '#92400e', lineHeight: '1.6' }}>
-              <strong>ðŸ’¡ Tips:</strong><br/>
-              â€¢ Drag floors to stack levels<br/>
-              â€¢ Drag apartments onto floors<br/>
-              â€¢ Move apartments between floors<br/>
-              â€¢ Click pencil to rename<br/>
-              â€¢ Click X to delete
+              <strong>💡 Tips:</strong><br/>
+              • Drag floors to stack levels<br/>
+              • Drag apartments onto floors<br/>
+              • Move apartments between floors<br/>
+              • Click pencil to rename<br/>
+              • Click X to delete
             </div>
           </div>
         </div>
@@ -1335,7 +1335,7 @@ export default function Buildings() {
               pointerEvents: 'none',
               zIndex: 100
             }}>
-              ðŸ—ï¸ Release to add a new Floor
+              🗂️ Release to add a new Floor
             </div>
           )}
         </div>
