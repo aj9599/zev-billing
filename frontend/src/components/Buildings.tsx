@@ -4,13 +4,6 @@ import { api } from '../api/client';
 import type { Building as BuildingType, Meter, Charger, BuildingConsumption } from '../types';
 import { useTranslation } from '../i18n';
 
-// Import FloorConfig type directly for internal use
-type FloorConfig = {
-  floor_number: number;
-  floor_name: string;
-  apartments: string[];
-};
-
 export default function Buildings() {
   const { t } = useTranslation();
   const [buildings, setBuildings] = useState<BuildingType[]>([]);
