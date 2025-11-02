@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Building, Search, MapPin, Zap, ChevronRight, ChevronDown, Folder, Home, HelpCircle, Activity, Sun, Grid, ArrowRight, ArrowLeft, Layers, Check } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Building, Search, MapPin, Zap, ChevronRight, ChevronDown, Folder, Home, HelpCircle, Activity, Sun, Grid, ArrowRight, ArrowLeft, Layers, Check, GripVertical } from 'lucide-react';
 import { api } from '../api/client';
 import type { Building as BuildingType, Meter, Charger, BuildingConsumption } from '../types';
 import { useTranslation } from '../i18n';
@@ -199,6 +199,10 @@ export default function Buildings() {
     const isExporting = gridPower < 0;
     const isImporting = gridPower > 0;
     const solarToHouse = solarProduction - solarToGrid;
+    
+    // Check if building has a solar meter configured
+    const buildingMeters = meters.filter(m => m.building_id === building.id);
+    const hasSolarMeter = buildingMeters.some(m => m.meter_type === 'solar_meter');
 
     return (
       <div style={{
@@ -324,8 +328,8 @@ export default function Buildings() {
           minHeight: '200px',
           position: 'relative'
         }}>
-          {/* Solar Production (only show if exists) */}
-          {solarProduction > 0 && (
+          {/* Solar Production (show if solar meter exists) */}
+          {hasSolarMeter && (
             <>
               <div style={{ 
                 display: 'flex', 
@@ -468,8 +472,8 @@ export default function Buildings() {
             </span>
           </div>
 
-          {/* Solar to Grid Arrow (only when exporting and solar exists) */}
-          {isExporting && solarProduction > 0 && (
+          {/* Solar to Grid Arrow (only when exporting and solar meter exists) */}
+          {isExporting && hasSolarMeter && (
             <>
               <div style={{ 
                 display: 'flex', 
@@ -683,6 +687,7 @@ export default function Buildings() {
       PALETTE_FLOOR: 'palette/floor',
       PALETTE_APT: 'palette/apartment',
       EXISTING_APT: 'existing/apartment',
+      EXISTING_FLOOR: 'existing/floor',
     };
 
     const addFloor = () => {
@@ -742,9 +747,22 @@ export default function Buildings() {
       setFormData({ ...formData, floors_config: floors });
     };
 
+    const reorderFloors = (fromIndex: number, toIndex: number) => {
+      const floors = [...(formData.floors_config || [])];
+      const [movedFloor] = floors.splice(fromIndex, 1);
+      floors.splice(toIndex, 0, movedFloor);
+      setFormData({ ...formData, floors_config: floors });
+    };
+
     const onPaletteDragStart = (e: React.DragEvent, type: string) => {
       e.dataTransfer.effectAllowed = 'copy';
       setDragType(type);
+    };
+
+    const onFloorDragStart = (e: React.DragEvent, floorIdx: number) => {
+      e.dataTransfer.effectAllowed = 'move';
+      setDragType(DRAG_TYPES.EXISTING_FLOOR);
+      setDragData({ floorIdx });
     };
 
     const onApartmentDragStart = (e: React.DragEvent, floorIdx: number, aptIdx: number) => {
@@ -775,6 +793,10 @@ export default function Buildings() {
       } else if (dragType === DRAG_TYPES.EXISTING_APT && dragData) {
         if (dragData.floorIdx !== floorIdx) {
           moveApartment(dragData.floorIdx, dragData.aptIdx, floorIdx);
+        }
+      } else if (dragType === DRAG_TYPES.EXISTING_FLOOR && dragData) {
+        if (dragData.floorIdx !== floorIdx) {
+          reorderFloors(dragData.floorIdx, floorIdx);
         }
       }
       onDragEndGlobal();
@@ -1011,15 +1033,19 @@ export default function Buildings() {
 
                     {/* Floor Card */}
                     <div
+                      draggable
+                      onDragStart={(e) => onFloorDragStart(e, floorIdx)}
+                      onDragEnd={onDragEndGlobal}
                       onDragOver={allowDrop}
                       onDrop={(e) => onFloorDrop(floorIdx, e)}
                       style={{
                         padding: '20px',
                         backgroundColor: dragType ? '#f0f9ff' : '#f8fafc',
                         borderRadius: '16px',
-                        border: `2px solid ${dragType === DRAG_TYPES.PALETTE_APT ? '#3b82f6' : '#e2e8f0'}`,
+                        border: `2px solid ${dragType === DRAG_TYPES.PALETTE_APT || dragType === DRAG_TYPES.EXISTING_FLOOR ? '#3b82f6' : '#e2e8f0'}`,
                         boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
-                        transition: 'all 0.2s'
+                        transition: 'all 0.2s',
+                        cursor: 'move'
                       }}
                     >
                       {/* Floor Header */}
@@ -1090,6 +1116,7 @@ export default function Buildings() {
                         ) : (
                           <>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                              <GripVertical size={20} color="#9ca3af" style={{ cursor: 'grab' }} title="Drag to reorder" />
                               <Layers size={20} color="#3b82f6" />
                               <span style={{ fontSize: '16px', fontWeight: '700', color: '#1f2937' }}>
                                 {floor.floor_name}
@@ -1284,28 +1311,6 @@ export default function Buildings() {
                           </div>
                         )}
                       </div>
-                    </div>
-
-                    {/* Floor Number Badge */}
-                    <div style={{
-                      position: 'absolute',
-                      left: '-16px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      padding: '6px 10px',
-                      backgroundColor: '#3b82f6',
-                      color: 'white',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                      fontWeight: '700',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                      zIndex: 10,
-                      maxWidth: '120px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      {floor.floor_name}
                     </div>
                   </div>
                 ))}
