@@ -228,7 +228,7 @@ export const en: Translations = {
   'buildings.setupInstructions': 'Setup Instructions',
   'buildings.noResults': 'No results found',
   'buildings.floor': 'Floor',
-  
+
   // Energy Flow
   'buildings.energyFlow.solar': 'Solar',
   'buildings.energyFlow.consumption': 'Building',
@@ -241,7 +241,7 @@ export const en: Translations = {
   'buildings.energyFlow.selling': 'Selling',
   'buildings.energyFlow.noProduction': 'No Production',
   'buildings.energyFlow.offline': 'Offline',
-  
+
   // Apartment Configuration
   'buildings.apartmentConfig.title': 'Visual Apartment Configuration',
   'buildings.apartmentConfig.description': 'Build your apartment structure floor by floor',
@@ -282,7 +282,10 @@ export const en: Translations = {
   'buildings.apartmentConfig.tip4': '• Click pencil to rename',
   'buildings.apartmentConfig.tip5': '• Click X to delete',
   'buildings.apartmentConfig.tip6': '• Drag floor handle to reorder',
-  
+  'buildings.apartmentConfig.unitsLabel': 'Units',
+  'buildings.apartmentConfig.floorsLabel': 'Floors:',
+  'buildings.apartmentConfig.apartmentsLabel': 'Apartments:',
+
   // Instructions
   'buildings.instructions.title': 'Buildings & Complexes Guide',
   'buildings.instructions.whatIsBuilding': 'What is a Building?',

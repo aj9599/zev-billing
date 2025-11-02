@@ -322,12 +322,12 @@ export default function Buildings() {
           )}
         </div>
 
-        {/* Energy Flow Diagram - FIXED LOGIC with IMPROVED SPACING */}
+        {/* Energy Flow Diagram - FIXED LOGIC with IMPROVED SPACING AND ALIGNMENT */}
         <div style={{ 
           display: 'flex',
           justifyContent: 'center',
-          alignItems: 'center',
-          gap: '40px', // Increased from 24px to 40px
+          alignItems: 'flex-start',
+          gap: '40px',
           marginBottom: '32px',
           minHeight: '200px',
           position: 'relative'
@@ -339,7 +339,8 @@ export default function Buildings() {
                 display: 'flex', 
                 flexDirection: 'column', 
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'flex-start',
+                width: '120px'
               }}>
                 <div style={{
                   width: '100px',
@@ -354,22 +355,38 @@ export default function Buildings() {
                 }}>
                   <Sun size={40} color="#f59e0b" />
                 </div>
-                <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
-                  {t('buildings.energyFlow.solar')}
-                </span>
-                <span style={{ fontSize: '24px', fontWeight: '800', color: '#f59e0b' }}>
-                  {solarProduction.toFixed(3)} kW
-                </span>
-                {/* Only show "Producing" label when actually producing */}
-                {solarProduction > 0 && (
-                  <span style={{ fontSize: '12px', color: '#22c55e', fontWeight: '600' }}>
-                    {t('buildings.energyFlow.production')}
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  alignItems: 'center',
+                  minHeight: '90px',
+                  justifyContent: 'flex-start'
+                }}>
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
+                    {t('buildings.energyFlow.solar')}
                   </span>
-                )}
+                  <span style={{ fontSize: '24px', fontWeight: '800', color: '#f59e0b' }}>
+                    {solarProduction.toFixed(3)} kW
+                  </span>
+                  {/* Fixed height container for additional info */}
+                  <div style={{ minHeight: '20px', marginTop: '4px' }}>
+                    {solarProduction > 0 && (
+                      <span style={{ fontSize: '12px', color: '#22c55e', fontWeight: '600' }}>
+                        {t('buildings.energyFlow.production')}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              {/* Arrow from Solar to Building */}
-              <div style={{ display: 'flex', alignItems: 'center', flexDirection: 'column', gap: '4px' }}>
+              {/* Arrow from Solar to Building - CENTERED */}
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                flexDirection: 'column', 
+                gap: '4px',
+                marginTop: '38px' // Half of circle height (100px/2 - arrow height/2)
+              }}>
                 <ArrowRight size={32} color="#22c55e" strokeWidth={3} />
                 <span style={{ fontSize: '11px', fontWeight: '600', color: '#22c55e' }}>
                   {solarToHouse.toFixed(2)} kW
@@ -383,8 +400,9 @@ export default function Buildings() {
             display: 'flex', 
             flexDirection: 'column', 
             alignItems: 'center',
-            justifyContent: 'center',
-            position: 'relative'
+            justifyContent: 'flex-start',
+            position: 'relative',
+            width: '140px'
           }}>
             <div style={{
               width: '120px',
@@ -400,29 +418,45 @@ export default function Buildings() {
             }}>
               <Building size={48} color="#3b82f6" />
             </div>
-            <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
-              {t('buildings.energyFlow.consumption')}
-            </span>
-            <span style={{ fontSize: '28px', fontWeight: '800', color: '#3b82f6' }}>
-              {actualHouseConsumption.toFixed(3)} kW
-            </span>
-            {solarCoverage > 0 && (
-              <div style={{
-                marginTop: '8px',
-                padding: '4px 12px',
-                backgroundColor: '#ecfdf5',
-                borderRadius: '12px',
-                border: '1px solid #22c55e'
-              }}>
-                <span style={{ fontSize: '12px', color: '#22c55e', fontWeight: '700' }}>
-                  {t('buildings.energyFlow.solarCoverage')}: {solarCoverage.toFixed(1)}%
-                </span>
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center',
+              minHeight: '90px',
+              justifyContent: 'flex-start'
+            }}>
+              <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
+                {t('buildings.energyFlow.consumption')}
+              </span>
+              <span style={{ fontSize: '28px', fontWeight: '800', color: '#3b82f6' }}>
+                {actualHouseConsumption.toFixed(3)} kW
+              </span>
+              {/* Fixed height container for solar coverage badge */}
+              <div style={{ minHeight: '32px', marginTop: '8px', display: 'flex', alignItems: 'center' }}>
+                {solarCoverage > 0 && (
+                  <div style={{
+                    padding: '4px 12px',
+                    backgroundColor: '#ecfdf5',
+                    borderRadius: '12px',
+                    border: '1px solid #22c55e'
+                  }}>
+                    <span style={{ fontSize: '12px', color: '#22c55e', fontWeight: '700' }}>
+                      {t('buildings.energyFlow.solarCoverage')}: {solarCoverage.toFixed(1)}%
+                    </span>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
 
-          {/* Arrow between Building and Grid */}
-          <div style={{ display: 'flex', alignItems: 'center', flexDirection: 'column', gap: '4px' }}>
+          {/* Arrow between Building and Grid - CENTERED */}
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            flexDirection: 'column', 
+            gap: '4px',
+            marginTop: '48px' // Half of building circle height (120px/2 - arrow height/2)
+          }}>
             {isExporting ? (
               <>
                 <ArrowRight size={32} color="#22c55e" strokeWidth={3} />
@@ -453,7 +487,8 @@ export default function Buildings() {
             display: 'flex', 
             flexDirection: 'column', 
             alignItems: 'center',
-            justifyContent: 'center'
+            justifyContent: 'flex-start',
+            width: '120px'
           }}>
             <div style={{
               width: '100px',
@@ -468,15 +503,26 @@ export default function Buildings() {
             }}>
               <Grid size={40} color={isExporting ? '#22c55e' : '#ef4444'} />
             </div>
-            <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
-              {t('buildings.energyFlow.grid')}
-            </span>
-            <span style={{ fontSize: '24px', fontWeight: '800', color: isExporting ? '#22c55e' : '#ef4444' }}>
-              {Math.abs(gridPower).toFixed(3)} kW
-            </span>
-            <span style={{ fontSize: '12px', color: isExporting ? '#22c55e' : '#ef4444', fontWeight: '600' }}>
-              {isExporting ? t('buildings.energyFlow.selling') : t('buildings.energyFlow.buying')}
-            </span>
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center',
+              minHeight: '90px',
+              justifyContent: 'flex-start'
+            }}>
+              <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
+                {t('buildings.energyFlow.grid')}
+              </span>
+              <span style={{ fontSize: '24px', fontWeight: '800', color: isExporting ? '#22c55e' : '#ef4444' }}>
+                {Math.abs(gridPower).toFixed(3)} kW
+              </span>
+              {/* Fixed height container for additional info */}
+              <div style={{ minHeight: '20px', marginTop: '4px' }}>
+                <span style={{ fontSize: '12px', color: isExporting ? '#22c55e' : '#ef4444', fontWeight: '600' }}>
+                  {isExporting ? t('buildings.energyFlow.selling') : t('buildings.energyFlow.buying')}
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* Solar to Grid Arrow (only when exporting and solar meter exists) */}
