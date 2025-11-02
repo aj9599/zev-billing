@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, X, Users as UsersIcon, Mail, Phone, MapPin, CreditCard, Search, Building, User, HelpCircle, Archive, CheckCircle, XCircle, Home } from 'lucide-react';
 import { api } from '../api/client';
-import type { User as UserType, Building as BuildingType, FloorConfig } from '../types';
+import type { User as UserType, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
 
 export default function Users() {
@@ -461,11 +461,13 @@ export default function Users() {
               {adminUsers.map(user => (
                 <tr key={user.id} style={{ borderBottom: '1px solid #eee', opacity: user.is_active ? 1 : 0.5 }}>
                   <td style={{ padding: '16px' }}>
-                    {user.is_active ? (
-                      <CheckCircle size={20} color="#22c55e" title="Active" />
-                    ) : (
-                      <XCircle size={20} color="#ef4444" title="Inactive" />
-                    )}
+                    <span title={user.is_active ? "Active" : "Inactive"}>
+                      {user.is_active ? (
+                        <CheckCircle size={20} color="#22c55e" />
+                      ) : (
+                        <XCircle size={20} color="#ef4444" />
+                      )}
+                    </span>
                   </td>
                   <td style={{ padding: '16px' }}>{user.first_name} {user.last_name}</td>
                   <td style={{ padding: '16px' }}>{user.email}</td>
@@ -611,11 +613,13 @@ export default function Users() {
               {regularUsers.map(user => (
                 <tr key={user.id} style={{ borderBottom: '1px solid #eee', opacity: user.is_active ? 1 : 0.5 }}>
                   <td style={{ padding: '16px' }}>
-                    {user.is_active ? (
-                      <CheckCircle size={20} color="#22c55e" title="Active" />
-                    ) : (
-                      <XCircle size={20} color="#ef4444" title="Inactive" />
-                    )}
+                    <span title={user.is_active ? "Active" : "Inactive"}>
+                      {user.is_active ? (
+                        <CheckCircle size={20} color="#22c55e" />
+                      ) : (
+                        <XCircle size={20} color="#ef4444" />
+                      )}
+                    </span>
                   </td>
                   <td style={{ padding: '16px' }}>{user.first_name} {user.last_name}</td>
                   <td style={{ padding: '16px' }}>{user.email}</td>

@@ -1,8 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Building, Search, MapPin, Zap, ChevronRight, ChevronDown, Folder, Home, HelpCircle, TrendingUp, TrendingDown, Activity, Minus } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Building, Search, MapPin, Zap, ChevronRight, ChevronDown, Folder, Home, HelpCircle, TrendingUp, TrendingDown, Activity } from 'lucide-react';
 import { api } from '../api/client';
-import type { Building as BuildingType, Meter, Charger, BuildingConsumption, FloorConfig } from '../types';
+import type { Building as BuildingType, Meter, Charger, BuildingConsumption } from '../types';
 import { useTranslation } from '../i18n';
+
+// Import FloorConfig type directly for internal use
+type FloorConfig = {
+  floor_number: number;
+  floor_name: string;
+  apartments: string[];
+};
 
 export default function Buildings() {
   const { t } = useTranslation();
