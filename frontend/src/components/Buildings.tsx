@@ -136,11 +136,16 @@ export default function Buildings() {
       const latestData = meter.data?.[meter.data.length - 1];
       if (!latestData) return;
       
-      if (meter.meter_type === 'total_meter' || meter.meter_type === 'apartment_meter') {
+      // Only consider main meter (total_meter) for grid import/export
+      if (meter.meter_type === 'total_meter') {
         mainMeterPower += latestData.power / 1000;
-      } else if (meter.meter_type === 'solar_meter') {
+      } 
+      // Only solar meter for production
+      else if (meter.meter_type === 'solar_meter') {
         solarPower += latestData.power / 1000;
-      } else if (meter.meter_type === 'charger') {
+      } 
+      // Track charging separately for display only
+      else if (meter.meter_type === 'charger') {
         charging += latestData.power / 1000;
       }
     });
@@ -151,7 +156,9 @@ export default function Buildings() {
     // Grid power from main meter (positive = importing, negative = exporting)
     const gridPower = mainMeterPower;
     
-    // Actual house consumption
+    // Actual house consumption = solar production + main meter power
+    // If main meter is positive (importing), house uses solar + grid
+    // If main meter is negative (exporting), house uses solar - export amount
     const actualHouseConsumption = solarProduction + mainMeterPower;
     
     // Solar directly to grid (only when exporting)
@@ -184,17 +191,14 @@ export default function Buildings() {
     b.address_city?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Energy Flow Card Component with FIXED logic - Always show solar meter
+  // Energy Flow Card Component with FIXED logic
   const EnergyFlowCard = ({ building }: { building: BuildingType }) => {
     const consumption = getBuildingConsumption(building.id);
     const { actualHouseConsumption, gridPower, solarProduction, solarToGrid } = consumption;
     const solarCoverage = actualHouseConsumption > 0 ? (solarProduction / actualHouseConsumption * 100) : 0;
     const isExporting = gridPower < 0;
     const isImporting = gridPower > 0;
-    const solarToHouse = Math.max(0, solarProduction - solarToGrid);
-    
-    // Check if building has solar meter configured
-    const hasSolarMeter = meters.some(m => m.building_id === building.id && m.meter_type === 'solar_meter');
+    const solarToHouse = solarProduction - solarToGrid;
 
     return (
       <div style={{
@@ -310,17 +314,18 @@ export default function Buildings() {
           )}
         </div>
 
-        {/* Energy Flow Diagram - FIXED LOGIC - Always show solar if meter exists */}
+        {/* Energy Flow Diagram - FIXED LOGIC */}
         <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: hasSolarMeter ? '1fr auto 1fr auto 1fr auto 1fr' : '1fr auto 1fr',
-          gap: '24px',
+          display: 'flex',
+          justifyContent: 'center',
           alignItems: 'center',
+          gap: '24px',
           marginBottom: '32px',
-          minHeight: '200px'
+          minHeight: '200px',
+          position: 'relative'
         }}>
-          {/* Solar Production (always show if solar meter exists) */}
-          {hasSolarMeter && (
+          {/* Solar Production (only show if exists) */}
+          {solarProduction > 0 && (
             <>
               <div style={{ 
                 display: 'flex', 
@@ -332,39 +337,37 @@ export default function Buildings() {
                   width: '100px',
                   height: '100px',
                   borderRadius: '50%',
-                  backgroundColor: solarProduction > 0 ? '#fef3c7' : '#f3f4f6',
-                  border: `4px solid ${solarProduction > 0 ? '#f59e0b' : '#9ca3af'}`,
+                  backgroundColor: '#fef3c7',
+                  border: '4px solid #f59e0b',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   marginBottom: '12px'
                 }}>
-                  <Sun size={40} color={solarProduction > 0 ? '#f59e0b' : '#9ca3af'} />
+                  <Sun size={40} color="#f59e0b" />
                 </div>
                 <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
                   {t('buildings.energyFlow.solar')}
                 </span>
-                <span style={{ fontSize: '24px', fontWeight: '800', color: solarProduction > 0 ? '#f59e0b' : '#9ca3af' }}>
+                <span style={{ fontSize: '24px', fontWeight: '800', color: '#f59e0b' }}>
                   {solarProduction.toFixed(3)} kW
                 </span>
-                <span style={{ fontSize: '12px', color: solarProduction > 0 ? '#22c55e' : '#9ca3af', fontWeight: '600' }}>
-                  {solarProduction > 0 ? t('buildings.energyFlow.production') : t('buildings.energyFlow.noProduction')}
+                <span style={{ fontSize: '12px', color: '#22c55e', fontWeight: '600' }}>
+                  {t('buildings.energyFlow.production')}
                 </span>
               </div>
 
               {/* Arrow from Solar to Building */}
               <div style={{ display: 'flex', alignItems: 'center', flexDirection: 'column', gap: '4px' }}>
-                <ArrowRight size={32} color={solarProduction > 0 ? '#22c55e' : '#e5e7eb'} strokeWidth={3} />
-                {solarProduction > 0 && (
-                  <span style={{ fontSize: '11px', fontWeight: '600', color: '#22c55e' }}>
-                    {solarToHouse.toFixed(2)} kW
-                  </span>
-                )}
+                <ArrowRight size={32} color="#22c55e" strokeWidth={3} />
+                <span style={{ fontSize: '11px', fontWeight: '600', color: '#22c55e' }}>
+                  {solarToHouse.toFixed(2)} kW
+                </span>
               </div>
             </>
           )}
 
-          {/* Building Consumption */}
+          {/* Building Consumption - CENTERED */}
           <div style={{ 
             display: 'flex', 
             flexDirection: 'column', 
@@ -465,8 +468,8 @@ export default function Buildings() {
             </span>
           </div>
 
-          {/* Solar to Grid Arrow (only when exporting and solar meter exists) */}
-          {isExporting && hasSolarMeter && solarProduction > 0 && (
+          {/* Solar to Grid Arrow (only when exporting and solar exists) */}
+          {isExporting && solarProduction > 0 && (
             <>
               <div style={{ 
                 display: 'flex', 
@@ -474,9 +477,9 @@ export default function Buildings() {
                 flexDirection: 'column', 
                 gap: '4px',
                 position: 'absolute',
-                top: '50%',
+                top: '0',
                 left: '50%',
-                transform: 'translate(-50%, -100px)'
+                transform: 'translateX(-50%)'
               }}>
                 <div style={{
                   display: 'flex',
@@ -675,13 +678,11 @@ export default function Buildings() {
     const [editingFloor, setEditingFloor] = useState<number | null>(null);
     const [editingApt, setEditingApt] = useState<{floorIdx: number, aptIdx: number} | null>(null);
     const [editValue, setEditValue] = useState('');
-    const [draggedFloorIndex, setDraggedFloorIndex] = useState<number | null>(null);
 
     const DRAG_TYPES = {
       PALETTE_FLOOR: 'palette/floor',
       PALETTE_APT: 'palette/apartment',
       EXISTING_APT: 'existing/apartment',
-      REORDER_FLOOR: 'reorder/floor',
     };
 
     const addFloor = () => {
@@ -735,50 +736,37 @@ export default function Buildings() {
       setFormData({ ...formData, floors_config: floors });
     };
 
-    const reorderFloors = (fromIndex: number, toIndex: number) => {
-      const floors = [...(formData.floors_config || [])];
-      const [movedFloor] = floors.splice(fromIndex, 1);
-      floors.splice(toIndex, 0, movedFloor);
-      setFormData({ ...formData, floors_config: floors });
-    };
-
     const updateApartmentName = (floorIndex: number, aptIndex: number, name: string) => {
       const floors = [...(formData.floors_config || [])];
       floors[floorIndex].apartments[aptIndex] = name;
       setFormData({ ...formData, floors_config: floors });
     };
 
-    const onPaletteDragStart = (e: React.DragEvent<HTMLDivElement>, type: string) => {
+    const onPaletteDragStart = (e: React.DragEvent, type: string) => {
       e.dataTransfer.effectAllowed = 'copy';
       setDragType(type);
     };
 
-    const onApartmentDragStart = (e: React.DragEvent<HTMLDivElement>, floorIdx: number, aptIdx: number) => {
+    const onApartmentDragStart = (e: React.DragEvent, floorIdx: number, aptIdx: number) => {
       e.dataTransfer.effectAllowed = 'move';
       setDragType(DRAG_TYPES.EXISTING_APT);
       setDragData({ floorIdx, aptIdx });
     };
 
-    const onFloorDragStart = (e: React.DragEvent<HTMLDivElement>, floorIdx: number) => {
-      e.dataTransfer.effectAllowed = 'move';
-      setDragType(DRAG_TYPES.REORDER_FLOOR);
-      setDraggedFloorIndex(floorIdx);
-      (e.currentTarget as HTMLElement).style.opacity = '0.5';
+    const onDragEndGlobal = () => {
+      setDragType(null);
+      setDragData(null);
     };
 
-    const onFloorDragEnd = (e: React.DragEvent<HTMLDivElement>) => {
-      (e.currentTarget as HTMLElement).style.opacity = '1';
-      setDraggedFloorIndex(null);
-    };
-
-    const onFloorDragOver = (e: React.DragEvent<HTMLDivElement>, targetFloorIdx: number) => {
+    const onBuildingDrop = (e: React.DragEvent) => {
       e.preventDefault();
-      if (dragType === DRAG_TYPES.REORDER_FLOOR && draggedFloorIndex !== null && draggedFloorIndex !== targetFloorIdx) {
-        e.dataTransfer.dropEffect = 'move';
+      if (dragType === DRAG_TYPES.PALETTE_FLOOR) {
+        addFloor();
       }
+      onDragEndGlobal();
     };
 
-    const onFloorDrop = (floorIdx: number, e: React.DragEvent<HTMLDivElement>) => {
+    const onFloorDrop = (floorIdx: number, e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
       
@@ -788,27 +776,11 @@ export default function Buildings() {
         if (dragData.floorIdx !== floorIdx) {
           moveApartment(dragData.floorIdx, dragData.aptIdx, floorIdx);
         }
-      } else if (dragType === DRAG_TYPES.REORDER_FLOOR && draggedFloorIndex !== null && draggedFloorIndex !== floorIdx) {
-        reorderFloors(draggedFloorIndex, floorIdx);
       }
       onDragEndGlobal();
     };
 
-    const onDragEndGlobal = () => {
-      setDragType(null);
-      setDragData(null);
-      setDraggedFloorIndex(null);
-    };
-
-    const onBuildingDrop = (e: React.DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      if (dragType === DRAG_TYPES.PALETTE_FLOOR) {
-        addFloor();
-      }
-      onDragEndGlobal();
-    };
-
-    const allowDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    const allowDrop = (e: React.DragEvent) => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
     };
@@ -945,17 +917,17 @@ export default function Buildings() {
             border: '2px dashed #e5e7eb'
           }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#6b7280', marginBottom: '12px' }}>
-              {t('buildings.apartmentConfig.buildingStats')}
+              Building Stats
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>{t('buildings.apartmentConfig.floors')}:</span>
+                <span style={{ fontSize: '12px', color: '#6b7280' }}>Floors:</span>
                 <span style={{ fontSize: '16px', fontWeight: '700', color: '#3b82f6' }}>
                   {(formData.floors_config || []).length}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>{t('buildings.apartmentConfig.totalApartments')}:</span>
+                <span style={{ fontSize: '12px', color: '#6b7280' }}>Apartments:</span>
                 <span style={{ fontSize: '16px', fontWeight: '700', color: '#f59e0b' }}>
                   {(formData.floors_config || []).reduce((sum, f) => sum + f.apartments.length, 0)}
                 </span>
@@ -1033,28 +1005,21 @@ export default function Buildings() {
             }}>
               <div style={{ display: 'flex', flexDirection: 'column-reverse', gap: '20px' }}>
                 {(formData.floors_config || []).map((floor, floorIdx) => (
-                  <div 
-                    key={floorIdx} 
-                    style={{ position: 'relative', marginLeft: '70px' }}
-                    draggable
-                    onDragStart={(e) => onFloorDragStart(e, floorIdx)}
-                    onDragEnd={onFloorDragEnd}
-                    onDragOver={(e) => onFloorDragOver(e, floorIdx)}
-                    onDrop={(e) => onFloorDrop(floorIdx, e)}
-                  >
+                  <div key={floorIdx} style={{ position: 'relative' }}>
                     {/* LEGO Studs on top */}
                     <StudRow />
 
                     {/* Floor Card */}
                     <div
+                      onDragOver={allowDrop}
+                      onDrop={(e) => onFloorDrop(floorIdx, e)}
                       style={{
                         padding: '20px',
                         backgroundColor: dragType ? '#f0f9ff' : '#f8fafc',
                         borderRadius: '16px',
-                        border: `2px solid ${draggedFloorIndex === floorIdx ? '#3b82f6' : dragType === DRAG_TYPES.PALETTE_APT ? '#3b82f6' : '#e2e8f0'}`,
+                        border: `2px solid ${dragType === DRAG_TYPES.PALETTE_APT ? '#3b82f6' : '#e2e8f0'}`,
                         boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
-                        transition: 'all 0.2s',
-                        cursor: dragType === DRAG_TYPES.REORDER_FLOOR ? 'move' : 'default'
+                        transition: 'all 0.2s'
                       }}
                     >
                       {/* Floor Header */}
@@ -1125,29 +1090,6 @@ export default function Buildings() {
                         ) : (
                           <>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
-                              <div 
-                                style={{ 
-                                  cursor: 'grab',
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  gap: '2px',
-                                  padding: '4px'
-                                }}
-                                title={t('buildings.apartmentConfig.dragFloorHint')}
-                              >
-                                <div style={{ display: 'flex', gap: '2px' }}>
-                                  <div style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: '#9ca3af' }} />
-                                  <div style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: '#9ca3af' }} />
-                                </div>
-                                <div style={{ display: 'flex', gap: '2px' }}>
-                                  <div style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: '#9ca3af' }} />
-                                  <div style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: '#9ca3af' }} />
-                                </div>
-                                <div style={{ display: 'flex', gap: '2px' }}>
-                                  <div style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: '#9ca3af' }} />
-                                  <div style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: '#9ca3af' }} />
-                                </div>
-                              </div>
                               <Layers size={20} color="#3b82f6" />
                               <span style={{ fontSize: '16px', fontWeight: '700', color: '#1f2937' }}>
                                 {floor.floor_name}
@@ -1344,24 +1286,26 @@ export default function Buildings() {
                       </div>
                     </div>
 
-                    {/* Floor Number Badge - Better visibility */}
+                    {/* Floor Number Badge */}
                     <div style={{
                       position: 'absolute',
-                      left: '0px',
+                      left: '-16px',
                       top: '50%',
                       transform: 'translateY(-50%)',
-                      padding: '8px 12px',
+                      padding: '6px 10px',
                       backgroundColor: '#3b82f6',
                       color: 'white',
                       borderRadius: '8px',
-                      fontSize: '13px',
+                      fontSize: '12px',
                       fontWeight: '700',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                       zIndex: 10,
-                      minWidth: '50px',
-                      textAlign: 'center'
+                      maxWidth: '120px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
                     }}>
-                      {(formData.floors_config || []).length - floorIdx === 1 ? t('buildings.apartmentConfig.groundFloor') : `${t('buildings.apartmentConfig.levelPrefix')}${(formData.floors_config || []).length - floorIdx - 1}`}
+                      {floor.floor_name}
                     </div>
                   </div>
                 ))}

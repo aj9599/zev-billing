@@ -453,23 +453,6 @@ export const de: Translations = {
   'meters.instructions.troubleshootingNetwork': 'Netzwerkverbindung testen:',
   'meters.instructions.troubleshootingMonitor': 'Überwachen Sie den Zählerstatus im Dashboard für Echtzeit-Updates',
 
-  // Meters
-  'meters.type': 'Typ',
-  'meters.http': 'HTTP (Loxone Virtueller Ausgang)',
-  'meters.udp': 'UDP (Gemeinsamer Port - Empfohlen!)',
-  'meters.endpointUrl': 'Endpunkt-URL',
-  'meters.powerField': 'Stromfeldname',
-  'meters.powerFieldHelp': 'JSON-Feldname, der den Stromwert in kWh enthält',
-  'meters.dataKeyHelp': 'Eindeutiger Schlüssel wie: apart1_kwh, solar_kwh, etc.',
-  'meters.sharedPortInfo': 'Gemeinsamer UDP-Port: Mehrere Zähler können denselben Port verwenden! Verwenden Sie eindeutige Datenschlüssel zur Unterscheidung.',
-  'meters.instructions.udpNew': 'NEU: Automatisch generierte UUID_power_kwh-Schlüssel für jeden Zähler!',
-  'meters.instructions.udpExample3Title': 'Solarzähler:',
-  'meters.instructions.udpBenefits': 'Vorteile: Eindeutige UUID_power_kwh-Schlüssel verhindern Konflikte, ein UDP-Port pro Gebäude, sauberere Netzwerkkonfiguration!',
-  'meters.instructions.httpTitle': 'HTTP-Verbindung (Alternative)',
-  'meters.instructions.httpSetup': 'Loxone Virtueller Ausgang Einrichtung:',
-  'meters.instructions.troubleshootingFirewall': 'Firewall überprüfen:',
-  'meters.instructions.troubleshootingUDP': 'UDP: Kopieren Sie den automatisch generierten UUID_power_kwh exakt in Ihre Loxone-Konfiguration!',
-
   // HTTP Meter Configuration
   'meters.httpRecommended': 'HTTP (Raspberry Pi Polling - Empfohlen!)',
   'meters.httpPollingInfo': 'HTTP-Polling: Raspberry Pi holt Daten alle 15 Minuten von Loxone!',
@@ -489,6 +472,7 @@ export const de: Translations = {
   'meters.httpRaspberryPi': 'Raspberry Pi → GET → Loxone alle 15 Min',
 
   // HTTP Instructions
+  'meters.instructions.httpTitle': 'HTTP-Verbindung (Alternative)',
   'meters.instructions.httpNew': 'NEU: HTTP-Polling mit Authentifizierung - Raspberry Pi ist der Master!',
   'meters.instructions.httpStep1': 'Klicken Sie auf "Zähler hinzufügen" - eine eindeutige UUID_power_kwh wird automatisch generiert',
   'meters.instructions.httpStep2': 'Geben Sie die Basis-URL/IP-Adresse von Loxone ein (z.B. http://192.168.1.100)',
@@ -519,97 +503,22 @@ export const de: Translations = {
   'meters.instructions.troubleshootingHttpAccess': 'Stellen Sie sicher, dass Loxone vom Raspberry Pi aus erreichbar ist (testen Sie mit curl oder Browser)',
   'meters.instructions.troubleshootingHttpAuth': 'Überprüfen Sie HTTP-Anmeldedaten, wenn Authentifizierung aktiviert ist',
   'meters.instructions.troubleshootingHttpMeterId': 'Überprüfen Sie, ob die Zähler-ID im URL-Pfad mit Ihrer Loxone-Konfiguration übereinstimmt',
+  'meters.instructions.troubleshootingFirewall': 'Firewall überprüfen:',
+  'meters.instructions.troubleshootingUDP': 'UDP: Kopieren Sie den automatisch generierten UUID_power_kwh exakt in Ihre Loxone-Konfiguration!',
 
-  // Connection types
-  'chargers.loxoneApiRecommended': 'Loxone WebSocket API (Empfohlen)',
-  'chargers.udpAlternative': 'UDP (Legacy)',
-
-  // Loxone configuration
-  'chargers.loxoneApiDescription': 'Echtzeit-WebSocket-Verbindung mit automatischer Wiederverbindung und Statusüberwachung',
-  'chargers.loxoneHost': 'Loxone Host (IP-Adresse)',
-  'chargers.loxoneHostDescription': 'IP-Adresse oder Hostname Ihres Loxone Miniservers',
-  'chargers.loxoneUsername': 'Benutzername',
-  'chargers.loxonePassword': 'Passwort',
-  'chargers.loxoneCredentialsDescription': 'Loxone Miniserver-Anmeldedaten für WebSocket-Authentifizierung',
-
-  // UUID fields
-  'chargers.loxonePowerUuid': 'Strom-UUID',
-  'chargers.loxoneStateUuid': 'Status-UUID',
-  'chargers.loxoneUserIdUuid': 'Benutzer-ID-UUID',
-  'chargers.loxoneModeUuid': 'Modus-UUID',
-  'chargers.loxoneUuidsDescription': 'Finden Sie diese UUIDs in Loxone Config oder in der LoxAPP3.json-Strukturdatei',
-
-  // Connection status
-  'chargers.loxoneConnected': 'Loxone Verbunden',
-  'chargers.loxoneDisconnected': 'Loxone Getrennt',
-  'chargers.loxoneConnecting': 'Verbinde mit Loxone...',
-  'chargers.lastUpdate': 'Letzte Aktualisierung',
-
-  // Setup guide
-  'chargers.loxoneSetupGuide': 'Schnelleinrichtungsanleitung:',
-  'chargers.loxoneSetupStep1': '1. Geben Sie die IP-Adresse Ihres Loxone Miniservers ein',
-  'chargers.loxoneSetupStep2': '2. Geben Sie die 4 UUIDs für Strom, Status, Benutzer-ID und Modus ein',
-  'chargers.loxoneSetupStep3': '3. Geben Sie Loxone-Anmeldedaten an (gleich wie Loxone Config Login)',
-  'chargers.loxoneSetupStep4': '4. Konfigurieren Sie Status- und Modus-Wert-Zuordnungen unten',
-
-  // Features
-  'chargers.loxoneFeatures': 'Hauptmerkmale:',
-  'chargers.loxoneFeature1': '✓ Echtzeit bidirektionale Kommunikation',
-  'chargers.loxoneFeature2': '✓ Automatische Wiederverbindung bei Verbindungsabbruch',
-  'chargers.loxoneFeature3': '✓ Verbindungsstatusüberwachung',
-
-  // Instructions modal
-  'chargers.instructions.title': 'Ladestations-Einrichtungsanleitung',
-  'chargers.instructions.loxoneTitle': 'Loxone WebSocket API-Verbindung',
-  'chargers.instructions.loxoneRecommended': 'Empfohlen: Beste Leistung und Zuverlässigkeit',
-  'chargers.instructions.loxoneChargerRequires': 'Jede Ladestation benötigt 4 separate UUIDs von Ihrem Loxone-System:',
-  'chargers.instructions.loxonePowerUuid': 'Strom-UUID - Aktueller Stromverbrauchswert',
-  'chargers.instructions.loxoneStateUuid': 'Status-UUID - Ladestationsstatus (Kabel verriegelt, lädt, inaktiv, etc.)',
-  'chargers.instructions.loxoneUserIdUuid': 'Benutzer-ID-UUID - Authentifizierte Benutzerkennung',
-  'chargers.instructions.loxoneModeUuid': 'Modus-UUID - Lademodus (normal oder priorität)',
-
-  'chargers.instructions.loxoneFindingUuid': 'UUIDs finden:',
-  'chargers.instructions.loxoneUuidStep1': '1. Öffnen Sie Loxone Config und verbinden Sie sich mit Ihrem Miniserver',
-  'chargers.instructions.loxoneUuidStep2': '2. Finden Sie die virtuellen Ausgänge Ihrer Ladestation in der Programmierung',
-  'chargers.instructions.loxoneUuidStep3': '3. Rechtsklick auf jeden Ausgang und wählen Sie "UUID kopieren"',
-  'chargers.instructions.loxoneUuidStep4': '4. Alternativ navigieren Sie zu http://IHR_MINISERVER_IP/data/LoxAPP3.json, um alle UUIDs zu sehen',
-
-  'chargers.instructions.loxoneSetupTitle': 'Konfigurationsschritte:',
-  'chargers.instructions.loxoneStep1': '1. Wählen Sie "Loxone WebSocket API" als Verbindungstyp',
-  'chargers.instructions.loxoneStep2': '2. Geben Sie die IP-Adresse Ihres Miniservers ein (z.B. 192.168.1.100)',
-  'chargers.instructions.loxoneStep3': '3. Fügen Sie die 4 UUIDs für Strom, Status, Benutzer-ID und Modus ein',
-  'chargers.instructions.loxoneStep4': '4. Geben Sie Ihren Loxone-Benutzernamen und Passwort ein',
-  'chargers.instructions.loxoneStep5': '5. Konfigurieren Sie Status- und Modus-Wert-Zuordnungen basierend auf Ihrer Ladestation',
-
-  'chargers.instructions.loxoneExample': 'Beispielkonfiguration:',
-  'chargers.instructions.loxoneExampleHost': 'Host: 192.168.1.100',
-  'chargers.instructions.loxoneExampleUuids': 'UUIDs: 4 separate UUIDs für Strom, Status, user_id und Modus',
-  'chargers.instructions.loxoneExampleCredentials': 'Benutzername/Passwort: Ihre Loxone Config Anmeldedaten',
-
-  'chargers.instructions.loxoneBenefits': 'Vorteile:',
-  'chargers.instructions.loxoneBenefit1': '✓ Echtzeit-Updates via WebSocket',
-  'chargers.instructions.loxoneBenefit2': '✓ Automatische Wiederverbindung bei Verbindungsabbruch',
-  'chargers.instructions.loxoneBenefit3': '✓ Live-Verbindungsstatusüberwachung',
-
-  'chargers.instructions.udpTitle': 'UDP-Verbindung (Legacy)',
-  'chargers.instructions.udpDeprecated': 'UDP ist veraltet. Verwenden Sie Loxone WebSocket API für bessere Zuverlässigkeit.',
-  'chargers.instructions.udpDescription': 'UDP-Verbindung erfordert eindeutige automatisch generierte Schlüssel für jede Ladestation. Nicht empfohlen für neue Installationen.',
-
-  'chargers.instructions.stateAndModeTitle': 'Status- und Modus-Wert-Zuordnungen',
-  'chargers.instructions.stateModeDescription': 'Konfigurieren Sie die numerischen Werte, die Ihre Ladestation für verschiedene Status und Modi verwendet',
-  'chargers.instructions.stateModeInfo': 'Diese Werte sind spezifisch für Ihre Ladestationsmarke. Überprüfen Sie die Dokumentation Ihrer Ladestation oder verwenden Sie die voreingestellten Standardwerte.',
-
-  'chargers.instructions.troubleshootingTitle': 'Fehlerbehebung',
-  'chargers.instructions.troubleshootingLoxoneWebSocket': 'Überprüfen Sie, ob Miniserver-IP erreichbar ist und WebSocket aktiviert ist',
-  'chargers.instructions.troubleshootingLoxoneAuth': 'Überprüfen Sie, ob Benutzername/Passwort korrekt sind (gleich wie Loxone Config)',
-  'chargers.instructions.troubleshootingLoxoneUuids': 'Überprüfen Sie, ob alle 4 UUIDs korrekt sind und in Ihrer Loxone-Konfiguration existieren',
-  'chargers.instructions.troubleshootingService': 'Überprüfen Sie Dienstprotokolle:',
-  'chargers.instructions.troubleshootingLogs': 'Echtzeit-Protokolle anzeigen:',
-  'chargers.instructions.troubleshootingNetwork': 'Netzwerkkonnektivität testen:',
-  'chargers.instructions.troubleshootingMonitor': 'Überwachen Sie die Verbindungsstatusindikatoren auf jeder Ladestationskarte',
-
-  // Warnings
-  'chargers.udpDeprecatedWarning': 'UDP-Verbindung ist veraltet. Erwägen Sie Migration zu Loxone WebSocket API.',
+  // Additional meters translations
+  'meters.type': 'Typ',
+  'meters.http': 'HTTP (Loxone Virtueller Ausgang)',
+  'meters.udp': 'UDP (Gemeinsamer Port - Empfohlen!)',
+  'meters.endpointUrl': 'Endpunkt-URL',
+  'meters.powerField': 'Stromfeldname',
+  'meters.powerFieldHelp': 'JSON-Feldname, der den Stromwert in kWh enthält',
+  'meters.dataKeyHelp': 'Eindeutiger Schlüssel wie: apart1_kwh, solar_kwh, etc.',
+  'meters.sharedPortInfo': 'Gemeinsamer UDP-Port: Mehrere Zähler können denselben Port verwenden! Verwenden Sie eindeutige Datenschlüssel zur Unterscheidung.',
+  'meters.instructions.udpNew': 'NEU: Automatisch generierte UUID_power_kwh-Schlüssel für jeden Zähler!',
+  'meters.instructions.udpExample3Title': 'Solarzähler:',
+  'meters.instructions.udpBenefits': 'Vorteile: Eindeutige UUID_power_kwh-Schlüssel verhindern Konflikte, ein UDP-Port pro Gebäude, sauberere Netzwerkkonfiguration!',
+  'meters.instructions.httpSetup': 'Loxone Virtueller Ausgang Einrichtung:',
 
   // Chargers
   'chargers.title': 'Ladestationen',
@@ -691,6 +600,78 @@ export const de: Translations = {
   'chargers.priorityMode': 'Prioritätsmodus',
   'chargers.supported': 'Unterstützt',
   'chargers.chargers': 'Ladestationen',
+
+  // Loxone charger connection
+  'chargers.loxoneApiRecommended': 'Loxone WebSocket API (Empfohlen)',
+  'chargers.udpAlternative': 'UDP (Legacy)',
+  'chargers.loxoneApiDescription': 'Echtzeit-WebSocket-Verbindung mit automatischer Wiederverbindung und Statusüberwachung',
+  'chargers.loxoneHost': 'Loxone Host (IP-Adresse)',
+  'chargers.loxoneHostDescription': 'IP-Adresse oder Hostname Ihres Loxone Miniservers',
+  'chargers.loxoneUsername': 'Benutzername',
+  'chargers.loxonePassword': 'Passwort',
+  'chargers.loxoneCredentialsDescription': 'Loxone Miniserver-Anmeldedaten für WebSocket-Authentifizierung',
+  'chargers.loxonePowerUuid': 'Strom-UUID',
+  'chargers.loxoneStateUuid': 'Status-UUID',
+  'chargers.loxoneUserIdUuid': 'Benutzer-ID-UUID',
+  'chargers.loxoneModeUuid': 'Modus-UUID',
+  'chargers.loxoneUuidsDescription': 'Finden Sie diese UUIDs in Loxone Config oder in der LoxAPP3.json-Strukturdatei',
+  'chargers.loxoneConnected': 'Loxone Verbunden',
+  'chargers.loxoneDisconnected': 'Loxone Getrennt',
+  'chargers.loxoneConnecting': 'Verbinde mit Loxone...',
+  'chargers.lastUpdate': 'Letzte Aktualisierung',
+  'chargers.loxoneSetupGuide': 'Schnelleinrichtungsanleitung:',
+  'chargers.loxoneSetupStep1': '1. Geben Sie die IP-Adresse Ihres Loxone Miniservers ein',
+  'chargers.loxoneSetupStep2': '2. Geben Sie die 4 UUIDs für Strom, Status, Benutzer-ID und Modus ein',
+  'chargers.loxoneSetupStep3': '3. Geben Sie Loxone-Anmeldedaten an (gleich wie Loxone Config Login)',
+  'chargers.loxoneSetupStep4': '4. Konfigurieren Sie Status- und Modus-Wert-Zuordnungen unten',
+  'chargers.loxoneFeatures': 'Hauptmerkmale:',
+  'chargers.loxoneFeature1': '✓ Echtzeit bidirektionale Kommunikation',
+  'chargers.loxoneFeature2': '✓ Automatische Wiederverbindung bei Verbindungsabbruch',
+  'chargers.loxoneFeature3': '✓ Verbindungsstatusüberwachung',
+
+  // Chargers instructions
+  'chargers.instructions.title': 'Ladestations-Einrichtungsanleitung',
+  'chargers.instructions.loxoneTitle': 'Loxone WebSocket API-Verbindung',
+  'chargers.instructions.loxoneRecommended': 'Empfohlen: Beste Leistung und Zuverlässigkeit',
+  'chargers.instructions.loxoneChargerRequires': 'Jede Ladestation benötigt 4 separate UUIDs von Ihrem Loxone-System:',
+  'chargers.instructions.loxonePowerUuid': 'Strom-UUID - Aktueller Stromverbrauchswert',
+  'chargers.instructions.loxoneStateUuid': 'Status-UUID - Ladestationsstatus (Kabel verriegelt, lädt, inaktiv, etc.)',
+  'chargers.instructions.loxoneUserIdUuid': 'Benutzer-ID-UUID - Authentifizierte Benutzerkennung',
+  'chargers.instructions.loxoneModeUuid': 'Modus-UUID - Lademodus (normal oder priorität)',
+  'chargers.instructions.loxoneFindingUuid': 'UUIDs finden:',
+  'chargers.instructions.loxoneUuidStep1': '1. Öffnen Sie Loxone Config und verbinden Sie sich mit Ihrem Miniserver',
+  'chargers.instructions.loxoneUuidStep2': '2. Finden Sie die virtuellen Ausgänge Ihrer Ladestation in der Programmierung',
+  'chargers.instructions.loxoneUuidStep3': '3. Rechtsklick auf jeden Ausgang und wählen Sie "UUID kopieren"',
+  'chargers.instructions.loxoneUuidStep4': '4. Alternativ navigieren Sie zu http://IHR_MINISERVER_IP/data/LoxAPP3.json, um alle UUIDs zu sehen',
+  'chargers.instructions.loxoneSetupTitle': 'Konfigurationsschritte:',
+  'chargers.instructions.loxoneStep1': '1. Wählen Sie "Loxone WebSocket API" als Verbindungstyp',
+  'chargers.instructions.loxoneStep2': '2. Geben Sie die IP-Adresse Ihres Miniservers ein (z.B. 192.168.1.100)',
+  'chargers.instructions.loxoneStep3': '3. Fügen Sie die 4 UUIDs für Strom, Status, Benutzer-ID und Modus ein',
+  'chargers.instructions.loxoneStep4': '4. Geben Sie Ihren Loxone-Benutzernamen und Passwort ein',
+  'chargers.instructions.loxoneStep5': '5. Konfigurieren Sie Status- und Modus-Wert-Zuordnungen basierend auf Ihrer Ladestation',
+  'chargers.instructions.loxoneExample': 'Beispielkonfiguration:',
+  'chargers.instructions.loxoneExampleHost': 'Host: 192.168.1.100',
+  'chargers.instructions.loxoneExampleUuids': 'UUIDs: 4 separate UUIDs für Strom, Status, user_id und Modus',
+  'chargers.instructions.loxoneExampleCredentials': 'Benutzername/Passwort: Ihre Loxone Config Anmeldedaten',
+  'chargers.instructions.loxoneBenefits': 'Vorteile:',
+  'chargers.instructions.loxoneBenefit1': '✓ Echtzeit-Updates via WebSocket',
+  'chargers.instructions.loxoneBenefit2': '✓ Automatische Wiederverbindung bei Verbindungsabbruch',
+  'chargers.instructions.loxoneBenefit3': '✓ Live-Verbindungsstatusüberwachung',
+  'chargers.instructions.udpTitle': 'UDP-Verbindung (Legacy)',
+  'chargers.instructions.udpDeprecated': 'UDP ist veraltet. Verwenden Sie Loxone WebSocket API für bessere Zuverlässigkeit.',
+  'chargers.instructions.udpDescription': 'UDP-Verbindung erfordert eindeutige automatisch generierte Schlüssel für jede Ladestation. Nicht empfohlen für neue Installationen.',
+  'chargers.instructions.stateAndModeTitle': 'Status- und Modus-Wert-Zuordnungen',
+  'chargers.instructions.stateModeDescription': 'Konfigurieren Sie die numerischen Werte, die Ihre Ladestation für verschiedene Status und Modi verwendet',
+  'chargers.instructions.stateModeInfo': 'Diese Werte sind spezifisch für Ihre Ladestationsmarke. Überprüfen Sie die Dokumentation Ihrer Ladestation oder verwenden Sie die voreingestellten Standardwerte.',
+  'chargers.instructions.troubleshootingTitle': 'Fehlerbehebung',
+  'chargers.instructions.troubleshootingLoxoneWebSocket': 'Überprüfen Sie, ob Miniserver-IP erreichbar ist und WebSocket aktiviert ist',
+  'chargers.instructions.troubleshootingLoxoneAuth': 'Überprüfen Sie, ob Benutzername/Passwort korrekt sind (gleich wie Loxone Config)',
+  'chargers.instructions.troubleshootingLoxoneUuids': 'Überprüfen Sie, ob alle 4 UUIDs korrekt sind und in Ihrer Loxone-Konfiguration existieren',
+  'chargers.instructions.troubleshootingService': 'Überprüfen Sie Dienstprotokolle:',
+  'chargers.instructions.troubleshootingLogs': 'Echtzeit-Protokolle anzeigen:',
+  'chargers.instructions.troubleshootingNetwork': 'Netzwerkkonnektivität testen:',
+  'chargers.instructions.troubleshootingMonitor': 'Überwachen Sie die Verbindungsstatusindikatoren auf jeder Ladestationskarte',
+  'chargers.udpDeprecatedWarning': 'UDP-Verbindung ist veraltet. Erwägen Sie Migration zu Loxone WebSocket API.',
 
   // Billing
   'billing.title': 'Abrechnung & Rechnungen',
@@ -824,8 +805,6 @@ export const de: Translations = {
   'pricing.saveSuccess': 'Preiseinstellungen erfolgreich gespeichert!',
   'pricing.saveFailed': 'Speichern der Einstellungen fehlgeschlagen',
   'pricing.loadFailed': 'Laden der Daten fehlgeschlagen',
-
-  // Pricing instructions
   'pricing.instructions.button': 'Einrichtungsanleitung',
   'pricing.instructions.title': 'Preiseinstellungen Anleitung',
   'pricing.instructions.whatIsPricing': 'Was sind Preiseinstellungen?',
@@ -849,8 +828,6 @@ export const de: Translations = {
   'pricing.instructions.tip1': 'Verwenden Sie verschiedene Preiszeiträume für saisonale Tarife oder Preisänderungen',
   'pricing.instructions.tip2': 'Deaktivieren Sie alte Preise, anstatt sie zu löschen, um historische Aufzeichnungen zu behalten',
   'pricing.instructions.tip3': 'Solarstrom wird typischerweise günstiger als Netzstrom bepreist, um die Nutzung zu fördern',
-
-  // Pricing validation messages
   'pricing.selectBuilding': 'Bitte wählen Sie ein Gebäude aus',
   'pricing.endDateBeforeStart': 'Enddatum muss nach Startdatum liegen',
   'pricing.dateOverlapError': 'Dieser Datumsbereich überschneidet sich mit einer bestehenden aktiven Preiseinstellung für dieses Gebäude. Bitte passen Sie die Daten an oder deaktivieren Sie die in Konflikt stehende Preiseinstellung.',
@@ -865,8 +842,6 @@ export const de: Translations = {
   'autoBilling.editConfig': 'Konfiguration bearbeiten',
   'autoBilling.setupInstructions': 'Einrichtungsanleitung',
   'autoBilling.noConfigs': 'Keine automatischen Abrechnungskonfigurationen. Erstellen Sie Ihre erste Konfiguration, um die Rechnungserstellung zu automatisieren.',
-
-  // Form labels
   'autoBilling.configName': 'Konfigurationsname',
   'autoBilling.configNamePlaceholder': 'z.B. Monatliche Abrechnung für Gebäude A',
   'autoBilling.selectBuildings': 'Gebäude auswählen',
@@ -874,15 +849,11 @@ export const de: Translations = {
   'autoBilling.atLeastOne': 'mindestens eins',
   'autoBilling.leaveEmptyForAll': 'leer lassen für alle Benutzer',
   'autoBilling.selectAtLeastOneBuilding': 'Bitte wählen Sie mindestens ein Gebäude aus',
-
-  // Frequency options
   'autoBilling.frequency': 'Abrechnungsfrequenz',
   'autoBilling.frequency.monthly': 'Monatlich',
   'autoBilling.frequency.quarterly': 'Vierteljährlich (Alle 3 Monate)',
   'autoBilling.frequency.half_yearly': 'Halbjährlich (Alle 6 Monate)',
   'autoBilling.frequency.yearly': 'Jährlich',
-
-  // Date and scheduling
   'autoBilling.generationDay': 'Erstellungstag',
   'autoBilling.generationDayHelp': 'Tag des Monats zur Rechnungserstellung (1-28)',
   'autoBilling.firstExecutionDate': 'Erstes Ausführungsdatum',
@@ -890,20 +861,14 @@ export const de: Translations = {
   'autoBilling.day': 'Tag',
   'autoBilling.lastRun': 'Letzte Ausführung',
   'autoBilling.nextRun': 'Nächste Ausführung',
-
-  // Card display
   'autoBilling.building': 'Gebäude',
   'autoBilling.buildings': 'Gebäude',
   'autoBilling.user': 'Benutzer',
   'autoBilling.users': 'Benutzer',
   'autoBilling.allUsers': 'Alle Benutzer in ausgewählten Gebäuden',
   'autoBilling.noBuildings': 'Keine Gebäude ausgewählt',
-
-  // Actions
   'autoBilling.pause': 'Pausieren',
   'autoBilling.activate': 'Aktivieren',
-
-  // Messages
   'autoBilling.createSuccess': 'Auto-Abrechnungskonfiguration erfolgreich erstellt!',
   'autoBilling.updateSuccess': 'Auto-Abrechnungskonfiguration erfolgreich aktualisiert!',
   'autoBilling.saveFailed': 'Speichern der Konfiguration fehlgeschlagen',
@@ -911,37 +876,30 @@ export const de: Translations = {
   'autoBilling.deleteSuccess': 'Auto-Abrechnungskonfiguration erfolgreich gelöscht',
   'autoBilling.deleteFailed': 'Löschen der Konfiguration fehlgeschlagen',
   'autoBilling.toggleFailed': 'Umschalten des Konfigurationsstatus fehlgeschlagen',
-
-  // Instructions modal
   'autoBilling.instructions.title': 'Automatische Abrechnung Anleitung',
   'autoBilling.instructions.whatIsAutoBilling': 'Was ist automatische Abrechnung?',
   'autoBilling.instructions.autoBillingDescription': 'Automatische Abrechnungspläne erstellen Rechnungen in regelmässigen Abständen ohne manuelles Eingreifen. Konfigurieren Sie, wann und wie oft Rechnungen erstellt werden sollen, und das System erstellt sie automatisch nach Zeitplan.',
-
   'autoBilling.instructions.howItWorks': 'Wie es funktioniert',
   'autoBilling.instructions.work1': 'Das System überprüft aktive Konfigurationen jede Stunde',
   'autoBilling.instructions.work2': 'Wenn der geplante Tag eintrifft, werden Rechnungen automatisch erstellt',
   'autoBilling.instructions.work3': 'Rechnungen erscheinen auf der regulären Abrechnungsseite neben manuellen Rechnungen',
   'autoBilling.instructions.work4': 'Sie können Zeitpläne jederzeit pausieren, ändern oder löschen',
-
   'autoBilling.instructions.frequencies': 'Abrechnungsfrequenzen',
   'autoBilling.instructions.freq1': 'Rechnungen werden am selben Tag jeden Monats erstellt',
   'autoBilling.instructions.freq2': 'Rechnungen werden alle 3 Monate erstellt (Jan, Apr, Jul, Okt)',
   'autoBilling.instructions.freq3': 'Rechnungen werden zweimal pro Jahr erstellt (Jan, Jul)',
   'autoBilling.instructions.freq4': 'Rechnungen werden einmal pro Jahr im Januar erstellt',
-
   'autoBilling.instructions.howToUse': 'Verwendung',
   'autoBilling.instructions.step1': 'Klicken Sie auf "Konfiguration hinzufügen", um einen neuen Abrechnungsplan zu erstellen',
   'autoBilling.instructions.step2': 'Wählen Sie Gebäude und optional bestimmte Benutzer zum Abrechnen aus',
   'autoBilling.instructions.step3': 'Wählen Sie Frequenz (monatlich, vierteljährlich, etc.) und Erstellungstag',
   'autoBilling.instructions.step4': 'Fügen Sie Absender- und Bankverbindung für Rechnungen hinzu',
   'autoBilling.instructions.step5': 'Aktivieren Sie die Konfiguration - Rechnungen werden automatisch erstellt',
-
   'autoBilling.instructions.important': 'Wichtig',
   'autoBilling.instructions.important1': 'Stellen Sie sicher, dass aktive Preise für alle Gebäude vor der Planung konfiguriert sind',
   'autoBilling.instructions.important2': 'Benutzer müssen Wohnungszähler für die Verbrauchsverfolgung haben',
   'autoBilling.instructions.important3': 'Konfigurationen können pausiert werden, ohne sie zu löschen',
   'autoBilling.instructions.important4': 'Überprüfen Sie regelmässig die Abrechnungsseite, um generierte Rechnungen zu verifizieren',
-
   'autoBilling.instructions.tips': 'Tipps',
   'autoBilling.instructions.tip1': 'Setzen Sie Erstellungstag auf 1.-5. des Monats für zuverlässigste Ergebnisse',
   'autoBilling.instructions.tip2': 'Verwenden Sie separate Konfigurationen für verschiedene Gebäudegruppen',
@@ -983,8 +941,6 @@ export const de: Translations = {
   'logs.rebootFailed': 'Systemneustart fehlgeschlagen',
   'logs.loadFailed': 'Laden der Protokolle fehlgeschlagen:',
   'logs.debugInfoFailed': 'Laden der Debug-Informationen fehlgeschlagen:',
-
-  // Device Health
   'logs.deviceHealth': 'Geräte-Gesundheit',
   'logs.cpuUsage': 'CPU-Auslastung',
   'logs.memoryUsage': 'Speicherauslastung',
@@ -995,8 +951,6 @@ export const de: Translations = {
   'logs.tempNormal': 'Normal',
   'logs.tempWarm': 'Warm',
   'logs.tempHot': 'Heiss',
-
-  // Backup & Restore
   'logs.createBackup': 'Backup erstellen',
   'logs.creatingBackup': 'Erstelle Backup...',
   'logs.restoreBackup': 'Backup wiederherstellen',
@@ -1007,8 +961,6 @@ export const de: Translations = {
   'logs.restoreSuccess': 'Datenbank erfolgreich wiederhergestellt! Das System wird in wenigen Sekunden neu gestartet.',
   'logs.restoreFailed': 'Backup-Wiederherstellung fehlgeschlagen. Bitte überprüfen Sie die Datei und versuchen Sie es erneut.',
   'logs.invalidBackupFile': 'Ungültige Backup-Datei. Bitte wählen Sie eine .db-Datei.',
-
-  // Software Updates
   'logs.checkUpdates': 'Nach Updates suchen',
   'logs.checkingUpdates': 'Überprüfe...',
   'logs.applyUpdate': 'Update anwenden',
