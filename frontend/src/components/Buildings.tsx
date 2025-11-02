@@ -1116,7 +1116,7 @@ export default function Buildings() {
                         ) : (
                           <>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
-                              <GripVertical size={20} color="#9ca3af" style={{ cursor: 'grab' }} title="Drag to reorder" />
+                              <GripVertical size={20} color="#9ca3af" style={{ cursor: 'grab' }} />
                               <Layers size={20} color="#3b82f6" />
                               <span style={{ fontSize: '16px', fontWeight: '700', color: '#1f2937' }}>
                                 {floor.floor_name}
