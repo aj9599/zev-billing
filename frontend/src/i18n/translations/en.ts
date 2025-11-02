@@ -12,6 +12,7 @@ export const en: Translations = {
   'nav.logs': 'Logs',
   'nav.settings': 'Settings',
   'nav.logout': 'Logout',
+  'nav.autoBilling': 'Auto Billing',
 
   // Common
   'common.add': 'Add',
@@ -87,7 +88,7 @@ export const en: Translations = {
   'export.exportingAllFrom': 'All {{type}} from {{building}}',
 
   // Math CAPTCHA
-  'captcha.title': 'ðŸ”’ Security Check - Complete to Continue',
+  'captcha.title': '🔐 Security Check - Complete to Continue',
   'captcha.mathInstruction': 'Solve the math problem to continue',
   'captcha.mathFooter': 'Select the correct answer',
   'captcha.new': 'New',
@@ -97,7 +98,7 @@ export const en: Translations = {
 
   // Meters Delete Confirmation
   'meters.deleteConfirmTitle': 'Delete Meter',
-  'meters.deleteWarning': 'âš ï¸ Warning: This action cannot be undone',
+  'meters.deleteWarning': '⚠️ Warning: This action cannot be undone',
   'meters.deleteImpactTitle': 'What will be deleted:',
   'meters.meterWillBeDeleted': 'The meter will be permanently removed',
   'meters.readingsWillBeDeleted': 'readings',
@@ -114,7 +115,7 @@ export const en: Translations = {
 
   // Chargers Delete Confirmation
   'chargers.deleteConfirmTitle': 'Delete Charger',
-  'chargers.deleteWarning': 'âš ï¸ Warning: This action cannot be undone',
+  'chargers.deleteWarning': '⚠️ Warning: This action cannot be undone',
   'chargers.deleteImpactTitle': 'What will be deleted:',
   'chargers.chargerWillBeDeleted': 'The charger will be permanently removed',
   'chargers.sessionsWillBeDeleted': 'charging sessions',
@@ -238,6 +239,8 @@ export const en: Translations = {
   'buildings.energyFlow.gridPower': 'From Grid',
   'buildings.energyFlow.buying': 'Buying',
   'buildings.energyFlow.selling': 'Selling',
+  'buildings.energyFlow.noProduction': 'No Production',
+  'buildings.energyFlow.offline': 'Offline',
   
   // Apartment Configuration
   'buildings.apartmentConfig.title': 'Visual Apartment Configuration',
@@ -254,6 +257,31 @@ export const en: Translations = {
   'buildings.apartmentConfig.clickAddFloor': 'Click "Add Floor" to start building your apartment structure',
   'buildings.apartmentConfig.noApartments': 'Click to add apartments',
   'buildings.apartmentConfig.helpText': 'Click on a floor to add apartments. Drag and arrange floors visually. Each apartment can be assigned to a user.',
+  'buildings.apartmentConfig.dragFloorHint': 'Drag floors to reorder',
+  'buildings.apartmentConfig.dragApartmentHint': 'Drag apartments between floors',
+  'buildings.apartmentConfig.buildingStats': 'Building Stats',
+  'buildings.apartmentConfig.floors': 'Floors',
+  'buildings.apartmentConfig.totalApartments': 'Apartments',
+  'buildings.apartmentConfig.paletteFloor': 'Floor',
+  'buildings.apartmentConfig.paletteApartment': 'Apartment',
+  'buildings.apartmentConfig.dragToBuilding': 'Drag to building',
+  'buildings.apartmentConfig.dragToFloor': 'Drag to floor',
+  'buildings.apartmentConfig.addNewLevel': '🗂️ Add New Level',
+  'buildings.apartmentConfig.addUnit': '🏠 Add Unit',
+  'buildings.apartmentConfig.buildingLayout': 'Building Layout',
+  'buildings.apartmentConfig.releaseToAdd': 'Release to add a new Floor',
+  'buildings.apartmentConfig.dragHereHint': 'Drag an Apartment here',
+  'buildings.apartmentConfig.groundFloor': 'GF',
+  'buildings.apartmentConfig.levelPrefix': 'L',
+  'buildings.apartmentConfig.units': 'units',
+  'buildings.apartmentConfig.points': 'pts',
+  'buildings.apartmentConfig.tips': '💡 Tips:',
+  'buildings.apartmentConfig.tip1': '• Drag floors to stack levels',
+  'buildings.apartmentConfig.tip2': '• Drag apartments onto floors',
+  'buildings.apartmentConfig.tip3': '• Move apartments between floors',
+  'buildings.apartmentConfig.tip4': '• Click pencil to rename',
+  'buildings.apartmentConfig.tip5': '• Click X to delete',
+  'buildings.apartmentConfig.tip6': '• Drag floor handle to reorder',
   
   // Instructions
   'buildings.instructions.title': 'Buildings & Complexes Guide',
@@ -334,9 +362,9 @@ export const en: Translations = {
   'meters.loxoneSetupStep3': '3. Enter username/password (optional)',
   'meters.loxoneSetupStep4': '4. Save and the system will connect automatically',
   'meters.loxoneFeatures': 'Benefits:',
-  'meters.loxoneFeature1': 'âœ“ Real-time data updates',
-  'meters.loxoneFeature2': 'âœ“ Automatic reconnection',
-  'meters.loxoneFeature3': 'âœ“ Secure WebSocket connection',
+  'meters.loxoneFeature1': '✓ Real-time data updates',
+  'meters.loxoneFeature2': '✓ Automatic reconnection',
+  'meters.loxoneFeature3': '✓ Secure WebSocket connection',
 
   // UDP Connection
   'meters.udpDeprecatedWarning': 'UDP is deprecated. Please use Loxone WebSocket API for new meters.',
@@ -383,9 +411,9 @@ export const en: Translations = {
   'meters.instructions.loxoneExampleCredentials': 'Username: admin / Password: your-password',
 
   'meters.instructions.loxoneBenefits': 'Why Loxone WebSocket?',
-  'meters.instructions.loxoneBenefit1': 'âœ“ Real-time data updates every 15 minutes',
-  'meters.instructions.loxoneBenefit2': 'âœ“ Automatic reconnection on connection loss',
-  'meters.instructions.loxoneBenefit3': 'âœ“ No Loxone configuration required',
+  'meters.instructions.loxoneBenefit1': '✓ Real-time data updates every 15 minutes',
+  'meters.instructions.loxoneBenefit2': '✓ Automatic reconnection on connection loss',
+  'meters.instructions.loxoneBenefit3': '✓ No Loxone configuration required',
 
   // UDP Instructions
   'meters.instructions.udpTitle': 'UDP Connection (Legacy)',
@@ -458,7 +486,7 @@ export const en: Translations = {
   'meters.httpVirtualOutput': 'Virtual Output HTTP',
   'meters.httpListensResponds': 'Listens and responds with:',
   'meters.httpPolling': 'Polling:',
-  'meters.httpRaspberryPi': 'Raspberry Pi â†’ GET â†’ Loxone every 15 min',
+  'meters.httpRaspberryPi': 'Raspberry Pi → GET → Loxone every 15 min',
 
   // HTTP Instructions
   'meters.instructions.httpNew': 'NEW: HTTP Polling with Authentication - Raspberry Pi is the master!',
@@ -481,8 +509,8 @@ export const en: Translations = {
   'meters.instructions.httpLoxoneResponse': '- Response: {"UUID_power_kwh": <v>}',
   'meters.instructions.httpHowItWorks': 'How it works:',
   'meters.instructions.httpPollingExplained': 'Every 15 minutes, Raspberry Pi sends GET request to Loxone',
-  'meters.instructions.httpRequestFormat': 'â†’ http://192.168.1.100/api/meter/solar_meter (with Basic Auth if configured)',
-  'meters.instructions.httpResponseFormat': 'â† Loxone responds with: {"a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d_power_kwh": 123.45}',
+  'meters.instructions.httpRequestFormat': '→ http://192.168.1.100/api/meter/solar_meter (with Basic Auth if configured)',
+  'meters.instructions.httpResponseFormat': '← Loxone responds with: {"a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d_power_kwh": 123.45}',
   'meters.instructions.httpBenefits': 'Benefits:',
   'meters.instructions.httpBenefitsDesc': 'Raspberry Pi is master and controls timing, no firewall issues, reliable 15-minute polling, supports HTTP authentication, Loxone just responds!',
 
@@ -527,9 +555,9 @@ export const en: Translations = {
 
   // Features
   'chargers.loxoneFeatures': 'Key Features:',
-  'chargers.loxoneFeature1': 'âœ“ Real-time bidirectional communication',
-  'chargers.loxoneFeature2': 'âœ“ Automatic reconnection on connection loss',
-  'chargers.loxoneFeature3': 'âœ“ Connection status monitoring',
+  'chargers.loxoneFeature1': '✓ Real-time bidirectional communication',
+  'chargers.loxoneFeature2': '✓ Automatic reconnection on connection loss',
+  'chargers.loxoneFeature3': '✓ Connection status monitoring',
 
   // Instructions modal
   'chargers.instructions.title': 'Charger Setup Instructions',
@@ -560,9 +588,9 @@ export const en: Translations = {
   'chargers.instructions.loxoneExampleCredentials': 'Username/Password: Your Loxone Config credentials',
 
   'chargers.instructions.loxoneBenefits': 'Benefits:',
-  'chargers.instructions.loxoneBenefit1': 'âœ“ Real-time updates via WebSocket',
-  'chargers.instructions.loxoneBenefit2': 'âœ“ Automatic reconnection on connection loss',
-  'chargers.instructions.loxoneBenefit3': 'âœ“ Live connection status monitoring',
+  'chargers.instructions.loxoneBenefit1': '✓ Real-time updates via WebSocket',
+  'chargers.instructions.loxoneBenefit2': '✓ Automatic reconnection on connection loss',
+  'chargers.instructions.loxoneBenefit3': '✓ Live connection status monitoring',
 
   'chargers.instructions.udpTitle': 'UDP Connection (Legacy)',
   'chargers.instructions.udpDeprecated': 'UDP is deprecated. Use Loxone WebSocket API for better reliability.',
@@ -598,9 +626,9 @@ export const en: Translations = {
   'chargers.currentMode': 'Current Mode',
   'chargers.noChargers': 'No chargers found. Click "Setup Instructions" to learn how to configure your first charger.',
   'chargers.brandPreset': 'Brand / Preset',
-  'chargers.weidmuller': 'WeidmÃ¼ller',
-  'chargers.weidmullerHelp': 'WeidmÃ¼ller chargers require 4 data points: power, state, user ID, and mode',
-  'chargers.connectionConfig': 'Connection Configuration (WeidmÃ¼ller - 4 Data Points)',
+  'chargers.weidmuller': 'Weidmüller',
+  'chargers.weidmullerHelp': 'Weidmüller chargers require 4 data points: power, state, user ID, and mode',
+  'chargers.connectionConfig': 'Connection Configuration (Weidmüller - 4 Data Points)',
   'chargers.powerEndpoint': 'Power Consumed Endpoint',
   'chargers.stateEndpoint': 'State Endpoint',
   'chargers.userIdEndpoint': 'User ID Endpoint',
@@ -738,9 +766,6 @@ export const en: Translations = {
   'billing.bankNamePlaceholder': 'Bank Name',
   'billing.ibanPlaceholder': 'CH93 0076 2011 6238 5295 7',
   'billing.accountHolderPlaceholder': 'Account Holder Name',
-
-  // Navigation
-  'nav.autoBilling': 'Auto Billing',
 
   // Main page
   'autoBilling.title': 'Automatic Bill Generation',

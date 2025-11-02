@@ -184,14 +184,17 @@ export default function Buildings() {
     b.address_city?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Energy Flow Card Component with FIXED logic
+  // Energy Flow Card Component with FIXED logic - Always show solar meter
   const EnergyFlowCard = ({ building }: { building: BuildingType }) => {
     const consumption = getBuildingConsumption(building.id);
     const { actualHouseConsumption, gridPower, solarProduction, solarToGrid } = consumption;
     const solarCoverage = actualHouseConsumption > 0 ? (solarProduction / actualHouseConsumption * 100) : 0;
     const isExporting = gridPower < 0;
     const isImporting = gridPower > 0;
-    const solarToHouse = solarProduction - solarToGrid;
+    const solarToHouse = Math.max(0, solarProduction - solarToGrid);
+    
+    // Check if building has solar meter configured
+    const hasSolarMeter = meters.some(m => m.building_id === building.id && m.meter_type === 'solar_meter');
 
     return (
       <div style={{
@@ -307,17 +310,17 @@ export default function Buildings() {
           )}
         </div>
 
-        {/* Energy Flow Diagram - FIXED LOGIC */}
+        {/* Energy Flow Diagram - FIXED LOGIC - Always show solar if meter exists */}
         <div style={{ 
           display: 'grid', 
-          gridTemplateColumns: solarProduction > 0 ? '1fr auto 1fr auto 1fr auto 1fr' : '1fr auto 1fr',
+          gridTemplateColumns: hasSolarMeter ? '1fr auto 1fr auto 1fr auto 1fr' : '1fr auto 1fr',
           gap: '24px',
           alignItems: 'center',
           marginBottom: '32px',
           minHeight: '200px'
         }}>
-          {/* Solar Production (only show if exists) */}
-          {solarProduction > 0 && (
+          {/* Solar Production (always show if solar meter exists) */}
+          {hasSolarMeter && (
             <>
               <div style={{ 
                 display: 'flex', 
@@ -329,32 +332,34 @@ export default function Buildings() {
                   width: '100px',
                   height: '100px',
                   borderRadius: '50%',
-                  backgroundColor: '#fef3c7',
-                  border: '4px solid #f59e0b',
+                  backgroundColor: solarProduction > 0 ? '#fef3c7' : '#f3f4f6',
+                  border: `4px solid ${solarProduction > 0 ? '#f59e0b' : '#9ca3af'}`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   marginBottom: '12px'
                 }}>
-                  <Sun size={40} color="#f59e0b" />
+                  <Sun size={40} color={solarProduction > 0 ? '#f59e0b' : '#9ca3af'} />
                 </div>
                 <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
                   {t('buildings.energyFlow.solar')}
                 </span>
-                <span style={{ fontSize: '24px', fontWeight: '800', color: '#f59e0b' }}>
+                <span style={{ fontSize: '24px', fontWeight: '800', color: solarProduction > 0 ? '#f59e0b' : '#9ca3af' }}>
                   {solarProduction.toFixed(3)} kW
                 </span>
-                <span style={{ fontSize: '12px', color: '#22c55e', fontWeight: '600' }}>
-                  {t('buildings.energyFlow.production')}
+                <span style={{ fontSize: '12px', color: solarProduction > 0 ? '#22c55e' : '#9ca3af', fontWeight: '600' }}>
+                  {solarProduction > 0 ? t('buildings.energyFlow.production') : t('buildings.energyFlow.noProduction')}
                 </span>
               </div>
 
               {/* Arrow from Solar to Building */}
               <div style={{ display: 'flex', alignItems: 'center', flexDirection: 'column', gap: '4px' }}>
-                <ArrowRight size={32} color="#22c55e" strokeWidth={3} />
-                <span style={{ fontSize: '11px', fontWeight: '600', color: '#22c55e' }}>
-                  {solarToHouse.toFixed(2)} kW
-                </span>
+                <ArrowRight size={32} color={solarProduction > 0 ? '#22c55e' : '#e5e7eb'} strokeWidth={3} />
+                {solarProduction > 0 && (
+                  <span style={{ fontSize: '11px', fontWeight: '600', color: '#22c55e' }}>
+                    {solarToHouse.toFixed(2)} kW
+                  </span>
+                )}
               </div>
             </>
           )}
@@ -460,8 +465,8 @@ export default function Buildings() {
             </span>
           </div>
 
-          {/* Solar to Grid Arrow (only when exporting and solar exists) */}
-          {isExporting && solarProduction > 0 && (
+          {/* Solar to Grid Arrow (only when exporting and solar meter exists) */}
+          {isExporting && hasSolarMeter && solarProduction > 0 && (
             <>
               <div style={{ 
                 display: 'flex', 
@@ -670,11 +675,13 @@ export default function Buildings() {
     const [editingFloor, setEditingFloor] = useState<number | null>(null);
     const [editingApt, setEditingApt] = useState<{floorIdx: number, aptIdx: number} | null>(null);
     const [editValue, setEditValue] = useState('');
+    const [draggedFloorIndex, setDraggedFloorIndex] = useState<number | null>(null);
 
     const DRAG_TYPES = {
       PALETTE_FLOOR: 'palette/floor',
       PALETTE_APT: 'palette/apartment',
       EXISTING_APT: 'existing/apartment',
+      REORDER_FLOOR: 'reorder/floor',
     };
 
     const addFloor = () => {
@@ -728,6 +735,13 @@ export default function Buildings() {
       setFormData({ ...formData, floors_config: floors });
     };
 
+    const reorderFloors = (fromIndex: number, toIndex: number) => {
+      const floors = [...(formData.floors_config || [])];
+      const [movedFloor] = floors.splice(fromIndex, 1);
+      floors.splice(toIndex, 0, movedFloor);
+      setFormData({ ...formData, floors_config: floors });
+    };
+
     const updateApartmentName = (floorIndex: number, aptIndex: number, name: string) => {
       const floors = [...(formData.floors_config || [])];
       floors[floorIndex].apartments[aptIndex] = name;
@@ -745,17 +759,23 @@ export default function Buildings() {
       setDragData({ floorIdx, aptIdx });
     };
 
-    const onDragEndGlobal = () => {
-      setDragType(null);
-      setDragData(null);
+    const onFloorDragStart = (e: React.DragEvent, floorIdx: number) => {
+      e.dataTransfer.effectAllowed = 'move';
+      setDragType(DRAG_TYPES.REORDER_FLOOR);
+      setDraggedFloorIndex(floorIdx);
+      e.currentTarget.style.opacity = '0.5';
     };
 
-    const onBuildingDrop = (e: React.DragEvent) => {
+    const onFloorDragEnd = (e: React.DragEvent) => {
+      e.currentTarget.style.opacity = '1';
+      setDraggedFloorIndex(null);
+    };
+
+    const onFloorDragOver = (e: React.DragEvent, targetFloorIdx: number) => {
       e.preventDefault();
-      if (dragType === DRAG_TYPES.PALETTE_FLOOR) {
-        addFloor();
+      if (dragType === DRAG_TYPES.REORDER_FLOOR && draggedFloorIndex !== null && draggedFloorIndex !== targetFloorIdx) {
+        e.dataTransfer.dropEffect = 'move';
       }
-      onDragEndGlobal();
     };
 
     const onFloorDrop = (floorIdx: number, e: React.DragEvent) => {
@@ -768,6 +788,22 @@ export default function Buildings() {
         if (dragData.floorIdx !== floorIdx) {
           moveApartment(dragData.floorIdx, dragData.aptIdx, floorIdx);
         }
+      } else if (dragType === DRAG_TYPES.REORDER_FLOOR && draggedFloorIndex !== null && draggedFloorIndex !== floorIdx) {
+        reorderFloors(draggedFloorIndex, floorIdx);
+      }
+      onDragEndGlobal();
+    };
+
+    const onDragEndGlobal = () => {
+      setDragType(null);
+      setDragData(null);
+      setDraggedFloorIndex(null);
+    };
+
+    const onBuildingDrop = (e: React.DragEvent) => {
+      e.preventDefault();
+      if (dragType === DRAG_TYPES.PALETTE_FLOOR) {
+        addFloor();
       }
       onDragEndGlobal();
     };
@@ -849,7 +885,7 @@ export default function Buildings() {
               textAlign: 'center',
               fontWeight: '600'
             }}>
-              🏗️ Add New Level
+              ðŸ—ï¸ Add New Level
             </div>
           </div>
 
@@ -897,7 +933,7 @@ export default function Buildings() {
               textAlign: 'center',
               fontWeight: '600'
             }}>
-              🏠 Add Unit
+              ðŸ  Add Unit
             </div>
           </div>
 
@@ -909,17 +945,17 @@ export default function Buildings() {
             border: '2px dashed #e5e7eb'
           }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#6b7280', marginBottom: '12px' }}>
-              Building Stats
+              {t('buildings.apartmentConfig.buildingStats')}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>Floors:</span>
+                <span style={{ fontSize: '12px', color: '#6b7280' }}>{t('buildings.apartmentConfig.floors')}:</span>
                 <span style={{ fontSize: '16px', fontWeight: '700', color: '#3b82f6' }}>
                   {(formData.floors_config || []).length}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>Apartments:</span>
+                <span style={{ fontSize: '12px', color: '#6b7280' }}>{t('buildings.apartmentConfig.totalApartments')}:</span>
                 <span style={{ fontSize: '16px', fontWeight: '700', color: '#f59e0b' }}>
                   {(formData.floors_config || []).reduce((sum, f) => sum + f.apartments.length, 0)}
                 </span>
@@ -935,12 +971,12 @@ export default function Buildings() {
             border: '1px solid #fef3c7'
           }}>
             <div style={{ fontSize: '11px', color: '#92400e', lineHeight: '1.6' }}>
-              <strong>💡 Tips:</strong><br/>
-              • Drag floors to stack levels<br/>
-              • Drag apartments onto floors<br/>
-              • Move apartments between floors<br/>
-              • Click pencil to rename<br/>
-              • Click X to delete
+              <strong>ðŸ’¡ Tips:</strong><br/>
+              â€¢ Drag floors to stack levels<br/>
+              â€¢ Drag apartments onto floors<br/>
+              â€¢ Move apartments between floors<br/>
+              â€¢ Click pencil to rename<br/>
+              â€¢ Click X to delete
             </div>
           </div>
         </div>
@@ -997,21 +1033,28 @@ export default function Buildings() {
             }}>
               <div style={{ display: 'flex', flexDirection: 'column-reverse', gap: '20px' }}>
                 {(formData.floors_config || []).map((floor, floorIdx) => (
-                  <div key={floorIdx} style={{ position: 'relative' }}>
+                  <div 
+                    key={floorIdx} 
+                    style={{ position: 'relative', marginLeft: '70px' }}
+                    draggable
+                    onDragStart={(e) => onFloorDragStart(e, floorIdx)}
+                    onDragEnd={onFloorDragEnd}
+                    onDragOver={(e) => onFloorDragOver(e, floorIdx)}
+                    onDrop={(e) => onFloorDrop(floorIdx, e)}
+                  >
                     {/* LEGO Studs on top */}
                     <StudRow />
 
                     {/* Floor Card */}
                     <div
-                      onDragOver={allowDrop}
-                      onDrop={(e) => onFloorDrop(floorIdx, e)}
                       style={{
                         padding: '20px',
                         backgroundColor: dragType ? '#f0f9ff' : '#f8fafc',
                         borderRadius: '16px',
-                        border: `2px solid ${dragType === DRAG_TYPES.PALETTE_APT ? '#3b82f6' : '#e2e8f0'}`,
+                        border: `2px solid ${draggedFloorIndex === floorIdx ? '#3b82f6' : dragType === DRAG_TYPES.PALETTE_APT ? '#3b82f6' : '#e2e8f0'}`,
                         boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
-                        transition: 'all 0.2s'
+                        transition: 'all 0.2s',
+                        cursor: dragType === DRAG_TYPES.REORDER_FLOOR ? 'move' : 'default'
                       }}
                     >
                       {/* Floor Header */}
@@ -1082,6 +1125,29 @@ export default function Buildings() {
                         ) : (
                           <>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                              <div 
+                                style={{ 
+                                  cursor: 'grab',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '2px',
+                                  padding: '4px'
+                                }}
+                                title={t('buildings.apartmentConfig.dragFloorHint')}
+                              >
+                                <div style={{ display: 'flex', gap: '2px' }}>
+                                  <div style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: '#9ca3af' }} />
+                                  <div style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: '#9ca3af' }} />
+                                </div>
+                                <div style={{ display: 'flex', gap: '2px' }}>
+                                  <div style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: '#9ca3af' }} />
+                                  <div style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: '#9ca3af' }} />
+                                </div>
+                                <div style={{ display: 'flex', gap: '2px' }}>
+                                  <div style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: '#9ca3af' }} />
+                                  <div style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: '#9ca3af' }} />
+                                </div>
+                              </div>
                               <Layers size={20} color="#3b82f6" />
                               <span style={{ fontSize: '16px', fontWeight: '700', color: '#1f2937' }}>
                                 {floor.floor_name}
@@ -1278,22 +1344,24 @@ export default function Buildings() {
                       </div>
                     </div>
 
-                    {/* Floor Number Badge */}
+                    {/* Floor Number Badge - Better visibility */}
                     <div style={{
                       position: 'absolute',
-                      left: '-16px',
+                      left: '0px',
                       top: '50%',
                       transform: 'translateY(-50%)',
-                      padding: '6px 10px',
+                      padding: '8px 12px',
                       backgroundColor: '#3b82f6',
                       color: 'white',
                       borderRadius: '8px',
-                      fontSize: '12px',
+                      fontSize: '13px',
                       fontWeight: '700',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                      zIndex: 10
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                      zIndex: 10,
+                      minWidth: '50px',
+                      textAlign: 'center'
                     }}>
-                      {(formData.floors_config || []).length - floorIdx === 1 ? 'GF' : `L${(formData.floors_config || []).length - floorIdx - 1}`}
+                      {(formData.floors_config || []).length - floorIdx === 1 ? t('buildings.apartmentConfig.groundFloor') : `${t('buildings.apartmentConfig.levelPrefix')}${(formData.floors_config || []).length - floorIdx - 1}`}
                     </div>
                   </div>
                 ))}
@@ -1318,7 +1386,7 @@ export default function Buildings() {
               pointerEvents: 'none',
               zIndex: 100
             }}>
-              🏗️ Release to add a new Floor
+              ðŸ—ï¸ Release to add a new Floor
             </div>
           )}
         </div>
