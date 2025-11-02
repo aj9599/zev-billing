@@ -206,7 +206,7 @@ export default function Buildings() {
 
     // Get charger data for this building
     const buildingChargers = chargers.filter(c => c.building_id === building.id);
-    const activeCharger = buildingChargers.find(c => consumption.charging > 0);
+    const activeCharger = consumption.charging > 0 && buildingChargers.length > 0 ? buildingChargers[0] : null;
 
     return (
       <div style={{
