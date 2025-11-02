@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Building, Search, MapPin, Zap, ChevronRight, ChevronDown, Folder, Home, HelpCircle, TrendingUp, TrendingDown, Activity, Sun, Grid, ArrowRight, ArrowDown, ArrowUp, ArrowLeft, Layers, PlusCircle, MinusCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Building, Search, MapPin, Zap, ChevronRight, ChevronDown, Folder, Home, HelpCircle, Activity, Sun, Grid, ArrowRight, ArrowLeft, Layers, PlusCircle, MinusCircle } from 'lucide-react';
 import { api } from '../api/client';
 import type { Building as BuildingType, Meter, Charger, BuildingConsumption } from '../types';
 import { useTranslation } from '../i18n';
