@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Eye, FileText, Download, Trash2, Archive } from 'lucide-react';
+import { Eye, Download, Trash2, Archive } from 'lucide-react';
 import { api } from '../api/client';
 import type { Invoice, Building as BuildingType, User } from '../types';
 import { useTranslation } from '../i18n';

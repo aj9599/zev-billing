@@ -5,7 +5,7 @@ import type { Building as BuildingType, User } from '../types';
 import { useTranslation } from '../i18n';
 import BillConfiguration from './BillConfiguration';
 import SharedMeterConfig from './SharedMeterConfig';
-import CustomItems from './CustomItems';
+import CustomItems from './CustomItemModal';
 import Bills from './Bills';
 
 export default function Billing() {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, Plus, Edit2, Trash2, Building as BuildingIcon, Zap, AlertCircle, CheckCircle, Loader } from 'lucide-react';
+import { Plus, Edit2, Trash2, Building as BuildingIcon, Zap, AlertCircle, CheckCircle, Loader } from 'lucide-react';
 import { api } from '../api/client';
 import type { SharedMeterConfig, Building, Meter, User } from '../types';
 import { useTranslation } from '../i18n';
