@@ -143,10 +143,20 @@ export interface CustomLineItem {
   updated_at: string;
 }
 
-// NEW: Bill generation request with advanced options
+// NEW: Apartment with user information for billing selection
+export interface ApartmentWithUser {
+  building_id: number;
+  apartment_unit: string;
+  user?: User;
+  meter?: Meter;
+  has_meter: boolean;
+}
+
+// NEW: Bill generation request with advanced options - UPDATED to use apartments
 export interface GenerateBillsRequest {
   building_ids: number[];
-  user_ids: number[];
+  user_ids: number[];  // Still kept for backend compatibility but populated from apartment selection
+  apartments?: ApartmentSelection[];  // NEW: For frontend tracking
   start_date: string;
   end_date: string;
   sender_name?: string;
@@ -160,6 +170,13 @@ export interface GenerateBillsRequest {
   include_shared_meters?: boolean;
   shared_meter_configs?: SharedMeterConfig[];
   custom_line_items?: CustomLineItemSelection[];
+}
+
+// NEW: Apartment selection tracking
+export interface ApartmentSelection {
+  building_id: number;
+  apartment_unit: string;
+  user_id?: number;
 }
 
 // NEW: Custom line item selection for invoice

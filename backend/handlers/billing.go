@@ -20,12 +20,14 @@ import (
 type BillingHandler struct {
 	db             *sql.DB
 	billingService *services.BillingService
+	pdfGenerator   *services.PDFGenerator
 }
 
-func NewBillingHandler(db *sql.DB, billingService *services.BillingService) *BillingHandler {
+func NewBillingHandler(db *sql.DB, billingService *services.BillingService, pdfGenerator *services.PDFGenerator) *BillingHandler {
 	return &BillingHandler{
 		db:             db,
 		billingService: billingService,
+		pdfGenerator:   pdfGenerator,
 	}
 }
 
@@ -34,6 +36,18 @@ type GenerateBillsRequest struct {
 	UserIDs     []int  `json:"user_ids"`
 	StartDate   string `json:"start_date"`
 	EndDate     string `json:"end_date"`
+	
+	// Sender information
+	SenderName    string `json:"sender_name"`
+	SenderAddress string `json:"sender_address"`
+	SenderCity    string `json:"sender_city"`
+	SenderZip     string `json:"sender_zip"`
+	SenderCountry string `json:"sender_country"`
+	
+	// Banking information
+	BankName          string `json:"bank_name"`
+	BankIBAN          string `json:"bank_iban"`
+	BankAccountHolder string `json:"bank_account_holder"`
 }
 
 func (h *BillingHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
@@ -216,7 +230,9 @@ func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 	log.Printf("=== Starting bill generation ===")
 	log.Printf("Buildings: %v, Users: %v, Period: %s to %s", 
 		req.BuildingIDs, req.UserIDs, req.StartDate, req.EndDate)
+	log.Printf("Sender: %s, IBAN: %s", req.SenderName, req.BankIBAN)
 
+	// Generate invoices
 	invoices, err := h.billingService.GenerateBills(req.BuildingIDs, req.UserIDs, req.StartDate, req.EndDate)
 	if err != nil {
 		log.Printf("ERROR: Bill generation failed: %v", err)
@@ -224,12 +240,114 @@ func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("Generated %d invoices, now creating PDFs...", len(invoices))
+
+	// Prepare sender and banking info for PDF generation
+	senderInfo := services.SenderInfo{
+		Name:    req.SenderName,
+		Address: req.SenderAddress,
+		City:    req.SenderCity,
+		Zip:     req.SenderZip,
+		Country: req.SenderCountry,
+	}
+
+	bankingInfo := services.BankingInfo{
+		Name:          req.BankName,
+		IBAN:          req.BankIBAN,
+		AccountHolder: req.BankAccountHolder,
+	}
+
+	// Generate PDFs for each invoice
+	successCount := 0
+	for i, invoice := range invoices {
+		// Load full invoice with items and user details
+		fullInvoice, err := h.loadFullInvoice(invoice.ID)
+		if err != nil {
+			log.Printf("WARNING: Failed to load full invoice %d: %v", invoice.ID, err)
+			continue
+		}
+
+		// Generate PDF
+		pdfPath, err := h.pdfGenerator.GenerateInvoicePDF(fullInvoice, senderInfo, bankingInfo)
+		if err != nil {
+			log.Printf("WARNING: Failed to generate PDF for invoice %d: %v", invoice.ID, err)
+			continue
+		}
+
+		// Update invoice with PDF path
+		_, err = h.db.Exec("UPDATE invoices SET pdf_path = ? WHERE id = ?", pdfPath, invoice.ID)
+		if err != nil {
+			log.Printf("WARNING: Failed to update PDF path for invoice %d: %v", invoice.ID, err)
+		} else {
+			successCount++
+			log.Printf("✓ Generated PDF %d/%d: %s", i+1, len(invoices), pdfPath)
+		}
+	}
+
 	log.Printf("=== Bill generation completed successfully ===")
-	log.Printf("Generated %d invoices", len(invoices))
+	log.Printf("Generated %d invoices with %d PDFs", len(invoices), successCount)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(invoices)
+}
+
+// Helper function to load full invoice with items and user
+func (h *BillingHandler) loadFullInvoice(invoiceID int) (models.Invoice, error) {
+	var inv models.Invoice
+	
+	err := h.db.QueryRow(`
+		SELECT i.id, i.invoice_number, i.user_id, i.building_id, 
+		       i.period_start, i.period_end, i.total_amount, i.currency, 
+		       i.status, i.generated_at
+		FROM invoices i WHERE i.id = ?
+	`, invoiceID).Scan(
+		&inv.ID, &inv.InvoiceNumber, &inv.UserID, &inv.BuildingID,
+		&inv.PeriodStart, &inv.PeriodEnd, &inv.TotalAmount, &inv.Currency,
+		&inv.Status, &inv.GeneratedAt,
+	)
+	
+	if err != nil {
+		return inv, err
+	}
+
+	// Load invoice items
+	itemRows, err := h.db.Query(`
+		SELECT id, invoice_id, description, quantity, unit_price, total_price, item_type
+		FROM invoice_items WHERE invoice_id = ?
+		ORDER BY id ASC
+	`, inv.ID)
+
+	if err == nil {
+		defer itemRows.Close()
+		inv.Items = []models.InvoiceItem{}
+		for itemRows.Next() {
+			var item models.InvoiceItem
+			if err := itemRows.Scan(&item.ID, &item.InvoiceID, &item.Description,
+				&item.Quantity, &item.UnitPrice, &item.TotalPrice, &item.ItemType); err == nil {
+				inv.Items = append(inv.Items, item)
+			}
+		}
+	}
+
+	// Load user details
+	var user models.User
+	err = h.db.QueryRow(`
+		SELECT id, first_name, last_name, email, phone, 
+		       address_street, address_city, address_zip, address_country,
+		       is_active
+		FROM users WHERE id = ?
+	`, inv.UserID).Scan(
+		&user.ID, &user.FirstName, &user.LastName, &user.Email, &user.Phone,
+		&user.AddressStreet, &user.AddressCity, &user.AddressZip, &user.AddressCountry,
+		&user.IsActive,
+	)
+
+	if err == nil {
+		inv.User = &user
+	}
+
+	return inv, nil
 }
 
 func (h *BillingHandler) ListInvoices(w http.ResponseWriter, r *http.Request) {
@@ -241,7 +359,7 @@ func (h *BillingHandler) ListInvoices(w http.ResponseWriter, r *http.Request) {
 	query := `
 		SELECT i.id, i.invoice_number, i.user_id, i.building_id, 
 		       i.period_start, i.period_end, i.total_amount, i.currency, 
-		       i.status, i.generated_at
+		       i.status, i.generated_at, i.pdf_path
 		FROM invoices i
 		WHERE 1=1
 	`
@@ -269,12 +387,16 @@ func (h *BillingHandler) ListInvoices(w http.ResponseWriter, r *http.Request) {
 	invoices := []models.Invoice{}
 	for rows.Next() {
 		var inv models.Invoice
+		var pdfPath sql.NullString
 		err := rows.Scan(
 			&inv.ID, &inv.InvoiceNumber, &inv.UserID, &inv.BuildingID,
 			&inv.PeriodStart, &inv.PeriodEnd, &inv.TotalAmount, &inv.Currency,
-			&inv.Status, &inv.GeneratedAt,
+			&inv.Status, &inv.GeneratedAt, &pdfPath,
 		)
 		if err == nil {
+			if pdfPath.Valid {
+				inv.PDFPath = pdfPath.String
+			}
 			invoices = append(invoices, inv)
 		}
 	}
@@ -293,18 +415,7 @@ func (h *BillingHandler) GetInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var inv models.Invoice
-	err = h.db.QueryRow(`
-		SELECT i.id, i.invoice_number, i.user_id, i.building_id, 
-		       i.period_start, i.period_end, i.total_amount, i.currency, 
-		       i.status, i.generated_at
-		FROM invoices i WHERE i.id = ?
-	`, id).Scan(
-		&inv.ID, &inv.InvoiceNumber, &inv.UserID, &inv.BuildingID,
-		&inv.PeriodStart, &inv.PeriodEnd, &inv.TotalAmount, &inv.Currency,
-		&inv.Status, &inv.GeneratedAt,
-	)
-
+	inv, err := h.loadFullInvoice(id)
 	if err == sql.ErrNoRows {
 		log.Printf("ERROR: Invoice ID %d not found", id)
 		http.Error(w, "Invoice not found", http.StatusNotFound)
@@ -314,40 +425,6 @@ func (h *BillingHandler) GetInvoice(w http.ResponseWriter, r *http.Request) {
 		log.Printf("ERROR: Failed to query invoice ID %d: %v", id, err)
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
-	}
-
-	// Get invoice items
-	itemRows, err := h.db.Query(`
-		SELECT id, invoice_id, description, quantity, unit_price, total_price, item_type
-		FROM invoice_items WHERE invoice_id = ?
-		ORDER BY id ASC
-	`, inv.ID)
-
-	if err == nil {
-		defer itemRows.Close()
-		inv.Items = []models.InvoiceItem{}
-		for itemRows.Next() {
-			var item models.InvoiceItem
-			if err := itemRows.Scan(&item.ID, &item.InvoiceID, &item.Description,
-				&item.Quantity, &item.UnitPrice, &item.TotalPrice, &item.ItemType); err == nil {
-				inv.Items = append(inv.Items, item)
-			}
-		}
-	}
-
-	// Get user details
-	var user models.User
-	err = h.db.QueryRow(`
-		SELECT id, first_name, last_name, email, phone, 
-		       address_street, address_city, address_zip, address_country
-		FROM users WHERE id = ?
-	`, inv.UserID).Scan(
-		&user.ID, &user.FirstName, &user.LastName, &user.Email, &user.Phone,
-		&user.AddressStreet, &user.AddressCity, &user.AddressZip, &user.AddressCountry,
-	)
-
-	if err == nil {
-		inv.User = &user
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -361,6 +438,10 @@ func (h *BillingHandler) DeleteInvoice(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
 	}
+
+	// Get PDF path before deletion to clean up file
+	var pdfPath sql.NullString
+	h.db.QueryRow("SELECT pdf_path FROM invoices WHERE id = ?", id).Scan(&pdfPath)
 
 	// Delete invoice items first
 	_, err = h.db.Exec("DELETE FROM invoice_items WHERE invoice_id = ?", id)
@@ -378,8 +459,73 @@ func (h *BillingHandler) DeleteInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Delete PDF file if exists
+	if pdfPath.Valid && pdfPath.String != "" {
+		invoicesDir := "/home/pi/zev-billing/invoices"
+		if _, err := os.Stat(invoicesDir); os.IsNotExist(err) {
+			invoicesDir = "./invoices"
+		}
+		fullPath := filepath.Join(invoicesDir, pdfPath.String)
+		os.Remove(fullPath) // Ignore errors
+	}
+
 	log.Printf("SUCCESS: Deleted invoice ID %d", id)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *BillingHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	// Get invoice PDF path
+	var pdfPath sql.NullString
+	var invoiceNumber string
+	err = h.db.QueryRow(`
+		SELECT invoice_number, pdf_path 
+		FROM invoices 
+		WHERE id = ?
+	`, id).Scan(&invoiceNumber, &pdfPath)
+
+	if err == sql.ErrNoRows {
+		http.Error(w, "Invoice not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		log.Printf("ERROR: Failed to query invoice: %v", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	if !pdfPath.Valid || pdfPath.String == "" {
+		http.Error(w, "PDF not generated for this invoice", http.StatusNotFound)
+		return
+	}
+
+	// Construct full path
+	invoicesDir := "/home/pi/zev-billing/invoices"
+	if _, err := os.Stat(invoicesDir); os.IsNotExist(err) {
+		invoicesDir = "./invoices"
+	}
+
+	fullPath := filepath.Join(invoicesDir, pdfPath.String)
+
+	// Check if file exists
+	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+		log.Printf("ERROR: PDF file not found: %s", fullPath)
+		http.Error(w, "PDF file not found", http.StatusNotFound)
+		return
+	}
+
+	// Serve the file
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.pdf", invoiceNumber))
+
+	http.ServeFile(w, r, fullPath)
+	log.Printf("SUCCESS: Served PDF for invoice %d", id)
 }
 
 func (h *BillingHandler) BackupDatabase(w http.ResponseWriter, r *http.Request) {
@@ -527,59 +673,4 @@ func (h *BillingHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(csv.String()))
 
 	log.Printf("SUCCESS: Exported data to %s", filename)
-}
-
-func (h *BillingHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.Atoi(vars["id"])
-	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
-		return
-	}
-
-	// Get invoice PDF path
-	var pdfPath sql.NullString
-	var invoiceNumber string
-	err = h.db.QueryRow(`
-		SELECT invoice_number, pdf_path 
-		FROM invoices 
-		WHERE id = ?
-	`, id).Scan(&invoiceNumber, &pdfPath)
-
-	if err == sql.ErrNoRows {
-		http.Error(w, "Invoice not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		log.Printf("ERROR: Failed to query invoice: %v", err)
-		http.Error(w, "Database error", http.StatusInternalServerError)
-		return
-	}
-
-	if !pdfPath.Valid || pdfPath.String == "" {
-		http.Error(w, "PDF not generated for this invoice", http.StatusNotFound)
-		return
-	}
-
-	// Construct full path
-	invoicesDir := "/home/pi/zev-billing/invoices"
-	if _, err := os.Stat(invoicesDir); os.IsNotExist(err) {
-		invoicesDir = "./invoices"
-	}
-
-	fullPath := filepath.Join(invoicesDir, pdfPath.String)
-
-	// Check if file exists
-	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		log.Printf("ERROR: PDF file not found: %s", fullPath)
-		http.Error(w, "PDF file not found", http.StatusNotFound)
-		return
-	}
-
-	// Serve the file
-	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.pdf", invoiceNumber))
-
-	http.ServeFile(w, r, fullPath)
-	log.Printf("SUCCESS: Served PDF for invoice %d", id)
 }
