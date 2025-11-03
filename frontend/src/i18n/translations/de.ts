@@ -152,7 +152,7 @@ export const de: Translations = {
   'users.active': 'aktiv',
   'users.user': 'Benutzer',
   'users.users': 'Benutzer',
-  
+
   // User Types
   'users.userType': 'Benutzertyp',
   'users.regular': 'Normaler Benutzer',
@@ -161,7 +161,7 @@ export const de: Translations = {
   'users.regularUsers': 'Normale Benutzer',
   'users.adminDescription': 'Benutzer, die Gebäude verwalten und Zugriff auf die Abrechnung haben',
   'users.regularDescription': 'Gebäudebewohner, die Fahrzeuge laden können',
-  
+
   // User Status
   'users.status': 'Status',
   'users.activeUser': 'Aktiver Benutzer',
@@ -170,7 +170,7 @@ export const de: Translations = {
   'users.inactiveUserNote': 'Inaktive Benutzer können nicht laden und erscheinen nicht in der Abrechnung',
   'users.activate': 'Aktivieren',
   'users.deactivate': 'Deaktivieren',
-  
+
   // User Fields
   'users.firstName': 'Vorname',
   'users.lastName': 'Nachname',
@@ -186,29 +186,29 @@ export const de: Translations = {
   'users.current': 'aktuell',
   'users.apartmentInfo': 'Wichtig: Wohnungszuweisung',
   'users.apartmentExplanation': 'Wenn Sie einen Benutzer einer Wohnung zuweisen, werden die Zähler dieser Wohnung mit diesem Benutzer verknüpft. Bei einem Bewohnerwechsel deaktivieren Sie einfach diesen Benutzer und erstellen einen neuen für dieselbe Wohnung.',
-  
+
   // RFID Cards
   'users.rfidCards': 'RFID-Karten',
   'users.rfidCardIds': 'RFID-Karten-IDs',
   'users.rfidImportant': 'WICHTIG',
   'users.rfidEnterNumber': 'Geben Sie die RFID-Kartennummer ein (z.B. 15, 42, 123)',
   'users.rfidNotChargerId': 'Dies ist NICHT die Ladegerät-ID - es ist die eindeutige Nummer auf der RFID-Karte',
-  
+
   // Managed Buildings
   'users.managedBuildings': 'Verwaltete Gebäude',
   'users.manages': 'Verwaltet',
   'users.complex': 'Komplex',
   'users.selectManagedBuildings': 'Wählen Sie aus, welche Gebäude oder Komplexe dieser Admin verwalten kann',
-  
+
   // Address & Bank
-  'users.street': 'Straße',
+  'users.street': 'Strasse',
   'users.city': 'Stadt',
   'users.zip': 'PLZ',
   'users.bankDetails': 'Bankverbindung',
   'users.bankName': 'Bankname',
   'users.iban': 'IBAN',
   'users.accountHolder': 'Kontoinhaber',
-  
+
   // Messages
   'users.saveFailed': 'Benutzer konnte nicht gespeichert werden',
   'users.deleteConfirm': 'Sind Sie sicher, dass Sie diesen Benutzer löschen möchten?',
@@ -218,7 +218,7 @@ export const de: Translations = {
   'users.noArchivedAdminUsers': 'Keine archivierten Administrator-Benutzer',
   'users.noRegularUsers': 'Keine normalen Benutzer gefunden',
   'users.noArchivedRegularUsers': 'Keine archivierten normalen Benutzer',
-  
+
   // Instructions Modal
   'users.instructions.title': 'Anleitung zur Benutzereinrichtung',
   'users.instructions.whatIsRegularUser': 'Was ist ein normaler Benutzer?',
@@ -276,7 +276,7 @@ export const de: Translations = {
   'buildings.setupInstructions': 'Setup-Anleitung',
   'buildings.noResults': 'Keine Ergebnisse gefunden',
   'buildings.floor': 'Stockwerk',
-  
+
   // Energy Flow
   'buildings.energyFlow.solar': 'Solar',
   'buildings.energyFlow.consumption': 'Gebäude',
@@ -289,7 +289,7 @@ export const de: Translations = {
   'buildings.energyFlow.selling': 'Verkauf',
   'buildings.energyFlow.noProduction': 'Keine Produktion',
   'buildings.energyFlow.offline': 'Offline',
-  
+
   // Apartment Configuration
   'buildings.apartmentConfig.title': 'Visuelle Wohnungskonfiguration',
   'buildings.apartmentConfig.description': 'Bauen Sie Ihre Wohnungsstruktur Stockwerk für Stockwerk auf',
@@ -333,7 +333,7 @@ export const de: Translations = {
   'buildings.apartmentConfig.tip4': '• Stift-Symbol zum Umbenennen klicken',
   'buildings.apartmentConfig.tip5': '• X zum Löschen klicken',
   'buildings.apartmentConfig.tip6': '• Stockwerk-Griff zum Neuordnen ziehen',
-  
+
   // Instructions
   'buildings.instructions.title': 'Gebäude & Komplexe Anleitung',
   'buildings.instructions.whatIsBuilding': 'Was ist ein Gebäude?',
@@ -865,7 +865,7 @@ export const de: Translations = {
   'sharedMeters.deleteFailed': 'Löschen der gemeinsamen Zählerkonfiguration fehlgeschlagen',
   'sharedMeters.loadFailed': 'Laden der gemeinsamen Zählerkonfigurationen fehlgeschlagen',
   'sharedMeters.deleteConfirm': 'Sind Sie sicher, dass Sie diese gemeinsame Zählerkonfiguration löschen möchten?',
-  
+
   // Benutzerdefinierte Positionen
   'customItems.title': 'Benutzerdefinierte Rechnungspositionen verwalten',
   'customItems.subtitle': 'Fügen Sie benutzerdefinierte Gebühren wie Zählermiete, Wartungsgebühren und andere wiederkehrende Posten hinzu',
@@ -914,7 +914,7 @@ export const de: Translations = {
   'customItems.loadBuildingsFailed': 'Laden der Gebäude fehlgeschlagen',
   'customItems.loadItemsFailed': 'Laden der benutzerdefinierten Positionen fehlgeschlagen',
   'customItems.deleteConfirm': 'Sind Sie sicher, dass Sie diese benutzerdefinierte Position löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.',
-  
+
   // Rechnungskonfiguration (Erweitert)
   'billConfig.title': 'Erweiterte Rechnungskonfiguration',
   'billConfig.steps.selection': 'Auswahl',
@@ -970,6 +970,44 @@ export const de: Translations = {
   'billConfig.validation.selectUser': 'Bitte wählen Sie mindestens einen Nutzer',
   'billConfig.successMessage': 'Erfolgreich erstellt',
   'billConfig.errorMessage': 'Erstellen der Rechnungen fehlgeschlagen',
+  'billConfig.step1.selectApartments': 'Wohnungen/Nutzer auswählen',
+  'billConfig.step1.apartment': 'Wohnung',
+  'billConfig.step1.apartmentLabel': 'Wohnung',
+  'billConfig.step1.selectedSummary': 'Auswahlzusammenfassung',
+  'billConfig.step1.users': 'Nutzer',
+  'billConfig.steps.dates': 'Daten',
+  'billConfig.step2.titleNew': 'Abrechnungszeitraum',
+  'billConfig.step2.selectPeriod': 'Abrechnungszeitraum auswählen',
+  'billConfig.step2.startDate': 'Startdatum',
+  'billConfig.step2.endDate': 'Enddatum',
+  'billConfig.step2.periodSummary': 'Zeitraumzusammenfassung',
+  'billConfig.step2.days': 'Tage',
+  'billConfig.step3.noMeters': 'Keine gemeinsamen Zähler für ausgewählte Gebäude konfiguriert',
+  'billConfig.step3.meters': 'Zähler',
+  'billConfig.step4.noItems': 'Keine benutzerdefinierten Positionen für ausgewählte Gebäude konfiguriert',
+  'billConfig.step4.selected': 'Ausgewählt',
+  'billConfig.step4.items': 'Positionen',
+  'billConfig.step4.description': 'Optionale benutzerdefinierte Positionen auswählen, die in den Rechnungen enthalten sein sollen.',
+  'billConfig.step5.title': 'Überprüfen & Abschliessen',
+  'billConfig.step5.summary': 'Abrechnungsübersicht',
+  'billConfig.step5.period': 'Zeitraum',
+  'billConfig.step5.to': 'bis',
+  'billConfig.step5.buildings': 'Gebäude',
+  'billConfig.step5.apartments': 'Wohnungen',
+  'billConfig.step5.users': 'Nutzer',
+  'billConfig.step5.sharedMeters': 'Gemeinsame Zähler',
+  'billConfig.step5.customItems': 'Benutzerdefinierte Positionen',
+  'billConfig.step5.estimatedInvoices': 'Geschätzte Rechnungen',
+  'billConfig.step5.senderInfo': 'Absenderinformationen',
+  'billConfig.step5.name': 'Name',
+  'billConfig.step5.address': 'Adresse',
+  'billConfig.step5.zip': 'PLZ',
+  'billConfig.step5.city': 'Stadt',
+  'billConfig.step5.bankingInfo': 'Bankinformationen',
+  'billConfig.step5.bankName': 'Bankname',
+  'billConfig.step5.iban': 'IBAN',
+  'billConfig.step5.accountHolder': 'Kontoinhaber',
+
   'billing.tabs.invoices': 'Rechnungen',
   'billing.tabs.sharedMeters': 'Gemeinsame Zähler',
   'billing.tabs.customItems': 'Eigene Positionen',
@@ -977,13 +1015,13 @@ export const de: Translations = {
   'billing.allBuildingsDesc': 'Alle Rechnungen',
   'billing.allBuildingsDescSharedMeters': 'Alle Zählerkonfigurationen',
   'billing.allBuildingsDescCustomItems': 'Alle benutzerdefinierten Posten',
-  
+
   'customItems.editSubtitle': 'Details dieser benutzerdefinierten Position aktualisieren',
-  'customItems.createSubtitle': 'Neue benutzerdefinierte Gebühr hinzufügen, die in Rechnungen enthalten sein soll',  
+  'customItems.createSubtitle': 'Neue benutzerdefinierte Gebühr hinzufügen, die in Rechnungen enthalten sein soll',
   'customItems.organizedByBuilding': 'Eigene Positionen nach Gebäude',
   'customItems.noItemsForBuilding': 'Keine Positionen für dieses Gebäude',
   'customItems.buildingSection': 'Gebäude: {name}',
-  
+
   'sharedMeters.onlyHeatingOther': 'Nur Heizungs- und sonstige Zähler können geteilt werden',
   'sharedMeters.percentagePerApartment': 'Prozentsatz pro Wohnung',
   'sharedMeters.totalMustBe100': 'Summe muss 100% ergeben',
@@ -1087,7 +1125,7 @@ export const de: Translations = {
   'autoBilling.toggleFailed': 'Umschalten des Konfigurationsstatus fehlgeschlagen',
   'autoBilling.instructions.title': 'Automatische Abrechnung Anleitung',
   'autoBilling.instructions.whatIsAutoBilling': 'Was ist automatische Abrechnung?',
-  'autoBilling.instructions.autoBillingDescription': 'Automatische Abrechnungspläne erstellen Rechnungen in regelmäßigen Abständen ohne manuelles Eingreifen. Konfigurieren Sie, wann und wie oft Rechnungen erstellt werden sollen, und das System erstellt sie automatisch nach Zeitplan.',
+  'autoBilling.instructions.autoBillingDescription': 'Automatische Abrechnungspläne erstellen Rechnungen in regelmässigen Abständen ohne manuelles Eingreifen. Konfigurieren Sie, wann und wie oft Rechnungen erstellt werden sollen, und das System erstellt sie automatisch nach Zeitplan.',
   'autoBilling.instructions.howItWorks': 'Wie es funktioniert',
   'autoBilling.instructions.work1': 'Das System überprüft aktive Konfigurationen jede Stunde',
   'autoBilling.instructions.work2': 'Wenn der geplante Tag eintrifft, werden Rechnungen automatisch erstellt',
@@ -1108,7 +1146,7 @@ export const de: Translations = {
   'autoBilling.instructions.important1': 'Stellen Sie sicher, dass aktive Preise für alle Gebäude vor der Planung konfiguriert sind',
   'autoBilling.instructions.important2': 'Benutzer müssen Wohnungszähler für die Verbrauchsverfolgung haben',
   'autoBilling.instructions.important3': 'Konfigurationen können pausiert werden, ohne sie zu löschen',
-  'autoBilling.instructions.important4': 'Überprüfen Sie regelmäßig die Abrechnungsseite, um generierte Rechnungen zu verifizieren',
+  'autoBilling.instructions.important4': 'Überprüfen Sie regelmässig die Abrechnungsseite, um generierte Rechnungen zu verifizieren',
   'autoBilling.instructions.tips': 'Tipps',
   'autoBilling.instructions.tip1': 'Setzen Sie Erstellungstag auf 1.-5. des Monats für zuverlässigste Ergebnisse',
   'autoBilling.instructions.tip2': 'Verwenden Sie separate Konfigurationen für verschiedene Gebäudegruppen',
@@ -1159,7 +1197,7 @@ export const de: Translations = {
   'logs.sinceLastRestart': 'Seit letztem Neustart',
   'logs.tempNormal': 'Normal',
   'logs.tempWarm': 'Warm',
-  'logs.tempHot': 'Heiß',
+  'logs.tempHot': 'Heiss',
   'logs.createBackup': 'Backup erstellen',
   'logs.creatingBackup': 'Erstelle Backup...',
   'logs.restoreBackup': 'Backup wiederherstellen',
@@ -1190,7 +1228,7 @@ export const de: Translations = {
   'logs.cpuHigh': 'Hohe Auslastung!',
   'logs.updatingSystem': 'System wird aktualisiert',
   'logs.updateInProgress': 'Bitte warten Sie, während das System aktualisiert wird. Dies dauert ungefähr 40 Sekunden.',
-  'logs.doNotCloseWindow': 'Bitte schließen Sie dieses Fenster nicht oder navigieren Sie nicht weg.',
+  'logs.doNotCloseWindow': 'Bitte schliessen Sie dieses Fenster nicht oder navigieren Sie nicht weg.',
 
   // Settings
   'settings.title': 'Einstellungen',
@@ -1212,7 +1250,7 @@ export const de: Translations = {
   'settings.passwordChangeFailed': 'Passwortänderung fehlgeschlagen. Überprüfen Sie Ihr altes Passwort.',
   'settings.useStrongPasswords': 'Verwenden Sie starke Passwörter',
   'settings.useStrongPasswordsDesc': 'Kombinieren Sie Buchstaben, Zahlen und Symbole',
-  'settings.changeRegularly': 'Regelmäßig ändern',
+  'settings.changeRegularly': 'Regelmässig ändern',
   'settings.changeRegularlyDesc': 'Aktualisieren Sie Ihr Passwort alle 3-6 Monate',
   'settings.neverShare': 'Niemals teilen',
   'settings.neverShareDesc': 'Halten Sie Ihre Anmeldedaten privat und sicher',

@@ -888,7 +888,7 @@ export const en: Translations = {
   'sharedMeters.deleteFailed': 'Failed to delete shared meter configuration',
   'sharedMeters.loadFailed': 'Failed to load shared meter configurations',
   'sharedMeters.deleteConfirm': 'Are you sure you want to delete this shared meter configuration?',
-  
+
   // Custom Items
   'customItems.title': 'Manage Custom Line Items',
   'customItems.subtitle': 'Add custom charges like meter rental, maintenance fees, and other recurring items',
@@ -937,7 +937,7 @@ export const en: Translations = {
   'customItems.loadBuildingsFailed': 'Failed to load buildings',
   'customItems.loadItemsFailed': 'Failed to load custom items',
   'customItems.deleteConfirm': 'Are you sure you want to delete this custom item? This action cannot be undone.',
-  
+
   // Bill Configuration (Advanced)
   'billConfig.title': 'Advanced Bill Configuration',
   'billConfig.steps.selection': 'Selection',
@@ -993,6 +993,44 @@ export const en: Translations = {
   'billConfig.validation.selectUser': 'Please select at least one user',
   'billConfig.successMessage': 'Successfully generated',
   'billConfig.errorMessage': 'Failed to generate bills',
+  'billConfig.step1.selectApartments': 'Select Apartments/Users',
+  'billConfig.step1.apartment': 'apartment',
+  'billConfig.step1.apartmentLabel': 'Apartment',
+  'billConfig.step1.selectedSummary': 'Selected Summary',
+  'billConfig.step1.users': 'users',
+  'billConfig.steps.dates': 'Dates',
+  'billConfig.step2.titleNew': 'Billing Period',
+  'billConfig.step2.selectPeriod': 'Select Billing Period',
+  'billConfig.step2.startDate': 'Start Date',
+  'billConfig.step2.endDate': 'End Date',
+  'billConfig.step2.periodSummary': 'Period Summary',
+  'billConfig.step2.days': 'days',
+  'billConfig.step3.noMeters': 'No shared meters configured for selected buildings',
+  'billConfig.step3.meters': 'meters',
+  'billConfig.step4.noItems': 'No custom items configured for selected buildings',
+  'billConfig.step4.selected': 'Selected',
+  'billConfig.step4.items': 'items',
+  'billConfig.step4.description': 'Select optional custom line items to include in the invoices.',
+  'billConfig.step5.title': 'Review & Finalize',
+  'billConfig.step5.summary': 'Billing Summary',
+  'billConfig.step5.period': 'Period',
+  'billConfig.step5.to': 'to',
+  'billConfig.step5.buildings': 'Buildings',
+  'billConfig.step5.apartments': 'Apartments',
+  'billConfig.step5.users': 'Users',
+  'billConfig.step5.sharedMeters': 'Shared Meters',
+  'billConfig.step5.customItems': 'Custom Items',
+  'billConfig.step5.estimatedInvoices': 'Estimated Invoices',
+  'billConfig.step5.senderInfo': 'Sender Information',
+  'billConfig.step5.name': 'Name',
+  'billConfig.step5.address': 'Address',
+  'billConfig.step5.zip': 'ZIP',
+  'billConfig.step5.city': 'City',
+  'billConfig.step5.bankingInfo': 'Banking Information',
+  'billConfig.step5.bankName': 'Bank Name',
+  'billConfig.step5.iban': 'IBAN',
+  'billConfig.step5.accountHolder': 'Account Holder',
+
   'billing.tabs.invoices': 'Invoices',
   'billing.tabs.sharedMeters': 'Shared Meters',
   'billing.tabs.customItems': 'Custom Items',
@@ -1000,13 +1038,13 @@ export const en: Translations = {
   'billing.allBuildingsDesc': 'All invoices',
   'billing.allBuildingsDescSharedMeters': 'All shared meter',
   'billing.allBuildingsDescCustomItems': 'All custom line items',
-  
+
   'customItems.editSubtitle': 'Update the details of this custom line item',
   'customItems.createSubtitle': 'Add a new custom charge to be included in invoices',
   'customItems.organizedByBuilding': 'Custom Items by Building',
   'customItems.noItemsForBuilding': 'No items for this building',
   'customItems.buildingSection': 'Building: {name}',
-  
+
   'sharedMeters.onlyHeatingOther': 'Only heating and other meters can be shared',
   'sharedMeters.percentagePerApartment': 'Percentage per Apartment',
   'sharedMeters.totalMustBe100': 'Total must equal 100%',
