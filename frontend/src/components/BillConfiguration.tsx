@@ -202,7 +202,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     if (!newBuildings.includes(buildingId)) {
       const newSelectedApartments = new Set(selectedApartments);
       Array.from(selectedApartments).forEach(key => {
-        if (key.startsWith(`${buildingId}-`)) {
+        if (key.startsWith(`${buildingId}|||`)) {
           newSelectedApartments.delete(key);
         }
       });
@@ -213,7 +213,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
   };
 
   const handleApartmentToggle = (buildingId: number, apartmentUnit: string) => {
-    const key = `${buildingId}-${apartmentUnit}`;
+    const key = `${buildingId}|||${apartmentUnit}`; // Use ||| as separator since apartment names can contain dashes
     const newSelected = new Set(selectedApartments);
     
     if (newSelected.has(key)) {
@@ -231,12 +231,13 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     const apartmentSelections: { building_id: number; apartment_unit: string; user_id?: number }[] = [];
     
     newSelected.forEach(selectedKey => {
-      const [bId, aptUnit] = selectedKey.split('-');
+      const [bId, aptUnit] = selectedKey.split('|||'); // Split by ||| separator
       const parsedBuildingId = parseInt(bId);
       const apartments = apartmentsWithUsers.get(parsedBuildingId);
       
       console.log(`Processing key: ${selectedKey}`);
       console.log(`  Building ID: ${parsedBuildingId}`);
+      console.log(`  Apartment unit: "${aptUnit}"`);
       console.log(`  Apartments for this building:`, apartments);
       
       const apartment = apartments?.find(a => a.apartment_unit === aptUnit);
@@ -298,7 +299,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       apartments.forEach(apt => {
         // Only auto-select apartments with active users
         if (apt.user?.is_active) {
-          newSelected.add(`${buildingId}-${apt.apartment_unit}`);
+          newSelected.add(`${buildingId}|||${apt.apartment_unit}`);
         }
       });
     });
@@ -310,7 +311,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     const apartmentSelections: { building_id: number; apartment_unit: string; user_id?: number }[] = [];
     
     newSelected.forEach(key => {
-      const [bId, aptUnit] = key.split('-');
+      const [bId, aptUnit] = key.split('|||');
       const parsedBuildingId = parseInt(bId);
       const apartments = apartmentsWithUsers.get(parsedBuildingId);
       const apartment = apartments?.find(a => a.apartment_unit === aptUnit);
@@ -557,7 +558,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                     {building?.name} ({apartments.length} {apartments.length === 1 ? t('billConfig.step1.apartment') : t('billConfig.step1.apartments')})
                   </div>
                   {apartments.map(apartment => {
-                    const key = `${buildingId}-${apartment.apartment_unit}`;
+                    const key = `${buildingId}|||${apartment.apartment_unit}`;
                     const isSelected = selectedApartments.has(key);
                     const hasUser = !!apartment.user;
                     const isActive = apartment.user?.is_active ?? false;
