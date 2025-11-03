@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -339,7 +340,7 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// Get administration users for specific buildings
+// IMPROVED: Get administration users for specific buildings (including complex admins)
 func (h *UserHandler) GetAdminUsersForBuildings(w http.ResponseWriter, r *http.Request) {
 	buildingIDsParam := r.URL.Query().Get("building_ids")
 	if buildingIDsParam == "" {
@@ -347,22 +348,70 @@ func (h *UserHandler) GetAdminUsersForBuildings(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	log.Printf("GetAdminUsersForBuildings called with building_ids: %s", buildingIDsParam)
+
 	// Parse building IDs
 	buildingIDStrs := strings.Split(buildingIDsParam, ",")
-	buildingIDs := make([]int, 0)
+	requestedBuildingIDs := make([]int, 0)
 	for _, idStr := range buildingIDStrs {
 		if id, err := strconv.Atoi(strings.TrimSpace(idStr)); err == nil {
-			buildingIDs = append(buildingIDs, id)
+			requestedBuildingIDs = append(requestedBuildingIDs, id)
 		}
 	}
 
-	if len(buildingIDs) == 0 {
+	if len(requestedBuildingIDs) == 0 {
 		json.NewEncoder(w).Encode([]models.User{})
 		return
 	}
 
-	// Get all administration users
-	rows, err := h.db.Query(`
+	log.Printf("Parsed %d building IDs: %v", len(requestedBuildingIDs), requestedBuildingIDs)
+
+	// STEP 1: Check if any of these buildings belong to a complex (building group)
+	// We need to find all complexes that contain any of the requested buildings
+	allRelevantBuildingIDs := make(map[int]bool)
+	for _, bid := range requestedBuildingIDs {
+		allRelevantBuildingIDs[bid] = true
+	}
+
+	// Query building_groups to find complexes that contain these buildings
+	placeholders := make([]string, len(requestedBuildingIDs))
+	args := make([]interface{}, len(requestedBuildingIDs))
+	for i, id := range requestedBuildingIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	complexQuery := fmt.Sprintf(`
+		SELECT DISTINCT group_id FROM building_groups 
+		WHERE building_id IN (%s)
+	`, strings.Join(placeholders, ","))
+
+	log.Printf("Checking for complexes with query: %s, args: %v", complexQuery, args)
+
+	rows, err := h.db.Query(complexQuery, args...)
+	if err != nil {
+		log.Printf("Error querying building groups: %v", err)
+	} else {
+		defer rows.Close()
+		complexIDs := []int{}
+		for rows.Next() {
+			var groupID int
+			if err := rows.Scan(&groupID); err == nil {
+				complexIDs = append(complexIDs, groupID)
+				allRelevantBuildingIDs[groupID] = true
+			}
+		}
+		if len(complexIDs) > 0 {
+			log.Printf("Found %d complex(es) containing these buildings: %v", len(complexIDs), complexIDs)
+		} else {
+			log.Printf("No complexes found for these buildings")
+		}
+	}
+
+	log.Printf("Total relevant building IDs (including complexes): %v", allRelevantBuildingIDs)
+
+	// STEP 2: Get all administration users
+	adminRows, err := h.db.Query(`
 		SELECT id, first_name, last_name, email, phone,
 		       address_street, address_city, address_zip, address_country,
 		       bank_name, bank_iban, bank_account_holder,
@@ -376,14 +425,16 @@ func (h *UserHandler) GetAdminUsersForBuildings(w http.ResponseWriter, r *http.R
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
+	defer adminRows.Close()
 
 	matchingUsers := []models.User{}
-	for rows.Next() {
+	adminCount := 0
+
+	for adminRows.Next() {
 		var u models.User
 		var managedBuildings sql.NullString
 
-		err := rows.Scan(
+		err := adminRows.Scan(
 			&u.ID, &u.FirstName, &u.LastName, &u.Email, &u.Phone,
 			&u.AddressStreet, &u.AddressCity, &u.AddressZip, &u.AddressCountry,
 			&u.BankName, &u.BankIBAN, &u.BankAccountHolder, &managedBuildings,
@@ -393,24 +444,49 @@ func (h *UserHandler) GetAdminUsersForBuildings(w http.ResponseWriter, r *http.R
 			continue
 		}
 
-		if managedBuildings.Valid {
+		adminCount++
+		u.UserType = "administration"
+
+		if managedBuildings.Valid && managedBuildings.String != "" {
 			u.ManagedBuildings = managedBuildings.String
 
 			// Parse managed buildings JSON array
 			var managedBuildingIDs []int
-			if err := json.Unmarshal([]byte(u.ManagedBuildings), &managedBuildingIDs); err == nil {
-				// Check if any of the requested buildings match
-				for _, requestedID := range buildingIDs {
-					for _, managedID := range managedBuildingIDs {
-						if requestedID == managedID {
-							matchingUsers = append(matchingUsers, u)
-							goto nextUser
-						}
-					}
+			if err := json.Unmarshal([]byte(u.ManagedBuildings), &managedBuildingIDs); err != nil {
+				log.Printf("Error parsing managed_buildings JSON for user %d: %v", u.ID, err)
+				continue
+			}
+
+			// Check if any of the managed buildings match our relevant building IDs
+			// (includes both requested buildings AND their parent complexes)
+			for _, managedID := range managedBuildingIDs {
+				if allRelevantBuildingIDs[managedID] {
+					log.Printf("✓ Admin user %s %s (ID: %d) manages building/complex %d", 
+						u.FirstName, u.LastName, u.ID, managedID)
+					matchingUsers = append(matchingUsers, u)
+					break
 				}
 			}
+		} else {
+			log.Printf("Admin user %s %s (ID: %d) has no managed buildings", u.FirstName, u.LastName, u.ID)
 		}
-	nextUser:
+	}
+
+	log.Printf("Checked %d admin users, found %d matching", adminCount, len(matchingUsers))
+
+	if len(matchingUsers) > 0 {
+		log.Printf("Returning %d admin user(s) with banking details", len(matchingUsers))
+		for _, u := range matchingUsers {
+			log.Printf("  - %s %s (%s), IBAN: %s", u.FirstName, u.LastName, u.Email, 
+				func() string {
+					if u.BankIBAN != "" {
+						return "present"
+					}
+					return "missing"
+				}())
+		}
+	} else {
+		log.Printf("No matching admin users found for buildings: %v", requestedBuildingIDs)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

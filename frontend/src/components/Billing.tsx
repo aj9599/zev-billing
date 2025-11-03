@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Eye, FileText, Download, Trash2, Building, Search, Sun, Zap, Car, HelpCircle, X } from 'lucide-react';
+import { Plus, Eye, FileText, Download, Trash2, Building, Search, Sun, Zap, Car, HelpCircle, X, Archive } from 'lucide-react';
 import { api } from '../api/client';
 import type { Invoice, Building as BuildingType, User } from '../types';
 import { useTranslation } from '../i18n';
@@ -46,6 +46,7 @@ export default function Billing() {
   });
   const [generating, setGenerating] = useState(false);
   const [expandedBuildings, setExpandedBuildings] = useState<Set<number>>(new Set());
+  const [expandedYears, setExpandedYears] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadData();
@@ -101,7 +102,7 @@ export default function Billing() {
     }
   }, [bankingInfo]);
 
-  // NEW: Auto-fill sender and banking info when buildings are selected
+  // IMPROVED: Auto-fill sender and banking info when buildings are selected
   useEffect(() => {
     if (formData.building_ids.length > 0) {
       loadAdminInfoForBuildings(formData.building_ids);
@@ -110,13 +111,36 @@ export default function Billing() {
 
   const loadAdminInfoForBuildings = async (buildingIds: number[]) => {
     try {
-      // Find admin users for the selected buildings
-      const buildingIdsParam = buildingIds.join(',');
+      // IMPROVED: Also check for complex admins
+      const selectedBuildings = buildings.filter(b => buildingIds.includes(b.id));
+      const allBuildingIds = new Set<number>(buildingIds);
+      
+      // Add complex IDs if any of the selected buildings belong to a complex
+      for (const building of buildings) {
+        if (building.is_group && building.group_buildings) {
+          const groupBuildings = Array.isArray(building.group_buildings) 
+            ? building.group_buildings 
+            : JSON.parse(building.group_buildings as any);
+          
+          // Check if any selected building is in this complex
+          for (const bid of buildingIds) {
+            if (groupBuildings.includes(bid)) {
+              allBuildingIds.add(building.id);
+              break;
+            }
+          }
+        }
+      }
+      
+      const buildingIdsParam = Array.from(allBuildingIds).join(',');
+      console.log('Looking for admin users for buildings:', buildingIdsParam);
+      
       const adminUsers = await api.getAdminUsersForBuildings(buildingIdsParam);
       
       if (adminUsers && adminUsers.length > 0) {
         // Use the first admin user found
         const admin = adminUsers[0];
+        console.log('Found admin user:', admin.email, admin.first_name, admin.last_name);
         
         // Only auto-fill if current values are empty
         if (!formData.sender_name && admin.first_name && admin.last_name) {
@@ -137,6 +161,7 @@ export default function Billing() {
             sender_zip: newSenderInfo.zip,
             sender_country: newSenderInfo.country
           }));
+          console.log('Auto-filled sender info');
         }
         
         if (!formData.bank_iban && admin.bank_iban) {
@@ -153,9 +178,12 @@ export default function Billing() {
             bank_iban: newBankingInfo.iban,
             bank_account_holder: newBankingInfo.holder
           }));
+          console.log('Auto-filled banking info');
         }
         
-        console.log('Auto-filled billing info from admin user:', admin.email);
+        console.log('Successfully auto-filled billing info from admin user:', admin.email);
+      } else {
+        console.log('No admin users found for the selected buildings');
       }
     } catch (err) {
       console.error('Failed to load admin info:', err);
@@ -175,6 +203,10 @@ export default function Billing() {
       
       const buildingIds = new Set(buildingsData.filter(b => !b.is_group).map(b => b.id));
       setExpandedBuildings(buildingIds);
+      
+      // Auto-expand current year
+      const currentYear = new Date().getFullYear().toString();
+      setExpandedYears(new Set([currentYear]));
     } catch (err) {
       console.error('Failed to load data:', err);
     }
@@ -268,7 +300,7 @@ export default function Billing() {
     }
   };
 
-  // IMPROVED: Swiss QR code generation following proper specification
+  // FIXED: Swiss QR code generation with proper format
   const generateSwissQRData = (invoice: Invoice, sender: any, banking: any) => {
     const user = invoice.user;
     if (!user || !banking.iban || !banking.holder) return '';
@@ -276,58 +308,71 @@ export default function Billing() {
     // Format IBAN (remove spaces and convert to uppercase)
     const iban = banking.iban.replace(/\s/g, '').toUpperCase();
     
+    // Validate IBAN format
+    if (!iban.startsWith('CH') && !iban.startsWith('LI')) {
+      console.error('Invalid IBAN format - must start with CH or LI');
+      return '';
+    }
+    
     // Format amount with exactly 2 decimal places
     const amount = invoice.total_amount.toFixed(2);
     
-    // Split address into street and house number if possible
-    const addressParts = (sender.address || '').match(/^(.+?)\s+(\d+.*)$/) || [null, sender.address || '', ''];
-    const street = addressParts[1];
-    const houseNo = addressParts[2];
+    // Split sender address into street and house number if possible
+    const senderAddress = sender.address || '';
+    const senderAddressMatch = senderAddress.match(/^(.+?)\s+(\d+.*)$/);
+    const senderStreet = senderAddressMatch ? senderAddressMatch[1] : senderAddress;
+    const senderHouseNo = senderAddressMatch ? senderAddressMatch[2] : '';
     
     // Split user address
-    const userAddressParts = (user.address_street || '').match(/^(.+?)\s+(\d+.*)$/) || [null, user.address_street || '', ''];
-    const userStreet = userAddressParts[1];
-    const userHouseNo = userAddressParts[2];
+    const userAddress = user.address_street || '';
+    const userAddressMatch = userAddress.match(/^(.+?)\s+(\d+.*)$/);
+    const userStreet = userAddressMatch ? userAddressMatch[1] : userAddress;
+    const userHouseNo = userAddressMatch ? userAddressMatch[2] : '';
     
     // Swiss QR code structure (SPC Version 2.0)
-    // Each field MUST be separated by CRLF (\r\n)
-    const parts = [
-      'SPC',                                    // QR Type
-      '0200',                                   // Version
-      '1',                                      // Coding Type (UTF-8)
-      iban,                                     // IBAN
-      'S',                                      // Creditor Address Type (S=Structured)
-      banking.holder,                           // Creditor Name (max 70 chars)
-      street,                                   // Creditor Street (max 70 chars)
-      houseNo,                                  // Creditor Building Number (max 16 chars)
-      sender.zip || '',                         // Creditor Postal Code (max 16 chars)
-      sender.city || '',                        // Creditor Town (max 35 chars)
-      sender.country || 'CH',                   // Creditor Country (ISO)
-      '',                                       // Ultimate Creditor Address Type (empty=none)
-      '',                                       // Ultimate Creditor Name
-      '',                                       // Ultimate Creditor Street
-      '',                                       // Ultimate Creditor Building Number
-      '',                                       // Ultimate Creditor Postal Code
-      '',                                       // Ultimate Creditor Town
-      '',                                       // Ultimate Creditor Country
-      amount,                                   // Amount
-      invoice.currency,                         // Currency
-      'S',                                      // Debtor Address Type (S=Structured)
-      `${user.first_name} ${user.last_name}`,  // Debtor Name (max 70 chars)
-      userStreet,                               // Debtor Street (max 70 chars)
-      userHouseNo,                              // Debtor Building Number (max 16 chars)
-      user.address_zip || '',                   // Debtor Postal Code (max 16 chars)
-      user.address_city || '',                  // Debtor Town (max 35 chars)
-      user.address_country || 'CH',             // Debtor Country (ISO)
-      'NON',                                    // Reference Type (NON=without reference)
-      '',                                       // Reference (empty for NON)
-      `${t('billing.invoice')} ${invoice.invoice_number}`, // Additional Information (max 140 chars)
-      'EPD',                                    // Trailer
-      ''                                        // Billing Information (empty)
+    // CRITICAL: Each field MUST be separated by CRLF (\r\n)
+    const qrParts = [
+      'SPC',                                      // QR Type
+      '0200',                                     // Version
+      '1',                                        // Coding Type (UTF-8)
+      iban,                                       // IBAN
+      'S',                                        // Creditor Address Type (S=Structured)
+      banking.holder.substring(0, 70),            // Creditor Name (max 70 chars)
+      senderStreet.substring(0, 70),              // Creditor Street (max 70 chars)
+      senderHouseNo.substring(0, 16),             // Creditor Building Number (max 16 chars)
+      (sender.zip || '').substring(0, 16),        // Creditor Postal Code (max 16 chars)
+      (sender.city || '').substring(0, 35),       // Creditor Town (max 35 chars)
+      sender.country || 'CH',                     // Creditor Country (ISO)
+      '',                                         // Ultimate Creditor Address Type (empty=none)
+      '',                                         // Ultimate Creditor Name
+      '',                                         // Ultimate Creditor Street
+      '',                                         // Ultimate Creditor Building Number
+      '',                                         // Ultimate Creditor Postal Code
+      '',                                         // Ultimate Creditor Town
+      '',                                         // Ultimate Creditor Country
+      amount,                                     // Amount
+      invoice.currency,                           // Currency
+      'S',                                        // Debtor Address Type (S=Structured)
+      `${user.first_name} ${user.last_name}`.substring(0, 70),  // Debtor Name (max 70 chars)
+      userStreet.substring(0, 70),                // Debtor Street (max 70 chars)
+      userHouseNo.substring(0, 16),               // Debtor Building Number (max 16 chars)
+      (user.address_zip || '').substring(0, 16),  // Debtor Postal Code (max 16 chars)
+      (user.address_city || '').substring(0, 35), // Debtor Town (max 35 chars)
+      user.address_country || 'CH',               // Debtor Country (ISO)
+      'NON',                                      // Reference Type (NON=without reference)
+      '',                                         // Reference (empty for NON)
+      `Invoice ${invoice.invoice_number}`.substring(0, 140), // Additional Information (max 140 chars)
+      'EPD',                                      // Trailer
+      ''                                          // Billing Information (empty)
     ];
     
     // Join with CRLF as per Swiss QR specification
-    return parts.join('\r\n');
+    const qrData = qrParts.join('\r\n');
+    
+    console.log('Generated Swiss QR data:', qrData);
+    console.log('QR data length:', qrData.length, 'characters');
+    
+    return qrData;
   };
 
   // Download PDF function
@@ -580,6 +625,13 @@ export default function Billing() {
           
           #qrcode {
             margin: 20px auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+          }
+          
+          #qrcode canvas {
+            image-rendering: pixelated;
           }
           
           @media print {
@@ -759,7 +811,7 @@ export default function Billing() {
           <div class="page qr-page">
             <div class="qr-title">${t('billing.swissQR')}</div>
             <div class="qr-container">
-              <canvas id="qrcode"></canvas>
+              <div id="qrcode"></div>
               <div class="qr-info">
                 <p><strong>${t('billing.invoice')}:</strong> ${invoice.invoice_number}</p>
                 <p><strong>${t('billing.amount')}:</strong> ${invoice.currency} ${invoice.total_amount.toFixed(2)}</p>
@@ -776,36 +828,45 @@ export default function Billing() {
             // Generate Swiss QR Code with proper format
             const qrData = ${JSON.stringify(qrData)};
             
+            console.log('QR Data for Swiss QR Bill:');
+            console.log(qrData);
+            console.log('QR Data length:', qrData.length, 'characters');
+            
             window.addEventListener('load', function() {
               const qrCodeDiv = document.getElementById('qrcode');
               
               if (qrCodeDiv && typeof QRCode !== 'undefined') {
                 try {
+                  // Clear any existing content
+                  qrCodeDiv.innerHTML = '';
+                  
+                  // Create QR code with Swiss QR specifications
                   new QRCode(qrCodeDiv, {
                     text: qrData,
-                    width: 256,
-                    height: 256,
+                    width: 280,
+                    height: 280,
                     colorDark: "#000000",
                     colorLight: "#ffffff",
-                    correctLevel: QRCode.CorrectLevel.M
+                    correctLevel: QRCode.CorrectLevel.M  // Medium error correction as per Swiss QR spec
                   });
                   
-                  console.log('Swiss QR Code generated successfully');
-                  console.log('QR Data length:', qrData.length, 'bytes');
+                  console.log('✓ Swiss QR Code generated successfully');
                   
+                  // Wait for QR code to render before printing
                   setTimeout(() => {
                     window.print();
                     setTimeout(() => window.close(), 100);
-                  }, 1000);
+                  }, 1500);
                 } catch (error) {
-                  console.error('QR Code generation error:', error);
+                  console.error('❌ QR Code generation error:', error);
+                  alert('Failed to generate QR code: ' + error.message);
                   setTimeout(() => {
                     window.print();
                     setTimeout(() => window.close(), 100);
                   }, 1000);
                 }
               } else {
-                console.error('QRCode library not loaded');
+                console.error('❌ QRCode library not loaded or qrcode div not found');
                 setTimeout(() => {
                   window.print();
                   setTimeout(() => window.close(), 100);
@@ -870,6 +931,16 @@ export default function Billing() {
     setExpandedBuildings(newExpanded);
   };
 
+  const toggleYearExpand = (year: string) => {
+    const newExpanded = new Set(expandedYears);
+    if (newExpanded.has(year)) {
+      newExpanded.delete(year);
+    } else {
+      newExpanded.add(year);
+    }
+    setExpandedYears(newExpanded);
+  };
+
   const formatDate = (dateStr: string | Date) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString('de-CH');
@@ -883,10 +954,45 @@ export default function Billing() {
     ? invoices.filter(inv => inv.building_id === selectedBuildingId)
     : invoices;
 
-  const invoicesByBuilding = buildings.map(building => ({
-    building,
-    invoices: filteredInvoices.filter(inv => inv.building_id === building.id)
-  })).filter(group => group.invoices.length > 0);
+  // NEW: Organize invoices by building, year, and archive status
+  const organizedInvoices = buildings.map(building => {
+    const buildingInvoices = filteredInvoices.filter(inv => inv.building_id === building.id);
+    
+    // Separate active and archived user invoices
+    const activeInvoices = buildingInvoices.filter(inv => {
+      const user = users.find(u => u.id === inv.user_id);
+      return user?.is_active;
+    });
+    
+    const archivedInvoices = buildingInvoices.filter(inv => {
+      const user = users.find(u => u.id === inv.user_id);
+      return !user?.is_active;
+    });
+    
+    // Group active invoices by year
+    const invoicesByYear = activeInvoices.reduce((acc, inv) => {
+      const year = new Date(inv.period_start).getFullYear().toString();
+      if (!acc[year]) acc[year] = [];
+      acc[year].push(inv);
+      return acc;
+    }, {} as Record<string, Invoice[]>);
+    
+    // Group archived invoices by user
+    const archivedByUser = archivedInvoices.reduce((acc, inv) => {
+      const user = users.find(u => u.id === inv.user_id);
+      const userName = user ? `${user.first_name} ${user.last_name}` : 'Unknown User';
+      if (!acc[userName]) acc[userName] = [];
+      acc[userName].push(inv);
+      return acc;
+    }, {} as Record<string, Invoice[]>);
+    
+    return {
+      building,
+      invoicesByYear,
+      archivedByUser,
+      totalCount: buildingInvoices.length
+    };
+  }).filter(group => group.totalCount > 0);
 
   // IMPROVED: Filter users to show only active ones (exclude archived) in the selection
   const activeUsersForBuildings = users.filter(u => 
@@ -952,6 +1058,7 @@ export default function Billing() {
               <li>{t('billing.instructions.important3')}</li>
               <li>{t('billing.instructions.important4')}</li>
               <li><strong>Archived users are excluded from billing automatically</strong></li>
+              <li><strong>Invoices are organized by year and archived users</strong></li>
             </ul>
           </div>
 
@@ -992,6 +1099,158 @@ export default function Billing() {
       </div>
     </div>
   );
+
+  const renderInvoiceCard = (invoice: Invoice) => {
+    const user = users.find(u => u.id === invoice.user_id);
+    const statusColors = getStatusColor(invoice.status);
+    const isArchived = !user?.is_active;
+    
+    return (
+      <div key={invoice.id} style={{
+        backgroundColor: isArchived ? '#f8f9fa' : 'white',
+        borderRadius: '12px',
+        padding: '16px',
+        marginBottom: '12px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+      }}>
+        <div style={{ marginBottom: '12px' }}>
+          <div style={{ fontSize: '13px', fontFamily: 'monospace', color: '#6b7280', marginBottom: '4px' }}>
+            {invoice.invoice_number}
+          </div>
+          <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: '#1f2937' }}>
+            {user ? `${user.first_name} ${user.last_name}` : '-'}
+            {isArchived && <span style={{ color: '#999', fontSize: '12px', marginLeft: '8px' }}>(Archived)</span>}
+          </h3>
+          <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>
+            {formatDate(invoice.period_start)} - {formatDate(invoice.period_end)}
+          </div>
+          <div style={{ fontSize: '18px', fontWeight: '700', color: '#1f2937', marginBottom: '8px' }}>
+            {invoice.currency} {invoice.total_amount.toFixed(2)}
+          </div>
+          <span style={{
+            display: 'inline-block',
+            padding: '4px 12px',
+            borderRadius: '12px',
+            fontSize: '12px',
+            fontWeight: '600',
+            backgroundColor: statusColors.bg,
+            color: statusColors.color,
+            marginBottom: '8px'
+          }}>
+            {invoice.status.toUpperCase()}
+          </span>
+          <div style={{ fontSize: '12px', color: '#9ca3af' }}>
+            {t('billing.generated')}: {formatDate(invoice.generated_at)}
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', borderTop: '1px solid #f3f4f6', paddingTop: '12px' }}>
+          <button
+            onClick={() => viewInvoice(invoice.id)}
+            style={{
+              padding: '10px',
+              backgroundColor: '#007bff',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px'
+            }}
+          >
+            <Eye size={14} />
+            <span style={{ fontSize: '11px' }}>{t('billing.viewBtn')}</span>
+          </button>
+          <button
+            onClick={() => downloadPDF(invoice, senderInfo, bankingInfo)}
+            style={{
+              padding: '10px',
+              backgroundColor: '#28a745',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px'
+            }}
+          >
+            <Download size={14} />
+            <span style={{ fontSize: '11px' }}>{t('billing.pdfBtn')}</span>
+          </button>
+          <button
+            onClick={() => deleteInvoice(invoice.id)}
+            style={{
+              padding: '10px',
+              backgroundColor: '#dc3545',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px'
+            }}
+          >
+            <Trash2 size={14} />
+            <span style={{ fontSize: '11px' }}>{t('billing.deleteBtn')}</span>
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderInvoiceRow = (invoice: Invoice) => {
+    const user = users.find(u => u.id === invoice.user_id);
+    const statusColors = getStatusColor(invoice.status);
+    const isArchived = !user?.is_active;
+    
+    return (
+      <tr key={invoice.id} style={{ borderBottom: '1px solid #eee', backgroundColor: isArchived ? '#f8f9fa' : 'white' }}>
+        <td style={{ padding: '16px', fontFamily: 'monospace', fontSize: '13px' }}>{invoice.invoice_number}</td>
+        <td style={{ padding: '16px' }}>
+          {user ? `${user.first_name} ${user.last_name}` : '-'}
+          {isArchived && <span style={{ color: '#999', fontSize: '12px', marginLeft: '8px' }}>(Archived)</span>}
+        </td>
+        <td style={{ padding: '16px' }}>{formatDate(invoice.period_start)} - {formatDate(invoice.period_end)}</td>
+        <td style={{ padding: '16px', fontWeight: '600' }}>{invoice.currency} {invoice.total_amount.toFixed(2)}</td>
+        <td style={{ padding: '16px' }}>
+          <span style={{
+            padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600',
+            backgroundColor: statusColors.bg, 
+            color: statusColors.color
+          }}>
+            {invoice.status.toUpperCase()}
+          </span>
+        </td>
+        <td style={{ padding: '16px', fontSize: '13px', color: '#666' }}>
+          {formatDate(invoice.generated_at)}
+        </td>
+        <td style={{ padding: '16px' }}>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={() => viewInvoice(invoice.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title={t('billing.view')}>
+              <Eye size={16} color="#007bff" />
+            </button>
+            <button onClick={() => downloadPDF(invoice, senderInfo, bankingInfo)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title={t('billing.downloadPdf')}>
+              <Download size={16} color="#28a745" />
+            </button>
+            <button onClick={() => deleteInvoice(invoice.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title={t('common.delete')}>
+              <Trash2 size={16} color="#dc3545" />
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  };
 
   return (
     <div className="billing-container" style={{ width: '100%', maxWidth: '100%' }}>
@@ -1120,12 +1379,12 @@ export default function Billing() {
         })}
       </div>
 
-      {invoicesByBuilding.length === 0 ? (
+      {organizedInvoices.length === 0 ? (
         <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '60px 20px', textAlign: 'center', color: '#999' }}>
           {t('billing.noInvoices')}
         </div>
       ) : (
-        invoicesByBuilding.map(({ building, invoices: buildingInvoices }) => (
+        organizedInvoices.map(({ building, invoicesByYear, archivedByUser, totalCount }) => (
           <div key={building.id} style={{ marginBottom: '24px' }}>
             <div 
               onClick={() => toggleBuildingExpand(building.id)}
@@ -1146,7 +1405,7 @@ export default function Billing() {
                   {building.name}
                 </h2>
                 <p style={{ fontSize: '14px', color: '#666', margin: '4px 0 0 0' }}>
-                  {buildingInvoices.length} {buildingInvoices.length === 1 ? t('billing.invoices') : t('billing.invoicesPlural')}
+                  {totalCount} {totalCount === 1 ? t('billing.invoices') : t('billing.invoicesPlural')}
                 </p>
               </div>
               <span style={{ fontSize: '24px', color: '#666' }}>
@@ -1155,176 +1414,125 @@ export default function Billing() {
             </div>
 
             {expandedBuildings.has(building.id) && (
-              <>
-                <div className="desktop-table" style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden', width: '100%' }}>
-                  <table style={{ width: '100%' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
-                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('billing.invoiceNumber')}</th>
-                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('billing.user')}</th>
-                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('billing.period')}</th>
-                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('billing.amount')}</th>
-                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.status')}</th>
-                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('billing.generated')}</th>
-                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.actions')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {buildingInvoices.map(invoice => {
-                        const user = users.find(u => u.id === invoice.user_id);
-                        const statusColors = getStatusColor(invoice.status);
-                        const isArchived = !user?.is_active;
-                        return (
-                          <tr key={invoice.id} style={{ borderBottom: '1px solid #eee', backgroundColor: isArchived ? '#f8f9fa' : 'white' }}>
-                            <td style={{ padding: '16px', fontFamily: 'monospace', fontSize: '13px' }}>{invoice.invoice_number}</td>
-                            <td style={{ padding: '16px' }}>
-                              {user ? `${user.first_name} ${user.last_name}` : '-'}
-                              {isArchived && <span style={{ color: '#999', fontSize: '12px', marginLeft: '8px' }}>(Archived)</span>}
-                            </td>
-                            <td style={{ padding: '16px' }}>{formatDate(invoice.period_start)} - {formatDate(invoice.period_end)}</td>
-                            <td style={{ padding: '16px', fontWeight: '600' }}>{invoice.currency} {invoice.total_amount.toFixed(2)}</td>
-                            <td style={{ padding: '16px' }}>
-                              <span style={{
-                                padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600',
-                                backgroundColor: statusColors.bg, 
-                                color: statusColors.color
-                              }}>
-                                {invoice.status.toUpperCase()}
-                              </span>
-                            </td>
-                            <td style={{ padding: '16px', fontSize: '13px', color: '#666' }}>
-                              {formatDate(invoice.generated_at)}
-                            </td>
-                            <td style={{ padding: '16px' }}>
-                              <div style={{ display: 'flex', gap: '8px' }}>
-                                <button onClick={() => viewInvoice(invoice.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title={t('billing.view')}>
-                                  <Eye size={16} color="#007bff" />
-                                </button>
-                                <button onClick={() => downloadPDF(invoice, senderInfo, bankingInfo)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title={t('billing.downloadPdf')}>
-                                  <Download size={16} color="#28a745" />
-                                </button>
-                                <button onClick={() => deleteInvoice(invoice.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }} title={t('common.delete')}>
-                                  <Trash2 size={16} color="#dc3545" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="mobile-cards">
-                  {buildingInvoices.map(invoice => {
-                    const user = users.find(u => u.id === invoice.user_id);
-                    const statusColors = getStatusColor(invoice.status);
-                    const isArchived = !user?.is_active;
-                    return (
-                      <div key={invoice.id} style={{
-                        backgroundColor: isArchived ? '#f8f9fa' : 'white',
-                        borderRadius: '12px',
-                        padding: '16px',
-                        marginBottom: '12px',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                      }}>
-                        <div style={{ marginBottom: '12px' }}>
-                          <div style={{ fontSize: '13px', fontFamily: 'monospace', color: '#6b7280', marginBottom: '4px' }}>
-                            {invoice.invoice_number}
-                          </div>
-                          <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: '#1f2937' }}>
-                            {user ? `${user.first_name} ${user.last_name}` : '-'}
-                            {isArchived && <span style={{ color: '#999', fontSize: '12px', marginLeft: '8px' }}>(Archived)</span>}
-                          </h3>
-                          <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>
-                            {formatDate(invoice.period_start)} - {formatDate(invoice.period_end)}
-                          </div>
-                          <div style={{ fontSize: '18px', fontWeight: '700', color: '#1f2937', marginBottom: '8px' }}>
-                            {invoice.currency} {invoice.total_amount.toFixed(2)}
-                          </div>
-                          <span style={{
-                            display: 'inline-block',
-                            padding: '4px 12px',
-                            borderRadius: '12px',
-                            fontSize: '12px',
-                            fontWeight: '600',
-                            backgroundColor: statusColors.bg,
-                            color: statusColors.color,
-                            marginBottom: '8px'
-                          }}>
-                            {invoice.status.toUpperCase()}
-                          </span>
-                          <div style={{ fontSize: '12px', color: '#9ca3af' }}>
-                            {t('billing.generated')}: {formatDate(invoice.generated_at)}
-                          </div>
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', borderTop: '1px solid #f3f4f6', paddingTop: '12px' }}>
-                          <button
-                            onClick={() => viewInvoice(invoice.id)}
-                            style={{
-                              padding: '10px',
-                              backgroundColor: '#007bff',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '6px',
-                              fontSize: '13px',
-                              fontWeight: '600',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: '4px'
-                            }}
-                          >
-                            <Eye size={14} />
-                            <span style={{ fontSize: '11px' }}>{t('billing.viewBtn')}</span>
-                          </button>
-                          <button
-                            onClick={() => downloadPDF(invoice, senderInfo, bankingInfo)}
-                            style={{
-                              padding: '10px',
-                              backgroundColor: '#28a745',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '6px',
-                              fontSize: '13px',
-                              fontWeight: '600',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: '4px'
-                            }}
-                          >
-                            <Download size={14} />
-                            <span style={{ fontSize: '11px' }}>{t('billing.pdfBtn')}</span>
-                          </button>
-                          <button
-                            onClick={() => deleteInvoice(invoice.id)}
-                            style={{
-                              padding: '10px',
-                              backgroundColor: '#dc3545',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '6px',
-                              fontSize: '13px',
-                              fontWeight: '600',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: '4px'
-                            }}
-                          >
-                            <Trash2 size={14} />
-                            <span style={{ fontSize: '11px' }}>{t('billing.deleteBtn')}</span>
-                          </button>
-                        </div>
+              <div style={{ paddingLeft: '20px' }}>
+                {/* Archive Section */}
+                {Object.keys(archivedByUser).length > 0 && (
+                  <div style={{ marginBottom: '20px' }}>
+                    <div
+                      onClick={() => toggleYearExpand('archive-' + building.id)}
+                      style={{
+                        backgroundColor: '#fff3cd',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        marginBottom: '8px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        border: '1px solid #ffc107'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Archive size={18} color="#856404" />
+                        <h3 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#856404' }}>
+                          Archive (Archived Users)
+                        </h3>
                       </div>
-                    );
-                  })}
-                </div>
-              </>
+                      <span style={{ fontSize: '18px', color: '#856404' }}>
+                        {expandedYears.has('archive-' + building.id) ? '▼' : '▶'}
+                      </span>
+                    </div>
+
+                    {expandedYears.has('archive-' + building.id) && (
+                      <div style={{ paddingLeft: '20px' }}>
+                        {Object.entries(archivedByUser).map(([userName, userInvoices]) => (
+                          <div key={userName} style={{ marginBottom: '16px' }}>
+                            <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px', color: '#666' }}>
+                              {userName} ({userInvoices.length} {userInvoices.length === 1 ? 'invoice' : 'invoices'})
+                            </h4>
+                            <div className="desktop-table" style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden', width: '100%' }}>
+                              <table style={{ width: '100%' }}>
+                                <thead>
+                                  <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
+                                    <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>{t('billing.invoiceNumber')}</th>
+                                    <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>{t('billing.period')}</th>
+                                    <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>{t('billing.amount')}</th>
+                                    <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>{t('common.status')}</th>
+                                    <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>{t('billing.generated')}</th>
+                                    <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>{t('common.actions')}</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {userInvoices.map(renderInvoiceRow)}
+                                </tbody>
+                              </table>
+                            </div>
+                            <div className="mobile-cards">
+                              {userInvoices.map(renderInvoiceCard)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Year Sections */}
+                {Object.entries(invoicesByYear)
+                  .sort(([a], [b]) => parseInt(b) - parseInt(a)) // Sort years descending
+                  .map(([year, yearInvoices]) => (
+                    <div key={year} style={{ marginBottom: '20px' }}>
+                      <div
+                        onClick={() => toggleYearExpand(year + '-' + building.id)}
+                        style={{
+                          backgroundColor: '#e7f3ff',
+                          padding: '12px 16px',
+                          borderRadius: '8px',
+                          marginBottom: '8px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          border: '1px solid #3b82f6'
+                        }}
+                      >
+                        <h3 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#1f2937' }}>
+                          {year} ({yearInvoices.length} {yearInvoices.length === 1 ? 'invoice' : 'invoices'})
+                        </h3>
+                        <span style={{ fontSize: '18px', color: '#666' }}>
+                          {expandedYears.has(year + '-' + building.id) ? '▼' : '▶'}
+                        </span>
+                      </div>
+
+                      {expandedYears.has(year + '-' + building.id) && (
+                        <>
+                          <div className="desktop-table" style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden', width: '100%' }}>
+                            <table style={{ width: '100%' }}>
+                              <thead>
+                                <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
+                                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>{t('billing.invoiceNumber')}</th>
+                                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>{t('billing.user')}</th>
+                                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>{t('billing.period')}</th>
+                                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>{t('billing.amount')}</th>
+                                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>{t('common.status')}</th>
+                                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>{t('billing.generated')}</th>
+                                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>{t('common.actions')}</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {yearInvoices.map(renderInvoiceRow)}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          <div className="mobile-cards">
+                            {yearInvoices.map(renderInvoiceCard)}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+              </div>
             )}
           </div>
         ))
