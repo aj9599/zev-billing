@@ -504,9 +504,8 @@ export default function SharedMeterConfigComponent() {
           </div>
         )}
       </div>
-    </div>
-  );
-}
+
+      {/* Modal */}
       {showModal && (
         <div style={{
           position: 'fixed',
