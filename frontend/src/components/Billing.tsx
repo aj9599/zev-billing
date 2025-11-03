@@ -86,6 +86,17 @@ export default function Billing() {
         console.error('Failed to parse banking info:', e);
       }
     }
+
+    // FIX 5: Load expanded years from localStorage
+    const savedExpandedYears = localStorage.getItem('zev_expanded_years');
+    if (savedExpandedYears) {
+      try {
+        const parsed = JSON.parse(savedExpandedYears);
+        setExpandedYears(new Set(parsed));
+      } catch (e) {
+        console.error('Failed to parse expanded years:', e);
+      }
+    }
   }, []);
 
   // Save sender info to sessionStorage when it changes
@@ -102,7 +113,14 @@ export default function Billing() {
     }
   }, [bankingInfo]);
 
-  // Auto-fill sender and banking info when buildings are selected
+  // FIX 5: Save expanded years to localStorage when they change
+  useEffect(() => {
+    if (expandedYears.size > 0) {
+      localStorage.setItem('zev_expanded_years', JSON.stringify(Array.from(expandedYears)));
+    }
+  }, [expandedYears]);
+
+  // FIX 4: Auto-fill sender and banking info when buildings are selected (ALWAYS override)
   useEffect(() => {
     if (formData.building_ids.length > 0) {
       loadAdminInfoForBuildings(formData.building_ids);
@@ -138,8 +156,8 @@ export default function Billing() {
         const admin = adminUsers[0];
         console.log('Found admin user:', admin.email, admin.first_name, admin.last_name);
         
-        // Only auto-fill if current values are empty
-        if (!formData.sender_name && admin.first_name && admin.last_name) {
+        // FIX 4: ALWAYS fill from admin (override existing values)
+        if (admin.first_name && admin.last_name) {
           const newSenderInfo = {
             name: `${admin.first_name} ${admin.last_name}`,
             address: admin.address_street || '',
@@ -157,10 +175,11 @@ export default function Billing() {
             sender_zip: newSenderInfo.zip,
             sender_country: newSenderInfo.country
           }));
-          console.log('Auto-filled sender info');
+          console.log('Auto-filled sender info from admin');
         }
         
-        if (!formData.bank_iban && admin.bank_iban) {
+        // FIX 4: ALWAYS fill banking info (override existing values)
+        if (admin.bank_iban) {
           const newBankingInfo = {
             name: admin.bank_name || '',
             iban: admin.bank_iban || '',
@@ -174,7 +193,7 @@ export default function Billing() {
             bank_iban: newBankingInfo.iban,
             bank_account_holder: newBankingInfo.holder
           }));
-          console.log('Auto-filled banking info');
+          console.log('Auto-filled banking info from admin');
         }
         
         console.log('Successfully auto-filled billing info from admin user:', admin.email);
@@ -200,7 +219,7 @@ export default function Billing() {
       const buildingIds = new Set(buildingsData.filter(b => !b.is_group).map(b => b.id));
       setExpandedBuildings(buildingIds);
       
-      // FIX 1: Keep existing expanded years and add current year
+      // Keep existing expanded years and add current year
       setExpandedYears(prev => {
         const newExpanded = new Set(prev);
         const currentYear = new Date().getFullYear().toString();
@@ -243,7 +262,7 @@ export default function Billing() {
       setShowGenerateModal(false);
       resetForm();
       
-      // FIX 1: Expand the years for the newly generated invoices
+      // Expand the years for the newly generated invoices
       if (result && result.length > 0) {
         const generatedYears = new Set<string>();
         result.forEach(invoice => {
@@ -394,10 +413,10 @@ export default function Billing() {
       return '';
     }
     
+    console.log('✓ Generated valid Swiss QR data with 31 elements');
     return qrData;
   };
 
-  // FIX 4 & 5: Improved PDF download function with direct download
   const downloadPDF = async (invoice: Invoice, senderInfoOverride?: any, bankingInfoOverride?: any) => {
     let invoiceWithItems = invoice;
     if (!invoice.items || invoice.items.length === 0) {
@@ -422,9 +441,15 @@ export default function Billing() {
     
     const hasBankingDetails = banking.iban && banking.holder;
     const isArchived = !user?.is_active;
-    const qrData = generateSwissQRData(invoiceWithItems, sender, banking);
     
-    // Create a unique ID for this invoice's QR code
+    // FIX 3: Generate QR data and verify it's valid before using
+    const qrData = hasBankingDetails ? generateSwissQRData(invoiceWithItems, sender, banking) : '';
+    const hasValidQR = qrData && qrData.length > 0;
+    
+    if (hasBankingDetails && !hasValidQR) {
+      console.warn('Banking details present but QR generation failed - will show QR page without code');
+    }
+    
     const qrCodeId = `qrcode-${invoiceWithItems.id}-${Date.now()}`;
     
     const iframe = document.createElement('iframe');
@@ -465,9 +490,10 @@ export default function Billing() {
           .page {
             page-break-after: always;
             padding: 20px;
-            min-height: 100vh;
+            min-height: 297mm;
+            max-height: 297mm;
             position: relative;
-            padding-bottom: 180px;
+            box-sizing: border-box;
           }
           
           .page:last-child {
@@ -620,6 +646,7 @@ export default function Billing() {
             text-align: right; 
             margin-top: 20px;
             border-radius: 6px;
+            margin-bottom: 20px;
           }
           
           .total-section p { 
@@ -628,14 +655,14 @@ export default function Billing() {
             margin: 0;
           }
           
-          /* FIX 2: Payment details at bottom of first page */
+          /* FIX 1: Payment details at absolute bottom of page */
           .payment-details-bottom {
             position: absolute;
-            bottom: 20px;
+            bottom: 15mm;
             left: 20px;
             right: 20px;
-            padding: 15px;
-            border-top: 1px solid #ddd;
+            padding: 15px 0;
+            border-top: 2px solid #ddd;
             font-size: 8pt;
             color: #666;
             background: white;
@@ -656,7 +683,7 @@ export default function Billing() {
           
           .footer-timestamp {
             text-align: right;
-            font-size: 8pt;
+            font-size: 7pt;
             color: #999;
             margin-top: 8px;
           }
@@ -666,7 +693,7 @@ export default function Billing() {
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
+            min-height: 297mm;
             text-align: center;
             padding: 30px;
           }
@@ -698,6 +725,7 @@ export default function Billing() {
             display: flex;
             justify-content: center;
             align-items: center;
+            min-height: 280px;
           }
           
           #${qrCodeId} canvas {
@@ -705,11 +733,21 @@ export default function Billing() {
           }
           
           @media print {
-            body { padding: 0; font-size: 10pt; }
-            .page { padding: 15px; padding-bottom: 180px; }
+            body { 
+              padding: 0; 
+              font-size: 10pt; 
+            }
             
+            .page { 
+              padding: 15px;
+              min-height: 297mm;
+              max-height: 297mm;
+            }
+            
+            /* FIX 2: Hide browser URL from print */
             @page { 
               margin: 10mm;
+              size: A4 portrait;
             }
             
             * {
@@ -876,7 +914,7 @@ export default function Billing() {
               <p><strong>${t('billing.accountHolder')}:</strong> ${banking.holder}</p>
               <p><strong>${t('billing.iban')}:</strong> ${banking.iban}</p>
               <div class="footer-timestamp">
-                <p>${new Date().toLocaleString('de-CH', { 
+                <p>${t('billing.generated')}: ${new Date().toLocaleString('de-CH', { 
                   year: 'numeric', 
                   month: '2-digit', 
                   day: '2-digit',
@@ -889,11 +927,18 @@ export default function Billing() {
           ` : ''}
         </div>
 
-        ${hasBankingDetails && qrData ? `
+        ${hasBankingDetails ? `
           <div class="page qr-page">
             <div class="qr-title">${t('billing.swissQR')}</div>
             <div class="qr-container">
-              <div id="${qrCodeId}"></div>
+              <div id="${qrCodeId}">
+                ${!hasValidQR ? `
+                  <div style="padding: 20px; color: #dc3545; text-align: center;">
+                    <p style="margin: 0; font-size: 12pt;">QR Code could not be generated</p>
+                    <p style="margin: 5px 0 0 0; font-size: 9pt;">Please check banking details</p>
+                  </div>
+                ` : ''}
+              </div>
               <div class="qr-info">
                 <p><strong>${t('billing.invoice')}:</strong> ${invoiceWithItems.invoice_number}</p>
                 <p><strong>${t('billing.amount')}:</strong> ${invoiceWithItems.currency} ${invoiceWithItems.total_amount.toFixed(2)}</p>
@@ -906,11 +951,11 @@ export default function Billing() {
 
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
         <script>
-          ${hasBankingDetails && qrData ? `
+          ${hasBankingDetails && hasValidQR ? `
             const qrData = ${JSON.stringify(qrData)};
             
-            console.log('QR Data for Swiss QR Bill (31 data elements):');
-            console.log(qrData);
+            console.log('Generating Swiss QR Code...');
+            console.log('QR Data length:', qrData.length, 'characters');
             
             window.addEventListener('load', function() {
               const qrCodeDiv = document.getElementById('${qrCodeId}');
@@ -930,18 +975,18 @@ export default function Billing() {
                   
                   console.log('✓ Swiss QR Code generated successfully');
                   
-                  // FIX 5: Trigger print after QR code is generated
                   setTimeout(() => {
                     window.print();
                   }, 1500);
                 } catch (error) {
                   console.error('✗ QR Code generation error:', error);
+                  qrCodeDiv.innerHTML = '<p style="color: red; padding: 20px;">Error generating QR code</p>';
                   setTimeout(() => {
                     window.print();
                   }, 1000);
                 }
               } else {
-                console.error('✗ QRCode library not loaded or qrcode div not found');
+                console.error('✗ QRCode library not loaded or div not found');
                 setTimeout(() => {
                   window.print();
                 }, 1000);
@@ -949,7 +994,10 @@ export default function Billing() {
             });
           ` : `
             window.addEventListener('load', function() {
-              window.print();
+              console.log('Printing invoice without QR code...');
+              setTimeout(() => {
+                window.print();
+              }, 500);
             });
           `}
         </script>
@@ -959,7 +1007,6 @@ export default function Billing() {
     
     iframeDoc.close();
     
-    // Cleanup iframe after print/download
     setTimeout(() => {
       document.body.removeChild(iframe);
     }, 5000);
@@ -1487,7 +1534,6 @@ export default function Billing() {
 
             {expandedBuildings.has(building.id) && (
               <div style={{ paddingLeft: '20px' }}>
-                {/* Archive Section */}
                 {Object.keys(archivedByUser).length > 0 && (
                   <div style={{ marginBottom: '20px' }}>
                     <div
@@ -1549,7 +1595,6 @@ export default function Billing() {
                   </div>
                 )}
 
-                {/* Year Sections - FIX 6: Better translation */}
                 {Object.entries(invoicesByYear)
                   .sort(([a], [b]) => parseInt(b) - parseInt(a))
                   .map(([year, yearInvoices]) => (
