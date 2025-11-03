@@ -48,14 +48,6 @@ export default function Billing() {
       try {
         const parsed = JSON.parse(savedSender);
         setSenderInfo(parsed);
-        setFormData(prev => ({
-          ...prev,
-          sender_name: parsed.name || '',
-          sender_address: parsed.address || '',
-          sender_city: parsed.city || '',
-          sender_zip: parsed.zip || '',
-          sender_country: parsed.country || 'Switzerland'
-        }));
       } catch (e) {
         console.error('Failed to parse sender info:', e);
       }
@@ -65,12 +57,6 @@ export default function Billing() {
       try {
         const parsed = JSON.parse(savedBanking);
         setBankingInfo(parsed);
-        setFormData(prev => ({
-          ...prev,
-          bank_name: parsed.name || '',
-          bank_iban: parsed.iban || '',
-          bank_account_holder: parsed.holder || ''
-        }));
       } catch (e) {
         console.error('Failed to parse banking info:', e);
       }
@@ -108,89 +94,6 @@ export default function Billing() {
       localStorage.setItem('zev_expanded_years', JSON.stringify(Array.from(expandedYears)));
     }
   }, [expandedYears]);
-
-  // Auto-fill sender and banking info when buildings are selected
-  useEffect(() => {
-    if (formData.building_ids.length > 0) {
-      loadAdminInfoForBuildings(formData.building_ids);
-    }
-  }, [formData.building_ids]);
-
-  const loadAdminInfoForBuildings = async (buildingIds: number[]) => {
-    try {
-      const allBuildingIds = new Set<number>(buildingIds);
-      
-      // Add complex IDs if any of the selected buildings belong to a complex
-      for (const building of buildings) {
-        if (building.is_group && building.group_buildings) {
-          const groupBuildings = Array.isArray(building.group_buildings) 
-            ? building.group_buildings 
-            : JSON.parse(building.group_buildings as any);
-          
-          for (const bid of buildingIds) {
-            if (groupBuildings.includes(bid)) {
-              allBuildingIds.add(building.id);
-              break;
-            }
-          }
-        }
-      }
-      
-      const buildingIdsParam = Array.from(allBuildingIds).join(',');
-      console.log('Looking for admin users for buildings:', buildingIdsParam);
-      
-      const adminUsers = await api.getAdminUsersForBuildings(buildingIdsParam);
-      
-      if (adminUsers && adminUsers.length > 0) {
-        const admin = adminUsers[0];
-        console.log('Found admin user:', admin.email, admin.first_name, admin.last_name);
-        
-        if (admin.first_name && admin.last_name) {
-          const newSenderInfo = {
-            name: `${admin.first_name} ${admin.last_name}`,
-            address: admin.address_street || '',
-            city: admin.address_city || '',
-            zip: admin.address_zip || '',
-            country: admin.address_country || 'Switzerland'
-          };
-          
-          setSenderInfo(newSenderInfo);
-          setFormData(prev => ({
-            ...prev,
-            sender_name: newSenderInfo.name,
-            sender_address: newSenderInfo.address,
-            sender_city: newSenderInfo.city,
-            sender_zip: newSenderInfo.zip,
-            sender_country: newSenderInfo.country
-          }));
-          console.log('Auto-filled sender info from admin');
-        }
-        
-        if (admin.bank_iban) {
-          const newBankingInfo = {
-            name: admin.bank_name || '',
-            iban: admin.bank_iban || '',
-            holder: admin.bank_account_holder || ''
-          };
-          
-          setBankingInfo(newBankingInfo);
-          setFormData(prev => ({
-            ...prev,
-            bank_name: newBankingInfo.name,
-            bank_iban: newBankingInfo.iban,
-            bank_account_holder: newBankingInfo.holder
-          }));
-          console.log('Auto-filled banking info from admin');
-        }
-        
-        console.log('Successfully auto-filled billing info from admin user:', admin.email);
-      } else {
-        console.log('No admin users found for the selected buildings');
-      }
-    } catch (err) {
-      console.error('Failed to load admin info:', err);
-    }
-  };
 
   const loadData = async () => {
     try {
