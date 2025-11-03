@@ -51,16 +51,15 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     }
   }, [isOpen]);
 
+  // Rebuild apartments list whenever buildings, users, or meters change AND building_ids is set
   useEffect(() => {
     if (config.building_ids.length > 0 && users.length > 0 && meters.length > 0) {
-      buildApartmentsList();
+      console.log('Rebuilding apartments list...');
+      const newApartmentMap = buildApartmentsListSync();
+      setApartmentsWithUsers(newApartmentMap);
+      console.log('Apartments map updated:', newApartmentMap);
     }
   }, [config.building_ids, users, meters]);
-
-  useEffect(() => {
-    console.log('User IDs updated:', config.user_ids);
-    console.log('Selected apartments:', Array.from(selectedApartments));
-  }, [config.user_ids, selectedApartments]);
 
   const loadData = async () => {
     try {
@@ -115,7 +114,8 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     }
   };
 
-  const buildApartmentsList = () => {
+  // This returns the map instead of setting state, so it's synchronous
+  const buildApartmentsListSync = (): Map<number, ApartmentWithUser[]> => {
     const apartmentMap = new Map<number, ApartmentWithUser[]>();
 
     config.building_ids.forEach(buildingId => {
@@ -132,6 +132,8 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         m.meter_type === 'apartment_meter' &&
         m.is_active
       );
+
+      console.log(`Building ${buildingId} (${building.name}): Found ${buildingMeters.length} apartment meters`);
 
       buildingMeters.forEach(meter => {
         if (meter.apartment_unit && !apartmentSet.has(meter.apartment_unit)) {
@@ -158,6 +160,8 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
             user = users.find(u => u.apartment_unit === meter.apartment_unit);
           }
 
+          console.log(`  Apartment "${meter.apartment_unit}": ${user ? `Found user ${user.first_name} ${user.last_name}` : 'NO USER'}`);
+
           apartments.push({
             building_id: buildingId,
             apartment_unit: meter.apartment_unit,
@@ -178,7 +182,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       apartmentMap.set(buildingId, apartments);
     });
 
-    setApartmentsWithUsers(apartmentMap);
+    return apartmentMap;
   };
 
   const filteredSharedMeters = sharedMeters.filter(meter =>
@@ -194,6 +198,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       ? config.building_ids.filter(id => id !== buildingId)
       : [...config.building_ids, buildingId];
     
+    // Clear apartment selections for removed buildings
     if (!newBuildings.includes(buildingId)) {
       const newSelectedApartments = new Set(selectedApartments);
       Array.from(selectedApartments).forEach(key => {
@@ -219,6 +224,9 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     
     setSelectedApartments(newSelected);
 
+    console.log('Current apartmentsWithUsers map:', apartmentsWithUsers);
+    console.log('Looking for building', buildingId, 'in map...');
+
     const userIds: number[] = [];
     const apartmentSelections: { building_id: number; apartment_unit: string; user_id?: number }[] = [];
     
@@ -226,18 +234,18 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       const [bId, aptUnit] = selectedKey.split('-');
       const parsedBuildingId = parseInt(bId);
       const apartments = apartmentsWithUsers.get(parsedBuildingId);
+      
+      console.log(`Processing key: ${selectedKey}`);
+      console.log(`  Building ID: ${parsedBuildingId}`);
+      console.log(`  Apartments for this building:`, apartments);
+      
       const apartment = apartments?.find(a => a.apartment_unit === aptUnit);
       
-      console.log('Processing selected apartment:', {
-        key: selectedKey,
-        apartment: apartment,
-        hasUser: !!apartment?.user,
-        userId: apartment?.user?.id,
-        isActive: apartment?.user?.is_active
-      });
+      console.log(`  Found apartment:`, apartment);
       
       // Add user if exists and is active (already filtered for regular users in loadData)
       if (apartment?.user?.is_active) {
+        console.log(`  ✓ Adding user ${apartment.user.id}: ${apartment.user.first_name} ${apartment.user.last_name}`);
         userIds.push(apartment.user.id);
         
         apartmentSelections.push({
@@ -246,16 +254,18 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           user_id: apartment.user.id
         });
       } else if (apartment) {
-        // Still track apartment selection even without active user
+        console.log(`  ✗ Apartment found but no active user`);
         apartmentSelections.push({
           building_id: parsedBuildingId,
           apartment_unit: aptUnit,
           user_id: undefined
         });
+      } else {
+        console.log(`  ✗ Apartment not found in map!`);
       }
     });
 
-    console.log('Updated user IDs:', userIds);
+    console.log('Final user IDs:', userIds);
 
     setConfig(prev => ({ 
       ...prev, 
@@ -422,7 +432,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
   const canProceed = () => {
     switch (step) {
       case 1:
-        return config.building_ids.length > 0 && selectedApartments.size > 0;
+        return config.building_ids.length > 0 && config.user_ids.length > 0;
       case 2:
         return config.start_date && config.end_date;
       case 3:
@@ -1228,7 +1238,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                 }}
               >
                 <FileText size={18} />
-                {loading ? t('billConfig.navigation.generating') : `${t('billConfig.navigation.generate')} ${config.user_ids.length} ${config.user_ids.length === 1 ? t('billing.invoice') : t('billing.invoicesPlural')}`}
+                {loading ? t('billConfig.navigation.generating') : `${t('billConfig.navigation.generate')} ${config.user_ids.length} ${config.user_ids.length === 1 ? t('billing.invoice') : t('billConfig.invoicesPlural')}`}
               </button>
             )}
           </div>
