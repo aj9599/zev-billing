@@ -286,29 +286,29 @@ export default function SharedMeterConfigComponent() {
         </button>
       </div>
 
-        {/* Info Banner */}
-        <div style={{
-          backgroundColor: '#e7f3ff',
-          border: '2px solid #667EEA',
-          borderRadius: '12px',
-          padding: '20px',
-          marginBottom: '30px',
-          display: 'flex',
-          gap: '16px'
-        }}>
-          <AlertCircle size={24} color="#667EEA" style={{ flexShrink: 0, marginTop: '2px' }} />
-          <div style={{ fontSize: '14px', color: '#4b5563', lineHeight: '1.7' }}>
-            <strong style={{ display: 'block', fontSize: '15px', marginBottom: '6px', color: '#1f2937' }}>
-              {t('sharedMeters.infoTitle')}
-            </strong>
-            {t('sharedMeters.infoDescription')}
-            <br />
-            <strong style={{ marginTop: '8px', display: 'block' }}>{t('sharedMeters.onlyHeatingOther')}</strong>
-          </div>
+      {/* Info Banner */}
+      <div style={{
+        backgroundColor: '#e7f3ff',
+        border: '2px solid #667EEA',
+        borderRadius: '12px',
+        padding: '20px',
+        marginBottom: '30px',
+        display: 'flex',
+        gap: '16px'
+      }}>
+        <AlertCircle size={24} color="#667EEA" style={{ flexShrink: 0, marginTop: '2px' }} />
+        <div style={{ fontSize: '14px', color: '#4b5563', lineHeight: '1.7' }}>
+          <strong style={{ display: 'block', fontSize: '15px', marginBottom: '6px', color: '#1f2937' }}>
+            {t('sharedMeters.infoTitle')}
+          </strong>
+          {t('sharedMeters.infoDescription')}
+          <br />
+          <strong style={{ marginTop: '8px', display: 'block' }}>{t('sharedMeters.onlyHeatingOther')}</strong>
         </div>
+      </div>
 
-        {/* Configs List */}
-        {configs.length === 0 ? (
+      {/* Configs List */}
+      {configs.length === 0 ? (
           <div style={{ 
             textAlign: 'center', 
             padding: '80px 20px',
@@ -503,7 +503,6 @@ export default function SharedMeterConfigComponent() {
             </table>
           </div>
         )}
-      </div>
 
       {/* Modal */}
       {showModal && (
