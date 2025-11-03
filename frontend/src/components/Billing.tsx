@@ -725,7 +725,19 @@ export default function Billing() {
             body { padding: 0; font-size: 10pt; }
             .page { padding: 15px; padding-bottom: 100px; }
             .footer { position: fixed; bottom: 0; }
-            @page { margin: 10mm; }
+            
+            /* Hide browser's default headers/footers with URL */
+            @page { 
+              margin: 10mm;
+              /* Remove browser headers/footers */
+            }
+            
+            /* Force colors to print */
+            * {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+              color-adjust: exact !important;
+            }
           }
         </style>
       </head>
