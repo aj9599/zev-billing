@@ -70,6 +70,7 @@ func main() {
 
 	dataCollector = services.NewDataCollector(db)
 	billingService := services.NewBillingService(db)
+	pdfGenerator := services.NewPDFGenerator(db)
 	autoBillingScheduler = services.NewAutoBillingScheduler(db, billingService)
 
 	go dataCollector.Start()
@@ -81,7 +82,7 @@ func main() {
 	buildingHandler := handlers.NewBuildingHandler(db)
 	meterHandler := handlers.NewMeterHandler(db, dataCollector)
 	chargerHandler := handlers.NewChargerHandler(db, dataCollector)
-	billingHandler := handlers.NewBillingHandler(db, billingService)
+	billingHandler := handlers.NewBillingHandler(db, billingService, pdfGenerator)
 	autoBillingHandler := handlers.NewAutoBillingHandler(db)
 	dashboardHandler := handlers.NewDashboardHandler(db)
 	exportHandler := handlers.NewExportHandler(db)

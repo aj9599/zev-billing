@@ -132,6 +132,7 @@ type Invoice struct {
 	TotalAmount   float64       `json:"total_amount"`
 	Currency      string        `json:"currency"`
 	Status        string        `json:"status"`
+	PDFPath       string        `json:"pdf_path,omitempty"`
 	Items         []InvoiceItem `json:"items,omitempty"`
 	User          *User         `json:"user,omitempty"`
 	GeneratedAt   time.Time     `json:"generated_at"`
@@ -180,17 +181,17 @@ type AdminLog struct {
 }
 
 type DashboardStats struct {
-	TotalUsers     int     `json:"total_users"`
-	RegularUsers   int     `json:"regular_users"`
-	AdminUsers     int     `json:"admin_users"`
-	ActiveUsers    int     `json:"active_users"`
-	InactiveUsers  int     `json:"inactive_users"`
-	TotalBuildings int     `json:"total_buildings"`
-	TotalComplexes int     `json:"total_complexes"`
-	TotalMeters    int     `json:"total_meters"`
-	TotalChargers  int     `json:"total_chargers"`
-	ActiveMeters   int     `json:"active_meters"`
-	ActiveChargers int     `json:"active_chargers"`
+	TotalUsers          int     `json:"total_users"`
+	RegularUsers        int     `json:"regular_users"`
+	AdminUsers          int     `json:"admin_users"`
+	ActiveUsers         int     `json:"active_users"`
+	InactiveUsers       int     `json:"inactive_users"`
+	TotalBuildings      int     `json:"total_buildings"`
+	TotalComplexes      int     `json:"total_complexes"`
+	TotalMeters         int     `json:"total_meters"`
+	TotalChargers       int     `json:"total_chargers"`
+	ActiveMeters        int     `json:"active_meters"`
+	ActiveChargers      int     `json:"active_chargers"`
 	TodayConsumption    float64 `json:"today_consumption"`
 	MonthConsumption    float64 `json:"month_consumption"`
 	TodaySolar          float64 `json:"today_solar"`

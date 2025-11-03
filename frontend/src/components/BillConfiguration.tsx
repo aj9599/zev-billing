@@ -189,7 +189,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     setConfig({ ...config, building_ids: newBuildings });
   };
 
-  const handleApartmentToggle = (buildingId: number, apartmentUnit: string, userId?: number) => {
+  const handleApartmentToggle = (buildingId: number, apartmentUnit: string) => {
     const key = `${buildingId}-${apartmentUnit}`;
     const newSelected = new Set(selectedApartments);
     
@@ -537,7 +537,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                         <input
                           type="checkbox"
                           checked={isSelected}
-                          onChange={() => hasUser && handleApartmentToggle(buildingId, apartment.apartment_unit, apartment.user?.id)}
+                          onChange={() => hasUser && handleApartmentToggle(buildingId, apartment.apartment_unit)}
                           disabled={!hasUser}
                           style={{ 
                             marginRight: '12px', 
