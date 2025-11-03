@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { X, ChevronLeft, ChevronRight, Check, FileText, Users, Zap, DollarSign } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Check, FileText, Zap, DollarSign } from 'lucide-react';
 import { api } from '../api/client';
 import type { Building, User, SharedMeterConfig, CustomLineItem, GenerateBillsRequest } from '../types';
-import { useTranslation } from '../i18n';
+//import { useTranslation } from '../i18n';
 
 interface BillConfigurationProps {
   isOpen: boolean;
@@ -11,7 +11,7 @@ interface BillConfigurationProps {
 }
 
 export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillConfigurationProps) {
-  const { t } = useTranslation();
+  //const { t } = useTranslation();
   const [step, setStep] = useState(1);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [users, setUsers] = useState<User[]>([]);

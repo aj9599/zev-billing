@@ -9,4 +9,8 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.19
 	github.com/rs/cors v1.10.1
 	golang.org/x/crypto v0.18.0
+
+	// Add these two:
+	github.com/jung-kurt/gofpdf v1.16.2 // or latest
+	github.com/skip2/go-qrcode v0.0.0-20201117163319-591cf36de303 // or latest
 )

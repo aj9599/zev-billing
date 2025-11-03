@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import { Settings, Plus, Edit2, Trash2, Building as BuildingIcon, Zap, AlertCircle } from 'lucide-react';
 import { api } from '../api/client';
 import type { SharedMeterConfig, Building, Meter } from '../types';
-import { useTranslation } from '../i18n';
+//import { useTranslation } from '../i18n';
 
 export default function SharedMeterConfig() {
-  const { t } = useTranslation();
+  //const { t } = useTranslation();
   const [configs, setConfigs] = useState<SharedMeterConfig[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [meters, setMeters] = useState<Meter[]>([]);
