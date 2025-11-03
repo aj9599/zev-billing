@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, DollarSign, AlertCircle, CheckCircle, Loader, Building as BuildingIcon } from 'lucide-react';
+import { Plus, Edit2, Trash2, DollarSign, AlertCircle, CheckCircle, Loader } from 'lucide-react';
 import { api } from '../api/client';
 import type { CustomLineItem, Building } from '../types';
 import { useTranslation } from '../i18n';
