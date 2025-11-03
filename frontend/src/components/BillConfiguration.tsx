@@ -723,7 +723,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                     {meter.meter_name}
                   </div>
                   <div style={{ fontSize: '13px', color: '#6c757d' }}>
-                    {building?.name} â€¢ {meter.split_type} {t('billConfig.step3.split')} â€¢ CHF {meter.unit_price.toFixed(3)}/kWh
+                    {building?.name} • {meter.split_type} {t('billConfig.step3.split')} • CHF {meter.unit_price.toFixed(3)}/kWh
                   </div>
                 </div>
               </label>
@@ -798,7 +798,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                     {item.description}
                   </div>
                   <div style={{ fontSize: '13px', color: '#6c757d' }}>
-                    {building?.name} â€¢ CHF {item.amount.toFixed(2)} â€¢ {item.frequency} â€¢ {item.category}
+                    {building?.name} • CHF {item.amount.toFixed(2)} • {item.frequency} • {item.category}
                   </div>
                 </div>
               </label>
