@@ -336,7 +336,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
               }}
               style={{
                 padding: '6px 12px',
-                backgroundColor: '#007bff',
+                backgroundColor: '#667EEA',
                 color: 'white',
                 border: 'none',
                 borderRadius: '4px',
@@ -447,7 +447,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                     {meter.meter_name}
                   </div>
                   <div style={{ fontSize: '13px', color: '#6c757d' }}>
-                    {building?.name} • {meter.split_type} {t('billConfig.step2.split')} • CHF {meter.unit_price.toFixed(3)}/kWh
+                    {building?.name} â€¢ {meter.split_type} {t('billConfig.step2.split')} â€¢ CHF {meter.unit_price.toFixed(3)}/kWh
                   </div>
                 </div>
               </label>
@@ -523,7 +523,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                     {item.description}
                   </div>
                   <div style={{ fontSize: '13px', color: '#6c757d' }}>
-                    {building?.name} • CHF {item.amount.toFixed(2)} • {item.frequency} • {item.category}
+                    {building?.name} â€¢ CHF {item.amount.toFixed(2)} â€¢ {item.frequency} â€¢ {item.category}
                   </div>
                 </div>
               </label>
@@ -799,7 +799,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                   width: '40px',
                   height: '40px',
                   borderRadius: '50%',
-                  backgroundColor: step >= s ? (step > s ? '#28a745' : '#007bff') : '#dee2e6',
+                  backgroundColor: step >= s ? (step > s ? '#28a745' : '#667EEA') : '#dee2e6',
                   color: 'white',
                   display: 'flex',
                   alignItems: 'center',
@@ -815,7 +815,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                   fontSize: '12px', 
                   textAlign: 'center',
                   fontWeight: step === s ? '600' : 'normal',
-                  color: step === s ? '#007bff' : '#6c757d'
+                  color: step === s ? '#667EEA' : '#6c757d'
                 }}>
                   {s === 1 && t('billConfig.steps.selection')}
                   {s === 2 && t('billConfig.steps.meters')}
@@ -871,8 +871,8 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                 style={{
                   padding: '12px 24px',
                   backgroundColor: 'white',
-                  color: '#007bff',
-                  border: '1px solid #007bff',
+                  color: '#667EEA',
+                  border: '1px solid #667EEA',
                   borderRadius: '6px',
                   cursor: 'pointer',
                   fontSize: '15px',
@@ -893,7 +893,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                 disabled={!canProceed()}
                 style={{
                   padding: '12px 24px',
-                  backgroundColor: canProceed() ? '#007bff' : '#ced4da',
+                  backgroundColor: canProceed() ? '#667EEA' : '#ced4da',
                   color: 'white',
                   border: 'none',
                   borderRadius: '6px',

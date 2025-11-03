@@ -212,20 +212,14 @@ export default function SharedMeterConfigComponent() {
         alignItems: 'center',
         justifyContent: 'center'
       }}>
-        <Loader size={48} style={{ animation: 'spin 1s linear infinite', color: '#007bff', marginBottom: '16px' }} />
+        <Loader size={48} style={{ animation: 'spin 1s linear infinite', color: '#667EEA', marginBottom: '16px' }} />
         <p style={{ fontSize: '16px', color: '#6b7280' }}>{t('sharedMeters.loading')}</p>
       </div>
     );
   }
 
   return (
-    <div style={{ 
-      padding: '30px', 
-      maxWidth: '1400px', 
-      margin: '0 auto',
-      backgroundColor: '#f8f9fa',
-      minHeight: '100vh'
-    }}>
+    <div style={{ width: '100%' }}>
       {/* Toast Notification */}
       {toast && (
         <div style={{
@@ -251,82 +245,58 @@ export default function SharedMeterConfigComponent() {
         </div>
       )}
 
+      {/* Header */}
       <div style={{ 
-        backgroundColor: 'white',
-        borderRadius: '12px',
-        padding: '30px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'start',
+        marginBottom: '30px'
       }}>
-        {/* Header */}
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'start',
-          marginBottom: '30px',
-          paddingBottom: '20px',
-          borderBottom: '2px solid #e9ecef'
-        }}>
-          <div>
-            <h1 style={{ 
-              fontSize: '36px', 
-              fontWeight: '800', 
-              marginBottom: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              color: '#1f2937'
-            }}>
-              <Settings size={36} style={{ color: '#007bff' }} />
-              {t('sharedMeters.title')}
-            </h1>
-            <p style={{ fontSize: '16px', color: '#6b7280', marginTop: '8px' }}>
-              {t('sharedMeters.subtitle')}
-            </p>
-          </div>
-          <button
-            onClick={handleCreate}
-            style={{
-              padding: '12px 24px',
-              backgroundColor: '#007bff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '15px',
-              fontWeight: '600',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              transition: 'all 0.2s',
-              boxShadow: '0 2px 4px rgba(0, 123, 255, 0.3)'
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.backgroundColor = '#0056b3';
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 123, 255, 0.4)';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.backgroundColor = '#007bff';
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 123, 255, 0.3)';
-            }}
-          >
-            <Plus size={18} />
-            {t('sharedMeters.addNew')}
-          </button>
-        </div>
+        <button
+          onClick={handleCreate}
+          style={{
+            padding: '12px 24px',
+            backgroundColor: '#667EEA',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '15px',
+            fontWeight: '600',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            transition: 'all 0.2s',
+            boxShadow: '0 2px 4px rgba(0, 123, 255, 0.3)',
+            marginLeft: 'auto'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.backgroundColor = '#0056b3';
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 123, 255, 0.4)';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.backgroundColor = '#667EEA';
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 123, 255, 0.3)';
+          }}
+        >
+          <Plus size={18} />
+          {t('sharedMeters.addNew')}
+        </button>
+      </div>
 
         {/* Info Banner */}
         <div style={{
           backgroundColor: '#e7f3ff',
-          border: '2px solid #007bff',
+          border: '2px solid #667EEA',
           borderRadius: '12px',
           padding: '20px',
           marginBottom: '30px',
           display: 'flex',
           gap: '16px'
         }}>
-          <AlertCircle size={24} color="#007bff" style={{ flexShrink: 0, marginTop: '2px' }} />
+          <AlertCircle size={24} color="#667EEA" style={{ flexShrink: 0, marginTop: '2px' }} />
           <div style={{ fontSize: '14px', color: '#4b5563', lineHeight: '1.7' }}>
             <strong style={{ display: 'block', fontSize: '15px', marginBottom: '6px', color: '#1f2937' }}>
               {t('sharedMeters.infoTitle')}
@@ -350,7 +320,7 @@ export default function SharedMeterConfigComponent() {
               width: '80px',
               height: '80px',
               margin: '0 auto 20px',
-              backgroundColor: '#007bff',
+              backgroundColor: '#667EEA',
               borderRadius: '50%',
               display: 'flex',
               alignItems: 'center',
@@ -456,7 +426,7 @@ export default function SharedMeterConfigComponent() {
                         display: 'inline-block',
                         padding: '6px 14px',
                         borderRadius: '20px',
-                        backgroundColor: '#007bff',
+                        backgroundColor: '#667EEA',
                         color: 'white',
                         fontSize: '13px',
                         fontWeight: '600'
@@ -534,8 +504,9 @@ export default function SharedMeterConfigComponent() {
           </div>
         )}
       </div>
-
-      {/* Modal */}
+    </div>
+  );
+}
       {showModal && (
         <div style={{
           position: 'fixed',
@@ -603,7 +574,7 @@ export default function SharedMeterConfigComponent() {
                   cursor: 'pointer',
                   transition: 'border-color 0.2s'
                 }}
-                onFocus={(e) => e.target.style.borderColor = '#007bff'}
+                onFocus={(e) => e.target.style.borderColor = '#667EEA'}
                 onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
               >
                 <option value={0}>{t('sharedMeters.selectBuilding')}</option>
@@ -646,7 +617,7 @@ export default function SharedMeterConfigComponent() {
                   cursor: formData.building_id ? 'pointer' : 'not-allowed',
                   transition: 'border-color 0.2s'
                 }}
-                onFocus={(e) => formData.building_id && (e.target.style.borderColor = '#007bff')}
+                onFocus={(e) => formData.building_id && (e.target.style.borderColor = '#667EEA')}
                 onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
               >
                 <option value={0}>{t('sharedMeters.selectMeter')}</option>
@@ -682,7 +653,7 @@ export default function SharedMeterConfigComponent() {
                     alignItems: 'start',
                     gap: '12px',
                     padding: '16px',
-                    border: `2px solid ${formData.split_type === type ? '#007bff' : '#e5e7eb'}`,
+                    border: `2px solid ${formData.split_type === type ? '#667EEA' : '#e5e7eb'}`,
                     borderRadius: '10px',
                     cursor: 'pointer',
                     backgroundColor: formData.split_type === type ? '#e7f3ff' : 'white',
@@ -705,7 +676,7 @@ export default function SharedMeterConfigComponent() {
                       value={type}
                       checked={formData.split_type === type}
                       onChange={(e) => setFormData({...formData, split_type: e.target.value as any})}
-                      style={{ marginTop: '2px', cursor: 'pointer', accentColor: '#007bff' }}
+                      style={{ marginTop: '2px', cursor: 'pointer', accentColor: '#667EEA' }}
                     />
                     <div style={{ flex: 1 }}>
                       <strong style={{ fontSize: '15px', display: 'block', marginBottom: '4px', color: '#1f2937' }}>
@@ -828,7 +799,7 @@ export default function SharedMeterConfigComponent() {
                   fontSize: '15px',
                   transition: 'border-color 0.2s'
                 }}
-                onFocus={(e) => e.target.style.borderColor = '#007bff'}
+                onFocus={(e) => e.target.style.borderColor = '#667EEA'}
                 onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
               />
             </div>
@@ -862,7 +833,7 @@ export default function SharedMeterConfigComponent() {
                 style={{
                   flex: 1,
                   padding: '12px',
-                  backgroundColor: (!formData.building_id || !formData.meter_id || formData.unit_price <= 0 || saving) ? '#d1d5db' : '#007bff',
+                  backgroundColor: (!formData.building_id || !formData.meter_id || formData.unit_price <= 0 || saving) ? '#d1d5db' : '#667EEA',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
@@ -882,7 +853,7 @@ export default function SharedMeterConfigComponent() {
                 }}
                 onMouseOut={(e) => {
                   if (formData.building_id && formData.meter_id && formData.unit_price > 0 && !saving) {
-                    e.currentTarget.style.backgroundColor = '#007bff';
+                    e.currentTarget.style.backgroundColor = '#667EEA';
                   }
                 }}
               >
