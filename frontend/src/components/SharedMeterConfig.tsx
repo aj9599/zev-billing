@@ -19,6 +19,7 @@ export default function SharedMeterConfigComponent({ selectedBuildingId }: Share
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [expandedBuildings, setExpandedBuildings] = useState<Set<number>>(new Set());
 
   const [formData, setFormData] = useState({
     meter_id: 0,
@@ -54,7 +55,12 @@ export default function SharedMeterConfigComponent({ selectedBuildingId }: Share
         api.getUsers()
       ]);
       setConfigs(configsData);
-      setBuildings(buildingsData.filter(b => !b.is_group));
+      const nonGroupBuildings = buildingsData.filter(b => !b.is_group);
+      setBuildings(nonGroupBuildings);
+      
+      // Expand all buildings by default
+      const buildingIds = new Set(nonGroupBuildings.map(b => b.id));
+      setExpandedBuildings(buildingIds);
       
       // Only show Heating and Other meters (exclude Apartment, Solar, Total)
       const filteredMeters = metersData.filter(m => {
@@ -152,11 +158,6 @@ export default function SharedMeterConfigComponent({ selectedBuildingId }: Share
     }
   };
 
-  const getBuildingName = (buildingId: number) => {
-    const building = buildings.find(b => b.id === buildingId);
-    return building?.name || t('common.unknown');
-  };
-
   const getSplitTypeLabel = (splitType: string) => {
     const labels: Record<string, string> = {
       'equal': t('sharedMeters.splitType.equal'),
@@ -171,6 +172,16 @@ export default function SharedMeterConfigComponent({ selectedBuildingId }: Share
       'custom': t('sharedMeters.splitTypeDesc.custom')
     };
     return descriptions[splitType] || '';
+  };
+
+  const toggleBuildingExpand = (id: number) => {
+    const newExpanded = new Set(expandedBuildings);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
+    } else {
+      newExpanded.add(id);
+    }
+    setExpandedBuildings(newExpanded);
   };
 
   const buildingUsers = users.filter(u => u.building_id === formData.building_id && u.is_active);
@@ -209,6 +220,16 @@ export default function SharedMeterConfigComponent({ selectedBuildingId }: Share
   const filteredConfigs = selectedBuildingId 
     ? configs.filter(c => c.building_id === selectedBuildingId)
     : configs;
+
+  // Organize configs by building
+  const organizedConfigs = buildings.map(building => {
+    const buildingConfigs = filteredConfigs.filter(c => c.building_id === building.id);
+    return {
+      building,
+      configs: buildingConfigs,
+      totalCount: buildingConfigs.length
+    };
+  }).filter(group => group.totalCount > 0);
 
   if (loading) {
     return (
@@ -254,47 +275,6 @@ export default function SharedMeterConfigComponent({ selectedBuildingId }: Share
         </div>
       )}
 
-      {/* Header */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'start',
-        marginBottom: '30px'
-      }}>
-        <button
-          onClick={handleCreate}
-          style={{
-            padding: '12px 24px',
-            backgroundColor: '#667EEA',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            fontSize: '15px',
-            fontWeight: '600',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            transition: 'all 0.2s',
-            boxShadow: '0 2px 4px rgba(0, 123, 255, 0.3)',
-            marginLeft: 'auto'
-          }}
-          onMouseOver={(e) => {
-            e.currentTarget.style.backgroundColor = '#0056b3';
-            e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 123, 255, 0.4)';
-          }}
-          onMouseOut={(e) => {
-            e.currentTarget.style.backgroundColor = '#667EEA';
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 123, 255, 0.3)';
-          }}
-        >
-          <Plus size={18} />
-          {t('sharedMeters.addNew')}
-        </button>
-      </div>
-
       {/* Info Banner */}
       <div style={{
         backgroundColor: '#e7f3ff',
@@ -316,202 +296,272 @@ export default function SharedMeterConfigComponent({ selectedBuildingId }: Share
         </div>
       </div>
 
-      {/* Configs List */}
-      {filteredConfigs.length === 0 ? (
-          <div style={{ 
-            textAlign: 'center', 
-            padding: '80px 20px',
-            backgroundColor: '#f8f9fa',
-            borderRadius: '12px',
-            border: '2px dashed #dee2e6'
+      {/* Organized by Building */}
+      {organizedConfigs.length === 0 ? (
+        <div style={{ 
+          textAlign: 'center', 
+          padding: '80px 20px',
+          backgroundColor: '#f8f9fa',
+          borderRadius: '12px',
+          border: '2px dashed #dee2e6'
+        }}>
+          <div style={{
+            width: '80px',
+            height: '80px',
+            margin: '0 auto 20px',
+            backgroundColor: '#667EEA',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
           }}>
-            <div style={{
-              width: '80px',
-              height: '80px',
-              margin: '0 auto 20px',
+            <Zap size={40} color="white" />
+          </div>
+          <p style={{ fontSize: '18px', marginBottom: '8px', fontWeight: '600', color: '#1f2937' }}>
+            {t('sharedMeters.noConfigs')}
+          </p>
+          <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '20px' }}>
+            {t('sharedMeters.noConfigsDescription')}
+          </p>
+          <button
+            onClick={handleCreate}
+            style={{
+              padding: '12px 24px',
               backgroundColor: '#667EEA',
-              borderRadius: '50%',
-              display: 'flex',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '15px',
+              fontWeight: '600',
+              display: 'inline-flex',
               alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <Zap size={40} color="white" />
-            </div>
-            <p style={{ fontSize: '18px', marginBottom: '8px', fontWeight: '600', color: '#1f2937' }}>
-              {t('sharedMeters.noConfigs')}
-            </p>
-            <p style={{ fontSize: '14px', color: '#6b7280' }}>
-              {t('sharedMeters.noConfigsDescription')}
-            </p>
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ 
-              width: '100%', 
-              borderCollapse: 'collapse',
-              backgroundColor: 'white'
-            }}>
-              <thead>
-                <tr style={{ 
-                  backgroundColor: '#f8f9fa',
-                  color: '#1f2937',
-                  borderBottom: '2px solid #e9ecef'
-                }}>
-                  <th style={{ 
-                    padding: '16px', 
-                    textAlign: 'left', 
-                    fontWeight: '600',
-                    fontSize: '14px'
-                  }}>
-                    {t('sharedMeters.meterName')}
-                  </th>
-                  <th style={{ 
-                    padding: '16px', 
-                    textAlign: 'left', 
-                    fontWeight: '600',
-                    fontSize: '14px'
-                  }}>
-                    {t('sharedMeters.building')}
-                  </th>
-                  <th style={{ 
-                    padding: '16px', 
-                    textAlign: 'left', 
-                    fontWeight: '600',
-                    fontSize: '14px'
-                  }}>
-                    {t('sharedMeters.splitType.label')}
-                  </th>
-                  <th style={{ 
-                    padding: '16px', 
-                    textAlign: 'right', 
-                    fontWeight: '600',
-                    fontSize: '14px'
-                  }}>
-                    {t('sharedMeters.unitPrice')}
-                  </th>
-                  <th style={{ 
-                    padding: '16px', 
-                    textAlign: 'right', 
-                    fontWeight: '600',
-                    fontSize: '14px'
-                  }}>
-                    {t('common.actions')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredConfigs.map(config => (
-                  <tr key={config.id} style={{ 
-                    borderBottom: '1px solid #e9ecef',
-                    transition: 'background-color 0.2s'
+              gap: '8px',
+              transition: 'all 0.2s',
+              boxShadow: '0 2px 4px rgba(0, 123, 255, 0.3)'
+            }}
+          >
+            <Plus size={18} />
+            {t('sharedMeters.addNew')}
+          </button>
+        </div>
+      ) : (
+        organizedConfigs.map(({ building, configs: buildingConfigs, totalCount }) => (
+          <div key={building.id} style={{ marginBottom: '24px' }}>
+            <div 
+              onClick={() => toggleBuildingExpand(building.id)}
+              style={{ 
+                backgroundColor: '#f8f9fa', 
+                padding: '16px 20px', 
+                borderRadius: '8px', 
+                marginBottom: '12px',
+                cursor: 'pointer',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                border: '2px solid #e9ecef'
+              }}
+            >
+              <div>
+                <h2 style={{ fontSize: '20px', fontWeight: '600', margin: 0 }}>
+                  {building.name}
+                </h2>
+                <p style={{ fontSize: '14px', color: '#666', margin: '4px 0 0 0' }}>
+                  {totalCount} {totalCount === 1 ? t('sharedMeters.config') : t('sharedMeters.configs')}
+                </p>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCreate();
                   }}
-                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'white'}
-                  >
-                    <td style={{ padding: '16px', fontSize: '15px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{
-                          width: '36px',
-                          height: '36px',
-                          backgroundColor: '#fbbf24',
-                          borderRadius: '8px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}>
-                          <Zap size={18} color="white" />
-                        </div>
-                        <strong>{config.meter_name}</strong>
-                      </div>
-                    </td>
-                    <td style={{ padding: '16px', fontSize: '15px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <BuildingIcon size={16} color="#6b7280" />
-                        {getBuildingName(config.building_id)}
-                      </div>
-                    </td>
-                    <td style={{ padding: '16px', fontSize: '14px' }}>
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '6px 14px',
-                        borderRadius: '20px',
-                        backgroundColor: '#667EEA',
-                        color: 'white',
-                        fontSize: '13px',
-                        fontWeight: '600'
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#667EEA',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <Plus size={16} />
+                  {t('common.add')}
+                </button>
+                <span style={{ fontSize: '24px', color: '#666' }}>
+                  {expandedBuildings.has(building.id) ? '▼' : '▶'}
+                </span>
+              </div>
+            </div>
+
+            {expandedBuildings.has(building.id) && (
+              <div style={{ paddingLeft: '20px' }}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ 
+                    width: '100%', 
+                    borderCollapse: 'collapse',
+                    backgroundColor: 'white',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                  }}>
+                    <thead>
+                      <tr style={{ 
+                        backgroundColor: '#f8f9fa',
+                        color: '#1f2937',
+                        borderBottom: '2px solid #e9ecef'
                       }}>
-                        {getSplitTypeLabel(config.split_type)}
-                      </span>
-                    </td>
-                    <td style={{ padding: '16px', textAlign: 'right', fontSize: '15px', fontWeight: '600' }}>
-                      CHF {config.unit_price.toFixed(3)}/kWh
-                    </td>
-                    <td style={{ padding: '16px', textAlign: 'right' }}>
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                        <button
-                          onClick={() => handleEdit(config)}
-                          style={{
-                            padding: '8px 14px',
-                            backgroundColor: '#10b981',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            fontSize: '13px',
-                            fontWeight: '600',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            transition: 'all 0.2s'
-                          }}
-                          onMouseOver={(e) => {
-                            e.currentTarget.style.backgroundColor = '#059669';
-                            e.currentTarget.style.transform = 'translateY(-1px)';
-                          }}
-                          onMouseOut={(e) => {
-                            e.currentTarget.style.backgroundColor = '#10b981';
-                            e.currentTarget.style.transform = 'translateY(0)';
-                          }}
+                        <th style={{ 
+                          padding: '16px', 
+                          textAlign: 'left', 
+                          fontWeight: '600',
+                          fontSize: '14px'
+                        }}>
+                          {t('sharedMeters.meterName')}
+                        </th>
+                        <th style={{ 
+                          padding: '16px', 
+                          textAlign: 'left', 
+                          fontWeight: '600',
+                          fontSize: '14px'
+                        }}>
+                          {t('sharedMeters.splitType.label')}
+                        </th>
+                        <th style={{ 
+                          padding: '16px', 
+                          textAlign: 'right', 
+                          fontWeight: '600',
+                          fontSize: '14px'
+                        }}>
+                          {t('sharedMeters.unitPrice')}
+                        </th>
+                        <th style={{ 
+                          padding: '16px', 
+                          textAlign: 'right', 
+                          fontWeight: '600',
+                          fontSize: '14px'
+                        }}>
+                          {t('common.actions')}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {buildingConfigs.map(config => (
+                        <tr key={config.id} style={{ 
+                          borderBottom: '1px solid #e9ecef',
+                          transition: 'background-color 0.2s'
+                        }}
+                        onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                        onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'white'}
                         >
-                          <Edit2 size={14} />
-                          {t('common.edit')}
-                        </button>
-                        <button
-                          onClick={() => handleDelete(config.id)}
-                          style={{
-                            padding: '8px 14px',
-                            backgroundColor: '#ef4444',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            fontSize: '13px',
-                            fontWeight: '600',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            transition: 'all 0.2s'
-                          }}
-                          onMouseOver={(e) => {
-                            e.currentTarget.style.backgroundColor = '#dc2626';
-                            e.currentTarget.style.transform = 'translateY(-1px)';
-                          }}
-                          onMouseOut={(e) => {
-                            e.currentTarget.style.backgroundColor = '#ef4444';
-                            e.currentTarget.style.transform = 'translateY(0)';
-                          }}
-                        >
-                          <Trash2 size={14} />
-                          {t('common.delete')}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                          <td style={{ padding: '16px', fontSize: '15px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <div style={{
+                                width: '36px',
+                                height: '36px',
+                                backgroundColor: '#fbbf24',
+                                borderRadius: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}>
+                                <Zap size={18} color="white" />
+                              </div>
+                              <strong>{config.meter_name}</strong>
+                            </div>
+                          </td>
+                          <td style={{ padding: '16px', fontSize: '14px' }}>
+                            <span style={{
+                              display: 'inline-block',
+                              padding: '6px 14px',
+                              borderRadius: '20px',
+                              backgroundColor: '#667EEA',
+                              color: 'white',
+                              fontSize: '13px',
+                              fontWeight: '600'
+                            }}>
+                              {getSplitTypeLabel(config.split_type)}
+                            </span>
+                          </td>
+                          <td style={{ padding: '16px', textAlign: 'right', fontSize: '15px', fontWeight: '600' }}>
+                            CHF {config.unit_price.toFixed(3)}/kWh
+                          </td>
+                          <td style={{ padding: '16px', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                              <button
+                                onClick={() => handleEdit(config)}
+                                style={{
+                                  padding: '8px 14px',
+                                  backgroundColor: '#10b981',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  fontSize: '13px',
+                                  fontWeight: '600',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  transition: 'all 0.2s'
+                                }}
+                                onMouseOver={(e) => {
+                                  e.currentTarget.style.backgroundColor = '#059669';
+                                  e.currentTarget.style.transform = 'translateY(-1px)';
+                                }}
+                                onMouseOut={(e) => {
+                                  e.currentTarget.style.backgroundColor = '#10b981';
+                                  e.currentTarget.style.transform = 'translateY(0)';
+                                }}
+                              >
+                                <Edit2 size={14} />
+                                {t('common.edit')}
+                              </button>
+                              <button
+                                onClick={() => handleDelete(config.id)}
+                                style={{
+                                  padding: '8px 14px',
+                                  backgroundColor: '#ef4444',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  fontSize: '13px',
+                                  fontWeight: '600',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  transition: 'all 0.2s'
+                                }}
+                                onMouseOver={(e) => {
+                                  e.currentTarget.style.backgroundColor = '#dc2626';
+                                  e.currentTarget.style.transform = 'translateY(-1px)';
+                                }}
+                                onMouseOut={(e) => {
+                                  e.currentTarget.style.backgroundColor = '#ef4444';
+                                  e.currentTarget.style.transform = 'translateY(0)';
+                                }}
+                              >
+                                <Trash2 size={14} />
+                                {t('common.delete')}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
-        )}
+        ))
+      )}
 
       {/* Modal */}
       {showModal && (

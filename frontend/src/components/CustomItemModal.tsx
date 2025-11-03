@@ -258,41 +258,6 @@ export default function CustomItems({ onSave, selectedBuildingId }: CustomItemsP
         </div>
       )}
 
-      {/* Add New Item Button */}
-      {!loading && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '30px' }}>
-          <button
-            onClick={() => setShowModal(true)}
-            style={{
-              padding: '12px 24px',
-              backgroundColor: '#667EEA',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '15px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              transition: 'all 0.2s',
-              boxShadow: '0 2px 4px rgba(0, 123, 255, 0.3)'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 123, 255, 0.4)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 123, 255, 0.3)';
-            }}
-          >
-            <Plus size={18} />
-            {t('customItems.addNew')}
-          </button>
-        </div>
-      )}
-
       {/* Loading State */}
       {loading && (
         <div style={{
@@ -308,33 +273,10 @@ export default function CustomItems({ onSave, selectedBuildingId }: CustomItemsP
       {/* Items List Organized by Building */}
       {!loading && (
         <div>
-          <h3 style={{ 
-            fontSize: '18px', 
-            fontWeight: '700', 
-            marginBottom: '16px',
-            color: '#111827',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between'
-          }}>
-            <span>{t('customItems.organizedByBuilding')}</span>
-            <span style={{ 
-              fontSize: '14px', 
-              fontWeight: '600', 
-              color: '#667EEA',
-              backgroundColor: '#e7f3ff',
-              padding: '6px 14px',
-              borderRadius: '20px',
-              border: '2px solid #667EEA'
-            }}>
-              {filteredItems.length} {filteredItems.length === 1 ? t('customItems.item') : t('customItems.items')}
-            </span>
-          </h3>
-
           {organizedItems.length === 0 ? (
             <div style={{
               textAlign: 'center',
-              padding: '60px',
+              padding: '80px 20px',
               color: '#6b7280',
               backgroundColor: '#f8f9fa',
               borderRadius: '12px',
@@ -352,23 +294,44 @@ export default function CustomItems({ onSave, selectedBuildingId }: CustomItemsP
               }}>
                 <DollarSign size={40} color="white" />
               </div>
-              <p style={{ fontSize: '16px', fontWeight: '600', marginBottom: '4px', color: '#1f2937' }}>
+              <p style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: '#1f2937' }}>
                 {t('customItems.noItems')}
               </p>
-              <p style={{ fontSize: '14px', marginTop: '5px' }}>
+              <p style={{ fontSize: '14px', marginTop: '5px', marginBottom: '20px' }}>
                 {t('customItems.noItemsDescription')}
               </p>
+              <button
+                onClick={() => setShowModal(true)}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#667EEA',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '15px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  transition: 'all 0.2s',
+                  boxShadow: '0 2px 4px rgba(0, 123, 255, 0.3)'
+                }}
+              >
+                <Plus size={18} />
+                {t('customItems.addNew')}
+              </button>
             </div>
           ) : (
             organizedItems.map(({ building, items: buildingItems, totalCount }) => (
-              <div key={building.id} style={{ marginBottom: '20px' }}>
+              <div key={building.id} style={{ marginBottom: '24px' }}>
                 <div
                   onClick={() => toggleBuildingExpand(building.id)}
                   style={{
                     backgroundColor: '#f8f9fa',
-                    padding: '12px 16px',
+                    padding: '16px 20px',
                     borderRadius: '8px',
-                    marginBottom: '8px',
+                    marginBottom: '12px',
                     cursor: 'pointer',
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -376,21 +339,43 @@ export default function CustomItems({ onSave, selectedBuildingId }: CustomItemsP
                     border: '2px solid #e9ecef',
                     transition: 'all 0.2s'
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e9ecef'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <BuildingIcon size={20} color="#667EEA" />
-                    <h4 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#1f2937' }}>
+                  <div>
+                    <h2 style={{ fontSize: '20px', fontWeight: '600', margin: 0 }}>
                       {building.name}
-                    </h4>
-                    <span style={{ fontSize: '13px', color: '#6b7280' }}>
-                      ({totalCount} {totalCount === 1 ? t('customItems.item') : t('customItems.items')})
+                    </h2>
+                    <p style={{ fontSize: '14px', color: '#666', margin: '4px 0 0 0' }}>
+                      {totalCount} {totalCount === 1 ? t('customItems.item') : t('customItems.items')}
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowModal(true);
+                      }}
+                      style={{
+                        padding: '8px 16px',
+                        backgroundColor: '#667EEA',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <Plus size={16} />
+                      {t('common.add')}
+                    </button>
+                    <span style={{ fontSize: '24px', color: '#666' }}>
+                      {expandedBuildings.has(building.id) ? '▼' : '▶'}
                     </span>
                   </div>
-                  <span style={{ fontSize: '18px', color: '#666' }}>
-                    {expandedBuildings.has(building.id) ? '▼' : '▶'}
-                  </span>
                 </div>
 
                 {expandedBuildings.has(building.id) && (

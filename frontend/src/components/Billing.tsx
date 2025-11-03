@@ -39,6 +39,19 @@ export default function Billing() {
     b.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const getAllBuildingsDescription = () => {
+    switch (currentView) {
+      case 'invoices':
+        return t('billing.allBuildingsDesc');
+      case 'shared-meters':
+        return t('billing.allBuildingsDescSharedMeters');
+      case 'custom-items':
+        return t('billing.allBuildingsDescCustomItems');
+      default:
+        return t('billing.allBuildingsDesc');
+    }
+  };
+
   const InstructionsModal = () => (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -302,7 +315,7 @@ export default function Billing() {
             </h3>
           </div>
           <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
-            {t('billing.allBuildingsDesc')}
+            {getAllBuildingsDescription()}
           </p>
         </div>
 
