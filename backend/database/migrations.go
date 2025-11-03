@@ -149,6 +149,7 @@ func RunMigrations(db *sql.DB) error {
 			total_amount REAL NOT NULL,
 			currency TEXT DEFAULT 'CHF',
 			status TEXT DEFAULT 'draft',
+			pdf_path TEXT,
 			generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (user_id) REFERENCES users(id),
 			FOREIGN KEY (building_id) REFERENCES buildings(id)
@@ -254,6 +255,7 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_charger_sessions_charger ON charger_sessions(charger_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_invoices_building ON invoices(building_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_invoices_pdf_path ON invoices(pdf_path)`,
 		`CREATE INDEX IF NOT EXISTS idx_auto_billing_next_run ON auto_billing_configs(next_run)`,
 
 		// =====================================================================
