@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Building, Search, MapPin, Zap, ChevronRight, ChevronDown, Folder, Home, HelpCircle, Activity, Sun, Grid, ArrowRight, ArrowLeft, Layers, Check, GripVertical } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Building, Search, MapPin, Zap, ChevronRight, ChevronDown, Folder, Home, HelpCircle, Activity, Sun, Grid, ArrowRight, ArrowLeft, ArrowDown, ArrowUp, Layers, Check, GripVertical } from 'lucide-react';
 import { api } from '../api/client';
 import type { Building as BuildingType, Meter, Charger, BuildingConsumption } from '../types';
 import { useTranslation } from '../i18n';
@@ -15,6 +15,7 @@ export default function Buildings() {
   const [showInstructions, setShowInstructions] = useState(false);
   const [editingBuilding, setEditingBuilding] = useState<BuildingType | null>(null);
   const [expandedComplexes, setExpandedComplexes] = useState<Set<number>>(new Set());
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [formData, setFormData] = useState<Partial<BuildingType>>({
     name: '',
     address_street: '',
@@ -30,6 +31,13 @@ export default function Buildings() {
 
   useEffect(() => {
     loadData();
+    
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const loadData = async () => {
@@ -128,40 +136,28 @@ export default function Buildings() {
     if (!data) return { total: 0, solar: 0, charging: 0, actualHouseConsumption: 0, gridPower: 0, solarProduction: 0, solarToGrid: 0 };
     
     const buildingMeters = data.meters || [];
-    let mainMeterPower = 0; // positive = importing, negative = exporting
-    let solarPower = 0; // production (should be negative or we take absolute)
+    let mainMeterPower = 0;
+    let solarPower = 0;
     let charging = 0;
     
     buildingMeters.forEach(meter => {
       const latestData = meter.data?.[meter.data.length - 1];
       if (!latestData) return;
       
-      // Only consider main meter (total_meter) for grid import/export
       if (meter.meter_type === 'total_meter') {
         mainMeterPower += latestData.power / 1000;
       } 
-      // Only solar meter for production
       else if (meter.meter_type === 'solar_meter') {
         solarPower += latestData.power / 1000;
       } 
-      // Track charging separately for display only
       else if (meter.meter_type === 'charger') {
         charging += latestData.power / 1000;
       }
     });
     
-    // Solar production is always positive (absolute value)
     const solarProduction = Math.abs(solarPower);
-    
-    // Grid power from main meter (positive = importing, negative = exporting)
     const gridPower = mainMeterPower;
-    
-    // Actual house consumption = solar production + main meter power
-    // If main meter is positive (importing), house uses solar + grid
-    // If main meter is negative (exporting), house uses solar - export amount
     const actualHouseConsumption = solarProduction + mainMeterPower;
-    
-    // Solar directly to grid (only when exporting)
     const solarToGrid = gridPower < 0 ? Math.abs(gridPower) : 0;
     
     return { 
@@ -191,7 +187,7 @@ export default function Buildings() {
     b.address_city?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Energy Flow Card Component with FIXED logic and improved spacing
+  // Mobile-Responsive Energy Flow Card Component
   const EnergyFlowCard = ({ building }: { building: BuildingType }) => {
     const consumption = getBuildingConsumption(building.id);
     const { actualHouseConsumption, gridPower, solarProduction, solarToGrid } = consumption;
@@ -200,29 +196,26 @@ export default function Buildings() {
     const isImporting = gridPower > 0;
     const solarToHouse = solarProduction - solarToGrid;
     
-    // Check if building has a solar meter configured
     const buildingMeters = meters.filter(m => m.building_id === building.id);
     const hasSolarMeter = buildingMeters.some(m => m.meter_type === 'solar_meter');
-
-    // Get charger data for this building
     const buildingChargers = chargers.filter(c => c.building_id === building.id);
     const activeCharger = consumption.charging > 0 && buildingChargers.length > 0 ? buildingChargers[0] : null;
 
     return (
       <div style={{
         backgroundColor: 'white',
-        borderRadius: '16px',
-        padding: '32px',
+        borderRadius: isMobile ? '12px' : '16px',
+        padding: isMobile ? '16px' : '32px',
         boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
         border: '2px solid #f0f0f0',
         marginBottom: '16px',
         position: 'relative'
       }}>
-        {/* Edit/Delete buttons in top right corner */}
+        {/* Edit/Delete buttons */}
         <div style={{ 
           position: 'absolute', 
-          top: '16px', 
-          right: '16px', 
+          top: isMobile ? '8px' : '16px', 
+          right: isMobile ? '8px' : '16px', 
           display: 'flex', 
           gap: '8px',
           zIndex: 10
@@ -230,8 +223,8 @@ export default function Buildings() {
           <button 
             onClick={() => handleEdit(building)}
             style={{
-              width: '36px',
-              height: '36px',
+              width: isMobile ? '40px' : '36px',
+              height: isMobile ? '40px' : '36px',
               borderRadius: '50%',
               border: 'none',
               backgroundColor: 'rgba(59, 130, 246, 0.1)',
@@ -257,8 +250,8 @@ export default function Buildings() {
           <button 
             onClick={() => handleDelete(building.id)}
             style={{
-              width: '36px',
-              height: '36px',
+              width: isMobile ? '40px' : '36px',
+              height: isMobile ? '40px' : '36px',
               borderRadius: '50%',
               border: 'none',
               backgroundColor: 'rgba(239, 68, 68, 0.1)',
@@ -284,19 +277,20 @@ export default function Buildings() {
         </div>
 
         {/* Header with building name */}
-        <div style={{ marginBottom: '32px', textAlign: 'center', paddingRight: '100px' }}>
+        <div style={{ marginBottom: isMobile ? '20px' : '32px', textAlign: 'center', paddingRight: isMobile ? '90px' : '100px' }}>
           <h3 style={{ 
-            fontSize: '24px', 
+            fontSize: isMobile ? '18px' : '24px', 
             fontWeight: '700', 
             margin: 0,
             color: '#1f2937',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '12px'
+            gap: isMobile ? '8px' : '12px',
+            flexWrap: 'wrap'
           }}>
-            <Home size={28} color="#667eea" />
-            {building.name}
+            <Home size={isMobile ? 22 : 28} color="#667eea" />
+            <span style={{ wordBreak: 'break-word' }}>{building.name}</span>
             {building.has_apartments && (
               <span style={{
                 fontSize: '11px',
@@ -312,9 +306,9 @@ export default function Buildings() {
             )}
           </h3>
           {(building.address_street || building.address_city) && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
               <MapPin size={14} color="#9ca3af" />
-              <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
+              <p style={{ fontSize: isMobile ? '12px' : '14px', color: '#6b7280', margin: 0, textAlign: 'center' }}>
                 {building.address_street && <>{building.address_street}, </>}
                 {building.address_zip && building.address_city && `${building.address_zip} ${building.address_city}`}
               </p>
@@ -322,56 +316,59 @@ export default function Buildings() {
           )}
         </div>
 
-        {/* Energy Flow Diagram - FIXED LOGIC with IMPROVED SPACING AND ALIGNMENT */}
+        {/* Energy Flow Diagram - RESPONSIVE */}
         <div style={{ 
           display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
           justifyContent: 'center',
-          alignItems: 'flex-start',
-          gap: '40px',
-          marginBottom: '32px',
-          minHeight: '200px',
+          alignItems: 'center',
+          gap: isMobile ? '20px' : '40px',
+          marginBottom: isMobile ? '20px' : '32px',
+          minHeight: isMobile ? 'auto' : '200px',
           position: 'relative'
         }}>
-          {/* Solar Production (show if solar meter exists) */}
+          {/* Solar Production */}
           {hasSolarMeter && (
             <>
               <div style={{ 
                 display: 'flex', 
-                flexDirection: 'column', 
+                flexDirection: isMobile ? 'row' : 'column', 
                 alignItems: 'center',
-                justifyContent: 'flex-start',
-                width: '120px'
+                justifyContent: 'center',
+                width: isMobile ? '100%' : '120px',
+                gap: isMobile ? '16px' : '0'
               }}>
                 <div style={{
-                  width: '100px',
-                  height: '100px',
+                  width: isMobile ? '80px' : '100px',
+                  height: isMobile ? '80px' : '100px',
                   borderRadius: '50%',
                   backgroundColor: '#fef3c7',
                   border: '4px solid #f59e0b',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  marginBottom: '12px'
+                  marginBottom: isMobile ? '0' : '12px',
+                  flexShrink: 0
                 }}>
-                  <Sun size={40} color="#f59e0b" />
+                  <Sun size={isMobile ? 32 : 40} color="#f59e0b" />
                 </div>
                 <div style={{ 
                   display: 'flex', 
                   flexDirection: 'column', 
-                  alignItems: 'center',
-                  minHeight: '90px',
-                  justifyContent: 'flex-start'
+                  alignItems: isMobile ? 'flex-start' : 'center',
+                  minHeight: isMobile ? 'auto' : '90px',
+                  justifyContent: 'flex-start',
+                  flex: 1
                 }}>
-                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
+                  <span style={{ fontSize: isMobile ? '12px' : '14px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
                     {t('buildings.energyFlow.solar')}
                   </span>
-                  <span style={{ fontSize: '24px', fontWeight: '800', color: '#f59e0b' }}>
+                  <span style={{ fontSize: isMobile ? '20px' : '24px', fontWeight: '800', color: '#f59e0b' }}>
                     {solarProduction.toFixed(3)} kW
                   </span>
-                  {/* Fixed height container for additional info */}
                   <div style={{ minHeight: '20px', marginTop: '4px' }}>
                     {solarProduction > 0 && (
-                      <span style={{ fontSize: '12px', color: '#22c55e', fontWeight: '600' }}>
+                      <span style={{ fontSize: isMobile ? '11px' : '12px', color: '#22c55e', fontWeight: '600' }}>
                         {t('buildings.energyFlow.production')}
                       </span>
                     )}
@@ -379,15 +376,15 @@ export default function Buildings() {
                 </div>
               </div>
 
-              {/* Arrow from Solar to Building - CENTERED */}
+              {/* Arrow from Solar to Building */}
               <div style={{ 
                 display: 'flex', 
                 alignItems: 'center', 
-                flexDirection: 'column', 
+                flexDirection: isMobile ? 'row' : 'column', 
                 gap: '4px',
-                marginTop: '38px' // Half of circle height (100px/2 - arrow height/2)
+                marginTop: isMobile ? '0' : '38px'
               }}>
-                <ArrowRight size={32} color="#22c55e" strokeWidth={3} />
+                {isMobile ? <ArrowDown size={28} color="#22c55e" strokeWidth={3} /> : <ArrowRight size={32} color="#22c55e" strokeWidth={3} />}
                 <span style={{ fontSize: '11px', fontWeight: '600', color: '#22c55e' }}>
                   {solarToHouse.toFixed(2)} kW
                 </span>
@@ -395,18 +392,19 @@ export default function Buildings() {
             </>
           )}
 
-          {/* Building Consumption - CENTERED */}
+          {/* Building Consumption */}
           <div style={{ 
             display: 'flex', 
-            flexDirection: 'column', 
+            flexDirection: isMobile ? 'row' : 'column', 
             alignItems: 'center',
-            justifyContent: 'flex-start',
+            justifyContent: 'center',
             position: 'relative',
-            width: '140px'
+            width: isMobile ? '100%' : '140px',
+            gap: isMobile ? '16px' : '0'
           }}>
             <div style={{
-              width: '120px',
-              height: '120px',
+              width: isMobile ? '100px' : '120px',
+              height: isMobile ? '100px' : '120px',
               borderRadius: '50%',
               backgroundColor: '#dbeafe',
               border: '4px solid #3b82f6',
@@ -414,24 +412,25 @@ export default function Buildings() {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              marginBottom: '12px'
+              marginBottom: isMobile ? '0' : '12px',
+              flexShrink: 0
             }}>
-              <Building size={48} color="#3b82f6" />
+              <Building size={isMobile ? 40 : 48} color="#3b82f6" />
             </div>
             <div style={{ 
               display: 'flex', 
               flexDirection: 'column', 
-              alignItems: 'center',
-              minHeight: '90px',
-              justifyContent: 'flex-start'
+              alignItems: isMobile ? 'flex-start' : 'center',
+              minHeight: isMobile ? 'auto' : '90px',
+              justifyContent: 'flex-start',
+              flex: 1
             }}>
-              <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
+              <span style={{ fontSize: isMobile ? '12px' : '14px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
                 {t('buildings.energyFlow.consumption')}
               </span>
-              <span style={{ fontSize: '28px', fontWeight: '800', color: '#3b82f6' }}>
+              <span style={{ fontSize: isMobile ? '24px' : '28px', fontWeight: '800', color: '#3b82f6' }}>
                 {actualHouseConsumption.toFixed(3)} kW
               </span>
-              {/* Fixed height container for solar coverage badge */}
               <div style={{ minHeight: '32px', marginTop: '8px', display: 'flex', alignItems: 'center' }}>
                 {solarCoverage > 0 && (
                   <div style={{
@@ -440,7 +439,7 @@ export default function Buildings() {
                     borderRadius: '12px',
                     border: '1px solid #22c55e'
                   }}>
-                    <span style={{ fontSize: '12px', color: '#22c55e', fontWeight: '700' }}>
+                    <span style={{ fontSize: isMobile ? '11px' : '12px', color: '#22c55e', fontWeight: '700' }}>
                       {t('buildings.energyFlow.solarCoverage')}: {solarCoverage.toFixed(1)}%
                     </span>
                   </div>
@@ -449,17 +448,17 @@ export default function Buildings() {
             </div>
           </div>
 
-          {/* Arrow between Building and Grid - CENTERED */}
+          {/* Arrow between Building and Grid */}
           <div style={{ 
             display: 'flex', 
             alignItems: 'center', 
-            flexDirection: 'column', 
+            flexDirection: isMobile ? 'row' : 'column', 
             gap: '4px',
-            marginTop: '48px' // Half of building circle height (120px/2 - arrow height/2)
+            marginTop: isMobile ? '0' : '48px'
           }}>
             {isExporting ? (
               <>
-                <ArrowRight size={32} color="#22c55e" strokeWidth={3} />
+                {isMobile ? <ArrowDown size={28} color="#22c55e" strokeWidth={3} /> : <ArrowRight size={32} color="#22c55e" strokeWidth={3} />}
                 <span style={{ fontSize: '11px', fontWeight: '600', color: '#22c55e' }}>
                   {Math.abs(gridPower).toFixed(2)} kW
                 </span>
@@ -469,7 +468,7 @@ export default function Buildings() {
               </>
             ) : isImporting ? (
               <>
-                <ArrowLeft size={32} color="#ef4444" strokeWidth={3} />
+                {isMobile ? <ArrowUp size={28} color="#ef4444" strokeWidth={3} /> : <ArrowLeft size={32} color="#ef4444" strokeWidth={3} />}
                 <span style={{ fontSize: '11px', fontWeight: '600', color: '#ef4444' }}>
                   {gridPower.toFixed(2)} kW
                 </span>
@@ -478,147 +477,148 @@ export default function Buildings() {
                 </span>
               </>
             ) : (
-              <ArrowLeft size={32} color="#e5e7eb" strokeWidth={3} />
+              isMobile ? <ArrowUp size={28} color="#e5e7eb" strokeWidth={3} /> : <ArrowLeft size={32} color="#e5e7eb" strokeWidth={3} />
             )}
           </div>
 
           {/* Grid */}
           <div style={{ 
             display: 'flex', 
-            flexDirection: 'column', 
+            flexDirection: isMobile ? 'row' : 'column', 
             alignItems: 'center',
-            justifyContent: 'flex-start',
-            width: '120px'
+            justifyContent: 'center',
+            width: isMobile ? '100%' : '120px',
+            gap: isMobile ? '16px' : '0'
           }}>
             <div style={{
-              width: '100px',
-              height: '100px',
+              width: isMobile ? '80px' : '100px',
+              height: isMobile ? '80px' : '100px',
               borderRadius: '50%',
               backgroundColor: isExporting ? '#ecfdf5' : '#fee2e2',
               border: `4px solid ${isExporting ? '#22c55e' : '#ef4444'}`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              marginBottom: '12px'
+              marginBottom: isMobile ? '0' : '12px',
+              flexShrink: 0
             }}>
-              <Grid size={40} color={isExporting ? '#22c55e' : '#ef4444'} />
+              <Grid size={isMobile ? 32 : 40} color={isExporting ? '#22c55e' : '#ef4444'} />
             </div>
             <div style={{ 
               display: 'flex', 
               flexDirection: 'column', 
-              alignItems: 'center',
-              minHeight: '90px',
-              justifyContent: 'flex-start'
+              alignItems: isMobile ? 'flex-start' : 'center',
+              minHeight: isMobile ? 'auto' : '90px',
+              justifyContent: 'flex-start',
+              flex: 1
             }}>
-              <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
+              <span style={{ fontSize: isMobile ? '12px' : '14px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
                 {t('buildings.energyFlow.grid')}
               </span>
-              <span style={{ fontSize: '24px', fontWeight: '800', color: isExporting ? '#22c55e' : '#ef4444' }}>
+              <span style={{ fontSize: isMobile ? '20px' : '24px', fontWeight: '800', color: isExporting ? '#22c55e' : '#ef4444' }}>
                 {Math.abs(gridPower).toFixed(3)} kW
               </span>
-              {/* Fixed height container for additional info */}
               <div style={{ minHeight: '20px', marginTop: '4px' }}>
-                <span style={{ fontSize: '12px', color: isExporting ? '#22c55e' : '#ef4444', fontWeight: '600' }}>
+                <span style={{ fontSize: isMobile ? '11px' : '12px', color: isExporting ? '#22c55e' : '#ef4444', fontWeight: '600' }}>
                   {isExporting ? t('buildings.energyFlow.selling') : t('buildings.energyFlow.buying')}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Solar to Grid Arrow (only when exporting and solar meter exists) */}
-          {isExporting && hasSolarMeter && (
-            <>
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                flexDirection: 'column', 
-                gap: '4px',
-                position: 'absolute',
-                top: '0',
-                left: '50%',
-                transform: 'translateX(-50%)'
+          {/* Solar to Grid Arrow (desktop only) */}
+          {isExporting && hasSolarMeter && !isMobile && (
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              flexDirection: 'column', 
+              gap: '4px',
+              position: 'absolute',
+              top: '0',
+              left: '50%',
+              transform: 'translateX(-50%)'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '6px 12px',
+                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                borderRadius: '20px',
+                border: '2px dashed #22c55e'
               }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '6px 12px',
-                  backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                  borderRadius: '20px',
-                  border: '2px dashed #22c55e'
-                }}>
-                  <Sun size={16} color="#f59e0b" />
-                  <ArrowRight size={20} color="#22c55e" strokeWidth={3} />
-                  <Grid size={16} color="#22c55e" />
-                  <span style={{ fontSize: '11px', fontWeight: '600', color: '#22c55e', marginLeft: '4px' }}>
-                    {solarToGrid.toFixed(2)} kW
-                  </span>
-                </div>
+                <Sun size={16} color="#f59e0b" />
+                <ArrowRight size={20} color="#22c55e" strokeWidth={3} />
+                <Grid size={16} color="#22c55e" />
+                <span style={{ fontSize: '11px', fontWeight: '600', color: '#22c55e', marginLeft: '4px' }}>
+                  {solarToGrid.toFixed(2)} kW
+                </span>
               </div>
-            </>
+            </div>
           )}
         </div>
 
-        {/* Stats Row - Dynamic Grid */}
+        {/* Stats Row - Responsive Grid */}
         <div style={{ 
           display: 'grid', 
-          gridTemplateColumns: building.has_apartments 
-            ? (consumption.charging > 0 ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)')
-            : (consumption.charging > 0 ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)'), 
-          gap: '16px',
-          paddingTop: '24px',
+          gridTemplateColumns: isMobile 
+            ? 'repeat(2, 1fr)'
+            : (building.has_apartments 
+              ? (consumption.charging > 0 ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)')
+              : (consumption.charging > 0 ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)')), 
+          gap: isMobile ? '12px' : '16px',
+          paddingTop: isMobile ? '16px' : '24px',
           borderTop: '2px solid #f3f4f6'
         }}>
-          <div style={{ textAlign: 'center', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '12px' }}>
+          <div style={{ textAlign: 'center', padding: isMobile ? '12px' : '16px', backgroundColor: '#f9fafb', borderRadius: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px' }}>
-              <Zap size={18} color="#f59e0b" />
-              <span style={{ fontSize: '13px', color: '#6b7280', fontWeight: '600' }}>
+              <Zap size={16} color="#f59e0b" />
+              <span style={{ fontSize: isMobile ? '11px' : '13px', color: '#6b7280', fontWeight: '600' }}>
                 {t('buildings.metersCount')}
               </span>
             </div>
-            <span style={{ fontSize: '24px', fontWeight: '800', color: '#1f2937' }}>
+            <span style={{ fontSize: isMobile ? '20px' : '24px', fontWeight: '800', color: '#1f2937' }}>
               {getBuildingMeters(building.id).length}
             </span>
           </div>
           
-          <div style={{ textAlign: 'center', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '12px' }}>
+          <div style={{ textAlign: 'center', padding: isMobile ? '12px' : '16px', backgroundColor: '#f9fafb', borderRadius: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px' }}>
-              <Activity size={18} color="#3b82f6" />
-              <span style={{ fontSize: '13px', color: '#6b7280', fontWeight: '600' }}>
+              <Activity size={16} color="#3b82f6" />
+              <span style={{ fontSize: isMobile ? '11px' : '13px', color: '#6b7280', fontWeight: '600' }}>
                 {t('buildings.chargersCount')}
               </span>
             </div>
-            <span style={{ fontSize: '24px', fontWeight: '800', color: '#1f2937' }}>
+            <span style={{ fontSize: isMobile ? '20px' : '24px', fontWeight: '800', color: '#1f2937' }}>
               {getBuildingChargers(building.id).length}
             </span>
           </div>
 
           {building.has_apartments && (
-            <div style={{ textAlign: 'center', padding: '16px', backgroundColor: '#dbeafe', borderRadius: '12px' }}>
+            <div style={{ textAlign: 'center', padding: isMobile ? '12px' : '16px', backgroundColor: '#dbeafe', borderRadius: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px' }}>
-                <Home size={18} color="#1e40af" />
-                <span style={{ fontSize: '13px', color: '#1e40af', fontWeight: '600' }}>
+                <Home size={16} color="#1e40af" />
+                <span style={{ fontSize: isMobile ? '11px' : '13px', color: '#1e40af', fontWeight: '600' }}>
                   {t('buildings.apartmentsCount')}
                 </span>
               </div>
-              <span style={{ fontSize: '24px', fontWeight: '800', color: '#1e40af' }}>
+              <span style={{ fontSize: isMobile ? '20px' : '24px', fontWeight: '800', color: '#1e40af' }}>
                 {building.floors_config?.reduce((sum, floor) => sum + floor.apartments.length, 0) || 0}
               </span>
             </div>
           )}
 
           {consumption.charging > 0 && (
-            <div style={{ textAlign: 'center', padding: '16px', backgroundColor: '#f0fdf4', borderRadius: '12px' }}>
+            <div style={{ textAlign: 'center', padding: isMobile ? '12px' : '16px', backgroundColor: '#f0fdf4', borderRadius: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px' }}>
-                <Zap size={18} color="#22c55e" />
-                <span style={{ fontSize: '13px', color: '#22c55e', fontWeight: '600' }}>
+                <Zap size={16} color="#22c55e" />
+                <span style={{ fontSize: isMobile ? '11px' : '13px', color: '#22c55e', fontWeight: '600' }}>
                   {t('buildings.charging')}
                 </span>
               </div>
-              <span style={{ fontSize: '24px', fontWeight: '800', color: '#22c55e' }}>
+              <span style={{ fontSize: isMobile ? '20px' : '24px', fontWeight: '800', color: '#22c55e' }}>
                 {consumption.charging.toFixed(2)} kW
               </span>
-              {/* Show charger info if available */}
               {activeCharger && (
                 <div style={{ marginTop: '8px' }}>
                   <span style={{ fontSize: '11px', color: '#6b7280', display: 'block' }}>
@@ -643,8 +643,8 @@ export default function Buildings() {
           onClick={() => toggleComplex(complex.id)}
           style={{
             backgroundColor: 'white',
-            borderRadius: '16px',
-            padding: '24px',
+            borderRadius: isMobile ? '12px' : '16px',
+            padding: isMobile ? '16px' : '24px',
             boxShadow: '0 4px 6px rgba(0,0,0,0.07)',
             border: '2px solid #667eea',
             position: 'relative',
@@ -652,26 +652,30 @@ export default function Buildings() {
             transition: 'all 0.2s ease',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.boxShadow = '0 8px 12px rgba(0,0,0,0.12)';
-            e.currentTarget.style.transform = 'translateY(-2px)';
+            if (!isMobile) {
+              e.currentTarget.style.boxShadow = '0 8px 12px rgba(0,0,0,0.12)';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+            }
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.07)';
-            e.currentTarget.style.transform = 'translateY(0)';
+            if (!isMobile) {
+              e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.07)';
+              e.currentTarget.style.transform = 'translateY(0)';
+            }
           }}
         >
           <div style={{ 
             position: 'absolute', 
-            top: '16px', 
-            right: '16px', 
+            top: isMobile ? '12px' : '16px', 
+            right: isMobile ? '12px' : '16px', 
             display: 'flex', 
             gap: '8px' 
           }}>
             <button 
               onClick={(e) => { e.stopPropagation(); handleEdit(complex); }}
               style={{
-                width: '32px',
-                height: '32px',
+                width: isMobile ? '36px' : '32px',
+                height: isMobile ? '36px' : '32px',
                 borderRadius: '50%',
                 border: 'none',
                 backgroundColor: 'rgba(59, 130, 246, 0.1)',
@@ -689,8 +693,8 @@ export default function Buildings() {
             <button 
               onClick={(e) => { e.stopPropagation(); handleDelete(complex.id); }}
               style={{
-                width: '32px',
-                height: '32px',
+                width: isMobile ? '36px' : '32px',
+                height: isMobile ? '36px' : '32px',
                 borderRadius: '50%',
                 border: 'none',
                 backgroundColor: 'rgba(239, 68, 68, 0.1)',
@@ -707,20 +711,21 @@ export default function Buildings() {
             </button>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingRight: '72px' }}>
-            {isExpanded ? <ChevronDown size={24} color="#667eea" /> : <ChevronRight size={24} color="#667eea" />}
-            <Folder size={24} color="#667eea" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '12px', paddingRight: isMobile ? '80px' : '72px' }}>
+            {isExpanded ? <ChevronDown size={20} color="#667eea" /> : <ChevronRight size={20} color="#667eea" />}
+            <Folder size={20} color="#667eea" />
             <div style={{ flex: 1 }}>
               <h3 style={{ 
-                fontSize: '22px', 
+                fontSize: isMobile ? '18px' : '22px', 
                 fontWeight: '700', 
                 margin: 0,
                 color: '#667eea',
-                lineHeight: '1.3'
+                lineHeight: '1.3',
+                wordBreak: 'break-word'
               }}>
                 {complex.name}
               </h3>
-              <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>
+              <p style={{ fontSize: isMobile ? '12px' : '14px', color: '#6b7280', margin: '4px 0 0 0' }}>
                 {buildingsInComplex.length} {t('buildings.buildingsInComplex')}
               </p>
             </div>
@@ -738,7 +743,7 @@ export default function Buildings() {
     );
   };
 
-  // LEGO-Style Apartment Configuration Component
+  // LEGO-Style Apartment Configuration Component - MOBILE RESPONSIVE
   const LegoApartmentBuilder = () => {
     const [dragType, setDragType] = useState<string | null>(null);
     const [dragData, setDragData] = useState<any>(null);
@@ -872,12 +877,12 @@ export default function Buildings() {
 
     const StudRow = () => (
       <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', marginBottom: '4px' }}>
-        {Array.from({ length: 8 }).map((_, i) => (
+        {Array.from({ length: isMobile ? 6 : 8 }).map((_, i) => (
           <div
             key={i}
             style={{
-              width: '10px',
-              height: '10px',
+              width: isMobile ? '8px' : '10px',
+              height: isMobile ? '8px' : '10px',
               borderRadius: '50%',
               backgroundColor: 'rgba(255, 255, 255, 0.6)',
               border: '1px solid rgba(0, 0, 0, 0.1)',
@@ -892,31 +897,33 @@ export default function Buildings() {
       <div style={{ 
         marginTop: '24px', 
         display: 'grid',
-        gridTemplateColumns: '280px 1fr',
+        gridTemplateColumns: isMobile ? '1fr' : '280px 1fr',
         gap: '24px',
-        minHeight: '500px'
+        minHeight: isMobile ? 'auto' : '500px'
       }}>
         {/* Palette Sidebar */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'row' : 'column', gap: '16px', order: isMobile ? 2 : 1 }}>
           {/* Floor Palette */}
           <div
-            draggable
-            onDragStart={(e) => onPaletteDragStart(e, DRAG_TYPES.PALETTE_FLOOR)}
+            draggable={!isMobile}
+            onDragStart={(e) => !isMobile && onPaletteDragStart(e, DRAG_TYPES.PALETTE_FLOOR)}
             onDragEnd={onDragEndGlobal}
+            onClick={() => isMobile && addFloor()}
             style={{
-              cursor: 'grab',
-              padding: '20px',
+              cursor: isMobile ? 'pointer' : 'grab',
+              padding: isMobile ? '16px' : '20px',
               backgroundColor: 'white',
               borderRadius: '12px',
               border: '2px solid #e5e7eb',
               boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
               transition: 'all 0.2s',
-              userSelect: 'none'
+              userSelect: 'none',
+              flex: isMobile ? 1 : 'none'
             }}
-            onMouseDown={(e) => e.currentTarget.style.cursor = 'grabbing'}
-            onMouseUp={(e) => e.currentTarget.style.cursor = 'grab'}
+            onMouseDown={(e) => !isMobile && (e.currentTarget.style.cursor = 'grabbing')}
+            onMouseUp={(e) => !isMobile && (e.currentTarget.style.cursor = 'grab')}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px', flexDirection: isMobile ? 'column' : 'row' }}>
               <div style={{
                 width: '40px',
                 height: '40px',
@@ -928,47 +935,33 @@ export default function Buildings() {
               }}>
                 <Layers size={24} color="#3b82f6" />
               </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: '700', fontSize: '16px', color: '#1f2937' }}>
+              <div style={{ flex: 1, textAlign: isMobile ? 'center' : 'left' }}>
+                <div style={{ fontWeight: '700', fontSize: isMobile ? '14px' : '16px', color: '#1f2937' }}>
                   {t('buildings.apartmentConfig.paletteFloor')}
                 </div>
                 <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                  {t('buildings.apartmentConfig.dragToBuilding')}
+                  {isMobile ? t('buildings.apartmentConfig.tapToAdd') : t('buildings.apartmentConfig.dragToBuilding')}
                 </div>
               </div>
-            </div>
-            <div style={{
-              padding: '6px 12px',
-              backgroundColor: '#f3f4f6',
-              borderRadius: '6px',
-              fontSize: '11px',
-              color: '#6b7280',
-              textAlign: 'center',
-              fontWeight: '600'
-            }}>
-              {t('buildings.apartmentConfig.addNewLevel')}
             </div>
           </div>
 
           {/* Apartment Palette */}
           <div
-            draggable
-            onDragStart={(e) => onPaletteDragStart(e, DRAG_TYPES.PALETTE_APT)}
-            onDragEnd={onDragEndGlobal}
             style={{
-              cursor: 'grab',
-              padding: '20px',
+              cursor: 'default',
+              padding: isMobile ? '16px' : '20px',
               backgroundColor: 'white',
               borderRadius: '12px',
               border: '2px solid #e5e7eb',
               boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
               transition: 'all 0.2s',
-              userSelect: 'none'
+              userSelect: 'none',
+              flex: isMobile ? 1 : 'none',
+              opacity: 0.6
             }}
-            onMouseDown={(e) => e.currentTarget.style.cursor = 'grabbing'}
-            onMouseUp={(e) => e.currentTarget.style.cursor = 'grab'}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px', flexDirection: isMobile ? 'column' : 'row' }}>
               <div style={{
                 width: '40px',
                 height: '40px',
@@ -980,74 +973,67 @@ export default function Buildings() {
               }}>
                 <Home size={24} color="#f59e0b" />
               </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: '700', fontSize: '16px', color: '#1f2937' }}>
+              <div style={{ flex: 1, textAlign: isMobile ? 'center' : 'left' }}>
+                <div style={{ fontWeight: '700', fontSize: isMobile ? '14px' : '16px', color: '#1f2937' }}>
                   {t('buildings.apartmentConfig.paletteApartment')}
                 </div>
                 <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                  {t('buildings.apartmentConfig.dragToFloor')}
+                  {isMobile ? t('buildings.apartmentConfig.useFloorButton') : t('buildings.apartmentConfig.dragToFloor')}
                 </div>
               </div>
             </div>
-            <div style={{
-              padding: '6px 12px',
-              backgroundColor: '#f3f4f6',
-              borderRadius: '6px',
-              fontSize: '11px',
-              color: '#6b7280',
-              textAlign: 'center',
-              fontWeight: '600'
-            }}>
-              {t('buildings.apartmentConfig.addUnit')}
-            </div>
           </div>
 
-          {/* Stats */}
-          <div style={{
-            padding: '16px',
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            border: '2px dashed #e5e7eb'
-          }}>
-            <div style={{ fontSize: '13px', fontWeight: '600', color: '#6b7280', marginBottom: '12px' }}>
-              {t('buildings.apartmentConfig.buildingStats')}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                  {t('buildings.apartmentConfig.floorsLabel')}
-                </span>
-                <span style={{ fontSize: '16px', fontWeight: '700', color: '#3b82f6' }}>
-                  {(formData.floors_config || []).length}
-                </span>
+          {/* Stats - hide on mobile in palette area */}
+          {!isMobile && (
+            <>
+              <div style={{
+                padding: '16px',
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                border: '2px dashed #e5e7eb'
+              }}>
+                <div style={{ fontSize: '13px', fontWeight: '600', color: '#6b7280', marginBottom: '12px' }}>
+                  {t('buildings.apartmentConfig.buildingStats')}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                      {t('buildings.apartmentConfig.floorsLabel')}
+                    </span>
+                    <span style={{ fontSize: '16px', fontWeight: '700', color: '#3b82f6' }}>
+                      {(formData.floors_config || []).length}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                      {t('buildings.apartmentConfig.apartmentsLabel')}
+                    </span>
+                    <span style={{ fontSize: '16px', fontWeight: '700', color: '#f59e0b' }}>
+                      {(formData.floors_config || []).reduce((sum, f) => sum + f.apartments.length, 0)}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                  {t('buildings.apartmentConfig.apartmentsLabel')}
-                </span>
-                <span style={{ fontSize: '16px', fontWeight: '700', color: '#f59e0b' }}>
-                  {(formData.floors_config || []).reduce((sum, f) => sum + f.apartments.length, 0)}
-                </span>
-              </div>
-            </div>
-          </div>
 
-          {/* Instructions */}
-          <div style={{
-            padding: '16px',
-            backgroundColor: '#fffbeb',
-            borderRadius: '12px',
-            border: '1px solid #fef3c7'
-          }}>
-            <div style={{ fontSize: '11px', color: '#92400e', lineHeight: '1.6' }}>
-              <strong>{t('buildings.apartmentConfig.tips')}</strong><br/>
-              {t('buildings.apartmentConfig.tip1')}<br/>
-              {t('buildings.apartmentConfig.tip2')}<br/>
-              {t('buildings.apartmentConfig.tip3')}<br/>
-              {t('buildings.apartmentConfig.tip4')}<br/>
-              {t('buildings.apartmentConfig.tip5')}
-            </div>
-          </div>
+              {/* Instructions */}
+              <div style={{
+                padding: '16px',
+                backgroundColor: '#fffbeb',
+                borderRadius: '12px',
+                border: '1px solid #fef3c7'
+              }}>
+                <div style={{ fontSize: '11px', color: '#92400e', lineHeight: '1.6' }}>
+                  <strong>{t('buildings.apartmentConfig.tips')}</strong><br/>
+                  {t('buildings.apartmentConfig.tip1')}<br/>
+                  {t('buildings.apartmentConfig.tip2')}<br/>
+                  {t('buildings.apartmentConfig.tip3')}<br/>
+                  {t('buildings.apartmentConfig.tip4')}<br/>
+                  {t('buildings.apartmentConfig.tip5')}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Building Area */}
@@ -1055,10 +1041,11 @@ export default function Buildings() {
           backgroundColor: 'white',
           borderRadius: '16px',
           border: `3px dashed ${dragType === DRAG_TYPES.PALETTE_FLOOR ? '#22c55e' : '#e5e7eb'}`,
-          padding: '24px',
-          minHeight: '500px',
+          padding: isMobile ? '16px' : '24px',
+          minHeight: isMobile ? '300px' : '500px',
           position: 'relative',
-          transition: 'all 0.3s'
+          transition: 'all 0.3s',
+          order: isMobile ? 1 : 2
         }}
         onDragOver={allowDrop}
         onDrop={onBuildingDrop}
@@ -1067,14 +1054,26 @@ export default function Buildings() {
             display: 'flex', 
             alignItems: 'center', 
             gap: '12px', 
-            marginBottom: '24px',
+            marginBottom: isMobile ? '16px' : '24px',
             paddingBottom: '16px',
-            borderBottom: '2px solid #f3f4f6'
+            borderBottom: '2px solid #f3f4f6',
+            flexWrap: 'wrap'
           }}>
-            <Building size={24} color="#667eea" />
-            <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#1f2937', margin: 0 }}>
+            <Building size={20} color="#667eea" />
+            <h3 style={{ fontSize: isMobile ? '16px' : '20px', fontWeight: '700', color: '#1f2937', margin: 0 }}>
               {t('buildings.apartmentConfig.buildingLayout')}
             </h3>
+            {/* Mobile stats */}
+            {isMobile && (
+              <div style={{ display: 'flex', gap: '12px', marginLeft: 'auto', fontSize: '12px' }}>
+                <span style={{ color: '#3b82f6', fontWeight: '700' }}>
+                  {(formData.floors_config || []).length} {t('buildings.apartmentConfig.floorsLabel')}
+                </span>
+                <span style={{ color: '#f59e0b', fontWeight: '700' }}>
+                  {(formData.floors_config || []).reduce((sum, f) => sum + f.apartments.length, 0)} {t('buildings.apartmentConfig.apartmentsLabel')}
+                </span>
+              </div>
+            )}
           </div>
 
           {(formData.floors_config || []).length === 0 ? (
@@ -1083,44 +1082,43 @@ export default function Buildings() {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              height: '400px',
+              height: isMobile ? '250px' : '400px',
               gap: '16px'
             }}>
-              <Building size={64} color="#cbd5e1" />
-              <p style={{ fontSize: '16px', color: '#64748b', textAlign: 'center' }}>
+              <Building size={isMobile ? 48 : 64} color="#cbd5e1" />
+              <p style={{ fontSize: isMobile ? '14px' : '16px', color: '#64748b', textAlign: 'center', padding: '0 20px' }}>
                 {t('buildings.apartmentConfig.noFloors')}
               </p>
-              <p style={{ fontSize: '14px', color: '#94a3b8', textAlign: 'center' }}>
-                {t('buildings.apartmentConfig.clickAddFloor')}
+              <p style={{ fontSize: isMobile ? '12px' : '14px', color: '#94a3b8', textAlign: 'center', padding: '0 20px' }}>
+                {isMobile ? t('buildings.apartmentConfig.tapAbove') : t('buildings.apartmentConfig.clickAddFloor')}
               </p>
             </div>
           ) : (
             <div style={{ 
-              maxHeight: '600px', 
+              maxHeight: isMobile ? '500px' : '600px', 
               overflowY: 'auto',
-              paddingRight: '8px'
+              paddingRight: isMobile ? '4px' : '8px'
             }}>
-              <div style={{ display: 'flex', flexDirection: 'column-reverse', gap: '20px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column-reverse', gap: isMobile ? '16px' : '20px' }}>
                 {(formData.floors_config || []).map((floor, floorIdx) => (
                   <div key={floorIdx} style={{ position: 'relative' }}>
-                    {/* LEGO Studs on top */}
                     <StudRow />
 
                     {/* Floor Card */}
                     <div
-                      draggable
-                      onDragStart={(e) => onFloorDragStart(e, floorIdx)}
+                      draggable={!isMobile}
+                      onDragStart={(e) => !isMobile && onFloorDragStart(e, floorIdx)}
                       onDragEnd={onDragEndGlobal}
                       onDragOver={allowDrop}
                       onDrop={(e) => onFloorDrop(floorIdx, e)}
                       style={{
-                        padding: '20px',
+                        padding: isMobile ? '16px' : '20px',
                         backgroundColor: dragType ? '#f0f9ff' : '#f8fafc',
                         borderRadius: '16px',
                         border: `2px solid ${dragType === DRAG_TYPES.PALETTE_APT || dragType === DRAG_TYPES.EXISTING_FLOOR ? '#3b82f6' : '#e2e8f0'}`,
                         boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
                         transition: 'all 0.2s',
-                        cursor: 'move'
+                        cursor: isMobile ? 'default' : 'move'
                       }}
                     >
                       {/* Floor Header */}
@@ -1130,10 +1128,12 @@ export default function Buildings() {
                         alignItems: 'center', 
                         marginBottom: '16px',
                         paddingBottom: '12px',
-                        borderBottom: '2px solid #e2e8f0'
+                        borderBottom: '2px solid #e2e8f0',
+                        flexWrap: 'wrap',
+                        gap: '8px'
                       }}>
                         {editingFloor === floorIdx ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '200px' }}>
                             <input
                               autoFocus
                               type="text"
@@ -1190,10 +1190,10 @@ export default function Buildings() {
                           </div>
                         ) : (
                           <>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
-                              <GripVertical size={20} color="#9ca3af" style={{ cursor: 'grab' }} />
-                              <Layers size={20} color="#3b82f6" />
-                              <span style={{ fontSize: '16px', fontWeight: '700', color: '#1f2937' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '150px' }}>
+                              {!isMobile && <GripVertical size={20} color="#9ca3af" style={{ cursor: 'grab' }} />}
+                              <Layers size={18} color="#3b82f6" />
+                              <span style={{ fontSize: isMobile ? '14px' : '16px', fontWeight: '700', color: '#1f2937', wordBreak: 'break-word' }}>
                                 {floor.floor_name}
                               </span>
                               <button
@@ -1215,6 +1215,27 @@ export default function Buildings() {
                               </button>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              {isMobile && (
+                                <button
+                                  onClick={() => addApartmentToFloor(floorIdx)}
+                                  style={{
+                                    padding: '8px 12px',
+                                    border: 'none',
+                                    background: '#f59e0b',
+                                    color: 'white',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    fontSize: '12px',
+                                    fontWeight: '600'
+                                  }}
+                                >
+                                  <Plus size={14} />
+                                  {t('buildings.apartmentConfig.addApt')}
+                                </button>
+                              )}
                               <div style={{
                                 padding: '4px 12px',
                                 backgroundColor: '#f3f4f6',
@@ -1244,7 +1265,7 @@ export default function Buildings() {
                         )}
                       </div>
 
-                      {/* Apartments Grid - FLEXIBLE WIDTH */}
+                      {/* Apartments Grid */}
                       <div style={{ 
                         display: 'flex',
                         flexWrap: 'wrap',
@@ -1253,28 +1274,20 @@ export default function Buildings() {
                         {floor.apartments.map((apt, aptIdx) => (
                           <div
                             key={aptIdx}
-                            draggable
-                            onDragStart={(e) => onApartmentDragStart(e, floorIdx, aptIdx)}
+                            draggable={!isMobile}
+                            onDragStart={(e) => !isMobile && onApartmentDragStart(e, floorIdx, aptIdx)}
                             onDragEnd={onDragEndGlobal}
                             style={{
-                              padding: '14px',
+                              padding: isMobile ? '12px' : '14px',
                               backgroundColor: '#fef3c7',
                               borderRadius: '12px',
                               border: '2px solid #fbbf24',
-                              cursor: 'grab',
+                              cursor: isMobile ? 'default' : 'grab',
                               transition: 'all 0.2s',
                               boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
                               userSelect: 'none',
                               minWidth: 'fit-content',
                               maxWidth: '200px'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.transform = 'translateY(-2px)';
-                              e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.transform = 'translateY(0)';
-                              e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
                             }}
                           >
                             {editingApt?.floorIdx === floorIdx && editingApt?.aptIdx === aptIdx ? (
@@ -1375,7 +1388,7 @@ export default function Buildings() {
                         {floor.apartments.length === 0 && (
                           <div style={{
                             width: '100%',
-                            padding: '20px',
+                            padding: isMobile ? '16px' : '20px',
                             textAlign: 'center',
                             color: '#94a3b8',
                             fontSize: '13px',
@@ -1384,7 +1397,7 @@ export default function Buildings() {
                             borderRadius: '8px',
                             border: '2px dashed #e2e8f0'
                           }}>
-                            {t('buildings.apartmentConfig.dragHereHint')}
+                            {isMobile ? t('buildings.apartmentConfig.tapAddApt') : t('buildings.apartmentConfig.dragHereHint')}
                           </div>
                         )}
                       </div>
@@ -1396,7 +1409,7 @@ export default function Buildings() {
           )}
 
           {/* Drop Hint Overlay */}
-          {dragType === DRAG_TYPES.PALETTE_FLOOR && (
+          {dragType === DRAG_TYPES.PALETTE_FLOOR && !isMobile && (
             <div style={{
               position: 'absolute',
               top: '50%',
@@ -1427,54 +1440,54 @@ export default function Buildings() {
       justifyContent: 'center', zIndex: 2000, padding: '20px'
     }}>
       <div style={{
-        backgroundColor: 'white', borderRadius: '12px', padding: '30px',
+        backgroundColor: 'white', borderRadius: '12px', padding: isMobile ? '20px' : '30px',
         maxWidth: '700px', maxHeight: '90vh', overflow: 'auto', width: '100%'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>{t('buildings.instructions.title')}</h2>
+          <h2 style={{ fontSize: isMobile ? '20px' : '24px', fontWeight: 'bold' }}>{t('buildings.instructions.title')}</h2>
           <button onClick={() => setShowInstructions(false)} 
             style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
             <X size={24} />
           </button>
         </div>
 
-        <div style={{ lineHeight: '1.8', color: '#374151' }}>
+        <div style={{ lineHeight: '1.8', color: '#374151', fontSize: isMobile ? '14px' : '16px' }}>
           <div style={{ backgroundColor: '#dbeafe', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #3b82f6' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h3 style={{ fontSize: isMobile ? '16px' : '18px', fontWeight: '600', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Home size={20} color="#3b82f6" />
               {t('buildings.instructions.whatIsBuilding')}
             </h3>
-            <p>{t('buildings.instructions.buildingDescription')}</p>
+            <p style={{ fontSize: isMobile ? '13px' : '15px' }}>{t('buildings.instructions.buildingDescription')}</p>
           </div>
 
           <div style={{ backgroundColor: '#f3e5f5', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #7b1fa2' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h3 style={{ fontSize: isMobile ? '16px' : '18px', fontWeight: '600', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Folder size={20} color="#7b1fa2" />
               {t('buildings.instructions.whatIsComplex')}
             </h3>
-            <p>{t('buildings.instructions.complexDescription')}</p>
+            <p style={{ fontSize: isMobile ? '13px' : '15px' }}>{t('buildings.instructions.complexDescription')}</p>
           </div>
 
           <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #f59e0b' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h3 style={{ fontSize: isMobile ? '16px' : '18px', fontWeight: '600', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Building size={20} color="#f59e0b" />
               {t('buildings.instructions.apartmentTitle')}
             </h3>
-            <p>{t('buildings.instructions.apartmentDescription')}</p>
+            <p style={{ fontSize: isMobile ? '13px' : '15px' }}>{t('buildings.instructions.apartmentDescription')}</p>
           </div>
 
           <div style={{ backgroundColor: '#ecfdf5', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #22c55e' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h3 style={{ fontSize: isMobile ? '16px' : '18px', fontWeight: '600', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Sun size={20} color="#22c55e" />
               {t('buildings.instructions.energyFlowTitle')}
             </h3>
-            <p>{t('buildings.instructions.energyFlowDescription')}</p>
+            <p style={{ fontSize: isMobile ? '13px' : '15px' }}>{t('buildings.instructions.energyFlowDescription')}</p>
           </div>
 
-          <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
+          <h3 style={{ fontSize: isMobile ? '16px' : '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
             {t('buildings.instructions.howToUse')}
           </h3>
-          <ul style={{ marginLeft: '20px' }}>
+          <ul style={{ marginLeft: '20px', fontSize: isMobile ? '13px' : '14px' }}>
             <li>{t('buildings.instructions.step1')}</li>
             <li>{t('buildings.instructions.step2')}</li>
             <li>{t('buildings.instructions.step3')}</li>
@@ -1484,10 +1497,10 @@ export default function Buildings() {
           </ul>
 
           <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', marginTop: '16px', border: '1px solid #f59e0b' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: '#1f2937' }}>
+            <h3 style={{ fontSize: isMobile ? '14px' : '16px', fontWeight: '600', marginBottom: '8px', color: '#1f2937' }}>
               {t('buildings.instructions.tips')}
             </h3>
-            <ul style={{ marginLeft: '20px', fontSize: '14px' }}>
+            <ul style={{ marginLeft: '20px', fontSize: isMobile ? '12px' : '14px' }}>
               <li>{t('buildings.instructions.tip1')}</li>
               <li>{t('buildings.instructions.tip2')}</li>
               <li>{t('buildings.instructions.tip3')}</li>
@@ -1509,24 +1522,24 @@ export default function Buildings() {
 
   return (
     <div className="buildings-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', gap: '15px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isMobile ? '20px' : '30px', gap: '15px', flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ 
-            fontSize: '36px', 
+            fontSize: isMobile ? '24px' : '36px', 
             fontWeight: '800', 
             marginBottom: '8px',
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
+            gap: isMobile ? '8px' : '12px',
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text'
           }}>
-            <Building size={36} style={{ color: '#667eea' }} />
+            <Building size={isMobile ? 28 : 36} style={{ color: '#667eea' }} />
             {t('buildings.title')}
           </h1>
-          <p style={{ color: '#6b7280', fontSize: '16px' }}>
+          <p style={{ color: '#6b7280', fontSize: isMobile ? '14px' : '16px' }}>
             {t('buildings.subtitle')}
           </p>
         </div>
@@ -1534,28 +1547,28 @@ export default function Buildings() {
           <button
             onClick={() => setShowInstructions(true)}
             style={{
-              display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
+              display: 'flex', alignItems: 'center', gap: '8px', padding: isMobile ? '10px 16px' : '10px 20px',
               backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
             }}
           >
             <HelpCircle size={18} />
-            {t('buildings.setupInstructions')}
+            {!isMobile && t('buildings.setupInstructions')}
           </button>
           <button
             onClick={() => { resetForm(); setShowModal(true); }}
             style={{
-              display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
+              display: 'flex', alignItems: 'center', gap: '8px', padding: isMobile ? '10px 16px' : '10px 20px',
               backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
             }}
           >
             <Plus size={18} />
-            {t('buildings.addBuilding')}
+            {isMobile ? t('common.add') : t('buildings.addBuilding')}
           </button>
         </div>
       </div>
 
       <div style={{ marginBottom: '20px' }}>
-        <div style={{ position: 'relative', maxWidth: '400px' }}>
+        <div style={{ position: 'relative', maxWidth: isMobile ? '100%' : '400px' }}>
           <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
           <input
             type="text"
@@ -1575,7 +1588,7 @@ export default function Buildings() {
 
       {filteredComplexes.length > 0 && (
         <div style={{ marginBottom: '30px' }}>
-          <h2 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h2 style={{ fontSize: isMobile ? '18px' : '20px', fontWeight: '600', marginBottom: '16px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Folder size={20} color="#667eea" />
             {t('buildings.complexes')}
           </h2>
@@ -1587,7 +1600,7 @@ export default function Buildings() {
 
       {filteredStandalone.length > 0 && (
         <div>
-          <h2 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h2 style={{ fontSize: isMobile ? '18px' : '20px', fontWeight: '600', marginBottom: '16px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Home size={20} color="#667eea" />
             {t('buildings.standaloneBuildings')}
           </h2>
@@ -1603,7 +1616,7 @@ export default function Buildings() {
         <div style={{ 
           backgroundColor: 'white', 
           borderRadius: '12px', 
-          padding: '60px 20px', 
+          padding: isMobile ? '40px 20px' : '60px 20px', 
           textAlign: 'center', 
           color: '#999',
           boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
@@ -1622,11 +1635,11 @@ export default function Buildings() {
           padding: '15px'
         }}>
           <div className="modal-content" style={{
-            backgroundColor: 'white', borderRadius: '12px', padding: '30px',
+            backgroundColor: 'white', borderRadius: '12px', padding: isMobile ? '20px' : '30px',
             width: '95%', maxWidth: '1200px', maxHeight: '90vh', overflow: 'auto'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>
+              <h2 style={{ fontSize: isMobile ? '20px' : '24px', fontWeight: 'bold' }}>
                 {editingBuilding ? t('buildings.editBuilding') : t('buildings.addBuilding')}
               </h2>
               <button onClick={() => { setShowModal(false); setEditingBuilding(null); }} style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
@@ -1638,7 +1651,7 @@ export default function Buildings() {
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('common.name')} *</label>
                 <input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: isMobile ? '16px' : '14px' }} />
               </div>
 
               <div style={{ marginTop: '16px' }}>
@@ -1677,12 +1690,12 @@ export default function Buildings() {
                   <div style={{ marginTop: '16px' }}>
                     <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('common.address')}</label>
                     <input type="text" value={formData.address_street} onChange={(e) => setFormData({ ...formData, address_street: e.target.value })}
-                      placeholder={t('users.street')} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', marginBottom: '8px' }} />
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '8px' }}>
+                      placeholder={t('users.street')} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', marginBottom: '8px', fontSize: isMobile ? '16px' : '14px' }} />
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 2fr', gap: '8px' }}>
                       <input type="text" value={formData.address_zip} onChange={(e) => setFormData({ ...formData, address_zip: e.target.value })}
-                        placeholder={t('users.zip')} style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                        placeholder={t('users.zip')} style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: isMobile ? '16px' : '14px' }} />
                       <input type="text" value={formData.address_city} onChange={(e) => setFormData({ ...formData, address_city: e.target.value })}
-                        placeholder={t('users.city')} style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                        placeholder={t('users.city')} style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: isMobile ? '16px' : '14px' }} />
                     </div>
                   </div>
 
@@ -1715,10 +1728,10 @@ export default function Buildings() {
               <div style={{ marginTop: '16px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('common.notes')}</label>
                 <textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  rows={3} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'inherit' }} />
+                  rows={3} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'inherit', fontSize: isMobile ? '16px' : '14px' }} />
               </div>
 
-              <div className="button-group" style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+              <div className="button-group" style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '12px', marginTop: '24px' }}>
                 <button type="submit" style={{
                   flex: 1, padding: '12px', backgroundColor: '#007bff', color: 'white',
                   border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
@@ -1736,38 +1749,6 @@ export default function Buildings() {
           </div>
         </div>
       )}
-
-      <style>{`
-        @media (max-width: 768px) {
-          .buildings-container h1 {
-            font-size: 24px !important;
-          }
-
-          .buildings-container h1 svg {
-            width: 24px !important;
-            height: 24px !important;
-          }
-
-          .buildings-container p {
-            font-size: 14px !important;
-          }
-
-          .modal-content h2 {
-            font-size: 20px !important;
-          }
-        }
-
-        @media (max-width: 480px) {
-          .buildings-container h1 {
-            font-size: 20px !important;
-          }
-
-          .buildings-container h1 svg {
-            width: 20px !important;
-            height: 20px !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }
