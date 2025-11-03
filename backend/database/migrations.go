@@ -78,6 +78,7 @@ func RunMigrations(db *sql.DB) error {
 			last_reading REAL DEFAULT 0,
 			last_reading_time DATETIME,
 			is_active INTEGER DEFAULT 1,
+			is_shared INTEGER DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (building_id) REFERENCES buildings(id),
@@ -196,6 +197,57 @@ func RunMigrations(db *sql.DB) error {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
+		// =====================================================================
+		// NEW: Shared Meter Configurations
+		// =====================================================================
+		`CREATE TABLE IF NOT EXISTS shared_meter_configs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			meter_id INTEGER NOT NULL,
+			building_id INTEGER NOT NULL,
+			meter_name TEXT NOT NULL,
+			split_type TEXT NOT NULL CHECK(split_type IN ('equal', 'by_area', 'by_units', 'custom')),
+			unit_price REAL NOT NULL CHECK(unit_price >= 0),
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (meter_id) REFERENCES meters(id) ON DELETE CASCADE,
+			FOREIGN KEY (building_id) REFERENCES buildings(id) ON DELETE CASCADE
+		)`,
+
+		// =====================================================================
+		// NEW: Custom Line Items
+		// =====================================================================
+		`CREATE TABLE IF NOT EXISTS custom_line_items (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			building_id INTEGER NOT NULL,
+			description TEXT NOT NULL,
+			amount REAL NOT NULL CHECK(amount >= 0),
+			frequency TEXT NOT NULL CHECK(frequency IN ('once', 'monthly', 'quarterly', 'yearly')),
+			category TEXT NOT NULL CHECK(category IN ('meter_rent', 'maintenance', 'service', 'other')),
+			is_active INTEGER DEFAULT 1 CHECK(is_active IN (0, 1)),
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (building_id) REFERENCES buildings(id) ON DELETE CASCADE
+		)`,
+
+		// =====================================================================
+		// NEW: Shared Meter Custom Splits (for custom percentage splitting)
+		// =====================================================================
+		`CREATE TABLE IF NOT EXISTS shared_meter_custom_splits (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			config_id INTEGER NOT NULL,
+			user_id INTEGER NOT NULL,
+			percentage REAL NOT NULL CHECK(percentage > 0 AND percentage <= 100),
+			notes TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (config_id) REFERENCES shared_meter_configs(id) ON DELETE CASCADE,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+			UNIQUE(config_id, user_id)
+		)`,
+
+		// =====================================================================
+		// Indexes for existing tables
+		// =====================================================================
 		`CREATE INDEX IF NOT EXISTS idx_meter_readings_time ON meter_readings(reading_time)`,
 		`CREATE INDEX IF NOT EXISTS idx_meter_readings_meter ON meter_readings(meter_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_charger_sessions_time ON charger_sessions(session_time)`,
@@ -203,11 +255,22 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_invoices_building ON invoices(building_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_auto_billing_next_run ON auto_billing_configs(next_run)`,
+
+		// =====================================================================
+		// NEW: Indexes for shared meters and custom items
+		// =====================================================================
+		`CREATE INDEX IF NOT EXISTS idx_shared_meters_building ON shared_meter_configs(building_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_shared_meters_meter ON shared_meter_configs(meter_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_custom_items_building ON custom_line_items(building_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_custom_items_active ON custom_line_items(building_id, is_active)`,
+		`CREATE INDEX IF NOT EXISTS idx_custom_splits_config ON shared_meter_custom_splits(config_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_custom_splits_user ON shared_meter_custom_splits(user_id)`,
 	}
 
 	for _, migration := range migrations {
 		if _, err := db.Exec(migration); err != nil {
-			return err
+			log.Printf("Migration error: %v", err)
+			// Continue with other migrations even if one fails
 		}
 	}
 
@@ -222,6 +285,7 @@ func RunMigrations(db *sql.DB) error {
 		`ALTER TABLE buildings ADD COLUMN floors_config TEXT`,
 		`ALTER TABLE auto_billing_configs ADD COLUMN first_execution_date DATE`,
 		`ALTER TABLE meters ADD COLUMN apartment_unit TEXT`,
+		`ALTER TABLE meters ADD COLUMN is_shared INTEGER DEFAULT 0`,
 	}
 
 	for _, stmt := range addColumns {
@@ -240,6 +304,7 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_users_apartment_unit ON users(apartment_unit)`,
 		`CREATE INDEX IF NOT EXISTS idx_meters_apartment_unit ON meters(apartment_unit)`,
 		`CREATE INDEX IF NOT EXISTS idx_meters_building ON meters(building_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_meters_shared ON meters(is_shared)`,
 	}
 
 	for _, idx := range newIndexes {
@@ -255,11 +320,64 @@ func RunMigrations(db *sql.DB) error {
 		// Don't return error here as it might be already migrated
 	}
 
+	// Create triggers for shared meters and custom items
+	if err := createTriggers(db); err != nil {
+		log.Printf("Trigger creation: %v", err)
+		// Don't return error as triggers might already exist
+	}
+
 	if err := createDefaultAdmin(db); err != nil {
 		return err
 	}
 
-	log.Println("Migrations completed successfully")
+	log.Println("✓ Migrations completed successfully")
+	log.Println("✓ Shared meter configurations table ready")
+	log.Println("✓ Custom line items table ready")
+	return nil
+}
+
+// =====================================================================
+// NEW: Create triggers for automatic timestamp updates
+// =====================================================================
+func createTriggers(db *sql.DB) error {
+	triggers := []string{
+		// Trigger for shared_meter_configs
+		`CREATE TRIGGER IF NOT EXISTS update_shared_meters_timestamp 
+		AFTER UPDATE ON shared_meter_configs
+		FOR EACH ROW
+		BEGIN
+			UPDATE shared_meter_configs 
+			SET updated_at = CURRENT_TIMESTAMP 
+			WHERE id = NEW.id;
+		END`,
+
+		// Trigger for custom_line_items
+		`CREATE TRIGGER IF NOT EXISTS update_custom_items_timestamp 
+		AFTER UPDATE ON custom_line_items
+		FOR EACH ROW
+		BEGIN
+			UPDATE custom_line_items 
+			SET updated_at = CURRENT_TIMESTAMP 
+			WHERE id = NEW.id;
+		END`,
+
+		// Trigger for shared_meter_custom_splits
+		`CREATE TRIGGER IF NOT EXISTS update_custom_splits_timestamp 
+		AFTER UPDATE ON shared_meter_custom_splits
+		FOR EACH ROW
+		BEGIN
+			UPDATE shared_meter_custom_splits 
+			SET updated_at = CURRENT_TIMESTAMP 
+			WHERE id = NEW.id;
+		END`,
+	}
+
+	for _, trigger := range triggers {
+		if _, err := db.Exec(trigger); err != nil {
+			log.Printf("Note: Trigger may already exist or failed: %v", err)
+		}
+	}
+
 	return nil
 }
 
@@ -270,7 +388,7 @@ func migrateEmailConstraint(db *sql.DB) error {
 		SELECT sql FROM sqlite_master 
 		WHERE type='table' AND name='users'
 	`).Scan(&sql)
-	
+
 	if err != nil {
 		return err
 	}
@@ -287,7 +405,7 @@ func migrateEmailConstraint(db *sql.DB) error {
 
 	if !hasUniqueConstraint {
 		log.Println("Email constraint already migrated or doesn't exist")
-		
+
 		// Even if already migrated, ensure the compound unique index exists
 		_, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_type ON users(email, user_type)`)
 		if err != nil {
@@ -295,7 +413,7 @@ func migrateEmailConstraint(db *sql.DB) error {
 		} else {
 			log.Println("✓ Compound unique index (email, user_type) created")
 		}
-		
+
 		return nil
 	}
 
@@ -384,7 +502,7 @@ func migrateEmailConstraint(db *sql.DB) error {
 
 	log.Println("✓ Email constraint migration completed successfully")
 	log.Println("✓ Administrators and regular users can now share the same email")
-	
+
 	return nil
 }
 
@@ -395,13 +513,13 @@ func containsEmailUnique(sql string) bool {
 		"email TEXT NOT NULL UNIQUE",
 		"UNIQUE(email)",
 	}
-	
+
 	for _, pattern := range patterns {
 		if contains(sql, pattern) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 

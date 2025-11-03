@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Plus, Eye, FileText, Download, Trash2, Building, Search, Sun, Zap, Car, HelpCircle, X, Archive } from 'lucide-react';
+import { Plus, Eye, FileText, Download, Trash2, Building, Search, Sun, Zap, Car, HelpCircle, X, Archive, Settings, DollarSign } from 'lucide-react';
 import { api } from '../api/client';
 import type { Invoice, Building as BuildingType, User } from '../types';
 import { useTranslation } from '../i18n';
+import BillConfiguration from './BillConfiguration';
+import SharedMeterConfig from './SharedMeterConfig';
+import CustomItemModal from './CustomItemModal';
 
 export default function Billing() {
   const { t } = useTranslation();
@@ -14,6 +17,9 @@ export default function Billing() {
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [showAdvancedConfig, setShowAdvancedConfig] = useState(false);
+  const [currentView, setCurrentView] = useState<'invoices' | 'shared-meters' | 'custom-items'>('invoices');
+  const [showCustomItemModal, setShowCustomItemModal] = useState(false);
   
   // Persistent sender and banking info
   const [senderInfo, setSenderInfo] = useState({
@@ -413,7 +419,7 @@ export default function Billing() {
       return '';
     }
     
-    console.log('✓ Generated valid Swiss QR data with 31 elements');
+    console.log('âœ“ Generated valid Swiss QR data with 31 elements');
     return qrData;
   };
 
@@ -762,7 +768,7 @@ export default function Billing() {
         <div class="page">
           ${isArchived ? `
             <div class="archived-banner">
-              ⚠️ ARCHIVED USER - This invoice is for an archived user
+              âš ï¸ ARCHIVED USER - This invoice is for an archived user
             </div>
           ` : ''}
           
@@ -973,20 +979,20 @@ export default function Billing() {
                     correctLevel: QRCode.CorrectLevel.M
                   });
                   
-                  console.log('✓ Swiss QR Code generated successfully');
+                  console.log('âœ“ Swiss QR Code generated successfully');
                   
                   setTimeout(() => {
                     window.print();
                   }, 1500);
                 } catch (error) {
-                  console.error('✗ QR Code generation error:', error);
+                  console.error('âœ— QR Code generation error:', error);
                   qrCodeDiv.innerHTML = '<p style="color: red; padding: 20px;">Error generating QR code</p>';
                   setTimeout(() => {
                     window.print();
                   }, 1000);
                 }
               } else {
-                console.error('✗ QRCode library not loaded or div not found');
+                console.error('âœ— QRCode library not loaded or div not found');
                 setTimeout(() => {
                   window.print();
                 }, 1000);
@@ -1394,30 +1400,183 @@ export default function Billing() {
             {t('billing.subtitle')}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <button
-            onClick={() => setShowInstructions(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
-              backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
-            }}
-          >
-            <HelpCircle size={18} />
-            {t('billing.setupInstructions')}
-          </button>
-          <button
-            onClick={() => setShowGenerateModal(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
-              backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
-            }}
-          >
-            <Plus size={18} />
-            <span className="button-text">{t('billing.generateBills')}</span>
-          </button>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* View Switcher */}
+          <div style={{ 
+            display: 'flex', 
+            backgroundColor: '#f0f0f0', 
+            borderRadius: '6px', 
+            padding: '4px' 
+          }}>
+            <button
+              onClick={() => setCurrentView('invoices')}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: currentView === 'invoices' ? '#667eea' : 'transparent',
+                color: currentView === 'invoices' ? 'white' : '#666',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: '500',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <FileText size={14} />
+              Invoices
+            </button>
+            <button
+              onClick={() => setCurrentView('shared-meters')}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: currentView === 'shared-meters' ? '#667eea' : 'transparent',
+                color: currentView === 'shared-meters' ? 'white' : '#666',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: '500',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <Settings size={14} />
+              Shared Meters
+            </button>
+            <button
+              onClick={() => setCurrentView('custom-items')}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: currentView === 'custom-items' ? '#667eea' : 'transparent',
+                color: currentView === 'custom-items' ? 'white' : '#666',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: '500',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <DollarSign size={14} />
+              Custom Items
+            </button>
+          </div>
+
+          {/* Action Buttons (only show for invoices view) */}
+          {currentView === 'invoices' && (
+            <>
+              <button
+                onClick={() => setShowInstructions(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
+                  backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
+                }}
+              >
+                <HelpCircle size={18} />
+                {t('billing.setupInstructions')}
+              </button>
+              <button
+                onClick={() => setShowAdvancedConfig(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
+                  backgroundColor: '#6f42c1', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
+                }}
+              >
+                <Settings size={18} />
+                <span className="button-text">Advanced</span>
+              </button>
+              <button
+                onClick={() => setShowGenerateModal(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
+                  backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
+                }}
+              >
+                <Plus size={18} />
+                <span className="button-text">{t('billing.generateBills')}</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
+      {/* Conditionally render based on current view */}
+      {currentView === 'shared-meters' ? (
+        <SharedMeterConfig />
+      ) : currentView === 'custom-items' ? (
+        <div style={{ 
+          backgroundColor: 'white', 
+          borderRadius: '12px', 
+          padding: '30px', 
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)' 
+        }}>
+          <div style={{ textAlign: 'center', padding: '40px' }}>
+            <DollarSign size={48} style={{ 
+              color: '#667eea', 
+              marginBottom: '20px',
+              display: 'block',
+              margin: '0 auto 20px'
+            }} />
+            <h2 style={{ 
+              fontSize: '24px', 
+              fontWeight: '600', 
+              marginBottom: '12px',
+              color: '#111827'
+            }}>
+              Custom Line Items
+            </h2>
+            <p style={{ 
+              fontSize: '16px', 
+              color: '#6b7280', 
+              marginBottom: '30px',
+              maxWidth: '500px',
+              margin: '0 auto 30px'
+            }}>
+              Manage custom line items that will be automatically included in your invoices based on frequency settings.
+            </p>
+            <button
+              onClick={() => setShowCustomItemModal(true)}
+              style={{
+                padding: '12px 24px',
+                backgroundColor: '#667eea',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: '0 2px 4px rgba(102, 126, 234, 0.3)',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#5568d3';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 4px 6px rgba(102, 126, 234, 0.4)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#667eea';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 2px 4px rgba(102, 126, 234, 0.3)';
+              }}
+            >
+              <DollarSign size={18} />
+              Open Custom Items Manager
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
       <div style={{ marginBottom: '20px' }}>
         <div style={{ position: 'relative', maxWidth: '400px' }}>
           <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
@@ -1528,7 +1687,7 @@ export default function Billing() {
                 </p>
               </div>
               <span style={{ fontSize: '24px', color: '#666' }}>
-                {expandedBuildings.has(building.id) ? '▼' : '▶'}
+                {expandedBuildings.has(building.id) ? 'â–¼' : 'â–¶'}
               </span>
             </div>
 
@@ -1557,7 +1716,7 @@ export default function Billing() {
                         </h3>
                       </div>
                       <span style={{ fontSize: '18px', color: '#856404' }}>
-                        {expandedYears.has('archive-' + building.id) ? '▼' : '▶'}
+                        {expandedYears.has('archive-' + building.id) ? 'â–¼' : 'â–¶'}
                       </span>
                     </div>
 
@@ -1617,7 +1776,7 @@ export default function Billing() {
                           {year} ({yearInvoices.length} {yearInvoices.length === 1 ? t('billing.invoice') : t('billing.invoices')})
                         </h3>
                         <span style={{ fontSize: '18px', color: '#666' }}>
-                          {expandedYears.has(year + '-' + building.id) ? '▼' : '▶'}
+                          {expandedYears.has(year + '-' + building.id) ? 'â–¼' : 'â–¶'}
                         </span>
                       </div>
 
@@ -1735,7 +1894,7 @@ export default function Billing() {
                   {t('billing.senderInfo')}
                   {formData.building_ids.length > 0 && formData.sender_name && (
                     <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#10b981', marginLeft: '8px' }}>
-                      ✓ {t('billing.autoFilled')}
+                      âœ“ {t('billing.autoFilled')}
                     </span>
                   )}
                 </h3>
@@ -1788,7 +1947,7 @@ export default function Billing() {
                   {t('billing.bankingInfo')}
                   {formData.building_ids.length > 0 && formData.bank_iban && (
                     <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#10b981', marginLeft: '8px' }}>
-                      ✓ {t('billing.autoFilled')}
+                      âœ“ {t('billing.autoFilled')}
                     </span>
                   )}
                 </h3>
@@ -1977,7 +2136,31 @@ export default function Billing() {
             </div>
           </div>
         </div>
+        </div>
       )}
+
+      {/* End of conditional invoices view */}
+      </>
+      )}
+
+      {/* Custom Items Modal */}
+      <CustomItemModal
+        isOpen={showCustomItemModal}
+        onClose={() => setShowCustomItemModal(false)}
+        onSave={() => {
+          loadData();
+        }}
+      />
+
+      {/* Advanced Bill Configuration Modal */}
+      <BillConfiguration
+        isOpen={showAdvancedConfig}
+        onClose={() => setShowAdvancedConfig(false)}
+        onGenerate={() => {
+          loadData();
+          setShowAdvancedConfig(false);
+        }}
+      />
 
       <style>{`
         @media (min-width: 769px) {

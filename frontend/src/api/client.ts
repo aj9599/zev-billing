@@ -1,7 +1,8 @@
 import type {
   User, Building, Meter, Charger, BillingSettings,
   Invoice, DashboardStats, ConsumptionData, AdminLog,
-  BuildingConsumption
+  BuildingConsumption, SharedMeterConfig, CustomLineItem,
+  GenerateBillsRequest
 } from '../types';
 
 const API_BASE = '/api';
@@ -238,20 +239,7 @@ class ApiClient {
     return this.request(`/billing/settings/${id}`, { method: 'DELETE' });
   }
 
-  async generateBills(data: {
-    building_ids: number[];
-    user_ids: number[];
-    start_date: string;
-    end_date: string;
-    sender_name?: string;
-    sender_address?: string;
-    sender_city?: string;
-    sender_zip?: string;
-    sender_country?: string;
-    bank_name?: string;
-    bank_iban?: string;
-    bank_account_holder?: string;
-  }): Promise<Invoice[]> {
+  async generateBills(data: GenerateBillsRequest): Promise<Invoice[]> {
     return this.request('/billing/generate', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -272,6 +260,67 @@ class ApiClient {
 
   async deleteInvoice(id: number) {
     return this.request(`/billing/invoices/${id}`, { method: 'DELETE' });
+  }
+
+  // NEW: Download invoice PDF
+  async downloadInvoicePDF(id: number): string {
+    return `${API_BASE}/billing/invoices/${id}/pdf`;
+  }
+
+  // NEW: Shared Meters
+  async getSharedMeterConfigs(building_id?: number): Promise<SharedMeterConfig[]> {
+    const query = building_id ? `?building_id=${building_id}` : '';
+    return this.request(`/shared-meters${query}`);
+  }
+
+  async getSharedMeterConfig(id: number): Promise<SharedMeterConfig> {
+    return this.request(`/shared-meters/${id}`);
+  }
+
+  async createSharedMeterConfig(config: Partial<SharedMeterConfig>): Promise<SharedMeterConfig> {
+    return this.request('/shared-meters', {
+      method: 'POST',
+      body: JSON.stringify(config),
+    });
+  }
+
+  async updateSharedMeterConfig(id: number, config: Partial<SharedMeterConfig>): Promise<SharedMeterConfig> {
+    return this.request(`/shared-meters/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(config),
+    });
+  }
+
+  async deleteSharedMeterConfig(id: number) {
+    return this.request(`/shared-meters/${id}`, { method: 'DELETE' });
+  }
+
+  // NEW: Custom Line Items
+  async getCustomLineItems(building_id?: number): Promise<CustomLineItem[]> {
+    const query = building_id ? `?building_id=${building_id}` : '';
+    return this.request(`/custom-line-items${query}`);
+  }
+
+  async getCustomLineItem(id: number): Promise<CustomLineItem> {
+    return this.request(`/custom-line-items/${id}`);
+  }
+
+  async createCustomLineItem(item: Partial<CustomLineItem>): Promise<CustomLineItem> {
+    return this.request('/custom-line-items', {
+      method: 'POST',
+      body: JSON.stringify(item),
+    });
+  }
+
+  async updateCustomLineItem(id: number, item: Partial<CustomLineItem>): Promise<CustomLineItem> {
+    return this.request(`/custom-line-items/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(item),
+    });
+  }
+
+  async deleteCustomLineItem(id: number) {
+    return this.request(`/custom-line-items/${id}`, { method: 'DELETE' });
   }
 
   // Auto Billing

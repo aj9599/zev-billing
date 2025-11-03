@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -526,4 +527,59 @@ func (h *BillingHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(csv.String()))
 
 	log.Printf("SUCCESS: Exported data to %s", filename)
+}
+
+func (h *BillingHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	// Get invoice PDF path
+	var pdfPath sql.NullString
+	var invoiceNumber string
+	err = h.db.QueryRow(`
+		SELECT invoice_number, pdf_path 
+		FROM invoices 
+		WHERE id = ?
+	`, id).Scan(&invoiceNumber, &pdfPath)
+
+	if err == sql.ErrNoRows {
+		http.Error(w, "Invoice not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		log.Printf("ERROR: Failed to query invoice: %v", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	if !pdfPath.Valid || pdfPath.String == "" {
+		http.Error(w, "PDF not generated for this invoice", http.StatusNotFound)
+		return
+	}
+
+	// Construct full path
+	invoicesDir := "/home/pi/zev-billing/invoices"
+	if _, err := os.Stat(invoicesDir); os.IsNotExist(err) {
+		invoicesDir = "./invoices"
+	}
+
+	fullPath := filepath.Join(invoicesDir, pdfPath.String)
+
+	// Check if file exists
+	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+		log.Printf("ERROR: PDF file not found: %s", fullPath)
+		http.Error(w, "PDF file not found", http.StatusNotFound)
+		return
+	}
+
+	// Serve the file
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.pdf", invoiceNumber))
+
+	http.ServeFile(w, r, fullPath)
+	log.Printf("SUCCESS: Served PDF for invoice %d", id)
 }

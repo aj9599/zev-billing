@@ -86,6 +86,8 @@ func main() {
 	dashboardHandler := handlers.NewDashboardHandler(db)
 	exportHandler := handlers.NewExportHandler(db)
 	webhookHandler := handlers.NewWebhookHandler(db)
+	sharedMeterHandler := handlers.NewSharedMeterHandler(db)
+	customItemHandler := handlers.NewCustomItemHandler(db)
 
 	r := mux.NewRouter()
 
@@ -162,6 +164,23 @@ func main() {
 	api.HandleFunc("/billing/auto-configs/{id}", autoBillingHandler.Get).Methods("GET")
 	api.HandleFunc("/billing/auto-configs/{id}", autoBillingHandler.Update).Methods("PUT")
 	api.HandleFunc("/billing/auto-configs/{id}", autoBillingHandler.Delete).Methods("DELETE")
+
+	// Shared Meters API
+	api.HandleFunc("/shared-meters", sharedMeterHandler.List).Methods("GET")
+	api.HandleFunc("/shared-meters", sharedMeterHandler.Create).Methods("POST")
+	api.HandleFunc("/shared-meters/{id}", sharedMeterHandler.Get).Methods("GET")
+	api.HandleFunc("/shared-meters/{id}", sharedMeterHandler.Update).Methods("PUT")
+	api.HandleFunc("/shared-meters/{id}", sharedMeterHandler.Delete).Methods("DELETE")
+
+	// Custom Line Items API
+	api.HandleFunc("/custom-line-items", customItemHandler.List).Methods("GET")
+	api.HandleFunc("/custom-line-items", customItemHandler.Create).Methods("POST")
+	api.HandleFunc("/custom-line-items/{id}", customItemHandler.Get).Methods("GET")
+	api.HandleFunc("/custom-line-items/{id}", customItemHandler.Update).Methods("PUT")
+	api.HandleFunc("/custom-line-items/{id}", customItemHandler.Delete).Methods("DELETE")
+
+	// PDF Download
+	api.HandleFunc("/billing/invoices/{id}/pdf", billingHandler.DownloadPDF).Methods("GET")
 
 	// Dashboard routes
 	api.HandleFunc("/dashboard/stats", dashboardHandler.GetStats).Methods("GET")

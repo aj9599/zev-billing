@@ -57,6 +57,7 @@ export interface Meter {
   last_reading: number;
   last_reading_time?: string;
   is_active: boolean;
+  is_shared: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -101,6 +102,7 @@ export interface Invoice {
   total_amount: number;
   currency: string;
   status: string;
+  pdf_path?: string;
   items?: InvoiceItem[];
   user?: User;
   generated_at: string;
@@ -114,6 +116,59 @@ export interface InvoiceItem {
   unit_price: number;
   total_price: number;
   item_type: string;
+}
+
+// NEW: Shared meter configuration
+export interface SharedMeterConfig {
+  id: number;
+  meter_id: number;
+  building_id: number;
+  meter_name: string;
+  split_type: 'equal' | 'by_area' | 'by_units' | 'custom';
+  unit_price: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// NEW: Custom line item
+export interface CustomLineItem {
+  id: number;
+  building_id: number;
+  description: string;
+  amount: number;
+  frequency: 'once' | 'monthly' | 'quarterly' | 'yearly';
+  category: 'meter_rent' | 'maintenance' | 'service' | 'other';
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// NEW: Bill generation request with advanced options
+export interface GenerateBillsRequest {
+  building_ids: number[];
+  user_ids: number[];
+  start_date: string;
+  end_date: string;
+  sender_name?: string;
+  sender_address?: string;
+  sender_city?: string;
+  sender_zip?: string;
+  sender_country?: string;
+  bank_name?: string;
+  bank_iban?: string;
+  bank_account_holder?: string;
+  include_shared_meters?: boolean;
+  shared_meter_configs?: SharedMeterConfig[];
+  custom_line_items?: CustomLineItemSelection[];
+}
+
+// NEW: Custom line item selection for invoice
+export interface CustomLineItemSelection {
+  item_id?: number;
+  description: string;
+  amount: number;
+  category: string;
+  is_one_time: boolean;
 }
 
 export interface AutoBillingConfig {

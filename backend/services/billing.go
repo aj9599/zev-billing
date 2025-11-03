@@ -48,7 +48,7 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 			SELECT COUNT(*) FROM billing_settings 
 			WHERE building_id = ? AND is_active = 1
 		`, buildingID).Scan(&count)
-		
+
 		if err != nil || count == 0 {
 			var buildingName string
 			bs.db.QueryRow("SELECT name FROM buildings WHERE id = ?", buildingID).Scan(&buildingName)
@@ -58,9 +58,9 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 			buildingsWithoutPricing = append(buildingsWithoutPricing, buildingName)
 		}
 	}
-	
+
 	if len(buildingsWithoutPricing) > 0 {
-		errorMsg := fmt.Sprintf("No active pricing configuration found for the following building(s): %s. Please configure pricing in the Pricing section before generating bills.", 
+		errorMsg := fmt.Sprintf("No active pricing configuration found for the following building(s): %s. Please configure pricing in the Pricing section before generating bills.",
 			strings.Join(buildingsWithoutPricing, ", "))
 		log.Printf("ERROR: %s", errorMsg)
 		return nil, fmt.Errorf(errorMsg)
@@ -76,14 +76,14 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 	if err != nil {
 		return nil, fmt.Errorf("invalid end date: %v", err)
 	}
-	
+
 	end = end.Add(24 * time.Hour).Add(-1 * time.Second)
 
 	log.Printf("Parsed dates - Start: %s, End: %s", start, end)
 
 	for _, buildingID := range buildingIDs {
 		log.Printf("\n--- Processing Building ID: %d ---", buildingID)
-		
+
 		var settings models.BillingSettings
 		err := bs.db.QueryRow(`
 			SELECT id, building_id, normal_power_price, solar_power_price, 
@@ -101,8 +101,8 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 			continue
 		}
 
-		log.Printf("Billing Settings - Normal: %.3f, Solar: %.3f, Car Solar: %.3f, Car Priority: %.3f %s", 
-			settings.NormalPowerPrice, settings.SolarPowerPrice, 
+		log.Printf("Billing Settings - Normal: %.3f, Solar: %.3f, Car Solar: %.3f, Car Priority: %.3f %s",
+			settings.NormalPowerPrice, settings.SolarPowerPrice,
 			settings.CarChargingNormalPrice, settings.CarChargingPriorityPrice, settings.Currency)
 
 		// IMPROVED: Filter only active users (exclude archived users where is_active = 0)
@@ -132,13 +132,13 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 
 		userCount := 0
 		skippedCount := 0
-		
+
 		for userRows.Next() {
 			var userID int
 			var firstName, lastName, email string
 			var chargerIDs sql.NullString
 			var isActive bool
-			
+
 			if err := userRows.Scan(&userID, &firstName, &lastName, &email, &chargerIDs, &isActive); err != nil {
 				continue
 			}
@@ -169,7 +169,7 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 			log.Printf("  ✓ Generated invoice %s: %s %.3f", invoice.InvoiceNumber, settings.Currency, invoice.TotalAmount)
 		}
 		userRows.Close()
-		
+
 		log.Printf("--- Building %d: Generated %d invoices, skipped %d archived users ---", buildingID, userCount, skippedCount)
 	}
 
@@ -177,11 +177,307 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 	return invoices, nil
 }
 
+func (bs *BillingService) calculateSharedMeterCosts(buildingID int, start, end time.Time, userID int, totalActiveUsers int) ([]models.InvoiceItem, float64, error) {
+	log.Printf("  [SHARED METERS] Calculating shared meter costs for building %d, user %d (%d active users)", buildingID, userID, totalActiveUsers)
+
+	// Get all shared meter configs for this building
+	rows, err := bs.db.Query(`
+		SELECT id, meter_id, meter_name, split_type, unit_price
+		FROM shared_meter_configs
+		WHERE building_id = ?
+	`, buildingID)
+	if err != nil {
+		log.Printf("  [SHARED METERS] ERROR: Failed to query shared meter configs: %v", err)
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	items := []models.InvoiceItem{}
+	totalCost := 0.0
+	configCount := 0
+
+	for rows.Next() {
+		var configID, meterID int
+		var meterName, splitType string
+		var unitPrice float64
+
+		if err := rows.Scan(&configID, &meterID, &meterName, &splitType, &unitPrice); err != nil {
+			log.Printf("  [SHARED METERS] ERROR: Failed to scan config row: %v", err)
+			continue
+		}
+
+		configCount++
+		log.Printf("  [SHARED METERS] Config #%d: Meter '%s' (ID %d), split=%s, price=%.3f",
+			configCount, meterName, meterID, splitType, unitPrice)
+
+		// Get meter readings for this period
+		var readingFrom, readingTo float64
+		err := bs.db.QueryRow(`
+			SELECT 
+				COALESCE(
+					(SELECT reading FROM meter_readings 
+					 WHERE meter_id = ? AND timestamp <= ? 
+					 ORDER BY timestamp DESC LIMIT 1), 
+					0
+				) as reading_from,
+				COALESCE(
+					(SELECT reading FROM meter_readings 
+					 WHERE meter_id = ? AND timestamp <= ? 
+					 ORDER BY timestamp DESC LIMIT 1), 
+					0
+				) as reading_to
+		`, meterID, start, meterID, end).Scan(&readingFrom, &readingTo)
+
+		if err != nil {
+			log.Printf("  [SHARED METERS] ERROR: Failed to get meter readings: %v", err)
+			continue
+		}
+
+		if readingFrom >= readingTo {
+			log.Printf("  [SHARED METERS] WARNING: Invalid readings (from=%.3f, to=%.3f) - skipping",
+				readingFrom, readingTo)
+			continue
+		}
+
+		consumption := readingTo - readingFrom
+		totalMeterCost := consumption * unitPrice
+
+		log.Printf("  [SHARED METERS]   Readings: %.3f → %.3f kWh (consumption: %.3f kWh)",
+			readingFrom, readingTo, consumption)
+		log.Printf("  [SHARED METERS]   Total meter cost: %.3f × %.3f = %.3f",
+			consumption, unitPrice, totalMeterCost)
+
+		// Calculate this user's share based on split_type
+		var userShare float64
+		var splitDescription string
+
+		switch splitType {
+		case "equal":
+			if totalActiveUsers > 0 {
+				userShare = totalMeterCost / float64(totalActiveUsers)
+				splitDescription = fmt.Sprintf("Split equally among %d users", totalActiveUsers)
+			}
+		case "by_area":
+			// Get user's apartment area
+			var userArea, totalArea float64
+			err := bs.db.QueryRow(`
+				SELECT 
+					COALESCE((SELECT apartment_area FROM users WHERE id = ? AND apartment_area > 0), 0),
+					COALESCE((SELECT SUM(apartment_area) FROM users WHERE building_id = ? AND is_active = 1 AND apartment_area > 0), 0)
+			`, userID, buildingID).Scan(&userArea, &totalArea)
+
+			if err == nil && totalArea > 0 && userArea > 0 {
+				userShare = totalMeterCost * (userArea / totalArea)
+				splitDescription = fmt.Sprintf("Split by area: %.1fm² of %.1fm² total", userArea, totalArea)
+			} else {
+				// Fallback to equal split if area data is missing
+				if totalActiveUsers > 0 {
+					userShare = totalMeterCost / float64(totalActiveUsers)
+				}
+				splitDescription = fmt.Sprintf("Split equally (area data not available) among %d users", totalActiveUsers)
+				log.Printf("  [SHARED METERS]   WARNING: Area-based split requested but data missing, using equal split")
+			}
+
+		case "by_units":
+			// Get number of units occupied by this user
+			var userUnits, totalUnits int
+			err := bs.db.QueryRow(`
+				SELECT 
+					COALESCE((SELECT unit_count FROM users WHERE id = ? AND unit_count > 0), 1),
+					COALESCE((SELECT SUM(unit_count) FROM users WHERE building_id = ? AND is_active = 1), ?)
+			`, userID, buildingID, totalActiveUsers).Scan(&userUnits, &totalUnits)
+
+			if err == nil && totalUnits > 0 {
+				userShare = totalMeterCost * (float64(userUnits) / float64(totalUnits))
+				splitDescription = fmt.Sprintf("Split by units: %d of %d total units", userUnits, totalUnits)
+			} else {
+				// Fallback to equal split
+				if totalActiveUsers > 0 {
+					userShare = totalMeterCost / float64(totalActiveUsers)
+				}
+				splitDescription = fmt.Sprintf("Split equally (unit data not available) among %d users", totalActiveUsers)
+				log.Printf("  [SHARED METERS]   WARNING: Unit-based split requested but data missing, using equal split")
+			}
+
+		case "custom":
+			// Get custom percentage for this user
+			var customPercentage float64
+			err := bs.db.QueryRow(`
+				SELECT COALESCE(percentage, 0) 
+				FROM shared_meter_custom_splits 
+				WHERE config_id = ? AND user_id = ?
+			`, configID, userID).Scan(&customPercentage)
+
+			if err == nil && customPercentage > 0 {
+				userShare = totalMeterCost * (customPercentage / 100.0)
+				splitDescription = fmt.Sprintf("Custom split: %.1f%%", customPercentage)
+			} else {
+				// Fallback to equal split
+				if totalActiveUsers > 0 {
+					userShare = totalMeterCost / float64(totalActiveUsers)
+				}
+				splitDescription = fmt.Sprintf("Split equally (custom % not configured) among %d users", totalActiveUsers)
+				log.Printf("  [SHARED METERS]   WARNING: Custom split requested but percentage not found, using equal split")
+			}
+
+		default:
+			// Default to equal split
+			if totalActiveUsers > 0 {
+				userShare = totalMeterCost / float64(totalActiveUsers)
+			}
+			splitDescription = fmt.Sprintf("Split equally among %d users", totalActiveUsers)
+		}
+
+		log.Printf("  [SHARED METERS]   User share: %.3f (%s)", userShare, splitDescription)
+
+		// Add header item (informational, no cost)
+		items = append(items, models.InvoiceItem{
+			Description: fmt.Sprintf("Shared Meter: %s", meterName),
+			Quantity:    0,
+			UnitPrice:   0,
+			TotalPrice:  0,
+			ItemType:    "shared_meter_info",
+		})
+
+		// Add consumption details
+		items = append(items, models.InvoiceItem{
+			Description: fmt.Sprintf("  Total consumption: %.3f kWh × %.3f CHF/kWh = %.3f CHF", consumption, unitPrice, totalMeterCost),
+			Quantity:    0,
+			UnitPrice:   0,
+			TotalPrice:  0,
+			ItemType:    "shared_meter_detail",
+		})
+
+		// Add the billable charge
+		items = append(items, models.InvoiceItem{
+			Description: fmt.Sprintf("  Your share: %.3f CHF (%s)", userShare, splitDescription),
+			Quantity:    consumption / float64(totalActiveUsers), // Approximate per-user consumption
+			UnitPrice:   unitPrice,
+			TotalPrice:  userShare,
+			ItemType:    "shared_meter_charge",
+		})
+
+		// Add separator
+		items = append(items, models.InvoiceItem{
+			Description: "",
+			Quantity:    0,
+			UnitPrice:   0,
+			TotalPrice:  0,
+			ItemType:    "separator",
+		})
+
+		totalCost += userShare
+	}
+
+	if configCount == 0 {
+		log.Printf("  [SHARED METERS] No shared meter configurations found for building %d", buildingID)
+	} else {
+		log.Printf("  [SHARED METERS] Processed %d shared meters, total cost: %.3f", configCount, totalCost)
+	}
+
+	return items, totalCost, nil
+}
+
+func (bs *BillingService) getCustomLineItems(buildingID int) ([]models.InvoiceItem, float64, error) {
+	log.Printf("  [CUSTOM ITEMS] Getting custom line items for building %d", buildingID)
+
+	rows, err := bs.db.Query(`
+		SELECT id, description, amount, frequency, category
+		FROM custom_line_items
+		WHERE building_id = ? AND is_active = 1
+		ORDER BY category, description
+	`, buildingID)
+	if err != nil {
+		log.Printf("  [CUSTOM ITEMS] ERROR: Failed to query custom line items: %v", err)
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	items := []models.InvoiceItem{}
+	totalCost := 0.0
+	itemCount := 0
+
+	for rows.Next() {
+		var itemID int
+		var description, frequency, category string
+		var amount float64
+
+		if err := rows.Scan(&itemID, &description, &amount, &frequency, &category); err != nil {
+			log.Printf("  [CUSTOM ITEMS] ERROR: Failed to scan item row: %v", err)
+			continue
+		}
+
+		itemCount++
+
+		// Format frequency label
+		var frequencyLabel string
+		switch frequency {
+		case "once":
+			frequencyLabel = "One-time charge"
+		case "monthly":
+			frequencyLabel = "Monthly"
+		case "quarterly":
+			frequencyLabel = "Quarterly"
+		case "yearly":
+			frequencyLabel = "Yearly"
+		default:
+			frequencyLabel = frequency
+		}
+
+		// Format category icon/label
+		var categoryLabel string
+		switch category {
+		case "meter_rent":
+			categoryLabel = "Meter Rental"
+		case "maintenance":
+			categoryLabel = "Maintenance"
+		case "service":
+			categoryLabel = "Service Fee"
+		case "other":
+			categoryLabel = "Other"
+		default:
+			categoryLabel = category
+		}
+
+		log.Printf("  [CUSTOM ITEMS] Item #%d: %s - %.3f CHF (%s, %s)",
+			itemCount, description, amount, frequencyLabel, categoryLabel)
+
+		items = append(items, models.InvoiceItem{
+			Description: fmt.Sprintf("%s: %s", categoryLabel, description),
+			Quantity:    1,
+			UnitPrice:   amount,
+			TotalPrice:  amount,
+			ItemType:    "custom_item_" + category,
+		})
+
+		totalCost += amount
+	}
+
+	if itemCount == 0 {
+		log.Printf("  [CUSTOM ITEMS] No active custom line items found for building %d", buildingID)
+	} else {
+		log.Printf("  [CUSTOM ITEMS] Added %d custom items, total cost: %.3f", itemCount, totalCost)
+	}
+
+	return items, totalCost, nil
+}
+
+func (bs *BillingService) countActiveUsers(buildingID int) (int, error) {
+	var count int
+	err := bs.db.QueryRow(`
+		SELECT COUNT(*) 
+		FROM users 
+		WHERE building_id = ? AND is_active = 1
+	`, buildingID).Scan(&count)
+
+	return count, err
+}
+
 func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end time.Time, settings models.BillingSettings, rfidCards string) (*models.Invoice, error) {
 	// IMPROVED: Year-based invoice numbering for better organization
 	invoiceYear := start.Year()
 	timestamp := time.Now().Format("20060102150405")
-	
+
 	// Format: INV-YEAR-BUILDING-USER-TIMESTAMP
 	invoiceNumber := fmt.Sprintf("INV-%d-%d-%d-%s", invoiceYear, buildingID, userID, timestamp)
 
@@ -193,7 +489,7 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 
 	log.Printf("  Meter: %s", meterName)
 	log.Printf("  Reading from: %.3f kWh, Reading to: %.3f kWh", meterReadingFrom, meterReadingTo)
-	log.Printf("  Calculated consumption: %.3f kWh (Normal: %.3f, Solar: %.3f)", 
+	log.Printf("  Calculated consumption: %.3f kWh (Normal: %.3f, Solar: %.3f)",
 		totalConsumption, normalPower, solarPower)
 
 	if totalConsumption > 0 {
@@ -352,6 +648,39 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 		log.Printf("  [CHARGING] No RFID cards configured for this user - skipping charging calculation")
 	}
 
+	// Get total active users for shared meter split calculations
+	totalActiveUsers, err := bs.countActiveUsers(buildingID)
+	if err != nil || totalActiveUsers == 0 {
+		totalActiveUsers = 1 // Fallback to prevent division by zero
+	}
+	log.Printf("  Total active users in building: %d", totalActiveUsers)
+
+	// Calculate and add shared meter costs
+	log.Printf("  Checking for shared meters...")
+	sharedMeterItems, sharedMeterCost, err := bs.calculateSharedMeterCosts(
+		buildingID, start, end, userID, totalActiveUsers,
+	)
+	if err != nil {
+		log.Printf("  WARNING: Failed to calculate shared meter costs: %v", err)
+	} else if len(sharedMeterItems) > 0 {
+		items = append(items, sharedMeterItems...)
+		totalAmount += sharedMeterCost
+		log.Printf("  ✓ Added %d shared meter items (total: %.3f)",
+			len(sharedMeterItems), sharedMeterCost)
+	}
+
+	// Get and add custom line items
+	log.Printf("  Checking for custom line items...")
+	customItems, customCost, err := bs.getCustomLineItems(buildingID)
+	if err != nil {
+		log.Printf("  WARNING: Failed to get custom line items: %v", err)
+	} else if len(customItems) > 0 {
+		items = append(items, customItems...)
+		totalAmount += customCost
+		log.Printf("  ✓ Added %d custom line items (total: %.3f)",
+			len(customItems), customCost)
+	}
+
 	log.Printf("  INVOICE TOTAL: %s %.3f", settings.Currency, totalAmount)
 	log.Printf("  INVOICE NUMBER: %s (Year: %d)", invoiceNumber, invoiceYear)
 
@@ -375,7 +704,7 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 				invoice_id, description, quantity, unit_price, total_price, item_type
 			) VALUES (?, ?, ?, ?, ?, ?)
 		`, invoiceID, item.Description, item.Quantity, item.UnitPrice, item.TotalPrice, item.ItemType)
-		
+
 		if err != nil {
 			log.Printf("WARNING: Failed to insert invoice item: %v", err)
 		}
@@ -401,14 +730,14 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 func (bs *BillingService) getMeterReadings(userID int, start, end time.Time) (float64, float64, string) {
 	var meterName string
 	var meterID int
-	
+
 	err := bs.db.QueryRow(`
 		SELECT id, name FROM meters 
 		WHERE user_id = ? AND meter_type = 'apartment_meter' 
 		AND is_active = 1
 		LIMIT 1
 	`, userID).Scan(&meterID, &meterName)
-	
+
 	if err != nil {
 		log.Printf("ERROR: No apartment meter found for user %d: %v", userID, err)
 		return 0, 0, "Unknown Meter"
@@ -416,7 +745,7 @@ func (bs *BillingService) getMeterReadings(userID int, start, end time.Time) (fl
 
 	var readingFrom sql.NullFloat64
 	var readingFromTime time.Time
-	
+
 	err = bs.db.QueryRow(`
 		SELECT power_kwh, reading_time FROM meter_readings 
 		WHERE meter_id = ? 
@@ -434,7 +763,7 @@ func (bs *BillingService) getMeterReadings(userID int, start, end time.Time) (fl
 
 	var readingTo sql.NullFloat64
 	var readingToTime time.Time
-	
+
 	err = bs.db.QueryRow(`
 		SELECT power_kwh, reading_time FROM meter_readings 
 		WHERE meter_id = ? 
@@ -451,7 +780,7 @@ func (bs *BillingService) getMeterReadings(userID int, start, end time.Time) (fl
 
 	from := 0.0
 	to := 0.0
-	
+
 	if readingFrom.Valid {
 		from = readingFrom.Float64
 	}
@@ -473,10 +802,10 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 	log.Printf("    [ZEV] Period: %s to %s", start.Format("2006-01-02 15:04:05"), end.Format("2006-01-02 15:04:05"))
 
 	type ReadingData struct {
-		MeterID     int
-		MeterType   string
-		UserID      sql.NullInt64
-		ReadingTime time.Time
+		MeterID        int
+		MeterType      string
+		UserID         sql.NullInt64
+		ReadingTime    time.Time
 		ConsumptionKWh float64
 	}
 
@@ -551,7 +880,7 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 	for ts := range intervalData {
 		timestamps = append(timestamps, ts)
 	}
-	
+
 	for i := 0; i < len(timestamps); i++ {
 		for j := i + 1; j < len(timestamps); j++ {
 			if timestamps[i].After(timestamps[j]) {
@@ -562,7 +891,7 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 
 	for _, timestamp := range timestamps {
 		data := intervalData[timestamp]
-		
+
 		if data.UserConsumption <= 0 {
 			continue
 		}
@@ -588,14 +917,14 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 
 		totalSolar += userSolar
 		totalNormal += userNormal
-		
+
 		if userSolar > 0 {
 			solarUsed += userSolar
 		}
 
 		if (intervalCount <= 5) || (userSolar > 0 && solarUsed <= userSolar*3) {
-			log.Printf("    [ZEV] %s: User %.3f kWh, Building %.3f kWh, Solar %.3f kWh → %.3f solar + %.3f grid", 
-				timestamp.Format("15:04"), data.UserConsumption, data.BuildingConsumption, 
+			log.Printf("    [ZEV] %s: User %.3f kWh, Building %.3f kWh, Solar %.3f kWh → %.3f solar + %.3f grid",
+				timestamp.Format("15:04"), data.UserConsumption, data.BuildingConsumption,
 				data.SolarProduction, userSolar, userNormal)
 		}
 	}
@@ -605,7 +934,7 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 	} else {
 		log.Printf("    [ZEV] Processed %d intervals (15-minute fixed intervals)", intervalCount)
 		if totalConsumption > 0 {
-			log.Printf("    [ZEV] RESULT - Total: %.3f kWh, Solar: %.3f kWh (%.1f%%), Grid: %.3f kWh (%.1f%%)", 
+			log.Printf("    [ZEV] RESULT - Total: %.3f kWh, Solar: %.3f kWh (%.1f%%), Grid: %.3f kWh (%.1f%%)",
 				totalConsumption, totalSolar, (totalSolar/totalConsumption)*100, totalNormal, (totalNormal/totalConsumption)*100)
 		}
 	}
@@ -620,7 +949,7 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 	log.Printf("  [CHARGING] Building ID: %d", buildingID)
 	log.Printf("  [CHARGING] RFID cards raw: '%s'", rfidCards)
 	log.Printf("  [CHARGING] Period: %s to %s", start.Format("2006-01-02 15:04"), end.Format("2006-01-02 15:04"))
-	
+
 	rfidList := strings.Split(strings.TrimSpace(rfidCards), ",")
 	if len(rfidList) == 0 || (len(rfidList) == 1 && rfidList[0] == "") {
 		log.Printf("  [CHARGING] ERROR: No RFID cards provided")
@@ -634,7 +963,7 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 			cleanedRfids = append(cleanedRfids, cleaned)
 		}
 	}
-	
+
 	if len(cleanedRfids) == 0 {
 		log.Printf("  [CHARGING] ERROR: No valid RFID cards after cleanup")
 		return 0, 0, time.Time{}, time.Time{}
@@ -646,7 +975,7 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 		SELECT id, name, connection_config FROM chargers 
 		WHERE building_id = ? AND is_active = 1
 	`, buildingID)
-	
+
 	if err != nil {
 		log.Printf("  [CHARGING] ERROR: Could not query chargers: %v", err)
 		return 0, 0, time.Time{}, time.Time{}
@@ -654,14 +983,14 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 	defer chargerRows.Close()
 
 	type ChargerConfig struct {
-		ChargerID          int
-		ChargerName        string
-		StateCableLocked   string
-		StateWaitingAuth   string
-		StateCharging      string
-		StateIdle          string
-		ModeNormal         string
-		ModePriority       string
+		ChargerID        int
+		ChargerName      string
+		StateCableLocked string
+		StateWaitingAuth string
+		StateCharging    string
+		StateIdle        string
+		ModeNormal       string
+		ModePriority     string
 	}
 
 	chargerConfigs := []ChargerConfig{}
@@ -671,7 +1000,7 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 		var chargerID int
 		var chargerName string
 		var connConfigJSON string
-		
+
 		if err := chargerRows.Scan(&chargerID, &chargerName, &connConfigJSON); err != nil {
 			log.Printf("  [CHARGING] ERROR: Failed to scan charger row: %v", err)
 			continue
@@ -698,7 +1027,7 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 		}
 
 		log.Printf("  [CHARGING] Charger %d config: States[locked=%s, auth=%s, charging=%s, idle=%s], Modes[normal=%s, priority=%s]",
-			chargerID, config.StateCableLocked, config.StateWaitingAuth, config.StateCharging, 
+			chargerID, config.StateCableLocked, config.StateWaitingAuth, config.StateCharging,
 			config.StateIdle, config.ModeNormal, config.ModePriority)
 
 		chargerConfigs = append(chargerConfigs, config)
@@ -713,12 +1042,12 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 
 	placeholders := make([]string, len(cleanedRfids))
 	args := []interface{}{}
-	
+
 	for i, rfid := range cleanedRfids {
 		placeholders[i] = "?"
 		args = append(args, rfid)
 	}
-	
+
 	inClause := strings.Join(placeholders, ",")
 	args = append(args, start, end)
 
@@ -729,9 +1058,9 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 		AND session_time >= ? AND session_time <= ?
 		ORDER BY charger_id, session_time ASC
 	`, inClause)
-	
+
 	log.Printf("  [CHARGING] Querying sessions with IN clause for %d RFID cards", len(cleanedRfids))
-	
+
 	rows, err := bs.db.Query(query, args...)
 	if err != nil {
 		log.Printf("  [CHARGING] ERROR querying sessions: %v", err)
@@ -746,7 +1075,7 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 		State       string
 		UserID      string
 	}
-	
+
 	chargerSessions := make(map[int][]SessionData)
 	totalSessionsFound := 0
 
@@ -766,7 +1095,7 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 
 		if totalSessionsFound <= 10 {
 			log.Printf("  [CHARGING] Session #%d: charger=%d, user='%s', time=%s, power=%.3f, mode='%s', state='%s'",
-				totalSessionsFound, chargerID, sessionUserID, sessionTime.Format("2006-01-02 15:04"), 
+				totalSessionsFound, chargerID, sessionUserID, sessionTime.Format("2006-01-02 15:04"),
 				power, mode, state)
 		}
 
@@ -805,14 +1134,14 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 		}
 
 		if config == nil {
-			log.Printf("  [CHARGING] WARNING: No config found for charger %d - skipping %d sessions", 
+			log.Printf("  [CHARGING] WARNING: No config found for charger %d - skipping %d sessions",
 				chargerID, len(sessions))
 			totalSkippedSessions += len(sessions)
 			continue
 		}
 
 		log.Printf("  [CHARGING] ----------------------------------------")
-		log.Printf("  [CHARGING] Processing charger %d (%s) with %d sessions", 
+		log.Printf("  [CHARGING] Processing charger %d (%s) with %d sessions",
 			chargerID, config.ChargerName, len(sessions))
 
 		var previousPower float64
@@ -825,36 +1154,36 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 
 		for sessionIdx, session := range sessions {
 			sessionNum := sessionIdx + 1
-			
+
 			isBillable := true
 			if session.State == config.StateIdle {
 				isBillable = false
 			}
-			
+
 			shouldLog := (chargerID == chargerConfigs[0].ChargerID && sessionNum <= 20) || sessionNum <= 10
-			
+
 			if shouldLog {
 				if isBillable {
-					log.Printf("  [CHARGING]     [%d] %s: %.3f kWh, mode=%s, state=%s → BILLABLE", 
+					log.Printf("  [CHARGING]     [%d] %s: %.3f kWh, mode=%s, state=%s → BILLABLE",
 						sessionNum, session.SessionTime.Format("15:04"), session.PowerKwh, session.Mode, session.State)
 				} else {
-					log.Printf("  [CHARGING]     [%d] %s: %.3f kWh, mode=%s, state=%s → SKIP (idle)", 
+					log.Printf("  [CHARGING]     [%d] %s: %.3f kWh, mode=%s, state=%s → SKIP (idle)",
 						sessionNum, session.SessionTime.Format("15:04"), session.PowerKwh, session.Mode, session.State)
 				}
 			}
-			
+
 			if !isBillable {
 				chargerSkipped++
 				continue
 			}
-			
+
 			if firstSession.IsZero() || session.SessionTime.Before(firstSession) {
 				firstSession = session.SessionTime
 			}
 			if session.SessionTime.After(lastSession) {
 				lastSession = session.SessionTime
 			}
-			
+
 			if !hasPreviousPower {
 				previousPower = session.PowerKwh
 				hasPreviousPower = true
@@ -863,54 +1192,54 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 				}
 				continue
 			}
-			
+
 			consumption := session.PowerKwh - previousPower
-			
+
 			if consumption < 0 {
 				if shouldLog {
-					log.Printf("  [CHARGING]     [%d] NEGATIVE consumption %.3f kWh - meter reset, resetting baseline", 
+					log.Printf("  [CHARGING]     [%d] NEGATIVE consumption %.3f kWh - meter reset, resetting baseline",
 						sessionNum, consumption)
 				}
 				previousPower = session.PowerKwh
 				continue
 			}
-			
+
 			if consumption > 0 {
 				chargerBillable++
-				
+
 				isNormal := (session.Mode == config.ModeNormal)
 				isPriority := (session.Mode == config.ModePriority)
-				
+
 				if isNormal {
 					chargerNormal += consumption
 					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh NORMAL (%.3f → %.3f)", 
+						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh NORMAL (%.3f → %.3f)",
 							sessionNum, consumption, previousPower, session.PowerKwh)
 					}
 				} else if isPriority {
 					chargerPriority += consumption
 					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh PRIORITY (%.3f → %.3f)", 
+						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh PRIORITY (%.3f → %.3f)",
 							sessionNum, consumption, previousPower, session.PowerKwh)
 					}
 				} else {
 					chargerNormal += consumption
 					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh UNKNOWN mode '%s' → NORMAL", 
+						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh UNKNOWN mode '%s' → NORMAL",
 							sessionNum, consumption, session.Mode)
 					}
 				}
 			} else if shouldLog {
-				log.Printf("  [CHARGING]     [%d] Zero consumption (%.3f → %.3f)", 
+				log.Printf("  [CHARGING]     [%d] Zero consumption (%.3f → %.3f)",
 					sessionNum, previousPower, session.PowerKwh)
 			}
-			
+
 			previousPower = session.PowerKwh
 		}
-		
-		log.Printf("  [CHARGING] Charger %d summary: %d billable, %d skipped, %.3f kWh normal, %.3f kWh priority", 
+
+		log.Printf("  [CHARGING] Charger %d summary: %d billable, %d skipped, %.3f kWh normal, %.3f kWh priority",
 			chargerID, chargerBillable, chargerSkipped, chargerNormal, chargerPriority)
-		
+
 		normalTotal += chargerNormal
 		priorityTotal += chargerPriority
 		totalBillableSessions += chargerBillable
