@@ -105,6 +105,10 @@ class ApiClient {
     return this.request(`/users/${id}`, { method: 'DELETE' });
   }
 
+  async getAdminUsersForBuildings(buildingIds: string): Promise<User[]> {
+    return this.request(`/users/admin-for-buildings?building_ids=${buildingIds}`);
+  }
+
   // Buildings
   async getBuildings(): Promise<Building[]> {
     return this.request('/buildings');

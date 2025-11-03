@@ -105,10 +105,11 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 			settings.NormalPowerPrice, settings.SolarPowerPrice, 
 			settings.CarChargingNormalPrice, settings.CarChargingPriorityPrice, settings.Currency)
 
+		// IMPROVED: Filter only active users (exclude archived users where is_active = 0)
 		var usersQuery string
 		var args []interface{}
 		if len(userIDs) > 0 {
-			usersQuery = "SELECT id, first_name, last_name, email, charger_ids FROM users WHERE building_id = ? AND id IN (?"
+			usersQuery = "SELECT id, first_name, last_name, email, charger_ids, is_active FROM users WHERE building_id = ? AND is_active = 1 AND id IN (?"
 			args = append(args, buildingID, userIDs[0])
 			for i := 1; i < len(userIDs); i++ {
 				usersQuery += ",?"
@@ -116,9 +117,12 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 			}
 			usersQuery += ")"
 		} else {
-			usersQuery = "SELECT id, first_name, last_name, email, charger_ids FROM users WHERE building_id = ?"
+			// CRITICAL: Only select ACTIVE users (is_active = 1)
+			usersQuery = "SELECT id, first_name, last_name, email, charger_ids, is_active FROM users WHERE building_id = ? AND is_active = 1"
 			args = append(args, buildingID)
 		}
+
+		log.Printf("Users query: %s", usersQuery)
 
 		userRows, err := bs.db.Query(usersQuery, args...)
 		if err != nil {
@@ -127,16 +131,27 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 		}
 
 		userCount := 0
+		skippedCount := 0
+		
 		for userRows.Next() {
 			var userID int
 			var firstName, lastName, email string
 			var chargerIDs sql.NullString
-			if err := userRows.Scan(&userID, &firstName, &lastName, &email, &chargerIDs); err != nil {
+			var isActive bool
+			
+			if err := userRows.Scan(&userID, &firstName, &lastName, &email, &chargerIDs, &isActive); err != nil {
+				continue
+			}
+
+			// DOUBLE CHECK: Skip if user is not active (archived)
+			if !isActive {
+				skippedCount++
+				log.Printf("  SKIPPED archived user: %s %s (ID: %d)", firstName, lastName, userID)
 				continue
 			}
 
 			userCount++
-			log.Printf("\n  Processing User #%d: %s %s (ID: %d)", userCount, firstName, lastName, userID)
+			log.Printf("\n  Processing User #%d: %s %s (ID: %d, Active: %v)", userCount, firstName, lastName, userID, isActive)
 
 			rfidCards := ""
 			if chargerIDs.Valid {
@@ -155,7 +170,7 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 		}
 		userRows.Close()
 		
-		log.Printf("--- Building %d: Generated %d invoices ---", buildingID, userCount)
+		log.Printf("--- Building %d: Generated %d invoices, skipped %d archived users ---", buildingID, userCount, skippedCount)
 	}
 
 	log.Printf("\n=== BILL GENERATION COMPLETE: %d total invoices ===\n", len(invoices))
@@ -163,7 +178,12 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 }
 
 func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end time.Time, settings models.BillingSettings, rfidCards string) (*models.Invoice, error) {
-	invoiceNumber := fmt.Sprintf("INV-%d-%d-%s", buildingID, userID, time.Now().Format("20060102150405"))
+	// IMPROVED: Year-based invoice numbering for better organization
+	invoiceYear := start.Year()
+	timestamp := time.Now().Format("20060102150405")
+	
+	// Format: INV-YEAR-BUILDING-USER-TIMESTAMP
+	invoiceNumber := fmt.Sprintf("INV-%d-%d-%d-%s", invoiceYear, buildingID, userID, timestamp)
 
 	totalAmount := 0.0
 	items := []models.InvoiceItem{}
@@ -333,6 +353,7 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 	}
 
 	log.Printf("  INVOICE TOTAL: %s %.3f", settings.Currency, totalAmount)
+	log.Printf("  INVOICE NUMBER: %s (Year: %d)", invoiceNumber, invoiceYear)
 
 	result, err := bs.db.Exec(`
 		INSERT INTO invoices (
@@ -446,7 +467,7 @@ func (bs *BillingService) getMeterReadings(userID int, start, end time.Time) (fl
 	return from, to, meterName
 }
 
-// FIXED: ZEV calculation now uses data at fixed 15-minute intervals
+// ZEV calculation using data at fixed 15-minute intervals
 func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start, end time.Time) (normal, solar, total float64) {
 	log.Printf("    [ZEV] Calculating consumption for user %d in building %d", userID, buildingID)
 	log.Printf("    [ZEV] Period: %s to %s", start.Format("2006-01-02 15:04:05"), end.Format("2006-01-02 15:04:05"))
@@ -459,7 +480,6 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 		ConsumptionKWh float64
 	}
 
-	// FIXED: Now using consumption_kwh which is already at 15-minute intervals
 	rows, err := bs.db.Query(`
 		SELECT m.id, m.meter_type, m.user_id, mr.reading_time, mr.consumption_kwh
 		FROM meter_readings mr
@@ -496,7 +516,6 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 		return 0, 0, 0
 	}
 
-	// Group readings by time interval (15-minute intervals)
 	type IntervalData struct {
 		UserConsumption     float64
 		BuildingConsumption float64
@@ -506,7 +525,6 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 	intervalData := make(map[time.Time]*IntervalData)
 
 	for _, reading := range allReadings {
-		// Data is already at 15-minute intervals
 		roundedTime := reading.ReadingTime
 
 		if intervalData[roundedTime] == nil {
@@ -595,7 +613,7 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 	return totalNormal, totalSolar, totalConsumption
 }
 
-// FIXED: Charging calculation now uses data at fixed 15-minute intervals
+// Charging calculation using data at fixed 15-minute intervals
 func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards string, start, end time.Time) (normal, priority float64, firstSession, lastSession time.Time) {
 	log.Printf("  [CHARGING] ========================================")
 	log.Printf("  [CHARGING] Starting calculation")
