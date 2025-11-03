@@ -183,7 +183,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       };
 
       const result = await api.generateBills(finalConfig);
-      alert(t('billConfig.successMessage', { count: result.length }));
+      alert(t('billConfig.successMessage') + ` ${result.length} ${result.length === 1 ? t('billing.invoice') : t('billing.invoicesPlural')}!`);
       onGenerate();
       onClose();
       resetForm();
@@ -287,7 +287,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       {/* Buildings */}
       <div style={{ marginBottom: '24px' }}>
         <label style={{ display: 'block', fontWeight: '600', marginBottom: '12px', fontSize: '15px' }}>
-          {t('billConfig.step1.selectBuildings', { count: config.building_ids.length })}
+          {t('billConfig.step1.selectBuildings')} ({config.building_ids.length} {t('billConfig.step1.selected')})
         </label>
         <div style={{ 
           maxHeight: '200px', 
@@ -326,7 +326,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       <div style={{ marginBottom: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
           <label style={{ fontWeight: '600', fontSize: '15px' }}>
-            {t('billConfig.step1.selectUsers', { count: config.user_ids.length })}
+            {t('billConfig.step1.selectUsers')} ({config.user_ids.length} {t('billConfig.step1.selected')})
           </label>
           {config.building_ids.length > 0 && (
             <button
@@ -464,7 +464,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         fontSize: '14px',
         color: '#004a99'
       }}>
-        <strong>{t('billConfig.step2.selected')}:</strong> {selectedSharedMeters.length} {t('billConfig.step2.meters', { count: selectedSharedMeters.length })}
+        <strong>{t('billConfig.step2.selected')}:</strong> {selectedSharedMeters.length} {t('billConfig.step2.meters')}
       </div>
     </div>
   );
@@ -540,7 +540,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         fontSize: '14px',
         color: '#004a99'
       }}>
-        <strong>{t('billConfig.step3.selected')}:</strong> {selectedCustomItems.length} {t('billConfig.step3.items', { count: selectedCustomItems.length })}
+        <strong>{t('billConfig.step3.selected')}:</strong> {selectedCustomItems.length} {t('billConfig.step3.items')}
       </div>
     </div>
   );
@@ -927,7 +927,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                 }}
               >
                 <FileText size={18} />
-                {loading ? t('billConfig.navigation.generating') : t('billConfig.navigation.generate', { count: config.user_ids.length })}
+                {loading ? t('billConfig.navigation.generating') : `${t('billConfig.navigation.generate')} ${config.user_ids.length} ${config.user_ids.length === 1 ? t('billing.invoice') : t('billing.invoicesPlural')}`}
               </button>
             )}
           </div>
