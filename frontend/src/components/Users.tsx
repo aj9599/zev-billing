@@ -40,6 +40,16 @@ export default function Users() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate apartment selection for buildings with apartments
+    if (formData.user_type === 'regular' && formData.building_id) {
+      const selectedBuilding = buildings.find(b => b.id === formData.building_id);
+      if (selectedBuilding?.has_apartments && !formData.apartment_unit) {
+        alert(t('users.pleaseSelectApartment'));
+        return;
+      }
+    }
+    
     try {
       const dataToSend = {
         ...formData,
@@ -953,19 +963,42 @@ export default function Users() {
                     </small>
                   </div>
 
-                  {/* Apartment Selection */}
+                  {/* Apartment Selection - More Prominent */}
                   {formData.building_id && buildings.find(b => b.id === formData.building_id)?.has_apartments && (
-                    <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#15803d' }}>
-                        <Home size={18} />
-                        {t('users.apartmentUnit')}
+                    <div style={{ 
+                      marginTop: '16px', 
+                      padding: '20px', 
+                      backgroundColor: '#f0fdf4', 
+                      borderRadius: '8px', 
+                      border: '2px solid #22c55e',
+                      boxShadow: '0 2px 8px rgba(34, 197, 94, 0.1)'
+                    }}>
+                      <label style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '8px', 
+                        marginBottom: '12px', 
+                        fontWeight: '600', 
+                        fontSize: '15px', 
+                        color: '#15803d' 
+                      }}>
+                        <Home size={20} />
+                        {t('users.apartmentUnit')} *
                       </label>
                       <select 
                         value={formData.apartment_unit || ''} 
                         onChange={(e) => setFormData({ ...formData, apartment_unit: e.target.value })}
-                        style={{ width: '100%', padding: '10px', border: '1px solid #bbf7d0', borderRadius: '6px' }}
+                        required
+                        style={{ 
+                          width: '100%', 
+                          padding: '12px', 
+                          border: '2px solid #22c55e', 
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          backgroundColor: 'white'
+                        }}
                       >
-                        <option value="">{t('users.noApartmentAssigned')}</option>
+                        <option value="">{t('users.selectApartment')}</option>
                         {getAvailableApartments(formData.building_id).map(apt => (
                           <option key={apt} value={apt}>{apt}</option>
                         ))}
@@ -973,9 +1006,19 @@ export default function Users() {
                           <option value={editingUser.apartment_unit}>{editingUser.apartment_unit} ({t('users.current')})</option>
                         )}
                       </select>
-                      <small style={{ display: 'block', marginTop: '6px', color: '#15803d', fontSize: '12px' }}>
-                        {t('users.onlyAvailableApartments')}
-                      </small>
+                      <div style={{ 
+                        marginTop: '10px', 
+                        padding: '10px', 
+                        backgroundColor: '#dcfce7', 
+                        borderRadius: '6px',
+                        fontSize: '13px',
+                        color: '#15803d',
+                        lineHeight: '1.5'
+                      }}>
+                        <strong>ℹ️ {t('users.apartmentInfo')}</strong>
+                        <br />
+                        {t('users.apartmentExplanation')}
+                      </div>
                     </div>
                   )}
 
