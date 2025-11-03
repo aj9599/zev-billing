@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, ChevronLeft, ChevronRight, Check, FileText, Zap, DollarSign } from 'lucide-react';
 import { api } from '../api/client';
 import type { Building, User, SharedMeterConfig, CustomLineItem, GenerateBillsRequest } from '../types';
-//import { useTranslation } from '../i18n';
+import { useTranslation } from '../i18n';
 
 interface BillConfigurationProps {
   isOpen: boolean;
@@ -11,7 +11,7 @@ interface BillConfigurationProps {
 }
 
 export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillConfigurationProps) {
-  //const { t } = useTranslation();
+  const { t } = useTranslation();
   const [step, setStep] = useState(1);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -141,17 +141,17 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
 
   const handleGenerate = async () => {
     if (!config.start_date || !config.end_date) {
-      alert('Please select start and end dates');
+      alert(t('billConfig.validation.selectDates'));
       return;
     }
 
     if (config.building_ids.length === 0) {
-      alert('Please select at least one building');
+      alert(t('billConfig.validation.selectBuilding'));
       return;
     }
 
     if (config.user_ids.length === 0) {
-      alert('Please select at least one user');
+      alert(t('billConfig.validation.selectUser'));
       return;
     }
 
@@ -183,13 +183,13 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       };
 
       const result = await api.generateBills(finalConfig);
-      alert(`Successfully generated ${result.length} invoices!`);
+      alert(t('billConfig.successMessage', { count: result.length }));
       onGenerate();
       onClose();
       resetForm();
     } catch (err) {
       console.error('Failed to generate bills:', err);
-      alert(`Failed to generate bills: ${err}`);
+      alert(t('billConfig.errorMessage') + ': ' + err);
     } finally {
       setLoading(false);
     }
@@ -238,18 +238,18 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
   const renderStep1 = () => (
     <div>
       <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px' }}>
-        Select Buildings, Users & Period
+        {t('billConfig.step1.title')}
       </h3>
 
       {/* Date Range */}
       <div style={{ marginBottom: '30px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
         <label style={{ display: 'block', fontWeight: '600', marginBottom: '12px', fontSize: '15px' }}>
-          Billing Period
+          {t('billConfig.step1.billingPeriod')}
         </label>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', color: '#6c757d' }}>
-              Start Date
+              {t('billConfig.step1.startDate')}
             </label>
             <input
               type="date"
@@ -266,7 +266,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           </div>
           <div>
             <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', color: '#6c757d' }}>
-              End Date
+              {t('billConfig.step1.endDate')}
             </label>
             <input
               type="date"
@@ -287,7 +287,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       {/* Buildings */}
       <div style={{ marginBottom: '24px' }}>
         <label style={{ display: 'block', fontWeight: '600', marginBottom: '12px', fontSize: '15px' }}>
-          Select Buildings ({config.building_ids.length} selected)
+          {t('billConfig.step1.selectBuildings', { count: config.building_ids.length })}
         </label>
         <div style={{ 
           maxHeight: '200px', 
@@ -326,7 +326,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       <div style={{ marginBottom: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
           <label style={{ fontWeight: '600', fontSize: '15px' }}>
-            Select Users ({config.user_ids.length} selected)
+            {t('billConfig.step1.selectUsers', { count: config.user_ids.length })}
           </label>
           {config.building_ids.length > 0 && (
             <button
@@ -344,7 +344,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                 cursor: 'pointer'
               }}
             >
-              Select All Active
+              {t('billConfig.step1.selectAllActive')}
             </button>
           )}
         </div>
@@ -357,7 +357,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         }}>
           {filteredUsers.length === 0 ? (
             <div style={{ padding: '20px', textAlign: 'center', color: '#6c757d' }}>
-              {config.building_ids.length === 0 ? 'Select a building first' : 'No users found'}
+              {config.building_ids.length === 0 ? t('billConfig.step1.selectBuildingFirst') : t('billConfig.step1.noUsersFound')}
             </div>
           ) : (
             filteredUsers.map(user => (
@@ -383,7 +383,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                 />
                 <span style={{ fontSize: '15px' }}>
                   {user.first_name} {user.last_name}
-                  {!user.is_active && <span style={{ color: '#dc3545', marginLeft: '8px', fontSize: '13px' }}>(Archived)</span>}
+                  {!user.is_active && <span style={{ color: '#dc3545', marginLeft: '8px', fontSize: '13px' }}>({t('billConfig.step1.archived')})</span>}
                 </span>
               </label>
             ))
@@ -397,10 +397,10 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
   const renderStep2 = () => (
     <div>
       <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px' }}>
-        Shared Meters (Optional)
+        {t('billConfig.step2.title')}
       </h3>
       <p style={{ color: '#6c757d', marginBottom: '24px', fontSize: '14px' }}>
-        Select which shared meters to include in the invoices. Leave empty to skip.
+        {t('billConfig.step2.description')}
       </p>
 
       {filteredSharedMeters.length === 0 ? (
@@ -412,7 +412,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           color: '#6c757d'
         }}>
           <Zap size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
-          <p>No shared meters configured for selected buildings</p>
+          <p>{t('billConfig.step2.noMeters')}</p>
         </div>
       ) : (
         <div style={{ 
@@ -447,7 +447,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                     {meter.meter_name}
                   </div>
                   <div style={{ fontSize: '13px', color: '#6c757d' }}>
-                    {building?.name} • {meter.split_type} split • CHF {meter.unit_price.toFixed(3)}/kWh
+                    {building?.name} • {meter.split_type} {t('billConfig.step2.split')} • CHF {meter.unit_price.toFixed(3)}/kWh
                   </div>
                 </div>
               </label>
@@ -464,7 +464,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         fontSize: '14px',
         color: '#004a99'
       }}>
-        <strong>Selected:</strong> {selectedSharedMeters.length} shared meter(s)
+        <strong>{t('billConfig.step2.selected')}:</strong> {selectedSharedMeters.length} {t('billConfig.step2.meters', { count: selectedSharedMeters.length })}
       </div>
     </div>
   );
@@ -473,10 +473,10 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
   const renderStep3 = () => (
     <div>
       <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px' }}>
-        Custom Line Items (Optional)
+        {t('billConfig.step3.title')}
       </h3>
       <p style={{ color: '#6c757d', marginBottom: '24px', fontSize: '14px' }}>
-        Add custom charges like meter rental, maintenance fees, etc.
+        {t('billConfig.step3.description')}
       </p>
 
       {filteredCustomItems.length === 0 ? (
@@ -488,7 +488,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           color: '#6c757d'
         }}>
           <DollarSign size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
-          <p>No custom line items configured for selected buildings</p>
+          <p>{t('billConfig.step3.noItems')}</p>
         </div>
       ) : (
         <div style={{ 
@@ -540,7 +540,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         fontSize: '14px',
         color: '#004a99'
       }}>
-        <strong>Selected:</strong> {selectedCustomItems.length} custom item(s)
+        <strong>{t('billConfig.step3.selected')}:</strong> {selectedCustomItems.length} {t('billConfig.step3.items', { count: selectedCustomItems.length })}
       </div>
     </div>
   );
@@ -549,7 +549,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
   const renderStep4 = () => (
     <div>
       <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px' }}>
-        Review & Sender Information
+        {t('billConfig.step4.title')}
       </h3>
 
       {/* Summary */}
@@ -559,24 +559,24 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         backgroundColor: '#f8f9fa', 
         borderRadius: '8px'
       }}>
-        <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>Summary</h4>
+        <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>{t('billConfig.step4.summary')}</h4>
         <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '14px', lineHeight: '1.8' }}>
-          <li><strong>Period:</strong> {config.start_date} to {config.end_date}</li>
-          <li><strong>Buildings:</strong> {config.building_ids.length}</li>
-          <li><strong>Users:</strong> {config.user_ids.length}</li>
-          <li><strong>Shared Meters:</strong> {selectedSharedMeters.length}</li>
-          <li><strong>Custom Items:</strong> {selectedCustomItems.length}</li>
-          <li><strong>Estimated Invoices:</strong> {config.user_ids.length}</li>
+          <li><strong>{t('billConfig.step4.period')}:</strong> {config.start_date} {t('billConfig.step4.to')} {config.end_date}</li>
+          <li><strong>{t('billConfig.step4.buildings')}:</strong> {config.building_ids.length}</li>
+          <li><strong>{t('billConfig.step4.users')}:</strong> {config.user_ids.length}</li>
+          <li><strong>{t('billConfig.step4.sharedMeters')}:</strong> {selectedSharedMeters.length}</li>
+          <li><strong>{t('billConfig.step4.customItems')}:</strong> {selectedCustomItems.length}</li>
+          <li><strong>{t('billConfig.step4.estimatedInvoices')}:</strong> {config.user_ids.length}</li>
         </ul>
       </div>
 
       {/* Sender Information */}
       <div style={{ marginBottom: '24px' }}>
-        <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>Sender Information</h4>
+        <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>{t('billConfig.step4.senderInfo')}</h4>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>
-              Name *
+              {t('billConfig.step4.name')} *
             </label>
             <input
               type="text"
@@ -593,7 +593,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           </div>
           <div>
             <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>
-              Address
+              {t('billConfig.step4.address')}
             </label>
             <input
               type="text"
@@ -611,7 +611,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>
-                ZIP
+                {t('billConfig.step4.zip')}
               </label>
               <input
                 type="text"
@@ -628,7 +628,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
             </div>
             <div>
               <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>
-                City
+                {t('billConfig.step4.city')}
               </label>
               <input
                 type="text"
@@ -649,11 +649,11 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
 
       {/* Banking Information */}
       <div>
-        <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>Banking Information</h4>
+        <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>{t('billConfig.step4.bankingInfo')}</h4>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>
-              Bank Name
+              {t('billConfig.step4.bankName')}
             </label>
             <input
               type="text"
@@ -670,7 +670,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           </div>
           <div>
             <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>
-              IBAN *
+              {t('billConfig.step4.iban')} *
             </label>
             <input
               type="text"
@@ -688,7 +688,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           </div>
           <div>
             <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>
-              Account Holder
+              {t('billConfig.step4.accountHolder')}
             </label>
             <input
               type="text"
@@ -742,8 +742,16 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           justifyContent: 'space-between',
           alignItems: 'center'
         }}>
-          <h2 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>
-            Advanced Bill Configuration
+          <h2 style={{ 
+            fontSize: '24px', 
+            fontWeight: 'bold', 
+            margin: 0,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text'
+          }}>
+            {t('billConfig.title')}
           </h2>
           <button
             onClick={onClose}
@@ -809,10 +817,10 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                   fontWeight: step === s ? '600' : 'normal',
                   color: step === s ? '#007bff' : '#6c757d'
                 }}>
-                  {s === 1 && 'Selection'}
-                  {s === 2 && 'Meters'}
-                  {s === 3 && 'Items'}
-                  {s === 4 && 'Review'}
+                  {s === 1 && t('billConfig.steps.selection')}
+                  {s === 2 && t('billConfig.steps.meters')}
+                  {s === 3 && t('billConfig.steps.items')}
+                  {s === 4 && t('billConfig.steps.review')}
                 </div>
               </div>
             ))}
@@ -853,7 +861,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
               fontWeight: '500'
             }}
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           
           <div style={{ display: 'flex', gap: '12px' }}>
@@ -875,7 +883,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                 }}
               >
                 <ChevronLeft size={18} />
-                Previous
+                {t('billConfig.navigation.previous')}
               </button>
             )}
             
@@ -897,7 +905,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                   gap: '8px'
                 }}
               >
-                Next
+                {t('billConfig.navigation.next')}
                 <ChevronRight size={18} />
               </button>
             ) : (
@@ -919,7 +927,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                 }}
               >
                 <FileText size={18} />
-                {loading ? 'Generating...' : `Generate ${config.user_ids.length} Invoice(s)`}
+                {loading ? t('billConfig.navigation.generating') : t('billConfig.navigation.generate', { count: config.user_ids.length })}
               </button>
             )}
           </div>

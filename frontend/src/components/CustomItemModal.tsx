@@ -73,7 +73,7 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
       }
     } catch (err) {
       console.error('Failed to load buildings:', err);
-      showToast('Failed to load buildings', 'error');
+      showToast(t('customItems.loadBuildingsFailed'), 'error');
     } finally {
       setLoading(false);
     }
@@ -86,7 +86,7 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
       setItems(data);
     } catch (err) {
       console.error('Failed to load custom items:', err);
-      showToast('Failed to load custom items', 'error');
+      showToast(t('customItems.loadItemsFailed'), 'error');
     } finally {
       setLoading(false);
     }
@@ -96,15 +96,15 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
     const newErrors: Record<string, string> = {};
 
     if (!formData.description.trim()) {
-      newErrors.description = 'Description is required';
+      newErrors.description = t('customItems.validation.descriptionRequired');
     } else if (formData.description.length > 200) {
-      newErrors.description = 'Description must be less than 200 characters';
+      newErrors.description = t('customItems.validation.descriptionTooLong');
     }
 
     if (formData.amount <= 0) {
-      newErrors.amount = 'Amount must be greater than 0';
+      newErrors.amount = t('customItems.validation.amountPositive');
     } else if (formData.amount > 999999) {
-      newErrors.amount = 'Amount is too large';
+      newErrors.amount = t('customItems.validation.amountTooLarge');
     }
 
     setErrors(newErrors);
@@ -115,12 +115,12 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
     e.preventDefault();
     
     if (!validateForm()) {
-      showToast('Please fix the errors in the form', 'error');
+      showToast(t('customItems.validation.fixErrors'), 'error');
       return;
     }
 
     if (!selectedBuildingId) {
-      showToast('Please select a building', 'error');
+      showToast(t('customItems.validation.selectBuilding'), 'error');
       return;
     }
     
@@ -128,13 +128,13 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
       setSaving(true);
       if (editingItem) {
         await api.updateCustomLineItem(editingItem.id, formData);
-        showToast('Custom item updated successfully', 'success');
+        showToast(t('customItems.updateSuccess'), 'success');
       } else {
         await api.createCustomLineItem({
           ...formData,
           building_id: selectedBuildingId
         });
-        showToast('Custom item created successfully', 'success');
+        showToast(t('customItems.createSuccess'), 'success');
       }
       
       resetForm();
@@ -142,7 +142,7 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
       onSave();
     } catch (err) {
       console.error('Failed to save custom item:', err);
-      showToast(`Failed to save custom item: ${(err as Error).message}`, 'error');
+      showToast(t('customItems.saveFailed') + `: ${(err as Error).message}`, 'error');
     } finally {
       setSaving(false);
     }
@@ -168,16 +168,16 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this custom item? This action cannot be undone.')) return;
+    if (!confirm(t('customItems.deleteConfirm'))) return;
     
     try {
       await api.deleteCustomLineItem(id);
-      showToast('Custom item deleted successfully', 'success');
+      showToast(t('customItems.deleteSuccess'), 'success');
       await loadItems(selectedBuildingId!);
       onSave();
     } catch (err) {
       console.error('Failed to delete custom item:', err);
-      showToast(`Failed to delete custom item: ${(err as Error).message}`, 'error');
+      showToast(t('customItems.deleteFailed') + `: ${(err as Error).message}`, 'error');
     }
   };
 
@@ -197,20 +197,20 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
 
   const getCategoryLabel = (category: string) => {
     const labels = {
-      meter_rent: t('customItems.category.meterRent') || 'Meter Rent',
-      maintenance: t('customItems.category.maintenance') || 'Maintenance',
-      service: t('customItems.category.service') || 'Service',
-      other: t('customItems.category.other') || 'Other'
+      meter_rent: t('customItems.category.meterRent'),
+      maintenance: t('customItems.category.maintenance'),
+      service: t('customItems.category.service'),
+      other: t('customItems.category.other')
     };
     return labels[category as keyof typeof labels] || category;
   };
 
   const getFrequencyLabel = (frequency: string) => {
     const labels = {
-      once: t('customItems.frequency.once') || 'One-time',
-      monthly: t('customItems.frequency.monthly') || 'Monthly',
-      quarterly: t('customItems.frequency.quarterly') || 'Quarterly',
-      yearly: t('customItems.frequency.yearly') || 'Yearly'
+      once: t('customItems.frequency.once'),
+      monthly: t('customItems.frequency.monthly'),
+      quarterly: t('customItems.frequency.quarterly'),
+      yearly: t('customItems.frequency.yearly')
     };
     return labels[frequency as keyof typeof labels] || frequency;
   };
@@ -245,7 +245,7 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
         backgroundColor: 'white',
         borderRadius: '12px',
         padding: '30px',
-        maxWidth: '900px',
+        maxWidth: '950px',
         width: '90%',
         maxHeight: '90vh',
         overflow: 'auto',
@@ -278,18 +278,28 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
         )}
 
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
-          <h2 style={{ 
-            fontSize: '24px', 
-            fontWeight: 'bold', 
-            margin: 0,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px'
-          }}>
-            <DollarSign size={24} style={{ color: '#667eea' }} />
-            {t('customItems.title') || 'Manage Custom Line Items'}
-          </h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px', paddingBottom: '20px', borderBottom: '2px solid #e9ecef' }}>
+          <div>
+            <h2 style={{ 
+              fontSize: '28px', 
+              fontWeight: '700', 
+              margin: 0,
+              marginBottom: '8px',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}>
+              <DollarSign size={28} style={{ color: '#667eea' }} />
+              {t('customItems.title')}
+            </h2>
+            <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
+              {t('customItems.subtitle')}
+            </p>
+          </div>
           <button 
             onClick={onClose} 
             style={{
@@ -297,7 +307,7 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
               border: 'none',
               cursor: 'pointer',
               padding: '8px',
-              borderRadius: '4px',
+              borderRadius: '6px',
               transition: 'background-color 0.2s'
             }}
             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
@@ -312,11 +322,11 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
           <label style={{ 
             display: 'block', 
             marginBottom: '8px', 
-            fontWeight: '500',
+            fontWeight: '600',
             fontSize: '14px',
             color: '#374151'
           }}>
-            {t('customItems.selectBuilding') || 'Select Building'} *
+            {t('customItems.selectBuilding')} *
           </label>
           <select
             value={selectedBuildingId || ''}
@@ -328,16 +338,18 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
             disabled={loading}
             style={{
               width: '100%',
-              padding: '10px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
+              padding: '12px',
+              border: '2px solid #e5e7eb',
+              borderRadius: '8px',
               fontSize: '14px',
               backgroundColor: loading ? '#f9fafb' : 'white',
               cursor: loading ? 'not-allowed' : 'pointer',
               transition: 'border-color 0.2s'
             }}
+            onFocus={(e) => !loading && (e.target.style.borderColor = '#667eea')}
+            onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
           >
-            <option value="">{t('customItems.selectBuildingPlaceholder') || 'Select a building'}</option>
+            <option value="">{t('customItems.selectBuildingPlaceholder')}</option>
             {buildings.map(building => (
               <option key={building.id} value={building.id}>
                 {building.name}
@@ -353,8 +365,8 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
             padding: '40px',
             color: '#666'
           }}>
-            <Loader size={40} style={{ animation: 'spin 1s linear infinite' }} />
-            <p style={{ marginTop: '10px', fontSize: '14px' }}>Loading...</p>
+            <Loader size={40} style={{ animation: 'spin 1s linear infinite', color: '#667eea' }} />
+            <p style={{ marginTop: '10px', fontSize: '14px' }}>{t('customItems.loading')}</p>
           </div>
         )}
 
@@ -364,26 +376,33 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
             onClick={() => setShowForm(true)}
             style={{
               width: '100%',
-              padding: '12px',
-              backgroundColor: '#667eea',
+              padding: '14px',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               color: 'white',
               border: 'none',
-              borderRadius: '6px',
-              fontSize: '14px',
-              fontWeight: '500',
+              borderRadius: '8px',
+              fontSize: '15px',
+              fontWeight: '600',
               cursor: 'pointer',
               marginBottom: '20px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '8px',
-              transition: 'background-color 0.2s'
+              transition: 'all 0.2s',
+              boxShadow: '0 4px 6px rgba(102, 126, 234, 0.3)'
             }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#5568d3'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#667eea'}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 6px 12px rgba(102, 126, 234, 0.4)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 6px rgba(102, 126, 234, 0.3)';
+            }}
           >
             <Plus size={18} />
-            {t('customItems.addNew') || 'Add New Custom Item'}
+            {t('customItems.addNew')}
           </button>
         )}
 
@@ -393,21 +412,21 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
             id="custom-item-form"
             onSubmit={handleSubmit} 
             style={{
-              backgroundColor: '#f9fafb',
-              padding: '20px',
-              borderRadius: '8px',
+              background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
+              padding: '24px',
+              borderRadius: '12px',
               marginBottom: '25px',
-              border: '1px solid #e5e7eb'
+              border: '2px solid #e5e7eb'
             }}
           >
-            <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '15px', color: '#111827' }}>
-              {editingItem ? (t('customItems.editItem') || 'Edit Custom Item') : (t('customItems.newItem') || 'New Custom Item')}
+            <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '20px', color: '#111827' }}>
+              {editingItem ? t('customItems.editItem') : t('customItems.newItem')}
             </h3>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
               <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
-                  {t('customItems.description') || 'Description'} *
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                  {t('customItems.description')} *
                 </label>
                 <input
                   type="text"
@@ -418,15 +437,16 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
                   }}
                   required
                   maxLength={200}
-                  placeholder={t('customItems.descriptionPlaceholder') || 'e.g., Monthly maintenance fee'}
+                  placeholder={t('customItems.descriptionPlaceholder')}
                   style={{
                     width: '100%',
-                    padding: '8px',
-                    border: `1px solid ${errors.description ? '#ef4444' : '#d1d5db'}`,
-                    borderRadius: '4px',
+                    padding: '10px',
+                    border: `2px solid ${errors.description ? '#ef4444' : '#d1d5db'}`,
+                    borderRadius: '6px',
                     fontSize: '14px',
                     outline: 'none',
-                    transition: 'border-color 0.2s'
+                    transition: 'border-color 0.2s',
+                    backgroundColor: 'white'
                   }}
                   onFocus={(e) => !errors.description && (e.target.style.borderColor = '#667eea')}
                   onBlur={(e) => !errors.description && (e.target.style.borderColor = '#d1d5db')}
@@ -440,8 +460,8 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
-                  {t('customItems.amount') || 'Amount'} (CHF) *
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                  {t('customItems.amount')} (CHF) *
                 </label>
                 <input
                   type="number"
@@ -457,12 +477,13 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
                   placeholder="0.00"
                   style={{
                     width: '100%',
-                    padding: '8px',
-                    border: `1px solid ${errors.amount ? '#ef4444' : '#d1d5db'}`,
-                    borderRadius: '4px',
+                    padding: '10px',
+                    border: `2px solid ${errors.amount ? '#ef4444' : '#d1d5db'}`,
+                    borderRadius: '6px',
                     fontSize: '14px',
                     outline: 'none',
-                    transition: 'border-color 0.2s'
+                    transition: 'border-color 0.2s',
+                    backgroundColor: 'white'
                   }}
                   onFocus={(e) => !errors.amount && (e.target.style.borderColor = '#667eea')}
                   onBlur={(e) => !errors.amount && (e.target.style.borderColor = '#d1d5db')}
@@ -476,8 +497,8 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
-                  {t('customItems.category') || 'Category'} *
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                  {t('customItems.category.label')} *
                 </label>
                 <select
                   value={formData.category}
@@ -485,25 +506,28 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
                   required
                   style={{
                     width: '100%',
-                    padding: '8px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '4px',
+                    padding: '10px',
+                    border: '2px solid #d1d5db',
+                    borderRadius: '6px',
                     fontSize: '14px',
                     cursor: 'pointer',
-                    backgroundColor: 'white'
+                    backgroundColor: 'white',
+                    transition: 'border-color 0.2s'
                   }}
+                  onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                  onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
                 >
-                  <option value="meter_rent">{t('customItems.category.meterRent') || 'Meter Rent'}</option>
-                  <option value="maintenance">{t('customItems.category.maintenance') || 'Maintenance'}</option>
-                  <option value="service">{t('customItems.category.service') || 'Service'}</option>
-                  <option value="other">{t('customItems.category.other') || 'Other'}</option>
+                  <option value="meter_rent">{t('customItems.category.meterRent')}</option>
+                  <option value="maintenance">{t('customItems.category.maintenance')}</option>
+                  <option value="service">{t('customItems.category.service')}</option>
+                  <option value="other">{t('customItems.category.other')}</option>
                 </select>
               </div>
             </div>
 
-            <div style={{ marginBottom: '15px' }}>
-              <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
-                {t('customItems.frequency') || 'Frequency'} *
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                {t('customItems.frequency.label')} *
               </label>
               <select
                 value={formData.frequency}
@@ -511,78 +535,82 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
                 required
                 style={{
                   width: '100%',
-                  padding: '8px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
+                  padding: '10px',
+                  border: '2px solid #d1d5db',
+                  borderRadius: '6px',
                   fontSize: '14px',
                   cursor: 'pointer',
-                  backgroundColor: 'white'
+                  backgroundColor: 'white',
+                  transition: 'border-color 0.2s'
                 }}
+                onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
               >
-                <option value="once">{t('customItems.frequency.once') || 'One-time'}</option>
-                <option value="monthly">{t('customItems.frequency.monthly') || 'Monthly'}</option>
-                <option value="quarterly">{t('customItems.frequency.quarterly') || 'Quarterly'}</option>
-                <option value="yearly">{t('customItems.frequency.yearly') || 'Yearly'}</option>
+                <option value="once">{t('customItems.frequency.once')}</option>
+                <option value="monthly">{t('customItems.frequency.monthly')}</option>
+                <option value="quarterly">{t('customItems.frequency.quarterly')}</option>
+                <option value="yearly">{t('customItems.frequency.yearly')}</option>
               </select>
-              <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                {formData.frequency === 'once' && (t('customItems.frequencyHelp.once') || 'Added once to the first bill in the period')}
-                {formData.frequency === 'monthly' && (t('customItems.frequencyHelp.monthly') || 'Multiplied by the number of months in the billing period')}
-                {formData.frequency === 'quarterly' && (t('customItems.frequencyHelp.quarterly') || 'Multiplied by the number of quarters in the billing period')}
-                {formData.frequency === 'yearly' && (t('customItems.frequencyHelp.yearly') || 'Multiplied by the number of years in the billing period')}
+              <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px', fontStyle: 'italic' }}>
+                {formData.frequency === 'once' && t('customItems.frequencyHelp.once')}
+                {formData.frequency === 'monthly' && t('customItems.frequencyHelp.monthly')}
+                {formData.frequency === 'quarterly' && t('customItems.frequencyHelp.quarterly')}
+                {formData.frequency === 'yearly' && t('customItems.frequencyHelp.yearly')}
               </p>
             </div>
 
-            <div style={{ marginBottom: '15px' }}>
+            <div style={{ marginBottom: '20px' }}>
               <label style={{ 
                 display: 'flex', 
                 alignItems: 'center', 
-                gap: '8px', 
+                gap: '10px', 
                 cursor: 'pointer',
-                padding: '10px',
+                padding: '12px',
                 backgroundColor: formData.is_active ? '#ecfdf5' : '#fef2f2',
-                borderRadius: '6px',
-                border: `1px solid ${formData.is_active ? '#10b981' : '#ef4444'}`,
+                borderRadius: '8px',
+                border: `2px solid ${formData.is_active ? '#10b981' : '#ef4444'}`,
                 transition: 'all 0.2s'
               }}>
                 <input
                   type="checkbox"
                   checked={formData.is_active}
                   onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#667eea' }}
                 />
-                <span style={{ fontSize: '14px', fontWeight: '500', color: '#111827' }}>
+                <span style={{ fontSize: '14px', fontWeight: '600', color: '#111827' }}>
                   {formData.is_active 
-                    ? (t('customItems.active') || 'Active (will be included in bills)') 
-                    : (t('customItems.inactive') || 'Inactive (will not be included in bills)')}
+                    ? t('customItems.active')
+                    : t('customItems.inactive')}
                 </span>
               </label>
             </div>
 
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '12px' }}>
               <button
                 type="submit"
                 disabled={saving}
                 style={{
                   flex: 1,
-                  padding: '10px',
-                  backgroundColor: saving ? '#9ca3af' : '#10b981',
+                  padding: '12px',
+                  background: saving ? '#9ca3af' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                   color: 'white',
                   border: 'none',
-                  borderRadius: '4px',
+                  borderRadius: '8px',
                   fontSize: '14px',
-                  fontWeight: '500',
+                  fontWeight: '600',
                   cursor: saving ? 'not-allowed' : 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '8px',
-                  transition: 'background-color 0.2s'
+                  transition: 'all 0.2s',
+                  boxShadow: saving ? 'none' : '0 2px 4px rgba(16, 185, 129, 0.3)'
                 }}
-                onMouseEnter={(e) => !saving && (e.currentTarget.style.backgroundColor = '#059669')}
-                onMouseLeave={(e) => !saving && (e.currentTarget.style.backgroundColor = '#10b981')}
+                onMouseEnter={(e) => !saving && (e.currentTarget.style.transform = 'translateY(-1px)')}
+                onMouseLeave={(e) => !saving && (e.currentTarget.style.transform = 'translateY(0)')}
               >
                 {saving && <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />}
-                {editingItem ? (t('common.update') || 'Update') : (t('common.create') || 'Create')}
+                {editingItem ? t('common.update') : t('common.create')}
               </button>
               <button
                 type="button"
@@ -590,20 +618,21 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
                 disabled={saving}
                 style={{
                   flex: 1,
-                  padding: '10px',
+                  padding: '12px',
                   backgroundColor: '#6b7280',
                   color: 'white',
                   border: 'none',
-                  borderRadius: '4px',
+                  borderRadius: '8px',
                   fontSize: '14px',
-                  fontWeight: '500',
+                  fontWeight: '600',
                   cursor: saving ? 'not-allowed' : 'pointer',
-                  transition: 'background-color 0.2s'
+                  transition: 'all 0.2s',
+                  opacity: saving ? 0.6 : 1
                 }}
                 onMouseEnter={(e) => !saving && (e.currentTarget.style.backgroundColor = '#4b5563')}
                 onMouseLeave={(e) => !saving && (e.currentTarget.style.backgroundColor = '#6b7280')}
               >
-                {t('common.cancel') || 'Cancel'}
+                {t('common.cancel')}
               </button>
             </div>
           </form>
@@ -614,41 +643,53 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
           <div>
             <h3 style={{ 
               fontSize: '18px', 
-              fontWeight: '600', 
-              marginBottom: '15px',
+              fontWeight: '700', 
+              marginBottom: '16px',
               color: '#111827',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between'
             }}>
-              <span>{t('customItems.itemsForBuilding') || 'Custom Items for Building'}</span>
+              <span>{t('customItems.itemsForBuilding')}</span>
               <span style={{ 
                 fontSize: '14px', 
-                fontWeight: '500', 
-                color: '#6b7280',
-                backgroundColor: '#f3f4f6',
-                padding: '4px 12px',
-                borderRadius: '12px'
+                fontWeight: '600', 
+                color: '#667eea',
+                background: 'linear-gradient(135deg, #667eea15 0%, #764ba215 100%)',
+                padding: '6px 14px',
+                borderRadius: '20px',
+                border: '2px solid #667eea'
               }}>
-                {items.length} {items.length === 1 ? 'item' : 'items'}
+                {items.length} {items.length === 1 ? t('customItems.item') : t('customItems.items')}
               </span>
             </h3>
 
             {items.length === 0 ? (
               <div style={{
                 textAlign: 'center',
-                padding: '40px',
+                padding: '60px',
                 color: '#6b7280',
-                backgroundColor: '#f9fafb',
-                borderRadius: '8px',
+                background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
+                borderRadius: '12px',
                 border: '2px dashed #d1d5db'
               }}>
-                <DollarSign size={48} style={{ marginBottom: '10px', opacity: 0.3, margin: '0 auto' }} />
-                <p style={{ fontSize: '16px', fontWeight: '500', marginBottom: '4px' }}>
-                  {t('customItems.noItems') || 'No custom items found'}
+                <div style={{
+                  width: '80px',
+                  height: '80px',
+                  margin: '0 auto 20px',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <DollarSign size={40} color="white" />
+                </div>
+                <p style={{ fontSize: '16px', fontWeight: '600', marginBottom: '4px', color: '#1f2937' }}>
+                  {t('customItems.noItems')}
                 </p>
                 <p style={{ fontSize: '14px', marginTop: '5px' }}>
-                  {t('customItems.noItemsDescription') || 'Click "Add New Custom Item" to create one.'}
+                  {t('customItems.noItemsDescription')}
                 </p>
               </div>
             ) : (
@@ -657,35 +698,41 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
                   <div
                     key={item.id}
                     style={{
-                      padding: '16px',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
+                      padding: '18px',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '12px',
                       backgroundColor: item.is_active ? 'white' : '#f9fafb',
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
                       borderLeft: `4px solid ${getCategoryColor(item.category)}`,
-                      transition: 'box-shadow 0.2s',
+                      transition: 'all 0.2s',
                       cursor: 'default'
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)'}
-                    onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'none'}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.boxShadow = 'none';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                    }}
                   >
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                        <h4 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#111827' }}>
+                        <h4 style={{ fontSize: '16px', fontWeight: '700', margin: 0, color: '#111827' }}>
                           {item.description}
                         </h4>
                         {!item.is_active && (
                           <span style={{
                             fontSize: '12px',
-                            padding: '2px 8px',
+                            padding: '3px 10px',
                             backgroundColor: '#fef3c7',
                             color: '#92400e',
                             borderRadius: '12px',
-                            fontWeight: '500'
+                            fontWeight: '600'
                           }}>
-                            {t('customItems.inactive') || 'Inactive'}
+                            {t('customItems.inactiveLabel')}
                           </span>
                         )}
                       </div>
@@ -693,8 +740,8 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
                         <span style={{ 
                           display: 'flex', 
                           alignItems: 'center',
-                          gap: '4px',
-                          fontWeight: '500'
+                          gap: '6px',
+                          fontWeight: '600'
                         }}>
                           <span style={{ 
                             width: '8px', 
@@ -705,7 +752,7 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
                           {getCategoryLabel(item.category)}
                         </span>
                         <span>{getFrequencyLabel(item.frequency)}</span>
-                        <span style={{ fontWeight: '600', color: '#111827' }}>
+                        <span style={{ fontWeight: '700', color: '#111827' }}>
                           CHF {item.amount.toFixed(2)}
                         </span>
                       </div>
@@ -714,46 +761,58 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
                       <button
                         onClick={() => handleEdit(item)}
                         style={{
-                          padding: '8px 12px',
+                          padding: '10px 14px',
                           backgroundColor: '#667eea',
                           color: 'white',
                           border: 'none',
-                          borderRadius: '4px',
+                          borderRadius: '6px',
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '4px',
+                          gap: '6px',
                           fontSize: '13px',
-                          fontWeight: '500',
-                          transition: 'background-color 0.2s'
+                          fontWeight: '600',
+                          transition: 'all 0.2s'
                         }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#5568d3'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#667eea'}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = '#5568d3';
+                          e.currentTarget.style.transform = 'translateY(-1px)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = '#667eea';
+                          e.currentTarget.style.transform = 'translateY(0)';
+                        }}
                       >
                         <Edit2 size={14} />
-                        {t('common.edit') || 'Edit'}
+                        {t('common.edit')}
                       </button>
                       <button
                         onClick={() => handleDelete(item.id)}
                         style={{
-                          padding: '8px 12px',
+                          padding: '10px 14px',
                           backgroundColor: '#ef4444',
                           color: 'white',
                           border: 'none',
-                          borderRadius: '4px',
+                          borderRadius: '6px',
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '4px',
+                          gap: '6px',
                           fontSize: '13px',
-                          fontWeight: '500',
-                          transition: 'background-color 0.2s'
+                          fontWeight: '600',
+                          transition: 'all 0.2s'
                         }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#dc2626'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ef4444'}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = '#dc2626';
+                          e.currentTarget.style.transform = 'translateY(-1px)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = '#ef4444';
+                          e.currentTarget.style.transform = 'translateY(0)';
+                        }}
                       >
                         <Trash2 size={14} />
-                        {t('common.delete') || 'Delete'}
+                        {t('common.delete')}
                       </button>
                     </div>
                   </div>
@@ -764,25 +823,25 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
         )}
 
         {/* Footer */}
-        <div style={{ marginTop: '25px', paddingTop: '20px', borderTop: '1px solid #e5e7eb' }}>
+        <div style={{ marginTop: '25px', paddingTop: '20px', borderTop: '2px solid #e5e7eb' }}>
           <button
             onClick={onClose}
             style={{
               width: '100%',
               padding: '12px',
-              backgroundColor: '#f3f4f6',
-              color: '#374151',
+              backgroundColor: '#6b7280',
+              color: 'white',
               border: 'none',
-              borderRadius: '6px',
+              borderRadius: '8px',
               fontSize: '14px',
-              fontWeight: '500',
+              fontWeight: '600',
               cursor: 'pointer',
-              transition: 'background-color 0.2s'
+              transition: 'all 0.2s'
             }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e5e7eb'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#4b5563'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#6b7280'}
           >
-            {t('common.close') || 'Close'}
+            {t('common.close')}
           </button>
         </div>
 
