@@ -237,7 +237,7 @@ export default function Layout({ onLogout }: LayoutProps) {
         }
 
         /* Tablet and smaller - Switch to mobile layout earlier */
-        @media (max-width: 1024px) {
+        @media (max-width: 1280px) {
           .mobile-header {
             display: flex !important;
           }
@@ -290,7 +290,7 @@ export default function Layout({ onLogout }: LayoutProps) {
         }
 
         /* Prevent horizontal scroll on all mobile sizes */
-        @media (max-width: 1024px) {
+        @media (max-width: 1280px) {
           html, body {
             overflow-x: hidden;
             width: 100%;

@@ -1104,7 +1104,7 @@ export default function Users() {
           display: none;
         }
 
-        @media (max-width: 1024px) {
+        @media (max-width: 1280px) {
           .desktop-table {
             display: none;
           }
