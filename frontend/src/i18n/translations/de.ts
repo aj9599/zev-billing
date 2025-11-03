@@ -333,6 +333,10 @@ export const de: Translations = {
   'buildings.apartmentConfig.tip4': '• Stift-Symbol zum Umbenennen klicken',
   'buildings.apartmentConfig.tip5': '• X zum Löschen klicken',
   'buildings.apartmentConfig.tip6': '• Stockwerk-Griff zum Neuordnen ziehen',
+  'buildings.apartmentConfig.tapToAdd': 'Tippen zum Hinzufügen',
+  'buildings.apartmentConfig.useFloorButton': 'Verwenden Sie die Etagen-Schaltfläche zum Hinzufügen',
+  'buildings.apartmentConfig.addApt': 'Wohnung hinzufügen',
+  'buildings.apartmentConfig.tapAddApt': 'Tippen Sie auf die Schaltfläche "Wohnung hinzufügen" oben, um Wohnungen zu dieser Etage hinzuzufügen',
 
   // Instructions
   'buildings.instructions.title': 'Gebäude & Komplexe Anleitung',

@@ -325,6 +325,10 @@ export const en: Translations = {
   'buildings.apartmentConfig.unitsLabel': 'Units',
   'buildings.apartmentConfig.floorsLabel': 'Floors:',
   'buildings.apartmentConfig.apartmentsLabel': 'Apartments:',
+  'buildings.apartmentConfig.tapToAdd': 'Tap to add',
+  'buildings.apartmentConfig.useFloorButton': 'Use floor button to add',
+  'buildings.apartmentConfig.addApt': 'Add Apt',
+  'buildings.apartmentConfig.tapAddApt': 'Tap "Add Apt" button above to add apartments to this floor',
 
   // Instructions
   'buildings.instructions.title': 'Buildings & Complexes Guide',

@@ -38,11 +38,11 @@ export default function Buildings() {
 
   useEffect(() => {
     loadData();
-    
+
     const handleResize = () => {
       setIsMobile(window.innerWidth <= 768);
     };
-    
+
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -54,26 +54,26 @@ export default function Buildings() {
       const minutes = now.getMinutes();
       const seconds = now.getSeconds();
       const milliseconds = now.getMilliseconds();
-      
+
       // Calculate minutes until next quarter hour (0, 15, 30, 45)
       const minutesToNext = 15 - (minutes % 15);
-      
+
       // Calculate total milliseconds until next quarter hour
       const msToNext = (minutesToNext * 60 * 1000) - (seconds * 1000) - milliseconds;
-      
+
       console.log(`Next auto-reload scheduled in ${minutesToNext} minutes and ${60 - seconds} seconds`);
-      
+
       const timeoutId = setTimeout(() => {
         console.log('Auto-reloading data at quarter-hour mark...');
         loadData();
         scheduleNextReload(); // Schedule the next reload
       }, msToNext);
-      
+
       return timeoutId;
     };
-    
+
     const timeoutId = scheduleNextReload();
-    
+
     return () => {
       clearTimeout(timeoutId);
       console.log('Auto-reload timer cleared');
@@ -176,39 +176,39 @@ export default function Buildings() {
 
   const getBuildingMeters = (buildingId: number) => meters.filter(m => m.building_id === buildingId);
   const getBuildingChargers = (buildingId: number) => chargers.filter(c => c.building_id === buildingId);
-  
+
   const getBuildingConsumption = (buildingId: number) => {
     const data = consumptionData.find(d => d.building_id === buildingId);
     if (!data) return { total: 0, solar: 0, charging: 0, actualHouseConsumption: 0, gridPower: 0, solarProduction: 0, solarToGrid: 0 };
-    
+
     const buildingMeters = data.meters || [];
     let mainMeterPower = 0;
     let solarPower = 0;
     let charging = 0;
-    
+
     buildingMeters.forEach(meter => {
       const latestData = meter.data?.[meter.data.length - 1];
       if (!latestData) return;
-      
+
       if (meter.meter_type === 'total_meter') {
         mainMeterPower += latestData.power / 1000;
-      } 
+      }
       else if (meter.meter_type === 'solar_meter') {
         solarPower += latestData.power / 1000;
-      } 
+      }
       else if (meter.meter_type === 'charger') {
         charging += latestData.power / 1000;
       }
     });
-    
+
     const solarProduction = Math.abs(solarPower);
     const gridPower = mainMeterPower;
     const actualHouseConsumption = solarProduction + mainMeterPower;
     const solarToGrid = gridPower < 0 ? Math.abs(gridPower) : 0;
-    
-    return { 
-      total: mainMeterPower, 
-      solar: solarPower, 
+
+    return {
+      total: mainMeterPower,
+      solar: solarPower,
       charging,
       actualHouseConsumption,
       gridPower,
@@ -241,7 +241,7 @@ export default function Buildings() {
     const isExporting = gridPower < 0;
     const isImporting = gridPower > 0;
     const solarToHouse = solarProduction - solarToGrid;
-    
+
     const buildingMeters = meters.filter(m => m.building_id === building.id);
     const hasSolarMeter = buildingMeters.some(m => m.meter_type === 'solar_meter');
     const buildingChargers = chargers.filter(c => c.building_id === building.id);
@@ -258,15 +258,15 @@ export default function Buildings() {
         position: 'relative'
       }}>
         {/* Edit/Delete buttons */}
-        <div style={{ 
-          position: 'absolute', 
-          top: isMobile ? '8px' : '16px', 
-          right: isMobile ? '8px' : '16px', 
-          display: 'flex', 
+        <div style={{
+          position: 'absolute',
+          top: isMobile ? '8px' : '16px',
+          right: isMobile ? '8px' : '16px',
+          display: 'flex',
           gap: '8px',
           zIndex: 10
         }}>
-          <button 
+          <button
             onClick={() => handleEdit(building)}
             style={{
               width: isMobile ? '40px' : '36px',
@@ -293,7 +293,7 @@ export default function Buildings() {
           >
             <Edit2 size={16} />
           </button>
-          <button 
+          <button
             onClick={() => handleDelete(building.id)}
             style={{
               width: isMobile ? '40px' : '36px',
@@ -324,9 +324,9 @@ export default function Buildings() {
 
         {/* Header with building name */}
         <div style={{ marginBottom: isMobile ? '20px' : '32px', textAlign: 'center', paddingRight: isMobile ? '90px' : '100px' }}>
-          <h3 style={{ 
-            fontSize: isMobile ? '18px' : '24px', 
-            fontWeight: '700', 
+          <h3 style={{
+            fontSize: isMobile ? '18px' : '24px',
+            fontWeight: '700',
             margin: 0,
             color: '#1f2937',
             display: 'flex',
@@ -363,7 +363,7 @@ export default function Buildings() {
         </div>
 
         {/* Energy Flow Diagram - RESPONSIVE */}
-        <div style={{ 
+        <div style={{
           display: 'flex',
           flexDirection: isMobile ? 'column' : 'row',
           justifyContent: 'center',
@@ -376,9 +376,9 @@ export default function Buildings() {
           {/* Solar Production */}
           {hasSolarMeter && (
             <>
-              <div style={{ 
-                display: 'flex', 
-                flexDirection: isMobile ? 'row' : 'column', 
+              <div style={{
+                display: 'flex',
+                flexDirection: isMobile ? 'row' : 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
                 width: isMobile ? '100%' : '120px',
@@ -398,9 +398,9 @@ export default function Buildings() {
                 }}>
                   <Sun size={isMobile ? 32 : 40} color="#f59e0b" />
                 </div>
-                <div style={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
                   alignItems: isMobile ? 'flex-start' : 'center',
                   minHeight: isMobile ? 'auto' : '90px',
                   justifyContent: 'flex-start',
@@ -423,10 +423,10 @@ export default function Buildings() {
               </div>
 
               {/* Arrow from Solar to Building */}
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                flexDirection: isMobile ? 'row' : 'column', 
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                flexDirection: isMobile ? 'row' : 'column',
                 gap: '4px',
                 marginTop: isMobile ? '0' : '38px'
               }}>
@@ -439,9 +439,9 @@ export default function Buildings() {
           )}
 
           {/* Building Consumption */}
-          <div style={{ 
-            display: 'flex', 
-            flexDirection: isMobile ? 'row' : 'column', 
+          <div style={{
+            display: 'flex',
+            flexDirection: isMobile ? 'row' : 'column',
             alignItems: 'center',
             justifyContent: 'center',
             position: 'relative',
@@ -463,9 +463,9 @@ export default function Buildings() {
             }}>
               <Building size={isMobile ? 40 : 48} color="#3b82f6" />
             </div>
-            <div style={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
               alignItems: isMobile ? 'flex-start' : 'center',
               minHeight: isMobile ? 'auto' : '90px',
               justifyContent: 'flex-start',
@@ -495,10 +495,10 @@ export default function Buildings() {
           </div>
 
           {/* Arrow between Building and Grid */}
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            flexDirection: isMobile ? 'row' : 'column', 
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            flexDirection: isMobile ? 'row' : 'column',
             gap: '4px',
             marginTop: isMobile ? '0' : '48px'
           }}>
@@ -528,9 +528,9 @@ export default function Buildings() {
           </div>
 
           {/* Grid */}
-          <div style={{ 
-            display: 'flex', 
-            flexDirection: isMobile ? 'row' : 'column', 
+          <div style={{
+            display: 'flex',
+            flexDirection: isMobile ? 'row' : 'column',
             alignItems: 'center',
             justifyContent: 'center',
             width: isMobile ? '100%' : '120px',
@@ -550,9 +550,9 @@ export default function Buildings() {
             }}>
               <Grid size={isMobile ? 32 : 40} color={isExporting ? '#22c55e' : '#ef4444'} />
             </div>
-            <div style={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
               alignItems: isMobile ? 'flex-start' : 'center',
               minHeight: isMobile ? 'auto' : '90px',
               justifyContent: 'flex-start',
@@ -574,10 +574,10 @@ export default function Buildings() {
 
           {/* Solar to Grid Arrow (desktop only) */}
           {isExporting && hasSolarMeter && !isMobile && (
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              flexDirection: 'column', 
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              flexDirection: 'column',
               gap: '4px',
               position: 'absolute',
               top: '0',
@@ -605,13 +605,13 @@ export default function Buildings() {
         </div>
 
         {/* Stats Row - Responsive Grid */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: isMobile 
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile
             ? 'repeat(2, 1fr)'
-            : (building.has_apartments 
+            : (building.has_apartments
               ? (consumption.charging > 0 ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)')
-              : (consumption.charging > 0 ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)')), 
+              : (consumption.charging > 0 ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)')),
           gap: isMobile ? '12px' : '16px',
           paddingTop: isMobile ? '16px' : '24px',
           borderTop: '2px solid #f3f4f6'
@@ -627,7 +627,7 @@ export default function Buildings() {
               {getBuildingMeters(building.id).length}
             </span>
           </div>
-          
+
           <div style={{ textAlign: 'center', padding: isMobile ? '12px' : '16px', backgroundColor: '#f9fafb', borderRadius: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px' }}>
               <Activity size={16} color="#3b82f6" />
@@ -682,10 +682,10 @@ export default function Buildings() {
   const ComplexCard = ({ complex }: { complex: BuildingType }) => {
     const isExpanded = expandedComplexes.has(complex.id);
     const buildingsInComplex = buildings.filter(b => complex.group_buildings?.includes(b.id));
-    
+
     return (
       <div style={{ marginBottom: '20px' }}>
-        <div 
+        <div
           onClick={() => toggleComplex(complex.id)}
           style={{
             backgroundColor: 'white',
@@ -710,14 +710,14 @@ export default function Buildings() {
             }
           }}
         >
-          <div style={{ 
-            position: 'absolute', 
-            top: isMobile ? '12px' : '16px', 
-            right: isMobile ? '12px' : '16px', 
-            display: 'flex', 
-            gap: '8px' 
+          <div style={{
+            position: 'absolute',
+            top: isMobile ? '12px' : '16px',
+            right: isMobile ? '12px' : '16px',
+            display: 'flex',
+            gap: '8px'
           }}>
-            <button 
+            <button
               onClick={(e) => { e.stopPropagation(); handleEdit(complex); }}
               style={{
                 width: isMobile ? '36px' : '32px',
@@ -736,7 +736,7 @@ export default function Buildings() {
             >
               <Edit2 size={16} />
             </button>
-            <button 
+            <button
               onClick={(e) => { e.stopPropagation(); handleDelete(complex.id); }}
               style={{
                 width: isMobile ? '36px' : '32px',
@@ -761,9 +761,9 @@ export default function Buildings() {
             {isExpanded ? <ChevronDown size={20} color="#667eea" /> : <ChevronRight size={20} color="#667eea" />}
             <Folder size={20} color="#667eea" />
             <div style={{ flex: 1 }}>
-              <h3 style={{ 
-                fontSize: isMobile ? '18px' : '22px', 
-                fontWeight: '700', 
+              <h3 style={{
+                fontSize: isMobile ? '18px' : '22px',
+                fontWeight: '700',
                 margin: 0,
                 color: '#667eea',
                 lineHeight: '1.3',
@@ -794,7 +794,7 @@ export default function Buildings() {
     const [dragType, setDragType] = useState<string | null>(null);
     const [dragData, setDragData] = useState<any>(null);
     const [editingFloor, setEditingFloor] = useState<number | null>(null);
-    const [editingApt, setEditingApt] = useState<{floorIdx: number, aptIdx: number} | null>(null);
+    const [editingApt, setEditingApt] = useState<{ floorIdx: number, aptIdx: number } | null>(null);
     const [editValue, setEditValue] = useState('');
 
     const DRAG_TYPES = {
@@ -901,7 +901,7 @@ export default function Buildings() {
     const onFloorDrop = (floorIdx: number, e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      
+
       if (dragType === DRAG_TYPES.PALETTE_APT) {
         addApartmentToFloor(floorIdx);
       } else if (dragType === DRAG_TYPES.EXISTING_APT && dragData) {
@@ -940,8 +940,8 @@ export default function Buildings() {
     );
 
     return (
-      <div style={{ 
-        marginTop: '24px', 
+      <div style={{
+        marginTop: '24px',
         display: 'grid',
         gridTemplateColumns: isMobile ? '1fr' : '280px 1fr',
         gap: '24px',
@@ -952,11 +952,10 @@ export default function Buildings() {
           {/* Floor Palette */}
           <div
             draggable={!isMobile}
-            onDragStart={(e) => !isMobile && onPaletteDragStart(e, DRAG_TYPES.PALETTE_FLOOR)}
+            onDragStart={(e) => !isMobile && onPaletteDragStart(e, DRAG_TYPES.PALETTE_APT)}
             onDragEnd={onDragEndGlobal}
-            onClick={() => isMobile && addFloor()}
             style={{
-              cursor: isMobile ? 'pointer' : 'grab',
+              cursor: isMobile ? 'default' : 'grab',
               padding: isMobile ? '16px' : '20px',
               backgroundColor: 'white',
               borderRadius: '12px',
@@ -1070,11 +1069,11 @@ export default function Buildings() {
                 border: '1px solid #fef3c7'
               }}>
                 <div style={{ fontSize: '11px', color: '#92400e', lineHeight: '1.6' }}>
-                  <strong>{t('buildings.apartmentConfig.tips')}</strong><br/>
-                  {t('buildings.apartmentConfig.tip1')}<br/>
-                  {t('buildings.apartmentConfig.tip2')}<br/>
-                  {t('buildings.apartmentConfig.tip3')}<br/>
-                  {t('buildings.apartmentConfig.tip4')}<br/>
+                  <strong>{t('buildings.apartmentConfig.tips')}</strong><br />
+                  {t('buildings.apartmentConfig.tip1')}<br />
+                  {t('buildings.apartmentConfig.tip2')}<br />
+                  {t('buildings.apartmentConfig.tip3')}<br />
+                  {t('buildings.apartmentConfig.tip4')}<br />
                   {t('buildings.apartmentConfig.tip5')}
                 </div>
               </div>
@@ -1093,13 +1092,13 @@ export default function Buildings() {
           transition: 'all 0.3s',
           order: isMobile ? 1 : 2
         }}
-        onDragOver={allowDrop}
-        onDrop={onBuildingDrop}
+          onDragOver={allowDrop}
+          onDrop={onBuildingDrop}
         >
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '12px', 
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
             marginBottom: isMobile ? '16px' : '24px',
             paddingBottom: '16px',
             borderBottom: '2px solid #f3f4f6',
@@ -1140,8 +1139,8 @@ export default function Buildings() {
               </p>
             </div>
           ) : (
-            <div style={{ 
-              maxHeight: isMobile ? '500px' : '600px', 
+            <div style={{
+              maxHeight: isMobile ? '500px' : '600px',
               overflowY: 'auto',
               paddingRight: isMobile ? '4px' : '8px'
             }}>
@@ -1168,10 +1167,10 @@ export default function Buildings() {
                       }}
                     >
                       {/* Floor Header */}
-                      <div style={{ 
-                        display: 'flex', 
-                        justifyContent: 'space-between', 
-                        alignItems: 'center', 
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
                         marginBottom: '16px',
                         paddingBottom: '12px',
                         borderBottom: '2px solid #e2e8f0',
@@ -1312,7 +1311,7 @@ export default function Buildings() {
                       </div>
 
                       {/* Apartments Grid */}
-                      <div style={{ 
+                      <div style={{
                         display: 'flex',
                         flexWrap: 'wrap',
                         gap: '12px'
@@ -1381,9 +1380,9 @@ export default function Buildings() {
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
                                   <Home size={14} color="#f59e0b" />
-                                  <span style={{ 
-                                    fontSize: '13px', 
-                                    fontWeight: '700', 
+                                  <span style={{
+                                    fontSize: '13px',
+                                    fontWeight: '700',
                                     color: '#92400e',
                                     whiteSpace: 'nowrap',
                                     overflow: 'hidden',
@@ -1482,7 +1481,7 @@ export default function Buildings() {
   const InstructionsModal = () => (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', 
+      backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center',
       justifyContent: 'center', zIndex: 2000, padding: '20px'
     }}>
       <div style={{
@@ -1491,7 +1490,7 @@ export default function Buildings() {
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h2 style={{ fontSize: isMobile ? '20px' : '24px', fontWeight: 'bold' }}>{t('buildings.instructions.title')}</h2>
-          <button onClick={() => setShowInstructions(false)} 
+          <button onClick={() => setShowInstructions(false)}
             style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
             <X size={24} />
           </button>
@@ -1570,9 +1569,9 @@ export default function Buildings() {
     <div className="buildings-container">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isMobile ? '20px' : '30px', gap: '15px', flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ 
-            fontSize: isMobile ? '24px' : '36px', 
-            fontWeight: '800', 
+          <h1 style={{
+            fontSize: isMobile ? '24px' : '36px',
+            fontWeight: '800',
             marginBottom: '8px',
             display: 'flex',
             alignItems: 'center',
@@ -1659,11 +1658,11 @@ export default function Buildings() {
       )}
 
       {filteredComplexes.length === 0 && filteredStandalone.length === 0 && (
-        <div style={{ 
-          backgroundColor: 'white', 
-          borderRadius: '12px', 
-          padding: isMobile ? '40px 20px' : '60px 20px', 
-          textAlign: 'center', 
+        <div style={{
+          backgroundColor: 'white',
+          borderRadius: '12px',
+          padding: isMobile ? '40px 20px' : '60px 20px',
+          textAlign: 'center',
           color: '#999',
           boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
         }}>
@@ -1748,14 +1747,14 @@ export default function Buildings() {
                   {/* Apartment Management Toggle */}
                   <div style={{ marginTop: '16px' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={formData.has_apartments} 
-                        onChange={(e) => setFormData({ 
-                          ...formData, 
-                          has_apartments: e.target.checked, 
-                          floors_config: e.target.checked ? formData.floors_config : [] 
-                        })} 
+                      <input
+                        type="checkbox"
+                        checked={formData.has_apartments}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          has_apartments: e.target.checked,
+                          floors_config: e.target.checked ? formData.floors_config : []
+                        })}
                       />
                       <span style={{ fontWeight: '600', fontSize: '14px', color: '#0369a1' }}>
                         {t('buildings.apartmentConfig.enable')}
