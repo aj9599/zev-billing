@@ -2136,7 +2136,6 @@ export default function Billing() {
             </div>
           </div>
         </div>
-        </div>
       )}
 
       {/* End of conditional invoices view */}
