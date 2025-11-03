@@ -1002,6 +1002,7 @@ export const en: Translations = {
   'billConfig.step1.apartments': 'apartments',
   'billConfig.step1.apartmentLabel': 'Apartment',
   'billConfig.step1.selectedSummary': 'Selected Summary',
+  'billConfig.step1.user': 'user',
   'billConfig.step1.users': 'users',
   'billConfig.steps.dates': 'Dates',
   'billConfig.step2.titleNew': 'Billing Period',

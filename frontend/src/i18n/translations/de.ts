@@ -979,6 +979,7 @@ export const de: Translations = {
   'billConfig.step1.apartments': 'Wohnungen',
   'billConfig.step1.apartmentLabel': 'Wohnung',
   'billConfig.step1.selectedSummary': 'Auswahlzusammenfassung',
+  'billConfig.step1.user': 'Nutzer',
   'billConfig.step1.users': 'Nutzer',
   'billConfig.steps.dates': 'Daten',
   'billConfig.step2.titleNew': 'Abrechnungszeitraum',
