@@ -57,6 +57,12 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     }
   }, [config.building_ids, users, meters]);
 
+  // Debug: Log when user_ids changes
+  useEffect(() => {
+    console.log('User IDs updated:', config.user_ids);
+    console.log('Selected apartments:', Array.from(selectedApartments));
+  }, [config.user_ids, selectedApartments]);
+
   const loadData = async () => {
     try {
       const [buildingsData, usersData, metersData, sharedMetersData, customItemsData] = await Promise.all([
@@ -207,19 +213,27 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     
     newSelected.forEach(selectedKey => {
       const [bId, aptUnit] = selectedKey.split('-');
-      const buildingId = parseInt(bId);
-      const apartments = apartmentsWithUsers.get(buildingId);
+      const parsedBuildingId = parseInt(bId);
+      const apartments = apartmentsWithUsers.get(parsedBuildingId);
       const apartment = apartments?.find(a => a.apartment_unit === aptUnit);
       
-      if (apartment?.user) {
+      // Only add apartments with active users
+      if (apartment?.user?.is_active) {
         userIds.push(apartment.user.id);
+        
+        apartmentSelections.push({
+          building_id: parsedBuildingId,
+          apartment_unit: aptUnit,
+          user_id: apartment.user.id
+        });
+      } else if (apartment) {
+        // Still track apartment selection even without user, but don't add to user_ids
+        apartmentSelections.push({
+          building_id: parsedBuildingId,
+          apartment_unit: aptUnit,
+          user_id: undefined
+        });
       }
-      
-      apartmentSelections.push({
-        building_id: buildingId,
-        apartment_unit: aptUnit,
-        user_id: apartment?.user?.id
-      });
     });
 
     setConfig(prev => ({ 
@@ -251,6 +265,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     config.building_ids.forEach(buildingId => {
       const apartments = apartmentsWithUsers.get(buildingId) || [];
       apartments.forEach(apt => {
+        // Only auto-select apartments with active users
         if (apt.user?.is_active) {
           newSelected.add(`${buildingId}-${apt.apartment_unit}`);
         }
@@ -259,25 +274,26 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
 
     setSelectedApartments(newSelected);
 
-    // Update config
+    // Update config with only active users
     const userIds: number[] = [];
     const apartmentSelections: { building_id: number; apartment_unit: string; user_id?: number }[] = [];
     
     newSelected.forEach(key => {
       const [bId, aptUnit] = key.split('-');
-      const buildingId = parseInt(bId);
-      const apartments = apartmentsWithUsers.get(buildingId);
+      const parsedBuildingId = parseInt(bId);
+      const apartments = apartmentsWithUsers.get(parsedBuildingId);
       const apartment = apartments?.find(a => a.apartment_unit === aptUnit);
       
-      if (apartment?.user) {
+      // Only add apartments with active users
+      if (apartment?.user?.is_active) {
         userIds.push(apartment.user.id);
+        
+        apartmentSelections.push({
+          building_id: parsedBuildingId,
+          apartment_unit: aptUnit,
+          user_id: apartment.user.id
+        });
       }
-      
-      apartmentSelections.push({
-        building_id: buildingId,
-        apartment_unit: aptUnit,
-        user_id: apartment?.user?.id
-      });
     });
 
     setConfig(prev => ({ 
@@ -707,7 +723,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                     {meter.meter_name}
                   </div>
                   <div style={{ fontSize: '13px', color: '#6c757d' }}>
-                    {building?.name} • {meter.split_type} {t('billConfig.step3.split')} • CHF {meter.unit_price.toFixed(3)}/kWh
+                    {building?.name} â€¢ {meter.split_type} {t('billConfig.step3.split')} â€¢ CHF {meter.unit_price.toFixed(3)}/kWh
                   </div>
                 </div>
               </label>
@@ -782,7 +798,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                     {item.description}
                   </div>
                   <div style={{ fontSize: '13px', color: '#6c757d' }}>
-                    {building?.name} • CHF {item.amount.toFixed(2)} • {item.frequency} • {item.category}
+                    {building?.name} â€¢ CHF {item.amount.toFixed(2)} â€¢ {item.frequency} â€¢ {item.category}
                   </div>
                 </div>
               </label>

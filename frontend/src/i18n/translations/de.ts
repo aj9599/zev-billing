@@ -976,6 +976,7 @@ export const de: Translations = {
   'billConfig.errorMessage': 'Erstellen der Rechnungen fehlgeschlagen',
   'billConfig.step1.selectApartments': 'Wohnungen/Nutzer auswählen',
   'billConfig.step1.apartment': 'Wohnung',
+  'billConfig.step1.apartments': 'Wohnungen',
   'billConfig.step1.apartmentLabel': 'Wohnung',
   'billConfig.step1.selectedSummary': 'Auswahlzusammenfassung',
   'billConfig.step1.users': 'Nutzer',

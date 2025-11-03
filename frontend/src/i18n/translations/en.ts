@@ -999,6 +999,7 @@ export const en: Translations = {
   'billConfig.errorMessage': 'Failed to generate bills',
   'billConfig.step1.selectApartments': 'Select Apartments/Users',
   'billConfig.step1.apartment': 'apartment',
+  'billConfig.step1.apartments': 'apartments',
   'billConfig.step1.apartmentLabel': 'Apartment',
   'billConfig.step1.selectedSummary': 'Selected Summary',
   'billConfig.step1.users': 'users',
