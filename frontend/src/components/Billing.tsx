@@ -112,7 +112,6 @@ export default function Billing() {
   const loadAdminInfoForBuildings = async (buildingIds: number[]) => {
     try {
       // IMPROVED: Also check for complex admins
-      const selectedBuildings = buildings.filter(b => buildingIds.includes(b.id));
       const allBuildingIds = new Set<number>(buildingIds);
       
       // Add complex IDs if any of the selected buildings belong to a complex
