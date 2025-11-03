@@ -473,6 +473,7 @@ export default function Billing() {
           .page {
             page-break-after: always;
             padding: 20px;
+            padding-bottom: 100px;
             min-height: 100vh;
           }
           
@@ -635,12 +636,45 @@ export default function Billing() {
           }
           
           .footer {
-            margin-top: 30px;
-            padding-top: 15px;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 15px 20px;
             border-top: 1px solid #ddd;
             font-size: 8pt;
             color: #666;
-            text-align: center;
+            background: white;
+          }
+          
+          .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+          }
+          
+          .payment-details {
+            text-align: left;
+            flex: 1;
+          }
+          
+          .payment-details h4 {
+            font-size: 9pt;
+            font-weight: 600;
+            margin: 0 0 5px 0;
+            color: #333;
+          }
+          
+          .payment-details p {
+            margin: 2px 0;
+            line-height: 1.4;
+            font-size: 8pt;
+          }
+          
+          .footer-timestamp {
+            text-align: right;
+            flex: 1;
+            font-size: 8pt;
           }
           
           .qr-page {
@@ -651,6 +685,7 @@ export default function Billing() {
             min-height: 100vh;
             text-align: center;
             padding: 30px;
+            padding-bottom: 100px;
           }
           
           .qr-title {
@@ -688,7 +723,8 @@ export default function Billing() {
           
           @media print {
             body { padding: 0; font-size: 10pt; }
-            .page { padding: 15px; }
+            .page { padding: 15px; padding-bottom: 100px; }
+            .footer { position: fixed; bottom: 0; }
             @page { margin: 10mm; }
           }
         </style>
@@ -841,21 +877,28 @@ export default function Billing() {
           <div class="total-section">
             <p>${t('billing.total')} ${invoiceWithItems.currency} ${invoiceWithItems.total_amount.toFixed(2)}</p>
           </div>
+        </div>
 
-          ${hasBankingDetails ? `
-            <div class="info-section" style="margin-top: 20px;">
-              <h3>${t('billing.paymentDetails')}</h3>
-              <p>
-                <strong>${t('billing.bankName')}:</strong> ${banking.name}<br>
-                <strong>${t('billing.accountHolder')}:</strong> ${banking.holder}<br>
-                <strong>${t('billing.iban')}:</strong> ${banking.iban}
-              </p>
+        <div class="footer">
+          <div class="footer-content">
+            ${hasBankingDetails ? `
+              <div class="payment-details">
+                <h4>${t('billing.paymentDetails')}</h4>
+                <p><strong>${t('billing.bankName')}:</strong> ${banking.name}</p>
+                <p><strong>${t('billing.accountHolder')}:</strong> ${banking.holder}</p>
+                <p><strong>${t('billing.iban')}:</strong> ${banking.iban}</p>
+              </div>
+            ` : '<div class="payment-details"></div>'}
+            <div class="footer-timestamp">
+              <p>${new Date().toLocaleString('de-CH', { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false 
+              })}</p>
             </div>
-          ` : ''}
-
-          <div class="footer">
-            <p>${t('billing.pdfGenerated')} ${new Date().toLocaleString()}</p>
-            <p>${t('billing.pdfFooter')}</p>
           </div>
         </div>
 
@@ -869,6 +912,29 @@ export default function Billing() {
                 <p><strong>${t('billing.amount')}:</strong> ${invoiceWithItems.currency} ${invoiceWithItems.total_amount.toFixed(2)}</p>
                 <p><strong>${t('billing.iban')}:</strong> ${banking.iban}</p>
                 <p><strong>${t('billing.accountHolder')}:</strong> ${banking.holder}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="footer">
+            <div class="footer-content">
+              ${hasBankingDetails ? `
+                <div class="payment-details">
+                  <h4>${t('billing.paymentDetails')}</h4>
+                  <p><strong>${t('billing.bankName')}:</strong> ${banking.name}</p>
+                  <p><strong>${t('billing.accountHolder')}:</strong> ${banking.holder}</p>
+                  <p><strong>${t('billing.iban')}:</strong> ${banking.iban}</p>
+                </div>
+              ` : '<div class="payment-details"></div>'}
+              <div class="footer-timestamp">
+                <p>${new Date().toLocaleString('de-CH', { 
+                  year: 'numeric', 
+                  month: '2-digit', 
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false 
+                })}</p>
               </div>
             </div>
           </div>
