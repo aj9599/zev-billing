@@ -795,6 +795,8 @@ export const en: Translations = {
   'billing.bankNamePlaceholder': 'Bank Name',
   'billing.ibanPlaceholder': 'CH93 0076 2011 6238 5295 7',
   'billing.accountHolderPlaceholder': 'Account Holder Name',
+  'billing.archived': 'Archived',
+  'billing.archiveSection': 'Archive (Archived Users)',
 
   // Main page
   'autoBilling.title': 'Automatic Bill Generation',

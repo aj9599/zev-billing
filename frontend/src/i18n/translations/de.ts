@@ -775,6 +775,8 @@ export const de: Translations = {
   'billing.bankNamePlaceholder': 'Bankname',
   'billing.ibanPlaceholder': 'CH93 0076 2011 6238 5295 7',
   'billing.accountHolderPlaceholder': 'Kontoinhaber Name',
+  'billing.archived': 'Archiviert',
+  'billing.archiveSection': 'Archiv (Archivierte Benutzer)',
 
   // Billing Instructions
   'billing.instructions.title': 'Abrechnung & Rechnungen Anleitung',

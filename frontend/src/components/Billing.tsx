@@ -102,7 +102,7 @@ export default function Billing() {
     }
   }, [bankingInfo]);
 
-  // IMPROVED: Auto-fill sender and banking info when buildings are selected
+  // Auto-fill sender and banking info when buildings are selected
   useEffect(() => {
     if (formData.building_ids.length > 0) {
       loadAdminInfoForBuildings(formData.building_ids);
@@ -111,7 +111,6 @@ export default function Billing() {
 
   const loadAdminInfoForBuildings = async (buildingIds: number[]) => {
     try {
-      // IMPROVED: Also check for complex admins
       const allBuildingIds = new Set<number>(buildingIds);
       
       // Add complex IDs if any of the selected buildings belong to a complex
@@ -121,7 +120,6 @@ export default function Billing() {
             ? building.group_buildings 
             : JSON.parse(building.group_buildings as any);
           
-          // Check if any selected building is in this complex
           for (const bid of buildingIds) {
             if (groupBuildings.includes(bid)) {
               allBuildingIds.add(building.id);
@@ -137,7 +135,6 @@ export default function Billing() {
       const adminUsers = await api.getAdminUsersForBuildings(buildingIdsParam);
       
       if (adminUsers && adminUsers.length > 0) {
-        // Use the first admin user found
         const admin = adminUsers[0];
         console.log('Found admin user:', admin.email, admin.first_name, admin.last_name);
         
@@ -194,7 +191,7 @@ export default function Billing() {
       const [invoicesData, buildingsData, usersData] = await Promise.all([
         api.getInvoices(),
         api.getBuildings(),
-        api.getUsers(undefined, true) // Include inactive users for display
+        api.getUsers(undefined, true)
       ]);
       setInvoices(invoicesData);
       setBuildings(buildingsData.filter(b => !b.is_group));
@@ -203,9 +200,13 @@ export default function Billing() {
       const buildingIds = new Set(buildingsData.filter(b => !b.is_group).map(b => b.id));
       setExpandedBuildings(buildingIds);
       
-      // Auto-expand current year
-      const currentYear = new Date().getFullYear().toString();
-      setExpandedYears(new Set([currentYear]));
+      // FIX 1: Keep existing expanded years and add current year
+      setExpandedYears(prev => {
+        const newExpanded = new Set(prev);
+        const currentYear = new Date().getFullYear().toString();
+        newExpanded.add(currentYear);
+        return newExpanded;
+      });
     } catch (err) {
       console.error('Failed to load data:', err);
     }
@@ -218,7 +219,6 @@ export default function Billing() {
       return;
     }
     
-    // Save sender and banking info to persistent state
     const newSenderInfo = {
       name: formData.sender_name,
       address: formData.sender_address,
@@ -242,6 +242,26 @@ export default function Billing() {
       console.log('Generated invoices:', result);
       setShowGenerateModal(false);
       resetForm();
+      
+      // FIX 1: Expand the years for the newly generated invoices
+      if (result && result.length > 0) {
+        const generatedYears = new Set<string>();
+        result.forEach(invoice => {
+          const year = new Date(invoice.period_start).getFullYear().toString();
+          generatedYears.add(year);
+        });
+        
+        setExpandedYears(prev => {
+          const newExpanded = new Set(prev);
+          generatedYears.forEach(year => {
+            formData.building_ids.forEach(buildingId => {
+              newExpanded.add(`${year}-${buildingId}`);
+            });
+          });
+          return newExpanded;
+        });
+      }
+      
       setTimeout(() => {
         loadData();
       }, 500);
@@ -274,14 +294,12 @@ export default function Billing() {
     if (!confirm(t('billing.deleteConfirm'))) return;
     
     try {
-      // Save current expanded state before reload
       const currentExpandedBuildings = new Set(expandedBuildings);
       const currentExpandedYears = new Set(expandedYears);
       
       await api.deleteInvoice(id);
       await loadData();
       
-      // Restore expanded state after reload
       setExpandedBuildings(currentExpandedBuildings);
       setExpandedYears(currentExpandedYears);
       
@@ -308,7 +326,6 @@ export default function Billing() {
     }
   };
 
-  // FIXED: Swiss QR code generation with exact Swiss Payment Standard compliance
   const generateSwissQRData = (invoice: Invoice, sender: any, banking: any) => {
     const user = invoice.user;
     if (!user || !banking.iban || !banking.holder) {
@@ -316,97 +333,75 @@ export default function Billing() {
       return '';
     }
 
-    // Format IBAN (remove spaces and convert to uppercase)
     const iban = banking.iban.replace(/\s/g, '').toUpperCase();
     
-    // Validate IBAN format
     if (!iban.match(/^(CH|LI)[0-9]{2}[A-Z0-9]{1,21}$/)) {
       console.error('Invalid IBAN format - must be Swiss (CH) or Liechtenstein (LI) IBAN');
       return '';
     }
     
-    // Format amount with exactly 2 decimal places
     const amount = invoice.total_amount.toFixed(2);
     
-    // Split sender address into street and house number if possible
     const senderAddress = (sender.address || '').trim();
     const senderAddressMatch = senderAddress.match(/^(.+?)\s+(\d+.*)$/);
     const senderStreet = (senderAddressMatch ? senderAddressMatch[1] : senderAddress).substring(0, 70);
     const senderHouseNo = (senderAddressMatch ? senderAddressMatch[2] : '').substring(0, 16);
     
-    // Split user address
     const userAddress = (user.address_street || '').trim();
     const userAddressMatch = userAddress.match(/^(.+?)\s+(\d+.*)$/);
     const userStreet = (userAddressMatch ? userAddressMatch[1] : userAddress).substring(0, 70);
     const userHouseNo = (userAddressMatch ? userAddressMatch[2] : '').substring(0, 16);
     
-    // Swiss QR code structure (Swiss Payment Standard Version 2.0)
-    // CRITICAL: Each field MUST be separated by CRLF (\r\n)
-    // All 31 data elements must be present (even if empty)
     const qrParts = [
-      'SPC',                                          // 1. QR Type (fixed "SPC")
-      '0200',                                         // 2. Version (fixed "0200")
-      '1',                                            // 3. Coding Type (fixed "1" = UTF-8)
-      iban,                                           // 4. IBAN
-      'S',                                            // 5. Creditor Address Type (S=Structured, K=Combined)
-      banking.holder.substring(0, 70),                // 6. Creditor Name (max 70 chars)
-      senderStreet || '',                             // 7. Creditor Street or Address Line 1 (max 70 chars)
-      senderHouseNo || '',                            // 8. Creditor Building Number or Address Line 2 (max 16 chars)
-      (sender.zip || '').substring(0, 16),            // 9. Creditor Postal Code (max 16 chars)
-      (sender.city || '').substring(0, 35),           // 10. Creditor Town (max 35 chars)
-      (sender.country || 'CH').substring(0, 2),       // 11. Creditor Country (ISO 2-letter code)
-      '',                                             // 12. Ultimate Creditor Address Type (empty or S/K)
-      '',                                             // 13. Ultimate Creditor Name (max 70 chars)
-      '',                                             // 14. Ultimate Creditor Street or Address Line 1
-      '',                                             // 15. Ultimate Creditor Building Number or Address Line 2
-      '',                                             // 16. Ultimate Creditor Postal Code
-      '',                                             // 17. Ultimate Creditor Town
-      '',                                             // 18. Ultimate Creditor Country
-      amount,                                         // 19. Amount (max 12 digits including decimal point)
-      (invoice.currency || 'CHF').substring(0, 3),    // 20. Currency (3-letter ISO code)
-      'S',                                            // 21. Ultimate Debtor Address Type (empty or S/K)
-      `${user.first_name} ${user.last_name}`.substring(0, 70), // 22. Ultimate Debtor Name (max 70 chars)
-      userStreet || '',                               // 23. Ultimate Debtor Street or Address Line 1
-      userHouseNo || '',                              // 24. Ultimate Debtor Building Number or Address Line 2
-      (user.address_zip || '').substring(0, 16),      // 25. Ultimate Debtor Postal Code
-      (user.address_city || '').substring(0, 35),     // 26. Ultimate Debtor Town
-      (user.address_country || 'CH').substring(0, 2), // 27. Ultimate Debtor Country
-      'NON',                                          // 28. Reference Type (NON/QRR/SCOR)
-      '',                                             // 29. Reference (max 27 chars, empty for NON)
-      `Invoice ${invoice.invoice_number}`.substring(0, 140), // 30. Unstructured Message (max 140 chars)
-      'EPD'                                           // 31. Billing Information (EPD or empty)
+      'SPC',
+      '0200',
+      '1',
+      iban,
+      'S',
+      banking.holder.substring(0, 70),
+      senderStreet || '',
+      senderHouseNo || '',
+      (sender.zip || '').substring(0, 16),
+      (sender.city || '').substring(0, 35),
+      (sender.country || 'CH').substring(0, 2),
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      amount,
+      (invoice.currency || 'CHF').substring(0, 3),
+      'S',
+      `${user.first_name} ${user.last_name}`.substring(0, 70),
+      userStreet || '',
+      userHouseNo || '',
+      (user.address_zip || '').substring(0, 16),
+      (user.address_city || '').substring(0, 35),
+      (user.address_country || 'CH').substring(0, 2),
+      'NON',
+      '',
+      `Invoice ${invoice.invoice_number}`.substring(0, 140),
+      'EPD'
     ];
     
-    // Join with CRLF as per Swiss QR specification
     const qrData = qrParts.join('\r\n');
     
-    // Validate structure
     const lines = qrData.split('\r\n');
     if (lines.length !== 31) {
       console.error(`Invalid QR data structure: expected 31 lines, got ${lines.length}`);
       return '';
     }
     
-    console.log('Generated Swiss QR data (31 elements):');
-    console.log(`1. QR Type: ${lines[0]}`);
-    console.log(`2. Version: ${lines[1]}`);
-    console.log(`3. Coding: ${lines[2]}`);
-    console.log(`4. IBAN: ${lines[3]}`);
-    console.log(`19. Amount: ${lines[18]}`);
-    console.log(`20. Currency: ${lines[19]}`);
-    console.log(`28. Reference Type: ${lines[27]}`);
-    console.log(`Total length: ${qrData.length} characters`);
-    
     return qrData;
   };
 
-  // Download PDF function with direct download (no print dialog)
+  // FIX 4 & 5: Improved PDF download function with direct download
   const downloadPDF = async (invoice: Invoice, senderInfoOverride?: any, bankingInfoOverride?: any) => {
-    // Ensure invoice has items loaded
     let invoiceWithItems = invoice;
     if (!invoice.items || invoice.items.length === 0) {
       try {
-        // Load full invoice with items
         invoiceWithItems = await api.getInvoice(invoice.id);
         if (!invoiceWithItems.items || invoiceWithItems.items.length === 0) {
           alert(t('billing.viewFirstWarning'));
@@ -422,19 +417,16 @@ export default function Billing() {
     const user = users.find(u => u.id === invoiceWithItems.user_id);
     const building = buildings.find(b => b.id === invoiceWithItems.building_id);
     
-    // Use override if provided, otherwise use persistent state
     const sender = senderInfoOverride || senderInfo;
     const banking = bankingInfoOverride || bankingInfo;
     
     const hasBankingDetails = banking.iban && banking.holder;
-    
-    // Check if user is archived
     const isArchived = !user?.is_active;
-    
-    // Generate QR code data for Swiss QR bill
     const qrData = generateSwissQRData(invoiceWithItems, sender, banking);
     
-    // Create iframe for PDF generation (hidden)
+    // Create a unique ID for this invoice's QR code
+    const qrCodeId = `qrcode-${invoiceWithItems.id}-${Date.now()}`;
+    
     const iframe = document.createElement('iframe');
     iframe.style.position = 'fixed';
     iframe.style.right = '0';
@@ -473,8 +465,9 @@ export default function Billing() {
           .page {
             page-break-after: always;
             padding: 20px;
-            padding-bottom: 100px;
             min-height: 100vh;
+            position: relative;
+            padding-bottom: 180px;
           }
           
           .page:last-child {
@@ -635,37 +628,27 @@ export default function Billing() {
             margin: 0;
           }
           
-          .footer {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            padding: 15px 20px;
+          /* FIX 2: Payment details at bottom of first page */
+          .payment-details-bottom {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            padding: 15px;
             border-top: 1px solid #ddd;
             font-size: 8pt;
             color: #666;
             background: white;
           }
           
-          .footer-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-          }
-          
-          .payment-details {
-            text-align: left;
-            flex: 1;
-          }
-          
-          .payment-details h4 {
+          .payment-details-bottom h4 {
             font-size: 9pt;
             font-weight: 600;
-            margin: 0 0 5px 0;
+            margin: 0 0 8px 0;
             color: #333;
           }
           
-          .payment-details p {
+          .payment-details-bottom p {
             margin: 2px 0;
             line-height: 1.4;
             font-size: 8pt;
@@ -673,8 +656,9 @@ export default function Billing() {
           
           .footer-timestamp {
             text-align: right;
-            flex: 1;
             font-size: 8pt;
+            color: #999;
+            margin-top: 8px;
           }
           
           .qr-page {
@@ -685,7 +669,6 @@ export default function Billing() {
             min-height: 100vh;
             text-align: center;
             padding: 30px;
-            padding-bottom: 100px;
           }
           
           .qr-title {
@@ -710,29 +693,25 @@ export default function Billing() {
             text-align: left;
           }
           
-          #qrcode {
+          #${qrCodeId} {
             margin: 15px auto;
             display: flex;
             justify-content: center;
             align-items: center;
           }
           
-          #qrcode canvas {
+          #${qrCodeId} canvas {
             image-rendering: pixelated;
           }
           
           @media print {
             body { padding: 0; font-size: 10pt; }
-            .page { padding: 15px; padding-bottom: 100px; }
-            .footer { position: fixed; bottom: 0; }
+            .page { padding: 15px; padding-bottom: 180px; }
             
-            /* Hide browser's default headers/footers with URL */
             @page { 
               margin: 10mm;
-              /* Remove browser headers/footers */
             }
             
-            /* Force colors to print */
             * {
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
@@ -889,55 +868,13 @@ export default function Billing() {
           <div class="total-section">
             <p>${t('billing.total')} ${invoiceWithItems.currency} ${invoiceWithItems.total_amount.toFixed(2)}</p>
           </div>
-        </div>
 
-        <div class="footer">
-          <div class="footer-content">
-            ${hasBankingDetails ? `
-              <div class="payment-details">
-                <h4>${t('billing.paymentDetails')}</h4>
-                <p><strong>${t('billing.bankName')}:</strong> ${banking.name}</p>
-                <p><strong>${t('billing.accountHolder')}:</strong> ${banking.holder}</p>
-                <p><strong>${t('billing.iban')}:</strong> ${banking.iban}</p>
-              </div>
-            ` : '<div class="payment-details"></div>'}
-            <div class="footer-timestamp">
-              <p>${new Date().toLocaleString('de-CH', { 
-                year: 'numeric', 
-                month: '2-digit', 
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false 
-              })}</p>
-            </div>
-          </div>
-        </div>
-
-        ${hasBankingDetails && qrData ? `
-          <div class="page qr-page">
-            <div class="qr-title">${t('billing.swissQR')}</div>
-            <div class="qr-container">
-              <div id="qrcode"></div>
-              <div class="qr-info">
-                <p><strong>${t('billing.invoice')}:</strong> ${invoiceWithItems.invoice_number}</p>
-                <p><strong>${t('billing.amount')}:</strong> ${invoiceWithItems.currency} ${invoiceWithItems.total_amount.toFixed(2)}</p>
-                <p><strong>${t('billing.iban')}:</strong> ${banking.iban}</p>
-                <p><strong>${t('billing.accountHolder')}:</strong> ${banking.holder}</p>
-              </div>
-            </div>
-          </div>
-          
-          <div class="footer">
-            <div class="footer-content">
-              ${hasBankingDetails ? `
-                <div class="payment-details">
-                  <h4>${t('billing.paymentDetails')}</h4>
-                  <p><strong>${t('billing.bankName')}:</strong> ${banking.name}</p>
-                  <p><strong>${t('billing.accountHolder')}:</strong> ${banking.holder}</p>
-                  <p><strong>${t('billing.iban')}:</strong> ${banking.iban}</p>
-                </div>
-              ` : '<div class="payment-details"></div>'}
+          ${hasBankingDetails ? `
+            <div class="payment-details-bottom">
+              <h4>${t('billing.paymentDetails')}</h4>
+              <p><strong>${t('billing.bankName')}:</strong> ${banking.name}</p>
+              <p><strong>${t('billing.accountHolder')}:</strong> ${banking.holder}</p>
+              <p><strong>${t('billing.iban')}:</strong> ${banking.iban}</p>
               <div class="footer-timestamp">
                 <p>${new Date().toLocaleString('de-CH', { 
                   year: 'numeric', 
@@ -949,50 +886,62 @@ export default function Billing() {
                 })}</p>
               </div>
             </div>
+          ` : ''}
+        </div>
+
+        ${hasBankingDetails && qrData ? `
+          <div class="page qr-page">
+            <div class="qr-title">${t('billing.swissQR')}</div>
+            <div class="qr-container">
+              <div id="${qrCodeId}"></div>
+              <div class="qr-info">
+                <p><strong>${t('billing.invoice')}:</strong> ${invoiceWithItems.invoice_number}</p>
+                <p><strong>${t('billing.amount')}:</strong> ${invoiceWithItems.currency} ${invoiceWithItems.total_amount.toFixed(2)}</p>
+                <p><strong>${t('billing.iban')}:</strong> ${banking.iban}</p>
+                <p><strong>${t('billing.accountHolder')}:</strong> ${banking.holder}</p>
+              </div>
+            </div>
           </div>
         ` : ''}
 
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
         <script>
           ${hasBankingDetails && qrData ? `
-            // Generate Swiss QR Code with proper format
             const qrData = ${JSON.stringify(qrData)};
             
             console.log('QR Data for Swiss QR Bill (31 data elements):');
             console.log(qrData);
             
             window.addEventListener('load', function() {
-              const qrCodeDiv = document.getElementById('qrcode');
+              const qrCodeDiv = document.getElementById('${qrCodeId}');
               
               if (qrCodeDiv && typeof QRCode !== 'undefined') {
                 try {
-                  // Clear any existing content
                   qrCodeDiv.innerHTML = '';
                   
-                  // Create QR code with Swiss QR specifications
                   new QRCode(qrCodeDiv, {
                     text: qrData,
                     width: 280,
                     height: 280,
                     colorDark: "#000000",
                     colorLight: "#ffffff",
-                    correctLevel: QRCode.CorrectLevel.M  // Medium error correction as per Swiss QR spec
+                    correctLevel: QRCode.CorrectLevel.M
                   });
                   
                   console.log('✓ Swiss QR Code generated successfully');
                   
-                  // Wait for QR code to render then trigger print
+                  // FIX 5: Trigger print after QR code is generated
                   setTimeout(() => {
                     window.print();
                   }, 1500);
                 } catch (error) {
-                  console.error('❌ QR Code generation error:', error);
+                  console.error('✗ QR Code generation error:', error);
                   setTimeout(() => {
                     window.print();
                   }, 1000);
                 }
               } else {
-                console.error('❌ QRCode library not loaded or qrcode div not found');
+                console.error('✗ QRCode library not loaded or qrcode div not found');
                 setTimeout(() => {
                   window.print();
                 }, 1000);
@@ -1022,7 +971,6 @@ export default function Billing() {
       user_ids: [],
       start_date: '',
       end_date: '',
-      // Keep sender and banking info from persistent state
       sender_name: senderInfo.name,
       sender_address: senderInfo.address,
       sender_city: senderInfo.city,
@@ -1083,11 +1031,9 @@ export default function Billing() {
     ? invoices.filter(inv => inv.building_id === selectedBuildingId)
     : invoices;
 
-  // NEW: Organize invoices by building, year, and archive status
   const organizedInvoices = buildings.map(building => {
     const buildingInvoices = filteredInvoices.filter(inv => inv.building_id === building.id);
     
-    // Separate active and archived user invoices
     const activeInvoices = buildingInvoices.filter(inv => {
       const user = users.find(u => u.id === inv.user_id);
       return user?.is_active;
@@ -1098,7 +1044,6 @@ export default function Billing() {
       return !user?.is_active;
     });
     
-    // Group active invoices by year
     const invoicesByYear = activeInvoices.reduce((acc, inv) => {
       const year = new Date(inv.period_start).getFullYear().toString();
       if (!acc[year]) acc[year] = [];
@@ -1106,7 +1051,6 @@ export default function Billing() {
       return acc;
     }, {} as Record<string, Invoice[]>);
     
-    // Group archived invoices by user
     const archivedByUser = archivedInvoices.reduce((acc, inv) => {
       const user = users.find(u => u.id === inv.user_id);
       const userName = user ? `${user.first_name} ${user.last_name}` : 'Unknown User';
@@ -1123,7 +1067,6 @@ export default function Billing() {
     };
   }).filter(group => group.totalCount > 0);
 
-  // IMPROVED: Filter users to show only active ones (exclude archived) in the selection
   const activeUsersForBuildings = users.filter(u => 
     u.is_active && formData.building_ids.includes(u.building_id || 0)
   );
@@ -1186,8 +1129,8 @@ export default function Billing() {
               <li>{t('billing.instructions.important2')}</li>
               <li>{t('billing.instructions.important3')}</li>
               <li>{t('billing.instructions.important4')}</li>
-              <li><strong>Archived users are excluded from billing automatically</strong></li>
-              <li><strong>Invoices are organized by year and archived users</strong></li>
+              <li><strong>{t('billing.instructions.important5')}</strong></li>
+              <li><strong>{t('billing.instructions.important6')}</strong></li>
             </ul>
           </div>
 
@@ -1248,7 +1191,7 @@ export default function Billing() {
           </div>
           <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: '#1f2937' }}>
             {user ? `${user.first_name} ${user.last_name}` : '-'}
-            {isArchived && <span style={{ color: '#999', fontSize: '12px', marginLeft: '8px' }}>(Archived)</span>}
+            {isArchived && <span style={{ color: '#999', fontSize: '12px', marginLeft: '8px' }}>({t('billing.archived')})</span>}
           </h3>
           <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>
             {formatDate(invoice.period_start)} - {formatDate(invoice.period_end)}
@@ -1348,7 +1291,7 @@ export default function Billing() {
         <td style={{ padding: '16px', fontFamily: 'monospace', fontSize: '13px' }}>{invoice.invoice_number}</td>
         <td style={{ padding: '16px' }}>
           {user ? `${user.first_name} ${user.last_name}` : '-'}
-          {isArchived && <span style={{ color: '#999', fontSize: '12px', marginLeft: '8px' }}>(Archived)</span>}
+          {isArchived && <span style={{ color: '#999', fontSize: '12px', marginLeft: '8px' }}>({t('billing.archived')})</span>}
         </td>
         <td style={{ padding: '16px' }}>{formatDate(invoice.period_start)} - {formatDate(invoice.period_end)}</td>
         <td style={{ padding: '16px', fontWeight: '600' }}>{invoice.currency} {invoice.total_amount.toFixed(2)}</td>
@@ -1564,7 +1507,7 @@ export default function Billing() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <Archive size={18} color="#856404" />
                         <h3 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#856404' }}>
-                          Archive (Archived Users)
+                          {t('billing.archiveSection')}
                         </h3>
                       </div>
                       <span style={{ fontSize: '18px', color: '#856404' }}>
@@ -1577,7 +1520,7 @@ export default function Billing() {
                         {Object.entries(archivedByUser).map(([userName, userInvoices]) => (
                           <div key={userName} style={{ marginBottom: '16px' }}>
                             <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px', color: '#666' }}>
-                              {userName} ({userInvoices.length} {userInvoices.length === 1 ? 'invoice' : 'invoices'})
+                              {userName} ({userInvoices.length} {userInvoices.length === 1 ? t('billing.invoice') : t('billing.invoices')})
                             </h4>
                             <div className="desktop-table" style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden', width: '100%' }}>
                               <table style={{ width: '100%' }}>
@@ -1606,9 +1549,9 @@ export default function Billing() {
                   </div>
                 )}
 
-                {/* Year Sections */}
+                {/* Year Sections - FIX 6: Better translation */}
                 {Object.entries(invoicesByYear)
-                  .sort(([a], [b]) => parseInt(b) - parseInt(a)) // Sort years descending
+                  .sort(([a], [b]) => parseInt(b) - parseInt(a))
                   .map(([year, yearInvoices]) => (
                     <div key={year} style={{ marginBottom: '20px' }}>
                       <div
@@ -1626,7 +1569,7 @@ export default function Billing() {
                         }}
                       >
                         <h3 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#1f2937' }}>
-                          {year} ({yearInvoices.length} {yearInvoices.length === 1 ? 'invoice' : 'invoices'})
+                          {year} ({yearInvoices.length} {yearInvoices.length === 1 ? t('billing.invoice') : t('billing.invoices')})
                         </h3>
                         <span style={{ fontSize: '18px', color: '#666' }}>
                           {expandedYears.has(year + '-' + building.id) ? '▼' : '▶'}
@@ -1706,13 +1649,13 @@ export default function Billing() {
                 <label style={{ display: 'block', marginBottom: '12px', fontWeight: '600', fontSize: '15px' }}>
                   {t('billing.selectUsers')} ({t('billing.leaveEmptyForAll')})
                   <span style={{ fontSize: '13px', fontWeight: 'normal', color: '#666', marginLeft: '8px' }}>
-                    (Only active users shown - archived users are excluded)
+                    ({t('billing.onlyActiveUsers')})
                   </span>
                 </label>
                 <div style={{ padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '8px', maxHeight: '200px', overflow: 'auto' }}>
                   {activeUsersForBuildings.length === 0 ? (
                     <p style={{ color: '#666', fontSize: '14px', textAlign: 'center', margin: '8px 0' }}>
-                      No active users in selected buildings
+                      {t('billing.noActiveUsers')}
                     </p>
                   ) : (
                     activeUsersForBuildings.map(u => (
@@ -1747,7 +1690,7 @@ export default function Billing() {
                   {t('billing.senderInfo')}
                   {formData.building_ids.length > 0 && formData.sender_name && (
                     <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#10b981', marginLeft: '8px' }}>
-                      ✓ Auto-filled from admin
+                      ✓ {t('billing.autoFilled')}
                     </span>
                   )}
                 </h3>
@@ -1800,7 +1743,7 @@ export default function Billing() {
                   {t('billing.bankingInfo')}
                   {formData.building_ids.length > 0 && formData.bank_iban && (
                     <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#10b981', marginLeft: '8px' }}>
-                      ✓ Auto-filled from admin
+                      ✓ {t('billing.autoFilled')}
                     </span>
                   )}
                 </h3>
@@ -1889,7 +1832,7 @@ export default function Billing() {
                 <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>{t('billing.billTo')}</h3>
                 <p style={{ fontSize: '15px', lineHeight: '1.6' }}>
                   {selectedInvoice.user.first_name} {selectedInvoice.user.last_name}
-                  {!selectedInvoice.user.is_active && <span style={{ color: '#999', fontSize: '13px', marginLeft: '8px' }}>(Archived)</span>}
+                  {!selectedInvoice.user.is_active && <span style={{ color: '#999', fontSize: '13px', marginLeft: '8px' }}>({t('billing.archived')})</span>}
                   <br />
                   {selectedInvoice.user.address_street}<br />
                   {selectedInvoice.user.address_zip} {selectedInvoice.user.address_city}<br />
