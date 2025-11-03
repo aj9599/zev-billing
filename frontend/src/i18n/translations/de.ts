@@ -974,7 +974,10 @@ export const de: Translations = {
   'billing.tabs.sharedMeters': 'Gemeinsame Zähler',
   'billing.tabs.customItems': 'Eigene Positionen',
   'billing.createBill': 'Rechnung erstellen',
+  'billing.allBuildingsDesc': 'Alle Rechnungen über alle Gebäude anzeigen',
   
+  'customItems.editSubtitle': 'Details dieser benutzerdefinierten Position aktualisieren',
+  'customItems.createSubtitle': 'Neue benutzerdefinierte Gebühr hinzufügen, die in Rechnungen enthalten sein soll',  
   'customItems.organizedByBuilding': 'Eigene Positionen nach Gebäude',
   'customItems.noItemsForBuilding': 'Keine Positionen für dieses Gebäude',
   'customItems.buildingSection': 'Gebäude: {name}',

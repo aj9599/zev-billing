@@ -997,7 +997,10 @@ export const en: Translations = {
   'billing.tabs.sharedMeters': 'Shared Meters',
   'billing.tabs.customItems': 'Custom Items',
   'billing.createBill': 'Create Bill',
+  'billing.allBuildingsDesc': 'View all invoices across all buildings',
   
+  'customItems.editSubtitle': 'Update the details of this custom line item',
+  'customItems.createSubtitle': 'Add a new custom charge to be included in invoices',
   'customItems.organizedByBuilding': 'Custom Items by Building',
   'customItems.noItemsForBuilding': 'No items for this building',
   'customItems.buildingSection': 'Building: {name}',
@@ -1007,6 +1010,7 @@ export const en: Translations = {
   'sharedMeters.totalMustBe100': 'Total must equal 100%',
   'sharedMeters.apartment': 'Apartment',
   'sharedMeters.percentage': 'Percentage (%)',
+
 
   // Main page
   'autoBilling.title': 'Automatic Bill Generation',

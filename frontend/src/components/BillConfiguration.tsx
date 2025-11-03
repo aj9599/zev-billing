@@ -15,6 +15,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
   const [step, setStep] = useState(1);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [adminUsers, setAdminUsers] = useState<User[]>([]);
   const [sharedMeters, setSharedMeters] = useState<SharedMeterConfig[]>([]);
   const [customItems, setCustomItems] = useState<CustomLineItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -56,7 +57,13 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         api.getCustomLineItems()
       ]);
       setBuildings(buildingsData);
-      setUsers(usersData);
+      
+      // Separate regular users from admin users
+      const regularUsers = usersData.filter(u => !u.is_admin);
+      const adminUsersList = usersData.filter(u => u.is_admin);
+      
+      setUsers(regularUsers);
+      setAdminUsers(adminUsersList);
       setSharedMeters(sharedMetersData);
       setCustomItems(customItemsData.filter(item => item.is_active));
     } catch (err) {
@@ -88,6 +95,19 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           bank_name: parsed.name || '',
           bank_iban: parsed.iban || '',
           bank_account_holder: parsed.holder || ''
+        }));
+      }
+      
+      // Try to prefill sender info from first admin user if available and not already set
+      if (!savedSender && adminUsers.length > 0) {
+        const firstAdmin = adminUsers[0];
+        setConfig(prev => ({
+          ...prev,
+          sender_name: `${firstAdmin.first_name} ${firstAdmin.last_name}`,
+          sender_address: firstAdmin.address_street || '',
+          sender_city: firstAdmin.address_city || '',
+          sender_zip: firstAdmin.address_zip || '',
+          sender_country: firstAdmin.address_country || 'Switzerland'
         }));
       }
     } catch (e) {
@@ -447,7 +467,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                     {meter.meter_name}
                   </div>
                   <div style={{ fontSize: '13px', color: '#6c757d' }}>
-                    {building?.name} â€¢ {meter.split_type} {t('billConfig.step2.split')} â€¢ CHF {meter.unit_price.toFixed(3)}/kWh
+                    {building?.name} • {meter.split_type} {t('billConfig.step2.split')} • CHF {meter.unit_price.toFixed(3)}/kWh
                   </div>
                 </div>
               </label>
@@ -523,7 +543,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                     {item.description}
                   </div>
                   <div style={{ fontSize: '13px', color: '#6c757d' }}>
-                    {building?.name} â€¢ CHF {item.amount.toFixed(2)} â€¢ {item.frequency} â€¢ {item.category}
+                    {building?.name} • CHF {item.amount.toFixed(2)} • {item.frequency} • {item.category}
                   </div>
                 </div>
               </label>

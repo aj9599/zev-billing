@@ -345,11 +345,16 @@ export default function Billing() {
       )}
 
       {currentView === 'shared-meters' && (
-        <SharedMeterConfig />
+        <SharedMeterConfig 
+          selectedBuildingId={selectedBuildingId}
+        />
       )}
 
       {currentView === 'custom-items' && (
-        <CustomItems onSave={loadData} />
+        <CustomItems 
+          onSave={loadData}
+          selectedBuildingId={selectedBuildingId}
+        />
       )}
 
       {/* Instructions Modal */}

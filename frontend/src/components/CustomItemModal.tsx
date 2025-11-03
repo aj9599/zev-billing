@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, DollarSign, AlertCircle, CheckCircle, Loader, Building as BuildingIcon } from 'lucide-react';
+import { Plus, Edit2, Trash2, DollarSign, AlertCircle, CheckCircle, Loader, Building as BuildingIcon, X } from 'lucide-react';
 import { api } from '../api/client';
 import type { CustomLineItem, Building } from '../types';
 import { useTranslation } from '../i18n';
 
 interface CustomItemsProps {
   onSave: () => void;
+  selectedBuildingId: number | null;
 }
 
 interface Toast {
@@ -13,12 +14,12 @@ interface Toast {
   type: 'success' | 'error' | 'info';
 }
 
-export default function CustomItems({ onSave }: CustomItemsProps) {
+export default function CustomItems({ onSave, selectedBuildingId }: CustomItemsProps) {
   const { t } = useTranslation();
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [items, setItems] = useState<CustomLineItem[]>([]);
   const [editingItem, setEditingItem] = useState<CustomLineItem | null>(null);
-  const [showForm, setShowForm] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
@@ -143,12 +144,8 @@ export default function CustomItems({ onSave }: CustomItemsProps) {
       category: item.category as any,
       is_active: item.is_active
     });
-    setShowForm(true);
+    setShowModal(true);
     setErrors({});
-    
-    setTimeout(() => {
-      document.getElementById('custom-item-form')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 100);
   };
 
   const handleDelete = async (id: number) => {
@@ -175,7 +172,7 @@ export default function CustomItems({ onSave }: CustomItemsProps) {
       is_active: true
     });
     setEditingItem(null);
-    setShowForm(false);
+    setShowModal(false);
     setErrors({});
   };
 
@@ -219,9 +216,14 @@ export default function CustomItems({ onSave }: CustomItemsProps) {
     setExpandedBuildings(newExpanded);
   };
 
+  // Filter items based on selected building
+  const filteredItems = selectedBuildingId 
+    ? items.filter(item => item.building_id === selectedBuildingId)
+    : items;
+
   // Organize items by building
   const organizedItems = buildings.map(building => {
-    const buildingItems = items.filter(item => item.building_id === building.id);
+    const buildingItems = filteredItems.filter(item => item.building_id === building.id);
     return {
       building,
       items: buildingItems,
@@ -245,7 +247,7 @@ export default function CustomItems({ onSave }: CustomItemsProps) {
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
-          zIndex: 1001,
+          zIndex: 2000,
           animation: 'slideInRight 0.3s ease-out',
           maxWidth: '400px'
         }}>
@@ -257,310 +259,38 @@ export default function CustomItems({ onSave }: CustomItemsProps) {
       )}
 
       {/* Add New Item Button */}
-      {!loading && !showForm && (
-        <button
-          onClick={() => setShowForm(true)}
-          style={{
-            width: '100%',
-            padding: '14px',
-            backgroundColor: '#667EEA',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            fontSize: '15px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            marginBottom: '20px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            transition: 'all 0.2s',
-            boxShadow: '0 2px 4px rgba(0, 123, 255, 0.3)'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 123, 255, 0.4)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 123, 255, 0.3)';
-          }}
-        >
-          <Plus size={18} />
-          {t('customItems.addNew')}
-        </button>
-      )}
-
-      {/* Form */}
-      {showForm && (
-        <form 
-          id="custom-item-form"
-          onSubmit={handleSubmit} 
-          style={{
-            backgroundColor: '#f8f9fa',
-            padding: '24px',
-            borderRadius: '12px',
-            marginBottom: '25px',
-            border: '2px solid #e5e7eb'
-          }}
-        >
-          <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '20px', color: '#111827' }}>
-            {editingItem ? t('customItems.editItem') : t('customItems.newItem')}
-          </h3>
-
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
-              {t('customItems.selectBuilding')} *
-            </label>
-            <select
-              value={formData.building_id || ''}
-              onChange={(e) => {
-                setFormData({ ...formData, building_id: Number(e.target.value) });
-                if (errors.building_id) setErrors({ ...errors, building_id: '' });
-              }}
-              required
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: `2px solid ${errors.building_id ? '#ef4444' : '#d1d5db'}`,
-                borderRadius: '6px',
-                fontSize: '14px',
-                outline: 'none',
-                transition: 'border-color 0.2s',
-                backgroundColor: 'white'
-              }}
-              onFocus={(e) => !errors.building_id && (e.target.style.borderColor = '#667EEA')}
-              onBlur={(e) => !errors.building_id && (e.target.style.borderColor = '#d1d5db')}
-            >
-              <option value="">{t('customItems.selectBuildingPlaceholder')}</option>
-              {buildings.map(building => (
-                <option key={building.id} value={building.id}>
-                  {building.name}
-                </option>
-              ))}
-            </select>
-            {errors.building_id && (
-              <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <AlertCircle size={12} />
-                {errors.building_id}
-              </p>
-            )}
-          </div>
-
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
-              {t('customItems.description')} *
-            </label>
-            <input
-              type="text"
-              value={formData.description}
-              onChange={(e) => {
-                setFormData({ ...formData, description: e.target.value });
-                if (errors.description) setErrors({ ...errors, description: '' });
-              }}
-              required
-              maxLength={200}
-              placeholder={t('customItems.descriptionPlaceholder')}
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: `2px solid ${errors.description ? '#ef4444' : '#d1d5db'}`,
-                borderRadius: '6px',
-                fontSize: '14px',
-                outline: 'none',
-                transition: 'border-color 0.2s',
-                backgroundColor: 'white'
-              }}
-              onFocus={(e) => !errors.description && (e.target.style.borderColor = '#667EEA')}
-              onBlur={(e) => !errors.description && (e.target.style.borderColor = '#d1d5db')}
-            />
-            {errors.description && (
-              <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <AlertCircle size={12} />
-                {errors.description}
-              </p>
-            )}
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
-                {t('customItems.amount')} (CHF) *
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                max="999999"
-                value={formData.amount || ''}
-                onChange={(e) => {
-                  setFormData({ ...formData, amount: Number(e.target.value) });
-                  if (errors.amount) setErrors({ ...errors, amount: '' });
-                }}
-                required
-                placeholder="0.00"
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  border: `2px solid ${errors.amount ? '#ef4444' : '#d1d5db'}`,
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  outline: 'none',
-                  transition: 'border-color 0.2s',
-                  backgroundColor: 'white'
-                }}
-                onFocus={(e) => !errors.amount && (e.target.style.borderColor = '#667EEA')}
-                onBlur={(e) => !errors.amount && (e.target.style.borderColor = '#d1d5db')}
-              />
-              {errors.amount && (
-                <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <AlertCircle size={12} />
-                  {errors.amount}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
-                {t('customItems.category.label')} *
-              </label>
-              <select
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value as any })}
-                required
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  border: '2px solid #d1d5db',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                  backgroundColor: 'white',
-                  transition: 'border-color 0.2s'
-                }}
-                onFocus={(e) => e.target.style.borderColor = '#667EEA'}
-                onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
-              >
-                <option value="meter_rent">{t('customItems.category.meterRent')}</option>
-                <option value="maintenance">{t('customItems.category.maintenance')}</option>
-                <option value="service">{t('customItems.category.service')}</option>
-                <option value="other">{t('customItems.category.other')}</option>
-              </select>
-            </div>
-          </div>
-
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
-              {t('customItems.frequency.label')} *
-            </label>
-            <select
-              value={formData.frequency}
-              onChange={(e) => setFormData({ ...formData, frequency: e.target.value as any })}
-              required
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '2px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: '14px',
-                cursor: 'pointer',
-                backgroundColor: 'white',
-                transition: 'border-color 0.2s'
-              }}
-              onFocus={(e) => e.target.style.borderColor = '#667EEA'}
-              onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
-            >
-              <option value="once">{t('customItems.frequency.once')}</option>
-              <option value="monthly">{t('customItems.frequency.monthly')}</option>
-              <option value="quarterly">{t('customItems.frequency.quarterly')}</option>
-              <option value="yearly">{t('customItems.frequency.yearly')}</option>
-            </select>
-            <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px', fontStyle: 'italic' }}>
-              {formData.frequency === 'once' && t('customItems.frequencyHelp.once')}
-              {formData.frequency === 'monthly' && t('customItems.frequencyHelp.monthly')}
-              {formData.frequency === 'quarterly' && t('customItems.frequencyHelp.quarterly')}
-              {formData.frequency === 'yearly' && t('customItems.frequencyHelp.yearly')}
-            </p>
-          </div>
-
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '10px', 
-              cursor: 'pointer',
-              padding: '12px',
-              backgroundColor: formData.is_active ? '#ecfdf5' : '#fef2f2',
+      {!loading && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '30px' }}>
+          <button
+            onClick={() => setShowModal(true)}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: '#667EEA',
+              color: 'white',
+              border: 'none',
               borderRadius: '8px',
-              border: `2px solid ${formData.is_active ? '#10b981' : '#ef4444'}`,
-              transition: 'all 0.2s'
-            }}>
-              <input
-                type="checkbox"
-                checked={formData.is_active}
-                onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#667EEA' }}
-              />
-              <span style={{ fontSize: '14px', fontWeight: '600', color: '#111827' }}>
-                {formData.is_active 
-                  ? t('customItems.active')
-                  : t('customItems.inactive')}
-              </span>
-            </label>
-          </div>
-
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <button
-              type="submit"
-              disabled={saving}
-              style={{
-                flex: 1,
-                padding: '12px',
-                backgroundColor: saving ? '#9ca3af' : '#10b981',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: saving ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                transition: 'all 0.2s',
-                boxShadow: saving ? 'none' : '0 2px 4px rgba(16, 185, 129, 0.3)'
-              }}
-              onMouseEnter={(e) => !saving && (e.currentTarget.style.transform = 'translateY(-1px)')}
-              onMouseLeave={(e) => !saving && (e.currentTarget.style.transform = 'translateY(0)')}
-            >
-              {saving && <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />}
-              {editingItem ? t('common.update') : t('common.create')}
-            </button>
-            <button
-              type="button"
-              onClick={resetForm}
-              disabled={saving}
-              style={{
-                flex: 1,
-                padding: '12px',
-                backgroundColor: '#6b7280',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: saving ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s',
-                opacity: saving ? 0.6 : 1
-              }}
-              onMouseEnter={(e) => !saving && (e.currentTarget.style.backgroundColor = '#4b5563')}
-              onMouseLeave={(e) => !saving && (e.currentTarget.style.backgroundColor = '#6b7280')}
-            >
-              {t('common.cancel')}
-            </button>
-          </div>
-        </form>
+              fontSize: '15px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'all 0.2s',
+              boxShadow: '0 2px 4px rgba(0, 123, 255, 0.3)'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 123, 255, 0.4)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 123, 255, 0.3)';
+            }}
+          >
+            <Plus size={18} />
+            {t('customItems.addNew')}
+          </button>
+        </div>
       )}
 
       {/* Loading State */}
@@ -597,7 +327,7 @@ export default function CustomItems({ onSave }: CustomItemsProps) {
               borderRadius: '20px',
               border: '2px solid #667EEA'
             }}>
-              {items.length} {items.length === 1 ? t('customItems.item') : t('customItems.items')}
+              {filteredItems.length} {filteredItems.length === 1 ? t('customItems.item') : t('customItems.items')}
             </span>
           </h3>
 
@@ -796,6 +526,305 @@ export default function CustomItems({ onSave }: CustomItemsProps) {
         </div>
       )}
 
+      {/* Modal for Add/Edit */}
+      {showModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          padding: '20px',
+          animation: 'fadeIn 0.2s ease-in'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '30px',
+            maxWidth: '650px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            animation: 'slideUp 0.3s ease-out'
+          }}>
+            <div style={{ marginBottom: '24px', paddingBottom: '20px', borderBottom: '2px solid #e9ecef' }}>
+              <h2 style={{ 
+                fontSize: '24px', 
+                fontWeight: '700',
+                color: '#1f2937',
+                marginBottom: '8px'
+              }}>
+                {editingItem ? t('customItems.editItem') : t('customItems.newItem')}
+              </h2>
+              <p style={{ fontSize: '14px', color: '#6b7280' }}>
+                {editingItem ? t('customItems.editSubtitle') : t('customItems.createSubtitle')}
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit}>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                  {t('customItems.selectBuilding')} <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <select
+                  value={formData.building_id || ''}
+                  onChange={(e) => {
+                    setFormData({ ...formData, building_id: Number(e.target.value) });
+                    if (errors.building_id) setErrors({ ...errors, building_id: '' });
+                  }}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: `2px solid ${errors.building_id ? '#ef4444' : '#e5e7eb'}`,
+                    borderRadius: '8px',
+                    fontSize: '15px',
+                    outline: 'none',
+                    transition: 'border-color 0.2s',
+                    backgroundColor: 'white',
+                    cursor: 'pointer'
+                  }}
+                  onFocus={(e) => !errors.building_id && (e.target.style.borderColor = '#667EEA')}
+                  onBlur={(e) => !errors.building_id && (e.target.style.borderColor = '#e5e7eb')}
+                >
+                  <option value="">{t('customItems.selectBuildingPlaceholder')}</option>
+                  {buildings.map(building => (
+                    <option key={building.id} value={building.id}>
+                      {building.name}
+                    </option>
+                  ))}
+                </select>
+                {errors.building_id && (
+                  <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <AlertCircle size={12} />
+                    {errors.building_id}
+                  </p>
+                )}
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                  {t('customItems.description')} <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.description}
+                  onChange={(e) => {
+                    setFormData({ ...formData, description: e.target.value });
+                    if (errors.description) setErrors({ ...errors, description: '' });
+                  }}
+                  required
+                  maxLength={200}
+                  placeholder={t('customItems.descriptionPlaceholder')}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: `2px solid ${errors.description ? '#ef4444' : '#e5e7eb'}`,
+                    borderRadius: '8px',
+                    fontSize: '15px',
+                    outline: 'none',
+                    transition: 'border-color 0.2s',
+                    backgroundColor: 'white'
+                  }}
+                  onFocus={(e) => !errors.description && (e.target.style.borderColor = '#667EEA')}
+                  onBlur={(e) => !errors.description && (e.target.style.borderColor = '#e5e7eb')}
+                />
+                {errors.description && (
+                  <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <AlertCircle size={12} />
+                    {errors.description}
+                  </p>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                    {t('customItems.amount')} (CHF) <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    max="999999"
+                    value={formData.amount || ''}
+                    onChange={(e) => {
+                      setFormData({ ...formData, amount: Number(e.target.value) });
+                      if (errors.amount) setErrors({ ...errors, amount: '' });
+                    }}
+                    required
+                    placeholder="0.00"
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: `2px solid ${errors.amount ? '#ef4444' : '#e5e7eb'}`,
+                      borderRadius: '8px',
+                      fontSize: '15px',
+                      outline: 'none',
+                      transition: 'border-color 0.2s',
+                      backgroundColor: 'white'
+                    }}
+                    onFocus={(e) => !errors.amount && (e.target.style.borderColor = '#667EEA')}
+                    onBlur={(e) => !errors.amount && (e.target.style.borderColor = '#e5e7eb')}
+                  />
+                  {errors.amount && (
+                    <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <AlertCircle size={12} />
+                      {errors.amount}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                    {t('customItems.category.label')} <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <select
+                    value={formData.category}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value as any })}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '15px',
+                      cursor: 'pointer',
+                      backgroundColor: 'white',
+                      transition: 'border-color 0.2s'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#667EEA'}
+                    onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                  >
+                    <option value="meter_rent">{t('customItems.category.meterRent')}</option>
+                    <option value="maintenance">{t('customItems.category.maintenance')}</option>
+                    <option value="service">{t('customItems.category.service')}</option>
+                    <option value="other">{t('customItems.category.other')}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                  {t('customItems.frequency.label')} <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <select
+                  value={formData.frequency}
+                  onChange={(e) => setFormData({ ...formData, frequency: e.target.value as any })}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: '8px',
+                    fontSize: '15px',
+                    cursor: 'pointer',
+                    backgroundColor: 'white',
+                    transition: 'border-color 0.2s'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#667EEA'}
+                  onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                >
+                  <option value="once">{t('customItems.frequency.once')}</option>
+                  <option value="monthly">{t('customItems.frequency.monthly')}</option>
+                  <option value="quarterly">{t('customItems.frequency.quarterly')}</option>
+                  <option value="yearly">{t('customItems.frequency.yearly')}</option>
+                </select>
+                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px', fontStyle: 'italic' }}>
+                  {formData.frequency === 'once' && t('customItems.frequencyHelp.once')}
+                  {formData.frequency === 'monthly' && t('customItems.frequencyHelp.monthly')}
+                  {formData.frequency === 'quarterly' && t('customItems.frequencyHelp.quarterly')}
+                  {formData.frequency === 'yearly' && t('customItems.frequencyHelp.yearly')}
+                </p>
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <label style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '10px', 
+                  cursor: 'pointer',
+                  padding: '12px',
+                  backgroundColor: formData.is_active ? '#ecfdf5' : '#fef2f2',
+                  borderRadius: '8px',
+                  border: `2px solid ${formData.is_active ? '#10b981' : '#ef4444'}`,
+                  transition: 'all 0.2s'
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={formData.is_active}
+                    onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#667EEA' }}
+                  />
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#111827' }}>
+                    {formData.is_active 
+                      ? t('customItems.active')
+                      : t('customItems.inactive')}
+                  </span>
+                </label>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  disabled={saving}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    backgroundColor: '#6b7280',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '15px',
+                    fontWeight: '600',
+                    cursor: saving ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s',
+                    opacity: saving ? 0.6 : 1
+                  }}
+                  onMouseEnter={(e) => !saving && (e.currentTarget.style.backgroundColor = '#4b5563')}
+                  onMouseLeave={(e) => !saving && (e.currentTarget.style.backgroundColor = '#6b7280')}
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    backgroundColor: saving ? '#9ca3af' : '#10b981',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '15px',
+                    fontWeight: '600',
+                    cursor: saving ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    transition: 'all 0.2s',
+                    boxShadow: saving ? 'none' : '0 2px 4px rgba(16, 185, 129, 0.3)'
+                  }}
+                  onMouseEnter={(e) => !saving && (e.currentTarget.style.transform = 'translateY(-1px)')}
+                  onMouseLeave={(e) => !saving && (e.currentTarget.style.transform = 'translateY(0)')}
+                >
+                  {saving && <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />}
+                  {editingItem ? t('common.update') : t('common.create')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* CSS Animations */}
       <style>{`
         @keyframes slideInRight {
@@ -806,6 +835,22 @@ export default function CustomItems({ onSave }: CustomItemsProps) {
           to {
             opacity: 1;
             transform: translateX(0);
+          }
+        }
+        
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
           }
         }
         

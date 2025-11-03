@@ -4,7 +4,11 @@ import { api } from '../api/client';
 import type { SharedMeterConfig, Building, Meter, User } from '../types';
 import { useTranslation } from '../i18n';
 
-export default function SharedMeterConfigComponent() {
+interface SharedMeterConfigProps {
+  selectedBuildingId: number | null;
+}
+
+export default function SharedMeterConfigComponent({ selectedBuildingId }: SharedMeterConfigProps) {
   const { t } = useTranslation();
   const [configs, setConfigs] = useState<SharedMeterConfig[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
@@ -201,6 +205,11 @@ export default function SharedMeterConfigComponent() {
     return Object.values(formData.custom_splits).reduce((sum, val) => sum + val, 0);
   };
 
+  // Filter configs based on selected building
+  const filteredConfigs = selectedBuildingId 
+    ? configs.filter(c => c.building_id === selectedBuildingId)
+    : configs;
+
   if (loading) {
     return (
       <div style={{ 
@@ -308,7 +317,7 @@ export default function SharedMeterConfigComponent() {
       </div>
 
       {/* Configs List */}
-      {configs.length === 0 ? (
+      {filteredConfigs.length === 0 ? (
           <div style={{ 
             textAlign: 'center', 
             padding: '80px 20px',
@@ -391,7 +400,7 @@ export default function SharedMeterConfigComponent() {
                 </tr>
               </thead>
               <tbody>
-                {configs.map(config => (
+                {filteredConfigs.map(config => (
                   <tr key={config.id} style={{ 
                     borderBottom: '1px solid #e9ecef',
                     transition: 'background-color 0.2s'
@@ -557,7 +566,7 @@ export default function SharedMeterConfigComponent() {
                 {t('sharedMeters.building')} <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <select 
-                value={formData.building_id}
+                value={formData.building_id || ''}
                 onChange={(e) => {
                   const buildingId = parseInt(e.target.value);
                   setFormData({...formData, building_id: buildingId, meter_id: 0, meter_name: '', custom_splits: {}});
@@ -575,7 +584,7 @@ export default function SharedMeterConfigComponent() {
                 onFocus={(e) => e.target.style.borderColor = '#667EEA'}
                 onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
               >
-                <option value={0}>{t('sharedMeters.selectBuilding')}</option>
+                <option value="">{t('sharedMeters.selectBuilding')}</option>
                 {buildings.map(b => (
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
@@ -594,7 +603,7 @@ export default function SharedMeterConfigComponent() {
                 {t('sharedMeters.meter')} <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <select 
-                value={formData.meter_id}
+                value={formData.meter_id || ''}
                 onChange={(e) => {
                   const meterId = parseInt(e.target.value);
                   const meter = meters.find(m => m.id === meterId);
@@ -618,7 +627,7 @@ export default function SharedMeterConfigComponent() {
                 onFocus={(e) => formData.building_id && (e.target.style.borderColor = '#667EEA')}
                 onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
               >
-                <option value={0}>{t('sharedMeters.selectMeter')}</option>
+                <option value="">{t('sharedMeters.selectMeter')}</option>
                 {meters
                   .filter(m => m.building_id === formData.building_id)
                   .map(m => (
@@ -731,7 +740,7 @@ export default function SharedMeterConfigComponent() {
                           step="0.01"
                           min="0"
                           max="100"
-                          value={formData.custom_splits[user.id] || 0}
+                          value={formData.custom_splits[user.id] || ''}
                           onChange={(e) => handlePercentageChange(user.id, e.target.value)}
                           style={{
                             width: '80px',
