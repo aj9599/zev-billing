@@ -138,12 +138,25 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         if (meter.apartment_unit && !apartmentSet.has(meter.apartment_unit)) {
           apartmentSet.add(meter.apartment_unit);
           
-          // Find user linked to this apartment
-          const user = users.find(
+          // Find user linked to this apartment - try multiple methods
+          let user = users.find(
             u => u.building_id === buildingId && 
             u.apartment_unit === meter.apartment_unit &&
             u.is_active
           );
+
+          // If not found by building_id + apartment_unit, try by meter's user_id
+          if (!user && meter.user_id) {
+            user = users.find(u => u.id === meter.user_id && u.is_active);
+          }
+
+          // If still not found, try to find any active user in this building with matching apartment
+          if (!user) {
+            user = users.find(
+              u => u.apartment_unit === meter.apartment_unit && 
+              u.is_active
+            );
+          }
 
           apartments.push({
             building_id: buildingId,
