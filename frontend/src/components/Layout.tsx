@@ -236,7 +236,8 @@ export default function Layout({ onLogout }: LayoutProps) {
           overflow-x: hidden;
         }
 
-        @media (max-width: 768px) {
+        /* Tablet and smaller - Switch to mobile layout earlier */
+        @media (max-width: 1024px) {
           .mobile-header {
             display: flex !important;
           }
@@ -277,6 +278,7 @@ export default function Layout({ onLogout }: LayoutProps) {
           }
         }
 
+        /* Mobile phones - Further optimizations */
         @media (max-width: 480px) {
           .main-content {
             padding: 15px 10px !important;
@@ -287,8 +289,8 @@ export default function Layout({ onLogout }: LayoutProps) {
           }
         }
 
-        /* Prevent horizontal scroll on mobile */
-        @media (max-width: 768px) {
+        /* Prevent horizontal scroll on all mobile sizes */
+        @media (max-width: 1024px) {
           html, body {
             overflow-x: hidden;
             width: 100%;
