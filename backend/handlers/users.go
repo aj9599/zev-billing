@@ -179,6 +179,21 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		isActiveVal = 0
 	}
 
+	// Check if email already exists with the same user_type
+	var existingUserID int
+	err := h.db.QueryRow(`
+		SELECT id FROM users 
+		WHERE email = ? AND user_type = ?
+	`, u.Email, u.UserType).Scan(&existingUserID)
+	
+	if err != sql.ErrNoRows {
+		if err == nil {
+			http.Error(w, "A user with this email and user type already exists", http.StatusBadRequest)
+			return
+		}
+		log.Printf("Error checking email uniqueness: %v", err)
+	}
+
 	// Check if apartment is already occupied (if apartment_unit is provided)
 	if u.ApartmentUnit != "" && u.BuildingID != nil {
 		var existingUserID int
@@ -210,11 +225,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		log.Printf("Error creating user: %v", err)
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			http.Error(w, "Email already exists", http.StatusBadRequest)
-		} else {
-			http.Error(w, "Failed to create user", http.StatusInternalServerError)
-		}
+		http.Error(w, "Failed to create user", http.StatusInternalServerError)
 		return
 	}
 
@@ -251,6 +262,21 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 		isActiveVal = 1
 	}
 
+	// Check if email already exists with the same user_type (excluding current user)
+	var existingUserID int
+	err = h.db.QueryRow(`
+		SELECT id FROM users 
+		WHERE email = ? AND user_type = ? AND id != ?
+	`, u.Email, u.UserType, id).Scan(&existingUserID)
+	
+	if err != sql.ErrNoRows {
+		if err == nil {
+			http.Error(w, "A user with this email and user type already exists", http.StatusBadRequest)
+			return
+		}
+		log.Printf("Error checking email uniqueness: %v", err)
+	}
+
 	// Check if apartment is already occupied (if apartment_unit is provided)
 	if u.ApartmentUnit != "" && u.BuildingID != nil {
 		var existingUserID int
@@ -284,11 +310,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		log.Printf("Error updating user ID %d: %v", id, err)
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			http.Error(w, "Email already exists", http.StatusBadRequest)
-		} else {
-			http.Error(w, "Failed to update user: "+err.Error(), http.StatusInternalServerError)
-		}
+		http.Error(w, "Failed to update user: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 

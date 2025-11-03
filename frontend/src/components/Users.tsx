@@ -29,8 +29,9 @@ export default function Users() {
   }, [showArchive]);
 
   const loadData = async () => {
+    // Always fetch all users (both active and inactive)
     const [usersData, buildingsData] = await Promise.all([
-      api.getUsers(undefined, showArchive),
+      api.getUsers(undefined, true),  // Fetch all users
       api.getBuildings()
     ]);
     setUsers(usersData);
@@ -78,7 +79,7 @@ export default function Users() {
       await api.updateUser(user.id, { ...user, is_active: !user.is_active });
       loadData();
     } catch (err) {
-      alert('Failed to update user status');
+      alert(t('users.updateFailed') || 'Failed to update user status');
     }
   };
 
@@ -120,14 +121,61 @@ export default function Users() {
     !b.is_group && b.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Helper function to check if user's managed buildings include the selected building
+  const userManagesBuilding = (user: UserType, buildingId: number): boolean => {
+    if (user.user_type !== 'administration' || !user.managed_buildings) return false;
+    
+    let managedBuildingIds: number[] = [];
+    try {
+      if (typeof user.managed_buildings === 'string') {
+        managedBuildingIds = JSON.parse(user.managed_buildings);
+      } else if (Array.isArray(user.managed_buildings)) {
+        managedBuildingIds = user.managed_buildings;
+      }
+    } catch (e) {
+      return false;
+    }
+    
+    // Check if the building is directly managed
+    if (managedBuildingIds.includes(buildingId)) return true;
+    
+    // Check if the user manages a complex that includes this building
+    for (const managedId of managedBuildingIds) {
+      const managedBuilding = buildings.find(b => b.id === managedId);
+      if (managedBuilding && managedBuilding.is_group && managedBuilding.group_buildings) {
+        const groupBuildingIds = typeof managedBuilding.group_buildings === 'string' 
+          ? JSON.parse(managedBuilding.group_buildings) 
+          : managedBuilding.group_buildings;
+        if (groupBuildingIds.includes(buildingId)) return true;
+      }
+    }
+    
+    return false;
+  };
+
   const filteredUsers = users.filter(user => {
-    const matchesBuilding = selectedBuildingId === 'all' || user.building_id === selectedBuildingId;
+    // Filter by active/inactive status based on showArchive
+    const matchesActiveStatus = showArchive ? !user.is_active : user.is_active;
+    
+    // Filter by building
+    let matchesBuilding = false;
+    if (selectedBuildingId === 'all') {
+      matchesBuilding = true;
+    } else if (user.user_type === 'regular') {
+      matchesBuilding = user.building_id === selectedBuildingId;
+    } else if (user.user_type === 'administration') {
+      // For admins, check if they manage this building or a complex containing it
+      matchesBuilding = userManagesBuilding(user, selectedBuildingId as number);
+    }
+    
+    // Filter by search query
     const searchLower = searchQuery.toLowerCase();
     const matchesSearch = searchQuery === '' || 
       `${user.first_name} ${user.last_name}`.toLowerCase().includes(searchLower) ||
       user.email.toLowerCase().includes(searchLower) ||
       (user.apartment_unit && user.apartment_unit.toLowerCase().includes(searchLower));
-    return matchesBuilding && matchesSearch;
+    
+    return matchesActiveStatus && matchesBuilding && matchesSearch;
   });
 
   const adminUsers = filteredUsers.filter(u => u.user_type === 'administration');
@@ -220,9 +268,9 @@ export default function Users() {
           <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #f59e0b' }}>
             <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '10px', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Home size={20} color="#f59e0b" />
-              Apartments & Status
+              {t('users.instructions.apartmentsAndStatus')}
             </h3>
-            <p>Users can be assigned to specific apartments in buildings that have apartment management enabled. You can also mark users as Active or Inactive - inactive users are moved to the archive and their apartments become available.</p>
+            <p>{t('users.instructions.apartmentsAndStatusDescription')}</p>
           </div>
 
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginTop: '20px', marginBottom: '10px', color: '#1f2937' }}>
@@ -234,8 +282,8 @@ export default function Users() {
             <li>{t('users.instructions.step3')}</li>
             <li>{t('users.instructions.step4')}</li>
             <li>{t('users.instructions.step5')}</li>
-            <li>Use the Archive view to see inactive users</li>
-            <li>Apartments can only have one active user at a time</li>
+            <li>{t('users.instructions.step6')}</li>
+            <li>{t('users.instructions.step7')}</li>
           </ul>
 
           <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', marginTop: '16px', border: '1px solid #f59e0b' }}>
@@ -258,7 +306,7 @@ export default function Users() {
               <li>{t('users.instructions.tip1')}</li>
               <li>{t('users.instructions.tip2')}</li>
               <li>{t('users.instructions.tip3')}</li>
-              <li>Set users to inactive instead of deleting them to preserve history</li>
+              <li>{t('users.instructions.tip4')}</li>
             </ul>
           </div>
         </div>
@@ -295,7 +343,7 @@ export default function Users() {
             {t('users.title')}
           </h1>
           <p style={{ color: '#6b7280', fontSize: '16px' }}>
-            {showArchive ? 'Archived Users' : t('users.subtitle')}
+            {showArchive ? t('users.archivedUsersSubtitle') : t('users.subtitle')}
           </p>
         </div>
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
@@ -308,7 +356,7 @@ export default function Users() {
             }}
           >
             <Archive size={18} />
-            {showArchive ? 'Show Active' : 'Show Archive'}
+            {showArchive ? t('users.showActive') : t('users.showArchive')}
           </button>
           <button
             onClick={() => setShowInstructions(true)}
@@ -347,7 +395,7 @@ export default function Users() {
           <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
           <input
             type="text"
-            placeholder="Search users by name, email, or apartment..."
+            placeholder={t('users.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -388,7 +436,7 @@ export default function Users() {
             </h3>
           </div>
           <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
-            {users.filter(u => u.is_active).length} active
+            {users.filter(u => u.is_active).length} {t('users.active')}
           </p>
         </div>
 
@@ -416,7 +464,7 @@ export default function Users() {
                 </h3>
               </div>
               <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
-                {userCount} active {userCount === 1 ? t('users.user') : t('users.users')}
+                {userCount} {t('users.active')} {userCount === 1 ? t('users.user') : t('users.users')}
               </p>
             </div>
           );
@@ -450,7 +498,7 @@ export default function Users() {
           <table style={{ width: '100%' }}>
             <thead>
               <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Status</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.status')}</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.name')}</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.email')}</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.managedBuildings')}</th>
@@ -461,7 +509,7 @@ export default function Users() {
               {adminUsers.map(user => (
                 <tr key={user.id} style={{ borderBottom: '1px solid #eee', opacity: user.is_active ? 1 : 0.5 }}>
                   <td style={{ padding: '16px' }}>
-                    <span title={user.is_active ? "Active" : "Inactive"}>
+                    <span title={user.is_active ? t('users.activeStatus') : t('users.inactiveStatus')}>
                       {user.is_active ? (
                         <CheckCircle size={20} color="#22c55e" />
                       ) : (
@@ -479,7 +527,7 @@ export default function Users() {
                       <button 
                         onClick={() => handleToggleActive(user)}
                         style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}
-                        title={user.is_active ? 'Deactivate' : 'Activate'}
+                        title={user.is_active ? t('users.deactivate') : t('users.activate')}
                       >
                         <Archive size={16} color="#8b5cf6" />
                       </button>
@@ -497,7 +545,7 @@ export default function Users() {
           </table>
           {adminUsers.length === 0 && (
             <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>
-              {showArchive ? 'No archived admin users' : t('users.noAdminUsers')}
+              {showArchive ? t('users.noArchivedAdminUsers') : t('users.noAdminUsers')}
             </div>
           )}
         </div>
@@ -567,7 +615,7 @@ export default function Users() {
           ))}
           {adminUsers.length === 0 && (
             <div style={{ backgroundColor: 'white', padding: '40px 20px', textAlign: 'center', color: '#999', borderRadius: '12px' }}>
-              {showArchive ? 'No archived admin users' : t('users.noAdminUsers')}
+              {showArchive ? t('users.noArchivedAdminUsers') : t('users.noAdminUsers')}
             </div>
           )}
         </div>
@@ -600,11 +648,11 @@ export default function Users() {
           <table style={{ width: '100%' }}>
             <thead>
               <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Status</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.status')}</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.name')}</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.email')}</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Apartment</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>RFID Card(s)</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.apartment')}</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.rfidCards')}</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.building')}</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.actions')}</th>
               </tr>
@@ -613,7 +661,7 @@ export default function Users() {
               {regularUsers.map(user => (
                 <tr key={user.id} style={{ borderBottom: '1px solid #eee', opacity: user.is_active ? 1 : 0.5 }}>
                   <td style={{ padding: '16px' }}>
-                    <span title={user.is_active ? "Active" : "Inactive"}>
+                    <span title={user.is_active ? t('users.activeStatus') : t('users.inactiveStatus')}>
                       {user.is_active ? (
                         <CheckCircle size={20} color="#22c55e" />
                       ) : (
@@ -664,7 +712,7 @@ export default function Users() {
                       <button 
                         onClick={() => handleToggleActive(user)}
                         style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}
-                        title={user.is_active ? 'Deactivate' : 'Activate'}
+                        title={user.is_active ? t('users.deactivate') : t('users.activate')}
                       >
                         <Archive size={16} color="#8b5cf6" />
                       </button>
@@ -682,7 +730,7 @@ export default function Users() {
           </table>
           {regularUsers.length === 0 && (
             <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>
-              {showArchive ? 'No archived regular users' : t('users.noRegularUsers')}
+              {showArchive ? t('users.noArchivedRegularUsers') : t('users.noRegularUsers')}
             </div>
           )}
         </div>
@@ -734,7 +782,7 @@ export default function Users() {
                   {user.apartment_unit && (
                     <div style={{ fontSize: '13px', color: '#15803d', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                       <Home size={14} />
-                      Apartment: {user.apartment_unit}
+                      {t('users.apartment')}: {user.apartment_unit}
                     </div>
                   )}
                   {user.charger_ids && (
@@ -766,7 +814,7 @@ export default function Users() {
           ))}
           {regularUsers.length === 0 && (
             <div style={{ backgroundColor: 'white', padding: '40px 20px', textAlign: 'center', color: '#999', borderRadius: '12px' }}>
-              {showArchive ? 'No archived regular users' : t('users.noRegularUsers')}
+              {showArchive ? t('users.noArchivedRegularUsers') : t('users.noRegularUsers')}
             </div>
           )}
         </div>
@@ -854,10 +902,10 @@ export default function Users() {
                     checked={formData.is_active}
                     onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
                   />
-                  <span style={{ fontWeight: '500', fontSize: '14px' }}>Active User</span>
+                  <span style={{ fontWeight: '500', fontSize: '14px' }}>{t('users.activeUser')}</span>
                 </label>
                 <small style={{ display: 'block', marginTop: '4px', marginLeft: '28px', color: '#6b7280', fontSize: '12px' }}>
-                  Inactive users are archived and their apartments become available
+                  {t('users.inactiveUserNote')}
                 </small>
               </div>
 
@@ -910,23 +958,23 @@ export default function Users() {
                     <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#15803d' }}>
                         <Home size={18} />
-                        Apartment / Unit
+                        {t('users.apartmentUnit')}
                       </label>
                       <select 
                         value={formData.apartment_unit || ''} 
                         onChange={(e) => setFormData({ ...formData, apartment_unit: e.target.value })}
                         style={{ width: '100%', padding: '10px', border: '1px solid #bbf7d0', borderRadius: '6px' }}
                       >
-                        <option value="">No apartment assigned</option>
+                        <option value="">{t('users.noApartmentAssigned')}</option>
                         {getAvailableApartments(formData.building_id).map(apt => (
                           <option key={apt} value={apt}>{apt}</option>
                         ))}
                         {editingUser?.apartment_unit && formData.apartment_unit === editingUser.apartment_unit && (
-                          <option value={editingUser.apartment_unit}>{editingUser.apartment_unit} (Current)</option>
+                          <option value={editingUser.apartment_unit}>{editingUser.apartment_unit} ({t('users.current')})</option>
                         )}
                       </select>
                       <small style={{ display: 'block', marginTop: '6px', color: '#15803d', fontSize: '12px' }}>
-                        Only available apartments are shown
+                        {t('users.onlyAvailableApartments')}
                       </small>
                     </div>
                   )}
@@ -1028,15 +1076,15 @@ export default function Users() {
               </div>
 
               {/* Buttons */}
-              <div className="button-group" style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+              <div className="button-group" style={{ display: 'flex', gap: '12px', marginTop: '24px', flexWrap: 'wrap' }}>
                 <button type="submit" style={{
-                  flex: 1, padding: '12px', backgroundColor: '#007bff', color: 'white',
+                  flex: 1, minWidth: '120px', padding: '12px', backgroundColor: '#007bff', color: 'white',
                   border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
                 }}>
                   {editingUser ? t('common.update') : t('common.create')}
                 </button>
                 <button type="button" onClick={() => { setShowModal(false); setEditingUser(null); }} style={{
-                  flex: 1, padding: '12px', backgroundColor: '#6c757d', color: 'white',
+                  flex: 1, minWidth: '120px', padding: '12px', backgroundColor: '#6c757d', color: 'white',
                   border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
                 }}>
                   {t('common.cancel')}
@@ -1078,12 +1126,24 @@ export default function Users() {
             font-size: 14px !important;
           }
 
+          .modal-content {
+            padding: 20px !important;
+          }
+
           .modal-content h2 {
             font-size: 20px !important;
           }
 
           .form-row {
             grid-template-columns: 1fr !important;
+          }
+
+          .button-group {
+            flex-direction: column !important;
+          }
+
+          .button-group button {
+            width: 100% !important;
           }
         }
 
@@ -1095,6 +1155,10 @@ export default function Users() {
           .users-container h1 svg {
             width: 20px !important;
             height: 20px !important;
+          }
+
+          .modal-content {
+            padding: 15px !important;
           }
         }
       `}</style>
