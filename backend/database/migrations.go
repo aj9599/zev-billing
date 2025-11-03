@@ -21,7 +21,7 @@ func RunMigrations(db *sql.DB) error {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			first_name TEXT NOT NULL,
 			last_name TEXT NOT NULL,
-			email TEXT UNIQUE NOT NULL,
+			email TEXT NOT NULL,
 			phone TEXT,
 			address_street TEXT,
 			address_city TEXT,
@@ -233,6 +233,9 @@ func RunMigrations(db *sql.DB) error {
 	newIndexes := []string{
 		`CREATE INDEX IF NOT EXISTS idx_users_building ON users(building_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)`,
+		`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`,
+		`CREATE INDEX IF NOT EXISTS idx_users_user_type ON users(user_type)`,
+		`CREATE INDEX IF NOT EXISTS idx_users_apartment_unit ON users(apartment_unit)`,
 	}
 
 	for _, idx := range newIndexes {
@@ -242,12 +245,173 @@ func RunMigrations(db *sql.DB) error {
 		}
 	}
 
+	// Fix email constraint for existing databases
+	if err := migrateEmailConstraint(db); err != nil {
+		log.Printf("Email constraint migration: %v", err)
+		// Don't return error here as it might be already migrated
+	}
+
 	if err := createDefaultAdmin(db); err != nil {
 		return err
 	}
 
 	log.Println("Migrations completed successfully")
 	return nil
+}
+
+func migrateEmailConstraint(db *sql.DB) error {
+	// Check if users table exists and has UNIQUE constraint on email
+	var sql string
+	err := db.QueryRow(`
+		SELECT sql FROM sqlite_master 
+		WHERE type='table' AND name='users'
+	`).Scan(&sql)
+	
+	if err != nil {
+		return err
+	}
+
+	// Check if the table still has UNIQUE constraint on email
+	// If it contains "email TEXT UNIQUE" or "email TEXT NOT NULL UNIQUE", we need to migrate
+	hasUniqueConstraint := false
+	if len(sql) > 0 {
+		// Simple check - if the schema contains "email TEXT UNIQUE" or similar
+		if containsEmailUnique(sql) {
+			hasUniqueConstraint = true
+		}
+	}
+
+	if !hasUniqueConstraint {
+		log.Println("Email constraint already migrated or doesn't exist")
+		
+		// Even if already migrated, ensure the compound unique index exists
+		_, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_type ON users(email, user_type)`)
+		if err != nil {
+			log.Printf("Note: Compound index may already exist: %v", err)
+		} else {
+			log.Println("✓ Compound unique index (email, user_type) created")
+		}
+		
+		return nil
+	}
+
+	log.Println("🔄 Migrating users table to remove email UNIQUE constraint...")
+
+	// Begin transaction
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Step 1: Create new users table without UNIQUE constraint on email
+	_, err = tx.Exec(`
+		CREATE TABLE users_new (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			first_name TEXT NOT NULL,
+			last_name TEXT NOT NULL,
+			email TEXT NOT NULL,
+			phone TEXT,
+			address_street TEXT,
+			address_city TEXT,
+			address_zip TEXT,
+			address_country TEXT DEFAULT 'Switzerland',
+			bank_name TEXT,
+			bank_iban TEXT,
+			bank_account_holder TEXT,
+			charger_ids TEXT,
+			notes TEXT,
+			building_id INTEGER,
+			apartment_unit TEXT,
+			user_type TEXT DEFAULT 'regular',
+			managed_buildings TEXT,
+			is_active INTEGER DEFAULT 1,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (building_id) REFERENCES buildings(id)
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	// Step 2: Copy all data
+	_, err = tx.Exec(`
+		INSERT INTO users_new 
+		SELECT * FROM users
+	`)
+	if err != nil {
+		return err
+	}
+
+	// Step 3: Drop old table
+	_, err = tx.Exec(`DROP TABLE users`)
+	if err != nil {
+		return err
+	}
+
+	// Step 4: Rename new table
+	_, err = tx.Exec(`ALTER TABLE users_new RENAME TO users`)
+	if err != nil {
+		return err
+	}
+
+	// Step 5: Recreate indexes
+	indexes := []string{
+		`CREATE INDEX idx_users_email ON users(email)`,
+		`CREATE INDEX idx_users_building ON users(building_id)`,
+		`CREATE INDEX idx_users_user_type ON users(user_type)`,
+		`CREATE INDEX idx_users_active ON users(is_active)`,
+		`CREATE INDEX idx_users_apartment_unit ON users(apartment_unit)`,
+		`CREATE UNIQUE INDEX idx_users_email_type ON users(email, user_type)`,
+	}
+
+	for _, idx := range indexes {
+		_, err = tx.Exec(idx)
+		if err != nil {
+			log.Printf("Index creation note: %v", err)
+		}
+	}
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	log.Println("✓ Email constraint migration completed successfully")
+	log.Println("✓ Administrators and regular users can now share the same email")
+	
+	return nil
+}
+
+func containsEmailUnique(sql string) bool {
+	// Check for various forms of UNIQUE constraint on email
+	patterns := []string{
+		"email TEXT UNIQUE",
+		"email TEXT NOT NULL UNIQUE",
+		"UNIQUE(email)",
+	}
+	
+	for _, pattern := range patterns {
+		if contains(sql, pattern) {
+			return true
+		}
+	}
+	
+	return false
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && containsHelper(s, substr))
+}
+
+func containsHelper(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 func createDefaultAdmin(db *sql.DB) error {

@@ -34,7 +34,7 @@ export default function Layout({ onLogout }: LayoutProps) {
   const closeMobileMenu = () => setMobileMenuOpen(false);
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div className="app-container" style={{ display: 'flex', minHeight: '100vh', position: 'relative' }}>
       {/* Mobile Header */}
       <div className="mobile-header" style={{
         display: 'none',
@@ -64,6 +64,7 @@ export default function Layout({ onLogout }: LayoutProps) {
             alignItems: 'center',
             justifyContent: 'center'
           }}
+          aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
         >
           {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
@@ -101,7 +102,8 @@ export default function Layout({ onLogout }: LayoutProps) {
         flexDirection: 'column',
         overflowY: 'auto',
         zIndex: 1000,
-        transition: 'transform 0.3s ease'
+        transition: 'transform 0.3s ease',
+        WebkitOverflowScrolling: 'touch'
       }}>
         <h1 className="desktop-only" style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '30px' }}>
           ZEV Billing
@@ -219,12 +221,21 @@ export default function Layout({ onLogout }: LayoutProps) {
         padding: '30px',
         backgroundColor: '#f5f5f5',
         minHeight: '100vh',
-        width: '100%'
+        width: 'calc(100% - 250px)',
+        boxSizing: 'border-box'
       }}>
         <Outlet />
       </main>
 
       <style>{`
+        * {
+          box-sizing: border-box;
+        }
+
+        .app-container {
+          overflow-x: hidden;
+        }
+
         @media (max-width: 768px) {
           .mobile-header {
             display: flex !important;
@@ -238,7 +249,7 @@ export default function Layout({ onLogout }: LayoutProps) {
             transform: translateX(-100%) !important;
             top: 60px !important;
             bottom: 0 !important;
-            height: auto !important;
+            height: calc(100vh - 60px) !important;
             padding: 20px !important;
             overflow-y: auto !important;
             -webkit-overflow-scrolling: touch;
@@ -256,15 +267,19 @@ export default function Layout({ onLogout }: LayoutProps) {
           .main-content {
             margin-left: 0 !important;
             margin-top: 60px !important;
-            padding: 20px 15px 15px 15px !important;
+            padding: 20px 15px !important;
             width: 100% !important;
             min-height: calc(100vh - 60px) !important;
+          }
+
+          body {
+            overflow-x: hidden;
           }
         }
 
         @media (max-width: 480px) {
           .main-content {
-            padding: 15px 10px 10px 10px !important;
+            padding: 15px 10px !important;
           }
           
           .sidebar {
@@ -272,9 +287,28 @@ export default function Layout({ onLogout }: LayoutProps) {
           }
         }
 
-        /* Ensure smooth scrolling on iOS */
+        /* Prevent horizontal scroll on mobile */
+        @media (max-width: 768px) {
+          html, body {
+            overflow-x: hidden;
+            width: 100%;
+            position: relative;
+          }
+
+          .app-container {
+            width: 100%;
+            overflow-x: hidden;
+          }
+        }
+
+        /* Smooth scrolling on iOS */
         .sidebar {
           -webkit-overflow-scrolling: touch;
+        }
+
+        /* Prevent body scroll when mobile menu is open */
+        body.mobile-menu-open {
+          overflow: hidden;
         }
       `}</style>
     </div>
