@@ -347,9 +347,7 @@ export default function Billing() {
     
     const hasBankingDetails = banking.iban && banking.holder;
     
-    // Get year from invoice for filename
-    const invoiceYear = new Date(invoice.period_start).getFullYear();
-    const buildingName = building?.name?.replace(/[^a-z0-9]/gi, '_') || 'Building';
+    // Check if user is archived
     const isArchived = !user?.is_active;
     
     // Create a new window for PDF generation
