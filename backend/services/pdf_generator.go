@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/jung-kurt/gofpdf"
 	"github.com/skip2/go-qrcode"
@@ -96,14 +95,14 @@ func (pg *PDFGenerator) GenerateInvoicePDF(invoice interface{}, senderInfo Sende
 
 	pdf.SetFont("Arial", "", 10)
 	pdf.SetTextColor(0, 0, 0)
-	
+
 	// Get user info
 	if user, ok := inv["user"].(map[string]interface{}); ok {
 		userName := fmt.Sprintf("%v %v", user["first_name"], user["last_name"])
 		pdf.SetFont("Arial", "B", 10)
 		pdf.Cell(0, 5, userName)
 		pdf.Ln(4)
-		
+
 		pdf.SetFont("Arial", "", 9)
 		if addr, ok := user["address_street"].(string); ok && addr != "" {
 			pdf.Cell(0, 4, addr)
@@ -129,12 +128,12 @@ func (pg *PDFGenerator) GenerateInvoicePDF(invoice interface{}, senderInfo Sende
 
 	pdf.SetFont("Arial", "", 9)
 	pdf.SetTextColor(0, 0, 0)
-	
+
 	periodStart := fmt.Sprintf("%v", inv["period_start"])
 	periodEnd := fmt.Sprintf("%v", inv["period_end"])
 	pdf.Cell(0, 4, "Period: "+periodStart+" to "+periodEnd)
 	pdf.Ln(4)
-	
+
 	generatedAt := fmt.Sprintf("%v", inv["generated_at"])
 	pdf.Cell(0, 4, "Generated: "+generatedAt)
 	pdf.Ln(10)
@@ -163,8 +162,8 @@ func (pg *PDFGenerator) GenerateInvoicePDF(invoice interface{}, senderInfo Sende
 					pdf.SetFont("Arial", "B", 9)
 					pdf.Cell(180, 5, description)
 					pdf.Ln(5)
-				} else if itemType == "meter_reading_from" || itemType == "meter_reading_to" || 
-				           itemType == "total_consumption" || itemType == "separator" {
+				} else if itemType == "meter_reading_from" || itemType == "meter_reading_to" ||
+					itemType == "total_consumption" || itemType == "separator" {
 					pdf.SetFont("Arial", "", 8)
 					pdf.SetTextColor(100, 100, 100)
 					pdf.Cell(180, 4, description)
@@ -213,7 +212,7 @@ func (pg *PDFGenerator) GenerateInvoicePDF(invoice interface{}, senderInfo Sende
 		qrData := pg.generateSwissQRData(inv, senderInfo, bankingInfo)
 		if qrData != "" {
 			pdf.AddPage()
-			
+
 			// QR Code Title
 			pdf.SetFont("Arial", "B", 18)
 			pdf.SetTextColor(0, 123, 255)
@@ -227,10 +226,10 @@ func (pg *PDFGenerator) GenerateInvoicePDF(invoice interface{}, senderInfo Sende
 			if err == nil {
 				// Add QR code to PDF
 				pdf.ImageOptions(tempQR, 55, 60, 100, 100, false, gofpdf.ImageOptions{ImageType: "PNG"}, 0, "")
-				
+
 				// Clean up temp file
 				defer os.Remove(tempQR)
-				
+
 				// Payment info below QR
 				pdf.Ln(110)
 				pdf.SetFont("Arial", "", 10)
@@ -272,7 +271,7 @@ func (pg *PDFGenerator) generateSwissQRData(inv map[string]interface{}, sender S
 	// Validate IBAN
 	iban := banking.IBAN
 	iban = stripSpaces(iban)
-	
+
 	if len(iban) < 15 || (iban[:2] != "CH" && iban[:2] != "LI") {
 		log.Printf("Invalid IBAN format: %s", iban)
 		return ""
@@ -291,7 +290,7 @@ func (pg *PDFGenerator) generateSwissQRData(inv map[string]interface{}, sender S
 
 	// Parse addresses
 	senderStreet, senderHouseNo := parseAddress(sender.Address)
-	
+
 	userStreet := ""
 	userHouseNo := ""
 	if user, ok := inv["user"].(map[string]interface{}); ok {
@@ -302,37 +301,37 @@ func (pg *PDFGenerator) generateSwissQRData(inv map[string]interface{}, sender S
 
 	// Build QR data (31 lines)
 	qrParts := []string{
-		"SPC",                                    // 1: QR Type
-		"0200",                                   // 2: Version
-		"1",                                      // 3: Coding
-		iban,                                     // 4: IBAN
-		"S",                                      // 5: Creditor Address Type
+		"SPC",                                   // 1: QR Type
+		"0200",                                  // 2: Version
+		"1",                                     // 3: Coding
+		iban,                                    // 4: IBAN
+		"S",                                     // 5: Creditor Address Type
 		truncate(banking.AccountHolder, 70),     // 6: Creditor Name
 		truncate(senderStreet, 70),              // 7: Creditor Street
 		truncate(senderHouseNo, 16),             // 8: Creditor House No
 		truncate(sender.Zip, 16),                // 9: Creditor Postal Code
 		truncate(sender.City, 35),               // 10: Creditor City
 		truncate(sender.Country, 2),             // 11: Creditor Country
-		"",                                       // 12: Ultimate Creditor Address Type
-		"",                                       // 13: Ultimate Creditor Name
-		"",                                       // 14: Ultimate Creditor Street
-		"",                                       // 15: Ultimate Creditor House No
-		"",                                       // 16: Ultimate Creditor Postal Code
-		"",                                       // 17: Ultimate Creditor City
-		"",                                       // 18: Ultimate Creditor Country
+		"",                                      // 12: Ultimate Creditor Address Type
+		"",                                      // 13: Ultimate Creditor Name
+		"",                                      // 14: Ultimate Creditor Street
+		"",                                      // 15: Ultimate Creditor House No
+		"",                                      // 16: Ultimate Creditor Postal Code
+		"",                                      // 17: Ultimate Creditor City
+		"",                                      // 18: Ultimate Creditor Country
 		fmt.Sprintf("%.2f", totalAmount),        // 19: Amount
 		truncate(currency, 3),                   // 20: Currency
-		"S",                                      // 21: Debtor Address Type
-		"",                                       // 22: Debtor Name (filled below)
+		"S",                                     // 21: Debtor Address Type
+		"",                                      // 22: Debtor Name (filled below)
 		truncate(userStreet, 70),                // 23: Debtor Street
 		truncate(userHouseNo, 16),               // 24: Debtor House No
-		"",                                       // 25: Debtor Postal Code (filled below)
-		"",                                       // 26: Debtor City (filled below)
-		"",                                       // 27: Debtor Country (filled below)
-		"NON",                                    // 28: Reference Type
-		"",                                       // 29: Reference
+		"",                                      // 25: Debtor Postal Code (filled below)
+		"",                                      // 26: Debtor City (filled below)
+		"",                                      // 27: Debtor Country (filled below)
+		"NON",                                   // 28: Reference Type
+		"",                                      // 29: Reference
 		truncate("Invoice "+invoiceNumber, 140), // 30: Additional Information
-		"EPD",                                    // 31: End Payment Data
+		"EPD",                                   // 31: End Payment Data
 	}
 
 	// Fill debtor info
@@ -340,7 +339,7 @@ func (pg *PDFGenerator) generateSwissQRData(inv map[string]interface{}, sender S
 		firstName := fmt.Sprintf("%v", user["first_name"])
 		lastName := fmt.Sprintf("%v", user["last_name"])
 		qrParts[21] = truncate(firstName+" "+lastName, 70)
-		
+
 		if zip, ok := user["address_zip"].(string); ok {
 			qrParts[24] = truncate(zip, 16)
 		}
