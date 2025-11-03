@@ -952,10 +952,11 @@ export default function Buildings() {
           {/* Floor Palette */}
           <div
             draggable={!isMobile}
-            onDragStart={(e) => !isMobile && onPaletteDragStart(e, DRAG_TYPES.PALETTE_APT)}
+            onDragStart={(e) => !isMobile && onPaletteDragStart(e, DRAG_TYPES.PALETTE_FLOOR)}
             onDragEnd={onDragEndGlobal}
+            onClick={() => isMobile && addFloor()}
             style={{
-              cursor: isMobile ? 'default' : 'grab',
+              cursor: isMobile ? 'pointer' : 'grab',
               padding: isMobile ? '16px' : '20px',
               backgroundColor: 'white',
               borderRadius: '12px',
@@ -993,8 +994,11 @@ export default function Buildings() {
 
           {/* Apartment Palette */}
           <div
+            draggable={!isMobile}
+            onDragStart={(e) => !isMobile && onPaletteDragStart(e, DRAG_TYPES.PALETTE_APT)}
+            onDragEnd={onDragEndGlobal}
             style={{
-              cursor: 'default',
+              cursor: isMobile ? 'default' : 'grab',
               padding: isMobile ? '16px' : '20px',
               backgroundColor: 'white',
               borderRadius: '12px',
@@ -1002,9 +1006,10 @@ export default function Buildings() {
               boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
               transition: 'all 0.2s',
               userSelect: 'none',
-              flex: isMobile ? 1 : 'none',
-              opacity: 0.6
+              flex: isMobile ? 1 : 'none'
             }}
+            onMouseDown={(e) => !isMobile && (e.currentTarget.style.cursor = 'grabbing')}
+            onMouseUp={(e) => !isMobile && (e.currentTarget.style.cursor = 'grab')}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px', flexDirection: isMobile ? 'column' : 'row' }}>
               <div style={{
