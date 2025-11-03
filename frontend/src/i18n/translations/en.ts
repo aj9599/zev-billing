@@ -997,7 +997,9 @@ export const en: Translations = {
   'billing.tabs.sharedMeters': 'Shared Meters',
   'billing.tabs.customItems': 'Custom Items',
   'billing.createBill': 'Create Bill',
-  'billing.allBuildingsDesc': 'View all invoices across all buildings',
+  'billing.allBuildingsDesc': 'All invoices',
+  'billing.allBuildingsDescSharedMeters': 'All shared meter',
+  'billing.allBuildingsDescCustomItems': 'All custom line items',
   
   'customItems.editSubtitle': 'Update the details of this custom line item',
   'customItems.createSubtitle': 'Add a new custom charge to be included in invoices',

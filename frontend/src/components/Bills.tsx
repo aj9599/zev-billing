@@ -230,7 +230,7 @@ export default function Bills({ selectedBuildingId, buildings, users, onRefresh 
       return '';
     }
     
-    console.log('✓ Generated valid Swiss QR data with 31 elements');
+    console.log('âœ“ Generated valid Swiss QR data with 31 elements');
     return qrData;
   };
 
@@ -576,7 +576,7 @@ export default function Bills({ selectedBuildingId, buildings, users, onRefresh 
         <div class="page">
           ${isArchived ? `
             <div class="archived-banner">
-              ⚠️ ARCHIVED USER - This invoice is for an archived user
+              âš ï¸ ARCHIVED USER - This invoice is for an archived user
             </div>
           ` : ''}
           
@@ -787,20 +787,20 @@ export default function Bills({ selectedBuildingId, buildings, users, onRefresh 
                     correctLevel: QRCode.CorrectLevel.M
                   });
                   
-                  console.log('✓ Swiss QR Code generated successfully');
+                  console.log('âœ“ Swiss QR Code generated successfully');
                   
                   setTimeout(() => {
                     window.print();
                   }, 1500);
                 } catch (error) {
-                  console.error('✗ QR Code generation error:', error);
+                  console.error('âœ— QR Code generation error:', error);
                   qrCodeDiv.innerHTML = '<p style="color: red; padding: 20px;">Error generating QR code</p>';
                   setTimeout(() => {
                     window.print();
                   }, 1000);
                 }
               } else {
-                console.error('✗ QRCode library not loaded or div not found');
+                console.error('âœ— QRCode library not loaded or div not found');
                 setTimeout(() => {
                   window.print();
                 }, 1000);
@@ -1075,7 +1075,7 @@ export default function Bills({ selectedBuildingId, buildings, users, onRefresh 
                 </p>
               </div>
               <span style={{ fontSize: '24px', color: '#666' }}>
-                {expandedBuildings.has(building.id) ? '▼' : '▶'}
+                {expandedBuildings.has(building.id) ? 'â–¼' : 'â–¶'}
               </span>
             </div>
 
@@ -1104,7 +1104,7 @@ export default function Bills({ selectedBuildingId, buildings, users, onRefresh 
                         </h3>
                       </div>
                       <span style={{ fontSize: '18px', color: '#856404' }}>
-                        {expandedYears.has('archive-' + building.id) ? '▼' : '▶'}
+                        {expandedYears.has('archive-' + building.id) ? 'â–¼' : 'â–¶'}
                       </span>
                     </div>
 
@@ -1164,7 +1164,7 @@ export default function Bills({ selectedBuildingId, buildings, users, onRefresh 
                           {year} ({yearInvoices.length} {yearInvoices.length === 1 ? t('billing.invoice') : t('billing.invoices')})
                         </h3>
                         <span style={{ fontSize: '18px', color: '#666' }}>
-                          {expandedYears.has(year + '-' + building.id) ? '▼' : '▶'}
+                          {expandedYears.has(year + '-' + building.id) ? 'â–¼' : 'â–¶'}
                         </span>
                       </div>
 
@@ -1213,7 +1213,7 @@ export default function Bills({ selectedBuildingId, buildings, users, onRefresh 
             backgroundColor: 'white', borderRadius: '12px', padding: '40px',
             width: '90%', maxWidth: '800px', maxHeight: '90vh', overflow: 'auto'
           }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ borderBottom: '2px solid #667EEA', paddingBottom: '20px', marginBottom: '30px' }}>
+            <div style={{ borderBottom: '2px solid #007bff', paddingBottom: '20px', marginBottom: '30px' }}>
               <h2 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '8px' }}>{t('billing.invoice')}</h2>
               <p style={{ fontSize: '14px', color: '#666' }}>#{selectedInvoice.invoice_number}</p>
               <span style={{
@@ -1267,19 +1267,60 @@ export default function Bills({ selectedBuildingId, buildings, users, onRefresh 
                                    item.item_type === 'charging_session_to' ||
                                    item.item_type === 'total_charged';
                     const isSeparator = item.item_type === 'separator';
+                    const isSolar = item.item_type === 'solar_power';
+                    const isNormal = item.item_type === 'normal_power';
+                    const isChargingNormal = item.item_type === 'car_charging_normal';
+                    const isChargingPriority = item.item_type === 'car_charging_priority';
                     
                     if (isSeparator) {
                       return <tr key={item.id}><td colSpan={2} style={{ padding: '8px' }}></td></tr>;
                     }
                     
+                    let backgroundColor = 'transparent';
+                    if (isSolar) backgroundColor = '#fffbea';
+                    else if (isNormal) backgroundColor = '#f0f4ff';
+                    else if (isChargingNormal || isChargingPriority) backgroundColor = '#f0fff4';
+                    
                     return (
-                      <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
+                      <tr key={item.id} style={{ 
+                        borderBottom: '1px solid #eee',
+                        backgroundColor
+                      }}>
                         <td style={{ 
                           padding: '12px',
-                          fontWeight: isHeader ? '600' : 'normal',
+                          fontWeight: isHeader || isSolar || isNormal || isChargingNormal || isChargingPriority ? '600' : 'normal',
                           color: isInfo ? '#666' : 'inherit',
-                          fontSize: isInfo ? '14px' : '15px'
+                          fontSize: isInfo ? '14px' : '15px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
                         }}>
+                          {isSolar && (
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="4"/>
+                              <path d="M12 2v2"/>
+                              <path d="M12 20v2"/>
+                              <path d="m4.93 4.93 1.41 1.41"/>
+                              <path d="m17.66 17.66 1.41 1.41"/>
+                              <path d="M2 12h2"/>
+                              <path d="M20 12h2"/>
+                              <path d="m6.34 17.66-1.41 1.41"/>
+                              <path d="m19.07 4.93-1.41 1.41"/>
+                            </svg>
+                          )}
+                          {isNormal && (
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>
+                            </svg>
+                          )}
+                          {(isChargingNormal || isChargingPriority) && (
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/>
+                              <circle cx="7" cy="17" r="2"/>
+                              <path d="M9 17h6"/>
+                              <circle cx="17" cy="17" r="2"/>
+                            </svg>
+                          )}
                           {item.description}
                         </td>
                         <td style={{ padding: '12px', textAlign: 'right', fontWeight: item.total_price > 0 ? '600' : 'normal' }}>
@@ -1308,7 +1349,7 @@ export default function Bills({ selectedBuildingId, buildings, users, onRefresh 
                 {t('billing.downloadPdf')}
               </button>
               <button onClick={() => setSelectedInvoice(null)} style={{
-                flex: 1, padding: '12px', backgroundColor: '#667EEA', color: 'white',
+                flex: 1, padding: '12px', backgroundColor: '#007bff', color: 'white',
                 border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
               }}>
                 {t('common.close')}
