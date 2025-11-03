@@ -12,5 +12,5 @@ require (
 
 	// Add these two:
 	github.com/jung-kurt/gofpdf v1.16.2 // or latest
-	github.com/skip2/go-qrcode v0.0.0-20201117163319-591cf36de303 // or latest
+	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e // or latest
 )
