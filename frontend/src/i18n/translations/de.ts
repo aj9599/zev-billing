@@ -43,6 +43,7 @@ export const de: Translations = {
   'common.recommended': 'Empfohlen',
   'common.unknownBuilding': 'Unbekanntes Gebäude',
   'common.all': 'Alle',
+  'common.to': 'bis',
 
   // Dashboard
   'dashboard.title': 'Dashboard',
@@ -738,12 +739,9 @@ export const de: Translations = {
   'billing.atLeastOne': 'mindestens eines',
   'billing.selectUsers': 'Benutzer auswählen (Optional)',
   'billing.leaveEmptyForAll': 'Leer lassen für alle Benutzer',
-  
-  // FIX 6: Missing translations
   'billing.onlyActiveUsers': 'Nur aktive Benutzer angezeigt - archivierte Benutzer sind ausgeschlossen',
   'billing.noActiveUsers': 'Keine aktiven Benutzer in ausgewählten Gebäuden',
   'billing.autoFilled': 'Automatisch ausgefüllt vom Administrator',
-  
   'billing.startDate': 'Startdatum',
   'billing.endDate': 'Enddatum',
   'billing.senderInfo': 'Absenderinformationen',
@@ -793,8 +791,8 @@ export const de: Translations = {
   'billing.downloadPdf': 'PDF herunterladen',
   'billing.archived': 'Archiviert',
   'billing.archiveSection': 'Archiv (Archivierte Benutzer)',
-  
-  // Instructions
+
+  // Billing Instructions
   'billing.instructions.title': 'Anleitung zur Abrechnung',
   'billing.instructions.whatIsBilling': 'Was ist Abrechnung?',
   'billing.instructions.billingDescription': 'Das Abrechnungsmodul berechnet und erstellt automatisch Rechnungen für Benutzer basierend auf ihrem Energieverbrauch (Solar- und Netzstrom) und EV-Ladeverbrauch.',
@@ -927,7 +925,7 @@ export const de: Translations = {
   'autoBilling.toggleFailed': 'Umschalten des Konfigurationsstatus fehlgeschlagen',
   'autoBilling.instructions.title': 'Automatische Abrechnung Anleitung',
   'autoBilling.instructions.whatIsAutoBilling': 'Was ist automatische Abrechnung?',
-  'autoBilling.instructions.autoBillingDescription': 'Automatische Abrechnungspläne erstellen Rechnungen in regelmässigen Abständen ohne manuelles Eingreifen. Konfigurieren Sie, wann und wie oft Rechnungen erstellt werden sollen, und das System erstellt sie automatisch nach Zeitplan.',
+  'autoBilling.instructions.autoBillingDescription': 'Automatische Abrechnungspläne erstellen Rechnungen in regelmäßigen Abständen ohne manuelles Eingreifen. Konfigurieren Sie, wann und wie oft Rechnungen erstellt werden sollen, und das System erstellt sie automatisch nach Zeitplan.',
   'autoBilling.instructions.howItWorks': 'Wie es funktioniert',
   'autoBilling.instructions.work1': 'Das System überprüft aktive Konfigurationen jede Stunde',
   'autoBilling.instructions.work2': 'Wenn der geplante Tag eintrifft, werden Rechnungen automatisch erstellt',
@@ -948,7 +946,7 @@ export const de: Translations = {
   'autoBilling.instructions.important1': 'Stellen Sie sicher, dass aktive Preise für alle Gebäude vor der Planung konfiguriert sind',
   'autoBilling.instructions.important2': 'Benutzer müssen Wohnungszähler für die Verbrauchsverfolgung haben',
   'autoBilling.instructions.important3': 'Konfigurationen können pausiert werden, ohne sie zu löschen',
-  'autoBilling.instructions.important4': 'Überprüfen Sie regelmässig die Abrechnungsseite, um generierte Rechnungen zu verifizieren',
+  'autoBilling.instructions.important4': 'Überprüfen Sie regelmäßig die Abrechnungsseite, um generierte Rechnungen zu verifizieren',
   'autoBilling.instructions.tips': 'Tipps',
   'autoBilling.instructions.tip1': 'Setzen Sie Erstellungstag auf 1.-5. des Monats für zuverlässigste Ergebnisse',
   'autoBilling.instructions.tip2': 'Verwenden Sie separate Konfigurationen für verschiedene Gebäudegruppen',
@@ -999,7 +997,7 @@ export const de: Translations = {
   'logs.sinceLastRestart': 'Seit letztem Neustart',
   'logs.tempNormal': 'Normal',
   'logs.tempWarm': 'Warm',
-  'logs.tempHot': 'Heiss',
+  'logs.tempHot': 'Heiß',
   'logs.createBackup': 'Backup erstellen',
   'logs.creatingBackup': 'Erstelle Backup...',
   'logs.restoreBackup': 'Backup wiederherstellen',
@@ -1030,7 +1028,7 @@ export const de: Translations = {
   'logs.cpuHigh': 'Hohe Auslastung!',
   'logs.updatingSystem': 'System wird aktualisiert',
   'logs.updateInProgress': 'Bitte warten Sie, während das System aktualisiert wird. Dies dauert ungefähr 40 Sekunden.',
-  'logs.doNotCloseWindow': 'Bitte schliessen Sie dieses Fenster nicht oder navigieren Sie nicht weg.',
+  'logs.doNotCloseWindow': 'Bitte schließen Sie dieses Fenster nicht oder navigieren Sie nicht weg.',
 
   // Settings
   'settings.title': 'Einstellungen',
@@ -1052,7 +1050,7 @@ export const de: Translations = {
   'settings.passwordChangeFailed': 'Passwortänderung fehlgeschlagen. Überprüfen Sie Ihr altes Passwort.',
   'settings.useStrongPasswords': 'Verwenden Sie starke Passwörter',
   'settings.useStrongPasswordsDesc': 'Kombinieren Sie Buchstaben, Zahlen und Symbole',
-  'settings.changeRegularly': 'Regelmässig ändern',
+  'settings.changeRegularly': 'Regelmäßig ändern',
   'settings.changeRegularlyDesc': 'Aktualisieren Sie Ihr Passwort alle 3-6 Monate',
   'settings.neverShare': 'Niemals teilen',
   'settings.neverShareDesc': 'Halten Sie Ihre Anmeldedaten privat und sicher',

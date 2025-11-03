@@ -130,7 +130,7 @@ const DeleteConfirmationModal = memo(({
               borderRadius: '12px', padding: '16px', marginBottom: '16px'
             }}>
               <p style={{ fontSize: '13px', fontWeight: '600', color: '#991b1b', margin: 0 }}>
-                âš ï¸ {t('meters.dataLossWarning') || 'Warning: All historical data for this meter will be permanently lost. This cannot be recovered.'}
+                Ã¢Å¡Â Ã¯Â¸Â {t('meters.dataLossWarning') || 'Warning: All historical data for this meter will be permanently lost. This cannot be recovered.'}
               </p>
             </div>
 
@@ -537,6 +537,17 @@ export default function Meters() {
     return loxoneStatus[meterId];
   };
 
+  const getMeterTypeLabel = (meterType: string): string => {
+    const typeMap: Record<string, string> = {
+      'total_meter': t('meters.totalMeter'),
+      'solar_meter': t('meters.solarMeter'),
+      'apartment_meter': t('meters.apartmentMeter'),
+      'heating_meter': t('meters.heatingMeter'),
+      'other': t('meters.other')
+    };
+    return typeMap[meterType] || meterType;
+  };
+
   const renderConnectionStatus = (meter: Meter) => {
     if (meter.connection_type === 'loxone_api') {
       const status = getLoxoneConnectionStatus(meter.id);
@@ -559,7 +570,7 @@ export default function Meters() {
                     {t('meters.loxoneConnected')}
                   </div>
                   <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
-                    {t('meters.lastUpdate')}: {new Date(status.last_update).toLocaleTimeString()}
+                    {t('meters.lastUpdate')}: {new Date(status.last_update).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
                   </div>
                 </div>
               </>
@@ -1031,10 +1042,9 @@ export default function Meters() {
                     <p style={{
                       fontSize: '14px',
                       color: '#6b7280',
-                      margin: 0,
-                      textTransform: 'capitalize'
+                      margin: 0
                     }}>
-                      {meter.meter_type.replace('_', ' ')}
+                      {getMeterTypeLabel(meter.meter_type)}
                     </p>
                     {meter.apartment_unit && (
                       <p style={{
@@ -1332,7 +1342,7 @@ export default function Meters() {
                                   fontSize: '11px',
                                   fontWeight: '600'
                                 }}>
-                                  ✓ {t('common.active')}
+                                  âœ“ {t('common.active')}
                                 </div>
                               </div>
                             ) : (
@@ -1344,7 +1354,7 @@ export default function Meters() {
                                 color: '#92400e',
                                 fontSize: '13px'
                               }}>
-                                ⚠️ {t('meters.noUserLinked')}
+                                âš ï¸ {t('meters.noUserLinked')}
                               </div>
                             )}
                             <p style={{ fontSize: '11px', color: '#666', marginTop: '6px' }}>
@@ -1362,7 +1372,7 @@ export default function Meters() {
                             color: '#6b7280',
                             fontSize: '13px'
                           }}>
-                            ℹ️ {t('meters.apartmentNotSelected')}
+                            â„¹ï¸ {t('meters.apartmentNotSelected')}
                           </div>
                         )}
                       </>
@@ -1437,7 +1447,7 @@ export default function Meters() {
                         </label>
                         <input type="password" required value={connectionConfig.loxone_password || ''}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_password: e.target.value })}
-                          placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                          placeholder="Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
                     </div>
