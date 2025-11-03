@@ -1075,7 +1075,7 @@ export default function Bills({ selectedBuildingId, buildings, users, onRefresh 
                                 </p>
                             </div>
                             <span style={{ fontSize: '24px', color: '#666' }}>
-                                {expandedBuildings.has(building.id) ? 'â–¼' : 'â–¶'}
+                                {expandedBuildings.has(building.id) ? '▼' : '▶'}
                             </span>
                         </div>
 
@@ -1104,7 +1104,7 @@ export default function Bills({ selectedBuildingId, buildings, users, onRefresh 
                                                 </h3>
                                             </div>
                                             <span style={{ fontSize: '18px', color: '#856404' }}>
-                                                {expandedYears.has('archive-' + building.id) ? 'â–¼' : 'â–¶'}
+                                                {expandedYears.has('archive-' + building.id) ? '▼' : '▶'}
                                             </span>
                                         </div>
 
@@ -1164,7 +1164,7 @@ export default function Bills({ selectedBuildingId, buildings, users, onRefresh 
                                                     {year} ({yearInvoices.length} {yearInvoices.length === 1 ? t('billing.invoice') : t('billing.invoices')})
                                                 </h3>
                                                 <span style={{ fontSize: '18px', color: '#666' }}>
-                                                    {expandedYears.has(year + '-' + building.id) ? 'â–¼' : 'â–¶'}
+                                                    {expandedYears.has(year + '-' + building.id) ? '▼' : '▶'}
                                                 </span>
                                             </div>
 
