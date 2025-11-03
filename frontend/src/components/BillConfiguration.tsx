@@ -15,7 +15,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
   const [step, setStep] = useState(1);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [adminUsers, setAdminUsers] = useState<User[]>([]);
   const [sharedMeters, setSharedMeters] = useState<SharedMeterConfig[]>([]);
   const [customItems, setCustomItems] = useState<CustomLineItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -58,12 +57,10 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       ]);
       setBuildings(buildingsData);
       
-      // Separate regular users from admin users
-      const regularUsers = usersData.filter(u => !u.is_admin);
-      const adminUsersList = usersData.filter(u => u.is_admin);
-      
+      // Filter out administration users - only show regular users for invoice generation
+      const regularUsers = usersData.filter(u => u.user_type === 'regular');
       setUsers(regularUsers);
-      setAdminUsers(adminUsersList);
+      
       setSharedMeters(sharedMetersData);
       setCustomItems(customItemsData.filter(item => item.is_active));
     } catch (err) {
@@ -95,19 +92,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           bank_name: parsed.name || '',
           bank_iban: parsed.iban || '',
           bank_account_holder: parsed.holder || ''
-        }));
-      }
-      
-      // Try to prefill sender info from first admin user if available and not already set
-      if (!savedSender && adminUsers.length > 0) {
-        const firstAdmin = adminUsers[0];
-        setConfig(prev => ({
-          ...prev,
-          sender_name: `${firstAdmin.first_name} ${firstAdmin.last_name}`,
-          sender_address: firstAdmin.address_street || '',
-          sender_city: firstAdmin.address_city || '',
-          sender_zip: firstAdmin.address_zip || '',
-          sender_country: firstAdmin.address_country || 'Switzerland'
         }));
       }
     } catch (e) {
@@ -177,13 +161,11 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
 
     setLoading(true);
     try {
-      // Prepare shared meter configs
       const sharedMeterConfigs = selectedSharedMeters.map(id => {
         const meter = sharedMeters.find(m => m.id === id);
         return meter!;
       });
 
-      // Prepare custom line items
       const customLineItems = selectedCustomItems.map(id => {
         const item = customItems.find(i => i.id === id);
         return {
@@ -244,9 +226,9 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         return config.building_ids.length > 0 && config.user_ids.length > 0 && 
                config.start_date && config.end_date;
       case 2:
-        return true; // Optional step
+        return true;
       case 3:
-        return true; // Optional step
+        return true;
       case 4:
         return config.sender_name && config.bank_iban;
       default:
@@ -254,14 +236,12 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     }
   };
 
-  // Step 1: Building & User Selection
   const renderStep1 = () => (
     <div>
       <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px' }}>
         {t('billConfig.step1.title')}
       </h3>
 
-      {/* Date Range */}
       <div style={{ marginBottom: '30px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
         <label style={{ display: 'block', fontWeight: '600', marginBottom: '12px', fontSize: '15px' }}>
           {t('billConfig.step1.billingPeriod')}
@@ -304,7 +284,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         </div>
       </div>
 
-      {/* Buildings */}
       <div style={{ marginBottom: '24px' }}>
         <label style={{ display: 'block', fontWeight: '600', marginBottom: '12px', fontSize: '15px' }}>
           {t('billConfig.step1.selectBuildings')} ({config.building_ids.length} {t('billConfig.step1.selected')})
@@ -342,7 +321,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         </div>
       </div>
 
-      {/* Users */}
       <div style={{ marginBottom: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
           <label style={{ fontWeight: '600', fontSize: '15px' }}>
@@ -413,7 +391,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     </div>
   );
 
-  // Step 2: Shared Meters
   const renderStep2 = () => (
     <div>
       <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px' }}>
@@ -489,7 +466,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     </div>
   );
 
-  // Step 3: Custom Line Items
   const renderStep3 = () => (
     <div>
       <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px' }}>
@@ -565,14 +541,12 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     </div>
   );
 
-  // Step 4: Review & Sender Info
   const renderStep4 = () => (
     <div>
       <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px' }}>
         {t('billConfig.step4.title')}
       </h3>
 
-      {/* Summary */}
       <div style={{ 
         marginBottom: '24px', 
         padding: '20px', 
@@ -590,7 +564,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         </ul>
       </div>
 
-      {/* Sender Information */}
       <div style={{ marginBottom: '24px' }}>
         <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>{t('billConfig.step4.senderInfo')}</h4>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
@@ -667,7 +640,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         </div>
       </div>
 
-      {/* Banking Information */}
       <div>
         <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>{t('billConfig.step4.bankingInfo')}</h4>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
@@ -754,7 +726,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         flexDirection: 'column',
         boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
       }}>
-        {/* Header */}
         <div style={{ 
           padding: '24px 30px', 
           borderBottom: '1px solid #dee2e6',
@@ -789,7 +760,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           </button>
         </div>
 
-        {/* Progress Steps */}
         <div style={{ 
           padding: '20px 30px', 
           borderBottom: '1px solid #dee2e6',
@@ -847,7 +817,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           </div>
         </div>
 
-        {/* Body */}
         <div style={{ 
           padding: '30px', 
           flex: 1, 
@@ -859,7 +828,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           {step === 4 && renderStep4()}
         </div>
 
-        {/* Footer */}
         <div style={{ 
           padding: '20px 30px', 
           borderTop: '1px solid #dee2e6',
