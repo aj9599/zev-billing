@@ -130,7 +130,7 @@ const DeleteConfirmationModal = memo(({
               borderRadius: '12px', padding: '16px', marginBottom: '16px'
             }}>
               <p style={{ fontSize: '13px', fontWeight: '600', color: '#991b1b', margin: 0 }}>
-                ⚠️ {t('meters.dataLossWarning') || 'Warning: All historical data for this meter will be permanently lost. This cannot be recovered.'}
+                âš ï¸ {t('meters.dataLossWarning') || 'Warning: All historical data for this meter will be permanently lost. This cannot be recovered.'}
               </p>
             </div>
 
@@ -229,7 +229,7 @@ export default function Meters() {
   const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
   const [loxoneStatus, setLoxoneStatus] = useState<LoxoneConnectionStatus>({});
   const [formData, setFormData] = useState<Partial<Meter>>({
-    name: '', meter_type: 'total_meter', building_id: 0, user_id: undefined,
+    name: '', meter_type: 'total_meter', building_id: 0, user_id: undefined, apartment_unit: '',
     connection_type: 'loxone_api', connection_config: '{}', notes: '', is_active: true
   });
   const [connectionConfig, setConnectionConfig] = useState<ConnectionConfig>({
@@ -502,7 +502,7 @@ export default function Meters() {
 
   const resetForm = () => {
     setFormData({
-      name: '', meter_type: 'total_meter', building_id: 0, user_id: undefined,
+      name: '', meter_type: 'total_meter', building_id: 0, user_id: undefined, apartment_unit: '',
       connection_type: 'loxone_api', connection_config: '{}', notes: '', is_active: true
     });
     setConnectionConfig({
@@ -1036,6 +1036,20 @@ export default function Meters() {
                     }}>
                       {meter.meter_type.replace('_', ' ')}
                     </p>
+                    {meter.apartment_unit && (
+                      <p style={{
+                        fontSize: '13px',
+                        color: '#667eea',
+                        margin: '4px 0 0 0',
+                        fontWeight: '500',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}>
+                        <Building size={14} />
+                        {meter.apartment_unit}
+                      </p>
+                    )}
                   </div>
 
                   <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #f3f4f6' }}>
@@ -1173,16 +1187,61 @@ export default function Meters() {
               </div>
 
               {formData.meter_type === 'apartment_meter' && (
-                <div style={{ marginTop: '16px' }}>
-                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('meters.userForApartment')}</label>
-                  <select value={formData.user_id || ''} onChange={(e) => setFormData({ ...formData, user_id: e.target.value ? parseInt(e.target.value) : undefined })}
-                    style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
-                    <option value="">{t('meters.selectUser')}</option>
-                    {users.filter(u => u.building_id === formData.building_id).map(u => (
-                      <option key={u.id} value={u.id}>{u.first_name} {u.last_name}</option>
-                    ))}
-                  </select>
-                </div>
+                <>
+                  {(() => {
+                    const selectedBuilding = buildings.find(b => b.id === formData.building_id);
+                    const hasApartments = selectedBuilding?.has_apartments && selectedBuilding?.floors_config && selectedBuilding.floors_config.length > 0;
+                    const allApartments = hasApartments 
+                      ? selectedBuilding!.floors_config!.flatMap(floor => 
+                          floor.apartments.map(apt => `${floor.floor_name} - ${apt}`)
+                        )
+                      : [];
+
+                    return (
+                      <>
+                        {hasApartments && (
+                          <div style={{ marginTop: '16px' }}>
+                            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                              {t('meters.apartmentUnit')}
+                            </label>
+                            <select 
+                              value={formData.apartment_unit || ''} 
+                              onChange={(e) => setFormData({ ...formData, apartment_unit: e.target.value })}
+                              style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
+                            >
+                              <option value="">{t('meters.selectApartment')}</option>
+                              {allApartments.map((apt, idx) => (
+                                <option key={idx} value={apt}>{apt}</option>
+                              ))}
+                            </select>
+                            <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                              {t('meters.apartmentHelpText')}
+                            </p>
+                          </div>
+                        )}
+                        
+                        <div style={{ marginTop: '16px' }}>
+                          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                            {t('meters.userForApartment')}
+                          </label>
+                          <select 
+                            value={formData.user_id || ''} 
+                            onChange={(e) => setFormData({ ...formData, user_id: e.target.value ? parseInt(e.target.value) : undefined })}
+                            style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
+                          >
+                            <option value="">{t('meters.selectUser')}</option>
+                            {users.filter(u => u.building_id === formData.building_id).map(u => (
+                              <option key={u.id} value={u.id}>{u.first_name} {u.last_name}</option>
+                            ))}
+                          </select>
+                          <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                            {t('meters.userOptionalHelpText')}
+                          </p>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </>
               )}
 
               <div style={{ marginTop: '16px' }}>
@@ -1251,7 +1310,7 @@ export default function Meters() {
                         </label>
                         <input type="password" required value={connectionConfig.loxone_password || ''}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_password: e.target.value })}
-                          placeholder="••••••••"
+                          placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
                     </div>

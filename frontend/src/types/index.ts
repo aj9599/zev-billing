@@ -50,6 +50,7 @@ export interface Meter {
   meter_type: string;
   building_id: number;
   user_id?: number;
+  apartment_unit?: string;
   connection_type: string;
   connection_config: string;
   notes: string;

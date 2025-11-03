@@ -62,6 +62,7 @@ type Meter struct {
 	MeterType        string     `json:"meter_type"`
 	BuildingID       int        `json:"building_id"`
 	UserID           *int       `json:"user_id"`
+	ApartmentUnit    string     `json:"apartment_unit"`
 	ConnectionType   string     `json:"connection_type"`
 	ConnectionConfig string     `json:"connection_config"`
 	Notes            string     `json:"notes"`

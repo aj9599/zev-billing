@@ -71,6 +71,7 @@ func RunMigrations(db *sql.DB) error {
 			meter_type TEXT NOT NULL,
 			building_id INTEGER NOT NULL,
 			user_id INTEGER,
+			apartment_unit TEXT,
 			connection_type TEXT NOT NULL,
 			connection_config TEXT NOT NULL,
 			notes TEXT,
@@ -220,6 +221,7 @@ func RunMigrations(db *sql.DB) error {
 		`ALTER TABLE buildings ADD COLUMN has_apartments INTEGER DEFAULT 0`,
 		`ALTER TABLE buildings ADD COLUMN floors_config TEXT`,
 		`ALTER TABLE auto_billing_configs ADD COLUMN first_execution_date DATE`,
+		`ALTER TABLE meters ADD COLUMN apartment_unit TEXT`,
 	}
 
 	for _, stmt := range addColumns {
@@ -236,6 +238,8 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_user_type ON users(user_type)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_apartment_unit ON users(apartment_unit)`,
+		`CREATE INDEX IF NOT EXISTS idx_meters_apartment_unit ON meters(apartment_unit)`,
+		`CREATE INDEX IF NOT EXISTS idx_meters_building ON meters(building_id)`,
 	}
 
 	for _, idx := range newIndexes {

@@ -28,9 +28,9 @@ func (h *MeterHandler) List(w http.ResponseWriter, r *http.Request) {
 	buildingID := r.URL.Query().Get("building_id")
 
 	query := `
-		SELECT id, name, meter_type, building_id, user_id, connection_type, 
-		       connection_config, notes, last_reading, last_reading_time,
-		       is_active, created_at, updated_at
+		SELECT id, name, meter_type, building_id, user_id, apartment_unit,
+		       connection_type, connection_config, notes, last_reading, 
+		       last_reading_time, is_active, created_at, updated_at
 		FROM meters
 	`
 
@@ -53,14 +53,21 @@ func (h *MeterHandler) List(w http.ResponseWriter, r *http.Request) {
 	meters := []models.Meter{}
 	for rows.Next() {
 		var m models.Meter
+		var apartmentUnit sql.NullString
+		
 		err := rows.Scan(
-			&m.ID, &m.Name, &m.MeterType, &m.BuildingID, &m.UserID, &m.ConnectionType,
-			&m.ConnectionConfig, &m.Notes, &m.LastReading, &m.LastReadingTime,
-			&m.IsActive, &m.CreatedAt, &m.UpdatedAt,
+			&m.ID, &m.Name, &m.MeterType, &m.BuildingID, &m.UserID, &apartmentUnit,
+			&m.ConnectionType, &m.ConnectionConfig, &m.Notes, &m.LastReading, 
+			&m.LastReadingTime, &m.IsActive, &m.CreatedAt, &m.UpdatedAt,
 		)
 		if err != nil {
 			continue
 		}
+		
+		if apartmentUnit.Valid {
+			m.ApartmentUnit = apartmentUnit.String
+		}
+		
 		meters = append(meters, m)
 	}
 
@@ -77,15 +84,17 @@ func (h *MeterHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var m models.Meter
+	var apartmentUnit sql.NullString
+	
 	err = h.db.QueryRow(`
-		SELECT id, name, meter_type, building_id, user_id, connection_type, 
-		       connection_config, notes, last_reading, last_reading_time,
-		       is_active, created_at, updated_at
+		SELECT id, name, meter_type, building_id, user_id, apartment_unit,
+		       connection_type, connection_config, notes, last_reading, 
+		       last_reading_time, is_active, created_at, updated_at
 		FROM meters WHERE id = ?
 	`, id).Scan(
-		&m.ID, &m.Name, &m.MeterType, &m.BuildingID, &m.UserID, &m.ConnectionType,
-		&m.ConnectionConfig, &m.Notes, &m.LastReading, &m.LastReadingTime,
-		&m.IsActive, &m.CreatedAt, &m.UpdatedAt,
+		&m.ID, &m.Name, &m.MeterType, &m.BuildingID, &m.UserID, &apartmentUnit,
+		&m.ConnectionType, &m.ConnectionConfig, &m.Notes, &m.LastReading, 
+		&m.LastReadingTime, &m.IsActive, &m.CreatedAt, &m.UpdatedAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -95,6 +104,10 @@ func (h *MeterHandler) Get(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
+	}
+
+	if apartmentUnit.Valid {
+		m.ApartmentUnit = apartmentUnit.String
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -110,11 +123,11 @@ func (h *MeterHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.db.Exec(`
 		INSERT INTO meters (
-			name, meter_type, building_id, user_id, connection_type, 
-			connection_config, notes, is_active
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, m.Name, m.MeterType, m.BuildingID, m.UserID, m.ConnectionType,
-		m.ConnectionConfig, m.Notes, m.IsActive)
+			name, meter_type, building_id, user_id, apartment_unit,
+			connection_type, connection_config, notes, is_active
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, m.Name, m.MeterType, m.BuildingID, m.UserID, m.ApartmentUnit,
+		m.ConnectionType, m.ConnectionConfig, m.Notes, m.IsActive)
 
 	if err != nil {
 		http.Error(w, "Failed to create meter", http.StatusInternalServerError)
@@ -158,11 +171,11 @@ func (h *MeterHandler) Update(w http.ResponseWriter, r *http.Request) {
 	_, err = h.db.Exec(`
 		UPDATE meters SET
 			name = ?, meter_type = ?, building_id = ?, user_id = ?, 
-			connection_type = ?, connection_config = ?, notes = ?,
-			is_active = ?, updated_at = CURRENT_TIMESTAMP
+			apartment_unit = ?, connection_type = ?, connection_config = ?, 
+			notes = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
-	`, m.Name, m.MeterType, m.BuildingID, m.UserID, m.ConnectionType,
-		m.ConnectionConfig, m.Notes, m.IsActive, id)
+	`, m.Name, m.MeterType, m.BuildingID, m.UserID, m.ApartmentUnit,
+		m.ConnectionType, m.ConnectionConfig, m.Notes, m.IsActive, id)
 
 	if err != nil {
 		http.Error(w, "Failed to update meter", http.StatusInternalServerError)
