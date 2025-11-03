@@ -154,7 +154,7 @@ const DeleteConfirmationModal = memo(({
               borderRadius: '12px', padding: '16px', marginBottom: '16px'
             }}>
               <p style={{ fontSize: '13px', fontWeight: '600', color: '#991b1b', margin: 0 }}>
-                ⚠️ {t('chargers.dataLossWarning') || 'Warning: All historical data for this charger will be permanently lost. This cannot be recovered.'}
+                âš ï¸ {t('chargers.dataLossWarning') || 'Warning: All historical data for this charger will be permanently lost. This cannot be recovered.'}
               </p>
             </div>
 
@@ -770,7 +770,7 @@ export default function Chargers() {
                     {t('chargers.loxoneConnected')}
                   </div>
                   <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
-                    {t('chargers.lastUpdate')}: {new Date(status.last_update).toLocaleTimeString()}
+                    {t('chargers.lastUpdate')}: {new Date(status.last_update).toLocaleTimeString(undefined, { hour12: false })}
                   </div>
                 </div>
               </>
@@ -1277,7 +1277,7 @@ export default function Chargers() {
                             fontWeight: '600',
                             color: '#22c55e'
                           }}>
-                            ✓ {t('chargers.supported')}
+                            âœ“ {t('chargers.supported')}
                           </span>
                         </div>
                       )}
@@ -1501,7 +1501,7 @@ export default function Chargers() {
                         </label>
                         <input type="password" required value={connectionConfig.loxone_password || ''}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_password: e.target.value })}
-                          placeholder="••••••••"
+                          placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
                     </div>
