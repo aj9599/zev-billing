@@ -14,7 +14,14 @@ export default function Buildings() {
   const [showModal, setShowModal] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [editingBuilding, setEditingBuilding] = useState<BuildingType | null>(null);
-  const [expandedComplexes, setExpandedComplexes] = useState<Set<number>>(new Set());
+  const [expandedComplexes, setExpandedComplexes] = useState<Set<number>>(() => {
+    try {
+      const saved = localStorage.getItem('expandedComplexes');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [formData, setFormData] = useState<Partial<BuildingType>>({
     name: '',
@@ -117,6 +124,12 @@ export default function Buildings() {
       newExpanded.add(complexId);
     }
     setExpandedComplexes(newExpanded);
+    // Persist to localStorage
+    try {
+      localStorage.setItem('expandedComplexes', JSON.stringify(Array.from(newExpanded)));
+    } catch (err) {
+      console.error('Failed to save expanded state:', err);
+    }
   };
 
   const toggleGroupBuilding = (buildingId: number) => {
