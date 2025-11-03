@@ -274,8 +274,17 @@ export default function Billing() {
     if (!confirm(t('billing.deleteConfirm'))) return;
     
     try {
+      // Save current expanded state before reload
+      const currentExpandedBuildings = new Set(expandedBuildings);
+      const currentExpandedYears = new Set(expandedYears);
+      
       await api.deleteInvoice(id);
-      loadData();
+      await loadData();
+      
+      // Restore expanded state after reload
+      setExpandedBuildings(currentExpandedBuildings);
+      setExpandedYears(currentExpandedYears);
+      
       alert(t('billing.deleteSuccess'));
     } catch (err) {
       alert(t('billing.deleteFailed') + ' ' + err);
@@ -299,17 +308,20 @@ export default function Billing() {
     }
   };
 
-  // FIXED: Swiss QR code generation with proper format
+  // FIXED: Swiss QR code generation with exact Swiss Payment Standard compliance
   const generateSwissQRData = (invoice: Invoice, sender: any, banking: any) => {
     const user = invoice.user;
-    if (!user || !banking.iban || !banking.holder) return '';
+    if (!user || !banking.iban || !banking.holder) {
+      console.error('Missing required data for QR code generation');
+      return '';
+    }
 
     // Format IBAN (remove spaces and convert to uppercase)
     const iban = banking.iban.replace(/\s/g, '').toUpperCase();
     
     // Validate IBAN format
-    if (!iban.startsWith('CH') && !iban.startsWith('LI')) {
-      console.error('Invalid IBAN format - must start with CH or LI');
+    if (!iban.match(/^(CH|LI)[0-9]{2}[A-Z0-9]{1,21}$/)) {
+      console.error('Invalid IBAN format - must be Swiss (CH) or Liechtenstein (LI) IBAN');
       return '';
     }
     
@@ -317,73 +329,98 @@ export default function Billing() {
     const amount = invoice.total_amount.toFixed(2);
     
     // Split sender address into street and house number if possible
-    const senderAddress = sender.address || '';
+    const senderAddress = (sender.address || '').trim();
     const senderAddressMatch = senderAddress.match(/^(.+?)\s+(\d+.*)$/);
-    const senderStreet = senderAddressMatch ? senderAddressMatch[1] : senderAddress;
-    const senderHouseNo = senderAddressMatch ? senderAddressMatch[2] : '';
+    const senderStreet = (senderAddressMatch ? senderAddressMatch[1] : senderAddress).substring(0, 70);
+    const senderHouseNo = (senderAddressMatch ? senderAddressMatch[2] : '').substring(0, 16);
     
     // Split user address
-    const userAddress = user.address_street || '';
+    const userAddress = (user.address_street || '').trim();
     const userAddressMatch = userAddress.match(/^(.+?)\s+(\d+.*)$/);
-    const userStreet = userAddressMatch ? userAddressMatch[1] : userAddress;
-    const userHouseNo = userAddressMatch ? userAddressMatch[2] : '';
+    const userStreet = (userAddressMatch ? userAddressMatch[1] : userAddress).substring(0, 70);
+    const userHouseNo = (userAddressMatch ? userAddressMatch[2] : '').substring(0, 16);
     
-    // Swiss QR code structure (SPC Version 2.0)
+    // Swiss QR code structure (Swiss Payment Standard Version 2.0)
     // CRITICAL: Each field MUST be separated by CRLF (\r\n)
+    // All 31 data elements must be present (even if empty)
     const qrParts = [
-      'SPC',                                      // QR Type
-      '0200',                                     // Version
-      '1',                                        // Coding Type (UTF-8)
-      iban,                                       // IBAN
-      'S',                                        // Creditor Address Type (S=Structured)
-      banking.holder.substring(0, 70),            // Creditor Name (max 70 chars)
-      senderStreet.substring(0, 70),              // Creditor Street (max 70 chars)
-      senderHouseNo.substring(0, 16),             // Creditor Building Number (max 16 chars)
-      (sender.zip || '').substring(0, 16),        // Creditor Postal Code (max 16 chars)
-      (sender.city || '').substring(0, 35),       // Creditor Town (max 35 chars)
-      sender.country || 'CH',                     // Creditor Country (ISO)
-      '',                                         // Ultimate Creditor Address Type (empty=none)
-      '',                                         // Ultimate Creditor Name
-      '',                                         // Ultimate Creditor Street
-      '',                                         // Ultimate Creditor Building Number
-      '',                                         // Ultimate Creditor Postal Code
-      '',                                         // Ultimate Creditor Town
-      '',                                         // Ultimate Creditor Country
-      amount,                                     // Amount
-      invoice.currency,                           // Currency
-      'S',                                        // Debtor Address Type (S=Structured)
-      `${user.first_name} ${user.last_name}`.substring(0, 70),  // Debtor Name (max 70 chars)
-      userStreet.substring(0, 70),                // Debtor Street (max 70 chars)
-      userHouseNo.substring(0, 16),               // Debtor Building Number (max 16 chars)
-      (user.address_zip || '').substring(0, 16),  // Debtor Postal Code (max 16 chars)
-      (user.address_city || '').substring(0, 35), // Debtor Town (max 35 chars)
-      user.address_country || 'CH',               // Debtor Country (ISO)
-      'NON',                                      // Reference Type (NON=without reference)
-      '',                                         // Reference (empty for NON)
-      `Invoice ${invoice.invoice_number}`.substring(0, 140), // Additional Information (max 140 chars)
-      'EPD',                                      // Trailer
-      ''                                          // Billing Information (empty)
+      'SPC',                                          // 1. QR Type (fixed "SPC")
+      '0200',                                         // 2. Version (fixed "0200")
+      '1',                                            // 3. Coding Type (fixed "1" = UTF-8)
+      iban,                                           // 4. IBAN
+      'S',                                            // 5. Creditor Address Type (S=Structured, K=Combined)
+      banking.holder.substring(0, 70),                // 6. Creditor Name (max 70 chars)
+      senderStreet || '',                             // 7. Creditor Street or Address Line 1 (max 70 chars)
+      senderHouseNo || '',                            // 8. Creditor Building Number or Address Line 2 (max 16 chars)
+      (sender.zip || '').substring(0, 16),            // 9. Creditor Postal Code (max 16 chars)
+      (sender.city || '').substring(0, 35),           // 10. Creditor Town (max 35 chars)
+      (sender.country || 'CH').substring(0, 2),       // 11. Creditor Country (ISO 2-letter code)
+      '',                                             // 12. Ultimate Creditor Address Type (empty or S/K)
+      '',                                             // 13. Ultimate Creditor Name (max 70 chars)
+      '',                                             // 14. Ultimate Creditor Street or Address Line 1
+      '',                                             // 15. Ultimate Creditor Building Number or Address Line 2
+      '',                                             // 16. Ultimate Creditor Postal Code
+      '',                                             // 17. Ultimate Creditor Town
+      '',                                             // 18. Ultimate Creditor Country
+      amount,                                         // 19. Amount (max 12 digits including decimal point)
+      (invoice.currency || 'CHF').substring(0, 3),    // 20. Currency (3-letter ISO code)
+      'S',                                            // 21. Ultimate Debtor Address Type (empty or S/K)
+      `${user.first_name} ${user.last_name}`.substring(0, 70), // 22. Ultimate Debtor Name (max 70 chars)
+      userStreet || '',                               // 23. Ultimate Debtor Street or Address Line 1
+      userHouseNo || '',                              // 24. Ultimate Debtor Building Number or Address Line 2
+      (user.address_zip || '').substring(0, 16),      // 25. Ultimate Debtor Postal Code
+      (user.address_city || '').substring(0, 35),     // 26. Ultimate Debtor Town
+      (user.address_country || 'CH').substring(0, 2), // 27. Ultimate Debtor Country
+      'NON',                                          // 28. Reference Type (NON/QRR/SCOR)
+      '',                                             // 29. Reference (max 27 chars, empty for NON)
+      `Invoice ${invoice.invoice_number}`.substring(0, 140), // 30. Unstructured Message (max 140 chars)
+      'EPD'                                           // 31. Billing Information (EPD or empty)
     ];
     
     // Join with CRLF as per Swiss QR specification
     const qrData = qrParts.join('\r\n');
     
-    console.log('Generated Swiss QR data:', qrData);
-    console.log('QR data length:', qrData.length, 'characters');
+    // Validate structure
+    const lines = qrData.split('\r\n');
+    if (lines.length !== 31) {
+      console.error(`Invalid QR data structure: expected 31 lines, got ${lines.length}`);
+      return '';
+    }
+    
+    console.log('Generated Swiss QR data (31 elements):');
+    console.log(`1. QR Type: ${lines[0]}`);
+    console.log(`2. Version: ${lines[1]}`);
+    console.log(`3. Coding: ${lines[2]}`);
+    console.log(`4. IBAN: ${lines[3]}`);
+    console.log(`19. Amount: ${lines[18]}`);
+    console.log(`20. Currency: ${lines[19]}`);
+    console.log(`28. Reference Type: ${lines[27]}`);
+    console.log(`Total length: ${qrData.length} characters`);
     
     return qrData;
   };
 
-  // Download PDF function
-  const downloadPDF = (invoice: Invoice, senderInfoOverride?: any, bankingInfoOverride?: any) => {
-    // Check if invoice has items
+  // Download PDF function with direct download (no print dialog)
+  const downloadPDF = async (invoice: Invoice, senderInfoOverride?: any, bankingInfoOverride?: any) => {
+    // Ensure invoice has items loaded
+    let invoiceWithItems = invoice;
     if (!invoice.items || invoice.items.length === 0) {
-      alert(t('billing.viewFirstWarning'));
-      return;
+      try {
+        // Load full invoice with items
+        invoiceWithItems = await api.getInvoice(invoice.id);
+        if (!invoiceWithItems.items || invoiceWithItems.items.length === 0) {
+          alert(t('billing.viewFirstWarning'));
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to load invoice items:', err);
+        alert('Failed to load invoice details. Please try again.');
+        return;
+      }
     }
     
-    const user = users.find(u => u.id === invoice.user_id);
-    const building = buildings.find(b => b.id === invoice.building_id);
+    const user = users.find(u => u.id === invoiceWithItems.user_id);
+    const building = buildings.find(b => b.id === invoiceWithItems.building_id);
     
     // Use override if provided, otherwise use persistent state
     const sender = senderInfoOverride || senderInfo;
@@ -394,26 +431,35 @@ export default function Billing() {
     // Check if user is archived
     const isArchived = !user?.is_active;
     
-    // Create a new window for PDF generation
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert(t('billing.allowPopups'));
+    // Generate QR code data for Swiss QR bill
+    const qrData = generateSwissQRData(invoiceWithItems, sender, banking);
+    
+    // Create iframe for PDF generation (hidden)
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+    
+    const iframeDoc = iframe.contentWindow?.document;
+    if (!iframeDoc) {
+      alert('Failed to create PDF. Please try again.');
       return;
     }
     
-    // Generate QR code data for Swiss QR bill
-    const qrData = generateSwissQRData(invoice, sender, banking);
-    
-    printWindow.document.write(`
+    iframeDoc.write(`
       <!DOCTYPE html>
       <html>
       <head>
-        <title>${t('billing.invoice')} ${invoice.invoice_number}</title>
+        <title>${t('billing.invoice')} ${invoiceWithItems.invoice_number}</title>
         <meta charset="UTF-8">
         <style>
           @page {
             size: A4;
-            margin: 20mm;
+            margin: 15mm;
           }
           
           body { 
@@ -421,11 +467,12 @@ export default function Billing() {
             padding: 0;
             margin: 0;
             max-width: 210mm;
+            font-size: 10pt;
           }
           
           .page {
             page-break-after: always;
-            padding: 40px;
+            padding: 20px;
             min-height: 100vh;
           }
           
@@ -434,9 +481,9 @@ export default function Billing() {
           }
           
           .header { 
-            border-bottom: 3px solid #007bff; 
-            padding-bottom: 20px; 
-            margin-bottom: 30px;
+            border-bottom: 2px solid #007bff; 
+            padding-bottom: 15px; 
+            margin-bottom: 20px;
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
@@ -444,37 +491,37 @@ export default function Billing() {
           
           .header-left h1 { 
             margin: 0; 
-            font-size: 32px; 
+            font-size: 24pt; 
             color: #007bff;
           }
           
           .header-left .invoice-number { 
             color: #666; 
-            font-size: 14px; 
-            margin-top: 5px;
+            font-size: 10pt; 
+            margin-top: 4px;
           }
           
           .header-right {
             text-align: right;
-            font-size: 12px;
-            line-height: 1.6;
+            font-size: 9pt;
+            line-height: 1.4;
           }
           
           .header-right strong {
             display: block;
-            font-size: 14px;
-            margin-bottom: 5px;
+            font-size: 10pt;
+            margin-bottom: 3px;
           }
           
           .status-badge {
             display: inline-block;
-            padding: 6px 16px;
-            border-radius: 20px;
-            font-size: 13px;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 9pt;
             font-weight: 600;
-            margin-top: 10px;
+            margin-top: 8px;
             ${(() => {
-              const colors = getStatusColor(invoice.status);
+              const colors = getStatusColor(invoiceWithItems.status);
               return `background-color: ${colors.bg}; color: ${colors.color};`;
             })()}
           }
@@ -483,19 +530,20 @@ export default function Billing() {
           .archived-banner {
             background-color: #f8d7da;
             color: #721c24;
-            padding: 15px;
+            padding: 10px;
             text-align: center;
             font-weight: bold;
-            border-radius: 8px;
-            margin-bottom: 20px;
+            border-radius: 6px;
+            margin-bottom: 15px;
             border: 2px solid #f5c6cb;
+            font-size: 10pt;
           }
           ` : ''}
           
           .addresses {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
           }
           
           .info-section { 
@@ -503,34 +551,39 @@ export default function Billing() {
           }
           
           .info-section h3 { 
-            font-size: 14px; 
+            font-size: 10pt; 
             text-transform: uppercase; 
             color: #666; 
-            margin-bottom: 10px;
+            margin-bottom: 8px;
+            font-weight: 600;
           }
           
           .info-section p { 
-            margin: 5px 0; 
-            line-height: 1.6;
+            margin: 3px 0; 
+            line-height: 1.4;
+            font-size: 9pt;
           }
           
           table { 
             width: 100%; 
             border-collapse: collapse; 
-            margin: 30px 0;
+            margin: 20px 0;
+            font-size: 9pt;
           }
           
           th { 
             background-color: #f9f9f9; 
-            padding: 12px; 
+            padding: 8px; 
             text-align: left; 
             border-bottom: 2px solid #ddd;
             font-weight: 600;
+            font-size: 9pt;
           }
           
           td { 
-            padding: 12px; 
+            padding: 8px; 
             border-bottom: 1px solid #eee;
+            font-size: 9pt;
           }
           
           td svg {
@@ -548,7 +601,7 @@ export default function Billing() {
           
           .item-info { 
             color: #666;
-            font-size: 14px;
+            font-size: 8pt;
           }
           
           .item-cost { 
@@ -569,23 +622,23 @@ export default function Billing() {
           
           .total-section { 
             background-color: #f9f9f9; 
-            padding: 20px; 
+            padding: 15px; 
             text-align: right; 
-            margin-top: 30px;
-            border-radius: 8px;
+            margin-top: 20px;
+            border-radius: 6px;
           }
           
           .total-section p { 
-            font-size: 24px; 
+            font-size: 18pt; 
             font-weight: bold; 
             margin: 0;
           }
           
           .footer {
-            margin-top: 50px;
-            padding-top: 20px;
+            margin-top: 30px;
+            padding-top: 15px;
             border-top: 1px solid #ddd;
-            font-size: 12px;
+            font-size: 8pt;
             color: #666;
             text-align: center;
           }
@@ -597,33 +650,33 @@ export default function Billing() {
             justify-content: center;
             min-height: 100vh;
             text-align: center;
-            padding: 40px;
+            padding: 30px;
           }
           
           .qr-title {
-            font-size: 24px;
+            font-size: 18pt;
             font-weight: bold;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             color: #007bff;
           }
           
           .qr-container {
             border: 2px solid #007bff;
-            padding: 30px;
-            border-radius: 10px;
+            padding: 25px;
+            border-radius: 8px;
             background: white;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
           }
           
           .qr-info {
-            margin-top: 20px;
-            font-size: 14px;
-            line-height: 1.8;
+            margin-top: 15px;
+            font-size: 10pt;
+            line-height: 1.6;
             text-align: left;
           }
           
           #qrcode {
-            margin: 20px auto;
+            margin: 15px auto;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -634,8 +687,8 @@ export default function Billing() {
           }
           
           @media print {
-            body { padding: 0; }
-            .page { padding: 20px; }
+            body { padding: 0; font-size: 10pt; }
+            .page { padding: 15px; }
             @page { margin: 10mm; }
           }
         </style>
@@ -651,8 +704,8 @@ export default function Billing() {
           <div class="header">
             <div class="header-left">
               <h1>${t('billing.invoice')}</h1>
-              <div class="invoice-number">#${invoice.invoice_number}</div>
-              <div class="status-badge">${invoice.status.toUpperCase()}</div>
+              <div class="invoice-number">#${invoiceWithItems.invoice_number}</div>
+              <div class="status-badge">${invoiceWithItems.status.toUpperCase()}</div>
             </div>
             ${sender.name ? `
               <div class="header-right">
@@ -679,9 +732,9 @@ export default function Billing() {
               <h3>${t('billing.invoiceDetails')}</h3>
               <p>
                 <strong>${t('users.building')}:</strong> ${building?.name || 'N/A'}<br>
-                <strong>${t('billing.periodLabel')}</strong> ${formatDate(invoice.period_start)} ${t('pricing.to')} ${formatDate(invoice.period_end)}<br>
-                <strong>${t('billing.generatedLabel')}</strong> ${formatDate(invoice.generated_at)}<br>
-                <strong>${t('billing.statusLabel')}</strong> ${invoice.status}
+                <strong>${t('billing.periodLabel')}</strong> ${formatDate(invoiceWithItems.period_start)} ${t('pricing.to')} ${formatDate(invoiceWithItems.period_end)}<br>
+                <strong>${t('billing.generatedLabel')}</strong> ${formatDate(invoiceWithItems.generated_at)}<br>
+                <strong>${t('billing.statusLabel')}</strong> ${invoiceWithItems.status}
               </p>
             </div>
           </div>
@@ -694,7 +747,7 @@ export default function Billing() {
               </tr>
             </thead>
             <tbody>
-              ${invoice.items?.map(item => {
+              ${invoiceWithItems.items?.map(item => {
                 if (item.item_type === 'meter_info' || item.item_type === 'charging_header') {
                   return `<tr class="item-header"><td colspan="2"><strong>${item.description}</strong></td></tr>`;
                 } 
@@ -786,11 +839,11 @@ export default function Billing() {
           </table>
 
           <div class="total-section">
-            <p>${t('billing.total')} ${invoice.currency} ${invoice.total_amount.toFixed(2)}</p>
+            <p>${t('billing.total')} ${invoiceWithItems.currency} ${invoiceWithItems.total_amount.toFixed(2)}</p>
           </div>
 
           ${hasBankingDetails ? `
-            <div class="info-section" style="margin-top: 30px;">
+            <div class="info-section" style="margin-top: 20px;">
               <h3>${t('billing.paymentDetails')}</h3>
               <p>
                 <strong>${t('billing.bankName')}:</strong> ${banking.name}<br>
@@ -812,8 +865,8 @@ export default function Billing() {
             <div class="qr-container">
               <div id="qrcode"></div>
               <div class="qr-info">
-                <p><strong>${t('billing.invoice')}:</strong> ${invoice.invoice_number}</p>
-                <p><strong>${t('billing.amount')}:</strong> ${invoice.currency} ${invoice.total_amount.toFixed(2)}</p>
+                <p><strong>${t('billing.invoice')}:</strong> ${invoiceWithItems.invoice_number}</p>
+                <p><strong>${t('billing.amount')}:</strong> ${invoiceWithItems.currency} ${invoiceWithItems.total_amount.toFixed(2)}</p>
                 <p><strong>${t('billing.iban')}:</strong> ${banking.iban}</p>
                 <p><strong>${t('billing.accountHolder')}:</strong> ${banking.holder}</p>
               </div>
@@ -827,9 +880,8 @@ export default function Billing() {
             // Generate Swiss QR Code with proper format
             const qrData = ${JSON.stringify(qrData)};
             
-            console.log('QR Data for Swiss QR Bill:');
+            console.log('QR Data for Swiss QR Bill (31 data elements):');
             console.log(qrData);
-            console.log('QR Data length:', qrData.length, 'characters');
             
             window.addEventListener('load', function() {
               const qrCodeDiv = document.getElementById('qrcode');
@@ -851,31 +903,26 @@ export default function Billing() {
                   
                   console.log('✓ Swiss QR Code generated successfully');
                   
-                  // Wait for QR code to render before printing
+                  // Wait for QR code to render then trigger print
                   setTimeout(() => {
                     window.print();
-                    setTimeout(() => window.close(), 100);
                   }, 1500);
                 } catch (error) {
                   console.error('❌ QR Code generation error:', error);
-                  alert('Failed to generate QR code: ' + error.message);
                   setTimeout(() => {
                     window.print();
-                    setTimeout(() => window.close(), 100);
                   }, 1000);
                 }
               } else {
                 console.error('❌ QRCode library not loaded or qrcode div not found');
                 setTimeout(() => {
                   window.print();
-                  setTimeout(() => window.close(), 100);
                 }, 1000);
               }
             });
           ` : `
             window.addEventListener('load', function() {
               window.print();
-              setTimeout(() => window.close(), 100);
             });
           `}
         </script>
@@ -883,7 +930,12 @@ export default function Billing() {
       </html>
     `);
     
-    printWindow.document.close();
+    iframeDoc.close();
+    
+    // Cleanup iframe after print/download
+    setTimeout(() => {
+      document.body.removeChild(iframe);
+    }, 5000);
   };
 
   const resetForm = () => {
