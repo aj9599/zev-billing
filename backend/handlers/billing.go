@@ -36,14 +36,14 @@ type GenerateBillsRequest struct {
 	UserIDs     []int  `json:"user_ids"`
 	StartDate   string `json:"start_date"`
 	EndDate     string `json:"end_date"`
-	
+
 	// Sender information
 	SenderName    string `json:"sender_name"`
 	SenderAddress string `json:"sender_address"`
 	SenderCity    string `json:"sender_city"`
 	SenderZip     string `json:"sender_zip"`
 	SenderCountry string `json:"sender_country"`
-	
+
 	// Banking information
 	BankName          string `json:"bank_name"`
 	BankIBAN          string `json:"bank_iban"`
@@ -52,10 +52,10 @@ type GenerateBillsRequest struct {
 
 func (h *BillingHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	buildingID := r.URL.Query().Get("building_id")
-	
+
 	var query string
 	var args []interface{}
-	
+
 	if buildingID != "" {
 		query = `
 			SELECT id, building_id, normal_power_price, solar_power_price, 
@@ -228,7 +228,7 @@ func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("=== Starting bill generation ===")
-	log.Printf("Buildings: %v, Users: %v, Period: %s to %s", 
+	log.Printf("Buildings: %v, Users: %v, Period: %s to %s",
 		req.BuildingIDs, req.UserIDs, req.StartDate, req.EndDate)
 	log.Printf("Sender: %s, IBAN: %s", req.SenderName, req.BankIBAN)
 
@@ -267,8 +267,11 @@ func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		// Convert invoice struct to map for PDF generator
+		invoiceMap := h.invoiceToMap(fullInvoice)
+
 		// Generate PDF
-		pdfPath, err := h.pdfGenerator.GenerateInvoicePDF(fullInvoice, senderInfo, bankingInfo)
+		pdfPath, err := h.pdfGenerator.GenerateInvoicePDF(invoiceMap, senderInfo, bankingInfo)
 		if err != nil {
 			log.Printf("WARNING: Failed to generate PDF for invoice %d: %v", invoice.ID, err)
 			continue
@@ -280,7 +283,7 @@ func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 			log.Printf("WARNING: Failed to update PDF path for invoice %d: %v", invoice.ID, err)
 		} else {
 			successCount++
-			log.Printf("✓ Generated PDF %d/%d: %s", i+1, len(invoices), pdfPath)
+			log.Printf("âœ“ Generated PDF %d/%d: %s", i+1, len(invoices), pdfPath)
 		}
 	}
 
@@ -295,7 +298,7 @@ func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 // Helper function to load full invoice with items and user
 func (h *BillingHandler) loadFullInvoice(invoiceID int) (models.Invoice, error) {
 	var inv models.Invoice
-	
+
 	err := h.db.QueryRow(`
 		SELECT i.id, i.invoice_number, i.user_id, i.building_id, 
 		       i.period_start, i.period_end, i.total_amount, i.currency, 
@@ -306,7 +309,7 @@ func (h *BillingHandler) loadFullInvoice(invoiceID int) (models.Invoice, error) 
 		&inv.PeriodStart, &inv.PeriodEnd, &inv.TotalAmount, &inv.Currency,
 		&inv.Status, &inv.GeneratedAt,
 	)
-	
+
 	if err != nil {
 		return inv, err
 	}
@@ -348,6 +351,55 @@ func (h *BillingHandler) loadFullInvoice(invoiceID int) (models.Invoice, error) 
 	}
 
 	return inv, nil
+}
+
+// Helper function to convert Invoice struct to map for PDF generator
+func (h *BillingHandler) invoiceToMap(inv models.Invoice) map[string]interface{} {
+	invoiceMap := make(map[string]interface{})
+
+	invoiceMap["id"] = inv.ID
+	invoiceMap["invoice_number"] = inv.InvoiceNumber
+	invoiceMap["user_id"] = inv.UserID
+	invoiceMap["building_id"] = inv.BuildingID
+	invoiceMap["period_start"] = inv.PeriodStart
+	invoiceMap["period_end"] = inv.PeriodEnd
+	invoiceMap["total_amount"] = inv.TotalAmount
+	invoiceMap["currency"] = inv.Currency
+	invoiceMap["status"] = inv.Status
+	invoiceMap["generated_at"] = inv.GeneratedAt.Format("2006-01-02")
+
+	// Convert items
+	items := make([]interface{}, len(inv.Items))
+	for i, item := range inv.Items {
+		itemMap := make(map[string]interface{})
+		itemMap["id"] = item.ID
+		itemMap["invoice_id"] = item.InvoiceID
+		itemMap["description"] = item.Description
+		itemMap["quantity"] = item.Quantity
+		itemMap["unit_price"] = item.UnitPrice
+		itemMap["total_price"] = item.TotalPrice
+		itemMap["item_type"] = item.ItemType
+		items[i] = itemMap
+	}
+	invoiceMap["items"] = items
+
+	// Convert user
+	if inv.User != nil {
+		userMap := make(map[string]interface{})
+		userMap["id"] = inv.User.ID
+		userMap["first_name"] = inv.User.FirstName
+		userMap["last_name"] = inv.User.LastName
+		userMap["email"] = inv.User.Email
+		userMap["phone"] = inv.User.Phone
+		userMap["address_street"] = inv.User.AddressStreet
+		userMap["address_city"] = inv.User.AddressCity
+		userMap["address_zip"] = inv.User.AddressZip
+		userMap["address_country"] = inv.User.AddressCountry
+		userMap["is_active"] = inv.User.IsActive
+		invoiceMap["user"] = userMap
+	}
+
+	return invoiceMap
 }
 
 func (h *BillingHandler) ListInvoices(w http.ResponseWriter, r *http.Request) {
@@ -532,7 +584,7 @@ func (h *BillingHandler) BackupDatabase(w http.ResponseWriter, r *http.Request) 
 	// Create a backup of the database
 	dbPath := "./zev-billing.db"
 	backupName := fmt.Sprintf("zev-billing-backup-%s.db", time.Now().Format("20060102-150405"))
-	
+
 	// Read the database file
 	data, err := os.ReadFile(dbPath)
 	if err != nil {
@@ -545,7 +597,7 @@ func (h *BillingHandler) BackupDatabase(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", backupName))
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
-	
+
 	w.Write(data)
 	log.Printf("SUCCESS: Database backup created: %s", backupName)
 }
@@ -632,7 +684,7 @@ func (h *BillingHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 
 	// Create CSV
 	var csv strings.Builder
-	
+
 	if exportType == "chargers" {
 		csv.WriteString("Timestamp,Charger Name,Building,User ID,Power (kWh),Mode,State\n")
 		for rows.Next() {
@@ -641,7 +693,7 @@ func (h *BillingHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 			if err := rows.Scan(&timestamp, &chargerName, &buildingName, &userID, &power, &mode, &state); err != nil {
 				continue
 			}
-			csv.WriteString(fmt.Sprintf("%s,%s,%s,%s,%.4f,%s,%s\n", 
+			csv.WriteString(fmt.Sprintf("%s,%s,%s,%s,%.4f,%s,%s\n",
 				timestamp, chargerName, buildingName, userID, power, mode, state))
 		}
 	} else {
@@ -661,13 +713,13 @@ func (h *BillingHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 			if lastName.Valid {
 				lnStr = lastName.String
 			}
-			csv.WriteString(fmt.Sprintf("%s,%s,%s,%s,%s,%s,%.4f\n", 
+			csv.WriteString(fmt.Sprintf("%s,%s,%s,%s,%s,%s,%.4f\n",
 				timestamp, meterName, meterType, buildingName, fnStr, lnStr, power))
 		}
 	}
 
 	filename := fmt.Sprintf("zev-export-%s-%s.csv", exportType, time.Now().Format("20060102-150405"))
-	
+
 	w.Header().Set("Content-Type", "text/csv")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	w.Write([]byte(csv.String()))
