@@ -19,7 +19,6 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
   const { t } = useTranslation();
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [items, setItems] = useState<CustomLineItem[]>([]);
-  const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(null);
   const [editingItem, setEditingItem] = useState<CustomLineItem | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);

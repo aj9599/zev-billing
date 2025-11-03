@@ -14,12 +14,10 @@ export default function Billing() {
   const [users, setUsers] = useState<User[]>([]);
   const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [showAdvancedConfig, setShowAdvancedConfig] = useState(false);
   const [currentView, setCurrentView] = useState<'invoices' | 'shared-meters' | 'custom-items'>('invoices');
-  const [showCustomItemModal, setShowCustomItemModal] = useState(false);
   
   // Persistent sender and banking info
   const [senderInfo, setSenderInfo] = useState({
@@ -36,21 +34,6 @@ export default function Billing() {
     holder: ''
   });
   
-  const [formData, setFormData] = useState({
-    building_ids: [] as number[],
-    user_ids: [] as number[],
-    start_date: '',
-    end_date: '',
-    sender_name: '',
-    sender_address: '',
-    sender_city: '',
-    sender_zip: '',
-    sender_country: 'Switzerland',
-    bank_name: '',
-    bank_iban: '',
-    bank_account_holder: ''
-  });
-  const [generating, setGenerating] = useState(false);
   const [expandedBuildings, setExpandedBuildings] = useState<Set<number>>(new Set());
   const [expandedYears, setExpandedYears] = useState<Set<string>>(new Set());
 
@@ -232,68 +215,6 @@ export default function Billing() {
       });
     } catch (err) {
       console.error('Failed to load data:', err);
-    }
-  };
-
-  const handleGenerate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (formData.building_ids.length === 0) {
-      alert(t('billing.selectAtLeastOne'));
-      return;
-    }
-    
-    const newSenderInfo = {
-      name: formData.sender_name,
-      address: formData.sender_address,
-      city: formData.sender_city,
-      zip: formData.sender_zip,
-      country: formData.sender_country
-    };
-    
-    const newBankingInfo = {
-      name: formData.bank_name,
-      iban: formData.bank_iban,
-      holder: formData.bank_account_holder
-    };
-    
-    setSenderInfo(newSenderInfo);
-    setBankingInfo(newBankingInfo);
-    
-    setGenerating(true);
-    try {
-      const result = await api.generateBills(formData);
-      console.log('Generated invoices:', result);
-      setShowGenerateModal(false);
-      resetForm();
-      
-      // Expand the years for the newly generated invoices
-      if (result && result.length > 0) {
-        const generatedYears = new Set<string>();
-        result.forEach(invoice => {
-          const year = new Date(invoice.period_start).getFullYear().toString();
-          generatedYears.add(year);
-        });
-        
-        setExpandedYears(prev => {
-          const newExpanded = new Set(prev);
-          generatedYears.forEach(year => {
-            formData.building_ids.forEach(buildingId => {
-              newExpanded.add(`${year}-${buildingId}`);
-            });
-          });
-          return newExpanded;
-        });
-      }
-      
-      setTimeout(() => {
-        loadData();
-      }, 500);
-      alert(t('billing.generatedSuccess') + ` (${result.length} ${t('billing.invoicesPlural')})`);
-    } catch (err: any) {
-      console.error('Generation error:', err);
-      alert(t('billing.generateFailed') + '\n' + (err.message || err));
-    } finally {
-      setGenerating(false);
     }
   };
 
@@ -1013,38 +934,6 @@ export default function Billing() {
     }, 5000);
   };
 
-  const resetForm = () => {
-    setFormData({
-      building_ids: [],
-      user_ids: [],
-      start_date: '',
-      end_date: '',
-      sender_name: senderInfo.name,
-      sender_address: senderInfo.address,
-      sender_city: senderInfo.city,
-      sender_zip: senderInfo.zip,
-      sender_country: senderInfo.country,
-      bank_name: bankingInfo.name,
-      bank_iban: bankingInfo.iban,
-      bank_account_holder: bankingInfo.holder
-    });
-  };
-
-  const toggleBuilding = (id: number) => {
-    if (formData.building_ids.includes(id)) {
-      setFormData({ ...formData, building_ids: formData.building_ids.filter(bid => bid !== id) });
-    } else {
-      setFormData({ ...formData, building_ids: [...formData.building_ids, id] });
-    }
-  };
-
-  const toggleUser = (id: number) => {
-    if (formData.user_ids.includes(id)) {
-      setFormData({ ...formData, user_ids: formData.user_ids.filter(uid => uid !== id) });
-    } else {
-      setFormData({ ...formData, user_ids: [...formData.user_ids, id] });
-    }
-  };
 
   const toggleBuildingExpand = (id: number) => {
     const newExpanded = new Set(expandedBuildings);
@@ -1114,10 +1003,6 @@ export default function Billing() {
       totalCount: buildingInvoices.length
     };
   }).filter(group => group.totalCount > 0);
-
-  const activeUsersForBuildings = users.filter(u => 
-    u.is_active && formData.building_ids.includes(u.building_id || 0)
-  );
 
   const InstructionsModal = () => (
     <div style={{

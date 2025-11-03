@@ -89,7 +89,7 @@ export default function SharedMeterConfigComponent() {
       meter_name: config.meter_name,
       split_type: config.split_type === 'equal' || config.split_type === 'custom' ? config.split_type : 'equal',
       unit_price: config.unit_price,
-      custom_splits: config.custom_splits || {}
+      custom_splits: (config as any).custom_splits || {}
     });
     setShowModal(true);
   };
