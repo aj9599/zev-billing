@@ -93,7 +93,7 @@ export default function Billing() {
       }
     }
 
-    // FIX 5: Load expanded years from localStorage
+    // Load expanded years from localStorage
     const savedExpandedYears = localStorage.getItem('zev_expanded_years');
     if (savedExpandedYears) {
       try {
@@ -119,14 +119,14 @@ export default function Billing() {
     }
   }, [bankingInfo]);
 
-  // FIX 5: Save expanded years to localStorage when they change
+  // Save expanded years to localStorage when they change
   useEffect(() => {
     if (expandedYears.size > 0) {
       localStorage.setItem('zev_expanded_years', JSON.stringify(Array.from(expandedYears)));
     }
   }, [expandedYears]);
 
-  // FIX 4: Auto-fill sender and banking info when buildings are selected (ALWAYS override)
+  // Auto-fill sender and banking info when buildings are selected
   useEffect(() => {
     if (formData.building_ids.length > 0) {
       loadAdminInfoForBuildings(formData.building_ids);
@@ -162,7 +162,6 @@ export default function Billing() {
         const admin = adminUsers[0];
         console.log('Found admin user:', admin.email, admin.first_name, admin.last_name);
         
-        // FIX 4: ALWAYS fill from admin (override existing values)
         if (admin.first_name && admin.last_name) {
           const newSenderInfo = {
             name: `${admin.first_name} ${admin.last_name}`,
@@ -184,7 +183,6 @@ export default function Billing() {
           console.log('Auto-filled sender info from admin');
         }
         
-        // FIX 4: ALWAYS fill banking info (override existing values)
         if (admin.bank_iban) {
           const newBankingInfo = {
             name: admin.bank_name || '',
@@ -419,7 +417,7 @@ export default function Billing() {
       return '';
     }
     
-    console.log('âœ“ Generated valid Swiss QR data with 31 elements');
+    console.log('✓ Generated valid Swiss QR data with 31 elements');
     return qrData;
   };
 
@@ -448,7 +446,6 @@ export default function Billing() {
     const hasBankingDetails = banking.iban && banking.holder;
     const isArchived = !user?.is_active;
     
-    // FIX 3: Generate QR data and verify it's valid before using
     const qrData = hasBankingDetails ? generateSwissQRData(invoiceWithItems, sender, banking) : '';
     const hasValidQR = qrData && qrData.length > 0;
     
@@ -661,7 +658,6 @@ export default function Billing() {
             margin: 0;
           }
           
-          /* FIX 1: Payment details at absolute bottom of page */
           .payment-details-bottom {
             position: absolute;
             bottom: 15mm;
@@ -750,7 +746,6 @@ export default function Billing() {
               max-height: 297mm;
             }
             
-            /* FIX 2: Hide browser URL from print */
             @page { 
               margin: 10mm;
               size: A4 portrait;
@@ -768,7 +763,7 @@ export default function Billing() {
         <div class="page">
           ${isArchived ? `
             <div class="archived-banner">
-              âš ï¸ ARCHIVED USER - This invoice is for an archived user
+              ⚠️ ARCHIVED USER - This invoice is for an archived user
             </div>
           ` : ''}
           
@@ -979,20 +974,20 @@ export default function Billing() {
                     correctLevel: QRCode.CorrectLevel.M
                   });
                   
-                  console.log('âœ“ Swiss QR Code generated successfully');
+                  console.log('✓ Swiss QR Code generated successfully');
                   
                   setTimeout(() => {
                     window.print();
                   }, 1500);
                 } catch (error) {
-                  console.error('âœ— QR Code generation error:', error);
+                  console.error('✗ QR Code generation error:', error);
                   qrCodeDiv.innerHTML = '<p style="color: red; padding: 20px;">Error generating QR code</p>';
                   setTimeout(() => {
                     window.print();
                   }, 1000);
                 }
               } else {
-                console.error('âœ— QRCode library not loaded or div not found');
+                console.error('✗ QRCode library not loaded or div not found');
                 setTimeout(() => {
                   window.print();
                 }, 1000);
@@ -1388,12 +1383,9 @@ export default function Billing() {
             display: 'flex',
             alignItems: 'center',
             gap: '12px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text'
+            color: '#1f2937'
           }}>
-            <FileText size={36} style={{ color: '#667eea' }} />
+            <FileText size={36} style={{ color: '#007bff' }} />
             {t('billing.title')}
           </h1>
           <p style={{ color: '#6b7280', fontSize: '16px' }}>
@@ -1412,7 +1404,7 @@ export default function Billing() {
               onClick={() => setCurrentView('invoices')}
               style={{
                 padding: '8px 16px',
-                backgroundColor: currentView === 'invoices' ? '#667eea' : 'transparent',
+                backgroundColor: currentView === 'invoices' ? '#007bff' : 'transparent',
                 color: currentView === 'invoices' ? 'white' : '#666',
                 border: 'none',
                 borderRadius: '4px',
@@ -1426,13 +1418,13 @@ export default function Billing() {
               }}
             >
               <FileText size={14} />
-              Invoices
+              {t('billing.tabs.invoices')}
             </button>
             <button
               onClick={() => setCurrentView('shared-meters')}
               style={{
                 padding: '8px 16px',
-                backgroundColor: currentView === 'shared-meters' ? '#667eea' : 'transparent',
+                backgroundColor: currentView === 'shared-meters' ? '#007bff' : 'transparent',
                 color: currentView === 'shared-meters' ? 'white' : '#666',
                 border: 'none',
                 borderRadius: '4px',
@@ -1446,13 +1438,13 @@ export default function Billing() {
               }}
             >
               <Settings size={14} />
-              Shared Meters
+              {t('billing.tabs.sharedMeters')}
             </button>
             <button
               onClick={() => setCurrentView('custom-items')}
               style={{
                 padding: '8px 16px',
-                backgroundColor: currentView === 'custom-items' ? '#667eea' : 'transparent',
+                backgroundColor: currentView === 'custom-items' ? '#007bff' : 'transparent',
                 color: currentView === 'custom-items' ? 'white' : '#666',
                 border: 'none',
                 borderRadius: '4px',
@@ -1466,7 +1458,7 @@ export default function Billing() {
               }}
             >
               <DollarSign size={14} />
-              Custom Items
+              {t('billing.tabs.customItems')}
             </button>
           </div>
 
@@ -1487,21 +1479,11 @@ export default function Billing() {
                 onClick={() => setShowAdvancedConfig(true)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
-                  backgroundColor: '#6f42c1', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
-                }}
-              >
-                <Settings size={18} />
-                <span className="button-text">Advanced</span>
-              </button>
-              <button
-                onClick={() => setShowGenerateModal(true)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
                   backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
                 }}
               >
                 <Plus size={18} />
-                <span className="button-text">{t('billing.generateBills')}</span>
+                <span className="button-text">{t('billing.createBill')}</span>
               </button>
             </>
           )}
@@ -1512,69 +1494,13 @@ export default function Billing() {
       {currentView === 'shared-meters' ? (
         <SharedMeterConfig />
       ) : currentView === 'custom-items' ? (
-        <div style={{ 
-          backgroundColor: 'white', 
-          borderRadius: '12px', 
-          padding: '30px', 
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)' 
-        }}>
-          <div style={{ textAlign: 'center', padding: '40px' }}>
-            <DollarSign size={48} style={{ 
-              color: '#667eea', 
-              marginBottom: '20px',
-              display: 'block',
-              margin: '0 auto 20px'
-            }} />
-            <h2 style={{ 
-              fontSize: '24px', 
-              fontWeight: '600', 
-              marginBottom: '12px',
-              color: '#111827'
-            }}>
-              Custom Line Items
-            </h2>
-            <p style={{ 
-              fontSize: '16px', 
-              color: '#6b7280', 
-              marginBottom: '30px',
-              maxWidth: '500px',
-              margin: '0 auto 30px'
-            }}>
-              Manage custom line items that will be automatically included in your invoices based on frequency settings.
-            </p>
-            <button
-              onClick={() => setShowCustomItemModal(true)}
-              style={{
-                padding: '12px 24px',
-                backgroundColor: '#667eea',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                fontSize: '14px',
-                fontWeight: '500',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                boxShadow: '0 2px 4px rgba(102, 126, 234, 0.3)',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#5568d3';
-                e.currentTarget.style.transform = 'translateY(-1px)';
-                e.currentTarget.style.boxShadow = '0 4px 6px rgba(102, 126, 234, 0.4)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = '#667eea';
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 2px 4px rgba(102, 126, 234, 0.3)';
-              }}
-            >
-              <DollarSign size={18} />
-              Open Custom Items Manager
-            </button>
-          </div>
-        </div>
+        <CustomItemModal
+          isOpen={true}
+          onClose={() => setCurrentView('invoices')}
+          onSave={() => {
+            loadData();
+          }}
+        />
       ) : (
         <>
       <div style={{ marginBottom: '20px' }}>
@@ -1606,13 +1532,13 @@ export default function Billing() {
           onClick={() => setSelectedBuildingId(null)}
           style={{
             padding: '20px',
-            backgroundColor: selectedBuildingId === null ? '#667eea' : 'white',
+            backgroundColor: selectedBuildingId === null ? '#007bff' : 'white',
             color: selectedBuildingId === null ? 'white' : '#1f2937',
             borderRadius: '12px',
             boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
             cursor: 'pointer',
             transition: 'all 0.2s',
-            border: selectedBuildingId === null ? '2px solid #667eea' : '2px solid transparent'
+            border: selectedBuildingId === null ? '2px solid #007bff' : '2px solid transparent'
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
@@ -1634,13 +1560,13 @@ export default function Billing() {
               onClick={() => setSelectedBuildingId(building.id)}
               style={{
                 padding: '20px',
-                backgroundColor: selectedBuildingId === building.id ? '#667eea' : 'white',
+                backgroundColor: selectedBuildingId === building.id ? '#007bff' : 'white',
                 color: selectedBuildingId === building.id ? 'white' : '#1f2937',
                 borderRadius: '12px',
                 boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
-                border: selectedBuildingId === building.id ? '2px solid #667eea' : '2px solid transparent'
+                border: selectedBuildingId === building.id ? '2px solid #007bff' : '2px solid transparent'
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
@@ -1687,7 +1613,7 @@ export default function Billing() {
                 </p>
               </div>
               <span style={{ fontSize: '24px', color: '#666' }}>
-                {expandedBuildings.has(building.id) ? 'â–¼' : 'â–¶'}
+                {expandedBuildings.has(building.id) ? '▼' : '▶'}
               </span>
             </div>
 
@@ -1716,7 +1642,7 @@ export default function Billing() {
                         </h3>
                       </div>
                       <span style={{ fontSize: '18px', color: '#856404' }}>
-                        {expandedYears.has('archive-' + building.id) ? 'â–¼' : 'â–¶'}
+                        {expandedYears.has('archive-' + building.id) ? '▼' : '▶'}
                       </span>
                     </div>
 
@@ -1776,7 +1702,7 @@ export default function Billing() {
                           {year} ({yearInvoices.length} {yearInvoices.length === 1 ? t('billing.invoice') : t('billing.invoices')})
                         </h3>
                         <span style={{ fontSize: '18px', color: '#666' }}>
-                          {expandedYears.has(year + '-' + building.id) ? 'â–¼' : 'â–¶'}
+                          {expandedYears.has(year + '-' + building.id) ? '▼' : '▶'}
                         </span>
                       </div>
 
@@ -1815,195 +1741,6 @@ export default function Billing() {
       )}
 
       {showInstructions && <InstructionsModal />}
-
-      {showGenerateModal && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-          padding: '15px', overflow: 'auto'
-        }}>
-          <div className="modal-content" style={{
-            backgroundColor: 'white', borderRadius: '12px', padding: '30px',
-            width: '90%', maxWidth: '700px', maxHeight: '90vh', overflow: 'auto'
-          }}>
-            <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '20px' }}>
-              {t('billing.generateBills')}
-            </h2>
-
-            <form onSubmit={handleGenerate}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '12px', fontWeight: '600', fontSize: '15px' }}>
-                  {t('billing.selectBuildings')} * ({t('billing.atLeastOne')})
-                </label>
-                <div style={{ padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '8px', maxHeight: '200px', overflow: 'auto' }}>
-                  {buildings.map(b => (
-                    <label key={b.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={formData.building_ids.includes(b.id)}
-                        onChange={() => toggleBuilding(b.id)}
-                      />
-                      <span>{b.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ marginTop: '20px' }}>
-                <label style={{ display: 'block', marginBottom: '12px', fontWeight: '600', fontSize: '15px' }}>
-                  {t('billing.selectUsers')} ({t('billing.leaveEmptyForAll')})
-                  <span style={{ fontSize: '13px', fontWeight: 'normal', color: '#666', marginLeft: '8px' }}>
-                    ({t('billing.onlyActiveUsers')})
-                  </span>
-                </label>
-                <div style={{ padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '8px', maxHeight: '200px', overflow: 'auto' }}>
-                  {activeUsersForBuildings.length === 0 ? (
-                    <p style={{ color: '#666', fontSize: '14px', textAlign: 'center', margin: '8px 0' }}>
-                      {t('billing.noActiveUsers')}
-                    </p>
-                  ) : (
-                    activeUsersForBuildings.map(u => (
-                      <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={formData.user_ids.includes(u.id)}
-                          onChange={() => toggleUser(u.id)}
-                        />
-                        <span style={{ fontSize: '14px' }}>{u.first_name} {u.last_name} ({u.email})</span>
-                      </label>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '20px' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('billing.startDate')} *</label>
-                  <input type="date" required value={formData.start_date} onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                    style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
-                </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('billing.endDate')} *</label>
-                  <input type="date" required value={formData.end_date} onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                    style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
-                </div>
-              </div>
-
-              <div style={{ marginTop: '20px', padding: '16px', backgroundColor: '#f0f4ff', borderRadius: '8px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
-                  {t('billing.senderInfo')}
-                  {formData.building_ids.length > 0 && formData.sender_name && (
-                    <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#10b981', marginLeft: '8px' }}>
-                      âœ“ {t('billing.autoFilled')}
-                    </span>
-                  )}
-                </h3>
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.senderName')}</label>
-                  <input 
-                    type="text" 
-                    value={formData.sender_name} 
-                    onChange={(e) => setFormData({ ...formData, sender_name: e.target.value })}
-                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
-                    placeholder={t('billing.senderNamePlaceholder')}
-                  />
-                </div>
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.senderAddress')}</label>
-                  <input 
-                    type="text" 
-                    value={formData.sender_address} 
-                    onChange={(e) => setFormData({ ...formData, sender_address: e.target.value })}
-                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
-                    placeholder={t('billing.senderAddressPlaceholder')}
-                  />
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.zip')}</label>
-                    <input 
-                      type="text" 
-                      value={formData.sender_zip} 
-                      onChange={(e) => setFormData({ ...formData, sender_zip: e.target.value })}
-                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
-                      placeholder={t('billing.zipPlaceholder')}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.city')}</label>
-                    <input 
-                      type="text" 
-                      value={formData.sender_city} 
-                      onChange={(e) => setFormData({ ...formData, sender_city: e.target.value })}
-                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
-                      placeholder={t('billing.cityPlaceholder')}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ marginTop: '20px', padding: '16px', backgroundColor: '#f0fff4', borderRadius: '8px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
-                  {t('billing.bankingInfo')}
-                  {formData.building_ids.length > 0 && formData.bank_iban && (
-                    <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#10b981', marginLeft: '8px' }}>
-                      âœ“ {t('billing.autoFilled')}
-                    </span>
-                  )}
-                </h3>
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.bankName')}</label>
-                  <input 
-                    type="text" 
-                    value={formData.bank_name} 
-                    onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
-                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
-                    placeholder={t('billing.bankNamePlaceholder')}
-                  />
-                </div>
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.iban')}</label>
-                  <input 
-                    type="text" 
-                    value={formData.bank_iban} 
-                    onChange={(e) => setFormData({ ...formData, bank_iban: e.target.value })}
-                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
-                    placeholder={t('billing.ibanPlaceholder')}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.accountHolder')}</label>
-                  <input 
-                    type="text" 
-                    value={formData.bank_account_holder} 
-                    onChange={(e) => setFormData({ ...formData, bank_account_holder: e.target.value })}
-                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
-                    placeholder={t('billing.accountHolderPlaceholder')}
-                  />
-                </div>
-                <p style={{ fontSize: '12px', color: '#666', marginTop: '8px', fontStyle: 'italic' }}>
-                  {t('billing.qrNote')}
-                </p>
-              </div>
-
-              <div className="button-group" style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
-                <button type="submit" disabled={generating} style={{
-                  flex: 1, padding: '12px', backgroundColor: '#28a745', color: 'white',
-                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', opacity: generating ? 0.7 : 1, cursor: generating ? 'not-allowed' : 'pointer'
-                }}>
-                  {generating ? t('billing.generating') : t('billing.generateBills')}
-                </button>
-                <button type="button" onClick={() => { setShowGenerateModal(false); resetForm(); }} style={{
-                  flex: 1, padding: '12px', backgroundColor: '#6c757d', color: 'white',
-                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
-                }}>
-                  {t('common.cancel')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {selectedInvoice && (
         <div style={{
@@ -2141,15 +1878,6 @@ export default function Billing() {
       {/* End of conditional invoices view */}
       </>
       )}
-
-      {/* Custom Items Modal */}
-      <CustomItemModal
-        isOpen={showCustomItemModal}
-        onClose={() => setShowCustomItemModal(false)}
-        onSave={() => {
-          loadData();
-        }}
-      />
 
       {/* Advanced Bill Configuration Modal */}
       <BillConfiguration

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Settings, Plus, Edit2, Trash2, Building as BuildingIcon, Zap, AlertCircle, CheckCircle, Loader } from 'lucide-react';
 import { api } from '../api/client';
-import type { SharedMeterConfig, Building, Meter } from '../types';
+import type { SharedMeterConfig, Building, Meter, User } from '../types';
 import { useTranslation } from '../i18n';
 
 export default function SharedMeterConfigComponent() {
@@ -9,6 +9,7 @@ export default function SharedMeterConfigComponent() {
   const [configs, setConfigs] = useState<SharedMeterConfig[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [meters, setMeters] = useState<Meter[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingConfig, setEditingConfig] = useState<SharedMeterConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -19,15 +20,15 @@ export default function SharedMeterConfigComponent() {
     meter_id: 0,
     building_id: 0,
     meter_name: '',
-    split_type: 'equal' as 'equal' | 'by_area' | 'by_units' | 'custom',
-    unit_price: 0
+    split_type: 'equal' as 'equal' | 'custom',
+    unit_price: 0,
+    custom_splits: {} as Record<number, number> // user_id -> percentage
   });
 
   useEffect(() => {
     loadData();
   }, []);
 
-  // Auto-hide toast after 3 seconds
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(null), 3000);
@@ -42,15 +43,23 @@ export default function SharedMeterConfigComponent() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [configsData, buildingsData, metersData] = await Promise.all([
+      const [configsData, buildingsData, metersData, usersData] = await Promise.all([
         api.getSharedMeterConfigs(),
         api.getBuildings(),
-        api.getMeters()
+        api.getMeters(),
+        api.getUsers()
       ]);
       setConfigs(configsData);
-      setBuildings(buildingsData);
-      // Only show building-level meters (no user_id)
-      setMeters(metersData.filter(m => !m.user_id));
+      setBuildings(buildingsData.filter(b => !b.is_group));
+      
+      // Only show Heating and Other meters (exclude Apartment, Solar, Total)
+      const filteredMeters = metersData.filter(m => {
+        if (m.user_id) return false; // Exclude user-specific meters
+        const meterType = m.meter_type?.toLowerCase() || '';
+        return meterType === 'heating' || meterType === 'other';
+      });
+      setMeters(filteredMeters);
+      setUsers(usersData.filter(u => u.is_active));
     } catch (err) {
       console.error('Failed to load data:', err);
       showToast(t('sharedMeters.loadFailed'), 'error');
@@ -66,7 +75,8 @@ export default function SharedMeterConfigComponent() {
       building_id: 0,
       meter_name: '',
       split_type: 'equal',
-      unit_price: 0
+      unit_price: 0,
+      custom_splits: {}
     });
     setShowModal(true);
   };
@@ -77,8 +87,9 @@ export default function SharedMeterConfigComponent() {
       meter_id: config.meter_id,
       building_id: config.building_id,
       meter_name: config.meter_name,
-      split_type: config.split_type,
-      unit_price: config.unit_price
+      split_type: config.split_type === 'equal' || config.split_type === 'custom' ? config.split_type : 'equal',
+      unit_price: config.unit_price,
+      custom_splits: config.custom_splits || {}
     });
     setShowModal(true);
   };
@@ -89,13 +100,29 @@ export default function SharedMeterConfigComponent() {
       return;
     }
 
+    // Validate custom splits if split_type is custom
+    if (formData.split_type === 'custom') {
+      const buildingUsers = users.filter(u => u.building_id === formData.building_id && u.is_active);
+      const totalPercentage = Object.values(formData.custom_splits).reduce((sum, val) => sum + val, 0);
+      
+      if (buildingUsers.length > 0 && Math.abs(totalPercentage - 100) > 0.01) {
+        showToast(t('sharedMeters.totalMustBe100'), 'error');
+        return;
+      }
+    }
+
     try {
       setSaving(true);
+      const saveData = {
+        ...formData,
+        custom_splits: formData.split_type === 'custom' ? formData.custom_splits : undefined
+      };
+      
       if (editingConfig) {
-        await api.updateSharedMeterConfig(editingConfig.id, formData);
+        await api.updateSharedMeterConfig(editingConfig.id, saveData);
         showToast(t('sharedMeters.updateSuccess'), 'success');
       } else {
-        await api.createSharedMeterConfig(formData);
+        await api.createSharedMeterConfig(saveData);
         showToast(t('sharedMeters.createSuccess'), 'success');
       }
       setShowModal(false);
@@ -129,8 +156,6 @@ export default function SharedMeterConfigComponent() {
   const getSplitTypeLabel = (splitType: string) => {
     const labels: Record<string, string> = {
       'equal': t('sharedMeters.splitType.equal'),
-      'by_area': t('sharedMeters.splitType.byArea'),
-      'by_units': t('sharedMeters.splitType.byUnits'),
       'custom': t('sharedMeters.splitType.custom')
     };
     return labels[splitType] || splitType;
@@ -139,11 +164,41 @@ export default function SharedMeterConfigComponent() {
   const getSplitTypeDescription = (splitType: string) => {
     const descriptions: Record<string, string> = {
       'equal': t('sharedMeters.splitTypeDesc.equal'),
-      'by_area': t('sharedMeters.splitTypeDesc.byArea'),
-      'by_units': t('sharedMeters.splitTypeDesc.byUnits'),
       'custom': t('sharedMeters.splitTypeDesc.custom')
     };
     return descriptions[splitType] || '';
+  };
+
+  const buildingUsers = users.filter(u => u.building_id === formData.building_id && u.is_active);
+
+  // Initialize custom splits when building changes
+  useEffect(() => {
+    if (formData.building_id && formData.split_type === 'custom') {
+      const buildingUsers = users.filter(u => u.building_id === formData.building_id && u.is_active);
+      if (buildingUsers.length > 0 && Object.keys(formData.custom_splits).length === 0) {
+        const equalSplit = 100 / buildingUsers.length;
+        const newSplits: Record<number, number> = {};
+        buildingUsers.forEach(user => {
+          newSplits[user.id] = parseFloat(equalSplit.toFixed(2));
+        });
+        setFormData(prev => ({ ...prev, custom_splits: newSplits }));
+      }
+    }
+  }, [formData.building_id, formData.split_type, users]);
+
+  const handlePercentageChange = (userId: number, value: string) => {
+    const numValue = parseFloat(value) || 0;
+    setFormData(prev => ({
+      ...prev,
+      custom_splits: {
+        ...prev.custom_splits,
+        [userId]: numValue
+      }
+    }));
+  };
+
+  const getTotalPercentage = () => {
+    return Object.values(formData.custom_splits).reduce((sum, val) => sum + val, 0);
   };
 
   if (loading) {
@@ -157,7 +212,7 @@ export default function SharedMeterConfigComponent() {
         alignItems: 'center',
         justifyContent: 'center'
       }}>
-        <Loader size={48} style={{ animation: 'spin 1s linear infinite', color: '#667eea', marginBottom: '16px' }} />
+        <Loader size={48} style={{ animation: 'spin 1s linear infinite', color: '#007bff', marginBottom: '16px' }} />
         <p style={{ fontSize: '16px', color: '#6b7280' }}>{t('sharedMeters.loading')}</p>
       </div>
     );
@@ -219,12 +274,9 @@ export default function SharedMeterConfigComponent() {
               display: 'flex',
               alignItems: 'center',
               gap: '12px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text'
+              color: '#1f2937'
             }}>
-              <Settings size={36} style={{ color: '#667eea' }} />
+              <Settings size={36} style={{ color: '#007bff' }} />
               {t('sharedMeters.title')}
             </h1>
             <p style={{ fontSize: '16px', color: '#6b7280', marginTop: '8px' }}>
@@ -235,7 +287,7 @@ export default function SharedMeterConfigComponent() {
             onClick={handleCreate}
             style={{
               padding: '12px 24px',
-              backgroundColor: '#667eea',
+              backgroundColor: '#007bff',
               color: 'white',
               border: 'none',
               borderRadius: '8px',
@@ -246,17 +298,17 @@ export default function SharedMeterConfigComponent() {
               alignItems: 'center',
               gap: '8px',
               transition: 'all 0.2s',
-              boxShadow: '0 4px 6px rgba(102, 126, 234, 0.3)'
+              boxShadow: '0 2px 4px rgba(0, 123, 255, 0.3)'
             }}
             onMouseOver={(e) => {
-              e.currentTarget.style.backgroundColor = '#5568d3';
+              e.currentTarget.style.backgroundColor = '#0056b3';
               e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 6px 12px rgba(102, 126, 234, 0.4)';
+              e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 123, 255, 0.4)';
             }}
             onMouseOut={(e) => {
-              e.currentTarget.style.backgroundColor = '#667eea';
+              e.currentTarget.style.backgroundColor = '#007bff';
               e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 4px 6px rgba(102, 126, 234, 0.3)';
+              e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 123, 255, 0.3)';
             }}
           >
             <Plus size={18} />
@@ -266,20 +318,22 @@ export default function SharedMeterConfigComponent() {
 
         {/* Info Banner */}
         <div style={{
-          background: 'linear-gradient(135deg, #667eea15 0%, #764ba215 100%)',
-          border: '2px solid #667eea',
+          backgroundColor: '#e7f3ff',
+          border: '2px solid #007bff',
           borderRadius: '12px',
           padding: '20px',
           marginBottom: '30px',
           display: 'flex',
           gap: '16px'
         }}>
-          <AlertCircle size={24} color="#667eea" style={{ flexShrink: 0, marginTop: '2px' }} />
+          <AlertCircle size={24} color="#007bff" style={{ flexShrink: 0, marginTop: '2px' }} />
           <div style={{ fontSize: '14px', color: '#4b5563', lineHeight: '1.7' }}>
             <strong style={{ display: 'block', fontSize: '15px', marginBottom: '6px', color: '#1f2937' }}>
               {t('sharedMeters.infoTitle')}
             </strong>
             {t('sharedMeters.infoDescription')}
+            <br />
+            <strong style={{ marginTop: '8px', display: 'block' }}>{t('sharedMeters.onlyHeatingOther')}</strong>
           </div>
         </div>
 
@@ -288,7 +342,7 @@ export default function SharedMeterConfigComponent() {
           <div style={{ 
             textAlign: 'center', 
             padding: '80px 20px',
-            background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
+            backgroundColor: '#f8f9fa',
             borderRadius: '12px',
             border: '2px dashed #dee2e6'
           }}>
@@ -296,7 +350,7 @@ export default function SharedMeterConfigComponent() {
               width: '80px',
               height: '80px',
               margin: '0 auto 20px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              backgroundColor: '#007bff',
               borderRadius: '50%',
               display: 'flex',
               alignItems: 'center',
@@ -320,15 +374,15 @@ export default function SharedMeterConfigComponent() {
             }}>
               <thead>
                 <tr style={{ 
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  color: 'white'
+                  backgroundColor: '#f8f9fa',
+                  color: '#1f2937',
+                  borderBottom: '2px solid #e9ecef'
                 }}>
                   <th style={{ 
                     padding: '16px', 
                     textAlign: 'left', 
                     fontWeight: '600',
-                    fontSize: '14px',
-                    borderTopLeftRadius: '8px'
+                    fontSize: '14px'
                   }}>
                     {t('sharedMeters.meterName')}
                   </th>
@@ -360,8 +414,7 @@ export default function SharedMeterConfigComponent() {
                     padding: '16px', 
                     textAlign: 'right', 
                     fontWeight: '600',
-                    fontSize: '14px',
-                    borderTopRightRadius: '8px'
+                    fontSize: '14px'
                   }}>
                     {t('common.actions')}
                   </th>
@@ -381,7 +434,7 @@ export default function SharedMeterConfigComponent() {
                         <div style={{
                           width: '36px',
                           height: '36px',
-                          background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+                          backgroundColor: '#fbbf24',
                           borderRadius: '8px',
                           display: 'flex',
                           alignItems: 'center',
@@ -403,7 +456,7 @@ export default function SharedMeterConfigComponent() {
                         display: 'inline-block',
                         padding: '6px 14px',
                         borderRadius: '20px',
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        backgroundColor: '#007bff',
                         color: 'white',
                         fontSize: '13px',
                         fontWeight: '600'
@@ -513,10 +566,7 @@ export default function SharedMeterConfigComponent() {
               <h2 style={{ 
                 fontSize: '24px', 
                 fontWeight: '700',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
+                color: '#1f2937',
                 marginBottom: '8px'
               }}>
                 {editingConfig ? t('sharedMeters.editTitle') : t('sharedMeters.createTitle')}
@@ -541,7 +591,7 @@ export default function SharedMeterConfigComponent() {
                 value={formData.building_id}
                 onChange={(e) => {
                   const buildingId = parseInt(e.target.value);
-                  setFormData({...formData, building_id: buildingId, meter_id: 0, meter_name: ''});
+                  setFormData({...formData, building_id: buildingId, meter_id: 0, meter_name: '', custom_splits: {}});
                 }}
                 style={{
                   width: '100%',
@@ -553,7 +603,7 @@ export default function SharedMeterConfigComponent() {
                   cursor: 'pointer',
                   transition: 'border-color 0.2s'
                 }}
-                onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                onFocus={(e) => e.target.style.borderColor = '#007bff'}
                 onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
               >
                 <option value={0}>{t('sharedMeters.selectBuilding')}</option>
@@ -596,7 +646,7 @@ export default function SharedMeterConfigComponent() {
                   cursor: formData.building_id ? 'pointer' : 'not-allowed',
                   transition: 'border-color 0.2s'
                 }}
-                onFocus={(e) => formData.building_id && (e.target.style.borderColor = '#667eea')}
+                onFocus={(e) => formData.building_id && (e.target.style.borderColor = '#007bff')}
                 onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
               >
                 <option value={0}>{t('sharedMeters.selectMeter')}</option>
@@ -626,16 +676,16 @@ export default function SharedMeterConfigComponent() {
                 {t('sharedMeters.splitType.label')} <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {(['equal', 'by_area', 'by_units', 'custom'] as const).map(type => (
+                {(['equal', 'custom'] as const).map(type => (
                   <label key={type} style={{
                     display: 'flex',
                     alignItems: 'start',
                     gap: '12px',
                     padding: '16px',
-                    border: `2px solid ${formData.split_type === type ? '#667eea' : '#e5e7eb'}`,
+                    border: `2px solid ${formData.split_type === type ? '#007bff' : '#e5e7eb'}`,
                     borderRadius: '10px',
                     cursor: 'pointer',
-                    backgroundColor: formData.split_type === type ? '#667eea10' : 'white',
+                    backgroundColor: formData.split_type === type ? '#e7f3ff' : 'white',
                     transition: 'all 0.2s'
                   }}
                   onMouseOver={(e) => {
@@ -655,7 +705,7 @@ export default function SharedMeterConfigComponent() {
                       value={type}
                       checked={formData.split_type === type}
                       onChange={(e) => setFormData({...formData, split_type: e.target.value as any})}
-                      style={{ marginTop: '2px', cursor: 'pointer', accentColor: '#667eea' }}
+                      style={{ marginTop: '2px', cursor: 'pointer', accentColor: '#007bff' }}
                     />
                     <div style={{ flex: 1 }}>
                       <strong style={{ fontSize: '15px', display: 'block', marginBottom: '4px', color: '#1f2937' }}>
@@ -669,6 +719,88 @@ export default function SharedMeterConfigComponent() {
                 ))}
               </div>
             </div>
+
+            {/* Custom Splits Configuration */}
+            {formData.split_type === 'custom' && formData.building_id && buildingUsers.length > 0 && (
+              <div style={{ 
+                marginBottom: '20px',
+                padding: '16px',
+                backgroundColor: '#f8f9fa',
+                borderRadius: '8px',
+                border: '2px solid #e5e7eb'
+              }}>
+                <h4 style={{ 
+                  fontSize: '15px', 
+                  fontWeight: '600', 
+                  marginBottom: '12px',
+                  color: '#1f2937'
+                }}>
+                  {t('sharedMeters.percentagePerApartment')}
+                </h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {buildingUsers.map(user => (
+                    <div key={user.id} style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '12px',
+                      padding: '10px',
+                      backgroundColor: 'white',
+                      borderRadius: '6px',
+                      border: '1px solid #e5e7eb'
+                    }}>
+                      <label style={{ 
+                        flex: 1, 
+                        fontSize: '14px',
+                        fontWeight: '500',
+                        color: '#374151'
+                      }}>
+                        {user.first_name} {user.last_name}
+                      </label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          value={formData.custom_splits[user.id] || 0}
+                          onChange={(e) => handlePercentageChange(user.id, e.target.value)}
+                          style={{
+                            width: '80px',
+                            padding: '6px 10px',
+                            border: '2px solid #d1d5db',
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            textAlign: 'right'
+                          }}
+                        />
+                        <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280' }}>%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ 
+                  marginTop: '12px',
+                  padding: '10px',
+                  backgroundColor: getTotalPercentage() === 100 ? '#ecfdf5' : '#fef2f2',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  border: `2px solid ${getTotalPercentage() === 100 ? '#10b981' : '#ef4444'}`
+                }}>
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#1f2937' }}>
+                    {t('common.total')}:
+                  </span>
+                  <span style={{ 
+                    fontSize: '16px', 
+                    fontWeight: '700',
+                    color: getTotalPercentage() === 100 ? '#10b981' : '#ef4444'
+                  }}>
+                    {getTotalPercentage().toFixed(2)}%
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Unit Price */}
             <div style={{ marginBottom: '24px' }}>
@@ -696,7 +828,7 @@ export default function SharedMeterConfigComponent() {
                   fontSize: '15px',
                   transition: 'border-color 0.2s'
                 }}
-                onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                onFocus={(e) => e.target.style.borderColor = '#007bff'}
                 onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
               />
             </div>
@@ -730,7 +862,7 @@ export default function SharedMeterConfigComponent() {
                 style={{
                   flex: 1,
                   padding: '12px',
-                  backgroundColor: (!formData.building_id || !formData.meter_id || formData.unit_price <= 0 || saving) ? '#d1d5db' : '#667eea',
+                  backgroundColor: (!formData.building_id || !formData.meter_id || formData.unit_price <= 0 || saving) ? '#d1d5db' : '#007bff',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
@@ -745,12 +877,12 @@ export default function SharedMeterConfigComponent() {
                 }}
                 onMouseOver={(e) => {
                   if (formData.building_id && formData.meter_id && formData.unit_price > 0 && !saving) {
-                    e.currentTarget.style.backgroundColor = '#5568d3';
+                    e.currentTarget.style.backgroundColor = '#0056b3';
                   }
                 }}
                 onMouseOut={(e) => {
                   if (formData.building_id && formData.meter_id && formData.unit_price > 0 && !saving) {
-                    e.currentTarget.style.backgroundColor = '#667eea';
+                    e.currentTarget.style.backgroundColor = '#007bff';
                   }
                 }}
               >

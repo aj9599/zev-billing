@@ -993,6 +993,20 @@ export const en: Translations = {
   'billConfig.validation.selectUser': 'Please select at least one user',
   'billConfig.successMessage': 'Successfully generated',
   'billConfig.errorMessage': 'Failed to generate bills',
+  'billing.tabs.invoices': 'Invoices',
+  'billing.tabs.sharedMeters': 'Shared Meters',
+  'billing.tabs.customItems': 'Custom Items',
+  'billing.createBill': 'Create Bill',
+  
+  'customItems.organizedByBuilding': 'Custom Items by Building',
+  'customItems.noItemsForBuilding': 'No items for this building',
+  'customItems.buildingSection': 'Building: {name}',
+  
+  'sharedMeters.onlyHeatingOther': 'Only heating and other meters can be shared',
+  'sharedMeters.percentagePerApartment': 'Percentage per Apartment',
+  'sharedMeters.totalMustBe100': 'Total must equal 100%',
+  'sharedMeters.apartment': 'Apartment',
+  'sharedMeters.percentage': 'Percentage (%)',
 
   // Main page
   'autoBilling.title': 'Automatic Bill Generation',

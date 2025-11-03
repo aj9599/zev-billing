@@ -970,6 +970,20 @@ export const de: Translations = {
   'billConfig.validation.selectUser': 'Bitte wählen Sie mindestens einen Nutzer',
   'billConfig.successMessage': 'Erfolgreich erstellt',
   'billConfig.errorMessage': 'Erstellen der Rechnungen fehlgeschlagen',
+  'billing.tabs.invoices': 'Rechnungen',
+  'billing.tabs.sharedMeters': 'Gemeinsame Zähler',
+  'billing.tabs.customItems': 'Eigene Positionen',
+  'billing.createBill': 'Rechnung erstellen',
+  
+  'customItems.organizedByBuilding': 'Eigene Positionen nach Gebäude',
+  'customItems.noItemsForBuilding': 'Keine Positionen für dieses Gebäude',
+  'customItems.buildingSection': 'Gebäude: {name}',
+  
+  'sharedMeters.onlyHeatingOther': 'Nur Heizungs- und sonstige Zähler können geteilt werden',
+  'sharedMeters.percentagePerApartment': 'Prozentsatz pro Wohnung',
+  'sharedMeters.totalMustBe100': 'Summe muss 100% ergeben',
+  'sharedMeters.apartment': 'Wohnung',
+  'sharedMeters.percentage': 'Prozentsatz (%)',
 
   // Pricing
   'pricing.title': 'Preiseinstellungen',

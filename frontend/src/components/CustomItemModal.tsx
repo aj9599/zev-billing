@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Plus, Edit2, Trash2, DollarSign, AlertCircle, CheckCircle, Loader } from 'lucide-react';
+import { X, Plus, Edit2, Trash2, DollarSign, AlertCircle, CheckCircle, Loader, Building as BuildingIcon } from 'lucide-react';
 import { api } from '../api/client';
 import type { CustomLineItem, Building } from '../types';
 import { useTranslation } from '../i18n';
@@ -26,6 +26,7 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [expandedBuildings, setExpandedBuildings] = useState<Set<number>>(new Set());
   
   const [formData, setFormData] = useState({
     building_id: 0,
@@ -39,19 +40,10 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
   useEffect(() => {
     if (isOpen) {
       loadBuildings();
-      if (selectedBuildingId) {
-        loadItems(selectedBuildingId);
-      }
+      loadItems();
     }
   }, [isOpen]);
 
-  useEffect(() => {
-    if (selectedBuildingId) {
-      loadItems(selectedBuildingId);
-    }
-  }, [selectedBuildingId]);
-
-  // Auto-hide toast after 3 seconds
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(null), 3000);
@@ -67,10 +59,12 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
     try {
       setLoading(true);
       const data = await api.getBuildings();
-      setBuildings(data);
-      if (data.length > 0 && !selectedBuildingId) {
-        setSelectedBuildingId(data[0].id);
-      }
+      const nonGroupBuildings = data.filter(b => !b.is_group);
+      setBuildings(nonGroupBuildings);
+      
+      // Expand all buildings by default
+      const buildingIds = new Set(nonGroupBuildings.map(b => b.id));
+      setExpandedBuildings(buildingIds);
     } catch (err) {
       console.error('Failed to load buildings:', err);
       showToast(t('customItems.loadBuildingsFailed'), 'error');
@@ -79,10 +73,10 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
     }
   };
 
-  const loadItems = async (buildingId?: number) => {
+  const loadItems = async () => {
     try {
       setLoading(true);
-      const data = await api.getCustomLineItems(buildingId);
+      const data = await api.getCustomLineItems();
       setItems(data);
     } catch (err) {
       console.error('Failed to load custom items:', err);
@@ -107,6 +101,10 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
       newErrors.amount = t('customItems.validation.amountTooLarge');
     }
 
+    if (!formData.building_id) {
+      newErrors.building_id = t('customItems.validation.selectBuilding');
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -118,11 +116,6 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
       showToast(t('customItems.validation.fixErrors'), 'error');
       return;
     }
-
-    if (!selectedBuildingId) {
-      showToast(t('customItems.validation.selectBuilding'), 'error');
-      return;
-    }
     
     try {
       setSaving(true);
@@ -130,15 +123,12 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
         await api.updateCustomLineItem(editingItem.id, formData);
         showToast(t('customItems.updateSuccess'), 'success');
       } else {
-        await api.createCustomLineItem({
-          ...formData,
-          building_id: selectedBuildingId
-        });
+        await api.createCustomLineItem(formData);
         showToast(t('customItems.createSuccess'), 'success');
       }
       
       resetForm();
-      await loadItems(selectedBuildingId);
+      await loadItems();
       onSave();
     } catch (err) {
       console.error('Failed to save custom item:', err);
@@ -161,7 +151,6 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
     setShowForm(true);
     setErrors({});
     
-    // Scroll form into view
     setTimeout(() => {
       document.getElementById('custom-item-form')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }, 100);
@@ -173,7 +162,7 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
     try {
       await api.deleteCustomLineItem(id);
       showToast(t('customItems.deleteSuccess'), 'success');
-      await loadItems(selectedBuildingId!);
+      await loadItems();
       onSave();
     } catch (err) {
       console.error('Failed to delete custom item:', err);
@@ -183,7 +172,7 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
 
   const resetForm = () => {
     setFormData({
-      building_id: selectedBuildingId || 0,
+      building_id: 0,
       description: '',
       amount: 0,
       frequency: 'monthly',
@@ -224,6 +213,26 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
     };
     return colors[category as keyof typeof colors] || '#6b7280';
   };
+
+  const toggleBuildingExpand = (id: number) => {
+    const newExpanded = new Set(expandedBuildings);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
+    } else {
+      newExpanded.add(id);
+    }
+    setExpandedBuildings(newExpanded);
+  };
+
+  // Organize items by building
+  const organizedItems = buildings.map(building => {
+    const buildingItems = items.filter(item => item.building_id === building.id);
+    return {
+      building,
+      items: buildingItems,
+      totalCount: buildingItems.length
+    };
+  }).filter(group => group.totalCount > 0);
 
   if (!isOpen) return null;
 
@@ -285,15 +294,12 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
               fontWeight: '700', 
               margin: 0,
               marginBottom: '8px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
+              color: '#1f2937',
               display: 'flex',
               alignItems: 'center',
               gap: '10px'
             }}>
-              <DollarSign size={28} style={{ color: '#667eea' }} />
+              <DollarSign size={28} style={{ color: '#007bff' }} />
               {t('customItems.title')}
             </h2>
             <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
@@ -317,67 +323,14 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
           </button>
         </div>
 
-        {/* Building Selection */}
-        <div style={{ marginBottom: '25px' }}>
-          <label style={{ 
-            display: 'block', 
-            marginBottom: '8px', 
-            fontWeight: '600',
-            fontSize: '14px',
-            color: '#374151'
-          }}>
-            {t('customItems.selectBuilding')} *
-          </label>
-          <select
-            value={selectedBuildingId || ''}
-            onChange={(e) => {
-              setSelectedBuildingId(Number(e.target.value));
-              setShowForm(false);
-              resetForm();
-            }}
-            disabled={loading}
-            style={{
-              width: '100%',
-              padding: '12px',
-              border: '2px solid #e5e7eb',
-              borderRadius: '8px',
-              fontSize: '14px',
-              backgroundColor: loading ? '#f9fafb' : 'white',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              transition: 'border-color 0.2s'
-            }}
-            onFocus={(e) => !loading && (e.target.style.borderColor = '#667eea')}
-            onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
-          >
-            <option value="">{t('customItems.selectBuildingPlaceholder')}</option>
-            {buildings.map(building => (
-              <option key={building.id} value={building.id}>
-                {building.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Loading State */}
-        {loading && (
-          <div style={{
-            textAlign: 'center',
-            padding: '40px',
-            color: '#666'
-          }}>
-            <Loader size={40} style={{ animation: 'spin 1s linear infinite', color: '#667eea' }} />
-            <p style={{ marginTop: '10px', fontSize: '14px' }}>{t('customItems.loading')}</p>
-          </div>
-        )}
-
         {/* Add New Item Button */}
-        {!loading && !showForm && selectedBuildingId && (
+        {!loading && !showForm && (
           <button
             onClick={() => setShowForm(true)}
             style={{
               width: '100%',
               padding: '14px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              backgroundColor: '#007bff',
               color: 'white',
               border: 'none',
               borderRadius: '8px',
@@ -390,15 +343,15 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
               justifyContent: 'center',
               gap: '8px',
               transition: 'all 0.2s',
-              boxShadow: '0 4px 6px rgba(102, 126, 234, 0.3)'
+              boxShadow: '0 2px 4px rgba(0, 123, 255, 0.3)'
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 6px 12px rgba(102, 126, 234, 0.4)';
+              e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 123, 255, 0.4)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 4px 6px rgba(102, 126, 234, 0.3)';
+              e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 123, 255, 0.3)';
             }}
           >
             <Plus size={18} />
@@ -412,7 +365,7 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
             id="custom-item-form"
             onSubmit={handleSubmit} 
             style={{
-              background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
+              backgroundColor: '#f8f9fa',
               padding: '24px',
               borderRadius: '12px',
               marginBottom: '25px',
@@ -423,42 +376,81 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
               {editingItem ? t('customItems.editItem') : t('customItems.newItem')}
             </h3>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
-                  {t('customItems.description')} *
-                </label>
-                <input
-                  type="text"
-                  value={formData.description}
-                  onChange={(e) => {
-                    setFormData({ ...formData, description: e.target.value });
-                    if (errors.description) setErrors({ ...errors, description: '' });
-                  }}
-                  required
-                  maxLength={200}
-                  placeholder={t('customItems.descriptionPlaceholder')}
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    border: `2px solid ${errors.description ? '#ef4444' : '#d1d5db'}`,
-                    borderRadius: '6px',
-                    fontSize: '14px',
-                    outline: 'none',
-                    transition: 'border-color 0.2s',
-                    backgroundColor: 'white'
-                  }}
-                  onFocus={(e) => !errors.description && (e.target.style.borderColor = '#667eea')}
-                  onBlur={(e) => !errors.description && (e.target.style.borderColor = '#d1d5db')}
-                />
-                {errors.description && (
-                  <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <AlertCircle size={12} />
-                    {errors.description}
-                  </p>
-                )}
-              </div>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                {t('customItems.selectBuilding')} *
+              </label>
+              <select
+                value={formData.building_id || ''}
+                onChange={(e) => {
+                  setFormData({ ...formData, building_id: Number(e.target.value) });
+                  if (errors.building_id) setErrors({ ...errors, building_id: '' });
+                }}
+                required
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: `2px solid ${errors.building_id ? '#ef4444' : '#d1d5db'}`,
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  outline: 'none',
+                  transition: 'border-color 0.2s',
+                  backgroundColor: 'white'
+                }}
+                onFocus={(e) => !errors.building_id && (e.target.style.borderColor = '#007bff')}
+                onBlur={(e) => !errors.building_id && (e.target.style.borderColor = '#d1d5db')}
+              >
+                <option value="">{t('customItems.selectBuildingPlaceholder')}</option>
+                {buildings.map(building => (
+                  <option key={building.id} value={building.id}>
+                    {building.name}
+                  </option>
+                ))}
+              </select>
+              {errors.building_id && (
+                <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <AlertCircle size={12} />
+                  {errors.building_id}
+                </p>
+              )}
+            </div>
 
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                {t('customItems.description')} *
+              </label>
+              <input
+                type="text"
+                value={formData.description}
+                onChange={(e) => {
+                  setFormData({ ...formData, description: e.target.value });
+                  if (errors.description) setErrors({ ...errors, description: '' });
+                }}
+                required
+                maxLength={200}
+                placeholder={t('customItems.descriptionPlaceholder')}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: `2px solid ${errors.description ? '#ef4444' : '#d1d5db'}`,
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  outline: 'none',
+                  transition: 'border-color 0.2s',
+                  backgroundColor: 'white'
+                }}
+                onFocus={(e) => !errors.description && (e.target.style.borderColor = '#007bff')}
+                onBlur={(e) => !errors.description && (e.target.style.borderColor = '#d1d5db')}
+              />
+              {errors.description && (
+                <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <AlertCircle size={12} />
+                  {errors.description}
+                </p>
+              )}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
               <div>
                 <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
                   {t('customItems.amount')} (CHF) *
@@ -485,7 +477,7 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
                     transition: 'border-color 0.2s',
                     backgroundColor: 'white'
                   }}
-                  onFocus={(e) => !errors.amount && (e.target.style.borderColor = '#667eea')}
+                  onFocus={(e) => !errors.amount && (e.target.style.borderColor = '#007bff')}
                   onBlur={(e) => !errors.amount && (e.target.style.borderColor = '#d1d5db')}
                 />
                 {errors.amount && (
@@ -514,7 +506,7 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
                     backgroundColor: 'white',
                     transition: 'border-color 0.2s'
                   }}
-                  onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                  onFocus={(e) => e.target.style.borderColor = '#007bff'}
                   onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
                 >
                   <option value="meter_rent">{t('customItems.category.meterRent')}</option>
@@ -543,7 +535,7 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
                   backgroundColor: 'white',
                   transition: 'border-color 0.2s'
                 }}
-                onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                onFocus={(e) => e.target.style.borderColor = '#007bff'}
                 onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
               >
                 <option value="once">{t('customItems.frequency.once')}</option>
@@ -575,7 +567,7 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
                   type="checkbox"
                   checked={formData.is_active}
                   onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#667eea' }}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#007bff' }}
                 />
                 <span style={{ fontSize: '14px', fontWeight: '600', color: '#111827' }}>
                   {formData.is_active 
@@ -592,7 +584,7 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
                 style={{
                   flex: 1,
                   padding: '12px',
-                  background: saving ? '#9ca3af' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  backgroundColor: saving ? '#9ca3af' : '#10b981',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
@@ -638,8 +630,20 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
           </form>
         )}
 
-        {/* Items List */}
-        {!loading && selectedBuildingId && (
+        {/* Loading State */}
+        {loading && (
+          <div style={{
+            textAlign: 'center',
+            padding: '40px',
+            color: '#666'
+          }}>
+            <Loader size={40} style={{ animation: 'spin 1s linear infinite', color: '#007bff' }} />
+            <p style={{ marginTop: '10px', fontSize: '14px' }}>{t('customItems.loading')}</p>
+          </div>
+        )}
+
+        {/* Items List Organized by Building */}
+        {!loading && (
           <div>
             <h3 style={{ 
               fontSize: '18px', 
@@ -650,26 +654,26 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
               alignItems: 'center',
               justifyContent: 'space-between'
             }}>
-              <span>{t('customItems.itemsForBuilding')}</span>
+              <span>{t('customItems.organizedByBuilding')}</span>
               <span style={{ 
                 fontSize: '14px', 
                 fontWeight: '600', 
-                color: '#667eea',
-                background: 'linear-gradient(135deg, #667eea15 0%, #764ba215 100%)',
+                color: '#007bff',
+                backgroundColor: '#e7f3ff',
                 padding: '6px 14px',
                 borderRadius: '20px',
-                border: '2px solid #667eea'
+                border: '2px solid #007bff'
               }}>
                 {items.length} {items.length === 1 ? t('customItems.item') : t('customItems.items')}
               </span>
             </h3>
 
-            {items.length === 0 ? (
+            {organizedItems.length === 0 ? (
               <div style={{
                 textAlign: 'center',
                 padding: '60px',
                 color: '#6b7280',
-                background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
+                backgroundColor: '#f8f9fa',
                 borderRadius: '12px',
                 border: '2px dashed #d1d5db'
               }}>
@@ -677,7 +681,7 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
                   width: '80px',
                   height: '80px',
                   margin: '0 auto 20px',
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  backgroundColor: '#007bff',
                   borderRadius: '50%',
                   display: 'flex',
                   alignItems: 'center',
@@ -693,131 +697,168 @@ export default function CustomItemModal({ isOpen, onClose, onSave }: CustomItemM
                 </p>
               </div>
             ) : (
-              <div style={{ display: 'grid', gap: '12px' }}>
-                {items.map(item => (
+              organizedItems.map(({ building, items: buildingItems, totalCount }) => (
+                <div key={building.id} style={{ marginBottom: '20px' }}>
                   <div
-                    key={item.id}
+                    onClick={() => toggleBuildingExpand(building.id)}
                     style={{
-                      padding: '18px',
-                      border: '2px solid #e5e7eb',
-                      borderRadius: '12px',
-                      backgroundColor: item.is_active ? 'white' : '#f9fafb',
+                      backgroundColor: '#f8f9fa',
+                      padding: '12px 16px',
+                      borderRadius: '8px',
+                      marginBottom: '8px',
+                      cursor: 'pointer',
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      borderLeft: `4px solid ${getCategoryColor(item.category)}`,
-                      transition: 'all 0.2s',
-                      cursor: 'default'
+                      border: '2px solid #e9ecef',
+                      transition: 'all 0.2s'
                     }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
-                      e.currentTarget.style.transform = 'translateY(-2px)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.boxShadow = 'none';
-                      e.currentTarget.style.transform = 'translateY(0)';
-                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e9ecef'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
                   >
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                        <h4 style={{ fontSize: '16px', fontWeight: '700', margin: 0, color: '#111827' }}>
-                          {item.description}
-                        </h4>
-                        {!item.is_active && (
-                          <span style={{
-                            fontSize: '12px',
-                            padding: '3px 10px',
-                            backgroundColor: '#fef3c7',
-                            color: '#92400e',
-                            borderRadius: '12px',
-                            fontWeight: '600'
-                          }}>
-                            {t('customItems.inactiveLabel')}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', gap: '20px', fontSize: '14px', color: '#6b7280', flexWrap: 'wrap' }}>
-                        <span style={{ 
-                          display: 'flex', 
-                          alignItems: 'center',
-                          gap: '6px',
-                          fontWeight: '600'
-                        }}>
-                          <span style={{ 
-                            width: '8px', 
-                            height: '8px', 
-                            borderRadius: '50%', 
-                            backgroundColor: getCategoryColor(item.category) 
-                          }} />
-                          {getCategoryLabel(item.category)}
-                        </span>
-                        <span>{getFrequencyLabel(item.frequency)}</span>
-                        <span style={{ fontWeight: '700', color: '#111827' }}>
-                          CHF {item.amount.toFixed(2)}
-                        </span>
-                      </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <BuildingIcon size={20} color="#007bff" />
+                      <h4 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#1f2937' }}>
+                        {building.name}
+                      </h4>
+                      <span style={{ fontSize: '13px', color: '#6b7280' }}>
+                        ({totalCount} {totalCount === 1 ? t('customItems.item') : t('customItems.items')})
+                      </span>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                      <button
-                        onClick={() => handleEdit(item)}
-                        style={{
-                          padding: '10px 14px',
-                          backgroundColor: '#667eea',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          fontSize: '13px',
-                          fontWeight: '600',
-                          transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = '#5568d3';
-                          e.currentTarget.style.transform = 'translateY(-1px)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = '#667eea';
-                          e.currentTarget.style.transform = 'translateY(0)';
-                        }}
-                      >
-                        <Edit2 size={14} />
-                        {t('common.edit')}
-                      </button>
-                      <button
-                        onClick={() => handleDelete(item.id)}
-                        style={{
-                          padding: '10px 14px',
-                          backgroundColor: '#ef4444',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          fontSize: '13px',
-                          fontWeight: '600',
-                          transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = '#dc2626';
-                          e.currentTarget.style.transform = 'translateY(-1px)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = '#ef4444';
-                          e.currentTarget.style.transform = 'translateY(0)';
-                        }}
-                      >
-                        <Trash2 size={14} />
-                        {t('common.delete')}
-                      </button>
-                    </div>
+                    <span style={{ fontSize: '18px', color: '#666' }}>
+                      {expandedBuildings.has(building.id) ? '▼' : '▶'}
+                    </span>
                   </div>
-                ))}
-              </div>
+
+                  {expandedBuildings.has(building.id) && (
+                    <div style={{ display: 'grid', gap: '12px', paddingLeft: '20px' }}>
+                      {buildingItems.map(item => (
+                        <div
+                          key={item.id}
+                          style={{
+                            padding: '18px',
+                            border: '2px solid #e5e7eb',
+                            borderRadius: '12px',
+                            backgroundColor: item.is_active ? 'white' : '#f9fafb',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            borderLeft: `4px solid ${getCategoryColor(item.category)}`,
+                            transition: 'all 0.2s',
+                            cursor: 'default'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.boxShadow = 'none';
+                            e.currentTarget.style.transform = 'translateY(0)';
+                          }}
+                        >
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                              <h5 style={{ fontSize: '16px', fontWeight: '700', margin: 0, color: '#111827' }}>
+                                {item.description}
+                              </h5>
+                              {!item.is_active && (
+                                <span style={{
+                                  fontSize: '12px',
+                                  padding: '3px 10px',
+                                  backgroundColor: '#fef3c7',
+                                  color: '#92400e',
+                                  borderRadius: '12px',
+                                  fontWeight: '600'
+                                }}>
+                                  {t('customItems.inactiveLabel')}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ display: 'flex', gap: '20px', fontSize: '14px', color: '#6b7280', flexWrap: 'wrap' }}>
+                              <span style={{ 
+                                display: 'flex', 
+                                alignItems: 'center',
+                                gap: '6px',
+                                fontWeight: '600'
+                              }}>
+                                <span style={{ 
+                                  width: '8px', 
+                                  height: '8px', 
+                                  borderRadius: '50%', 
+                                  backgroundColor: getCategoryColor(item.category) 
+                                }} />
+                                {getCategoryLabel(item.category)}
+                              </span>
+                              <span>{getFrequencyLabel(item.frequency)}</span>
+                              <span style={{ fontWeight: '700', color: '#111827' }}>
+                                CHF {item.amount.toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                            <button
+                              onClick={() => handleEdit(item)}
+                              style={{
+                                padding: '10px 14px',
+                                backgroundColor: '#007bff',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                fontSize: '13px',
+                                fontWeight: '600',
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = '#0056b3';
+                                e.currentTarget.style.transform = 'translateY(-1px)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = '#007bff';
+                                e.currentTarget.style.transform = 'translateY(0)';
+                              }}
+                            >
+                              <Edit2 size={14} />
+                              {t('common.edit')}
+                            </button>
+                            <button
+                              onClick={() => handleDelete(item.id)}
+                              style={{
+                                padding: '10px 14px',
+                                backgroundColor: '#ef4444',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                fontSize: '13px',
+                                fontWeight: '600',
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = '#dc2626';
+                                e.currentTarget.style.transform = 'translateY(-1px)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = '#ef4444';
+                                e.currentTarget.style.transform = 'translateY(0)';
+                              }}
+                            >
+                              <Trash2 size={14} />
+                              {t('common.delete')}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))
             )}
           </div>
         )}
