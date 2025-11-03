@@ -40,7 +40,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     bank_account_holder: ''
   });
 
-  const [selectedApartments, setSelectedApartments] = useState<Set<string>>(new Set()); // Format: "buildingId-apartmentUnit"
+  const [selectedApartments, setSelectedApartments] = useState<Set<string>>(new Set());
   const [selectedSharedMeters, setSelectedSharedMeters] = useState<number[]>([]);
   const [selectedCustomItems, setSelectedCustomItems] = useState<number[]>([]);
 
@@ -57,7 +57,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     }
   }, [config.building_ids, users, meters]);
 
-  // Debug: Log when user_ids changes
   useEffect(() => {
     console.log('User IDs updated:', config.user_ids);
     console.log('Selected apartments:', Array.from(selectedApartments));
@@ -74,10 +73,38 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       ]);
       setBuildings(buildingsData);
       
-      // Filter out administration users - only show regular users
       const regularUsers = usersData.filter(u => u.user_type === 'regular');
+      
+      // DEBUG: Log all users
+      console.log('=== ALL USERS LOADED ===');
+      console.log('Total users:', usersData.length);
+      console.log('Regular users:', regularUsers.length);
+      console.log('Sample users:', regularUsers.slice(0, 3).map(u => ({
+        id: u.id,
+        name: `${u.first_name} ${u.last_name}`,
+        building_id: u.building_id,
+        apartment_unit: u.apartment_unit,
+        is_active: u.is_active,
+        user_type: u.user_type
+      })));
+      
       setUsers(regularUsers);
       setMeters(metersData);
+      
+      // DEBUG: Log all meters
+      console.log('=== ALL METERS LOADED ===');
+      console.log('Total meters:', metersData.length);
+      const apartmentMeters = metersData.filter(m => m.meter_type === 'apartment_meter' && m.apartment_unit);
+      console.log('Apartment meters:', apartmentMeters.length);
+      console.log('Sample apartment meters:', apartmentMeters.slice(0, 3).map(m => ({
+        id: m.id,
+        name: m.name,
+        building_id: m.building_id,
+        apartment_unit: m.apartment_unit,
+        user_id: m.user_id,
+        is_active: m.is_active
+      })));
+      
       setSharedMeters(sharedMetersData);
       setCustomItems(customItemsData.filter(item => item.is_active));
     } catch (err) {
@@ -117,46 +144,83 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
   };
 
   const buildApartmentsList = () => {
+    console.log('=== BUILDING APARTMENTS LIST ===');
+    console.log('Selected building IDs:', config.building_ids);
+    
     const apartmentMap = new Map<number, ApartmentWithUser[]>();
 
     config.building_ids.forEach(buildingId => {
+      console.log(`\n--- Processing Building ID: ${buildingId} ---`);
+      
       const building = buildings.find(b => b.id === buildingId);
-      if (!building) return;
+      if (!building) {
+        console.log('Building not found!');
+        return;
+      }
+      console.log('Building name:', building.name);
 
       const apartments: ApartmentWithUser[] = [];
       const apartmentSet = new Set<string>();
 
-      // Get all apartment meters for this building
       const buildingMeters = meters.filter(
         m => m.building_id === buildingId && 
         m.apartment_unit && 
         m.meter_type === 'apartment_meter' &&
         m.is_active
       );
+      
+      console.log('Found apartment meters:', buildingMeters.length);
 
       buildingMeters.forEach(meter => {
         if (meter.apartment_unit && !apartmentSet.has(meter.apartment_unit)) {
           apartmentSet.add(meter.apartment_unit);
           
-          // Find user linked to this apartment - try multiple methods
+          console.log(`\nProcessing apartment: ${meter.apartment_unit}`);
+          console.log('Meter info:', {
+            meter_id: meter.id,
+            meter_name: meter.name,
+            meter_user_id: meter.user_id
+          });
+          
+          // Method 1: Try by building_id + apartment_unit
           let user = users.find(
             u => u.building_id === buildingId && 
             u.apartment_unit === meter.apartment_unit &&
             u.is_active
           );
+          console.log('Method 1 (building_id + apartment_unit):', user ? `Found: ${user.first_name} ${user.last_name}` : 'Not found');
 
-          // If not found by building_id + apartment_unit, try by meter's user_id
+          // Method 2: Try by meter's user_id
           if (!user && meter.user_id) {
             user = users.find(u => u.id === meter.user_id && u.is_active);
+            console.log('Method 2 (meter.user_id):', user ? `Found: ${user.first_name} ${user.last_name}` : 'Not found');
           }
 
-          // If still not found, try to find any active user in this building with matching apartment
+          // Method 3: Try any active user with matching apartment
           if (!user) {
             user = users.find(
               u => u.apartment_unit === meter.apartment_unit && 
               u.is_active
             );
+            console.log('Method 3 (apartment_unit only):', user ? `Found: ${user.first_name} ${user.last_name}` : 'Not found');
           }
+          
+          // Method 4: Try to find by user_id even if not active
+          if (!user && meter.user_id) {
+            const inactiveUser = users.find(u => u.id === meter.user_id);
+            console.log('Method 4 (meter.user_id inactive):', inactiveUser ? `Found inactive: ${inactiveUser.first_name} ${inactiveUser.last_name}` : 'Not found');
+          }
+          
+          // Method 5: Show ALL users for this building for debugging
+          const allBuildingUsers = users.filter(u => u.building_id === buildingId);
+          console.log(`All users in building ${buildingId}:`, allBuildingUsers.map(u => ({
+            id: u.id,
+            name: `${u.first_name} ${u.last_name}`,
+            apartment: u.apartment_unit,
+            active: u.is_active
+          })));
+
+          console.log('Final user result:', user ? `✓ ${user.first_name} ${user.last_name}` : '✗ NO USER FOUND');
 
           apartments.push({
             building_id: buildingId,
@@ -168,17 +232,23 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         }
       });
 
-      // Sort apartments naturally
       apartments.sort((a, b) => {
         const aNum = parseInt(a.apartment_unit.replace(/[^0-9]/g, '')) || 0;
         const bNum = parseInt(b.apartment_unit.replace(/[^0-9]/g, '')) || 0;
         return aNum - bNum;
       });
 
+      console.log(`\nFinal apartments for building ${buildingId}:`, apartments.map(a => ({
+        apartment: a.apartment_unit,
+        hasUser: !!a.user,
+        userName: a.user ? `${a.user.first_name} ${a.user.last_name}` : 'NO USER'
+      })));
+
       apartmentMap.set(buildingId, apartments);
     });
 
     setApartmentsWithUsers(apartmentMap);
+    console.log('=== APARTMENTS LIST COMPLETE ===\n');
   };
 
   const filteredSharedMeters = sharedMeters.filter(meter =>
@@ -194,7 +264,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       ? config.building_ids.filter(id => id !== buildingId)
       : [...config.building_ids, buildingId];
     
-    // Clear apartment selections for removed buildings
     if (!newBuildings.includes(buildingId)) {
       const newSelectedApartments = new Set(selectedApartments);
       Array.from(selectedApartments).forEach(key => {
@@ -220,7 +289,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     
     setSelectedApartments(newSelected);
 
-    // Update config with user IDs from selected apartments
     const userIds: number[] = [];
     const apartmentSelections: { building_id: number; apartment_unit: string; user_id?: number }[] = [];
     
@@ -230,7 +298,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       const apartments = apartmentsWithUsers.get(parsedBuildingId);
       const apartment = apartments?.find(a => a.apartment_unit === aptUnit);
       
-      // Only add apartments with active users
       if (apartment?.user?.is_active) {
         userIds.push(apartment.user.id);
         
@@ -240,7 +307,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           user_id: apartment.user.id
         });
       } else if (apartment) {
-        // Still track apartment selection even without user, but don't add to user_ids
         apartmentSelections.push({
           building_id: parsedBuildingId,
           apartment_unit: aptUnit,
@@ -278,7 +344,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     config.building_ids.forEach(buildingId => {
       const apartments = apartmentsWithUsers.get(buildingId) || [];
       apartments.forEach(apt => {
-        // Only auto-select apartments with active users
         if (apt.user?.is_active) {
           newSelected.add(`${buildingId}-${apt.apartment_unit}`);
         }
@@ -287,7 +352,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
 
     setSelectedApartments(newSelected);
 
-    // Update config with only active users
     const userIds: number[] = [];
     const apartmentSelections: { building_id: number; apartment_unit: string; user_id?: number }[] = [];
     
@@ -297,7 +361,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       const apartments = apartmentsWithUsers.get(parsedBuildingId);
       const apartment = apartments?.find(a => a.apartment_unit === aptUnit);
       
-      // Only add apartments with active users
       if (apartment?.user?.is_active) {
         userIds.push(apartment.user.id);
         
@@ -334,7 +397,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
 
     setLoading(true);
     try {
-      // Save sender and banking info to sessionStorage
       sessionStorage.setItem('zev_sender_info', JSON.stringify({
         name: config.sender_name,
         address: config.sender_address,
@@ -419,9 +481,9 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       case 2:
         return config.start_date && config.end_date;
       case 3:
-        return true; // Shared meters are optional
+        return true;
       case 4:
-        return true; // Custom items are optional
+        return true;
       case 5:
         return config.sender_name && config.bank_iban;
       default:
@@ -435,7 +497,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         {t('billConfig.step1.title')}
       </h3>
 
-      {/* Building Selection */}
       <div style={{ marginBottom: '30px' }}>
         <label style={{ display: 'block', fontWeight: '600', marginBottom: '12px', fontSize: '15px' }}>
           1. {t('billConfig.step1.selectBuildings')} ({config.building_ids.length} {t('billConfig.step1.selected')})
@@ -474,7 +535,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         </div>
       </div>
 
-      {/* Apartment/User Selection */}
       <div style={{ marginBottom: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
           <label style={{ fontWeight: '600', fontSize: '15px' }}>
@@ -629,7 +689,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px' }}>
         {t('billConfig.step2.titleNew')}
       </h3>
-
       <div style={{ padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
         <label style={{ display: 'block', fontWeight: '600', marginBottom: '12px', fontSize: '15px' }}>
           {t('billConfig.step2.selectPeriod')}
@@ -639,44 +698,21 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
             <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', color: '#6c757d', fontWeight: '500' }}>
               {t('billConfig.step2.startDate')}
             </label>
-            <input
-              type="date"
-              value={config.start_date}
-              onChange={(e) => setConfig({ ...config, start_date: e.target.value })}
-              style={{
-                width: '100%',
-                padding: '12px',
-                border: '1px solid #ced4da',
-                borderRadius: '6px',
-                fontSize: '15px'
-              }}
-            />
+            <input type="date" value={config.start_date} onChange={(e) => setConfig({ ...config, start_date: e.target.value })}
+              style={{ width: '100%', padding: '12px', border: '1px solid #ced4da', borderRadius: '6px', fontSize: '15px' }} />
           </div>
           <div>
             <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', color: '#6c757d', fontWeight: '500' }}>
               {t('billConfig.step2.endDate')}
             </label>
-            <input
-              type="date"
-              value={config.end_date}
-              onChange={(e) => setConfig({ ...config, end_date: e.target.value })}
-              style={{
-                width: '100%',
-                padding: '12px',
-                border: '1px solid #ced4da',
-                borderRadius: '6px',
-                fontSize: '15px'
-              }}
-            />
+            <input type="date" value={config.end_date} onChange={(e) => setConfig({ ...config, end_date: e.target.value })}
+              style={{ width: '100%', padding: '12px', border: '1px solid #ced4da', borderRadius: '6px', fontSize: '15px' }} />
           </div>
         </div>
-
         {config.start_date && config.end_date && (
           <div style={{ marginTop: '16px', padding: '12px', backgroundColor: 'white', borderRadius: '6px', fontSize: '14px' }}>
-            <strong>{t('billConfig.step2.periodSummary')}:</strong>{' '}
-            {new Date(config.start_date).toLocaleDateString()} - {new Date(config.end_date).toLocaleDateString()}
-            {' '}
-            ({Math.ceil((new Date(config.end_date).getTime() - new Date(config.start_date).getTime()) / (1000 * 60 * 60 * 24))} {t('billConfig.step2.days')})
+            <strong>{t('billConfig.step2.periodSummary')}:</strong> {new Date(config.start_date).toLocaleDateString()} - {new Date(config.end_date).toLocaleDateString()}
+            {' '}({Math.ceil((new Date(config.end_date).getTime() - new Date(config.start_date).getTime()) / (1000 * 60 * 60 * 24))} {t('billConfig.step2.days')})
           </div>
         )}
       </div>
@@ -685,56 +721,25 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
 
   const renderStep3 = () => (
     <div>
-      <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px' }}>
-        {t('billConfig.step3.title')}
-      </h3>
-      <p style={{ color: '#6c757d', marginBottom: '24px', fontSize: '14px' }}>
-        {t('billConfig.step3.description')}
-      </p>
-
+      <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px' }}>{t('billConfig.step3.title')}</h3>
+      <p style={{ color: '#6c757d', marginBottom: '24px', fontSize: '14px' }}>{t('billConfig.step3.description')}</p>
       {filteredSharedMeters.length === 0 ? (
-        <div style={{ 
-          padding: '40px', 
-          textAlign: 'center', 
-          backgroundColor: '#f8f9fa', 
-          borderRadius: '8px',
-          color: '#6c757d'
-        }}>
+        <div style={{ padding: '40px', textAlign: 'center', backgroundColor: '#f8f9fa', borderRadius: '8px', color: '#6c757d' }}>
           <Zap size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
           <p>{t('billConfig.step3.noMeters')}</p>
         </div>
       ) : (
-        <div style={{ 
-          border: '1px solid #dee2e6', 
-          borderRadius: '6px',
-          backgroundColor: 'white'
-        }}>
+        <div style={{ border: '1px solid #dee2e6', borderRadius: '6px', backgroundColor: 'white' }}>
           {filteredSharedMeters.map(meter => {
             const building = buildings.find(b => b.id === meter.building_id);
             return (
-              <label
-                key={meter.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'start',
-                  padding: '16px',
-                  cursor: 'pointer',
-                  borderBottom: '1px solid #f0f0f0',
-                  transition: 'background-color 0.2s'
-                }}
+              <label key={meter.id} style={{ display: 'flex', alignItems: 'start', padding: '16px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0', transition: 'background-color 0.2s' }}
                 onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'white'}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedSharedMeters.includes(meter.id)}
-                  onChange={() => handleSharedMeterToggle(meter.id)}
-                  style={{ marginRight: '12px', marginTop: '2px', cursor: 'pointer', width: '18px', height: '18px' }}
-                />
+                onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'white'}>
+                <input type="checkbox" checked={selectedSharedMeters.includes(meter.id)} onChange={() => handleSharedMeterToggle(meter.id)}
+                  style={{ marginRight: '12px', marginTop: '2px', cursor: 'pointer', width: '18px', height: '18px' }} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '15px', fontWeight: '600', marginBottom: '4px' }}>
-                    {meter.meter_name}
-                  </div>
+                  <div style={{ fontSize: '15px', fontWeight: '600', marginBottom: '4px' }}>{meter.meter_name}</div>
                   <div style={{ fontSize: '13px', color: '#6c757d' }}>
                     {building?.name} • {meter.split_type} {t('billConfig.step3.split')} • CHF {meter.unit_price.toFixed(3)}/kWh
                   </div>
@@ -744,15 +749,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           })}
         </div>
       )}
-
-      <div style={{ 
-        marginTop: '20px', 
-        padding: '16px', 
-        backgroundColor: '#e7f3ff', 
-        borderRadius: '6px',
-        fontSize: '14px',
-        color: '#004a99'
-      }}>
+      <div style={{ marginTop: '20px', padding: '16px', backgroundColor: '#e7f3ff', borderRadius: '6px', fontSize: '14px', color: '#004a99' }}>
         <strong>{t('billConfig.step3.selected')}:</strong> {selectedSharedMeters.length} {t('billConfig.step3.meters')}
       </div>
     </div>
@@ -760,56 +757,25 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
 
   const renderStep4 = () => (
     <div>
-      <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px' }}>
-        {t('billConfig.step4.title')}
-      </h3>
-      <p style={{ color: '#6c757d', marginBottom: '24px', fontSize: '14px' }}>
-        {t('billConfig.step4.description')}
-      </p>
-
+      <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px' }}>{t('billConfig.step4.title')}</h3>
+      <p style={{ color: '#6c757d', marginBottom: '24px', fontSize: '14px' }}>{t('billConfig.step4.description')}</p>
       {filteredCustomItems.length === 0 ? (
-        <div style={{ 
-          padding: '40px', 
-          textAlign: 'center', 
-          backgroundColor: '#f8f9fa', 
-          borderRadius: '8px',
-          color: '#6c757d'
-        }}>
+        <div style={{ padding: '40px', textAlign: 'center', backgroundColor: '#f8f9fa', borderRadius: '8px', color: '#6c757d' }}>
           <DollarSign size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
           <p>{t('billConfig.step4.noItems')}</p>
         </div>
       ) : (
-        <div style={{ 
-          border: '1px solid #dee2e6', 
-          borderRadius: '6px',
-          backgroundColor: 'white'
-        }}>
+        <div style={{ border: '1px solid #dee2e6', borderRadius: '6px', backgroundColor: 'white' }}>
           {filteredCustomItems.map(item => {
             const building = buildings.find(b => b.id === item.building_id);
             return (
-              <label
-                key={item.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'start',
-                  padding: '16px',
-                  cursor: 'pointer',
-                  borderBottom: '1px solid #f0f0f0',
-                  transition: 'background-color 0.2s'
-                }}
+              <label key={item.id} style={{ display: 'flex', alignItems: 'start', padding: '16px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0', transition: 'background-color 0.2s' }}
                 onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'white'}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedCustomItems.includes(item.id)}
-                  onChange={() => handleCustomItemToggle(item.id)}
-                  style={{ marginRight: '12px', marginTop: '2px', cursor: 'pointer', width: '18px', height: '18px' }}
-                />
+                onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'white'}>
+                <input type="checkbox" checked={selectedCustomItems.includes(item.id)} onChange={() => handleCustomItemToggle(item.id)}
+                  style={{ marginRight: '12px', marginTop: '2px', cursor: 'pointer', width: '18px', height: '18px' }} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '15px', fontWeight: '600', marginBottom: '4px' }}>
-                    {item.description}
-                  </div>
+                  <div style={{ fontSize: '15px', fontWeight: '600', marginBottom: '4px' }}>{item.description}</div>
                   <div style={{ fontSize: '13px', color: '#6c757d' }}>
                     {building?.name} • CHF {item.amount.toFixed(2)} • {item.frequency} • {item.category}
                   </div>
@@ -819,15 +785,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           })}
         </div>
       )}
-
-      <div style={{ 
-        marginTop: '20px', 
-        padding: '16px', 
-        backgroundColor: '#e7f3ff', 
-        borderRadius: '6px',
-        fontSize: '14px',
-        color: '#004a99'
-      }}>
+      <div style={{ marginTop: '20px', padding: '16px', backgroundColor: '#e7f3ff', borderRadius: '6px', fontSize: '14px', color: '#004a99' }}>
         <strong>{t('billConfig.step4.selected')}:</strong> {selectedCustomItems.length} {t('billConfig.step4.items')}
       </div>
     </div>
@@ -835,20 +793,9 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
 
   const renderStep5 = () => (
     <div>
-      <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px' }}>
-        {t('billConfig.step5.title')}
-      </h3>
-
-      {/* Summary */}
-      <div style={{ 
-        marginBottom: '24px', 
-        padding: '20px', 
-        backgroundColor: '#f8f9fa', 
-        borderRadius: '8px'
-      }}>
-        <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px', color: '#667EEA' }}>
-          {t('billConfig.step5.summary')}
-        </h4>
+      <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px' }}>{t('billConfig.step5.title')}</h3>
+      <div style={{ marginBottom: '24px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+        <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px', color: '#667EEA' }}>{t('billConfig.step5.summary')}</h4>
         <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '14px', lineHeight: '1.8' }}>
           <li><strong>{t('billConfig.step5.period')}:</strong> {config.start_date} {t('billConfig.step5.to')} {config.end_date}</li>
           <li><strong>{t('billConfig.step5.buildings')}:</strong> {config.building_ids.length}</li>
@@ -859,149 +806,50 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           <li><strong>{t('billConfig.step5.estimatedInvoices')}:</strong> {config.user_ids.length}</li>
         </ul>
       </div>
-
-      {/* Sender Information */}
       <div style={{ marginBottom: '24px' }}>
-        <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
-          {t('billConfig.step5.senderInfo')}
-        </h4>
+        <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>{t('billConfig.step5.senderInfo')}</h4>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>
-              {t('billConfig.step5.name')} *
-            </label>
-            <input
-              type="text"
-              value={config.sender_name}
-              onChange={(e) => setConfig({ ...config, sender_name: e.target.value })}
-              placeholder="Company or Organization Name"
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #ced4da',
-                borderRadius: '6px',
-                fontSize: '15px'
-              }}
-            />
+            <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>{t('billConfig.step5.name')} *</label>
+            <input type="text" value={config.sender_name} onChange={(e) => setConfig({ ...config, sender_name: e.target.value })}
+              placeholder="Company or Organization Name" style={{ width: '100%', padding: '10px', border: '1px solid #ced4da', borderRadius: '6px', fontSize: '15px' }} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>
-              {t('billConfig.step5.address')}
-            </label>
-            <input
-              type="text"
-              value={config.sender_address}
-              onChange={(e) => setConfig({ ...config, sender_address: e.target.value })}
-              placeholder="Street and Number"
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #ced4da',
-                borderRadius: '6px',
-                fontSize: '15px'
-              }}
-            />
+            <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>{t('billConfig.step5.address')}</label>
+            <input type="text" value={config.sender_address} onChange={(e) => setConfig({ ...config, sender_address: e.target.value })}
+              placeholder="Street and Number" style={{ width: '100%', padding: '10px', border: '1px solid #ced4da', borderRadius: '6px', fontSize: '15px' }} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>
-                {t('billConfig.step5.zip')}
-              </label>
-              <input
-                type="text"
-                value={config.sender_zip}
-                onChange={(e) => setConfig({ ...config, sender_zip: e.target.value })}
-                placeholder="1234"
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  border: '1px solid #ced4da',
-                  borderRadius: '6px',
-                  fontSize: '15px'
-                }}
-              />
+              <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>{t('billConfig.step5.zip')}</label>
+              <input type="text" value={config.sender_zip} onChange={(e) => setConfig({ ...config, sender_zip: e.target.value })}
+                placeholder="1234" style={{ width: '100%', padding: '10px', border: '1px solid #ced4da', borderRadius: '6px', fontSize: '15px' }} />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>
-                {t('billConfig.step5.city')}
-              </label>
-              <input
-                type="text"
-                value={config.sender_city}
-                onChange={(e) => setConfig({ ...config, sender_city: e.target.value })}
-                placeholder="City Name"
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  border: '1px solid #ced4da',
-                  borderRadius: '6px',
-                  fontSize: '15px'
-                }}
-              />
+              <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>{t('billConfig.step5.city')}</label>
+              <input type="text" value={config.sender_city} onChange={(e) => setConfig({ ...config, sender_city: e.target.value })}
+                placeholder="City Name" style={{ width: '100%', padding: '10px', border: '1px solid #ced4da', borderRadius: '6px', fontSize: '15px' }} />
             </div>
           </div>
         </div>
       </div>
-
-      {/* Banking Information */}
       <div>
-        <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
-          {t('billConfig.step5.bankingInfo')}
-        </h4>
+        <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>{t('billConfig.step5.bankingInfo')}</h4>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>
-              {t('billConfig.step5.bankName')}
-            </label>
-            <input
-              type="text"
-              value={config.bank_name}
-              onChange={(e) => setConfig({ ...config, bank_name: e.target.value })}
-              placeholder="Bank Name"
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #ced4da',
-                borderRadius: '6px',
-                fontSize: '15px'
-              }}
-            />
+            <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>{t('billConfig.step5.bankName')}</label>
+            <input type="text" value={config.bank_name} onChange={(e) => setConfig({ ...config, bank_name: e.target.value })}
+              placeholder="Bank Name" style={{ width: '100%', padding: '10px', border: '1px solid #ced4da', borderRadius: '6px', fontSize: '15px' }} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>
-              {t('billConfig.step5.iban')} *
-            </label>
-            <input
-              type="text"
-              value={config.bank_iban}
-              onChange={(e) => setConfig({ ...config, bank_iban: e.target.value })}
-              placeholder="CH93 0000 0000 0000 0000 0"
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #ced4da',
-                borderRadius: '6px',
-                fontSize: '15px'
-              }}
-            />
+            <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>{t('billConfig.step5.iban')} *</label>
+            <input type="text" value={config.bank_iban} onChange={(e) => setConfig({ ...config, bank_iban: e.target.value })}
+              placeholder="CH93 0000 0000 0000 0000 0" style={{ width: '100%', padding: '10px', border: '1px solid #ced4da', borderRadius: '6px', fontSize: '15px' }} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>
-              {t('billConfig.step5.accountHolder')}
-            </label>
-            <input
-              type="text"
-              value={config.bank_account_holder}
-              onChange={(e) => setConfig({ ...config, bank_account_holder: e.target.value })}
-              placeholder="Account Holder Name"
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #ced4da',
-                borderRadius: '6px',
-                fontSize: '15px'
-              }}
-            />
+            <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>{t('billConfig.step5.accountHolder')}</label>
+            <input type="text" value={config.bank_account_holder} onChange={(e) => setConfig({ ...config, bank_account_holder: e.target.value })}
+              placeholder="Account Holder Name" style={{ width: '100%', padding: '10px', border: '1px solid #ced4da', borderRadius: '6px', fontSize: '15px' }} />
           </div>
         </div>
       </div>
@@ -1011,113 +859,25 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
   if (!isOpen) return null;
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      zIndex: 1000,
-      padding: '20px'
-    }}>
-      <div style={{
-        backgroundColor: 'white',
-        borderRadius: '12px',
-        maxWidth: '900px',
-        width: '100%',
-        maxHeight: '90vh',
-        display: 'flex',
-        flexDirection: 'column',
-        boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
-      }}>
-        {/* Header */}
-        <div style={{ 
-          padding: '24px 30px', 
-          borderBottom: '1px solid #dee2e6',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <h2 style={{ 
-            fontSize: '24px', 
-            fontWeight: 'bold', 
-            margin: 0,
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text'
-          }}>
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px' }}>
+      <div style={{ backgroundColor: 'white', borderRadius: '12px', maxWidth: '900px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }}>
+        <div style={{ padding: '24px 30px', borderBottom: '1px solid #dee2e6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
             {t('billConfig.title')}
           </h2>
-          <button
-            onClick={onClose}
-            style={{
-              padding: '8px',
-              backgroundColor: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              borderRadius: '6px',
-              display: 'flex',
-              alignItems: 'center'
-            }}
-          >
+          <button onClick={onClose} style={{ padding: '8px', backgroundColor: 'transparent', border: 'none', cursor: 'pointer', borderRadius: '6px', display: 'flex', alignItems: 'center' }}>
             <X size={24} />
           </button>
         </div>
-
-        {/* Progress Steps */}
-        <div style={{ 
-          padding: '20px 30px', 
-          borderBottom: '1px solid #dee2e6',
-          backgroundColor: '#f8f9fa'
-        }}>
+        <div style={{ padding: '20px 30px', borderBottom: '1px solid #dee2e6', backgroundColor: '#f8f9fa' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative' }}>
             {[1, 2, 3, 4, 5].map(s => (
-              <div key={s} style={{ 
-                flex: 1, 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center',
-                position: 'relative'
-              }}>
-                {s < 5 && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '20px',
-                    left: '50%',
-                    right: '-50%',
-                    height: '2px',
-                    backgroundColor: step > s ? '#28a745' : '#dee2e6',
-                    zIndex: 0
-                  }} />
-                )}
-                <div style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '50%',
-                  backgroundColor: step >= s ? (step > s ? '#28a745' : '#667EEA') : '#dee2e6',
-                  color: 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 'bold',
-                  position: 'relative',
-                  zIndex: 1
-                }}>
+              <div key={s} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
+                {s < 5 && <div style={{ position: 'absolute', top: '20px', left: '50%', right: '-50%', height: '2px', backgroundColor: step > s ? '#28a745' : '#dee2e6', zIndex: 0 }} />}
+                <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: step >= s ? (step > s ? '#28a745' : '#667EEA') : '#dee2e6', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', position: 'relative', zIndex: 1 }}>
                   {step > s ? <Check size={20} /> : s}
                 </div>
-                <div style={{ 
-                  marginTop: '8px', 
-                  fontSize: '11px', 
-                  textAlign: 'center',
-                  fontWeight: step === s ? '600' : 'normal',
-                  color: step === s ? '#667EEA' : '#6c757d',
-                  lineHeight: '1.3'
-                }}>
+                <div style={{ marginTop: '8px', fontSize: '11px', textAlign: 'center', fontWeight: step === s ? '600' : 'normal', color: step === s ? '#667EEA' : '#6c757d', lineHeight: '1.3' }}>
                   {s === 1 && t('billConfig.steps.selection')}
                   {s === 2 && t('billConfig.steps.dates')}
                   {s === 3 && t('billConfig.steps.meters')}
@@ -1128,107 +888,31 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
             ))}
           </div>
         </div>
-
-        {/* Content */}
-        <div style={{ 
-          padding: '30px', 
-          flex: 1, 
-          overflowY: 'auto' 
-        }}>
+        <div style={{ padding: '30px', flex: 1, overflowY: 'auto' }}>
           {step === 1 && renderStep1()}
           {step === 2 && renderStep2()}
           {step === 3 && renderStep3()}
           {step === 4 && renderStep4()}
           {step === 5 && renderStep5()}
         </div>
-
-        {/* Footer */}
-        <div style={{ 
-          padding: '20px 30px', 
-          borderTop: '1px solid #dee2e6',
-          display: 'flex',
-          justifyContent: 'space-between',
-          gap: '12px',
-          backgroundColor: '#f8f9fa'
-        }}>
-          <button
-            onClick={onClose}
-            style={{
-              padding: '12px 24px',
-              backgroundColor: '#6c757d',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '15px',
-              fontWeight: '500'
-            }}
-          >
+        <div style={{ padding: '20px 30px', borderTop: '1px solid #dee2e6', display: 'flex', justifyContent: 'space-between', gap: '12px', backgroundColor: '#f8f9fa' }}>
+          <button onClick={onClose} style={{ padding: '12px 24px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '15px', fontWeight: '500' }}>
             {t('common.cancel')}
           </button>
-          
           <div style={{ display: 'flex', gap: '12px' }}>
             {step > 1 && (
-              <button
-                onClick={() => setStep(step - 1)}
-                style={{
-                  padding: '12px 24px',
-                  backgroundColor: 'white',
-                  color: '#667EEA',
-                  border: '1px solid #667EEA',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '15px',
-                  fontWeight: '500',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
+              <button onClick={() => setStep(step - 1)} style={{ padding: '12px 24px', backgroundColor: 'white', color: '#667EEA', border: '1px solid #667EEA', borderRadius: '6px', cursor: 'pointer', fontSize: '15px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <ChevronLeft size={18} />
                 {t('billConfig.navigation.previous')}
               </button>
             )}
-            
             {step < 5 ? (
-              <button
-                onClick={() => setStep(step + 1)}
-                disabled={!canProceed()}
-                style={{
-                  padding: '12px 24px',
-                  backgroundColor: canProceed() ? '#667EEA' : '#ced4da',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: canProceed() ? 'pointer' : 'not-allowed',
-                  fontSize: '15px',
-                  fontWeight: '500',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
+              <button onClick={() => setStep(step + 1)} disabled={!canProceed()} style={{ padding: '12px 24px', backgroundColor: canProceed() ? '#667EEA' : '#ced4da', color: 'white', border: 'none', borderRadius: '6px', cursor: canProceed() ? 'pointer' : 'not-allowed', fontSize: '15px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 {t('billConfig.navigation.next')}
                 <ChevronRight size={18} />
               </button>
             ) : (
-              <button
-                onClick={handleGenerate}
-                disabled={!canProceed() || loading}
-                style={{
-                  padding: '12px 24px',
-                  backgroundColor: (canProceed() && !loading) ? '#28a745' : '#ced4da',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: (canProceed() && !loading) ? 'pointer' : 'not-allowed',
-                  fontSize: '15px',
-                  fontWeight: '500',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
+              <button onClick={handleGenerate} disabled={!canProceed() || loading} style={{ padding: '12px 24px', backgroundColor: (canProceed() && !loading) ? '#28a745' : '#ced4da', color: 'white', border: 'none', borderRadius: '6px', cursor: (canProceed() && !loading) ? 'pointer' : 'not-allowed', fontSize: '15px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <FileText size={18} />
                 {loading ? t('billConfig.navigation.generating') : `${t('billConfig.navigation.generate')} ${config.user_ids.length} ${config.user_ids.length === 1 ? t('billing.invoice') : t('billing.invoicesPlural')}`}
               </button>
