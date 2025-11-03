@@ -112,6 +112,13 @@ export const de: Translations = {
   'meters.deleteCheckRequired': 'Bitte aktivieren Sie das Bestätigungsfeld, um fortzufahren.',
   'meters.captchaRequired': 'Bitte lösen Sie die Sicherheitsaufgabe, um fortzufahren.',
   'meters.deleteFailed': 'Löschen des Zählers fehlgeschlagen. Bitte versuchen Sie es erneut.',
+  'meters.apartmentUnit': 'Wohnungseinheit',
+  'meters.selectApartment': 'Wohnung auswählen',
+  'meters.apartmentHelpText': 'Verknüpfen Sie diesen Zähler dauerhaft mit einer Wohnungseinheit. Das System zeigt automatisch den dieser Wohnung zugewiesenen Mieter an.',
+  'meters.userOptionalHelpText': 'Dies ist der aktuelle Mieter, der dieser Wohnung zugewiesen ist. Um den Mieter zu ändern, gehen Sie zur Benutzerseite.',
+  'meters.linkedUser': 'Verknüpfter Mieter',
+  'meters.noUserLinked': 'Dieser Wohnung ist derzeit kein Mieter zugewiesen',
+  'meters.apartmentNotSelected': 'Wählen Sie zuerst eine Wohnung aus, um den verknüpften Mieter zu sehen',
 
   // Chargers Delete Confirmation
   'chargers.deleteConfirmTitle': 'Ladestation löschen',
@@ -129,7 +136,7 @@ export const de: Translations = {
   'chargers.deleteCheckRequired': 'Bitte aktivieren Sie das Bestätigungsfeld, um fortzufahren.',
   'chargers.captchaRequired': 'Bitte lösen Sie die Sicherheitsaufgabe, um fortzufahren.',
   'chargers.deleteFailed': 'Löschen der Ladestation fehlgeschlagen. Bitte versuchen Sie es erneut.',
-  
+
   // Users - General
   'users.title': 'Benutzer',
   'users.subtitle': 'Verwalten Sie reguläre Benutzer und Administratoren',

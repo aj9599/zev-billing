@@ -1050,6 +1050,49 @@ export default function Meters() {
                         {meter.apartment_unit}
                       </p>
                     )}
+                    {(() => {
+                      // Find user linked to this meter's apartment
+                      const linkedUser = meter.apartment_unit 
+                        ? users.find(u => 
+                            u.building_id === meter.building_id && 
+                            u.apartment_unit === meter.apartment_unit &&
+                            u.is_active
+                          )
+                        : meter.user_id 
+                        ? users.find(u => u.id === meter.user_id)
+                        : null;
+
+                      if (linkedUser) {
+                        return (
+                          <p style={{
+                            fontSize: '12px',
+                            color: '#10b981',
+                            margin: '4px 0 0 0',
+                            fontWeight: '500',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}>
+                            <div style={{
+                              width: '14px',
+                              height: '14px',
+                              borderRadius: '50%',
+                              backgroundColor: '#10b981',
+                              color: 'white',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '8px',
+                              fontWeight: '600'
+                            }}>
+                              {linkedUser.first_name.charAt(0)}
+                            </div>
+                            {linkedUser.first_name} {linkedUser.last_name}
+                          </p>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
 
                   <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #f3f4f6' }}>
@@ -1197,16 +1240,40 @@ export default function Meters() {
                         )
                       : [];
 
+                    // Find user linked to selected apartment
+                    const linkedUser = formData.apartment_unit 
+                      ? users.find(u => 
+                          u.building_id === formData.building_id && 
+                          u.apartment_unit === formData.apartment_unit &&
+                          u.is_active
+                        )
+                      : null;
+
                     return (
                       <>
                         {hasApartments && (
                           <div style={{ marginTop: '16px' }}>
                             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                              {t('meters.apartmentUnit')}
+                              {t('meters.apartmentUnit')} *
                             </label>
                             <select 
+                              required
                               value={formData.apartment_unit || ''} 
-                              onChange={(e) => setFormData({ ...formData, apartment_unit: e.target.value })}
+                              onChange={(e) => {
+                                const selectedApt = e.target.value;
+                                // Find user for this apartment
+                                const aptUser = users.find(u => 
+                                  u.building_id === formData.building_id && 
+                                  u.apartment_unit === selectedApt &&
+                                  u.is_active
+                                );
+                                // Update form with apartment and auto-link user if found
+                                setFormData({ 
+                                  ...formData, 
+                                  apartment_unit: selectedApt,
+                                  user_id: aptUser ? aptUser.id : undefined
+                                });
+                              }}
                               style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
                             >
                               <option value="">{t('meters.selectApartment')}</option>
@@ -1220,24 +1287,84 @@ export default function Meters() {
                           </div>
                         )}
                         
-                        <div style={{ marginTop: '16px' }}>
-                          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                            {t('meters.userForApartment')}
-                          </label>
-                          <select 
-                            value={formData.user_id || ''} 
-                            onChange={(e) => setFormData({ ...formData, user_id: e.target.value ? parseInt(e.target.value) : undefined })}
-                            style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
-                          >
-                            <option value="">{t('meters.selectUser')}</option>
-                            {users.filter(u => u.building_id === formData.building_id).map(u => (
-                              <option key={u.id} value={u.id}>{u.first_name} {u.last_name}</option>
-                            ))}
-                          </select>
-                          <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                            {t('meters.userOptionalHelpText')}
-                          </p>
-                        </div>
+                        {formData.apartment_unit && (
+                          <div style={{ marginTop: '16px' }}>
+                            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                              {t('meters.linkedUser')}
+                            </label>
+                            {linkedUser ? (
+                              <div style={{
+                                padding: '12px',
+                                backgroundColor: '#f0f9ff',
+                                border: '2px solid #3b82f6',
+                                borderRadius: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px'
+                              }}>
+                                <div style={{
+                                  width: '36px',
+                                  height: '36px',
+                                  borderRadius: '50%',
+                                  backgroundColor: '#3b82f6',
+                                  color: 'white',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontWeight: '600',
+                                  fontSize: '14px'
+                                }}>
+                                  {linkedUser.first_name.charAt(0)}{linkedUser.last_name.charAt(0)}
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontWeight: '600', color: '#1f2937', fontSize: '14px' }}>
+                                    {linkedUser.first_name} {linkedUser.last_name}
+                                  </div>
+                                  <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                                    {linkedUser.email}
+                                  </div>
+                                </div>
+                                <div style={{
+                                  padding: '4px 8px',
+                                  backgroundColor: '#22c55e',
+                                  color: 'white',
+                                  borderRadius: '12px',
+                                  fontSize: '11px',
+                                  fontWeight: '600'
+                                }}>
+                                  ✓ {t('common.active')}
+                                </div>
+                              </div>
+                            ) : (
+                              <div style={{
+                                padding: '12px',
+                                backgroundColor: '#fef3c7',
+                                border: '2px solid #f59e0b',
+                                borderRadius: '8px',
+                                color: '#92400e',
+                                fontSize: '13px'
+                              }}>
+                                ⚠️ {t('meters.noUserLinked')}
+                              </div>
+                            )}
+                            <p style={{ fontSize: '11px', color: '#666', marginTop: '6px' }}>
+                              {t('meters.userOptionalHelpText')}
+                            </p>
+                          </div>
+                        )}
+
+                        {!formData.apartment_unit && hasApartments && (
+                          <div style={{
+                            marginTop: '16px',
+                            padding: '12px',
+                            backgroundColor: '#f3f4f6',
+                            borderRadius: '8px',
+                            color: '#6b7280',
+                            fontSize: '13px'
+                          }}>
+                            ℹ️ {t('meters.apartmentNotSelected')}
+                          </div>
+                        )}
                       </>
                     );
                   })()}

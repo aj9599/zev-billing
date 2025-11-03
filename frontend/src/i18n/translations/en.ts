@@ -129,7 +129,7 @@ export const en: Translations = {
   'chargers.deleteCheckRequired': 'Please check the confirmation box to proceed.',
   'chargers.captchaRequired': 'Please solve the security challenge to proceed.',
   'chargers.deleteFailed': 'Failed to delete charger. Please try again.',
-  
+
   // Users - General
   'users.title': 'Users',
   'users.subtitle': 'Manage regular users and administrators',
@@ -144,7 +144,7 @@ export const en: Translations = {
   'users.active': 'active',
   'users.user': 'user',
   'users.users': 'users',
-  
+
   // User Types
   'users.userType': 'User Type',
   'users.regular': 'Regular User',
@@ -153,7 +153,7 @@ export const en: Translations = {
   'users.regularUsers': 'Regular Users',
   'users.adminDescription': 'Users who manage buildings and have access to billing',
   'users.regularDescription': 'Building residents who can charge vehicles',
-  
+
   // User Status
   'users.status': 'Status',
   'users.activeUser': 'Active User',
@@ -162,7 +162,7 @@ export const en: Translations = {
   'users.inactiveUserNote': 'Inactive users cannot charge and won\'t appear in billing',
   'users.activate': 'Activate',
   'users.deactivate': 'Deactivate',
-  
+
   // User Fields
   'users.firstName': 'First Name',
   'users.lastName': 'Last Name',
@@ -178,20 +178,20 @@ export const en: Translations = {
   'users.current': 'current',
   'users.apartmentInfo': 'Important: Apartment Assignment',
   'users.apartmentExplanation': 'When you assign a user to an apartment, meters for that apartment will be linked to this user. When the resident changes, simply deactivate this user and create a new one for the same apartment.',
-  
+
   // RFID Cards
   'users.rfidCards': 'RFID Cards',
   'users.rfidCardIds': 'RFID Card IDs',
   'users.rfidImportant': 'IMPORTANT',
   'users.rfidEnterNumber': 'Enter the RFID card number (e.g., 15, 42, 123)',
   'users.rfidNotChargerId': 'This is NOT the charger ID - it\'s the unique number on the RFID card',
-  
+
   // Managed Buildings
   'users.managedBuildings': 'Managed Buildings',
   'users.manages': 'Manages',
   'users.complex': 'Complex',
   'users.selectManagedBuildings': 'Select which buildings or complexes this admin can manage',
-  
+
   // Address & Bank
   'users.street': 'Street',
   'users.city': 'City',
@@ -200,7 +200,7 @@ export const en: Translations = {
   'users.bankName': 'Bank Name',
   'users.iban': 'IBAN',
   'users.accountHolder': 'Account Holder',
-  
+
   // Messages
   'users.saveFailed': 'Failed to save user',
   'users.deleteConfirm': 'Are you sure you want to delete this user?',
@@ -210,7 +210,7 @@ export const en: Translations = {
   'users.noArchivedAdminUsers': 'No archived administration users',
   'users.noRegularUsers': 'No regular users found',
   'users.noArchivedRegularUsers': 'No archived regular users',
-  
+
   // Instructions Modal
   'users.instructions.title': 'User Setup Instructions',
   'users.instructions.whatIsRegularUser': 'What is a Regular User?',
@@ -562,6 +562,14 @@ export const en: Translations = {
   'meters.instructions.troubleshootingHttpAccess': 'Ensure Loxone is accessible from Raspberry Pi (test with curl or browser)',
   'meters.instructions.troubleshootingHttpAuth': 'Verify HTTP credentials if authentication is enabled',
   'meters.instructions.troubleshootingHttpMeterId': 'Check that the Meter ID in the URL path matches your Loxone configuration',
+  'meters.apartmentUnit': 'Apartment Unit',
+  'meters.selectApartment': 'Select Apartment',
+  'meters.apartmentHelpText': 'Link this meter permanently to an apartment unit. The system will automatically show the tenant assigned to this apartment.',
+  'meters.userOptionalHelpText': 'This is the current tenant assigned to the selected apartment. To change the tenant, go to the Users page.',
+  'meters.linkedUser': 'Linked Tenant',
+  'meters.noUserLinked': 'No tenant currently assigned to this apartment',
+  'meters.apartmentNotSelected': 'Select an apartment first to see the linked tenant',
+
 
 
   // Connection types
@@ -751,12 +759,12 @@ export const en: Translations = {
   'billing.atLeastOne': 'at least one',
   'billing.selectUsers': 'Select Users (Optional)',
   'billing.leaveEmptyForAll': 'Leave empty for all users',
-  
+
   // FIX 6: Missing translations
   'billing.onlyActiveUsers': 'Only active users shown - archived users are excluded',
   'billing.noActiveUsers': 'No active users in selected buildings',
   'billing.autoFilled': 'Auto-filled from admin',
-  
+
   'billing.startDate': 'Start Date',
   'billing.endDate': 'End Date',
   'billing.senderInfo': 'Sender Information',
@@ -806,7 +814,7 @@ export const en: Translations = {
   'billing.downloadPdf': 'Download PDF',
   'billing.archived': 'Archived',
   'billing.archiveSection': 'Archive (Archived Users)',
-  
+
   // Instructions
   'billing.instructions.title': 'How to Use Billing',
   'billing.instructions.whatIsBilling': 'What is Billing?',
@@ -1068,12 +1076,12 @@ export const en: Translations = {
   'logs.updateCompleteReload': 'Update complete! Reloading the page now...',
   'logs.updateFailed': 'Update failed. Please check the system logs or try updating manually.',
 
-  "logs.cpuLow": "Low usage",
-  "logs.cpuModerate": "Moderate usage",
-  "logs.cpuHigh": "High usage!",
-  "logs.updatingSystem": 'Updating System',
-  "logs.updateInProgress": 'Please wait while the system is being updated. This will take approximately 40 seconds.',
-  "logs.doNotCloseWindow": 'Please do not close this window or navigate away.',
+  'logs.cpuLow': 'Low usage',
+  'logs.cpuModerate': 'Moderate usage',
+  'logs.cpuHigh': 'High usage!',
+  'logs.updatingSystem': 'Updating System',
+  'logs.updateInProgress': 'Please wait while the system is being updated. This will take approximately 40 seconds.',
+  'logs.doNotCloseWindow': 'Please do not close this window or navigate away.',
 
   // Settings
   'settings.title': 'Settings',
