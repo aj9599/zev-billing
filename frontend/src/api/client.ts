@@ -263,7 +263,7 @@ class ApiClient {
   }
 
   // NEW: Download invoice PDF
-  async downloadInvoicePDF(id: number): string {
+  async downloadInvoicePDF(id: number): Promise<string> {
     return `${API_BASE}/billing/invoices/${id}/pdf`;
   }
 
