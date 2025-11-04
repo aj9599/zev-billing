@@ -73,7 +73,7 @@ func (pg *PDFGenerator) GenerateInvoicePDF(invoice interface{}, senderInfo Sende
 		return "", fmt.Errorf("failed to convert to PDF: %v", err)
 	}
 
-	log.Printf("Ã¢Å“â€œ Generated PDF: %s", filename)
+	log.Printf("ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Generated PDF: %s", filename)
 	return filename, nil
 }
 
@@ -195,7 +195,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 	if isArchived {
 		archivedBanner = `
 		<div class="archived-banner">
-			Ã¢Å¡Â Ã¯Â¸Â ARCHIVED USER - This invoice is for an archived user
+			ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â ARCHIVED USER - This invoice is for an archived user
 		</div>`
 	}
 	
@@ -204,7 +204,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 	if sender.Name != "" {
 		senderSection = fmt.Sprintf(`
 			<div class="header-right">
-				<strong>%s</strong>
+				<strong>%s</strong><br>
 				%s<br>
 				%s %s<br>
 				%s
@@ -269,8 +269,9 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			userLocation = fmt.Sprintf("%s %s", zip, city)
 		}
 		
-		// Format sender info for display - only show country if not CH/Switzerland
+		// Format sender info for display - parse street and house number
 		senderName := banking.AccountHolder
+		senderStreetDisplay := sender.Address
 		senderLocation := fmt.Sprintf("%s %s", sender.Zip, sender.City)
 		
 		// Format IBAN with spaces every 4 characters
@@ -295,10 +296,14 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 						<p>%s</p>
 					</div>
 					<div class="qr-amount-box">
-						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Währung</p>
-						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
-						<p style="font-size: 6pt; font-weight: bold; margin: 2mm 0 0 0;">Betrag</p>
-						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%.2f</p>
+						<div class="qr-amount-row">
+							<span class="qr-amount-label">Währung</span>
+							<span class="qr-amount-value">%s</span>
+						</div>
+						<div class="qr-amount-row">
+							<span class="qr-amount-label">Betrag</span>
+							<span class="qr-amount-value">%.2f</span>
+						</div>
 					</div>
 					<div class="qr-acceptance-point">Annahmestelle</div>
 				</div>
@@ -322,16 +327,21 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 						<p>%s</p>
 					</div>
 					<div class="qr-amount-box">
-						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Währung</p>
-						<p style="font-size: 10pt; font-weight: bold; margin: 0;">%s</p>
-						<p style="font-size: 6pt; font-weight: bold; margin: 2mm 0 0 0;">Betrag</p>
-						<p style="font-size: 10pt; font-weight: bold; margin: 0;">%.2f</p>
+						<div class="qr-amount-row">
+							<span class="qr-amount-label">Währung</span>
+							<span class="qr-amount-value">%s</span>
+						</div>
+						<div class="qr-amount-row">
+							<span class="qr-amount-label">Betrag</span>
+							<span class="qr-amount-value">%.2f</span>
+						</div>
 					</div>
 				</div>
 			</div>
 		</div>`,
 			formattedIBAN,
 			senderName,
+			senderStreetDisplay,
 			senderLocation,
 			userName,
 			userStreet,
@@ -341,6 +351,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			qrCodeContent,
 			formattedIBAN,
 			senderName,
+			senderStreetDisplay,
 			senderLocation,
 			"Invoice "+invoiceNumber,
 			userName,
@@ -647,11 +658,39 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			position: absolute;
 			bottom: 5mm;
 			left: 5mm;
-			right: 5mm;
-			padding-top: 2mm;
-			border-top: 1px solid #000;
+			width: 52mm;
 		}
 		
+		.qr-amount-row {
+			display: flex;
+			justify-content: space-between;
+			align-items: baseline;
+			margin-bottom: 1mm;
+		}
+		
+		.qr-amount-label {
+			font-size: 6pt;
+			font-weight: bold;
+		}
+		
+		.qr-amount-value {
+			font-size: 8pt;
+			font-weight: bold;
+		}
+		
+		.qr-right .qr-amount-box {
+			width: 138mm;
+		}
+		
+		.qr-right .qr-amount-label {
+			font-size: 8pt;
+		}
+		
+		.qr-right .qr-amount-value {
+			font-size: 10pt;
+		}
+		
+		.qr-amount-box p {
 		.qr-amount-box p {
 			margin: 0.5mm 0;
 			padding: 0;
@@ -1009,7 +1048,7 @@ func (pg *PDFGenerator) generateSwissQRData(inv map[string]interface{}, sender S
 		return ""
 	}
 
-	log.Println("Ã¢Å“â€œ Generated valid Swiss QR data with 31 elements")
+	log.Println("ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Generated valid Swiss QR data with 31 elements")
 	return qrData
 }
 
