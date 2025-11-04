@@ -297,7 +297,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 						<p>%s</p>
 						<p>%s</p>
 					</div>
-					<div class="qr-amount-box">
+					<div class="qr-amount-box-left">
   						<div style="display: grid; grid-template-columns: 10mm auto;">
     						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Währung</p>
     						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Betrag</p>
@@ -331,7 +331,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 					</div>
 					</div>
 					</div>
-					<div class="qr-amount-box">
+					<div class="qr-amount-box-right">
   						<div style="display: grid; grid-template-columns: 10mm auto;">
     						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Währung</p>
     						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Betrag</p>
@@ -622,7 +622,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		.qr-left {
 			position: absolute;
 			left: 5mm;
-			top: 15mm;
+			top: 10mm;
 			width: 52mm;
 			height: 95mm;
 			font-size: 8pt;
@@ -649,7 +649,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		}
 		
 		.qr-left .qr-section-title {
-			top: 0mm;
+			top: -5mm;
 		}
 		
 		.qr-right .qr-section-title {
@@ -675,7 +675,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		.qr-code-wrapper {
 			text-align: left;
-			margin: 15mm 0 4mm 0;
+			margin: 10mm 0 4mm 0;
 			width: 46mm;
 			height: 46mm;
 		}
@@ -696,7 +696,16 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			flex: 1;
 		}
 		
-		.qr-amount-box {
+		.qr-amount-box-left {
+			position: absolute;
+			bottom: 15mm;
+			left: 0;
+			right: 0;
+			padding-top: 2mm;
+			border-top: none;
+		}
+		
+		.qr-amount-box-right {
 			position: absolute;
 			bottom: 25mm;
 			left: 0;
@@ -705,7 +714,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			border-top: none;
 		}
 		
-		.qr-amount-box p {
+		.qr-amount-box-left .qr-amount-box-right p {
 			margin: 0.5mm 0;
 			padding: 0;
 			line-height: 1.1;
