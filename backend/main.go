@@ -161,6 +161,7 @@ func main() {
 	api.HandleFunc("/billing/invoices/{id}", billingHandler.GetInvoice).Methods("GET")
 	api.HandleFunc("/billing/invoices/{id}", billingHandler.DeleteInvoice).Methods("DELETE")
 	api.HandleFunc("/billing/backup", billingHandler.BackupDatabase).Methods("GET")
+	api.HandleFunc("/billing/debug/pdfs", billingHandler.DebugListPDFs).Methods("GET")
 
 	// Auto Billing routes
 	api.HandleFunc("/billing/auto-configs", autoBillingHandler.List).Methods("GET")

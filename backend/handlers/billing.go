@@ -703,33 +703,66 @@ func (h *BillingHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 
 	// Determine PDF file path
 	var filePath string
+	var filename string
 
-	// If pdf_path is stored in database, use it
+	// Get the filename (either from database or construct from invoice number)
 	if pdfPath.Valid && pdfPath.String != "" {
 		// Check if it's a full path or just filename
 		if filepath.IsAbs(pdfPath.String) {
 			filePath = pdfPath.String
 		} else {
-			// It's just a filename, construct full path
-			invoicesDir := "/home/pi/zev-billing/backend/invoices"
-			if _, err := os.Stat(invoicesDir); os.IsNotExist(err) {
-				invoicesDir = "./invoices"
-			}
-			filePath = filepath.Join(invoicesDir, pdfPath.String)
+			filename = pdfPath.String
 		}
 	} else {
-		// Fallback: construct path from invoice number
-		invoicesDir := "/home/pi/zev-billing/backend/invoices"
-		if _, err := os.Stat(invoicesDir); os.IsNotExist(err) {
-			invoicesDir = "./invoices"
+		// Construct filename from invoice number
+		filename = fmt.Sprintf("%s.pdf", invoiceNumber)
+	}
+
+	// If we have a filename (not full path), search in possible directories
+	if filePath == "" && filename != "" {
+		possibleDirs := []string{
+			"/home/pi/zev-billing/backend/invoices",
+			"/home/pi/zev-billing/invoices",
+			"./invoices",
+			"./backend/invoices",
 		}
-		filePath = filepath.Join(invoicesDir, fmt.Sprintf("%s.pdf", invoiceNumber))
+
+		// Try each directory until we find the file
+		for _, dir := range possibleDirs {
+			testPath := filepath.Join(dir, filename)
+			if _, err := os.Stat(testPath); err == nil {
+				filePath = testPath
+				log.Printf("Found PDF at: %s", filePath)
+				break
+			}
+		}
+
+		// If still not found, use default directory
+		if filePath == "" {
+			filePath = filepath.Join("./invoices", filename)
+		}
 	}
 
 	// Check if file exists
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		log.Printf("PDF file not found: %s", filePath)
-		http.Error(w, "PDF file not found", http.StatusNotFound)
+		log.Printf("Searched filename: %s", filename)
+		log.Printf("Invoice number: %s", invoiceNumber)
+		
+		// Try to regenerate the PDF on-the-fly
+		log.Printf("Attempting to regenerate PDF for invoice %d", invoiceID)
+		
+		// Load full invoice details
+		fullInv, err := h.loadFullInvoice(invoiceID)
+		if err != nil {
+			log.Printf("Failed to load invoice for regeneration: %v", err)
+			http.Error(w, "PDF file not found and could not regenerate", http.StatusNotFound)
+			return
+		}
+
+		// Get sender and banking info from database or use defaults
+		// For now, we'll return not found - in production you'd want to regenerate
+		http.Error(w, "PDF file not found. Please regenerate the invoice.", http.StatusNotFound)
 		return
 	}
 
@@ -739,4 +772,44 @@ func (h *BillingHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 
 	http.ServeFile(w, r, filePath)
 	log.Printf("Served PDF: %s", filePath)
+}
+
+// DebugListPDFs lists all available PDF files for debugging
+func (h *BillingHandler) DebugListPDFs(w http.ResponseWriter, r *http.Request) {
+	type PDFInfo struct {
+		Directory string   `json:"directory"`
+		Files     []string `json:"files"`
+		Exists    bool     `json:"exists"`
+	}
+
+	possibleDirs := []string{
+		"/home/pi/zev-billing/backend/invoices",
+		"/home/pi/zev-billing/invoices",
+		"./invoices",
+		"./backend/invoices",
+	}
+
+	result := make([]PDFInfo, 0)
+
+	for _, dir := range possibleDirs {
+		info := PDFInfo{
+			Directory: dir,
+			Files:     []string{},
+			Exists:    false,
+		}
+
+		if entries, err := os.ReadDir(dir); err == nil {
+			info.Exists = true
+			for _, entry := range entries {
+				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".pdf") {
+					info.Files = append(info.Files, entry.Name())
+				}
+			}
+		}
+
+		result = append(result, info)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
