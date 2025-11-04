@@ -622,7 +622,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		.qr-left {
 			position: absolute;
 			left: 5mm;
-			top: 10mm;
+			top: 12mm;
 			width: 52mm;
 			height: 95mm;
 			font-size: 8pt;
@@ -649,7 +649,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		}
 		
 		.qr-left .qr-section-title {
-			top: -5mm;
+			top: -7mm;
 		}
 		
 		.qr-right .qr-section-title {
@@ -675,7 +675,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		.qr-code-wrapper {
 			text-align: left;
-			margin: 10mm 0 4mm 0;
+			margin: 12mm 0 4mm 0;
 			width: 46mm;
 			height: 46mm;
 		}
@@ -698,7 +698,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		.qr-amount-box-left {
 			position: absolute;
-			bottom: 15mm;
+			bottom: 35mm;
 			left: 0;
 			right: 0;
 			padding-top: 2mm;
