@@ -676,11 +676,11 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		.qr-amount-box {
 			position: absolute;
-			bottom: 35mm;
+			bottom: 25mm;
 			left: 5mm;
 			right: 5mm;
 			padding-top: 2mm;
-			border-top: 1px solid #000;
+			border-top: none;
 		}
 		
 		.qr-amount-box p {
@@ -690,7 +690,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		.qr-acceptance-point {
 			position: absolute;
-			bottom: 30mm;
+			bottom: 20mm;
 			right: 5mm;
 			font-size: 6pt;
 			font-weight: bold;
