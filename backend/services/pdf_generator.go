@@ -234,65 +234,79 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		if hasValidQR {
 			qrCodeContent = fmt.Sprintf(`
 				<div class="qr-code-wrapper">
-					<img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=%s" alt="QR Code" style="width: 250px; height: 250px;">
+					<img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=%s" alt="QR Code" style="width: 46mm; height: 46mm;">
 				</div>`,
 				template.URLQueryEscaper(qrData),
 			)
 		} else {
 			qrCodeContent = `
-				<div style="padding: 20px; color: #dc3545; text-align: center;">
-					<p style="margin: 0; font-size: 12pt;">QR Code could not be generated</p>
-					<p style="margin: 5px 0 0 0; font-size: 9pt;">Please check banking details</p>
+				<div style="padding: 10px; color: #dc3545; text-align: center;">
+					<p style="margin: 0; font-size: 9pt;">QR Code could not be generated</p>
 				</div>`
 		}
 		
-		// Get user info for display
-		displayUserInfo := strings.ReplaceAll(userInfo, "<strong>", "")
-		displayUserInfo = strings.ReplaceAll(displayUserInfo, "</strong>", "")
-		displayUserInfo = strings.ReplaceAll(displayUserInfo, "<br>", "\n")
-		displayUserInfo = strings.ReplaceAll(displayUserInfo, " <em>(Archived)</em>", "")
+		// Format user info for display (plain text, line breaks)
+		userName := ""
+		userAddress := ""
+		if user, ok := inv["user"].(map[string]interface{}); ok {
+			firstName := fmt.Sprintf("%v", user["first_name"])
+			lastName := fmt.Sprintf("%v", user["last_name"])
+			userName = fmt.Sprintf("%s %s", firstName, lastName)
+			street := fmt.Sprintf("%v", user["address_street"])
+			zip := fmt.Sprintf("%v", user["address_zip"])
+			city := fmt.Sprintf("%v", user["address_city"])
+			userAddress = fmt.Sprintf("%s<br>%s %s", street, zip, city)
+		}
 		
 		qrPage = fmt.Sprintf(`
 		<div class="page qr-page">
-			<div style="max-width: 600px; width: 100%%;">
-				<div class="qr-title">Empfangsschein / Zahlteil</div>
+			<div style="width: 210mm;">
 				<div class="qr-container">
 					<div class="qr-left">
 						<div class="qr-section-title">Empfangsschein</div>
-						<div class="qr-info">
+						<div class="qr-info" style="margin-bottom: 10px;">
 							<p><strong>Konto / Zahlbar an</strong></p>
 							<p>%s</p>
 							<p>%s</p>
 							<p>%s %s</p>
 							<p>%s</p>
-							<br>
+						</div>
+						<div class="qr-info" style="margin-bottom: 10px;">
 							<p><strong>Zahlbar durch</strong></p>
 							<p>%s</p>
+							<p>%s</p>
 						</div>
-						<div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
-							<p style="font-size: 8pt; margin: 2px 0;"><strong>Währung</strong> | <strong>Betrag</strong></p>
-							<p style="font-size: 11pt; margin: 2px 0;"><strong>%s</strong> | <strong>%.2f</strong></p>
+						<div class="qr-amount-box">
+							<p style="font-size: 6pt; margin: 2px 0;"><strong>Währung</strong></p>
+							<p style="font-size: 8pt; margin: 2px 0;"><strong>%s</strong></p>
+							<p style="font-size: 6pt; margin: 4px 0 2px 0;"><strong>Betrag</strong></p>
+							<p style="font-size: 8pt; margin: 2px 0;"><strong>%.2f</strong></p>
 						</div>
 					</div>
 					<div class="qr-right">
 						<div class="qr-section-title">Zahlteil</div>
 						%s
-						<div class="qr-info">
+						<div class="qr-info" style="margin-bottom: 8px;">
 							<p><strong>Konto / Zahlbar an</strong></p>
 							<p>%s</p>
 							<p>%s</p>
 							<p>%s %s</p>
 							<p>%s</p>
-							<br>
+						</div>
+						<div class="qr-info" style="margin-bottom: 8px;">
 							<p><strong>Zusätzliche Informationen</strong></p>
-							<p>Invoice %s</p>
-							<br>
-							<p><strong>Zahlbar durch</strong></p>
 							<p>%s</p>
 						</div>
-						<div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #ddd;">
-							<p style="font-size: 8pt; margin: 2px 0;"><strong>Währung</strong> | <strong>Betrag</strong></p>
-							<p style="font-size: 11pt; margin: 2px 0;"><strong>%s</strong> | <strong>%.2f</strong></p>
+						<div class="qr-info" style="margin-bottom: 8px;">
+							<p><strong>Zahlbar durch</strong></p>
+							<p>%s</p>
+							<p>%s</p>
+						</div>
+						<div class="qr-amount-box">
+							<p style="font-size: 6pt; margin: 2px 0;"><strong>Währung</strong></p>
+							<p style="font-size: 8pt; margin: 2px 0;"><strong>%s</strong></p>
+							<p style="font-size: 6pt; margin: 4px 0 2px 0;"><strong>Betrag</strong></p>
+							<p style="font-size: 8pt; margin: 2px 0;"><strong>%.2f</strong></p>
 						</div>
 					</div>
 				</div>
@@ -302,16 +316,20 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			banking.AccountHolder,
 			sender.Zip, sender.City,
 			sender.Country,
-			displayUserInfo,
-			currency, totalAmount,
+			userName,
+			userAddress,
+			currency,
+			totalAmount,
 			qrCodeContent,
 			banking.IBAN,
 			banking.AccountHolder,
 			sender.Zip, sender.City,
 			sender.Country,
-			invoiceNumber,
-			displayUserInfo,
-			currency, totalAmount,
+			"Invoice "+invoiceNumber,
+			userName,
+			userAddress,
+			currency,
+			totalAmount,
 		)
 	}
 	
@@ -545,53 +563,63 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		}
 		
 		.qr-title {
-			font-size: 14pt;
+			font-size: 11pt;
 			font-weight: bold;
-			margin-bottom: 20px;
-			text-align: center;
+			margin-bottom: 10px;
+			text-align: left;
 		}
 		
 		.qr-container {
 			border: 1px solid #000;
 			display: flex;
-			flex-direction: column;
+			flex-direction: row;
 			background: white;
-			max-width: 600px;
-			width: 100%%;
+			width: 210mm;
+			height: 105mm;
 		}
 		
 		.qr-left {
-			border-bottom: 1px dashed #000;
-			padding: 20px;
+			border-right: 1px dashed #000;
+			padding: 15px;
+			width: 62mm;
 			display: flex;
 			flex-direction: column;
+			font-size: 8pt;
 		}
 		
 		.qr-right {
-			padding: 20px;
+			padding: 15px;
+			flex: 1;
 			display: flex;
 			flex-direction: column;
+			font-size: 8pt;
 		}
 		
 		.qr-section-title {
-			font-size: 10pt;
+			font-size: 11pt;
 			font-weight: bold;
-			margin-bottom: 10px;
+			margin-bottom: 8px;
 		}
 		
 		.qr-info {
-			font-size: 9pt;
-			line-height: 1.6;
+			font-size: 8pt;
+			line-height: 1.4;
 		}
 		
 		.qr-info p {
-			margin: 3px 0;
+			margin: 2px 0;
 		}
 		
 		.qr-code-wrapper {
 			display: flex;
 			justify-content: center;
-			margin: 15px 0;
+			margin: 10px 0;
+		}
+		
+		.qr-amount-box {
+			margin-top: auto;
+			padding-top: 10px;
+			border-top: 1px solid #000;
 		}
 		
 		@media print {
@@ -714,12 +742,12 @@ func (pg *PDFGenerator) generateItemHTML(item map[string]interface{}, currency s
 		return fmt.Sprintf(`<tr class="section-separator"><td colspan="2"></td></tr><tr class="item-header"><td colspan="2"><strong>%s</strong></td></tr>`, description)
 		
 	case "meter_reading_compact":
-		// Single line with all meter readings
-		return fmt.Sprintf(`<tr class="item-info-compact"><td colspan="2">%s</td></tr>`, description)
+		// This should be a SINGLE line with all info: date range, old/new readings, consumption
+		return fmt.Sprintf(`<tr class="item-info-compact"><td colspan="2" style="padding: 6px 8px;">%s</td></tr>`, description)
 		
-	case "meter_reading_from", "meter_reading_to", "total_consumption",
-		"charging_session_from", "charging_session_to", "total_charged":
-		return fmt.Sprintf(`<tr class="item-info-compact"><td colspan="2">%s</td></tr>`, description)
+	case "charging_session_compact":
+		// Single line with charging session period and total
+		return fmt.Sprintf(`<tr class="item-info-compact"><td colspan="2" style="padding: 6px 8px;">%s</td></tr>`, description)
 		
 	case "separator":
 		return `<tr class="section-separator"><td colspan="2"></td></tr>`
@@ -759,6 +787,13 @@ func (pg *PDFGenerator) generateItemHTML(item map[string]interface{}, currency s
 		
 	case "custom_item_header":
 		return fmt.Sprintf(`<tr class="section-separator"><td colspan="2"></td></tr><tr class="item-header"><td colspan="2"><strong>%s</strong></td></tr>`, description)
+		
+	case "custom_item":
+		// Custom items with price
+		return fmt.Sprintf(`<tr class="item-cost">
+			<td style="padding-left: 8px;"><strong>%s</strong></td>
+			<td class="text-right"><strong>%s %.2f</strong></td>
+		</tr>`, description, currency, totalPrice)
 		
 	default:
 		if totalPrice > 0 {
