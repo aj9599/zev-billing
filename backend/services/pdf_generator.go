@@ -73,40 +73,31 @@ func (pg *PDFGenerator) GenerateInvoicePDF(invoice interface{}, senderInfo Sende
 		return "", fmt.Errorf("failed to convert to PDF: %v", err)
 	}
 
-	log.Printf("ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Generated PDF: %s", filename)
+	log.Printf("ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ Generated PDF: %s", filename)
 	return filename, nil
 }
 
 func (pg *PDFGenerator) convertHTMLToPDF(htmlPath, pdfPath string) error {
-	// Try wkhtmltopdf first (better for production)
+	// Try wkhtmltopdf first (better for production, supports CSS @page rules for mixed page sizes)
 	cmd := exec.Command("wkhtmltopdf",
-		"--page-size", "A4",
-		"--margin-top", "15mm",
-		"--margin-right", "15mm",
-		"--margin-bottom", "15mm",
-		"--margin-left", "15mm",
 		"--enable-local-file-access",
 		"--print-media-type",
 		"--no-pdf-compression",
 		"--disable-smart-shrinking",
-		"--footer-center", "",
-		"--footer-left", "",
-		"--footer-right", "",
-		"--header-center", "",
-		"--header-left", "",
-		"--header-right", "",
 		htmlPath,
 		pdfPath,
 	)
 
 	output, err := cmd.CombinedOutput()
 	if err == nil {
+		log.Printf("✓ PDF generated successfully with wkhtmltopdf (proper mixed page sizes)")
 		return nil
 	}
 
 	log.Printf("wkhtmltopdf not available: %v, trying chromium...", err)
 
 	// Try chromium/chrome as fallback
+	// NOTE: Chromium does NOT support CSS @page named pages, so the QR page will be A4
 	chromiumCmds := []string{"chromium-browser", "chromium", "google-chrome", "chrome"}
 
 	for _, chromiumCmd := range chromiumCmds {
@@ -121,6 +112,10 @@ func (pg *PDFGenerator) convertHTMLToPDF(htmlPath, pdfPath string) error {
 
 		output, err = cmd.CombinedOutput()
 		if err == nil {
+			log.Printf("⚠️  PDF generated with Chromium")
+			log.Printf("⚠️  NOTE: QR bill page will be A4 size (not 210x105mm) due to Chromium limitations")
+			log.Printf("⚠️  For proper Swiss QR bill format, please install wkhtmltopdf:")
+			log.Printf("⚠️    sudo apt-get install wkhtmltopdf")
 			return nil
 		}
 	}
@@ -195,7 +190,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 	if isArchived {
 		archivedBanner = `
 		<div class="archived-banner">
-			ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â ARCHIVED USER - This invoice is for an archived user
+			ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â ARCHIVED USER - This invoice is for an archived user
 		</div>`
 	}
 
@@ -299,7 +294,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 					</div>
 					<div class="qr-amount-box-left">
   						<div style="display: grid; grid-template-columns: 10mm auto;">
-    						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Währung</p>
+    						<p style="font-size: 6pt; font-weight: bold; margin: 0;">WÃ¤hrung</p>
     						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Betrag</p>
     						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
     						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%.2f</p>
@@ -333,7 +328,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 					</div>
 					<div class="qr-amount-box-right">
   						<div style="display: grid; grid-template-columns: 10mm auto;">
-    						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Währung</p>
+    						<p style="font-size: 6pt; font-weight: bold; margin: 0;">WÃ¤hrung</p>
     						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Betrag</p>
     						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
     						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%.2f</p>
@@ -1071,7 +1066,7 @@ func (pg *PDFGenerator) generateSwissQRData(inv map[string]interface{}, sender S
 		return ""
 	}
 
-	log.Println("✅ Generated valid Swiss QR data with 31 elements")
+	log.Println("âœ… Generated valid Swiss QR data with 31 elements")
 	return qrData
 }
 
