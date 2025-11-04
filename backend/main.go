@@ -99,6 +99,9 @@ func main() {
 	r.HandleFunc("/api/auth/login", authHandler.Login).Methods("POST")
 	r.HandleFunc("/api/health", healthCheck).Methods("GET")
 
+	// Public PDF access (no authentication needed for direct PDF links)
+	r.HandleFunc("/api/billing/invoices/{id}/pdf", billingHandler.DownloadPDF).Methods("GET")
+
 	// Webhook routes for receiving data from devices (NO AUTHENTICATION)
 	r.HandleFunc("/webhook/meter", webhookHandler.ReceiveMeterReading).Methods("GET", "POST")
 	r.HandleFunc("/webhook/charger", webhookHandler.ReceiveChargerData).Methods("GET", "POST")
@@ -180,9 +183,6 @@ func main() {
 	api.HandleFunc("/custom-line-items/{id}", customItemHandler.Update).Methods("PUT")
 	api.HandleFunc("/custom-line-items/{id}", customItemHandler.Delete).Methods("DELETE")
 
-	// PDF Download and serving
-	api.HandleFunc("/billing/invoices/{id}/pdf", billingHandler.DownloadPDF).Methods("GET")
-	
 	// Serve invoice PDFs from filesystem
 	invoicesDir := "./invoices"
 	if _, err := os.Stat("/home/pi/zev-billing/backend/invoices"); err == nil {
