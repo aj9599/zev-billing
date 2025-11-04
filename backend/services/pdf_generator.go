@@ -298,7 +298,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 						<p>%s</p>
 					</div>
 					<div class="qr-amount-box">
-  						<div style="display: grid; grid-template-columns: auto 30mm;">
+  						<div style="display: grid; grid-template-columns: 30mm auto;">
     						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Währung</p>
     						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Betrag</p>
     						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
@@ -332,7 +332,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 					</div>
 					</div>
 					<div class="qr-amount-box">
-  						<div style="display: grid; grid-template-columns: auto 30mm;">
+  						<div style="display: grid; grid-template-columns: 30mm auto;">
     						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Währung</p>
     						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Betrag</p>
     						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
@@ -644,16 +644,16 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			font-weight: bold;
 			margin: 0 0 3mm 0;
 			position: absolute;
-			bottom: 0;
+			top: 0;
 			left: 0;
 		}
 		
 		.qr-left .qr-section-title {
-			bottom: -5mm;
+			top: -5mm;
 		}
 		
 		.qr-right .qr-section-title {
-			bottom: -5mm;
+			top: -5mm;
 		}
 		
 		.qr-info {
@@ -702,7 +702,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			left: 0;
 			right: 0;
 			padding-top: 2mm;
-			border-top: 1px solid #000;
+			border-top: none;
 		}
 		
 		.qr-amount-box p {
