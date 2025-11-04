@@ -269,11 +269,14 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			userLocation = fmt.Sprintf("%s %s", zip, city)
 		}
 		
-		// Format sender info for display
+		// Format sender info for display - only show country if not CH/Switzerland
 		senderName := banking.AccountHolder
 		senderLocation := fmt.Sprintf("%s %s", sender.Zip, sender.City)
-		senderCountryLine := sender.Country
 		
+		// Format IBAN with spaces every 4 characters
+		formattedIBAN := formatIBAN(banking.IBAN)
+		
+		// Build QR sections - hide Switzerland for domestic addresses
 		qrPage = fmt.Sprintf(`
 		<div class="page qr-page">
 			<div class="qr-container">
@@ -281,7 +284,6 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 					<div class="qr-section-title">Empfangsschein</div>
 					<div class="qr-info">
 						<strong>Konto / Zahlbar an</strong>
-						<p>%s</p>
 						<p>%s</p>
 						<p>%s</p>
 						<p>%s</p>
@@ -308,7 +310,6 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 						<p>%s</p>
 						<p>%s</p>
 						<p>%s</p>
-						<p>%s</p>
 					</div>
 					<div class="qr-info">
 						<strong>Zusätzliche Informationen</strong>
@@ -329,20 +330,18 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 				</div>
 			</div>
 		</div>`,
-			banking.IBAN,
+			formattedIBAN,
 			senderName,
 			senderLocation,
-			senderCountryLine,
 			userName,
 			userStreet,
 			userLocation,
 			currency,
 			totalAmount,
 			qrCodeContent,
-			banking.IBAN,
+			formattedIBAN,
 			senderName,
 			senderLocation,
-			senderCountryLine,
 			"Invoice "+invoiceNumber,
 			userName,
 			userStreet,
@@ -577,8 +576,10 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		.qr-page {
 			page-break-before: always;
+			page-break-after: avoid;
 			padding: 0;
 			margin: 0;
+			height: 105mm;
 		}
 		
 		.qr-container {
@@ -589,6 +590,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			padding: 0;
 			position: relative;
 			overflow: hidden;
+			page-break-inside: avoid;
 		}
 		
 		.qr-left {
@@ -596,9 +598,10 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			width: 62mm;
 			height: 105mm;
 			float: left;
-			padding: 5mm 5mm 15mm 5mm;
+			padding: 5mm 5mm 18mm 5mm;
 			box-sizing: border-box;
 			font-size: 6pt;
+			line-height: 1.2;
 			position: relative;
 		}
 		
@@ -606,42 +609,43 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			width: 148mm;
 			height: 105mm;
 			float: left;
-			padding: 5mm 5mm 15mm 5mm;
+			padding: 5mm 5mm 18mm 5mm;
 			box-sizing: border-box;
 			font-size: 8pt;
+			line-height: 1.3;
 			position: relative;
 		}
 		
 		.qr-section-title {
 			font-size: 11pt;
 			font-weight: bold;
-			margin: 0 0 3mm 0;
+			margin: 0 0 4mm 0;
 		}
 		
 		.qr-info {
-			margin-bottom: 4mm;
+			margin-bottom: 5mm;
 		}
 		
 		.qr-info p {
 			margin: 0 0 1mm 0;
 			padding: 0;
-			line-height: 1.3;
+			line-height: 1.2;
 		}
 		
 		.qr-info strong {
 			font-weight: bold;
 			display: block;
-			margin-bottom: 1mm;
+			margin-bottom: 2mm;
 		}
 		
 		.qr-code-wrapper {
 			text-align: center;
-			margin: 3mm 0;
+			margin: 3mm 0 5mm 0;
 		}
 		
 		.qr-amount-box {
 			position: absolute;
-			bottom: 7mm;
+			bottom: 5mm;
 			left: 5mm;
 			right: 5mm;
 			padding-top: 2mm;
@@ -650,12 +654,13 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		.qr-amount-box p {
 			margin: 0.5mm 0;
+			padding: 0;
 			line-height: 1.1;
 		}
 		
 		.qr-acceptance-point {
 			position: absolute;
-			bottom: 3mm;
+			bottom: 2mm;
 			right: 5mm;
 			font-size: 6pt;
 			font-weight: bold;
@@ -878,6 +883,26 @@ func getStatusColors(status string) statusColor {
 	default:
 		return statusColor{bg: "#e2e3e5", color: "#383d41"}
 	}
+}
+
+// Helper: Group IBAN every 4 characters for display
+func formatIBAN(iban string) string {
+	// Remove all spaces first
+	cleaned := strings.ReplaceAll(strings.TrimSpace(iban), " ", "")
+	var result strings.Builder
+	for i, r := range cleaned {
+		if i > 0 && i%4 == 0 {
+			result.WriteString(" ")
+		}
+		result.WriteRune(r)
+	}
+	return result.String()
+}
+
+// Helper: Hide country line for domestic (CH) addresses
+func shouldShowCountry(country string) bool {
+	c := strings.ToUpper(strings.TrimSpace(country))
+	return c != "CH" && c != "SWITZERLAND"
 }
 
 func formatDate(dateStr string) string {
