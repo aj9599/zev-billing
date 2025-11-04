@@ -576,23 +576,26 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			background: white;
 			width: 210mm;
 			height: 105mm;
+			box-sizing: border-box;
 		}
 		
 		.qr-left {
 			border-right: 1px dashed #000;
-			padding: 15px;
+			padding: 12px;
 			width: 62mm;
 			display: flex;
 			flex-direction: column;
 			font-size: 8pt;
+			box-sizing: border-box;
 		}
 		
 		.qr-right {
-			padding: 15px;
+			padding: 12px;
 			flex: 1;
 			display: flex;
 			flex-direction: column;
 			font-size: 8pt;
+			box-sizing: border-box;
 		}
 		
 		.qr-section-title {
@@ -603,22 +606,24 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		.qr-info {
 			font-size: 8pt;
-			line-height: 1.4;
+			line-height: 1.3;
 		}
 		
 		.qr-info p {
-			margin: 2px 0;
+			margin: 1px 0;
+			word-wrap: break-word;
 		}
 		
 		.qr-code-wrapper {
 			display: flex;
 			justify-content: center;
-			margin: 10px 0;
+			align-items: center;
+			margin: 8px 0;
 		}
 		
 		.qr-amount-box {
 			margin-top: auto;
-			padding-top: 10px;
+			padding-top: 8px;
 			border-top: 1px solid #000;
 		}
 		

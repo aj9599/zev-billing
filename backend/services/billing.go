@@ -442,12 +442,31 @@ func (bs *BillingService) getCustomLineItems(buildingID int) ([]models.InvoiceIt
 		log.Printf("  [CUSTOM ITEMS] Item #%d: %s - %.3f CHF (%s, %s)",
 			itemCount, description, amount, frequencyLabel, categoryLabel)
 
+		// Add header for first item
+		if itemCount == 1 {
+			items = append(items, models.InvoiceItem{
+				Description: "",
+				Quantity:    0,
+				UnitPrice:   0,
+				TotalPrice:  0,
+				ItemType:    "separator",
+			})
+			
+			items = append(items, models.InvoiceItem{
+				Description: "Additional Services",
+				Quantity:    0,
+				UnitPrice:   0,
+				TotalPrice:  0,
+				ItemType:    "custom_item_header",
+			})
+		}
+
 		items = append(items, models.InvoiceItem{
 			Description: fmt.Sprintf("%s: %s", categoryLabel, description),
 			Quantity:    1,
 			UnitPrice:   amount,
 			TotalPrice:  amount,
-			ItemType:    "custom_item_" + category,
+			ItemType:    "custom_item",
 		})
 
 		totalCost += amount
@@ -501,28 +520,15 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 			ItemType:    "meter_info",
 		})
 
+		// Compact single-line meter reading
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  Reading from %s: %.3f kWh", start.Format("02.01.2006"), meterReadingFrom),
-			Quantity:    0,
-			UnitPrice:   0,
-			TotalPrice:  0,
-			ItemType:    "meter_reading_from",
-		})
-
-		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  Reading to %s: %.3f kWh", end.Format("02.01.2006"), meterReadingTo),
-			Quantity:    0,
-			UnitPrice:   0,
-			TotalPrice:  0,
-			ItemType:    "meter_reading_to",
-		})
-
-		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  Total Consumption: %.3f kWh", totalConsumption),
+			Description: fmt.Sprintf("Period: %s-%s | Old: %.3f kWh | New: %.3f kWh | Consumption: %.3f kWh",
+				start.Format("02.01"), end.Format("02.01"),
+				meterReadingFrom, meterReadingTo, totalConsumption),
 			Quantity:    totalConsumption,
 			UnitPrice:   0,
 			TotalPrice:  0,
-			ItemType:    "total_consumption",
+			ItemType:    "meter_reading_compact",
 		})
 
 		items = append(items, models.InvoiceItem{
@@ -584,29 +590,17 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 			})
 
 			if !firstSession.IsZero() && !lastSession.IsZero() {
-				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("  First session: %s", firstSession.Format("02.01.2006 15:04")),
-					Quantity:    0,
-					UnitPrice:   0,
-					TotalPrice:  0,
-					ItemType:    "charging_session_from",
-				})
-
-				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("  Last session: %s", lastSession.Format("02.01.2006 15:04")),
-					Quantity:    0,
-					UnitPrice:   0,
-					TotalPrice:  0,
-					ItemType:    "charging_session_to",
-				})
-
+				// Compact single-line charging session info
 				totalCharged := normalCharging + priorityCharging
 				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("  Total Charged: %.3f kWh", totalCharged),
+					Description: fmt.Sprintf("Period: %s - %s | Total: %.3f kWh",
+						firstSession.Format("02.01 15:04"),
+						lastSession.Format("02.01 15:04"),
+						totalCharged),
 					Quantity:    totalCharged,
 					UnitPrice:   0,
 					TotalPrice:  0,
-					ItemType:    "total_charged",
+					ItemType:    "charging_session_compact",
 				})
 
 				items = append(items, models.InvoiceItem{
