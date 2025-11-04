@@ -283,6 +283,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			<div class="qr-container">
 				<div class="qr-divider"></div>
 				<div class="qr-left">
+					<div class="qr-section-title">Empfangsschein</div>
 					<div class="qr-info">
 						<strong>Konto / Zahlbar an</strong>
 						<p>%s</p>
@@ -297,13 +298,16 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 						<p>%s</p>
 					</div>
 					<div class="qr-amount-box">
-						<p style="font-size: 6pt; font-weight: bold; margin: 0;">WÃ¤hrung</p>
-						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
-						<p style="font-size: 6pt; font-weight: bold; margin: 2mm 0 0 0;">Betrag</p>
-						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%.2f</p>
+  						<div class="qr-amount-row">
+    						<p style="font-size: 6pt; font-weight: bold;">Währung</p>
+    						<p style="font-size: 6pt; font-weight: bold;">Betrag</p>
+  						</div>
+  						<div class="qr-amount-row">
+   	 						<p style="font-size: 8pt; font-weight: bold;">%s</p>
+    						<p style="font-size: 8pt; font-weight: bold;">%.2f</p>
+  						</div>
 					</div>
 					<div class="qr-acceptance-point">Annahmestelle</div>
-					<div class="qr-section-title">Empfangsschein</div>
 				</div>
 				<div class="qr-right">
 					<div class="qr-section-title">Zahlteil</div>
@@ -330,10 +334,14 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 					</div>
 					</div>
 					<div class="qr-amount-box">
-						<p style="font-size: 6pt; font-weight: bold; margin: 0;">WÃ¤hrung</p>
-						<p style="font-size: 10pt; font-weight: bold; margin: 0;">%s</p>
-						<p style="font-size: 6pt; font-weight: bold; margin: 2mm 0 0 0;">Betrag</p>
-						<p style="font-size: 10pt; font-weight: bold; margin: 0;">%.2f</p>
+  						<div class="qr-amount-row">
+    						<p style="font-size: 6pt; font-weight: bold;">Währung</p>
+    						<p style="font-size: 6pt; font-weight: bold;">Betrag</p>
+  						</div>
+  						<div class="qr-amount-row">
+   	 						<p style="font-size: 8pt; font-weight: bold;">%s</p>
+    						<p style="font-size: 8pt; font-weight: bold;">%.2f</p>
+  						</div>
 					</div>
 				</div>
 			</div>
@@ -705,6 +713,11 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			margin: 0.5mm 0;
 			padding: 0;
 			line-height: 1.1;
+		}
+
+		.qr-amount-row {
+  			display: flex;
+  			justify-content: space-between;
 		}
 		
 		.qr-acceptance-point {
