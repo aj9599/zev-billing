@@ -298,7 +298,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 						<p>%s</p>
 					</div>
 					<div class="qr-amount-box">
-  						<div style="display: grid; grid-template-columns: 30mm auto;">
+  						<div style="display: grid; grid-template-columns: 10mm auto;">
     						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Währung</p>
     						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Betrag</p>
     						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
@@ -332,7 +332,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 					</div>
 					</div>
 					<div class="qr-amount-box">
-  						<div style="display: grid; grid-template-columns: 30mm auto;">
+  						<div style="display: grid; grid-template-columns: 10mm auto;">
     						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Währung</p>
     						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Betrag</p>
     						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
@@ -622,7 +622,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		.qr-left {
 			position: absolute;
 			left: 5mm;
-			top: 5mm;
+			top: 15mm;
 			width: 52mm;
 			height: 95mm;
 			font-size: 8pt;
@@ -675,7 +675,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		.qr-code-wrapper {
 			text-align: left;
-			margin: 10mm 0 4mm 0;
+			margin: 15mm 0 4mm 0;
 			width: 46mm;
 			height: 46mm;
 		}
