@@ -269,10 +269,10 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			userLocation = fmt.Sprintf("%s %s", zip, city)
 		}
 
-		// Format sender info for display
+		// Format sender info for display        
 		senderName := banking.AccountHolder
-		senderLocation := fmt.Sprintf("%s %s", sender.Zip, sender.City)
-		senderCountryLine := sender.Country
+        senderStreet := sender.Address
+        senderLocation := fmt.Sprintf("%s %s", sender.Zip, sender.City)
 
 		// Build QR sections
 		qrPage = fmt.Sprintf(`
@@ -303,23 +303,29 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 				</div>
 				<div class="qr-right">
 					<div class="qr-section-title">Zahlteil</div>
-					%s
-					<div class="qr-info">
-						<strong>Konto / Zahlbar an</strong>
-						<p>%s</p>
-						<p>%s</p>
-						<p>%s</p>
-						<p>%s</p>
-					</div>
-					<div class="qr-info">
-						<strong>Zusätzliche Informationen</strong>
-						<p>%s</p>
-					</div>
-					<div class="qr-info">
-						<strong>Zahlbar durch</strong>
-						<p>%s</p>
-						<p>%s</p>
-						<p>%s</p>
+					<div class="qr-right-layout">
+						<div class="qr-code-column">
+							%s
+						</div>
+						<div class="qr-info-column">
+							<div class="qr-info">
+								<strong>Konto / Zahlbar an</strong>
+								<p>%s</p>
+								<p>%s</p>
+								<p>%s</p>
+								<p>%s</p>
+							</div>
+							<div class="qr-info">
+								<strong>Zusätzliche Informationen</strong>
+								<p>%s</p>
+							</div>
+							<div class="qr-info">
+								<strong>Zahlbar durch</strong>
+								<p>%s</p>
+								<p>%s</p>
+								<p>%s</p>
+							</div>
+						</div>
 					</div>
 					<div class="qr-amount-box">
 						<p style="font-size: 6pt; font-weight: bold; margin: 0;">W&auml;hrung</p>
@@ -332,8 +338,8 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		</div>`,
 			banking.IBAN,
 			senderName,
+			senderStreet,
 			senderLocation,
-			senderCountryLine,
 			userName,
 			userStreet,
 			userLocation,
@@ -342,8 +348,8 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			qrCodeContent,
 			banking.IBAN,
 			senderName,
+			senderStreet,
 			senderLocation,
-			senderCountryLine,
 			"Invoice "+invoiceNumber,
 			userName,
 			userStreet,
@@ -615,6 +621,21 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			font-size: 8pt;
 		}
 		
+		.qr-right-layout {
+			display: flex;
+			gap: 5mm;
+			margin-top: 3mm;
+		}
+		
+		.qr-code-column {
+			flex-shrink: 0;
+			width: 52mm;
+		}
+		
+		.qr-info-column {
+			flex: 1;
+		}
+		
 		.qr-section-title {
 			font-size: 11pt;
 			font-weight: bold;
@@ -638,8 +659,16 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		}
 		
 		.qr-code-wrapper {
-			text-align: center;
-			margin: 3mm 0;
+			text-align: left;
+			margin: 0;
+			width: 46mm;
+			height: 46mm;
+		}
+		
+		.qr-code-wrapper img {
+			width: 46mm;
+			height: 46mm;
+			display: block;
 		}
 		
 		.qr-amount-box {
