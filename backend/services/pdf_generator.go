@@ -294,10 +294,12 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 						<p>%s</p>
 					</div>
 					<div class="qr-amount-box">
-						<p style="font-size: 6pt; font-weight: bold; margin: 0;">W&auml;hrung</p>
-						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
-						<p style="font-size: 6pt; font-weight: bold; margin: 2mm 0 0 0;">Betrag</p>
-						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%.2f</p>
+						<div style="display: grid; grid-template-columns: 10mm auto;">
+                            <p style="font-size: 6pt; font-weight: bold; margin: 0;">W&auml;hrung</p>
+                            <p style="font-size: 6pt; font-weight: bold; margin: 0;">Betrag</p>
+                            <p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
+                            <p style="font-size: 8pt; font-weight: bold; margin: 0;">%.2f</p>
+                        </div>
 					</div>
 					<div class="qr-acceptance-point">Annahmestelle</div>
 				</div>
@@ -328,10 +330,12 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 						</div>
 					</div>
 					<div class="qr-amount-box">
-						<p style="font-size: 6pt; font-weight: bold; margin: 0;">W&auml;hrung</p>
-						<p style="font-size: 10pt; font-weight: bold; margin: 0;">%s</p>
-						<p style="font-size: 6pt; font-weight: bold; margin: 2mm 0 0 0;">Betrag</p>
-						<p style="font-size: 10pt; font-weight: bold; margin: 0;">%.2f</p>
+						<div style="display: grid; grid-template-columns: 10mm auto;">
+                            <p style="font-size: 6pt; font-weight: bold; margin: 0;">W&auml;hrung</p>
+                            <p style="font-size: 6pt; font-weight: bold; margin: 0;">Betrag</p>
+                            <p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
+                            <p style="font-size: 8pt; font-weight: bold; margin: 0;">%.2f</p>
+                        </div>
 					</div>
 				</div>
 			</div>
@@ -589,7 +593,6 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		}
 		
 		.qr-container {
-			border: 1px solid #000;
 			width: 210mm;
 			height: 105mm;
 			margin: 0;
