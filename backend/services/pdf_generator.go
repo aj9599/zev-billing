@@ -271,6 +271,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 
 		// Format sender info for display - only show country if not CH/Switzerland
 		senderName := banking.AccountHolder
+		senderStreet := sender.Address
 		senderLocation := fmt.Sprintf("%s %s", sender.Zip, sender.City)
 
 		// Format IBAN with spaces every 4 characters
@@ -284,6 +285,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 				<div class="qr-left">
 					<div class="qr-info">
 						<strong>Konto / Zahlbar an</strong>
+						<p>%s</p>
 						<p>%s</p>
 						<p>%s</p>
 						<p>%s</p>
@@ -313,6 +315,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 						<p>%s</p>
 						<p>%s</p>
 						<p>%s</p>
+						<p>%s</p>
 					</div>
 					<div class="qr-info">
 						<strong>Referenz</strong>
@@ -337,6 +340,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		</div>`,
 			formattedIBAN,
 			senderName,
+			senderStreet,
 			senderLocation,
 			userName,
 			userStreet,
@@ -346,6 +350,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			qrCodeContent,
 			formattedIBAN,
 			senderName,
+			senderStreet,
 			senderLocation,
 			"Invoice "+invoiceNumber,
 			userName,
@@ -729,6 +734,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 				margin: 0;
 				width: 210mm;
 				height: 105mm;
+				page: qr-bill;
 			}
 			
 			@page { 
@@ -736,7 +742,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 				size: A4 portrait;
 			}
 			
-			@page :last {
+			@page qr-bill {
 				margin: 0;
 				size: 210mm 105mm landscape;
 			}
@@ -1052,7 +1058,7 @@ func (pg *PDFGenerator) generateSwissQRData(inv map[string]interface{}, sender S
 		return ""
 	}
 
-	log.Println("ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Generated valid Swiss QR data with 31 elements")
+	log.Println("✅ Generated valid Swiss QR data with 31 elements")
 	return qrData
 }
 
