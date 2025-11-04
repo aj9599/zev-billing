@@ -271,7 +271,6 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		// Format sender info for display
 		senderName := banking.AccountHolder
-		senderStreetAddr := sender.Address
 		senderLocation := fmt.Sprintf("%s %s", sender.Zip, sender.City)
 		senderCountryLine := sender.Country
 		
