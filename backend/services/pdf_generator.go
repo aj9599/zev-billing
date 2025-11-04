@@ -303,7 +303,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 					</div>
 					<div class="qr-amount-box-left">
   						<div style="display: grid; grid-template-columns: 10mm auto;">
-    						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Währung</p>
+    						<p style="font-size: 6pt; font-weight: bold; margin: 0;">W&auml;hrung</p>
     						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Betrag</p>
     						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
     						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%.2f</p>
@@ -337,7 +337,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 					</div>
 					<div class="qr-amount-box-right">
   						<div style="display: grid; grid-template-columns: 10mm auto;">
-    						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Währung</p>
+    						<p style="font-size: 6pt; font-weight: bold; margin: 0;">W&auml;hrung</p>
     						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Betrag</p>
     						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
     						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%.2f</p>
