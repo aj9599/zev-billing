@@ -73,7 +73,7 @@ func (pg *PDFGenerator) GenerateInvoicePDF(invoice interface{}, senderInfo Sende
 		return "", fmt.Errorf("failed to convert to PDF: %v", err)
 	}
 
-	log.Printf("âœ“ Generated PDF: %s", filename)
+	log.Printf("Ã¢Å“â€œ Generated PDF: %s", filename)
 	return filename, nil
 }
 
@@ -195,7 +195,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 	if isArchived {
 		archivedBanner = `
 		<div class="archived-banner">
-			âš ï¸ ARCHIVED USER - This invoice is for an archived user
+			Ã¢Å¡Â Ã¯Â¸Â ARCHIVED USER - This invoice is for an archived user
 		</div>`
 	}
 	
@@ -272,49 +272,52 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			<div class="qr-container">
 				<div class="qr-left">
 					<div class="qr-section-title">Empfangsschein</div>
-					<div class="qr-info" style="margin-bottom: 8px;">
+					<div class="qr-info">
 						<p><strong>Konto / Zahlbar an</strong></p>
 						<p>%s</p>
 						<p>%s</p>
 						<p>%s %s</p>
 						<p>%s</p>
 					</div>
-					<div class="qr-info" style="margin-bottom: 8px;">
+					<div class="qr-info">
 						<p><strong>Zahlbar durch</strong></p>
 						<p>%s</p>
 						<p>%s</p>
 					</div>
 					<div class="qr-amount-box">
-						<p style="font-size: 6pt; margin: 1px 0;"><strong>Währung</strong></p>
-						<p style="font-size: 8pt; margin: 1px 0;"><strong>%s</strong></p>
-						<p style="font-size: 6pt; margin: 3px 0 1px 0;"><strong>Betrag</strong></p>
-						<p style="font-size: 8pt; margin: 1px 0;"><strong>%.2f</strong></p>
+						<p><strong style="font-size: 6pt;">Währung</strong></p>
+						<p style="font-size: 8pt; font-weight: bold;">%s</p>
+						<p style="font-size: 6pt; margin-top: 2mm;"><strong>Betrag</strong></p>
+						<p style="font-size: 8pt; font-weight: bold;">%.2f</p>
+					</div>
+					<div style="margin-top: auto; padding-top: 3mm; text-align: right;">
+						<p style="font-size: 6pt; font-weight: bold;">Annahmestelle</p>
 					</div>
 				</div>
 				<div class="qr-right">
 					<div class="qr-section-title">Zahlteil</div>
 					%s
-					<div class="qr-info" style="margin-bottom: 6px;">
+					<div class="qr-info">
 						<p><strong>Konto / Zahlbar an</strong></p>
 						<p>%s</p>
 						<p>%s</p>
 						<p>%s %s</p>
 						<p>%s</p>
 					</div>
-					<div class="qr-info" style="margin-bottom: 6px;">
+					<div class="qr-info">
 						<p><strong>Zusätzliche Informationen</strong></p>
 						<p>%s</p>
 					</div>
-					<div class="qr-info" style="margin-bottom: 6px;">
+					<div class="qr-info">
 						<p><strong>Zahlbar durch</strong></p>
 						<p>%s</p>
 						<p>%s</p>
 					</div>
 					<div class="qr-amount-box">
-						<p style="font-size: 6pt; margin: 1px 0;"><strong>Währung</strong></p>
-						<p style="font-size: 8pt; margin: 1px 0;"><strong>%s</strong></p>
-						<p style="font-size: 6pt; margin: 3px 0 1px 0;"><strong>Betrag</strong></p>
-						<p style="font-size: 8pt; margin: 1px 0;"><strong>%.2f</strong></p>
+						<p><strong style="font-size: 6pt;">Währung</strong></p>
+						<p style="font-size: 10pt; font-weight: bold;">%s</p>
+						<p style="font-size: 6pt; margin-top: 2mm;"><strong>Betrag</strong></p>
+						<p style="font-size: 10pt; font-weight: bold;">%.2f</p>
 					</div>
 				</div>
 			</div>
@@ -573,13 +576,6 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			page-break-before: always;
 		}
 		
-		.qr-title {
-			font-size: 11pt;
-			font-weight: bold;
-			margin-bottom: 5px;
-			text-align: left;
-		}
-		
 		.qr-container {
 			border: 1px solid #000;
 			display: flex;
@@ -594,50 +590,65 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		.qr-left {
 			border-right: 1px dashed #000;
-			padding: 10px;
+			padding: 5mm;
 			width: 62mm;
 			display: flex;
 			flex-direction: column;
-			font-size: 7pt;
+			font-size: 6pt;
 			box-sizing: border-box;
+			line-height: 9pt;
 		}
 		
 		.qr-right {
-			padding: 10px;
+			padding: 5mm;
 			flex: 1;
 			display: flex;
 			flex-direction: column;
-			font-size: 7pt;
+			font-size: 8pt;
 			box-sizing: border-box;
+			line-height: 11pt;
 		}
 		
 		.qr-section-title {
 			font-size: 11pt;
 			font-weight: bold;
-			margin-bottom: 6px;
+			margin: 0 0 5mm 0;
+			line-height: 11pt;
 		}
 		
 		.qr-info {
-			font-size: 7pt;
-			line-height: 1.3;
+			margin-bottom: 5mm;
 		}
 		
 		.qr-info p {
-			margin: 1px 0;
-			word-wrap: break-word;
+			margin: 0;
+			padding: 0;
+			line-height: 1.2;
+		}
+		
+		.qr-info p strong {
+			font-weight: bold;
+			display: block;
+			margin-bottom: 1mm;
 		}
 		
 		.qr-code-wrapper {
 			display: flex;
 			justify-content: center;
 			align-items: center;
-			margin: 6px 0;
+			margin: 5mm 0;
 		}
 		
 		.qr-amount-box {
 			margin-top: auto;
-			padding-top: 6px;
+			padding-top: 3mm;
 			border-top: 1px solid #000;
+		}
+		
+		.qr-amount-box p {
+			margin: 0;
+			padding: 0;
+			line-height: 1.1;
 		}
 		
 		@media print {
@@ -958,7 +969,7 @@ func (pg *PDFGenerator) generateSwissQRData(inv map[string]interface{}, sender S
 		return ""
 	}
 
-	log.Println("âœ“ Generated valid Swiss QR data with 31 elements")
+	log.Println("Ã¢Å“â€œ Generated valid Swiss QR data with 31 elements")
 	return qrData
 }
 
