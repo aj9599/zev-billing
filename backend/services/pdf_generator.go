@@ -717,7 +717,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 
 		.qr-amount-row {
   			display: flex;
-  			justify-content: space-between;
+  			gap: 10px;
 		}
 		
 		.qr-acceptance-point {
