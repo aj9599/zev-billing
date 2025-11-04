@@ -698,7 +698,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		.qr-amount-box-left {
 			position: absolute;
-			bottom: 35mm;
+			bottom: 32mm;
 			left: 0;
 			right: 0;
 			padding-top: 2mm;
