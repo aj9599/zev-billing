@@ -283,7 +283,7 @@ func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 			log.Printf("WARNING: Failed to update PDF path for invoice %d: %v", invoice.ID, err)
 		} else {
 			successCount++
-			log.Printf("âœ“ Generated PDF %d/%d: %s", i+1, len(invoices), pdfPath)
+			log.Printf("✓ Generated PDF %d/%d: %s", i+1, len(invoices), pdfPath)
 		}
 	}
 
@@ -683,7 +683,7 @@ func (h *BillingHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 
 	// Get invoice from database to get the invoice number
 	var invoiceNumber string
-	var pdfPath string
+	var pdfPath sql.NullString
 
 	err = h.db.QueryRow(`
 		SELECT invoice_number, pdf_path 
@@ -705,17 +705,17 @@ func (h *BillingHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 	var filePath string
 
 	// If pdf_path is stored in database, use it
-	if pdfPath != "" {
+	if pdfPath.Valid && pdfPath.String != "" {
 		// Check if it's a full path or just filename
-		if filepath.IsAbs(pdfPath) {
-			filePath = pdfPath
+		if filepath.IsAbs(pdfPath.String) {
+			filePath = pdfPath.String
 		} else {
 			// It's just a filename, construct full path
 			invoicesDir := "/home/pi/zev-billing/backend/invoices"
 			if _, err := os.Stat(invoicesDir); os.IsNotExist(err) {
 				invoicesDir = "./invoices"
 			}
-			filePath = filepath.Join(invoicesDir, pdfPath)
+			filePath = filepath.Join(invoicesDir, pdfPath.String)
 		}
 	} else {
 		// Fallback: construct path from invoice number
