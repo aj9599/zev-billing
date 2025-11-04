@@ -87,6 +87,14 @@ func (pg *PDFGenerator) convertHTMLToPDF(htmlPath, pdfPath string) error {
 		"--margin-left", "15mm",
 		"--enable-local-file-access",
 		"--print-media-type",
+		"--no-pdf-compression",
+		"--disable-smart-shrinking",
+		"--footer-center", "",
+		"--footer-left", "",
+		"--footer-right", "",
+		"--header-center", "",
+		"--header-left", "",
+		"--header-right", "",
 		htmlPath,
 		pdfPath,
 	)
@@ -107,6 +115,7 @@ func (pg *PDFGenerator) convertHTMLToPDF(htmlPath, pdfPath string) error {
 			"--disable-gpu",
 			"--print-to-pdf="+pdfPath,
 			"--no-margins",
+			"--no-pdf-header-footer",
 			htmlPath,
 		)
 		
@@ -260,54 +269,52 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		qrPage = fmt.Sprintf(`
 		<div class="page qr-page">
-			<div style="width: 210mm;">
-				<div class="qr-container">
-					<div class="qr-left">
-						<div class="qr-section-title">Empfangsschein</div>
-						<div class="qr-info" style="margin-bottom: 10px;">
-							<p><strong>Konto / Zahlbar an</strong></p>
-							<p>%s</p>
-							<p>%s</p>
-							<p>%s %s</p>
-							<p>%s</p>
-						</div>
-						<div class="qr-info" style="margin-bottom: 10px;">
-							<p><strong>Zahlbar durch</strong></p>
-							<p>%s</p>
-							<p>%s</p>
-						</div>
-						<div class="qr-amount-box">
-							<p style="font-size: 6pt; margin: 2px 0;"><strong>Währung</strong></p>
-							<p style="font-size: 8pt; margin: 2px 0;"><strong>%s</strong></p>
-							<p style="font-size: 6pt; margin: 4px 0 2px 0;"><strong>Betrag</strong></p>
-							<p style="font-size: 8pt; margin: 2px 0;"><strong>%.2f</strong></p>
-						</div>
+			<div class="qr-container">
+				<div class="qr-left">
+					<div class="qr-section-title">Empfangsschein</div>
+					<div class="qr-info" style="margin-bottom: 8px;">
+						<p><strong>Konto / Zahlbar an</strong></p>
+						<p>%s</p>
+						<p>%s</p>
+						<p>%s %s</p>
+						<p>%s</p>
 					</div>
-					<div class="qr-right">
-						<div class="qr-section-title">Zahlteil</div>
-						%s
-						<div class="qr-info" style="margin-bottom: 8px;">
-							<p><strong>Konto / Zahlbar an</strong></p>
-							<p>%s</p>
-							<p>%s</p>
-							<p>%s %s</p>
-							<p>%s</p>
-						</div>
-						<div class="qr-info" style="margin-bottom: 8px;">
-							<p><strong>Zusätzliche Informationen</strong></p>
-							<p>%s</p>
-						</div>
-						<div class="qr-info" style="margin-bottom: 8px;">
-							<p><strong>Zahlbar durch</strong></p>
-							<p>%s</p>
-							<p>%s</p>
-						</div>
-						<div class="qr-amount-box">
-							<p style="font-size: 6pt; margin: 2px 0;"><strong>Währung</strong></p>
-							<p style="font-size: 8pt; margin: 2px 0;"><strong>%s</strong></p>
-							<p style="font-size: 6pt; margin: 4px 0 2px 0;"><strong>Betrag</strong></p>
-							<p style="font-size: 8pt; margin: 2px 0;"><strong>%.2f</strong></p>
-						</div>
+					<div class="qr-info" style="margin-bottom: 8px;">
+						<p><strong>Zahlbar durch</strong></p>
+						<p>%s</p>
+						<p>%s</p>
+					</div>
+					<div class="qr-amount-box">
+						<p style="font-size: 6pt; margin: 1px 0;"><strong>Währung</strong></p>
+						<p style="font-size: 8pt; margin: 1px 0;"><strong>%s</strong></p>
+						<p style="font-size: 6pt; margin: 3px 0 1px 0;"><strong>Betrag</strong></p>
+						<p style="font-size: 8pt; margin: 1px 0;"><strong>%.2f</strong></p>
+					</div>
+				</div>
+				<div class="qr-right">
+					<div class="qr-section-title">Zahlteil</div>
+					%s
+					<div class="qr-info" style="margin-bottom: 6px;">
+						<p><strong>Konto / Zahlbar an</strong></p>
+						<p>%s</p>
+						<p>%s</p>
+						<p>%s %s</p>
+						<p>%s</p>
+					</div>
+					<div class="qr-info" style="margin-bottom: 6px;">
+						<p><strong>Zusätzliche Informationen</strong></p>
+						<p>%s</p>
+					</div>
+					<div class="qr-info" style="margin-bottom: 6px;">
+						<p><strong>Zahlbar durch</strong></p>
+						<p>%s</p>
+						<p>%s</p>
+					</div>
+					<div class="qr-amount-box">
+						<p style="font-size: 6pt; margin: 1px 0;"><strong>Währung</strong></p>
+						<p style="font-size: 8pt; margin: 1px 0;"><strong>%s</strong></p>
+						<p style="font-size: 6pt; margin: 3px 0 1px 0;"><strong>Betrag</strong></p>
+						<p style="font-size: 8pt; margin: 1px 0;"><strong>%.2f</strong></p>
 					</div>
 				</div>
 			</div>
@@ -361,6 +368,8 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		.qr-page {
 			page-break-before: always;
+			padding: 0;
+			margin: 0;
 		}
 		
 		.header { 
@@ -471,8 +480,8 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		.item-header { 
 			font-weight: 600;
-			background-color: #e2e8f0;
-			border-bottom: 2px solid #cbd5e0;
+			background-color: #f9f9f9;
+			border-bottom: 2px solid #ddd;
 		}
 		
 		.item-info { 
@@ -494,15 +503,15 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		}
 		
 		.solar-highlight {
-			background-color: #fef3c7;
+			background-color: rgba(254, 243, 199, 0.4);
 		}
 		
 		.normal-highlight {
-			background-color: #dbeafe;
+			background-color: rgba(219, 234, 254, 0.4);
 		}
 		
 		.charging-highlight {
-			background-color: #d1fae5;
+			background-color: rgba(209, 250, 229, 0.4);
 		}
 		
 		.section-separator {
@@ -556,16 +565,18 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		.qr-page {
 			display: flex;
-			align-items: center;
-			justify-content: center;
-			min-height: 297mm;
-			padding: 30px;
+			align-items: flex-start;
+			justify-content: flex-start;
+			padding: 0;
+			margin: 0;
+			height: 105mm;
+			page-break-before: always;
 		}
 		
 		.qr-title {
 			font-size: 11pt;
 			font-weight: bold;
-			margin-bottom: 10px;
+			margin-bottom: 5px;
 			text-align: left;
 		}
 		
@@ -577,35 +588,37 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			width: 210mm;
 			height: 105mm;
 			box-sizing: border-box;
+			margin: 0;
+			padding: 0;
 		}
 		
 		.qr-left {
 			border-right: 1px dashed #000;
-			padding: 12px;
+			padding: 10px;
 			width: 62mm;
 			display: flex;
 			flex-direction: column;
-			font-size: 8pt;
+			font-size: 7pt;
 			box-sizing: border-box;
 		}
 		
 		.qr-right {
-			padding: 12px;
+			padding: 10px;
 			flex: 1;
 			display: flex;
 			flex-direction: column;
-			font-size: 8pt;
+			font-size: 7pt;
 			box-sizing: border-box;
 		}
 		
 		.qr-section-title {
 			font-size: 11pt;
 			font-weight: bold;
-			margin-bottom: 8px;
+			margin-bottom: 6px;
 		}
 		
 		.qr-info {
-			font-size: 8pt;
+			font-size: 7pt;
 			line-height: 1.3;
 		}
 		
@@ -618,12 +631,12 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			display: flex;
 			justify-content: center;
 			align-items: center;
-			margin: 8px 0;
+			margin: 6px 0;
 		}
 		
 		.qr-amount-box {
 			margin-top: auto;
-			padding-top: 8px;
+			padding-top: 6px;
 			border-top: 1px solid #000;
 		}
 		
@@ -639,11 +652,19 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			
 			.qr-page {
 				page-break-before: always;
+				padding: 0;
+				margin: 0;
+				height: 105mm;
 			}
 			
 			@page { 
 				margin: 10mm;
 				size: A4 portrait;
+			}
+			
+			@page :last {
+				margin: 0;
+				size: 210mm 105mm;
 			}
 			
 			* {
