@@ -277,7 +277,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		// Format IBAN with spaces every 4 characters
 		formattedIBAN := formatIBAN(banking.IBAN)
 		
-		// Build QR sections - hide Switzerland for domestic addresses
+		// Build QR sections following Swiss QR bill standard layout
 		qrPage = fmt.Sprintf(`
 		<div class="page qr-page">
 			<div class="qr-container">
@@ -285,6 +285,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 					<div class="qr-section-title">Empfangsschein</div>
 					<div class="qr-info">
 						<strong>Konto / Zahlbar an</strong>
+						<p>%s</p>
 						<p>%s</p>
 						<p>%s</p>
 						<p>%s</p>
@@ -312,6 +313,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 					%s
 					<div class="qr-info">
 						<strong>Konto / Zahlbar an</strong>
+						<p>%s</p>
 						<p>%s</p>
 						<p>%s</p>
 						<p>%s</p>
@@ -588,13 +590,14 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		.qr-page {
 			page-break-before: always;
 			page-break-after: avoid;
-			padding: 0;
-			margin: 0;
+			padding: 0 !important;
+			margin: 0 !important;
+			width: 210mm;
 			height: 105mm;
 		}
 		
 		.qr-container {
-			border: 1px solid #000;
+			border: 0.5pt solid #000;
 			width: 210mm;
 			height: 105mm;
 			margin: 0;
@@ -602,17 +605,18 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			position: relative;
 			overflow: hidden;
 			page-break-inside: avoid;
+			background: white;
 		}
 		
 		.qr-left {
-			border-right: 1px dashed #000;
+			border-right: 0.5pt dashed #000;
 			width: 62mm;
 			height: 105mm;
 			float: left;
-			padding: 5mm 5mm 18mm 5mm;
+			padding: 5mm;
 			box-sizing: border-box;
-			font-size: 6pt;
-			line-height: 1.2;
+			font-size: 8pt;
+			line-height: 1.3;
 			position: relative;
 		}
 		
@@ -620,9 +624,9 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			width: 148mm;
 			height: 105mm;
 			float: left;
-			padding: 5mm 5mm 18mm 5mm;
+			padding: 5mm;
 			box-sizing: border-box;
-			font-size: 8pt;
+			font-size: 9pt;
 			line-height: 1.3;
 			position: relative;
 		}
@@ -630,52 +634,73 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		.qr-section-title {
 			font-size: 11pt;
 			font-weight: bold;
-			margin: 0 0 4mm 0;
+			margin: 0 0 5mm 0;
 		}
 		
 		.qr-info {
-			margin-bottom: 5mm;
+			margin-bottom: 6mm;
 		}
 		
 		.qr-info p {
 			margin: 0 0 1mm 0;
 			padding: 0;
-			line-height: 1.2;
+			line-height: 1.3;
+			font-size: 8pt;
+		}
+		
+		.qr-right .qr-info p {
+			font-size: 9pt;
 		}
 		
 		.qr-info strong {
 			font-weight: bold;
 			display: block;
 			margin-bottom: 2mm;
+			font-size: 8pt;
+		}
+		
+		.qr-right .qr-info strong {
+			font-size: 9pt;
 		}
 		
 		.qr-code-wrapper {
-			text-align: center;
-			margin: 3mm 0 5mm 0;
+			margin: 5mm 0 5mm 0;
+		}
+		
+		.qr-code-wrapper img {
+			display: block;
+			width: 46mm !important;
+			height: 46mm !important;
 		}
 		
 		.qr-amount-box {
 			position: absolute;
-			bottom: 5mm;
+			bottom: 8mm;
 			left: 5mm;
 			width: 52mm;
+			border-top: 0.5pt solid #000;
+			padding-top: 2mm;
 		}
 		
 		.qr-amount-row {
-			display: flex;
-			justify-content: space-between;
-			align-items: baseline;
-			margin-bottom: 1mm;
+			display: table;
+			width: 100%;
+			margin-bottom: 2mm;
 		}
 		
 		.qr-amount-label {
+			display: table-cell;
 			font-size: 6pt;
 			font-weight: bold;
+			vertical-align: top;
 		}
 		
 		.qr-amount-value {
+			display: table-cell;
 			font-size: 8pt;
 			font-weight: bold;
+			text-align: left;
+			vertical-align: top;
 		}
 		
 		.qr-right .qr-amount-box {
@@ -688,13 +713,6 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		.qr-right .qr-amount-value {
 			font-size: 10pt;
-		}
-		
-		.qr-amount-box p {
-		.qr-amount-box p {
-			margin: 0.5mm 0;
-			padding: 0;
-			line-height: 1.1;
 		}
 		
 		.qr-acceptance-point {
@@ -716,16 +734,14 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 				padding: 15px;
 			}
 			
-			.qr-page {
-				page-break-before: always;
-				padding: 0;
-				margin: 0;
-				height: 105mm;
-			}
-			
 			@page { 
 				margin: 15mm;
 				size: A4 portrait;
+			}
+			
+			@page :last {
+				margin: 0;
+				size: 210mm 105mm;
 			}
 			
 			.qr-page {
