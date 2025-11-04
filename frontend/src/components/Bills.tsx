@@ -113,9 +113,9 @@ export default function Bills({ selectedBuildingId, buildings, users, onRefresh 
         }
     };
 
-    const downloadPDF = (invoice: Invoice) => {
+    const downloadPDF = async (invoice: Invoice) => {
         // Open PDF in new tab using backend endpoint
-        const pdfUrl = api.downloadInvoicePDF(invoice.id);
+        const pdfUrl = await api.downloadInvoicePDF(invoice.id);
         window.open(pdfUrl, '_blank');
     };
 
