@@ -256,7 +256,8 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		// Format user info for display (plain text, line breaks)
 		userName := ""
-		userAddress := ""
+		userStreet := ""
+		userLocation := ""
 		if user, ok := inv["user"].(map[string]interface{}); ok {
 			firstName := fmt.Sprintf("%v", user["first_name"])
 			lastName := fmt.Sprintf("%v", user["last_name"])
@@ -264,8 +265,15 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			street := fmt.Sprintf("%v", user["address_street"])
 			zip := fmt.Sprintf("%v", user["address_zip"])
 			city := fmt.Sprintf("%v", user["address_city"])
-			userAddress = fmt.Sprintf("%s<br>%s %s", street, zip, city)
+			userStreet = street
+			userLocation = fmt.Sprintf("%s %s", zip, city)
 		}
+		
+		// Format sender info for display
+		senderName := banking.AccountHolder
+		senderStreetAddr := sender.Address
+		senderLocation := fmt.Sprintf("%s %s", sender.Zip, sender.City)
+		senderCountryLine := sender.Country
 		
 		qrPage = fmt.Sprintf(`
 		<div class="page qr-page">
@@ -273,71 +281,73 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 				<div class="qr-left">
 					<div class="qr-section-title">Empfangsschein</div>
 					<div class="qr-info">
-						<p><strong>Konto / Zahlbar an</strong></p>
+						<strong>Konto / Zahlbar an</strong>
 						<p>%s</p>
 						<p>%s</p>
-						<p>%s %s</p>
+						<p>%s</p>
 						<p>%s</p>
 					</div>
 					<div class="qr-info">
-						<p><strong>Zahlbar durch</strong></p>
+						<strong>Zahlbar durch</strong>
+						<p>%s</p>
 						<p>%s</p>
 						<p>%s</p>
 					</div>
 					<div class="qr-amount-box">
-						<p><strong style="font-size: 6pt;">Währung</strong></p>
-						<p style="font-size: 8pt; font-weight: bold;">%s</p>
-						<p style="font-size: 6pt; margin-top: 2mm;"><strong>Betrag</strong></p>
-						<p style="font-size: 8pt; font-weight: bold;">%.2f</p>
+						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Währung</p>
+						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
+						<p style="font-size: 6pt; font-weight: bold; margin: 2mm 0 0 0;">Betrag</p>
+						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%.2f</p>
 					</div>
-					<div style="margin-top: auto; padding-top: 3mm; text-align: right;">
-						<p style="font-size: 6pt; font-weight: bold;">Annahmestelle</p>
-					</div>
+					<div class="qr-acceptance-point">Annahmestelle</div>
 				</div>
 				<div class="qr-right">
 					<div class="qr-section-title">Zahlteil</div>
 					%s
 					<div class="qr-info">
-						<p><strong>Konto / Zahlbar an</strong></p>
+						<strong>Konto / Zahlbar an</strong>
 						<p>%s</p>
 						<p>%s</p>
-						<p>%s %s</p>
+						<p>%s</p>
 						<p>%s</p>
 					</div>
 					<div class="qr-info">
-						<p><strong>Zusätzliche Informationen</strong></p>
+						<strong>Zusätzliche Informationen</strong>
 						<p>%s</p>
 					</div>
 					<div class="qr-info">
-						<p><strong>Zahlbar durch</strong></p>
+						<strong>Zahlbar durch</strong>
+						<p>%s</p>
 						<p>%s</p>
 						<p>%s</p>
 					</div>
 					<div class="qr-amount-box">
-						<p><strong style="font-size: 6pt;">Währung</strong></p>
-						<p style="font-size: 10pt; font-weight: bold;">%s</p>
-						<p style="font-size: 6pt; margin-top: 2mm;"><strong>Betrag</strong></p>
-						<p style="font-size: 10pt; font-weight: bold;">%.2f</p>
+						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Währung</p>
+						<p style="font-size: 10pt; font-weight: bold; margin: 0;">%s</p>
+						<p style="font-size: 6pt; font-weight: bold; margin: 2mm 0 0 0;">Betrag</p>
+						<p style="font-size: 10pt; font-weight: bold; margin: 0;">%.2f</p>
 					</div>
 				</div>
 			</div>
 		</div>`,
 			banking.IBAN,
-			banking.AccountHolder,
-			sender.Zip, sender.City,
-			sender.Country,
+			senderName,
+			senderLocation,
+			senderCountryLine,
 			userName,
-			userAddress,
+			userStreet,
+			userLocation,
 			currency,
 			totalAmount,
 			qrCodeContent,
 			banking.IBAN,
-			banking.AccountHolder,
-			sender.Zip, sender.City,
-			sender.Country,
+			senderName,
+			senderLocation,
+			senderCountryLine,
 			"Invoice "+invoiceNumber,
 			userName,
-			userAddress,
+			userStreet,
+			userLocation,
 			currency,
 			totalAmount,
 		)
@@ -567,88 +577,90 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		}
 		
 		.qr-page {
-			display: flex;
-			align-items: flex-start;
-			justify-content: flex-start;
+			page-break-before: always;
 			padding: 0;
 			margin: 0;
-			height: 105mm;
-			page-break-before: always;
 		}
 		
 		.qr-container {
 			border: 1px solid #000;
-			display: flex;
-			flex-direction: row;
-			background: white;
 			width: 210mm;
 			height: 105mm;
-			box-sizing: border-box;
+			display: table;
+			table-layout: fixed;
 			margin: 0;
 			padding: 0;
 		}
 		
 		.qr-left {
 			border-right: 1px dashed #000;
-			padding: 5mm;
 			width: 62mm;
-			display: flex;
-			flex-direction: column;
+			height: 105mm;
+			display: table-cell;
+			vertical-align: top;
+			padding: 5mm;
 			font-size: 6pt;
-			box-sizing: border-box;
-			line-height: 9pt;
+			position: relative;
 		}
 		
 		.qr-right {
+			width: 148mm;
+			height: 105mm;
+			display: table-cell;
+			vertical-align: top;
 			padding: 5mm;
-			flex: 1;
-			display: flex;
-			flex-direction: column;
 			font-size: 8pt;
-			box-sizing: border-box;
-			line-height: 11pt;
+			position: relative;
 		}
 		
 		.qr-section-title {
 			font-size: 11pt;
 			font-weight: bold;
-			margin: 0 0 5mm 0;
-			line-height: 11pt;
+			margin: 0 0 3mm 0;
 		}
 		
 		.qr-info {
-			margin-bottom: 5mm;
+			margin-bottom: 4mm;
 		}
 		
 		.qr-info p {
 			margin: 0;
 			padding: 0;
-			line-height: 1.2;
+			line-height: 1.3;
 		}
 		
-		.qr-info p strong {
+		.qr-info strong {
 			font-weight: bold;
 			display: block;
 			margin-bottom: 1mm;
 		}
 		
 		.qr-code-wrapper {
-			display: flex;
-			justify-content: center;
-			align-items: center;
-			margin: 5mm 0;
+			text-align: center;
+			margin: 3mm 0;
 		}
 		
 		.qr-amount-box {
-			margin-top: auto;
+			position: absolute;
+			bottom: 5mm;
+			left: 5mm;
+			right: 5mm;
 			padding-top: 3mm;
 			border-top: 1px solid #000;
 		}
 		
 		.qr-amount-box p {
-			margin: 0;
-			padding: 0;
-			line-height: 1.1;
+			margin: 1mm 0;
+			line-height: 1.2;
+		}
+		
+		.qr-acceptance-point {
+			position: absolute;
+			bottom: 5mm;
+			right: 5mm;
+			font-size: 6pt;
+			font-weight: bold;
+			text-align: right;
 		}
 		
 		@media print {
