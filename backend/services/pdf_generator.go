@@ -298,13 +298,11 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 						<p>%s</p>
 					</div>
 					<div class="qr-amount-box">
-  						<div class="qr-amount-row">
-    						<p style="font-size: 6pt; font-weight: bold;">Währung</p>
-    						<p style="font-size: 6pt; font-weight: bold;">Betrag</p>
-  						</div>
-  						<div class="qr-amount-row">
-   	 						<p style="font-size: 8pt; font-weight: bold;">%s</p>
-    						<p style="font-size: 8pt; font-weight: bold;">%.2f</p>
+  						<div style="display: grid; grid-template-columns: auto 30mm;">
+    						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Währung</p>
+    						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Betrag</p>
+    						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
+    						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%.2f</p>
   						</div>
 					</div>
 					<div class="qr-acceptance-point">Annahmestelle</div>
@@ -334,13 +332,11 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 					</div>
 					</div>
 					<div class="qr-amount-box">
-  						<div class="qr-amount-row">
-    						<p style="font-size: 6pt; font-weight: bold;">Währung</p>
-    						<p style="font-size: 6pt; font-weight: bold;">Betrag</p>
-  						</div>
-  						<div class="qr-amount-row">
-   	 						<p style="font-size: 8pt; font-weight: bold;">%s</p>
-    						<p style="font-size: 8pt; font-weight: bold;">%.2f</p>
+  						<div style="display: grid; grid-template-columns: auto 30mm;">
+    						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Währung</p>
+    						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Betrag</p>
+    						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
+    						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%.2f</p>
   						</div>
 					</div>
 				</div>
@@ -713,11 +709,6 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			margin: 0.5mm 0;
 			padding: 0;
 			line-height: 1.1;
-		}
-
-		.qr-amount-row {
-  			display: flex;
-  			gap: 10px;
 		}
 		
 		.qr-acceptance-point {
