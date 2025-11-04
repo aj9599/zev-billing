@@ -1,14 +1,17 @@
 package services
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
+	"html/template"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
-
-	"github.com/jung-kurt/gofpdf"
-	"github.com/skip2/go-qrcode"
+	"regexp"
+	"strings"
+	"time"
 )
 
 type PDFGenerator struct {
@@ -40,215 +43,16 @@ func (pg *PDFGenerator) GenerateInvoicePDF(invoice interface{}, senderInfo Sende
 		return "", fmt.Errorf("invalid invoice format")
 	}
 
-	// Create PDF
-	pdf := gofpdf.New("P", "mm", "A4", "")
-	pdf.SetMargins(15, 15, 15)
-	pdf.AddPage()
-
-	// Add Header
-	pdf.SetFont("Arial", "B", 24)
-	pdf.SetTextColor(0, 123, 255)
-	pdf.Cell(0, 10, "Invoice")
-	pdf.Ln(8)
-
-	// Invoice Number
-	pdf.SetFont("Arial", "", 10)
-	pdf.SetTextColor(100, 100, 100)
 	invoiceNumber := fmt.Sprintf("%v", inv["invoice_number"])
-	pdf.Cell(0, 6, "#"+invoiceNumber)
-	pdf.Ln(10)
-
-	// Status Badge
-	status := fmt.Sprintf("%v", inv["status"])
-	pdf.SetFillColor(212, 237, 218)
-	pdf.SetTextColor(21, 87, 36)
-	pdf.SetFont("Arial", "B", 9)
-	pdf.CellFormat(30, 6, status, "", 0, "C", true, 0, "")
-	pdf.Ln(12)
-
-	// Sender Info (right side)
-	pdf.SetFont("Arial", "B", 10)
-	pdf.SetTextColor(0, 0, 0)
-	if senderInfo.Name != "" {
-		pdf.Cell(0, 5, senderInfo.Name)
-		pdf.Ln(4)
-		pdf.SetFont("Arial", "", 9)
-		if senderInfo.Address != "" {
-			pdf.Cell(0, 4, senderInfo.Address)
-			pdf.Ln(4)
-		}
-		if senderInfo.Zip != "" || senderInfo.City != "" {
-			pdf.Cell(0, 4, senderInfo.Zip+" "+senderInfo.City)
-			pdf.Ln(4)
-		}
-		if senderInfo.Country != "" {
-			pdf.Cell(0, 4, senderInfo.Country)
-			pdf.Ln(8)
-		}
+	
+	// Generate HTML content
+	htmlContent, err := pg.generateHTML(inv, senderInfo, bankingInfo)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate HTML: %v", err)
 	}
 
-	// Bill To Section
-	pdf.SetFont("Arial", "B", 10)
-	pdf.SetTextColor(100, 100, 100)
-	pdf.Cell(0, 6, "BILL TO")
-	pdf.Ln(6)
-
-	pdf.SetFont("Arial", "", 10)
-	pdf.SetTextColor(0, 0, 0)
-
-	// Get user info
-	if user, ok := inv["user"].(map[string]interface{}); ok {
-		userName := fmt.Sprintf("%v %v", user["first_name"], user["last_name"])
-		pdf.SetFont("Arial", "B", 10)
-		pdf.Cell(0, 5, userName)
-		pdf.Ln(4)
-
-		pdf.SetFont("Arial", "", 9)
-		if addr, ok := user["address_street"].(string); ok && addr != "" {
-			pdf.Cell(0, 4, addr)
-			pdf.Ln(4)
-		}
-		if zip, ok := user["address_zip"].(string); ok {
-			if city, ok := user["address_city"].(string); ok {
-				pdf.Cell(0, 4, zip+" "+city)
-				pdf.Ln(4)
-			}
-		}
-		if email, ok := user["email"].(string); ok && email != "" {
-			pdf.Cell(0, 4, email)
-			pdf.Ln(8)
-		}
-	}
-
-	// Invoice Details
-	pdf.SetFont("Arial", "B", 10)
-	pdf.SetTextColor(100, 100, 100)
-	pdf.Cell(0, 6, "INVOICE DETAILS")
-	pdf.Ln(6)
-
-	pdf.SetFont("Arial", "", 9)
-	pdf.SetTextColor(0, 0, 0)
-
-	periodStart := fmt.Sprintf("%v", inv["period_start"])
-	periodEnd := fmt.Sprintf("%v", inv["period_end"])
-	pdf.Cell(0, 4, "Period: "+periodStart+" to "+periodEnd)
-	pdf.Ln(4)
-
-	generatedAt := fmt.Sprintf("%v", inv["generated_at"])
-	pdf.Cell(0, 4, "Generated: "+generatedAt)
-	pdf.Ln(10)
-
-	// Items Table
-	pdf.SetFillColor(249, 249, 249)
-	pdf.SetFont("Arial", "B", 9)
-	pdf.CellFormat(130, 8, "Description", "B", 0, "L", true, 0, "")
-	pdf.CellFormat(50, 8, "Amount", "B", 0, "R", true, 0, "")
-	pdf.Ln(8)
-
-	// Add items
-	pdf.SetFont("Arial", "", 9)
-	if items, ok := inv["items"].([]interface{}); ok {
-		for _, item := range items {
-			if itemMap, ok := item.(map[string]interface{}); ok {
-				description := fmt.Sprintf("%v", itemMap["description"])
-				totalPrice := 0.0
-				if tp, ok := itemMap["total_price"].(float64); ok {
-					totalPrice = tp
-				}
-				itemType := fmt.Sprintf("%v", itemMap["item_type"])
-
-				// Different formatting based on item type
-				if itemType == "meter_info" || itemType == "charging_header" {
-					pdf.SetFont("Arial", "B", 9)
-					pdf.Cell(180, 5, description)
-					pdf.Ln(5)
-				} else if itemType == "meter_reading_from" || itemType == "meter_reading_to" ||
-					itemType == "total_consumption" || itemType == "separator" {
-					pdf.SetFont("Arial", "", 8)
-					pdf.SetTextColor(100, 100, 100)
-					pdf.Cell(180, 4, description)
-					pdf.Ln(4)
-					pdf.SetTextColor(0, 0, 0)
-				} else if totalPrice > 0 {
-					pdf.SetFont("Arial", "B", 9)
-					pdf.CellFormat(130, 6, description, "", 0, "L", false, 0, "")
-					currency := fmt.Sprintf("%v", inv["currency"])
-					pdf.CellFormat(50, 6, fmt.Sprintf("%s %.2f", currency, totalPrice), "", 0, "R", false, 0, "")
-					pdf.Ln(6)
-				}
-			}
-		}
-	}
-
-	pdf.Ln(5)
-
-	// Total Section
-	pdf.SetFillColor(249, 249, 249)
-	pdf.SetFont("Arial", "B", 18)
-	totalAmount := 0.0
-	if ta, ok := inv["total_amount"].(float64); ok {
-		totalAmount = ta
-	}
-	currency := fmt.Sprintf("%v", inv["currency"])
-	pdf.CellFormat(0, 15, fmt.Sprintf("Total: %s %.2f", currency, totalAmount), "", 0, "R", true, 0, "")
-	pdf.Ln(20)
-
-	// Payment Details (if banking info provided)
-	if bankingInfo.IBAN != "" && bankingInfo.AccountHolder != "" {
-		pdf.SetFont("Arial", "B", 10)
-		pdf.SetTextColor(0, 0, 0)
-		pdf.Cell(0, 6, "PAYMENT DETAILS")
-		pdf.Ln(6)
-
-		pdf.SetFont("Arial", "", 9)
-		pdf.Cell(0, 4, "Bank: "+bankingInfo.Name)
-		pdf.Ln(4)
-		pdf.Cell(0, 4, "Account Holder: "+bankingInfo.AccountHolder)
-		pdf.Ln(4)
-		pdf.Cell(0, 4, "IBAN: "+bankingInfo.IBAN)
-		pdf.Ln(10)
-
-		// Generate QR Code Page
-		qrData := pg.generateSwissQRData(inv, senderInfo, bankingInfo)
-		if qrData != "" {
-			pdf.AddPage()
-
-			// QR Code Title
-			pdf.SetFont("Arial", "B", 18)
-			pdf.SetTextColor(0, 123, 255)
-			pdf.Ln(20)
-			pdf.Cell(0, 10, "Swiss QR Code")
-			pdf.Ln(15)
-
-			// Generate QR code image
-			tempQR := filepath.Join(os.TempDir(), fmt.Sprintf("qr_%s.png", invoiceNumber))
-			err := qrcode.WriteFile(qrData, qrcode.Medium, 280, tempQR)
-			if err == nil {
-				// Add QR code to PDF
-				pdf.ImageOptions(tempQR, 55, 60, 100, 100, false, gofpdf.ImageOptions{ImageType: "PNG"}, 0, "")
-
-				// Clean up temp file
-				defer os.Remove(tempQR)
-
-				// Payment info below QR
-				pdf.Ln(110)
-				pdf.SetFont("Arial", "", 10)
-				pdf.SetTextColor(0, 0, 0)
-				pdf.Cell(0, 5, "Invoice: "+invoiceNumber)
-				pdf.Ln(5)
-				pdf.Cell(0, 5, fmt.Sprintf("Amount: %s %.2f", currency, totalAmount))
-				pdf.Ln(5)
-				pdf.Cell(0, 5, "IBAN: "+bankingInfo.IBAN)
-				pdf.Ln(5)
-				pdf.Cell(0, 5, "Account Holder: "+bankingInfo.AccountHolder)
-			} else {
-				log.Printf("Failed to generate QR code: %v", err)
-			}
-		}
-	}
-
-	// Save PDF
-	invoicesDir := "/home/pi/zev-billing/invoices"
+	// Create invoices directory
+	invoicesDir := "/home/pi/zev-billing/backend/invoices"
 	if err := os.MkdirAll(invoicesDir, 0755); err != nil {
 		// Try local directory if home directory fails
 		invoicesDir = "./invoices"
@@ -256,23 +60,656 @@ func (pg *PDFGenerator) GenerateInvoicePDF(invoice interface{}, senderInfo Sende
 	}
 
 	filename := fmt.Sprintf("%s.pdf", invoiceNumber)
-	filepath := filepath.Join(invoicesDir, filename)
+	pdfPath := filepath.Join(invoicesDir, filename)
+	
+	// Save HTML temporarily
+	tempHTML := filepath.Join(os.TempDir(), fmt.Sprintf("invoice_%s.html", invoiceNumber))
+	if err := os.WriteFile(tempHTML, []byte(htmlContent), 0644); err != nil {
+		return "", fmt.Errorf("failed to write HTML: %v", err)
+	}
+	defer os.Remove(tempHTML)
 
-	err := pdf.OutputFileAndClose(filepath)
-	if err != nil {
-		return "", fmt.Errorf("failed to save PDF: %v", err)
+	// Convert HTML to PDF using wkhtmltopdf or chromium
+	if err := pg.convertHTMLToPDF(tempHTML, pdfPath); err != nil {
+		return "", fmt.Errorf("failed to convert to PDF: %v", err)
 	}
 
 	log.Printf("✓ Generated PDF: %s", filename)
 	return filename, nil
 }
 
+func (pg *PDFGenerator) convertHTMLToPDF(htmlPath, pdfPath string) error {
+	// Try wkhtmltopdf first (better for production)
+	cmd := exec.Command("wkhtmltopdf",
+		"--page-size", "A4",
+		"--margin-top", "15mm",
+		"--margin-right", "15mm",
+		"--margin-bottom", "15mm",
+		"--margin-left", "15mm",
+		"--enable-local-file-access",
+		"--print-media-type",
+		htmlPath,
+		pdfPath,
+	)
+	
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	
+	log.Printf("wkhtmltopdf not available: %v, trying chromium...", err)
+	
+	// Try chromium/chrome as fallback
+	chromiumCmds := []string{"chromium-browser", "chromium", "google-chrome", "chrome"}
+	
+	for _, chromiumCmd := range chromiumCmds {
+		cmd = exec.Command(chromiumCmd,
+			"--headless",
+			"--disable-gpu",
+			"--print-to-pdf="+pdfPath,
+			"--no-margins",
+			htmlPath,
+		)
+		
+		output, err = cmd.CombinedOutput()
+		if err == nil {
+			return nil
+		}
+	}
+	
+	return fmt.Errorf("no PDF converter available (tried wkhtmltopdf and chromium): %s", string(output))
+}
+
+func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderInfo, banking BankingInfo) (string, error) {
+	invoiceNumber := fmt.Sprintf("%v", inv["invoice_number"])
+	status := fmt.Sprintf("%v", inv["status"])
+	currency := fmt.Sprintf("%v", inv["currency"])
+	if currency == "" {
+		currency = "CHF"
+	}
+	
+	totalAmount := 0.0
+	if ta, ok := inv["total_amount"].(float64); ok {
+		totalAmount = ta
+	}
+	
+	periodStart := fmt.Sprintf("%v", inv["period_start"])
+	periodEnd := fmt.Sprintf("%v", inv["period_end"])
+	generatedAt := fmt.Sprintf("%v", inv["generated_at"])
+	
+	// Get status colors
+	statusColors := getStatusColors(status)
+	
+	// Check if user is archived
+	isArchived := false
+	var userInfo string
+	if user, ok := inv["user"].(map[string]interface{}); ok {
+		firstName := fmt.Sprintf("%v", user["first_name"])
+		lastName := fmt.Sprintf("%v", user["last_name"])
+		email := fmt.Sprintf("%v", user["email"])
+		street := fmt.Sprintf("%v", user["address_street"])
+		zip := fmt.Sprintf("%v", user["address_zip"])
+		city := fmt.Sprintf("%v", user["address_city"])
+		
+		if isActive, ok := user["is_active"].(bool); ok {
+			isArchived = !isActive
+		}
+		
+		archivedLabel := ""
+		if isArchived {
+			archivedLabel = " <em>(Archived)</em>"
+		}
+		
+		userInfo = fmt.Sprintf(`<strong>%s %s</strong>%s<br>%s<br>%s %s<br>%s`,
+			firstName, lastName, archivedLabel, street, zip, city, email)
+	}
+	
+	// Generate items HTML
+	itemsHTML := ""
+	if items, ok := inv["items"].([]interface{}); ok {
+		for _, item := range items {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				itemsHTML += pg.generateItemHTML(itemMap, currency)
+			}
+		}
+	}
+	
+	// Generate QR code data
+	qrData := ""
+	hasValidQR := false
+	if banking.IBAN != "" && banking.AccountHolder != "" {
+		qrData = pg.generateSwissQRData(inv, sender, banking)
+		hasValidQR = qrData != ""
+	}
+	
+	// Archived banner
+	archivedBanner := ""
+	if isArchived {
+		archivedBanner = `
+		<div class="archived-banner">
+			⚠️ ARCHIVED USER - This invoice is for an archived user
+		</div>`
+	}
+	
+	// Sender info section
+	senderSection := ""
+	if sender.Name != "" {
+		senderSection = fmt.Sprintf(`
+			<div class="header-right">
+				<strong>%s</strong>
+				%s<br>
+				%s %s<br>
+				%s
+			</div>`,
+			sender.Name,
+			sender.Address,
+			sender.Zip, sender.City,
+			sender.Country,
+		)
+	}
+	
+	// Payment details section
+	paymentSection := ""
+	if banking.IBAN != "" && banking.AccountHolder != "" {
+		paymentSection = fmt.Sprintf(`
+		<div class="payment-details-bottom">
+			<h4>Payment Details</h4>
+			<p><strong>Bank Name:</strong> %s</p>
+			<p><strong>Account Holder:</strong> %s</p>
+			<p><strong>IBAN:</strong> %s</p>
+			<div class="footer-timestamp">
+				<p>Generated: %s</p>
+			</div>
+		</div>`,
+			banking.Name,
+			banking.AccountHolder,
+			banking.IBAN,
+			time.Now().Format("02.01.2006 15:04"),
+		)
+	}
+	
+	// QR code page
+	qrPage := ""
+	if banking.IBAN != "" && banking.AccountHolder != "" {
+		qrCodeContent := ""
+		if hasValidQR {
+			qrCodeContent = fmt.Sprintf(`
+				<div id="qrcode" style="margin: 15px auto; display: flex; justify-content: center;">
+					<img src="https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=%s" alt="QR Code" style="width: 280px; height: 280px;">
+				</div>`,
+				template.URLQueryEscaper(qrData),
+			)
+		} else {
+			qrCodeContent = `
+				<div style="padding: 20px; color: #dc3545; text-align: center;">
+					<p style="margin: 0; font-size: 12pt;">QR Code could not be generated</p>
+					<p style="margin: 5px 0 0 0; font-size: 9pt;">Please check banking details</p>
+				</div>`
+		}
+		
+		qrPage = fmt.Sprintf(`
+		<div class="page qr-page">
+			<div class="qr-title">Swiss QR Code</div>
+			<div class="qr-container">
+				%s
+				<div class="qr-info">
+					<p><strong>Invoice:</strong> %s</p>
+					<p><strong>Amount:</strong> %s %.2f</p>
+					<p><strong>IBAN:</strong> %s</p>
+					<p><strong>Account Holder:</strong> %s</p>
+				</div>
+			</div>
+		</div>`,
+			qrCodeContent,
+			invoiceNumber,
+			currency, totalAmount,
+			banking.IBAN,
+			banking.AccountHolder,
+		)
+	}
+	
+	// Build complete HTML
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+	<title>Invoice %s</title>
+	<meta charset="UTF-8">
+	<style>
+		@page {
+			size: A4;
+			margin: 15mm;
+		}
+		
+		body { 
+			font-family: Arial, sans-serif; 
+			padding: 0;
+			margin: 0;
+			max-width: 210mm;
+			font-size: 10pt;
+		}
+		
+		.page {
+			page-break-after: always;
+			padding: 20px;
+			min-height: 297mm;
+			max-height: 297mm;
+			position: relative;
+			box-sizing: border-box;
+		}
+		
+		.page:last-child {
+			page-break-after: auto;
+		}
+		
+		.header { 
+			border-bottom: 2px solid #667EEA; 
+			padding-bottom: 15px; 
+			margin-bottom: 20px;
+			display: flex;
+			justify-content: space-between;
+			align-items: flex-start;
+		}
+		
+		.header-left h1 { 
+			margin: 0; 
+			font-size: 24pt; 
+			color: #667EEA;
+		}
+		
+		.header-left .invoice-number { 
+			color: #666; 
+			font-size: 10pt; 
+			margin-top: 4px;
+		}
+		
+		.header-right {
+			text-align: right;
+			font-size: 9pt;
+			line-height: 1.4;
+		}
+		
+		.header-right strong {
+			display: block;
+			font-size: 10pt;
+			margin-bottom: 3px;
+		}
+		
+		.status-badge {
+			display: inline-block;
+			padding: 4px 12px;
+			border-radius: 15px;
+			font-size: 9pt;
+			font-weight: 600;
+			margin-top: 8px;
+			background-color: %s;
+			color: %s;
+		}
+		
+		.archived-banner {
+			background-color: #f8d7da;
+			color: #721c24;
+			padding: 10px;
+			text-align: center;
+			font-weight: bold;
+			border-radius: 6px;
+			margin-bottom: 15px;
+			border: 2px solid #f5c6cb;
+			font-size: 10pt;
+		}
+		
+		.addresses {
+			display: flex;
+			justify-content: space-between;
+			margin-bottom: 20px;
+		}
+		
+		.info-section { 
+			flex: 1;
+		}
+		
+		.info-section h3 { 
+			font-size: 10pt; 
+			text-transform: uppercase; 
+			color: #666; 
+			margin-bottom: 8px;
+			font-weight: 600;
+		}
+		
+		.info-section p { 
+			margin: 3px 0; 
+			line-height: 1.4;
+			font-size: 9pt;
+		}
+		
+		table { 
+			width: 100%%; 
+			border-collapse: collapse; 
+			margin: 20px 0;
+			font-size: 9pt;
+		}
+		
+		th { 
+			background-color: #f9f9f9; 
+			padding: 8px; 
+			text-align: left; 
+			border-bottom: 2px solid #ddd;
+			font-weight: 600;
+			font-size: 9pt;
+		}
+		
+		td { 
+			padding: 8px; 
+			border-bottom: 1px solid #eee;
+			font-size: 9pt;
+		}
+		
+		.text-right { 
+			text-align: right;
+		}
+		
+		.item-header { 
+			font-weight: 600;
+			background-color: #f5f5f5;
+		}
+		
+		.item-info { 
+			color: #666;
+			font-size: 8pt;
+		}
+		
+		.item-cost { 
+			font-weight: 500;
+		}
+		
+		.solar-highlight {
+			background-color: #fffbea;
+		}
+		
+		.normal-highlight {
+			background-color: #f0f4ff;
+		}
+		
+		.charging-highlight {
+			background-color: #f0fff4;
+		}
+		
+		.total-section { 
+			background-color: #f9f9f9; 
+			padding: 15px; 
+			text-align: right; 
+			margin-top: 20px;
+			border-radius: 6px;
+			margin-bottom: 20px;
+		}
+		
+		.total-section p { 
+			font-size: 18pt; 
+			font-weight: bold; 
+			margin: 0;
+		}
+		
+		.payment-details-bottom {
+			position: absolute;
+			bottom: 15mm;
+			left: 20px;
+			right: 20px;
+			padding: 15px 0;
+			border-top: 2px solid #ddd;
+			font-size: 8pt;
+			color: #666;
+			background: white;
+		}
+		
+		.payment-details-bottom h4 {
+			font-size: 9pt;
+			font-weight: 600;
+			margin: 0 0 8px 0;
+			color: #333;
+		}
+		
+		.payment-details-bottom p {
+			margin: 2px 0;
+			line-height: 1.4;
+			font-size: 8pt;
+		}
+		
+		.footer-timestamp {
+			text-align: right;
+			font-size: 7pt;
+			color: #999;
+			margin-top: 8px;
+		}
+		
+		.qr-page {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			min-height: 297mm;
+			text-align: center;
+			padding: 30px;
+		}
+		
+		.qr-title {
+			font-size: 18pt;
+			font-weight: bold;
+			margin-bottom: 15px;
+			color: #667EEA;
+		}
+		
+		.qr-container {
+			border: 2px solid #667EEA;
+			padding: 25px;
+			border-radius: 8px;
+			background: white;
+			box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+		}
+		
+		.qr-info {
+			margin-top: 15px;
+			font-size: 10pt;
+			line-height: 1.6;
+			text-align: left;
+		}
+		
+		@media print {
+			body { 
+				padding: 0; 
+				font-size: 10pt; 
+			}
+			
+			.page { 
+				padding: 15px;
+				min-height: 297mm;
+				max-height: 297mm;
+			}
+			
+			@page { 
+				margin: 10mm;
+				size: A4 portrait;
+			}
+			
+			* {
+				-webkit-print-color-adjust: exact !important;
+				print-color-adjust: exact !important;
+				color-adjust: exact !important;
+			}
+		}
+	</style>
+</head>
+<body>
+	<div class="page">
+		%s
+		
+		<div class="header">
+			<div class="header-left">
+				<h1>Invoice</h1>
+				<div class="invoice-number">#%s</div>
+				<div class="status-badge">%s</div>
+			</div>
+			%s
+		</div>
+
+		<div class="addresses">
+			<div class="info-section">
+				<h3>Bill To</h3>
+				<p>%s</p>
+			</div>
+
+			<div class="info-section">
+				<h3>Invoice Details</h3>
+				<p>
+					<strong>Period:</strong> %s to %s<br>
+					<strong>Generated:</strong> %s<br>
+					<strong>Status:</strong> %s
+				</p>
+			</div>
+		</div>
+
+		<table>
+			<thead>
+				<tr>
+					<th>Description</th>
+					<th class="text-right">Amount</th>
+				</tr>
+			</thead>
+			<tbody>
+				%s
+			</tbody>
+		</table>
+
+		<div class="total-section">
+			<p>Total %s %.2f</p>
+		</div>
+
+		%s
+	</div>
+
+	%s
+</body>
+</html>`,
+		invoiceNumber,
+		statusColors.bg, statusColors.color,
+		archivedBanner,
+		invoiceNumber,
+		strings.ToUpper(status),
+		senderSection,
+		userInfo,
+		formatDate(periodStart), formatDate(periodEnd),
+		formatDate(generatedAt),
+		status,
+		itemsHTML,
+		currency, totalAmount,
+		paymentSection,
+		qrPage,
+	)
+	
+	return html, nil
+}
+
+func (pg *PDFGenerator) generateItemHTML(item map[string]interface{}, currency string) string {
+	description := fmt.Sprintf("%v", item["description"])
+	itemType := fmt.Sprintf("%v", item["item_type"])
+	totalPrice := 0.0
+	if tp, ok := item["total_price"].(float64); ok {
+		totalPrice = tp
+	}
+	
+	// Icons as inline SVG
+	sunIcon := `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-8.93-8.93 1.41 1.41m12.73 0 1.41-1.41M2 12h2m16 0h2m-3.07 6.34-1.41-1.41M6.34 6.34 4.93 4.93"/></svg>`
+	
+	boltIcon := `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>`
+	
+	carIcon := `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>`
+	
+	switch itemType {
+	case "meter_info", "charging_header":
+		return fmt.Sprintf(`<tr class="item-header"><td colspan="2"><strong>%s</strong></td></tr>`, description)
+		
+	case "meter_reading_from", "meter_reading_to", "total_consumption",
+		"charging_session_from", "charging_session_to", "total_charged":
+		return fmt.Sprintf(`<tr class="item-info"><td colspan="2">%s</td></tr>`, description)
+		
+	case "separator":
+		return `<tr><td colspan="2" style="padding: 8px;"></td></tr>`
+		
+	case "solar_power":
+		return fmt.Sprintf(`<tr class="item-cost solar-highlight">
+			<td style="display: flex; align-items: center; gap: 8px;">
+				%s
+				<strong>%s</strong>
+			</td>
+			<td class="text-right"><strong>%s %.2f</strong></td>
+		</tr>`, sunIcon, description, currency, totalPrice)
+		
+	case "normal_power":
+		return fmt.Sprintf(`<tr class="item-cost normal-highlight">
+			<td style="display: flex; align-items: center; gap: 8px;">
+				%s
+				<strong>%s</strong>
+			</td>
+			<td class="text-right"><strong>%s %.2f</strong></td>
+		</tr>`, boltIcon, description, currency, totalPrice)
+		
+	case "car_charging_normal", "car_charging_priority":
+		return fmt.Sprintf(`<tr class="item-cost charging-highlight">
+			<td style="display: flex; align-items: center; gap: 8px;">
+				%s
+				<strong>%s</strong>
+			</td>
+			<td class="text-right"><strong>%s %.2f</strong></td>
+		</tr>`, carIcon, description, currency, totalPrice)
+		
+	default:
+		if totalPrice > 0 {
+			return fmt.Sprintf(`<tr class="item-cost">
+				<td><strong>%s</strong></td>
+				<td class="text-right"><strong>%s %.2f</strong></td>
+			</tr>`, description, currency, totalPrice)
+		}
+		return fmt.Sprintf(`<tr class="item-info"><td colspan="2">%s</td></tr>`, description)
+	}
+}
+
+type statusColor struct {
+	bg    string
+	color string
+}
+
+func getStatusColors(status string) statusColor {
+	switch strings.ToLower(status) {
+	case "issued":
+		return statusColor{bg: "#d4edda", color: "#155724"}
+	case "pending":
+		return statusColor{bg: "#fff3cd", color: "#856404"}
+	case "paid":
+		return statusColor{bg: "#d1ecf1", color: "#0c5460"}
+	case "draft":
+		return statusColor{bg: "#f8d7da", color: "#721c24"}
+	case "archived":
+		return statusColor{bg: "#e2e3e5", color: "#383d41"}
+	default:
+		return statusColor{bg: "#e2e3e5", color: "#383d41"}
+	}
+}
+
+func formatDate(dateStr string) string {
+	t, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		t, err = time.Parse(time.RFC3339, dateStr)
+		if err != nil {
+			return dateStr
+		}
+	}
+	return t.Format("02.01.2006")
+}
+
 func (pg *PDFGenerator) generateSwissQRData(inv map[string]interface{}, sender SenderInfo, banking BankingInfo) string {
 	// Validate IBAN
-	iban := banking.IBAN
-	iban = stripSpaces(iban)
+	iban := strings.ReplaceAll(banking.IBAN, " ", "")
+	iban = strings.ToUpper(iban)
 
-	if len(iban) < 15 || (iban[:2] != "CH" && iban[:2] != "LI") {
+	if !regexp.MustCompile(`^(CH|LI)[0-9]{2}[A-Z0-9]{1,21}$`).MatchString(iban) {
 		log.Printf("Invalid IBAN format: %s", iban)
 		return ""
 	}
@@ -293,110 +730,94 @@ func (pg *PDFGenerator) generateSwissQRData(inv map[string]interface{}, sender S
 
 	userStreet := ""
 	userHouseNo := ""
+	userZip := ""
+	userCity := ""
+	userCountry := "CH"
+	userName := ""
+	
 	if user, ok := inv["user"].(map[string]interface{}); ok {
+		firstName := fmt.Sprintf("%v", user["first_name"])
+		lastName := fmt.Sprintf("%v", user["last_name"])
+		userName = fmt.Sprintf("%s %s", firstName, lastName)
+		
 		if addr, ok := user["address_street"].(string); ok {
 			userStreet, userHouseNo = parseAddress(addr)
+		}
+		if zip, ok := user["address_zip"].(string); ok {
+			userZip = zip
+		}
+		if city, ok := user["address_city"].(string); ok {
+			userCity = city
+		}
+		if country, ok := user["address_country"].(string); ok {
+			userCountry = country
 		}
 	}
 
 	// Build QR data (31 lines)
 	qrParts := []string{
-		"SPC",                                   // 1: QR Type
-		"0200",                                  // 2: Version
-		"1",                                     // 3: Coding
-		iban,                                    // 4: IBAN
-		"S",                                     // 5: Creditor Address Type
-		truncate(banking.AccountHolder, 70),     // 6: Creditor Name
-		truncate(senderStreet, 70),              // 7: Creditor Street
-		truncate(senderHouseNo, 16),             // 8: Creditor House No
-		truncate(sender.Zip, 16),                // 9: Creditor Postal Code
-		truncate(sender.City, 35),               // 10: Creditor City
-		truncate(sender.Country, 2),             // 11: Creditor Country
-		"",                                      // 12: Ultimate Creditor Address Type
-		"",                                      // 13: Ultimate Creditor Name
-		"",                                      // 14: Ultimate Creditor Street
-		"",                                      // 15: Ultimate Creditor House No
-		"",                                      // 16: Ultimate Creditor Postal Code
-		"",                                      // 17: Ultimate Creditor City
-		"",                                      // 18: Ultimate Creditor Country
-		fmt.Sprintf("%.2f", totalAmount),        // 19: Amount
-		truncate(currency, 3),                   // 20: Currency
-		"S",                                     // 21: Debtor Address Type
-		"",                                      // 22: Debtor Name (filled below)
-		truncate(userStreet, 70),                // 23: Debtor Street
-		truncate(userHouseNo, 16),               // 24: Debtor House No
-		"",                                      // 25: Debtor Postal Code (filled below)
-		"",                                      // 26: Debtor City (filled below)
-		"",                                      // 27: Debtor Country (filled below)
-		"NON",                                   // 28: Reference Type
-		"",                                      // 29: Reference
-		truncate("Invoice "+invoiceNumber, 140), // 30: Additional Information
-		"EPD",                                   // 31: End Payment Data
+		"SPC",                                          // 1: QR Type
+		"0200",                                         // 2: Version
+		"1",                                            // 3: Coding
+		iban,                                           // 4: IBAN
+		"S",                                            // 5: Creditor Address Type
+		truncate(banking.AccountHolder, 70),            // 6: Creditor Name
+		truncate(senderStreet, 70),                     // 7: Creditor Street
+		truncate(senderHouseNo, 16),                    // 8: Creditor House No
+		truncate(sender.Zip, 16),                       // 9: Creditor Postal Code
+		truncate(sender.City, 35),                      // 10: Creditor City
+		truncate(sender.Country, 2),                    // 11: Creditor Country
+		"",                                             // 12: Ultimate Creditor Address Type
+		"",                                             // 13: Ultimate Creditor Name
+		"",                                             // 14: Ultimate Creditor Street
+		"",                                             // 15: Ultimate Creditor House No
+		"",                                             // 16: Ultimate Creditor Postal Code
+		"",                                             // 17: Ultimate Creditor City
+		"",                                             // 18: Ultimate Creditor Country
+		fmt.Sprintf("%.2f", totalAmount),               // 19: Amount
+		truncate(currency, 3),                          // 20: Currency
+		"S",                                            // 21: Debtor Address Type
+		truncate(userName, 70),                         // 22: Debtor Name
+		truncate(userStreet, 70),                       // 23: Debtor Street
+		truncate(userHouseNo, 16),                      // 24: Debtor House No
+		truncate(userZip, 16),                          // 25: Debtor Postal Code
+		truncate(userCity, 35),                         // 26: Debtor City
+		truncate(userCountry, 2),                       // 27: Debtor Country
+		"NON",                                          // 28: Reference Type
+		"",                                             // 29: Reference
+		truncate("Invoice "+invoiceNumber, 140),        // 30: Additional Information
+		"EPD",                                          // 31: End Payment Data
 	}
 
-	// Fill debtor info
-	if user, ok := inv["user"].(map[string]interface{}); ok {
-		firstName := fmt.Sprintf("%v", user["first_name"])
-		lastName := fmt.Sprintf("%v", user["last_name"])
-		qrParts[21] = truncate(firstName+" "+lastName, 70)
-
-		if zip, ok := user["address_zip"].(string); ok {
-			qrParts[24] = truncate(zip, 16)
-		}
-		if city, ok := user["address_city"].(string); ok {
-			qrParts[25] = truncate(city, 35)
-		}
-		if country, ok := user["address_country"].(string); ok {
-			qrParts[26] = truncate(country, 2)
-		} else {
-			qrParts[26] = "CH"
-		}
+	qrData := strings.Join(qrParts, "\r\n")
+	
+	lines := strings.Split(qrData, "\r\n")
+	if len(lines) != 31 {
+		log.Printf("Invalid QR data structure: expected 31 lines, got %d", len(lines))
+		return ""
 	}
 
-	qrData := ""
-	for i, part := range qrParts {
-		qrData += part
-		if i < len(qrParts)-1 {
-			qrData += "\r\n"
-		}
-	}
-
+	log.Println("✓ Generated valid Swiss QR data with 31 elements")
 	return qrData
 }
 
-func stripSpaces(s string) string {
-	result := ""
-	for _, c := range s {
-		if c != ' ' {
-			result += string(c)
-		}
-	}
-	return result
-}
-
 func parseAddress(address string) (street, houseNo string) {
-	// Try to split address into street and house number
-	// Format: "Main Street 123" or "Main Street 123a"
 	if address == "" {
 		return "", ""
 	}
 
-	// Simple regex-like parsing
-	lastSpace := -1
-	for i := len(address) - 1; i >= 0; i-- {
-		if address[i] == ' ' {
-			lastSpace = i
-			break
-		}
+	// Try to split address into street and house number
+	parts := strings.Fields(address)
+	if len(parts) == 0 {
+		return "", ""
 	}
-
-	if lastSpace > 0 {
-		possibleNumber := address[lastSpace+1:]
-		if len(possibleNumber) > 0 && (possibleNumber[0] >= '0' && possibleNumber[0] <= '9') {
-			return address[:lastSpace], possibleNumber
-		}
+	
+	// Check if last part looks like a house number
+	lastPart := parts[len(parts)-1]
+	if len(lastPart) > 0 && (lastPart[0] >= '0' && lastPart[0] <= '9') {
+		return strings.Join(parts[:len(parts)-1], " "), lastPart
 	}
-
+	
 	return address, ""
 }
 

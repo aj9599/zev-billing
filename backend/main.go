@@ -180,8 +180,18 @@ func main() {
 	api.HandleFunc("/custom-line-items/{id}", customItemHandler.Update).Methods("PUT")
 	api.HandleFunc("/custom-line-items/{id}", customItemHandler.Delete).Methods("DELETE")
 
-	// PDF Download
+	// PDF Download and serving
 	api.HandleFunc("/billing/invoices/{id}/pdf", billingHandler.DownloadPDF).Methods("GET")
+	
+	// Serve invoice PDFs from filesystem
+	invoicesDir := "./invoices"
+	if _, err := os.Stat("/home/pi/zev-billing/backend/invoices"); err == nil {
+		invoicesDir = "/home/pi/zev-billing/backend/invoices"
+	}
+	// Ensure directory exists
+	os.MkdirAll(invoicesDir, 0755)
+	log.Printf("Serving invoice PDFs from: %s", invoicesDir)
+	api.PathPrefix("/invoices/").Handler(http.StripPrefix("/api/invoices/", http.FileServer(http.Dir(invoicesDir))))
 
 	// Dashboard routes
 	api.HandleFunc("/dashboard/stats", dashboardHandler.GetStats).Methods("GET")
@@ -216,6 +226,7 @@ func main() {
 	log.Println("Webhook endpoints available:")
 	log.Println("  - POST/GET /webhook/meter?meter_id=X")
 	log.Println("  - POST/GET /webhook/charger?charger_id=X")
+	log.Printf("Invoice PDFs will be served from: %s", invoicesDir)
 	log.Println("Default credentials: admin / admin123")
 	log.Println("IMPORTANT: Change default password after first login!")
 	log.Println("===========================================")
