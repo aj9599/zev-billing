@@ -78,49 +78,58 @@ func (pg *PDFGenerator) GenerateInvoicePDF(invoice interface{}, senderInfo Sende
 }
 
 func (pg *PDFGenerator) convertHTMLToPDF(htmlPath, pdfPath string) error {
-	// Try wkhtmltopdf first (better for production, supports CSS @page rules for mixed page sizes)
+	// Try chromium/chrome first (better support for CSS @page rules with different sizes)
+	chromiumCmds := []string{"chromium-browser", "chromium", "google-chrome", "chrome"}
+	
+	for _, chromiumCmd := range chromiumCmds {
+		cmd := exec.Command(chromiumCmd,
+			"--headless",
+			"--disable-gpu",
+			"--print-to-pdf="+pdfPath,
+			"--print-to-pdf-no-header",
+			"--no-margins",
+			htmlPath,
+		)
+		
+		output, err := cmd.CombinedOutput()
+		if err == nil {
+			log.Printf("Generated PDF using %s", chromiumCmd)
+			return nil
+		}
+		log.Printf("%s not available: %v", chromiumCmd, err)
+	}
+
+	log.Printf("Chromium not available, trying wkhtmltopdf...")
+
+	// Try wkhtmltopdf as fallback
+	// Note: wkhtmltopdf has limited support for CSS @page rules with multiple page sizes
 	cmd := exec.Command("wkhtmltopdf",
+		"--page-size", "A4",
+		"--margin-top", "15mm",
+		"--margin-right", "15mm",
+		"--margin-bottom", "15mm",
+		"--margin-left", "15mm",
 		"--enable-local-file-access",
 		"--print-media-type",
 		"--no-pdf-compression",
 		"--disable-smart-shrinking",
+		"--footer-center", "",
+		"--footer-left", "",
+		"--footer-right", "",
+		"--header-center", "",
+		"--header-left", "",
+		"--header-right", "",
 		htmlPath,
 		pdfPath,
 	)
 
 	output, err := cmd.CombinedOutput()
 	if err == nil {
-		log.Printf("✓ PDF generated successfully with wkhtmltopdf (proper mixed page sizes)")
+		log.Printf("Generated PDF using wkhtmltopdf (may not respect QR page size)")
 		return nil
 	}
 
-	log.Printf("wkhtmltopdf not available: %v, trying chromium...", err)
-
-	// Try chromium/chrome as fallback
-	// NOTE: Chromium does NOT support CSS @page named pages, so the QR page will be A4
-	chromiumCmds := []string{"chromium-browser", "chromium", "google-chrome", "chrome"}
-
-	for _, chromiumCmd := range chromiumCmds {
-		cmd = exec.Command(chromiumCmd,
-			"--headless",
-			"--disable-gpu",
-			"--print-to-pdf="+pdfPath,
-			"--no-margins",
-			"--no-pdf-header-footer",
-			htmlPath,
-		)
-
-		output, err = cmd.CombinedOutput()
-		if err == nil {
-			log.Printf("⚠️  PDF generated with Chromium")
-			log.Printf("⚠️  NOTE: QR bill page will be A4 size (not 210x105mm) due to Chromium limitations")
-			log.Printf("⚠️  For proper Swiss QR bill format, please install wkhtmltopdf:")
-			log.Printf("⚠️    sudo apt-get install wkhtmltopdf")
-			return nil
-		}
-	}
-
-	return fmt.Errorf("no PDF converter available (tried wkhtmltopdf and chromium): %s", string(output))
+	return fmt.Errorf("no PDF converter available (tried chromium and wkhtmltopdf): %s", string(output))
 }
 
 func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderInfo, banking BankingInfo) (string, error) {
@@ -294,7 +303,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 					</div>
 					<div class="qr-amount-box-left">
   						<div style="display: grid; grid-template-columns: 10mm auto;">
-    						<p style="font-size: 6pt; font-weight: bold; margin: 0;">WÃ¤hrung</p>
+    						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Währung</p>
     						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Betrag</p>
     						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
     						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%.2f</p>
@@ -328,7 +337,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 					</div>
 					<div class="qr-amount-box-right">
   						<div style="display: grid; grid-template-columns: 10mm auto;">
-    						<p style="font-size: 6pt; font-weight: bold; margin: 0;">WÃ¤hrung</p>
+    						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Währung</p>
     						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Betrag</p>
     						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
     						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%.2f</p>
