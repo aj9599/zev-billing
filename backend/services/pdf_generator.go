@@ -585,19 +585,19 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			border: 1px solid #000;
 			width: 210mm;
 			height: 105mm;
-			display: table;
-			table-layout: fixed;
 			margin: 0;
 			padding: 0;
+			position: relative;
+			overflow: hidden;
 		}
 		
 		.qr-left {
 			border-right: 1px dashed #000;
 			width: 62mm;
 			height: 105mm;
-			display: table-cell;
-			vertical-align: top;
-			padding: 5mm;
+			float: left;
+			padding: 5mm 5mm 15mm 5mm;
+			box-sizing: border-box;
 			font-size: 6pt;
 			position: relative;
 		}
@@ -605,9 +605,9 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		.qr-right {
 			width: 148mm;
 			height: 105mm;
-			display: table-cell;
-			vertical-align: top;
-			padding: 5mm;
+			float: left;
+			padding: 5mm 5mm 15mm 5mm;
+			box-sizing: border-box;
 			font-size: 8pt;
 			position: relative;
 		}
@@ -623,7 +623,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		}
 		
 		.qr-info p {
-			margin: 0;
+			margin: 0 0 1mm 0;
 			padding: 0;
 			line-height: 1.3;
 		}
@@ -641,21 +641,21 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		.qr-amount-box {
 			position: absolute;
-			bottom: 5mm;
+			bottom: 7mm;
 			left: 5mm;
 			right: 5mm;
-			padding-top: 3mm;
+			padding-top: 2mm;
 			border-top: 1px solid #000;
 		}
 		
 		.qr-amount-box p {
-			margin: 1mm 0;
-			line-height: 1.2;
+			margin: 0.5mm 0;
+			line-height: 1.1;
 		}
 		
 		.qr-acceptance-point {
 			position: absolute;
-			bottom: 5mm;
+			bottom: 3mm;
 			right: 5mm;
 			font-size: 6pt;
 			font-weight: bold;
@@ -680,11 +680,15 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			}
 			
 			@page { 
-				margin: 10mm;
+				margin: 15mm;
 				size: A4 portrait;
 			}
 			
-			@page :last {
+			.qr-page {
+				page: qr-bill;
+			}
+			
+			@page qr-bill {
 				margin: 0;
 				size: 210mm 105mm;
 			}
