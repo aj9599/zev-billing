@@ -78,26 +78,35 @@ func (pg *PDFGenerator) GenerateInvoicePDF(invoice interface{}, senderInfo Sende
 }
 
 func (pg *PDFGenerator) convertHTMLToPDF(htmlPath, pdfPath string) error {
-	// Try wkhtmltopdf first (better for production, supports CSS @page rules for mixed page sizes)
+	// Try wkhtmltopdf first (better for production)
 	cmd := exec.Command("wkhtmltopdf",
+		"--page-size", "A4",
+		"--margin-top", "15mm",
+		"--margin-right", "15mm",
+		"--margin-bottom", "15mm",
+		"--margin-left", "15mm",
 		"--enable-local-file-access",
 		"--print-media-type",
 		"--no-pdf-compression",
 		"--disable-smart-shrinking",
+		"--footer-center", "",
+		"--footer-left", "",
+		"--footer-right", "",
+		"--header-center", "",
+		"--header-left", "",
+		"--header-right", "",
 		htmlPath,
 		pdfPath,
 	)
 
 	output, err := cmd.CombinedOutput()
 	if err == nil {
-		log.Printf("✓ PDF generated successfully with wkhtmltopdf (proper mixed page sizes)")
 		return nil
 	}
 
 	log.Printf("wkhtmltopdf not available: %v, trying chromium...", err)
 
 	// Try chromium/chrome as fallback
-	// NOTE: Chromium does NOT support CSS @page named pages, so the QR page will be A4
 	chromiumCmds := []string{"chromium-browser", "chromium", "google-chrome", "chrome"}
 
 	for _, chromiumCmd := range chromiumCmds {
@@ -112,10 +121,6 @@ func (pg *PDFGenerator) convertHTMLToPDF(htmlPath, pdfPath string) error {
 
 		output, err = cmd.CombinedOutput()
 		if err == nil {
-			log.Printf("⚠️  PDF generated with Chromium")
-			log.Printf("⚠️  NOTE: QR bill page will be A4 size (not 210x105mm) due to Chromium limitations")
-			log.Printf("⚠️  For proper Swiss QR bill format, please install wkhtmltopdf:")
-			log.Printf("⚠️    sudo apt-get install wkhtmltopdf")
 			return nil
 		}
 	}
@@ -264,19 +269,15 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			userLocation = fmt.Sprintf("%s %s", zip, city)
 		}
 
-		// Format sender info for display - only show country if not CH/Switzerland
+		// Format sender info for display
 		senderName := banking.AccountHolder
-		senderStreet := sender.Address
 		senderLocation := fmt.Sprintf("%s %s", sender.Zip, sender.City)
+		senderCountryLine := sender.Country
 
-		// Format IBAN with spaces every 4 characters
-		formattedIBAN := formatIBAN(banking.IBAN)
-
-		// Build QR sections - hide Switzerland for domestic addresses
+		// Build QR sections
 		qrPage = fmt.Sprintf(`
 		<div class="page qr-page">
 			<div class="qr-container">
-				<div class="qr-divider"></div>
 				<div class="qr-left">
 					<div class="qr-section-title">Empfangsschein</div>
 					<div class="qr-info">
@@ -292,21 +293,17 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 						<p>%s</p>
 						<p>%s</p>
 					</div>
-					<div class="qr-amount-box-left">
-  						<div style="display: grid; grid-template-columns: 10mm auto;">
-    						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Währung</p>
-    						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Betrag</p>
-    						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
-    						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%.2f</p>
-  						</div>
+					<div class="qr-amount-box">
+						<p style="font-size: 6pt; font-weight: bold; margin: 0;">W&auml;hrung</p>
+						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
+						<p style="font-size: 6pt; font-weight: bold; margin: 2mm 0 0 0;">Betrag</p>
+						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%.2f</p>
 					</div>
 					<div class="qr-acceptance-point">Annahmestelle</div>
 				</div>
 				<div class="qr-right">
 					<div class="qr-section-title">Zahlteil</div>
-					<div class="qr-right-content">
 					%s
-					<div class="qr-details">
 					<div class="qr-info">
 						<strong>Konto / Zahlbar an</strong>
 						<p>%s</p>
@@ -315,7 +312,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 						<p>%s</p>
 					</div>
 					<div class="qr-info">
-						<strong>Referenz</strong>
+						<strong>Zusätzliche Informationen</strong>
 						<p>%s</p>
 					</div>
 					<div class="qr-info">
@@ -324,33 +321,29 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 						<p>%s</p>
 						<p>%s</p>
 					</div>
-					</div>
-					</div>
-					<div class="qr-amount-box-right">
-  						<div style="display: grid; grid-template-columns: 10mm auto;">
-    						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Währung</p>
-    						<p style="font-size: 6pt; font-weight: bold; margin: 0;">Betrag</p>
-    						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
-    						<p style="font-size: 8pt; font-weight: bold; margin: 0;">%.2f</p>
-  						</div>
+					<div class="qr-amount-box">
+						<p style="font-size: 6pt; font-weight: bold; margin: 0;">W&auml;hrung</p>
+						<p style="font-size: 10pt; font-weight: bold; margin: 0;">%s</p>
+						<p style="font-size: 6pt; font-weight: bold; margin: 2mm 0 0 0;">Betrag</p>
+						<p style="font-size: 10pt; font-weight: bold; margin: 0;">%.2f</p>
 					</div>
 				</div>
 			</div>
 		</div>`,
-			formattedIBAN,
+			banking.IBAN,
 			senderName,
-			senderStreet,
 			senderLocation,
+			senderCountryLine,
 			userName,
 			userStreet,
 			userLocation,
 			currency,
 			totalAmount,
 			qrCodeContent,
-			formattedIBAN,
+			banking.IBAN,
 			senderName,
-			senderStreet,
 			senderLocation,
+			senderCountryLine,
 			"Invoice "+invoiceNumber,
 			userName,
 			userStreet,
@@ -585,12 +578,8 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		.qr-page {
 			page-break-before: always;
-			page-break-after: avoid;
 			padding: 0;
 			margin: 0;
-			width: 210mm;
-			height: 105mm;
-			box-sizing: border-box;
 		}
 		
 		.qr-container {
@@ -601,54 +590,35 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			padding: 0;
 			position: relative;
 			overflow: hidden;
-			page-break-inside: avoid;
-			box-sizing: border-box;
-		}
-		
-		.qr-divider {
-			position: absolute;
-			left: 62mm;
-			top: 0;
-			bottom: 0;
-			width: 0;
-			border-left: 1px dashed #000;
 		}
 		
 		.qr-left {
+			border-right: 1px dashed #000;
+			width: 62mm;
+			height: 105mm;
 			position: absolute;
-			left: 5mm;
-			top: 12mm;
-			width: 52mm;
-			height: 95mm;
-			font-size: 8pt;
-			line-height: 1.2;
+			left: 0;
+			top: 0;
+			padding: 5mm 5mm 15mm 5mm;
+			box-sizing: border-box;
+			font-size: 6pt;
 		}
 		
 		.qr-right {
+			width: 148mm;
+			height: 105mm;
 			position: absolute;
-			left: 67mm;
-			top: 5mm;
-			width: 138mm;
-			height: 95mm;
-			font-size: 10pt;
-			line-height: 1.3;
+			left: 62mm;
+			top: 0;
+			padding: 5mm 5mm 15mm 5mm;
+			box-sizing: border-box;
+			font-size: 8pt;
 		}
 		
 		.qr-section-title {
 			font-size: 11pt;
 			font-weight: bold;
-			margin: 0 0 5mm 0;
-			position: absolute;
-			top: 0;
-			left: 0;
-		}
-		
-		.qr-left .qr-section-title {
-			top: -7mm;
-		}
-		
-		.qr-right .qr-section-title {
-			top: 0mm;
+			margin: 0 0 3mm 0;
 		}
 		
 		.qr-info {
@@ -656,69 +626,40 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		}
 		
 		.qr-info p {
-			margin: 0 0 0.5mm 0;
+			margin: 0 0 1mm 0;
 			padding: 0;
-			line-height: 1.2;
+			line-height: 1.3;
 		}
 		
 		.qr-info strong {
 			font-weight: bold;
 			display: block;
 			margin-bottom: 1mm;
-			font-size: 8pt;
 		}
 		
 		.qr-code-wrapper {
-			text-align: left;
-			margin: 12mm 0 4mm 0;
-			width: 46mm;
-			height: 46mm;
+			text-align: center;
+			margin: 3mm 0;
 		}
 		
-		.qr-code-wrapper img {
-			width: 46mm;
-			height: 46mm;
-			display: block;
-		}
-		
-		.qr-right-content {
-			display: flex;
-			gap: 5mm;
-			align-items: flex-start;
-		}
-		
-		.qr-details {
-			flex: 1;
-		}
-		
-		.qr-amount-box-left {
+		.qr-amount-box {
 			position: absolute;
-			bottom: 32mm;
-			left: 0;
-			right: 0;
+			bottom: 7mm;
+			left: 5mm;
+			right: 5mm;
 			padding-top: 2mm;
-			border-top: none;
+			border-top: 1px solid #000;
 		}
 		
-		.qr-amount-box-right {
-			position: absolute;
-			bottom: 25mm;
-			left: 0;
-			right: 0;
-			padding-top: 2mm;
-			border-top: none;
-		}
-		
-		.qr-amount-box-left .qr-amount-box-right p {
+		.qr-amount-box p {
 			margin: 0.5mm 0;
-			padding: 0;
 			line-height: 1.1;
 		}
 		
 		.qr-acceptance-point {
 			position: absolute;
-			bottom: 20mm;
-			right: 0;
+			bottom: 3mm;
+			right: 5mm;
 			font-size: 6pt;
 			font-weight: bold;
 			text-align: right;
@@ -732,17 +673,13 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			
 			.page { 
 				padding: 15px;
-				page-break-after: auto;
 			}
 			
 			.qr-page {
 				page-break-before: always;
-				page-break-after: auto;
 				padding: 0;
 				margin: 0;
-				width: 210mm;
 				height: 105mm;
-				page: qr-bill;
 			}
 			
 			@page { 
@@ -750,9 +687,13 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 				size: A4 portrait;
 			}
 			
+			.qr-page {
+				page: qr-bill;
+			}
+			
 			@page qr-bill {
 				margin: 0;
-				size: 210mm 105mm landscape;
+				size: 210mm 105mm;
 			}
 			
 			* {
