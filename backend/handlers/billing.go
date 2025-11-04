@@ -748,21 +748,10 @@ func (h *BillingHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 		log.Printf("PDF file not found: %s", filePath)
 		log.Printf("Searched filename: %s", filename)
 		log.Printf("Invoice number: %s", invoiceNumber)
+		log.Printf("Invoice ID: %d", invoiceID)
 		
-		// Try to regenerate the PDF on-the-fly
-		log.Printf("Attempting to regenerate PDF for invoice %d", invoiceID)
-		
-		// Load full invoice details
-		fullInv, err := h.loadFullInvoice(invoiceID)
-		if err != nil {
-			log.Printf("Failed to load invoice for regeneration: %v", err)
-			http.Error(w, "PDF file not found and could not regenerate", http.StatusNotFound)
-			return
-		}
-
-		// Get sender and banking info from database or use defaults
-		// For now, we'll return not found - in production you'd want to regenerate
-		http.Error(w, "PDF file not found. Please regenerate the invoice.", http.StatusNotFound)
+		// PDF was never generated or has been deleted
+		http.Error(w, "PDF file not found. Please regenerate the invoice from the Billing page.", http.StatusNotFound)
 		return
 	}
 

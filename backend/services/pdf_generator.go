@@ -73,7 +73,7 @@ func (pg *PDFGenerator) GenerateInvoicePDF(invoice interface{}, senderInfo Sende
 		return "", fmt.Errorf("failed to convert to PDF: %v", err)
 	}
 
-	log.Printf("✓ Generated PDF: %s", filename)
+	log.Printf("âœ“ Generated PDF: %s", filename)
 	return filename, nil
 }
 
@@ -186,7 +186,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 	if isArchived {
 		archivedBanner = `
 		<div class="archived-banner">
-			⚠️ ARCHIVED USER - This invoice is for an archived user
+			âš ï¸ ARCHIVED USER - This invoice is for an archived user
 		</div>`
 	}
 	
@@ -233,8 +233,8 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		qrCodeContent := ""
 		if hasValidQR {
 			qrCodeContent = fmt.Sprintf(`
-				<div id="qrcode" style="margin: 15px auto; display: flex; justify-content: center;">
-					<img src="https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=%s" alt="QR Code" style="width: 280px; height: 280px;">
+				<div class="qr-code-wrapper">
+					<img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=%s" alt="QR Code" style="width: 250px; height: 250px;">
 				</div>`,
 				template.URLQueryEscaper(qrData),
 			)
@@ -248,22 +248,64 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		qrPage = fmt.Sprintf(`
 		<div class="page qr-page">
-			<div class="qr-title">Swiss QR Code</div>
-			<div class="qr-container">
-				%s
-				<div class="qr-info">
-					<p><strong>Invoice:</strong> %s</p>
-					<p><strong>Amount:</strong> %s %.2f</p>
-					<p><strong>IBAN:</strong> %s</p>
-					<p><strong>Account Holder:</strong> %s</p>
+			<div style="max-width: 800px;">
+				<div class="qr-title">Empfangsschein / Zahlteil</div>
+				<div class="qr-container">
+					<div class="qr-left">
+						<div class="qr-section-title">Empfangsschein</div>
+						<div class="qr-info">
+							<p><strong>Konto / Zahlbar an</strong></p>
+							<p>%s</p>
+							<p>%s</p>
+							<p>%s %s</p>
+							<p>%s</p>
+							<br>
+							<p><strong>Zahlbar durch</strong></p>
+							<p>%s</p>
+						</div>
+						<div style="margin-top: auto; padding-top: 20px; border-top: 1px solid #ddd;">
+							<p style="font-size: 8pt; margin: 2px 0;"><strong>Währung</strong> | <strong>Betrag</strong></p>
+							<p style="font-size: 10pt; margin: 2px 0;"><strong>%s</strong> | <strong>%.2f</strong></p>
+						</div>
+					</div>
+					<div class="qr-right">
+						<div class="qr-section-title">Zahlteil</div>
+						%s
+						<div class="qr-info">
+							<p><strong>Konto / Zahlbar an</strong></p>
+							<p>%s</p>
+							<p>%s</p>
+							<p>%s %s</p>
+							<p>%s</p>
+							<br>
+							<p><strong>Zusätzliche Informationen</strong></p>
+							<p>Invoice %s</p>
+							<br>
+							<p><strong>Zahlbar durch</strong></p>
+							<p>%s</p>
+						</div>
+						<div style="margin-top: auto; padding-top: 10px;">
+							<p style="font-size: 8pt; margin: 2px 0;"><strong>Währung</strong> | <strong>Betrag</strong></p>
+							<p style="font-size: 10pt; margin: 2px 0;"><strong>%s</strong> | <strong>%.2f</strong></p>
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>`,
-			qrCodeContent,
-			invoiceNumber,
-			currency, totalAmount,
 			banking.IBAN,
 			banking.AccountHolder,
+			sender.Zip, sender.City,
+			sender.Country,
+			userInfo,
+			currency, totalAmount,
+			qrCodeContent,
+			banking.IBAN,
+			banking.AccountHolder,
+			sender.Zip, sender.City,
+			sender.Country,
+			invoiceNumber,
+			userInfo,
+			currency, totalAmount,
 		)
 	}
 	
@@ -288,16 +330,13 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		}
 		
 		.page {
-			page-break-after: always;
 			padding: 20px;
-			min-height: 297mm;
-			max-height: 297mm;
 			position: relative;
 			box-sizing: border-box;
 		}
 		
-		.page:last-child {
-			page-break-after: auto;
+		.qr-page {
+			page-break-before: always;
 		}
 		
 		.header { 
@@ -388,17 +427,16 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		}
 		
 		th { 
-			background-color: #f9f9f9; 
+			background-color: #4a5568; 
+			color: white;
 			padding: 8px; 
 			text-align: left; 
-			border-bottom: 2px solid #ddd;
 			font-weight: 600;
 			font-size: 9pt;
 		}
 		
 		td { 
-			padding: 8px; 
-			border-bottom: 1px solid #eee;
+			padding: 6px 8px; 
 			font-size: 9pt;
 		}
 		
@@ -408,28 +446,24 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		.item-header { 
 			font-weight: 600;
-			background-color: #f5f5f5;
+			background-color: #4a5568;
+			color: white;
 		}
 		
 		.item-info { 
-			color: #666;
+			color: #333;
 			font-size: 8pt;
+			background-color: #f7fafc;
 		}
 		
 		.item-cost { 
 			font-weight: 500;
+			background-color: white;
 		}
 		
-		.solar-highlight {
-			background-color: #fffbea;
-		}
-		
-		.normal-highlight {
-			background-color: #f0f4ff;
-		}
-		
-		.charging-highlight {
-			background-color: #f0fff4;
+		.section-separator {
+			height: 8px;
+			background-color: transparent;
 		}
 		
 		.total-section { 
@@ -448,15 +482,11 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		}
 		
 		.payment-details-bottom {
-			position: absolute;
-			bottom: 15mm;
-			left: 20px;
-			right: 20px;
 			padding: 15px 0;
+			margin-top: 30px;
 			border-top: 2px solid #ddd;
 			font-size: 8pt;
 			color: #666;
-			background: white;
 		}
 		
 		.payment-details-bottom h4 {
@@ -481,34 +511,60 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		.qr-page {
 			display: flex;
-			flex-direction: column;
 			align-items: center;
 			justify-content: center;
 			min-height: 297mm;
-			text-align: center;
 			padding: 30px;
 		}
 		
 		.qr-title {
-			font-size: 18pt;
+			font-size: 14pt;
 			font-weight: bold;
-			margin-bottom: 15px;
-			color: #667EEA;
+			margin-bottom: 20px;
+			text-align: center;
 		}
 		
 		.qr-container {
-			border: 2px solid #667EEA;
-			padding: 25px;
-			border-radius: 8px;
+			border: 1px solid #000;
+			display: flex;
 			background: white;
-			box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+			max-width: 800px;
+		}
+		
+		.qr-left {
+			border-right: 1px dashed #000;
+			padding: 20px;
+			flex: 1;
+			display: flex;
+			flex-direction: column;
+		}
+		
+		.qr-right {
+			padding: 20px;
+			flex: 1;
+			display: flex;
+			flex-direction: column;
+		}
+		
+		.qr-section-title {
+			font-size: 10pt;
+			font-weight: bold;
+			margin-bottom: 10px;
 		}
 		
 		.qr-info {
-			margin-top: 15px;
-			font-size: 10pt;
+			font-size: 9pt;
 			line-height: 1.6;
-			text-align: left;
+		}
+		
+		.qr-info p {
+			margin: 3px 0;
+		}
+		
+		.qr-code-wrapper {
+			display: flex;
+			justify-content: center;
+			margin: 15px 0;
 		}
 		
 		@media print {
@@ -519,8 +575,10 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			
 			.page { 
 				padding: 15px;
-				min-height: 297mm;
-				max-height: 297mm;
+			}
+			
+			.qr-page {
+				page-break-before: always;
 			}
 			
 			@page { 
@@ -614,56 +672,34 @@ func (pg *PDFGenerator) generateItemHTML(item map[string]interface{}, currency s
 		totalPrice = tp
 	}
 	
-	// Icons as inline SVG
-	sunIcon := `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-8.93-8.93 1.41 1.41m12.73 0 1.41-1.41M2 12h2m16 0h2m-3.07 6.34-1.41-1.41M6.34 6.34 4.93 4.93"/></svg>`
-	
-	boltIcon := `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>`
-	
-	carIcon := `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>`
-	
 	switch itemType {
-	case "meter_info", "charging_header":
-		return fmt.Sprintf(`<tr class="item-header"><td colspan="2"><strong>%s</strong></td></tr>`, description)
+	case "meter_info":
+		return fmt.Sprintf(`<tr class="item-header"><td colspan="2">%s</td></tr>`, description)
+		
+	case "charging_header":
+		return fmt.Sprintf(`<tr class="section-separator"><td colspan="2"></td></tr><tr class="item-header"><td colspan="2">%s</td></tr>`, description)
 		
 	case "meter_reading_from", "meter_reading_to", "total_consumption",
 		"charging_session_from", "charging_session_to", "total_charged":
 		return fmt.Sprintf(`<tr class="item-info"><td colspan="2">%s</td></tr>`, description)
 		
 	case "separator":
-		return `<tr><td colspan="2" style="padding: 8px;"></td></tr>`
+		return `<tr class="section-separator"><td colspan="2"></td></tr>`
 		
-	case "solar_power":
-		return fmt.Sprintf(`<tr class="item-cost solar-highlight">
-			<td style="display: flex; align-items: center; gap: 8px;">
-				%s
-				<strong>%s</strong>
-			</td>
-			<td class="text-right"><strong>%s %.2f</strong></td>
-		</tr>`, sunIcon, description, currency, totalPrice)
+	case "solar_power", "normal_power", "car_charging_normal", "car_charging_priority":
+		return fmt.Sprintf(`<tr class="item-cost">
+			<td>%s</td>
+			<td class="text-right">%s %.2f</td>
+		</tr>`, description, currency, totalPrice)
 		
-	case "normal_power":
-		return fmt.Sprintf(`<tr class="item-cost normal-highlight">
-			<td style="display: flex; align-items: center; gap: 8px;">
-				%s
-				<strong>%s</strong>
-			</td>
-			<td class="text-right"><strong>%s %.2f</strong></td>
-		</tr>`, boltIcon, description, currency, totalPrice)
-		
-	case "car_charging_normal", "car_charging_priority":
-		return fmt.Sprintf(`<tr class="item-cost charging-highlight">
-			<td style="display: flex; align-items: center; gap: 8px;">
-				%s
-				<strong>%s</strong>
-			</td>
-			<td class="text-right"><strong>%s %.2f</strong></td>
-		</tr>`, carIcon, description, currency, totalPrice)
+	case "custom_item_header":
+		return fmt.Sprintf(`<tr class="section-separator"><td colspan="2"></td></tr><tr class="item-header"><td colspan="2">%s</td></tr>`, description)
 		
 	default:
 		if totalPrice > 0 {
 			return fmt.Sprintf(`<tr class="item-cost">
-				<td><strong>%s</strong></td>
-				<td class="text-right"><strong>%s %.2f</strong></td>
+				<td>%s</td>
+				<td class="text-right">%s %.2f</td>
 			</tr>`, description, currency, totalPrice)
 		}
 		return fmt.Sprintf(`<tr class="item-info"><td colspan="2">%s</td></tr>`, description)
@@ -796,7 +832,7 @@ func (pg *PDFGenerator) generateSwissQRData(inv map[string]interface{}, sender S
 		return ""
 	}
 
-	log.Println("✓ Generated valid Swiss QR data with 31 elements")
+	log.Println("âœ“ Generated valid Swiss QR data with 31 elements")
 	return qrData
 }
 
