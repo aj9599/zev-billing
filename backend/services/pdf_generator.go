@@ -246,9 +246,15 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 				</div>`
 		}
 		
+		// Get user info for display
+		displayUserInfo := strings.ReplaceAll(userInfo, "<strong>", "")
+		displayUserInfo = strings.ReplaceAll(displayUserInfo, "</strong>", "")
+		displayUserInfo = strings.ReplaceAll(displayUserInfo, "<br>", "\n")
+		displayUserInfo = strings.ReplaceAll(displayUserInfo, " <em>(Archived)</em>", "")
+		
 		qrPage = fmt.Sprintf(`
 		<div class="page qr-page">
-			<div style="max-width: 800px;">
+			<div style="max-width: 600px; width: 100%%;">
 				<div class="qr-title">Empfangsschein / Zahlteil</div>
 				<div class="qr-container">
 					<div class="qr-left">
@@ -263,9 +269,9 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 							<p><strong>Zahlbar durch</strong></p>
 							<p>%s</p>
 						</div>
-						<div style="margin-top: auto; padding-top: 20px; border-top: 1px solid #ddd;">
+						<div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
 							<p style="font-size: 8pt; margin: 2px 0;"><strong>Währung</strong> | <strong>Betrag</strong></p>
-							<p style="font-size: 10pt; margin: 2px 0;"><strong>%s</strong> | <strong>%.2f</strong></p>
+							<p style="font-size: 11pt; margin: 2px 0;"><strong>%s</strong> | <strong>%.2f</strong></p>
 						</div>
 					</div>
 					<div class="qr-right">
@@ -284,9 +290,9 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 							<p><strong>Zahlbar durch</strong></p>
 							<p>%s</p>
 						</div>
-						<div style="margin-top: auto; padding-top: 10px;">
+						<div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #ddd;">
 							<p style="font-size: 8pt; margin: 2px 0;"><strong>Währung</strong> | <strong>Betrag</strong></p>
-							<p style="font-size: 10pt; margin: 2px 0;"><strong>%s</strong> | <strong>%.2f</strong></p>
+							<p style="font-size: 11pt; margin: 2px 0;"><strong>%s</strong> | <strong>%.2f</strong></p>
 						</div>
 					</div>
 				</div>
@@ -296,7 +302,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			banking.AccountHolder,
 			sender.Zip, sender.City,
 			sender.Country,
-			userInfo,
+			displayUserInfo,
 			currency, totalAmount,
 			qrCodeContent,
 			banking.IBAN,
@@ -304,7 +310,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			sender.Zip, sender.City,
 			sender.Country,
 			invoiceNumber,
-			userInfo,
+			displayUserInfo,
 			currency, totalAmount,
 		)
 	}
@@ -427,16 +433,17 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		}
 		
 		th { 
-			background-color: #4a5568; 
-			color: white;
+			background-color: #f9f9f9; 
 			padding: 8px; 
 			text-align: left; 
+			border-bottom: 2px solid #ddd;
 			font-weight: 600;
 			font-size: 9pt;
 		}
 		
 		td { 
-			padding: 6px 8px; 
+			padding: 8px; 
+			border-bottom: 1px solid #eee;
 			font-size: 9pt;
 		}
 		
@@ -446,24 +453,44 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		.item-header { 
 			font-weight: 600;
-			background-color: #4a5568;
-			color: white;
+			background-color: #e2e8f0;
+			border-bottom: 2px solid #cbd5e0;
 		}
 		
 		.item-info { 
-			color: #333;
+			color: #666;
 			font-size: 8pt;
-			background-color: #f7fafc;
+			background-color: white;
+			border-bottom: none;
+		}
+		
+		.item-info-compact { 
+			color: #666;
+			font-size: 8pt;
+			background-color: white;
+			padding: 4px 8px;
 		}
 		
 		.item-cost { 
 			font-weight: 500;
-			background-color: white;
+		}
+		
+		.solar-highlight {
+			background-color: #fef3c7;
+		}
+		
+		.normal-highlight {
+			background-color: #dbeafe;
+		}
+		
+		.charging-highlight {
+			background-color: #d1fae5;
 		}
 		
 		.section-separator {
-			height: 8px;
+			height: 12px;
 			background-color: transparent;
+			border: none;
 		}
 		
 		.total-section { 
@@ -527,21 +554,21 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		.qr-container {
 			border: 1px solid #000;
 			display: flex;
+			flex-direction: column;
 			background: white;
-			max-width: 800px;
+			max-width: 600px;
+			width: 100%%;
 		}
 		
 		.qr-left {
-			border-right: 1px dashed #000;
+			border-bottom: 1px dashed #000;
 			padding: 20px;
-			flex: 1;
 			display: flex;
 			flex-direction: column;
 		}
 		
 		.qr-right {
 			padding: 20px;
-			flex: 1;
 			display: flex;
 			flex-direction: column;
 		}
@@ -672,37 +699,75 @@ func (pg *PDFGenerator) generateItemHTML(item map[string]interface{}, currency s
 		totalPrice = tp
 	}
 	
+	// Icons as inline SVG
+	sunIcon := `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-8.93-8.93 1.41 1.41m12.73 0 1.41-1.41M2 12h2m16 0h2m-3.07 6.34-1.41-1.41M6.34 6.34 4.93 4.93"/></svg>`
+	
+	boltIcon := `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>`
+	
+	carIcon := `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>`
+	
 	switch itemType {
 	case "meter_info":
-		return fmt.Sprintf(`<tr class="item-header"><td colspan="2">%s</td></tr>`, description)
+		return fmt.Sprintf(`<tr class="item-header"><td colspan="2"><strong>%s</strong></td></tr>`, description)
 		
 	case "charging_header":
-		return fmt.Sprintf(`<tr class="section-separator"><td colspan="2"></td></tr><tr class="item-header"><td colspan="2">%s</td></tr>`, description)
+		return fmt.Sprintf(`<tr class="section-separator"><td colspan="2"></td></tr><tr class="item-header"><td colspan="2"><strong>%s</strong></td></tr>`, description)
+		
+	case "meter_reading_compact":
+		// Single line with all meter readings
+		return fmt.Sprintf(`<tr class="item-info-compact"><td colspan="2">%s</td></tr>`, description)
 		
 	case "meter_reading_from", "meter_reading_to", "total_consumption",
 		"charging_session_from", "charging_session_to", "total_charged":
-		return fmt.Sprintf(`<tr class="item-info"><td colspan="2">%s</td></tr>`, description)
+		return fmt.Sprintf(`<tr class="item-info-compact"><td colspan="2">%s</td></tr>`, description)
 		
 	case "separator":
 		return `<tr class="section-separator"><td colspan="2"></td></tr>`
 		
-	case "solar_power", "normal_power", "car_charging_normal", "car_charging_priority":
-		return fmt.Sprintf(`<tr class="item-cost">
-			<td>%s</td>
-			<td class="text-right">%s %.2f</td>
-		</tr>`, description, currency, totalPrice)
+	case "solar_power":
+		return fmt.Sprintf(`<tr class="item-cost solar-highlight">
+			<td style="padding-left: 20px;">
+				<span style="display: inline-flex; align-items: center; gap: 6px;">
+					%s
+					<strong>%s</strong>
+				</span>
+			</td>
+			<td class="text-right"><strong>%s %.2f</strong></td>
+		</tr>`, sunIcon, description, currency, totalPrice)
+		
+	case "normal_power":
+		return fmt.Sprintf(`<tr class="item-cost normal-highlight">
+			<td style="padding-left: 20px;">
+				<span style="display: inline-flex; align-items: center; gap: 6px;">
+					%s
+					<strong>%s</strong>
+				</span>
+			</td>
+			<td class="text-right"><strong>%s %.2f</strong></td>
+		</tr>`, boltIcon, description, currency, totalPrice)
+		
+	case "car_charging_normal", "car_charging_priority":
+		return fmt.Sprintf(`<tr class="item-cost charging-highlight">
+			<td style="padding-left: 20px;">
+				<span style="display: inline-flex; align-items: center; gap: 6px;">
+					%s
+					<strong>%s</strong>
+				</span>
+			</td>
+			<td class="text-right"><strong>%s %.2f</strong></td>
+		</tr>`, carIcon, description, currency, totalPrice)
 		
 	case "custom_item_header":
-		return fmt.Sprintf(`<tr class="section-separator"><td colspan="2"></td></tr><tr class="item-header"><td colspan="2">%s</td></tr>`, description)
+		return fmt.Sprintf(`<tr class="section-separator"><td colspan="2"></td></tr><tr class="item-header"><td colspan="2"><strong>%s</strong></td></tr>`, description)
 		
 	default:
 		if totalPrice > 0 {
 			return fmt.Sprintf(`<tr class="item-cost">
-				<td>%s</td>
-				<td class="text-right">%s %.2f</td>
+				<td><strong>%s</strong></td>
+				<td class="text-right"><strong>%s %.2f</strong></td>
 			</tr>`, description, currency, totalPrice)
 		}
-		return fmt.Sprintf(`<tr class="item-info"><td colspan="2">%s</td></tr>`, description)
+		return fmt.Sprintf(`<tr class="item-info-compact"><td colspan="2">%s</td></tr>`, description)
 	}
 }
 
