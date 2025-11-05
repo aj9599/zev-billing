@@ -110,7 +110,7 @@ export const de: Translations = {
   // ============================================================================
   // USERS
   // ============================================================================
-  
+
   // General
   'users.title': 'Benutzer',
   'users.subtitle': 'Verwalten Sie reguläre Benutzer und Administratoren',
@@ -222,7 +222,7 @@ export const de: Translations = {
   // ============================================================================
   // BUILDINGS
   // ============================================================================
-  
+
   // General
   'buildings.title': 'Gebäude',
   'buildings.subtitle': 'Verwalten Sie Immobilien und Gebäudegruppen',
@@ -341,7 +341,7 @@ export const de: Translations = {
   // ============================================================================
   // METERS
   // ============================================================================
-  
+
   // General
   'meters.title': 'Zähler',
   'meters.subtitle': 'Energiezähler verwalten und Verbrauch überwachen',
@@ -571,10 +571,75 @@ export const de: Translations = {
   'meters.instructions.troubleshootingHttpAuth': 'Überprüfen Sie HTTP-Anmeldedaten, wenn Authentifizierung aktiviert ist',
   'meters.instructions.troubleshootingHttpMeterId': 'Überprüfen Sie, ob die Zähler-ID im URL-Pfad mit Ihrer Loxone-Konfiguration übereinstimmt',
 
+  // Zählerersatz
+  'meters.replacement.title': 'Zähler ersetzen',
+  'meters.replacement.subtitle': 'Schritt',
+  'meters.replacement.failed': 'Zähler konnte nicht ersetzt werden',
+  'meters.replacement.replacing': 'Wird ersetzt...',
+  'meters.replacement.confirmReplace': 'Zähler ersetzen',
+  'meters.showArchived': 'Archivierte anzeigen',
+
+  // Validierung
+  'meters.replacement.invalidOldReading': 'Ungültiger Endwert',
+  'meters.replacement.readingTooLow': 'Endwert muss >= letztem aufgezeichneten Wert sein',
+  'meters.replacement.nameRequired': 'Zählername ist erforderlich',
+  'meters.replacement.loxoneConfigRequired': 'Loxone Host und Geräte-ID sind erforderlich',
+  'meters.replacement.modbusConfigRequired': 'IP-Adresse ist erforderlich',
+  'meters.replacement.invalidNewReading': 'Ungültiger Anfangswert',
+
+  // Schritt 1
+  'meters.replacement.step1.title': 'Zählerersatz Übersicht',
+  'meters.replacement.step1.currentMeter': 'Aktueller Zähler',
+  'meters.replacement.step1.lastReading': 'Letzter Messwert',
+  'meters.replacement.step1.connectionType': 'Verbindungstyp',
+  'meters.replacement.step1.whatHappens': 'Was geschieht beim Ersatz:',
+  'meters.replacement.step1.point1': 'Alter Zähler wird archiviert (nicht gelöscht)',
+  'meters.replacement.step1.point2': 'Historische Daten bleiben erhalten',
+  'meters.replacement.step1.point3': 'Neuer Zähler übernimmt die Datenerfassung',
+  'meters.replacement.step1.point4': 'Abrechnung läuft nahtlos mit Offset-Berechnung weiter',
+  'meters.replacement.step1.point5': 'Sie können den Verbindungstyp bei Bedarf ändern',
+  'meters.replacement.step1.warning': 'Wichtig: Diese Aktion kann nicht rückgängig gemacht werden. Stellen Sie sicher, dass Sie die richtigen Werte haben, bevor Sie fortfahren.',
+
+  // Schritt 2
+  'meters.replacement.step2.title': 'Endwert des alten Zählers',
+  'meters.replacement.step2.instruction': 'Geben Sie den Endwert des alten Zählers ein. Dies sollte der letzte Wert sein, den Sie am physischen Zähler ablesen können, bevor Sie ihn trennen.',
+  'meters.replacement.step2.lastRecorded': 'Letzter aufgezeichneter Messwert',
+  'meters.replacement.step2.reference': 'Als Referenz verwenden - Ihr Endwert sollte ≥ diesem Wert sein',
+  'meters.replacement.step2.finalReading': 'Endwert (kWh)',
+  'meters.replacement.step2.tip': 'Tipp: Notieren Sie diesen Wert genau. Er wird zur Berechnung des Offsets für die Abrechnungskontinuität verwendet.',
+
+  // Schritt 3
+  'meters.replacement.step3.title': 'Konfiguration des neuen Zählers',
+  'meters.replacement.step3.namePlaceholder': 'Namen des neuen Zählers eingeben',
+  'meters.replacement.step3.copySettings': 'Gebäude- und Wohnungseinstellungen vom alten Zähler übernehmen',
+
+  // Schritt 4
+  'meters.replacement.step4.title': 'Verbindungskonfiguration',
+  'meters.replacement.step4.subtitle': 'Wählen Sie aus, wie der neue Zähler Daten sendet. Sie können den Verbindungstyp bei Bedarf ändern.',
+
+  // Schritt 5
+  'meters.replacement.step5.title': 'Anfangswert des neuen Zählers',
+  'meters.replacement.step5.instruction': 'Geben Sie den Anfangswert des neuen Zählers ein. Dies ist typischerweise 0 oder eine kleine Zahl für einen neuen Zähler.',
+  'meters.replacement.step5.initialReading': 'Anfangswert (kWh)',
+  'meters.replacement.step5.offsetCalculation': 'Offset-Berechnung Vorschau',
+  'meters.replacement.step5.offsetExplanation': 'Dieser Offset wird auf alle neuen Messwerte für die Abrechnungskontinuität angewendet',
+
+  // Schritt 6
+  'meters.replacement.step6.title': 'Überprüfung & Bestätigung',
+  'meters.replacement.step6.oldMeter': 'Alter Zähler',
+  'meters.replacement.step6.newMeter': 'Neuer Zähler',
+  'meters.replacement.step6.finalReading': 'Endwert',
+  'meters.replacement.step6.initialReading': 'Anfangswert',
+  'meters.replacement.step6.readingOffset': 'Messwert-Offset',
+  'meters.replacement.step6.notes': 'Ersatz-Notizen (Optional)',
+  'meters.replacement.step6.notesPlaceholder': 'z.B. Zählerfehlfunktion, geplante Wartung, Upgrade...',
+  'meters.replacement.step6.finalWarning': 'Letzte Warnung',
+  'meters.replacement.step6.cannotUndo': 'Dieser Ersatz kann nicht rückgängig gemacht werden. Der alte Zähler wird archiviert und der neue Zähler beginnt sofort mit der Datenerfassung.',
+
   // ============================================================================
   // CHARGERS
   // ============================================================================
-  
+
   // General
   'chargers.title': 'Ladestationen',
   'chargers.subtitle': 'EV-Ladeinfrastruktur verwalten',
@@ -754,7 +819,7 @@ export const de: Translations = {
   // ============================================================================
   // BILLING
   // ============================================================================
-  
+
   // General
   'billing.title': 'Abrechnung & Rechnungen',
   'billing.subtitle': 'Rechnungen und Abrechnungen für alle Gebäude verwalten',
@@ -879,17 +944,17 @@ export const de: Translations = {
   // ============================================================================
   // BILL CONFIGURATION (Advanced Multi-Step Modal)
   // ============================================================================
-  
+
   // General
   'billConfig.title': 'Erweiterte Rechnungskonfiguration',
-  
+
   // Steps
   'billConfig.steps.selection': 'Auswahl',
   'billConfig.steps.dates': 'Daten',
   'billConfig.steps.meters': 'Zähler',
   'billConfig.steps.items': 'Positionen',
   'billConfig.steps.review': 'Überprüfung',
-  
+
   // Step 1: Building & Apartment Selection
   'billConfig.step1.title': 'Gebäude, Nutzer & Zeitraum auswählen',
   'billConfig.step1.selectBuildings': 'Gebäude auswählen',
@@ -969,7 +1034,7 @@ export const de: Translations = {
   // ============================================================================
   // SHARED METERS CONFIGURATION
   // ============================================================================
-  
+
   // General
   'sharedMeters.title': 'Gemeinsame Zählerkonfiguration',
   'sharedMeters.subtitle': 'Konfigurieren Sie gemeinsame Zähler und wie deren Kosten unter den Nutzern aufgeteilt werden',
@@ -979,7 +1044,7 @@ export const de: Translations = {
   'sharedMeters.infoDescription': 'Gemeinsame Zähler erfassen Strom für Gemeinschaftsflächen (Flure, Aufzüge, Parkplätze usw.), der unter mehreren Nutzern aufgeteilt wird. Konfigurieren Sie die Kostenverteilung über gleichmässige Aufteilung, flächenbasierte oder benutzerdefinierte Prozentsätze.',
   'sharedMeters.noConfigs': 'Noch keine gemeinsamen Zähler konfiguriert',
   'sharedMeters.noConfigsDescription': 'Klicken Sie auf "Gemeinsamen Zähler hinzufügen", um Ihre erste Konfiguration zu erstellen',
-  
+
   // Display Fields
   'sharedMeters.meterName': 'Zählername',
   'sharedMeters.building': 'Gebäude',
@@ -989,7 +1054,7 @@ export const de: Translations = {
   'sharedMeters.selectMeter': 'Wählen Sie einen Zähler...',
   'sharedMeters.noMetersFound': 'Keine Gebäudezähler für dieses Gebäude gefunden',
   'sharedMeters.onlyHeatingOther': 'Nur Heizungs- und sonstige Zähler können geteilt werden',
-  
+
   // Split Types
   'sharedMeters.splitType.label': 'Aufteilungsart',
   'sharedMeters.splitType.equal': 'Gleichmässige Aufteilung',
@@ -1000,22 +1065,22 @@ export const de: Translations = {
   'sharedMeters.splitTypeDesc.byArea': 'Kosten sind proportional zur Wohnungsfläche (erfordert Flächendaten)',
   'sharedMeters.splitTypeDesc.byUnits': 'Kosten sind proportional zur Anzahl der Einheiten (erfordert Einheitenzahl)',
   'sharedMeters.splitTypeDesc.custom': 'Benutzerdefinierte prozentuale Aufteilung für jeden Nutzer (erfordert Konfiguration)',
-  
+
   // Custom Split
   'sharedMeters.percentagePerApartment': 'Prozentsatz pro Wohnung',
   'sharedMeters.totalMustBe100': 'Summe muss 100% ergeben',
   'sharedMeters.apartment': 'Wohnung',
   'sharedMeters.percentage': 'Prozentsatz (%)',
-  
+
   // Modal Titles
   'sharedMeters.createTitle': 'Gemeinsamen Zähler hinzufügen',
   'sharedMeters.createSubtitle': 'Konfigurieren Sie einen neuen gemeinsamen Zähler für Ihr Gebäude',
   'sharedMeters.editTitle': 'Gemeinsamen Zähler bearbeiten',
   'sharedMeters.editSubtitle': 'Gemeinsame Zählerkonfiguration aktualisieren',
-  
+
   // Validation
   'sharedMeters.fillAllFields': 'Bitte füllen Sie alle erforderlichen Felder aus',
-  
+
   // Messages
   'sharedMeters.createSuccess': 'Gemeinsame Zählerkonfiguration erfolgreich erstellt',
   'sharedMeters.updateSuccess': 'Gemeinsame Zählerkonfiguration erfolgreich aktualisiert',
@@ -1028,7 +1093,7 @@ export const de: Translations = {
   // ============================================================================
   // CUSTOM ITEMS (Line Items for Invoices)
   // ============================================================================
-  
+
   // General
   'customItems.title': 'Benutzerdefinierte Rechnungspositionen verwalten',
   'customItems.subtitle': 'Fügen Sie benutzerdefinierte Gebühren wie Zählermiete, Wartungsgebühren und andere wiederkehrende Posten hinzu',
@@ -1041,14 +1106,14 @@ export const de: Translations = {
   'customItems.description': 'Beschreibung',
   'customItems.descriptionPlaceholder': 'z.B. Monatliche Wartungsgebühr',
   'customItems.amount': 'Betrag',
-  
+
   // Categories
   'customItems.category.label': 'Kategorie',
   'customItems.category.meterRent': 'Zählermiete',
   'customItems.category.maintenance': 'Wartung',
   'customItems.category.service': 'Service',
   'customItems.category.other': 'Sonstiges',
-  
+
   // Frequency
   'customItems.frequency.label': 'Häufigkeit',
   'customItems.frequency.once': 'Einmalig',
@@ -1059,12 +1124,12 @@ export const de: Translations = {
   'customItems.frequencyHelp.monthly': 'Wird mit der Anzahl der Monate im Abrechnungszeitraum multipliziert',
   'customItems.frequencyHelp.quarterly': 'Wird mit der Anzahl der Quartale im Abrechnungszeitraum multipliziert',
   'customItems.frequencyHelp.yearly': 'Wird mit der Anzahl der Jahre im Abrechnungszeitraum multipliziert',
-  
+
   // Status
   'customItems.active': 'Aktiv (wird in Rechnungen aufgenommen)',
   'customItems.inactive': 'Inaktiv (wird nicht in Rechnungen aufgenommen)',
   'customItems.inactiveLabel': 'Inaktiv',
-  
+
   // Display
   'customItems.itemsForBuilding': 'Benutzerdefinierte Positionen für Gebäude',
   'customItems.item': 'Position',
@@ -1076,7 +1141,7 @@ export const de: Translations = {
   'customItems.buildingSection': 'Gebäude: {name}',
   'customItems.editSubtitle': 'Details dieser benutzerdefinierten Position aktualisieren',
   'customItems.createSubtitle': 'Neue benutzerdefinierte Gebühr hinzufügen, die in Rechnungen enthalten sein soll',
-  
+
   // Validation
   'customItems.validation.descriptionRequired': 'Beschreibung ist erforderlich',
   'customItems.validation.descriptionTooLong': 'Beschreibung muss weniger als 200 Zeichen lang sein',
@@ -1084,7 +1149,7 @@ export const de: Translations = {
   'customItems.validation.amountTooLarge': 'Betrag ist zu gross',
   'customItems.validation.fixErrors': 'Bitte beheben Sie die Fehler im Formular',
   'customItems.validation.selectBuilding': 'Bitte wählen Sie ein Gebäude',
-  
+
   // Messages
   'customItems.createSuccess': 'Benutzerdefinierte Position erfolgreich erstellt',
   'customItems.updateSuccess': 'Benutzerdefinierte Position erfolgreich aktualisiert',
@@ -1098,7 +1163,7 @@ export const de: Translations = {
   // ============================================================================
   // AUTO BILLING (Scheduled Automatic Billing)
   // ============================================================================
-  
+
   // Main Page
   'autoBilling.title': 'Automatische Rechnungserstellung',
   'autoBilling.subtitle': 'Automatische Abrechnungspläne konfigurieren',
@@ -1187,7 +1252,7 @@ export const de: Translations = {
   // ============================================================================
   // PRICING
   // ============================================================================
-  
+
   // General
   'pricing.title': 'Preiseinstellungen',
   'pricing.subtitle': 'Strom- und Ladetarife konfigurieren',
@@ -1249,7 +1314,7 @@ export const de: Translations = {
   // ============================================================================
   // LOGS (System Logs & Monitoring)
   // ============================================================================
-  
+
   // General
   'logs.title': 'Systemprotokolle',
   'logs.subtitle': 'Systemaktivität überwachen und Debug-Informationen',
@@ -1338,7 +1403,7 @@ export const de: Translations = {
   // ============================================================================
   // SETTINGS (User Account Settings)
   // ============================================================================
-  
+
   'settings.title': 'Einstellungen',
   'settings.subtitle': 'Kontoeinstellungen und Sicherheitseinstellungen verwalten',
   'settings.changePassword': 'Passwort ändern',
@@ -1371,7 +1436,7 @@ export const de: Translations = {
   // ============================================================================
   // LOGIN
   // ============================================================================
-  
+
   'login.title': 'ZEV Abrechnung',
   'login.subtitle': 'Schweizer Energiemanagement',
   'login.username': 'Benutzername',

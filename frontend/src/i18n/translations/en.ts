@@ -111,7 +111,7 @@ export const en: Translations = {
   // ============================================================================
   // USERS
   // ============================================================================
-  
+
   // General
   'users.title': 'Users',
   'users.subtitle': 'Manage regular users and administrators',
@@ -223,7 +223,7 @@ export const en: Translations = {
   // ============================================================================
   // BUILDINGS
   // ============================================================================
-  
+
   // General
   'buildings.title': 'Buildings',
   'buildings.subtitle': 'Manage properties and building groups',
@@ -342,7 +342,7 @@ export const en: Translations = {
   // ============================================================================
   // METERS
   // ============================================================================
-  
+
   // General
   'meters.title': 'Meters',
   'meters.subtitle': 'Manage your energy meters and monitor consumption',
@@ -572,10 +572,75 @@ export const en: Translations = {
   'meters.instructions.troubleshootingHttpAuth': 'Verify HTTP credentials if authentication is enabled',
   'meters.instructions.troubleshootingHttpMeterId': 'Check that the Meter ID in the URL path matches your Loxone configuration',
 
+  // Meter Replacement
+  'meters.replacement.title': 'Replace Meter',
+  'meters.replacement.subtitle': 'Step',
+  'meters.replacement.failed': 'Failed to replace meter',
+  'meters.replacement.replacing': 'Replacing...',
+  'meters.replacement.confirmReplace': 'Replace Meter',
+  'meters.showArchived': 'Show Archived',
+
+  // Validation
+  'meters.replacement.invalidOldReading': 'Invalid final reading',
+  'meters.replacement.readingTooLow': 'Final reading must be >= last recorded reading',
+  'meters.replacement.nameRequired': 'Meter name is required',
+  'meters.replacement.loxoneConfigRequired': 'Loxone host and device ID are required',
+  'meters.replacement.modbusConfigRequired': 'IP address is required',
+  'meters.replacement.invalidNewReading': 'Invalid initial reading',
+
+  // Step 1
+  'meters.replacement.step1.title': 'Meter Replacement Overview',
+  'meters.replacement.step1.currentMeter': 'Current Meter',
+  'meters.replacement.step1.lastReading': 'Last Reading',
+  'meters.replacement.step1.connectionType': 'Connection Type',
+  'meters.replacement.step1.whatHappens': 'What happens during replacement:',
+  'meters.replacement.step1.point1': 'Old meter will be archived (not deleted)',
+  'meters.replacement.step1.point2': 'Historical data will be preserved',
+  'meters.replacement.step1.point3': 'New meter will take over data collection',
+  'meters.replacement.step1.point4': 'Billing will continue seamlessly with offset calculation',
+  'meters.replacement.step1.point5': 'You can change connection type if needed',
+  'meters.replacement.step1.warning': 'Important: This action cannot be undone. Make sure you have the correct readings before proceeding.',
+
+  // Step 2
+  'meters.replacement.step2.title': 'Old Meter Final Reading',
+  'meters.replacement.step2.instruction': 'Enter the final reading from the old meter. This should be the last reading you can see on the physical meter before disconnecting it.',
+  'meters.replacement.step2.lastRecorded': 'Last Recorded Reading',
+  'meters.replacement.step2.reference': 'Use this as reference - your final reading should be ≥ this value',
+  'meters.replacement.step2.finalReading': 'Final Reading (kWh)',
+  'meters.replacement.step2.tip': 'Tip: Record this reading accurately. It will be used to calculate the offset for billing continuity.',
+
+  // Step 3
+  'meters.replacement.step3.title': 'New Meter Configuration',
+  'meters.replacement.step3.namePlaceholder': 'Enter new meter name',
+  'meters.replacement.step3.copySettings': 'Copy building and apartment settings from old meter',
+
+  // Step 4
+  'meters.replacement.step4.title': 'Connection Configuration',
+  'meters.replacement.step4.subtitle': 'Select how the new meter will send data. You can change the connection type if needed.',
+
+  // Step 5
+  'meters.replacement.step5.title': 'New Meter Initial Reading',
+  'meters.replacement.step5.instruction': 'Enter the initial reading from the new meter. This is typically 0 or a small number for a new meter.',
+  'meters.replacement.step5.initialReading': 'Initial Reading (kWh)',
+  'meters.replacement.step5.offsetCalculation': 'Offset Calculation Preview',
+  'meters.replacement.step5.offsetExplanation': 'This offset will be applied to all new readings for billing continuity',
+
+  // Step 6
+  'meters.replacement.step6.title': 'Review & Confirm',
+  'meters.replacement.step6.oldMeter': 'Old Meter',
+  'meters.replacement.step6.newMeter': 'New Meter',
+  'meters.replacement.step6.finalReading': 'Final Reading',
+  'meters.replacement.step6.initialReading': 'Initial Reading',
+  'meters.replacement.step6.readingOffset': 'Reading Offset',
+  'meters.replacement.step6.notes': 'Replacement Notes (Optional)',
+  'meters.replacement.step6.notesPlaceholder': 'e.g., Meter malfunction, scheduled maintenance, upgrade...',
+  'meters.replacement.step6.finalWarning': 'Final Warning',
+  'meters.replacement.step6.cannotUndo': 'This replacement cannot be undone. The old meter will be archived and the new meter will immediately start collecting data.',
+
   // ============================================================================
   // CHARGERS
   // ============================================================================
-  
+
   // General
   'chargers.title': 'Car Chargers',
   'chargers.subtitle': 'Manage EV charging infrastructure',
@@ -755,7 +820,7 @@ export const en: Translations = {
   // ============================================================================
   // BILLING
   // ============================================================================
-  
+
   // General
   'billing.title': 'Billing & Invoices',
   'billing.subtitle': 'Manage invoices and billing for all buildings',
@@ -880,17 +945,17 @@ export const en: Translations = {
   // ============================================================================
   // BILL CONFIGURATION (Advanced Multi-Step Modal)
   // ============================================================================
-  
+
   // General
   'billConfig.title': 'Advanced Bill Configuration',
-  
+
   // Steps
   'billConfig.steps.selection': 'Selection',
   'billConfig.steps.dates': 'Dates',
   'billConfig.steps.meters': 'Meters',
   'billConfig.steps.items': 'Items',
   'billConfig.steps.review': 'Review',
-  
+
   // Step 1: Building & Apartment Selection
   'billConfig.step1.title': 'Select Buildings, Users & Period',
   'billConfig.step1.selectBuildings': 'Select Buildings',
@@ -970,7 +1035,7 @@ export const en: Translations = {
   // ============================================================================
   // SHARED METERS CONFIGURATION
   // ============================================================================
-  
+
   // General
   'sharedMeters.title': 'Shared Meter Configuration',
   'sharedMeters.subtitle': 'Configure shared meters and how their costs are split among users',
@@ -980,7 +1045,7 @@ export const en: Translations = {
   'sharedMeters.infoDescription': 'Shared meters track common-area electricity (hallways, elevators, parking, etc.) that is split among multiple users. Configure how costs are divided using equal split, area-based, or custom percentages.',
   'sharedMeters.noConfigs': 'No shared meters configured yet',
   'sharedMeters.noConfigsDescription': 'Click "Add Shared Meter" to create your first configuration',
-  
+
   // Display Fields
   'sharedMeters.meterName': 'Meter Name',
   'sharedMeters.building': 'Building',
@@ -990,7 +1055,7 @@ export const en: Translations = {
   'sharedMeters.selectMeter': 'Select a meter...',
   'sharedMeters.noMetersFound': 'No building-level meters found for this building',
   'sharedMeters.onlyHeatingOther': 'Only heating and other meters can be shared',
-  
+
   // Split Types
   'sharedMeters.splitType.label': 'Split Type',
   'sharedMeters.splitType.equal': 'Equal Split',
@@ -1001,22 +1066,22 @@ export const en: Translations = {
   'sharedMeters.splitTypeDesc.byArea': 'Cost is proportional to apartment area (requires area data)',
   'sharedMeters.splitTypeDesc.byUnits': 'Cost is proportional to number of units (requires unit count)',
   'sharedMeters.splitTypeDesc.custom': 'Custom percentage split for each user (requires configuration)',
-  
+
   // Custom Split
   'sharedMeters.percentagePerApartment': 'Percentage per Apartment',
   'sharedMeters.totalMustBe100': 'Total must equal 100%',
   'sharedMeters.apartment': 'Apartment',
   'sharedMeters.percentage': 'Percentage (%)',
-  
+
   // Modal Titles
   'sharedMeters.createTitle': 'Add Shared Meter',
   'sharedMeters.createSubtitle': 'Configure a new shared meter for your building',
   'sharedMeters.editTitle': 'Edit Shared Meter',
   'sharedMeters.editSubtitle': 'Update shared meter configuration',
-  
+
   // Validation
   'sharedMeters.fillAllFields': 'Please fill in all required fields',
-  
+
   // Messages
   'sharedMeters.createSuccess': 'Shared meter configuration created successfully',
   'sharedMeters.updateSuccess': 'Shared meter configuration updated successfully',
@@ -1029,7 +1094,7 @@ export const en: Translations = {
   // ============================================================================
   // CUSTOM ITEMS (Line Items for Invoices)
   // ============================================================================
-  
+
   // General
   'customItems.title': 'Manage Custom Line Items',
   'customItems.subtitle': 'Add custom charges like meter rental, maintenance fees, and other recurring items',
@@ -1042,14 +1107,14 @@ export const en: Translations = {
   'customItems.description': 'Description',
   'customItems.descriptionPlaceholder': 'e.g., Monthly maintenance fee',
   'customItems.amount': 'Amount',
-  
+
   // Categories
   'customItems.category.label': 'Category',
   'customItems.category.meter_rent': 'Meter Rent',
   'customItems.category.maintenance': 'Maintenance',
   'customItems.category.service': 'Service',
   'customItems.category.other': 'Other',
-  
+
   // Frequency
   'customItems.frequency.label': 'Frequency',
   'customItems.frequency.once': 'One-time',
@@ -1060,12 +1125,12 @@ export const en: Translations = {
   'customItems.frequencyHelp.monthly': 'Multiplied by the number of months in the billing period',
   'customItems.frequencyHelp.quarterly': 'Multiplied by the number of quarters in the billing period',
   'customItems.frequencyHelp.yearly': 'Multiplied by the number of years in the billing period',
-  
+
   // Status
   'customItems.active': 'Active (will be included in bills)',
   'customItems.inactive': 'Inactive (will not be included in bills)',
   'customItems.inactiveLabel': 'Inactive',
-  
+
   // Display
   'customItems.itemsForBuilding': 'Custom Items for Building',
   'customItems.item': 'item',
@@ -1077,7 +1142,7 @@ export const en: Translations = {
   'customItems.buildingSection': 'Building: {name}',
   'customItems.editSubtitle': 'Update the details of this custom line item',
   'customItems.createSubtitle': 'Add a new custom charge to be included in invoices',
-  
+
   // Validation
   'customItems.validation.descriptionRequired': 'Description is required',
   'customItems.validation.descriptionTooLong': 'Description must be less than 200 characters',
@@ -1085,7 +1150,7 @@ export const en: Translations = {
   'customItems.validation.amountTooLarge': 'Amount is too large',
   'customItems.validation.fixErrors': 'Please fix the errors in the form',
   'customItems.validation.selectBuilding': 'Please select a building',
-  
+
   // Messages
   'customItems.createSuccess': 'Custom item created successfully',
   'customItems.updateSuccess': 'Custom item updated successfully',
@@ -1099,7 +1164,7 @@ export const en: Translations = {
   // ============================================================================
   // AUTO BILLING (Scheduled Automatic Billing)
   // ============================================================================
-  
+
   // Main Page
   'autoBilling.title': 'Automatic Bill Generation',
   'autoBilling.subtitle': 'Configure automated billing schedules',
@@ -1188,7 +1253,7 @@ export const en: Translations = {
   // ============================================================================
   // PRICING
   // ============================================================================
-  
+
   // General
   'pricing.title': 'Pricing Settings',
   'pricing.subtitle': 'Configure electricity and charging rates',
@@ -1250,7 +1315,7 @@ export const en: Translations = {
   // ============================================================================
   // LOGS (System Logs & Monitoring)
   // ============================================================================
-  
+
   // General
   'logs.title': 'System Logs',
   'logs.subtitle': 'Monitor system activity and debug information',
@@ -1339,7 +1404,7 @@ export const en: Translations = {
   // ============================================================================
   // SETTINGS (User Account Settings)
   // ============================================================================
-  
+
   'settings.title': 'Settings',
   'settings.subtitle': 'Manage your account settings and security preferences',
   'settings.changePassword': 'Change Password',
@@ -1372,7 +1437,7 @@ export const en: Translations = {
   // ============================================================================
   // LOGIN
   // ============================================================================
-  
+
   'login.title': 'ZEV Billing',
   'login.subtitle': 'Swiss Energy Management',
   'login.username': 'Username',
