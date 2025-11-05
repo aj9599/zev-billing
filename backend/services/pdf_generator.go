@@ -73,7 +73,7 @@ func (pg *PDFGenerator) GenerateInvoicePDF(invoice interface{}, senderInfo Sende
 		return "", fmt.Errorf("failed to convert to PDF: %v", err)
 	}
 
-	log.Printf("ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ Generated PDF: %s", filename)
+	log.Printf("Generated PDF: %s", filename)
 	return filename, nil
 }
 
@@ -288,55 +288,55 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
         senderStreet := sender.Address
         senderLocation := fmt.Sprintf("%s %s", sender.Zip, sender.City)
 
-		// Build QR sections
+		// Build QR sections WITH TRANSLATIONS
 		qrPage = fmt.Sprintf(`
 		<div class="page qr-page">
 			<div class="qr-container">
 				<div class="qr-left">
-					<div class="qr-section-title">Empfangsschein</div>
+					<div class="qr-section-title">%s</div>
 					<div class="qr-info">
-						<strong>Konto / Zahlbar an</strong>
+						<strong>%s</strong>
 						<p>%s</p>
 						<p>%s</p>
 						<p>%s</p>
 						<p>%s</p>
 					</div>
 					<div class="qr-info">
-						<strong>Zahlbar durch</strong>
+						<strong>%s</strong>
 						<p>%s</p>
 						<p>%s</p>
 						<p>%s</p>
 					</div>
 					<div class="qr-amount-box">
 						<div style="display: grid; grid-template-columns: 12mm auto;">
-                            <p style="font-size: 6pt; font-weight: bold; margin: 0;">W&auml;hrung</p>
-                            <p style="font-size: 6pt; font-weight: bold; margin: 0;">Betrag</p>
+                            <p style="font-size: 6pt; font-weight: bold; margin: 0;">%s</p>
+                            <p style="font-size: 6pt; font-weight: bold; margin: 0;">%s</p>
                             <p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
                             <p style="font-size: 8pt; font-weight: bold; margin: 0;">%.2f</p>
                         </div>
 					</div>
-					<div class="qr-acceptance-point">Annahmestelle</div>
+					<div class="qr-acceptance-point">%s</div>
 				</div>
 				<div class="qr-right">
-					<div class="qr-section-title">Zahlteil</div>
+					<div class="qr-section-title">%s</div>
 					<div class="qr-right-layout">
 						<div class="qr-code-column">
 							%s
 						</div>
 						<div class="qr-info-column">
 							<div class="qr-info">
-								<strong>Konto / Zahlbar an</strong>
+								<strong>%s</strong>
 								<p>%s</p>
 								<p>%s</p>
 								<p>%s</p>
 								<p>%s</p>
 							</div>
 							<div class="qr-info">
-								<strong>ZusÃ¤tzliche Informationen</strong>
-								<p>%s</p>
+								<strong>%s</strong>
+								<p>%s %s</p>
 							</div>
 							<div class="qr-info">
-								<strong>Zahlbar durch</strong>
+								<strong>%s</strong>
 								<p>%s</p>
 								<p>%s</p>
 								<p>%s</p>
@@ -345,8 +345,8 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 					</div>
 					<div class="qr-amount-box">
 						<div style="display: grid; grid-template-columns: 12mm auto;">
-                            <p style="font-size: 6pt; font-weight: bold; margin: 0;">W&auml;hrung</p>
-                            <p style="font-size: 6pt; font-weight: bold; margin: 0;">Betrag</p>
+                            <p style="font-size: 6pt; font-weight: bold; margin: 0;">%s</p>
+                            <p style="font-size: 6pt; font-weight: bold; margin: 0;">%s</p>
                             <p style="font-size: 8pt; font-weight: bold; margin: 0;">%s</p>
                             <p style="font-size: 8pt; font-weight: bold; margin: 0;">%.2f</p>
                         </div>
@@ -354,24 +354,37 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 				</div>
 			</div>
 		</div>`,
+			tr.ReceiptSection,       // "Empfangsschein" / "Receipt" / etc.
+			tr.AccountPayableTo,     // "Konto / Zahlbar an"
 			banking.IBAN,
 			senderName,
 			senderStreet,
 			senderLocation,
+			tr.PayableBy,            // "Zahlbar durch"
 			userName,
 			userStreet,
 			userLocation,
+			tr.Currency,             // "Währung"
+			tr.AmountLabel,          // "Betrag"
 			currency,
 			totalAmount,
+			tr.AcceptancePoint,      // "Annahmestelle"
+			tr.PaymentPart,          // "Zahlteil"
 			qrCodeContent,
+			tr.AccountPayableTo,     // "Konto / Zahlbar an"
 			banking.IBAN,
 			senderName,
 			senderStreet,
 			senderLocation,
-			"Invoice "+invoiceNumber,
+			tr.AdditionalInfo,       // "Zusätzliche Informationen"
+			tr.InvoiceLabel,         // "Invoice" / "Rechnung" / etc.
+			invoiceNumber,
+			tr.PayableBy,            // "Zahlbar durch"
 			userName,
 			userStreet,
 			userLocation,
+			tr.Currency,             // "Währung"
+			tr.AmountLabel,          // "Betrag"
 			currency,
 			totalAmount,
 		)

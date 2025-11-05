@@ -45,6 +45,17 @@ type InvoiceTranslations struct {
 	Users             string
 	Of                string
 	TotalUnits        string
+	
+	// QR Code section translations
+	ReceiptSection    string  // "Empfangsschein" / "Receipt" / "Section de réception" / "Sezione ricevuta"
+	PaymentPart       string  // "Zahlteil" / "Payment part" / "Section paiement" / "Sezione pagamento"
+	AccountPayableTo  string  // "Konto / Zahlbar an" / "Account / Payable to" / "Compte / Payable à" / "Conto / Pagabile a"
+	PayableBy         string  // "Zahlbar durch" / "Payable by" / "Payable par" / "Pagabile da"
+	Currency          string  // "Währung" / "Currency" / "Monnaie" / "Valuta"
+	AmountLabel       string  // "Betrag" / "Amount" / "Montant" / "Importo"
+	AcceptancePoint   string  // "Annahmestelle" / "Acceptance point" / "Point d'acceptation" / "Punto di accettazione"
+	AdditionalInfo    string  // "Zusätzliche Informationen" / "Additional information" / "Informations supplémentaires" / "Informazioni aggiuntive"
+	InvoiceLabel      string  // "Invoice" / "Rechnung" / "Facture" / "Fattura"
 }
 
 // GetTranslations returns translations for the specified language
@@ -91,6 +102,15 @@ func GetTranslations(language string) InvoiceTranslations {
 			Users:              "Benutzer",
 			Of:                 "von",
 			TotalUnits:         "Gesamteinheiten",
+			ReceiptSection:     "Empfangsschein",
+			PaymentPart:        "Zahlteil",
+			AccountPayableTo:   "Konto / Zahlbar an",
+			PayableBy:          "Zahlbar durch",
+			Currency:           "Währung",
+			AmountLabel:        "Betrag",
+			AcceptancePoint:    "Annahmestelle",
+			AdditionalInfo:     "Zusätzliche Informationen",
+			InvoiceLabel:       "Rechnung",
 		}
 	case "fr": // French
 		return InvoiceTranslations{
@@ -133,6 +153,15 @@ func GetTranslations(language string) InvoiceTranslations {
 			Users:              "utilisateurs",
 			Of:                 "de",
 			TotalUnits:         "unités totales",
+			ReceiptSection:     "Section de réception",
+			PaymentPart:        "Section paiement",
+			AccountPayableTo:   "Compte / Payable à",
+			PayableBy:          "Payable par",
+			Currency:           "Monnaie",
+			AmountLabel:        "Montant",
+			AcceptancePoint:    "Point d'acceptation",
+			AdditionalInfo:     "Informations supplémentaires",
+			InvoiceLabel:       "Facture",
 		}
 	case "it": // Italian
 		return InvoiceTranslations{
@@ -175,6 +204,15 @@ func GetTranslations(language string) InvoiceTranslations {
 			Users:              "utenti",
 			Of:                 "di",
 			TotalUnits:         "unità totali",
+			ReceiptSection:     "Sezione ricevuta",
+			PaymentPart:        "Sezione pagamento",
+			AccountPayableTo:   "Conto / Pagabile a",
+			PayableBy:          "Pagabile da",
+			Currency:           "Valuta",
+			AmountLabel:        "Importo",
+			AcceptancePoint:    "Punto di accettazione",
+			AdditionalInfo:     "Informazioni aggiuntive",
+			InvoiceLabel:       "Fattura",
 		}
 	default: // English
 		return InvoiceTranslations{
@@ -217,6 +255,15 @@ func GetTranslations(language string) InvoiceTranslations {
 			Users:              "users",
 			Of:                 "of",
 			TotalUnits:         "total units",
+			ReceiptSection:     "Receipt",
+			PaymentPart:        "Payment part",
+			AccountPayableTo:   "Account / Payable to",
+			PayableBy:          "Payable by",
+			Currency:           "Currency",
+			AmountLabel:        "Amount",
+			AcceptancePoint:    "Acceptance point",
+			AdditionalInfo:     "Additional information",
+			InvoiceLabel:       "Invoice",
 		}
 	}
 }
