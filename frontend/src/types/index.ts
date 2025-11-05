@@ -17,6 +17,7 @@ export interface User {
   apartment_unit?: string;
   user_type: 'regular' | 'administration';
   managed_buildings?: number[] | string;
+  language?: string; // NEW: Invoice language (de, fr, it, en)
   is_active: boolean;
   created_at: string;
   updated_at: string;
