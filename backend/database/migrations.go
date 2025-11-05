@@ -264,46 +264,38 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_shared_meters_building ON shared_meter_configs(building_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_shared_meters_meter ON shared_meter_configs(meter_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_custom_items_building ON custom_line_items(building_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_custom_items_active ON custom_line_items(building_id, is_active)`,
+		`CREATE INDEX IF NOT EXISTS idx_custom_items_active ON custom_line_items(is_active)`,
 		`CREATE INDEX IF NOT EXISTS idx_custom_splits_config ON shared_meter_custom_splits(config_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_custom_splits_user ON shared_meter_custom_splits(user_id)`,
 	}
 
-	for _, migration := range migrations {
-		if _, err := db.Exec(migration); err != nil {
-			log.Printf("Migration error: %v", err)
-			// Continue with other migrations even if one fails
-		}
-	}
+	log.Println("Running database migrations...")
 
-	// Add new columns to existing tables
-	addColumns := []string{
-		`ALTER TABLE meter_readings ADD COLUMN consumption_kwh REAL DEFAULT 0`,
-		`ALTER TABLE users ADD COLUMN user_type TEXT DEFAULT 'regular'`,
-		`ALTER TABLE users ADD COLUMN managed_buildings TEXT`,
-		`ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1`,
-		`ALTER TABLE users ADD COLUMN apartment_unit TEXT`,
-		`ALTER TABLE buildings ADD COLUMN has_apartments INTEGER DEFAULT 0`,
-		`ALTER TABLE buildings ADD COLUMN floors_config TEXT`,
-		`ALTER TABLE auto_billing_configs ADD COLUMN first_execution_date DATE`,
-		`ALTER TABLE meters ADD COLUMN apartment_unit TEXT`,
-		`ALTER TABLE meters ADD COLUMN is_shared INTEGER DEFAULT 0`,
-	}
-
-	for _, stmt := range addColumns {
-		_, err := db.Exec(stmt)
+	for i, migration := range migrations {
+		_, err := db.Exec(migration)
 		if err != nil {
-			log.Printf("Note: Column may already exist: %v", err)
+			log.Printf("ERROR: Migration %d failed: %v", i+1, err)
+			log.Printf("Failed SQL: %s", migration[:min(len(migration), 100)])
+			return err
 		}
 	}
 
-	// Create indexes for new columns AFTER adding the columns
+	// =====================================================================
+	// CRITICAL: Add apartments_json column to auto_billing_configs
+	// =====================================================================
+	if err := addApartmentsJsonColumn(db); err != nil {
+		log.Printf("Apartments JSON column migration: %v", err)
+		// Don't return error as it might already exist
+	}
+
+	// Additional indexes that may not be in the main migrations array
 	newIndexes := []string{
-		`CREATE INDEX IF NOT EXISTS idx_users_building ON users(building_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`,
+		`CREATE INDEX IF NOT EXISTS idx_users_building ON users(building_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_user_type ON users(user_type)`,
+		`CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_apartment_unit ON users(apartment_unit)`,
+		`CREATE INDEX IF NOT EXISTS idx_meters_user ON meters(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_meters_apartment_unit ON meters(apartment_unit)`,
 		`CREATE INDEX IF NOT EXISTS idx_meters_building ON meters(building_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_meters_shared ON meters(is_shared)`,
@@ -335,6 +327,53 @@ func RunMigrations(db *sql.DB) error {
 	log.Println("✓ Migrations completed successfully")
 	log.Println("✓ Shared meter configurations table ready")
 	log.Println("✓ Custom line items table ready")
+	log.Println("✓ Auto billing apartments_json column ready")
+	return nil
+}
+
+// =====================================================================
+// NEW: Add apartments_json column for apartment-based auto billing
+// =====================================================================
+func addApartmentsJsonColumn(db *sql.DB) error {
+	// Check if the column already exists
+	var sql string
+	err := db.QueryRow(`
+		SELECT sql FROM sqlite_master 
+		WHERE type='table' AND name='auto_billing_configs'
+	`).Scan(&sql)
+
+	if err != nil {
+		return err
+	}
+
+	// Check if apartments_json column already exists
+	if contains(sql, "apartments_json") {
+		log.Println("✓ apartments_json column already exists")
+		return nil
+	}
+
+	log.Println("🔄 Adding apartments_json column to auto_billing_configs table...")
+
+	// Add the column
+	_, err = db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN apartments_json TEXT`)
+	if err != nil {
+		// Column might already exist, which is fine
+		if contains(err.Error(), "duplicate column") {
+			log.Println("✓ apartments_json column already exists")
+			return nil
+		}
+		return err
+	}
+
+	// Set default value for existing records
+	_, err = db.Exec(`UPDATE auto_billing_configs SET apartments_json = '[]' WHERE apartments_json IS NULL`)
+	if err != nil {
+		log.Printf("WARNING: Failed to set default apartments_json values: %v", err)
+	}
+
+	log.Println("✓ apartments_json column added successfully")
+	log.Println("✓ Auto billing now supports apartment-based selection")
+
 	return nil
 }
 
@@ -536,6 +575,13 @@ func containsHelper(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func createDefaultAdmin(db *sql.DB) error {

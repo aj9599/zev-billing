@@ -71,7 +71,7 @@ func main() {
 	dataCollector = services.NewDataCollector(db)
 	billingService := services.NewBillingService(db)
 	pdfGenerator := services.NewPDFGenerator(db)
-	autoBillingScheduler = services.NewAutoBillingScheduler(db, billingService)
+	autoBillingScheduler = services.NewAutoBillingScheduler(db, billingService, pdfGenerator)
 
 	go dataCollector.Start()
 	go autoBillingScheduler.Start()

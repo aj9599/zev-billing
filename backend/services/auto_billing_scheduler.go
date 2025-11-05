@@ -12,13 +12,21 @@ import (
 type AutoBillingScheduler struct {
 	db             *sql.DB
 	billingService *BillingService
+	pdfGenerator   *PDFGenerator
 	stopChan       chan bool
 }
 
-func NewAutoBillingScheduler(db *sql.DB, billingService *BillingService) *AutoBillingScheduler {
+type ApartmentSelection struct {
+	BuildingID    int  `json:"building_id"`
+	ApartmentUnit string `json:"apartment_unit"`
+	UserID        *int `json:"user_id,omitempty"`
+}
+
+func NewAutoBillingScheduler(db *sql.DB, billingService *BillingService, pdfGenerator *PDFGenerator) *AutoBillingScheduler {
 	return &AutoBillingScheduler{
 		db:             db,
 		billingService: billingService,
+		pdfGenerator:   pdfGenerator,
 		stopChan:       make(chan bool),
 	}
 }
@@ -57,7 +65,7 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 	now := time.Now()
 
 	rows, err := s.db.Query(`
-		SELECT id, name, building_ids, user_ids, frequency, generation_day,
+		SELECT id, name, building_ids, apartments_json, frequency, generation_day,
 		       next_run, first_execution_date, sender_name, sender_address, 
 		       sender_city, sender_zip, sender_country, bank_name, bank_iban, 
 		       bank_account_holder
@@ -74,14 +82,16 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 	dueConfigs := 0
 	for rows.Next() {
 		var id int
-		var name, buildingIDsStr, userIDsStr, frequency string
+		var name, buildingIDsStr string
+		var apartmentsJSON sql.NullString
+		var frequency string
 		var generationDay int
 		var nextRun time.Time
 		var firstExecutionDate sql.NullString
 		var senderName, senderAddress, senderCity, senderZip, senderCountry sql.NullString
 		var bankName, bankIBAN, bankAccountHolder sql.NullString
 
-		err := rows.Scan(&id, &name, &buildingIDsStr, &userIDsStr, &frequency,
+		err := rows.Scan(&id, &name, &buildingIDsStr, &apartmentsJSON, &frequency,
 			&generationDay, &nextRun, &firstExecutionDate, &senderName, &senderAddress, 
 			&senderCity, &senderZip, &senderCountry, &bankName, &bankIBAN, &bankAccountHolder)
 
@@ -93,14 +103,37 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 		dueConfigs++
 		log.Printf("Processing auto billing config: %s (ID: %d)", name, id)
 
-		// Parse building and user IDs
+		// Parse building IDs
 		buildingIDs := parseIDList(buildingIDsStr)
-		userIDs := parseIDList(userIDsStr)
 
 		if len(buildingIDs) == 0 {
 			log.Printf("WARNING: Config %d has no buildings, skipping", id)
 			continue
 		}
+
+		// Parse apartments
+		var apartments []ApartmentSelection
+		if apartmentsJSON.Valid && apartmentsJSON.String != "" {
+			if err := json.Unmarshal([]byte(apartmentsJSON.String), &apartments); err != nil {
+				log.Printf("ERROR: Failed to parse apartments JSON for config %d: %v", id, err)
+				continue
+			}
+		}
+
+		// Extract user IDs from apartments (only active users with valid user_id)
+		userIDs := []int{}
+		for _, apt := range apartments {
+			if apt.UserID != nil {
+				userIDs = append(userIDs, *apt.UserID)
+			}
+		}
+
+		if len(userIDs) == 0 {
+			log.Printf("WARNING: Config %d has no users with apartments, skipping", id)
+			continue
+		}
+
+		log.Printf("Found %d apartments with %d active users", len(apartments), len(userIDs))
 
 		// Calculate period based on frequency
 		endDate := now.AddDate(0, 0, -1) // Yesterday
@@ -134,6 +167,52 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 
 		log.Printf("SUCCESS: Generated %d invoices for config %s", len(invoices), name)
 
+		// Prepare sender and banking info for PDF generation
+		senderInfo := SenderInfo{
+			Name:    getStringFromNull(senderName),
+			Address: getStringFromNull(senderAddress),
+			City:    getStringFromNull(senderCity),
+			Zip:     getStringFromNull(senderZip),
+			Country: getStringFromNull(senderCountry),
+		}
+
+		bankingInfo := BankingInfo{
+			Name:          getStringFromNull(bankName),
+			IBAN:          getStringFromNull(bankIBAN),
+			AccountHolder: getStringFromNull(bankAccountHolder),
+		}
+
+		// Generate PDFs for each invoice
+		successCount := 0
+		for _, invoice := range invoices {
+			// Load full invoice with items and user details
+			fullInvoice, err := s.loadFullInvoice(invoice.ID)
+			if err != nil {
+				log.Printf("WARNING: Failed to load full invoice %d: %v", invoice.ID, err)
+				continue
+			}
+
+			// Convert invoice struct to map for PDF generator
+			invoiceMap := s.invoiceToMap(fullInvoice)
+
+			// Generate PDF
+			pdfPath, err := s.pdfGenerator.GenerateInvoicePDF(invoiceMap, senderInfo, bankingInfo)
+			if err != nil {
+				log.Printf("WARNING: Failed to generate PDF for invoice %d: %v", invoice.ID, err)
+				continue
+			}
+
+			// Update invoice with PDF path
+			_, err = s.db.Exec("UPDATE invoices SET pdf_path = ? WHERE id = ?", pdfPath, invoice.ID)
+			if err != nil {
+				log.Printf("WARNING: Failed to update PDF path for invoice %d: %v", invoice.ID, err)
+			} else {
+				successCount++
+			}
+		}
+
+		log.Printf("Generated %d invoices with %d PDFs", len(invoices), successCount)
+
 		// Calculate next_run based on current execution
 		nextRunTime := calculateNextRun(frequency, generationDay, now)
 
@@ -154,6 +233,7 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 			"config_id":      id,
 			"config_name":    name,
 			"invoices_count": len(invoices),
+			"pdfs_generated": successCount,
 			"period_start":   startDate.Format("2006-01-02"),
 			"period_end":     endDate.Format("2006-01-02"),
 		}
@@ -170,6 +250,119 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 	} else {
 		log.Printf("=== Auto Billing Scheduler: Processed %d configurations ===", dueConfigs)
 	}
+}
+
+// Helper function to load full invoice with items and user
+func (s *AutoBillingScheduler) loadFullInvoice(invoiceID int) (map[string]interface{}, error) {
+	inv := make(map[string]interface{})
+
+	var id, userID, buildingID int
+	var invoiceNumber, periodStart, periodEnd, currency, status string
+	var totalAmount float64
+	var generatedAt time.Time
+
+	err := s.db.QueryRow(`
+		SELECT i.id, i.invoice_number, i.user_id, i.building_id, 
+		       i.period_start, i.period_end, i.total_amount, i.currency, 
+		       i.status, i.generated_at
+		FROM invoices i WHERE i.id = ?
+	`, invoiceID).Scan(
+		&id, &invoiceNumber, &userID, &buildingID,
+		&periodStart, &periodEnd, &totalAmount, &currency,
+		&status, &generatedAt,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	inv["id"] = id
+	inv["invoice_number"] = invoiceNumber
+	inv["user_id"] = userID
+	inv["building_id"] = buildingID
+	inv["period_start"] = periodStart
+	inv["period_end"] = periodEnd
+	inv["total_amount"] = totalAmount
+	inv["currency"] = currency
+	inv["status"] = status
+	inv["generated_at"] = generatedAt.Format("2006-01-02")
+
+	// Load invoice items
+	itemRows, err := s.db.Query(`
+		SELECT id, invoice_id, description, quantity, unit_price, total_price, item_type
+		FROM invoice_items WHERE invoice_id = ?
+		ORDER BY id ASC
+	`, id)
+
+	if err == nil {
+		defer itemRows.Close()
+		items := []interface{}{}
+		for itemRows.Next() {
+			var itemID, invoiceID int
+			var description, itemType string
+			var quantity, unitPrice, totalPrice float64
+			if err := itemRows.Scan(&itemID, &invoiceID, &description,
+				&quantity, &unitPrice, &totalPrice, &itemType); err == nil {
+				itemMap := make(map[string]interface{})
+				itemMap["id"] = itemID
+				itemMap["invoice_id"] = invoiceID
+				itemMap["description"] = description
+				itemMap["quantity"] = quantity
+				itemMap["unit_price"] = unitPrice
+				itemMap["total_price"] = totalPrice
+				itemMap["item_type"] = itemType
+				items = append(items, itemMap)
+			}
+		}
+		inv["items"] = items
+	}
+
+	// Load user details
+	userMap := make(map[string]interface{})
+	var firstName, lastName, email, phone string
+	var addressStreet, addressCity, addressZip, addressCountry string
+	var isActive bool
+
+	err = s.db.QueryRow(`
+		SELECT id, first_name, last_name, email, phone, 
+		       address_street, address_city, address_zip, address_country,
+		       is_active
+		FROM users WHERE id = ?
+	`, userID).Scan(
+		&id, &firstName, &lastName, &email, &phone,
+		&addressStreet, &addressCity, &addressZip, &addressCountry,
+		&isActive,
+	)
+
+	if err == nil {
+		userMap["id"] = id
+		userMap["first_name"] = firstName
+		userMap["last_name"] = lastName
+		userMap["email"] = email
+		userMap["phone"] = phone
+		userMap["address_street"] = addressStreet
+		userMap["address_city"] = addressCity
+		userMap["address_zip"] = addressZip
+		userMap["address_country"] = addressCountry
+		userMap["is_active"] = isActive
+		inv["user"] = userMap
+	}
+
+	return inv, nil
+}
+
+// Helper function to convert Invoice to map (for compatibility)
+func (s *AutoBillingScheduler) invoiceToMap(inv map[string]interface{}) map[string]interface{} {
+	// Already in map format
+	return inv
+}
+
+// Helper function to get string from sql.NullString
+func getStringFromNull(ns sql.NullString) string {
+	if ns.Valid {
+		return ns.String
+	}
+	return ""
 }
 
 // Helper function to parse comma-separated IDs

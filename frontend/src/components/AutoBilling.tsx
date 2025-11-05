@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, HelpCircle, X, Calendar, Clock, Building, Users, PlayCircle, PauseCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, HelpCircle, X, Calendar, Clock, Building, Users, PlayCircle, PauseCircle, ChevronLeft, ChevronRight, Check, Home, User as UserIcon } from 'lucide-react';
 import { api } from '../api/client';
 import { useTranslation } from '../i18n';
+import type { Building as BuildingType, User, Meter, ApartmentWithUser } from '../types';
 
 interface AutoBillingConfig {
   id: number;
   name: string;
   building_ids: number[];
-  user_ids: number[];
+  apartments?: ApartmentSelection[];
   frequency: 'monthly' | 'quarterly' | 'half_yearly' | 'yearly';
   generation_day: number;
   first_execution_date?: string;
@@ -26,32 +27,29 @@ interface AutoBillingConfig {
   updated_at: string;
 }
 
-interface Building {
-  id: number;
-  name: string;
-  is_group: boolean;
-}
-
-interface User {
-  id: number;
-  first_name: string;
-  last_name: string;
-  email: string;
-  building_id?: number;
+interface ApartmentSelection {
+  building_id: number;
+  apartment_unit: string;
+  user_id?: number;
 }
 
 export default function AutoBilling() {
   const { t } = useTranslation();
   const [configs, setConfigs] = useState<AutoBillingConfig[]>([]);
-  const [buildings, setBuildings] = useState<Building[]>([]);
+  const [buildings, setBuildings] = useState<BuildingType[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [meters, setMeters] = useState<Meter[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [editingConfig, setEditingConfig] = useState<AutoBillingConfig | null>(null);
+  const [step, setStep] = useState(1);
+  const [apartmentsWithUsers, setApartmentsWithUsers] = useState<Map<number, ApartmentWithUser[]>>(new Map());
+  const [selectedApartments, setSelectedApartments] = useState<Set<string>>(new Set());
+  
   const [formData, setFormData] = useState({
     name: '',
     building_ids: [] as number[],
-    user_ids: [] as number[],
+    apartments: [] as ApartmentSelection[],
     frequency: 'monthly' as 'monthly' | 'quarterly' | 'half_yearly' | 'yearly',
     generation_day: 1,
     first_execution_date: '',
@@ -68,21 +66,232 @@ export default function AutoBilling() {
 
   useEffect(() => {
     loadData();
+    loadSavedInfo();
   }, []);
+
+  // Rebuild apartments list when buildings, users, or meters change
+  useEffect(() => {
+    if (formData.building_ids.length > 0 && users.length > 0 && meters.length > 0) {
+      console.log('Rebuilding apartments list for auto billing...');
+      const newApartmentMap = buildApartmentsListSync();
+      setApartmentsWithUsers(newApartmentMap);
+      console.log('Apartments map updated:', newApartmentMap);
+    }
+  }, [formData.building_ids, users, meters]);
 
   const loadData = async () => {
     try {
-      const [configsData, buildingsData, usersData] = await Promise.all([
+      const [configsData, buildingsData, usersData, metersData] = await Promise.all([
         api.getAutoBillingConfigs(),
         api.getBuildings(),
-        api.getUsers()
+        api.getUsers(undefined, true),
+        api.getMeters()
       ]);
       setConfigs(configsData);
       setBuildings(buildingsData.filter(b => !b.is_group));
-      setUsers(usersData);
+      
+      // Filter out administration users - only show regular users
+      const regularUsers = usersData.filter(u => u.user_type === 'regular');
+      setUsers(regularUsers);
+      setMeters(metersData);
     } catch (err) {
       console.error('Failed to load data:', err);
     }
+  };
+
+  const loadSavedInfo = () => {
+    try {
+      const savedSender = sessionStorage.getItem('zev_sender_info');
+      const savedBanking = sessionStorage.getItem('zev_banking_info');
+
+      if (savedSender) {
+        const parsed = JSON.parse(savedSender);
+        setFormData(prev => ({
+          ...prev,
+          sender_name: parsed.name || '',
+          sender_address: parsed.address || '',
+          sender_city: parsed.city || '',
+          sender_zip: parsed.zip || '',
+          sender_country: parsed.country || 'Switzerland'
+        }));
+      }
+
+      if (savedBanking) {
+        const parsed = JSON.parse(savedBanking);
+        setFormData(prev => ({
+          ...prev,
+          bank_name: parsed.name || '',
+          bank_iban: parsed.iban || '',
+          bank_account_holder: parsed.holder || ''
+        }));
+      }
+    } catch (e) {
+      console.error('Failed to load saved info:', e);
+    }
+  };
+
+  const buildApartmentsListSync = (): Map<number, ApartmentWithUser[]> => {
+    const apartmentMap = new Map<number, ApartmentWithUser[]>();
+
+    formData.building_ids.forEach(buildingId => {
+      const building = buildings.find(b => b.id === buildingId);
+      if (!building) return;
+
+      const apartments: ApartmentWithUser[] = [];
+      const apartmentSet = new Set<string>();
+
+      // Get apartment meters for this building
+      const buildingMeters = meters.filter(
+        m => m.building_id === buildingId && 
+        m.apartment_unit && 
+        m.meter_type === 'apartment_meter' &&
+        m.is_active
+      );
+
+      console.log(`Building ${buildingId} (${building.name}): Found ${buildingMeters.length} apartment meters`);
+
+      buildingMeters.forEach(meter => {
+        if (meter.apartment_unit && !apartmentSet.has(meter.apartment_unit)) {
+          apartmentSet.add(meter.apartment_unit);
+          
+          // Find user - prioritize meter.user_id
+          let user: User | undefined;
+          
+          if (meter.user_id) {
+            user = users.find(u => u.id === meter.user_id);
+          }
+          
+          if (!user) {
+            user = users.find(
+              u => u.building_id === buildingId && 
+              u.apartment_unit === meter.apartment_unit
+            );
+          }
+          
+          if (!user) {
+            user = users.find(u => u.apartment_unit === meter.apartment_unit);
+          }
+
+          console.log(`  Apartment "${meter.apartment_unit}": ${user ? `Found user ${user.first_name} ${user.last_name}` : 'NO USER'}`);
+
+          apartments.push({
+            building_id: buildingId,
+            apartment_unit: meter.apartment_unit,
+            user: user,
+            meter: meter,
+            has_meter: true
+          });
+        }
+      });
+
+      // Sort apartments naturally
+      apartments.sort((a, b) => {
+        const aNum = parseInt(a.apartment_unit.replace(/[^0-9]/g, '')) || 0;
+        const bNum = parseInt(b.apartment_unit.replace(/[^0-9]/g, '')) || 0;
+        return aNum - bNum;
+      });
+
+      apartmentMap.set(buildingId, apartments);
+    });
+
+    return apartmentMap;
+  };
+
+  const handleBuildingToggle = (buildingId: number) => {
+    const newBuildings = formData.building_ids.includes(buildingId)
+      ? formData.building_ids.filter(id => id !== buildingId)
+      : [...formData.building_ids, buildingId];
+    
+    // Clear apartment selections for removed buildings
+    if (!newBuildings.includes(buildingId)) {
+      const newSelectedApartments = new Set(selectedApartments);
+      Array.from(selectedApartments).forEach(key => {
+        if (key.startsWith(`${buildingId}|||`)) {
+          newSelectedApartments.delete(key);
+        }
+      });
+      setSelectedApartments(newSelectedApartments);
+    }
+    
+    setFormData({ ...formData, building_ids: newBuildings });
+  };
+
+  const handleApartmentToggle = (buildingId: number, apartmentUnit: string) => {
+    const key = `${buildingId}|||${apartmentUnit}`;
+    const newSelected = new Set(selectedApartments);
+    
+    if (newSelected.has(key)) {
+      newSelected.delete(key);
+    } else {
+      newSelected.add(key);
+    }
+    
+    setSelectedApartments(newSelected);
+
+    const apartmentSelections: ApartmentSelection[] = [];
+    
+    newSelected.forEach(selectedKey => {
+      const [bId, aptUnit] = selectedKey.split('|||');
+      const parsedBuildingId = parseInt(bId);
+      const apartments = apartmentsWithUsers.get(parsedBuildingId);
+      const apartment = apartments?.find(a => a.apartment_unit === aptUnit);
+      
+      if (apartment?.user?.is_active) {
+        apartmentSelections.push({
+          building_id: parsedBuildingId,
+          apartment_unit: aptUnit,
+          user_id: apartment.user.id
+        });
+      } else if (apartment) {
+        apartmentSelections.push({
+          building_id: parsedBuildingId,
+          apartment_unit: aptUnit,
+          user_id: undefined
+        });
+      }
+    });
+
+    setFormData(prev => ({ 
+      ...prev, 
+      apartments: apartmentSelections
+    }));
+  };
+
+  const handleSelectAllActiveApartments = () => {
+    const newSelected = new Set(selectedApartments);
+    
+    formData.building_ids.forEach(buildingId => {
+      const apartments = apartmentsWithUsers.get(buildingId) || [];
+      apartments.forEach(apt => {
+        if (apt.user?.is_active) {
+          newSelected.add(`${buildingId}|||${apt.apartment_unit}`);
+        }
+      });
+    });
+
+    setSelectedApartments(newSelected);
+
+    const apartmentSelections: ApartmentSelection[] = [];
+    
+    newSelected.forEach(key => {
+      const [bId, aptUnit] = key.split('|||');
+      const parsedBuildingId = parseInt(bId);
+      const apartments = apartmentsWithUsers.get(parsedBuildingId);
+      const apartment = apartments?.find(a => a.apartment_unit === aptUnit);
+      
+      if (apartment?.user?.is_active) {
+        apartmentSelections.push({
+          building_id: parsedBuildingId,
+          apartment_unit: aptUnit,
+          user_id: apartment.user.id
+        });
+      }
+    });
+
+    setFormData(prev => ({ 
+      ...prev, 
+      apartments: apartmentSelections
+    }));
   };
 
   const handleSubmit = async () => {
@@ -91,7 +300,32 @@ export default function AutoBilling() {
       return;
     }
 
+    if (formData.apartments.length === 0) {
+      alert(t('billConfig.validation.selectUser'));
+      return;
+    }
+
+    if (!formData.name) {
+      alert('Please enter a configuration name');
+      return;
+    }
+
     try {
+      // Save sender and banking info to session storage
+      sessionStorage.setItem('zev_sender_info', JSON.stringify({
+        name: formData.sender_name,
+        address: formData.sender_address,
+        city: formData.sender_city,
+        zip: formData.sender_zip,
+        country: formData.sender_country
+      }));
+
+      sessionStorage.setItem('zev_banking_info', JSON.stringify({
+        name: formData.bank_name,
+        iban: formData.bank_iban,
+        holder: formData.bank_account_holder
+      }));
+
       if (editingConfig) {
         await api.updateAutoBillingConfig(editingConfig.id, formData);
       } else {
@@ -108,10 +342,21 @@ export default function AutoBilling() {
 
   const handleEdit = (config: AutoBillingConfig) => {
     setEditingConfig(config);
+    
+    // Restore apartment selections if available
+    const apartmentKeys = new Set<string>();
+    if (config.apartments && config.apartments.length > 0) {
+      config.apartments.forEach(apt => {
+        apartmentKeys.add(`${apt.building_id}|||${apt.apartment_unit}`);
+      });
+    }
+    
+    setSelectedApartments(apartmentKeys);
+    
     setFormData({
       name: config.name,
       building_ids: config.building_ids,
-      user_ids: config.user_ids,
+      apartments: config.apartments || [],
       frequency: config.frequency,
       generation_day: config.generation_day,
       first_execution_date: config.first_execution_date || '',
@@ -125,6 +370,7 @@ export default function AutoBilling() {
       bank_iban: config.bank_iban || '',
       bank_account_holder: config.bank_account_holder || ''
     });
+    setStep(1);
     setShowModal(true);
   };
 
@@ -156,7 +402,7 @@ export default function AutoBilling() {
     setFormData({
       name: '',
       building_ids: [],
-      user_ids: [],
+      apartments: [],
       frequency: 'monthly',
       generation_day: 1,
       first_execution_date: '',
@@ -170,22 +416,25 @@ export default function AutoBilling() {
       bank_iban: '',
       bank_account_holder: ''
     });
+    setSelectedApartments(new Set());
     setEditingConfig(null);
+    setStep(1);
   };
 
-  const toggleBuilding = (id: number) => {
-    if (formData.building_ids.includes(id)) {
-      setFormData({ ...formData, building_ids: formData.building_ids.filter(bid => bid !== id) });
-    } else {
-      setFormData({ ...formData, building_ids: [...formData.building_ids, id] });
-    }
-  };
-
-  const toggleUser = (id: number) => {
-    if (formData.user_ids.includes(id)) {
-      setFormData({ ...formData, user_ids: formData.user_ids.filter(uid => uid !== id) });
-    } else {
-      setFormData({ ...formData, user_ids: [...formData.user_ids, id] });
+  const canProceed = () => {
+    switch (step) {
+      case 1:
+        return formData.building_ids.length > 0 && formData.apartments.length > 0;
+      case 2:
+        return formData.name && formData.frequency && formData.generation_day >= 1 && formData.generation_day <= 28;
+      case 3:
+        return true; // Sender info is optional
+      case 4:
+        return true; // Banking info is optional
+      case 5:
+        return formData.sender_name && formData.bank_iban; // Required for final step
+      default:
+        return false;
     }
   };
 
@@ -205,16 +454,496 @@ export default function AutoBilling() {
       .join(', ');
   };
 
-  const getUserNames = (userIds: number[]) => {
-    if (userIds.length === 0) return t('autoBilling.allUsers');
-    return userIds
-      .map(id => {
-        const user = users.find(u => u.id === id);
-        return user ? `${user.first_name} ${user.last_name}` : null;
-      })
-      .filter(Boolean)
-      .join(', ');
+  const getApartmentCount = (apartments?: ApartmentSelection[]) => {
+    if (!apartments || apartments.length === 0) return t('autoBilling.allUsers');
+    return `${apartments.length} ${apartments.length === 1 ? t('billConfig.step1.apartment') : t('billConfig.step1.apartments')}`;
   };
+
+  // Step renderers
+  const renderStep1 = () => (
+    <div>
+      <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px' }}>
+        {t('billConfig.step1.title')}
+      </h3>
+
+      <div style={{ marginBottom: '30px' }}>
+        <label style={{ display: 'block', fontWeight: '600', marginBottom: '12px', fontSize: '15px' }}>
+          1. {t('billConfig.step1.selectBuildings')} ({formData.building_ids.length} {t('billConfig.step1.selected')})
+        </label>
+        <div style={{ 
+          maxHeight: '200px', 
+          overflowY: 'auto', 
+          border: '1px solid #dee2e6', 
+          borderRadius: '6px',
+          backgroundColor: 'white'
+        }}>
+          {buildings.map(building => (
+            <label
+              key={building.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                padding: '12px 16px',
+                cursor: 'pointer',
+                borderBottom: '1px solid #f0f0f0',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'white'}
+            >
+              <input
+                type="checkbox"
+                checked={formData.building_ids.includes(building.id)}
+                onChange={() => handleBuildingToggle(building.id)}
+                style={{ marginRight: '12px', cursor: 'pointer', width: '18px', height: '18px' }}
+              />
+              <Home size={16} style={{ marginRight: '8px', color: '#667EEA' }} />
+              <span style={{ fontSize: '15px', fontWeight: '500' }}>{building.name}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+          <label style={{ fontWeight: '600', fontSize: '15px' }}>
+            2. {t('billConfig.step1.selectApartments')} ({selectedApartments.size} {t('billConfig.step1.selected')})
+          </label>
+          {formData.building_ids.length > 0 && (
+            <button
+              onClick={handleSelectAllActiveApartments}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: '#667EEA',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                fontSize: '13px',
+                cursor: 'pointer',
+                fontWeight: '500'
+              }}
+            >
+              {t('billConfig.step1.selectAllActive')}
+            </button>
+          )}
+        </div>
+        
+        <div style={{ 
+          maxHeight: '350px', 
+          overflowY: 'auto', 
+          border: '1px solid #dee2e6', 
+          borderRadius: '6px',
+          backgroundColor: 'white'
+        }}>
+          {formData.building_ids.length === 0 ? (
+            <div style={{ padding: '30px', textAlign: 'center', color: '#6c757d' }}>
+              <Home size={48} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
+              <p>{t('billConfig.step1.selectBuildingFirst')}</p>
+            </div>
+          ) : (
+            formData.building_ids.map(buildingId => {
+              const building = buildings.find(b => b.id === buildingId);
+              const apartments = apartmentsWithUsers.get(buildingId) || [];
+
+              if (apartments.length === 0) {
+                return (
+                  <div key={buildingId} style={{ padding: '20px', borderBottom: '2px solid #e9ecef' }}>
+                    <div style={{ fontWeight: '600', marginBottom: '8px', color: '#667EEA' }}>
+                      {building?.name}
+                    </div>
+                    <div style={{ color: '#6c757d', fontSize: '14px', fontStyle: 'italic' }}>
+                      {t('billConfig.step1.noApartmentsFound')}
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={buildingId} style={{ borderBottom: '2px solid #e9ecef' }}>
+                  <div style={{ 
+                    padding: '12px 16px', 
+                    backgroundColor: '#f8f9fa',
+                    fontWeight: '600',
+                    color: '#667EEA',
+                    fontSize: '14px',
+                    borderBottom: '1px solid #dee2e6'
+                  }}>
+                    {building?.name} ({apartments.length} {apartments.length === 1 ? t('billConfig.step1.apartment') : t('billConfig.step1.apartments')})
+                  </div>
+                  {apartments.map(apartment => {
+                    const key = `${buildingId}|||${apartment.apartment_unit}`;
+                    const isSelected = selectedApartments.has(key);
+                    const hasUser = !!apartment.user;
+                    const isActive = apartment.user?.is_active ?? false;
+
+                    return (
+                      <label
+                        key={key}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '12px 16px',
+                          cursor: hasUser ? 'pointer' : 'not-allowed',
+                          borderBottom: '1px solid #f0f0f0',
+                          transition: 'background-color 0.2s',
+                          opacity: hasUser ? (isActive ? 1 : 0.6) : 0.4,
+                          backgroundColor: isSelected ? '#e7f3ff' : 'white'
+                        }}
+                        onMouseOver={(e) => hasUser && (e.currentTarget.style.backgroundColor = isSelected ? '#d0e7ff' : '#f8f9fa')}
+                        onMouseOut={(e) => hasUser && (e.currentTarget.style.backgroundColor = isSelected ? '#e7f3ff' : 'white')}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => hasUser && handleApartmentToggle(buildingId, apartment.apartment_unit)}
+                          disabled={!hasUser}
+                          style={{ 
+                            marginRight: '12px', 
+                            cursor: hasUser ? 'pointer' : 'not-allowed',
+                            width: '18px',
+                            height: '18px'
+                          }}
+                        />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                            <Home size={14} style={{ color: '#667EEA' }} />
+                            <span style={{ fontSize: '15px', fontWeight: '600' }}>
+                              {t('billConfig.step1.apartmentLabel')} {apartment.apartment_unit}
+                            </span>
+                          </div>
+                          {hasUser ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#6c757d', paddingLeft: '22px' }}>
+                              <UserIcon size={12} />
+                              <span>
+                                {apartment.user?.first_name} {apartment.user?.last_name}
+                                {!isActive && (
+                                  <span style={{ color: '#dc3545', marginLeft: '6px', fontWeight: '500' }}>
+                                    ({t('billConfig.step1.archived')})
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: '13px', color: '#dc3545', paddingLeft: '22px', fontStyle: 'italic' }}>
+                              {t('billConfig.step1.noUserAssigned')}
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {selectedApartments.size > 0 && (
+        <div style={{ 
+          padding: '16px', 
+          backgroundColor: '#e7f3ff', 
+          borderRadius: '6px',
+          fontSize: '14px',
+          color: '#004a99'
+        }}>
+          <strong>{t('billConfig.step1.selectedSummary')}:</strong> {selectedApartments.size} {selectedApartments.size === 1 ? t('billConfig.step1.apartment') : t('billConfig.step1.apartments')} ({formData.apartments.filter(a => a.user_id).length} {t('billConfig.step1.users')})
+        </div>
+      )}
+    </div>
+  );
+
+  const renderStep2 = () => (
+    <div>
+      <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px' }}>
+        {t('autoBilling.configName')}
+      </h3>
+
+      <div style={{ padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px', marginBottom: '24px' }}>
+        <label style={{ display: 'block', fontWeight: '600', marginBottom: '12px', fontSize: '15px' }}>
+          {t('autoBilling.configName')} *
+        </label>
+        <input
+          type="text"
+          value={formData.name}
+          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          style={{
+            width: '100%',
+            padding: '12px',
+            border: '1px solid #ced4da',
+            borderRadius: '6px',
+            fontSize: '15px'
+          }}
+          placeholder={t('autoBilling.configNamePlaceholder')}
+        />
+      </div>
+
+      <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px' }}>
+        Billing Schedule
+      </h3>
+
+      <div style={{ padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+              {t('autoBilling.frequency')} *
+            </label>
+            <select
+              value={formData.frequency}
+              onChange={(e) => setFormData({ ...formData, frequency: e.target.value as any })}
+              style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
+            >
+              <option value="monthly">{t('autoBilling.frequency.monthly')}</option>
+              <option value="quarterly">{t('autoBilling.frequency.quarterly')}</option>
+              <option value="half_yearly">{t('autoBilling.frequency.half_yearly')}</option>
+              <option value="yearly">{t('autoBilling.frequency.yearly')}</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+              {t('autoBilling.generationDay')} *
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="28"
+              value={formData.generation_day}
+              onChange={(e) => setFormData({ ...formData, generation_day: parseInt(e.target.value) })}
+              style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
+            />
+            <small style={{ fontSize: '12px', color: '#666' }}>{t('autoBilling.generationDayHelp')}</small>
+          </div>
+        </div>
+
+        <div>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+            {t('autoBilling.firstExecutionDate')}
+          </label>
+          <input
+            type="date"
+            value={formData.first_execution_date}
+            onChange={(e) => setFormData({ ...formData, first_execution_date: e.target.value })}
+            style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
+          />
+          <small style={{ fontSize: '12px', color: '#666' }}>{t('autoBilling.firstExecutionDateHelp')}</small>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderStep3 = () => (
+    <div>
+      <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px' }}>
+        {t('billConfig.step5.senderInfo')}
+      </h3>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
+        <div>
+          <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>
+            {t('billConfig.step5.name')}
+          </label>
+          <input
+            type="text"
+            value={formData.sender_name}
+            onChange={(e) => setFormData({ ...formData, sender_name: e.target.value })}
+            placeholder="Company or Organization Name"
+            style={{
+              width: '100%',
+              padding: '10px',
+              border: '1px solid #ced4da',
+              borderRadius: '6px',
+              fontSize: '15px'
+            }}
+          />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>
+            {t('billConfig.step5.address')}
+          </label>
+          <input
+            type="text"
+            value={formData.sender_address}
+            onChange={(e) => setFormData({ ...formData, sender_address: e.target.value })}
+            placeholder="Street and Number"
+            style={{
+              width: '100%',
+              padding: '10px',
+              border: '1px solid #ced4da',
+              borderRadius: '6px',
+              fontSize: '15px'
+            }}
+          />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>
+              {t('billConfig.step5.zip')}
+            </label>
+            <input
+              type="text"
+              value={formData.sender_zip}
+              onChange={(e) => setFormData({ ...formData, sender_zip: e.target.value })}
+              placeholder="1234"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ced4da',
+                borderRadius: '6px',
+                fontSize: '15px'
+              }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>
+              {t('billConfig.step5.city')}
+            </label>
+            <input
+              type="text"
+              value={formData.sender_city}
+              onChange={(e) => setFormData({ ...formData, sender_city: e.target.value })}
+              placeholder="City Name"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ced4da',
+                borderRadius: '6px',
+                fontSize: '15px'
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderStep4 = () => (
+    <div>
+      <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px' }}>
+        {t('billConfig.step5.bankingInfo')}
+      </h3>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
+        <div>
+          <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>
+            {t('billConfig.step5.bankName')}
+          </label>
+          <input
+            type="text"
+            value={formData.bank_name}
+            onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
+            placeholder="Bank Name"
+            style={{
+              width: '100%',
+              padding: '10px',
+              border: '1px solid #ced4da',
+              borderRadius: '6px',
+              fontSize: '15px'
+            }}
+          />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>
+            {t('billConfig.step5.iban')}
+          </label>
+          <input
+            type="text"
+            value={formData.bank_iban}
+            onChange={(e) => setFormData({ ...formData, bank_iban: e.target.value })}
+            placeholder="CH93 0000 0000 0000 0000 0"
+            style={{
+              width: '100%',
+              padding: '10px',
+              border: '1px solid #ced4da',
+              borderRadius: '6px',
+              fontSize: '15px'
+            }}
+          />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', fontWeight: '500' }}>
+            {t('billConfig.step5.accountHolder')}
+          </label>
+          <input
+            type="text"
+            value={formData.bank_account_holder}
+            onChange={(e) => setFormData({ ...formData, bank_account_holder: e.target.value })}
+            placeholder="Account Holder Name"
+            style={{
+              width: '100%',
+              padding: '10px',
+              border: '1px solid #ced4da',
+              borderRadius: '6px',
+              fontSize: '15px'
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderStep5 = () => (
+    <div>
+      <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px' }}>
+        Review Configuration
+      </h3>
+
+      <div style={{ 
+        marginBottom: '24px', 
+        padding: '20px', 
+        backgroundColor: '#f8f9fa', 
+        borderRadius: '8px'
+      }}>
+        <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px', color: '#667EEA' }}>
+          Configuration Summary
+        </h4>
+        <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '14px', lineHeight: '1.8' }}>
+          <li><strong>Name:</strong> {formData.name}</li>
+          <li><strong>{t('billConfig.step5.buildings')}:</strong> {formData.building_ids.length}</li>
+          <li><strong>{t('billConfig.step5.apartments')}:</strong> {selectedApartments.size}</li>
+          <li><strong>{t('billConfig.step5.users')}:</strong> {formData.apartments.filter(a => a.user_id).length}</li>
+          <li><strong>{t('autoBilling.frequency')}:</strong> {getFrequencyLabel(formData.frequency)}</li>
+          <li><strong>{t('autoBilling.generationDay')}:</strong> Day {formData.generation_day}</li>
+          {formData.first_execution_date && (
+            <li><strong>{t('autoBilling.firstExecutionDate')}:</strong> {formData.first_execution_date}</li>
+          )}
+        </ul>
+      </div>
+
+      {formData.sender_name && (
+        <div style={{ 
+          marginBottom: '16px', 
+          padding: '16px', 
+          backgroundColor: '#e7f3ff', 
+          borderRadius: '8px'
+        }}>
+          <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>
+            {t('billConfig.step5.senderInfo')}
+          </h4>
+          <p style={{ margin: 0, fontSize: '13px', lineHeight: '1.6' }}>
+            {formData.sender_name}<br />
+            {formData.sender_address && `${formData.sender_address}, `}
+            {formData.sender_zip} {formData.sender_city}
+          </p>
+        </div>
+      )}
+
+      {formData.bank_iban && (
+        <div style={{ 
+          padding: '16px', 
+          backgroundColor: '#e8f5e9', 
+          borderRadius: '8px'
+        }}>
+          <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>
+            {t('billConfig.step5.bankingInfo')}
+          </h4>
+          <p style={{ margin: 0, fontSize: '13px', lineHeight: '1.6' }}>
+            {formData.bank_name && `${formData.bank_name} - `}
+            {formData.bank_iban}
+          </p>
+        </div>
+      )}
+    </div>
+  );
 
   const InstructionsModal = () => (
     <div style={{
@@ -439,10 +1168,10 @@ export default function AutoBilling() {
                   <Users size={16} color="#6b7280" style={{ marginTop: '2px', flexShrink: 0 }} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
-                      {config.user_ids.length === 0 ? t('autoBilling.users') : `${config.user_ids.length} ${config.user_ids.length === 1 ? t('autoBilling.user') : t('autoBilling.users')}`}:
+                      {t('autoBilling.users')}:
                     </div>
                     <div style={{ fontSize: '13px', color: '#374151' }}>
-                      {getUserNames(config.user_ids)}
+                      {getApartmentCount(config.apartments)}
                     </div>
                   </div>
                 </div>
@@ -521,204 +1250,213 @@ export default function AutoBilling() {
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center',
-          justifyContent: 'center', zIndex: 1000, padding: '15px', overflow: 'auto'
+          justifyContent: 'center', zIndex: 1000, padding: '20px'
         }}>
-          <div className="modal-content" style={{
-            backgroundColor: 'white', borderRadius: '12px', padding: '30px',
-            width: '90%', maxWidth: '700px', maxHeight: '90vh', overflow: 'auto'
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            maxWidth: '900px',
+            width: '100%',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
           }}>
-            <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '20px' }}>
-              {editingConfig ? t('autoBilling.editConfig') : t('autoBilling.addConfig')}
-            </h2>
+            <div style={{ 
+              padding: '24px 30px', 
+              borderBottom: '1px solid #dee2e6',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <h2 style={{ 
+                fontSize: '24px', 
+                fontWeight: 'bold', 
+                margin: 0,
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text'
+              }}>
+                {editingConfig ? t('autoBilling.editConfig') : t('autoBilling.addConfig')}
+              </h2>
+              <button
+                onClick={() => { setShowModal(false); resetForm(); }}
+                style={{
+                  padding: '8px',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                <X size={24} />
+              </button>
+            </div>
 
-            <div>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                  {t('autoBilling.configName')} *
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
-                  placeholder={t('autoBilling.configNamePlaceholder')}
-                />
+            <div style={{ 
+              padding: '20px 30px', 
+              borderBottom: '1px solid #dee2e6',
+              backgroundColor: '#f8f9fa'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative' }}>
+                {[1, 2, 3, 4, 5].map(s => (
+                  <div key={s} style={{ 
+                    flex: 1, 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center',
+                    position: 'relative'
+                  }}>
+                    {s < 5 && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '20px',
+                        left: '50%',
+                        right: '-50%',
+                        height: '2px',
+                        backgroundColor: step > s ? '#28a745' : '#dee2e6',
+                        zIndex: 0
+                      }} />
+                    )}
+                    <div style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '50%',
+                      backgroundColor: step >= s ? (step > s ? '#28a745' : '#667EEA') : '#dee2e6',
+                      color: 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 'bold',
+                      position: 'relative',
+                      zIndex: 1
+                    }}>
+                      {step > s ? <Check size={20} /> : s}
+                    </div>
+                    <div style={{ 
+                      marginTop: '8px', 
+                      fontSize: '11px', 
+                      textAlign: 'center',
+                      fontWeight: step === s ? '600' : 'normal',
+                      color: step === s ? '#667EEA' : '#6c757d',
+                      lineHeight: '1.3'
+                    }}>
+                      {s === 1 && 'Selection'}
+                      {s === 2 && 'Schedule'}
+                      {s === 3 && 'Sender'}
+                      {s === 4 && 'Banking'}
+                      {s === 5 && 'Review'}
+                    </div>
+                  </div>
+                ))}
               </div>
+            </div>
 
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '12px', fontWeight: '600', fontSize: '15px' }}>
-                  {t('autoBilling.selectBuildings')} * ({t('autoBilling.atLeastOne')})
-                </label>
-                <div style={{ padding: '16px', backgroundColor: 'rgba(249, 249, 249, 0.8)', borderRadius: '8px', maxHeight: '200px', overflow: 'auto' }}>
-                  {buildings.map(b => (
-                    <label key={b.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={formData.building_ids.includes(b.id)}
-                        onChange={() => toggleBuilding(b.id)}
-                      />
-                      <span>{b.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+            <div style={{ 
+              padding: '30px', 
+              flex: 1, 
+              overflowY: 'auto' 
+            }}>
+              {step === 1 && renderStep1()}
+              {step === 2 && renderStep2()}
+              {step === 3 && renderStep3()}
+              {step === 4 && renderStep4()}
+              {step === 5 && renderStep5()}
+            </div>
 
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '12px', fontWeight: '600', fontSize: '15px' }}>
-                  {t('autoBilling.selectUsers')} ({t('autoBilling.leaveEmptyForAll')})
-                </label>
-                <div style={{ padding: '16px', backgroundColor: 'rgba(249, 249, 249, 0.8)', borderRadius: '8px', maxHeight: '200px', overflow: 'auto' }}>
-                  {users.filter(u => formData.building_ids.includes(u.building_id || 0)).map(u => (
-                    <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={formData.user_ids.includes(u.id)}
-                        onChange={() => toggleUser(u.id)}
-                      />
-                      <span style={{ fontSize: '14px' }}>{u.first_name} {u.last_name} ({u.email})</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                    {t('autoBilling.frequency')} *
-                  </label>
-                  <select
-                    value={formData.frequency}
-                    onChange={(e) => setFormData({ ...formData, frequency: e.target.value as any })}
-                    style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
+            <div style={{ 
+              padding: '20px 30px', 
+              borderTop: '1px solid #dee2e6',
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: '12px',
+              backgroundColor: '#f8f9fa'
+            }}>
+              <button
+                onClick={() => { setShowModal(false); resetForm(); }}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '15px',
+                  fontWeight: '500'
+                }}
+              >
+                {t('common.cancel')}
+              </button>
+              
+              <div style={{ display: 'flex', gap: '12px' }}>
+                {step > 1 && (
+                  <button
+                    onClick={() => setStep(step - 1)}
+                    style={{
+                      padding: '12px 24px',
+                      backgroundColor: 'white',
+                      color: '#667EEA',
+                      border: '1px solid #667EEA',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '15px',
+                      fontWeight: '500',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
                   >
-                    <option value="monthly">{t('autoBilling.frequency.monthly')}</option>
-                    <option value="quarterly">{t('autoBilling.frequency.quarterly')}</option>
-                    <option value="half_yearly">{t('autoBilling.frequency.half_yearly')}</option>
-                    <option value="yearly">{t('autoBilling.frequency.yearly')}</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                    {t('autoBilling.generationDay')} *
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="28"
-                    value={formData.generation_day}
-                    onChange={(e) => setFormData({ ...formData, generation_day: parseInt(e.target.value) })}
-                    style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
-                  />
-                  <small style={{ fontSize: '12px', color: '#666' }}>{t('autoBilling.generationDayHelp')}</small>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                  {t('autoBilling.firstExecutionDate')}
-                </label>
-                <input
-                  type="date"
-                  value={formData.first_execution_date}
-                  onChange={(e) => setFormData({ ...formData, first_execution_date: e.target.value })}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
-                />
-                <small style={{ fontSize: '12px', color: '#666' }}>{t('autoBilling.firstExecutionDateHelp')}</small>
-              </div>
-
-              <div style={{ marginBottom: '16px', padding: '16px', backgroundColor: 'rgba(240, 244, 255, 0.5)', borderRadius: '8px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>{t('billing.senderInfo')}</h3>
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.senderName')}</label>
-                  <input
-                    type="text"
-                    value={formData.sender_name}
-                    onChange={(e) => setFormData({ ...formData, sender_name: e.target.value })}
-                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                    placeholder={t('billing.senderNamePlaceholder')}
-                  />
-                </div>
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.senderAddress')}</label>
-                  <input
-                    type="text"
-                    value={formData.sender_address}
-                    onChange={(e) => setFormData({ ...formData, sender_address: e.target.value })}
-                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                    placeholder={t('billing.senderAddressPlaceholder')}
-                  />
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.zip')}</label>
-                    <input
-                      type="text"
-                      value={formData.sender_zip}
-                      onChange={(e) => setFormData({ ...formData, sender_zip: e.target.value })}
-                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                      placeholder={t('billing.zipPlaceholder')}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.city')}</label>
-                    <input
-                      type="text"
-                      value={formData.sender_city}
-                      onChange={(e) => setFormData({ ...formData, sender_city: e.target.value })}
-                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                      placeholder={t('billing.cityPlaceholder')}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: '16px', padding: '16px', backgroundColor: 'rgba(240, 253, 244, 0.5)', borderRadius: '8px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>{t('billing.bankingInfo')}</h3>
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.bankName')}</label>
-                  <input
-                    type="text"
-                    value={formData.bank_name}
-                    onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
-                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                    placeholder={t('billing.bankNamePlaceholder')}
-                  />
-                </div>
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.iban')}</label>
-                  <input
-                    type="text"
-                    value={formData.bank_iban}
-                    onChange={(e) => setFormData({ ...formData, bank_iban: e.target.value })}
-                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                    placeholder={t('billing.ibanPlaceholder')}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px' }}>{t('billing.accountHolder')}</label>
-                  <input
-                    type="text"
-                    value={formData.bank_account_holder}
-                    onChange={(e) => setFormData({ ...formData, bank_account_holder: e.target.value })}
-                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                    placeholder={t('billing.accountHolderPlaceholder')}
-                  />
-                </div>
-              </div>
-
-              <div className="button-group" style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
-                <button onClick={handleSubmit} style={{
-                  flex: 1, padding: '12px', backgroundColor: 'rgba(40, 167, 69, 0.9)', color: 'white',
-                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
-                }}>
-                  {editingConfig ? t('common.update') : t('common.create')}
-                </button>
-                <button onClick={() => { setShowModal(false); resetForm(); }} style={{
-                  flex: 1, padding: '12px', backgroundColor: 'rgba(108, 117, 125, 0.9)', color: 'white',
-                  border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
-                }}>
-                  {t('common.cancel')}
-                </button>
+                    <ChevronLeft size={18} />
+                    {t('billConfig.navigation.previous')}
+                  </button>
+                )}
+                
+                {step < 5 ? (
+                  <button
+                    onClick={() => setStep(step + 1)}
+                    disabled={!canProceed()}
+                    style={{
+                      padding: '12px 24px',
+                      backgroundColor: canProceed() ? '#667EEA' : '#ced4da',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: canProceed() ? 'pointer' : 'not-allowed',
+                      fontSize: '15px',
+                      fontWeight: '500',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    {t('billConfig.navigation.next')}
+                    <ChevronRight size={18} />
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSubmit}
+                    disabled={!canProceed()}
+                    style={{
+                      padding: '12px 24px',
+                      backgroundColor: canProceed() ? '#28a745' : '#ced4da',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: canProceed() ? 'pointer' : 'not-allowed',
+                      fontSize: '15px',
+                      fontWeight: '500',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <Check size={18} />
+                    {editingConfig ? t('common.update') : t('common.create')}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -748,24 +1486,6 @@ export default function AutoBilling() {
           .auto-billing-header button {
             width: 100% !important;
             justify-content: center !important;
-          }
-
-          .modal-content {
-            padding: 20px !important;
-          }
-
-          .form-row {
-            grid-template-columns: 1fr !important;
-          }
-        }
-
-        @media (max-width: 480px) {
-          .auto-billing-container h1 {
-            font-size: 20px !important;
-          }
-
-          .modal-content {
-            padding: 15px !important;
           }
         }
       `}</style>

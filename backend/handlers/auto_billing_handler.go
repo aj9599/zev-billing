@@ -22,6 +22,12 @@ func NewAutoBillingHandler(db *sql.DB) *AutoBillingHandler {
 	return &AutoBillingHandler{db: db}
 }
 
+type ApartmentSelection struct {
+	BuildingID   int `json:"building_id"`
+	ApartmentUnit string `json:"apartment_unit"`
+	UserID       *int `json:"user_id,omitempty"`
+}
+
 // Helper function to parse comma-separated IDs
 func parseIDList(idStr string) []int {
 	if idStr == "" {
@@ -37,9 +43,24 @@ func parseIDList(idStr string) []int {
 	return ids
 }
 
+// Helper function to convert ID slice to comma-separated string
+func idListToString(ids []int) string {
+	if len(ids) == 0 {
+		return ""
+	}
+	result := ""
+	for i, id := range ids {
+		if i > 0 {
+			result += ","
+		}
+		result += strconv.Itoa(id)
+	}
+	return result
+}
+
 func (h *AutoBillingHandler) List(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Query(`
-		SELECT id, name, building_ids, user_ids, frequency, generation_day, 
+		SELECT id, name, building_ids, apartments_json, frequency, generation_day, 
 		       first_execution_date, is_active, last_run, next_run, 
 		       sender_name, sender_address, sender_city, sender_zip, sender_country, 
 		       bank_name, bank_iban, bank_account_holder, created_at, updated_at
@@ -56,14 +77,15 @@ func (h *AutoBillingHandler) List(w http.ResponseWriter, r *http.Request) {
 	configs := []map[string]interface{}{}
 	for rows.Next() {
 		var config models.AutoBillingConfig
-		var buildingIDsStr, userIDsStr string
+		var buildingIDsStr string
+		var apartmentsJSON sql.NullString
 		var firstExecutionDate sql.NullString
 		var lastRun, nextRun sql.NullTime
 		var senderName, senderAddress, senderCity, senderZip, senderCountry sql.NullString
 		var bankName, bankIBAN, bankAccountHolder sql.NullString
 
 		err := rows.Scan(
-			&config.ID, &config.Name, &buildingIDsStr, &userIDsStr,
+			&config.ID, &config.Name, &buildingIDsStr, &apartmentsJSON,
 			&config.Frequency, &config.GenerationDay, &firstExecutionDate,
 			&config.IsActive, &lastRun, &nextRun,
 			&senderName, &senderAddress, &senderCity, &senderZip, &senderCountry,
@@ -75,15 +97,23 @@ func (h *AutoBillingHandler) List(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Parse building and user IDs
+		// Parse building IDs
 		buildingIDs := parseIDList(buildingIDsStr)
-		userIDs := parseIDList(userIDsStr)
+
+		// Parse apartments JSON
+		var apartments []ApartmentSelection
+		if apartmentsJSON.Valid && apartmentsJSON.String != "" {
+			if err := json.Unmarshal([]byte(apartmentsJSON.String), &apartments); err != nil {
+				log.Printf("WARNING: Failed to parse apartments JSON for config %d: %v", config.ID, err)
+				apartments = []ApartmentSelection{}
+			}
+		}
 
 		configMap := map[string]interface{}{
 			"id":              config.ID,
 			"name":            config.Name,
 			"building_ids":    buildingIDs,
-			"user_ids":        userIDs,
+			"apartments":      apartments,
 			"frequency":       config.Frequency,
 			"generation_day":  config.GenerationDay,
 			"is_active":       config.IsActive,
@@ -141,20 +171,21 @@ func (h *AutoBillingHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var config models.AutoBillingConfig
-	var buildingIDsStr, userIDsStr string
+	var buildingIDsStr string
+	var apartmentsJSON sql.NullString
 	var firstExecutionDate sql.NullString
 	var lastRun, nextRun sql.NullTime
 	var senderName, senderAddress, senderCity, senderZip, senderCountry sql.NullString
 	var bankName, bankIBAN, bankAccountHolder sql.NullString
 
 	err = h.db.QueryRow(`
-		SELECT id, name, building_ids, user_ids, frequency, generation_day, 
+		SELECT id, name, building_ids, apartments_json, frequency, generation_day, 
 		       first_execution_date, is_active, last_run, next_run, 
 		       sender_name, sender_address, sender_city, sender_zip, sender_country, 
 		       bank_name, bank_iban, bank_account_holder, created_at, updated_at
 		FROM auto_billing_configs WHERE id = ?
 	`, id).Scan(
-		&config.ID, &config.Name, &buildingIDsStr, &userIDsStr,
+		&config.ID, &config.Name, &buildingIDsStr, &apartmentsJSON,
 		&config.Frequency, &config.GenerationDay, &firstExecutionDate,
 		&config.IsActive, &lastRun, &nextRun,
 		&senderName, &senderAddress, &senderCity, &senderZip, &senderCountry,
@@ -173,13 +204,21 @@ func (h *AutoBillingHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	buildingIDs := parseIDList(buildingIDsStr)
-	userIDs := parseIDList(userIDsStr)
+
+	// Parse apartments JSON
+	var apartments []ApartmentSelection
+	if apartmentsJSON.Valid && apartmentsJSON.String != "" {
+		if err := json.Unmarshal([]byte(apartmentsJSON.String), &apartments); err != nil {
+			log.Printf("WARNING: Failed to parse apartments JSON: %v", err)
+			apartments = []ApartmentSelection{}
+		}
+	}
 
 	response := map[string]interface{}{
 		"id":              config.ID,
 		"name":            config.Name,
 		"building_ids":    buildingIDs,
-		"user_ids":        userIDs,
+		"apartments":      apartments,
 		"frequency":       config.Frequency,
 		"generation_day":  config.GenerationDay,
 		"is_active":       config.IsActive,
@@ -227,21 +266,21 @@ func (h *AutoBillingHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 func (h *AutoBillingHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name               string `json:"name"`
-		BuildingIDs        []int  `json:"building_ids"`
-		UserIDs            []int  `json:"user_ids"`
-		Frequency          string `json:"frequency"`
-		GenerationDay      int    `json:"generation_day"`
-		FirstExecutionDate string `json:"first_execution_date"`
-		IsActive           bool   `json:"is_active"`
-		SenderName         string `json:"sender_name"`
-		SenderAddress      string `json:"sender_address"`
-		SenderCity         string `json:"sender_city"`
-		SenderZip          string `json:"sender_zip"`
-		SenderCountry      string `json:"sender_country"`
-		BankName           string `json:"bank_name"`
-		BankIBAN           string `json:"bank_iban"`
-		BankAccountHolder  string `json:"bank_account_holder"`
+		Name               string               `json:"name"`
+		BuildingIDs        []int                `json:"building_ids"`
+		Apartments         []ApartmentSelection `json:"apartments"`
+		Frequency          string               `json:"frequency"`
+		GenerationDay      int                  `json:"generation_day"`
+		FirstExecutionDate string               `json:"first_execution_date"`
+		IsActive           bool                 `json:"is_active"`
+		SenderName         string               `json:"sender_name"`
+		SenderAddress      string               `json:"sender_address"`
+		SenderCity         string               `json:"sender_city"`
+		SenderZip          string               `json:"sender_zip"`
+		SenderCountry      string               `json:"sender_country"`
+		BankName           string               `json:"bank_name"`
+		BankIBAN           string               `json:"bank_iban"`
+		BankAccountHolder  string               `json:"bank_account_holder"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -250,21 +289,15 @@ func (h *AutoBillingHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert slices to comma-separated strings
-	buildingIDsStr := ""
-	for i, id := range req.BuildingIDs {
-		if i > 0 {
-			buildingIDsStr += ","
-		}
-		buildingIDsStr += strconv.Itoa(id)
-	}
+	// Convert building IDs to comma-separated string
+	buildingIDsStr := idListToString(req.BuildingIDs)
 
-	userIDsStr := ""
-	for i, id := range req.UserIDs {
-		if i > 0 {
-			userIDsStr += ","
-		}
-		userIDsStr += strconv.Itoa(id)
+	// Convert apartments to JSON
+	apartmentsJSON, err := json.Marshal(req.Apartments)
+	if err != nil {
+		log.Printf("ERROR: Failed to marshal apartments: %v", err)
+		http.Error(w, "Failed to process apartments", http.StatusInternalServerError)
+		return
 	}
 
 	// Calculate next run using the scheduler's function
@@ -280,12 +313,12 @@ func (h *AutoBillingHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.db.Exec(`
 		INSERT INTO auto_billing_configs (
-			name, building_ids, user_ids, frequency, generation_day, 
+			name, building_ids, apartments_json, frequency, generation_day, 
 			first_execution_date, is_active, next_run, 
 			sender_name, sender_address, sender_city, sender_zip, sender_country, 
 			bank_name, bank_iban, bank_account_holder
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, req.Name, buildingIDsStr, userIDsStr, req.Frequency, req.GenerationDay,
+	`, req.Name, buildingIDsStr, string(apartmentsJSON), req.Frequency, req.GenerationDay,
 		firstExecDateValue, req.IsActive, nextRun,
 		req.SenderName, req.SenderAddress, req.SenderCity,
 		req.SenderZip, req.SenderCountry, req.BankName, req.BankIBAN, req.BankAccountHolder)
@@ -300,22 +333,22 @@ func (h *AutoBillingHandler) Create(w http.ResponseWriter, r *http.Request) {
 	log.Printf("SUCCESS: Created auto billing config ID %d (%s)", id, req.Name)
 
 	response := map[string]interface{}{
-		"id":              id,
-		"name":            req.Name,
-		"building_ids":    req.BuildingIDs,
-		"user_ids":        req.UserIDs,
-		"frequency":       req.Frequency,
-		"generation_day":  req.GenerationDay,
-		"is_active":       req.IsActive,
-		"next_run":        nextRun.Format(time.RFC3339),
-		"sender_name":     req.SenderName,
-		"sender_address":  req.SenderAddress,
-		"sender_city":     req.SenderCity,
-		"sender_zip":      req.SenderZip,
-		"sender_country":  req.SenderCountry,
-		"bank_name":       req.BankName,
-		"bank_iban":       req.BankIBAN,
-		"bank_account_holder": req.BankAccountHolder,
+		"id":                      id,
+		"name":                    req.Name,
+		"building_ids":            req.BuildingIDs,
+		"apartments":              req.Apartments,
+		"frequency":               req.Frequency,
+		"generation_day":          req.GenerationDay,
+		"is_active":               req.IsActive,
+		"next_run":                nextRun.Format(time.RFC3339),
+		"sender_name":             req.SenderName,
+		"sender_address":          req.SenderAddress,
+		"sender_city":             req.SenderCity,
+		"sender_zip":              req.SenderZip,
+		"sender_country":          req.SenderCountry,
+		"bank_name":               req.BankName,
+		"bank_iban":               req.BankIBAN,
+		"bank_account_holder":     req.BankAccountHolder,
 	}
 
 	if req.FirstExecutionDate != "" {
@@ -336,21 +369,21 @@ func (h *AutoBillingHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name               string `json:"name"`
-		BuildingIDs        []int  `json:"building_ids"`
-		UserIDs            []int  `json:"user_ids"`
-		Frequency          string `json:"frequency"`
-		GenerationDay      int    `json:"generation_day"`
-		FirstExecutionDate string `json:"first_execution_date"`
-		IsActive           bool   `json:"is_active"`
-		SenderName         string `json:"sender_name"`
-		SenderAddress      string `json:"sender_address"`
-		SenderCity         string `json:"sender_city"`
-		SenderZip          string `json:"sender_zip"`
-		SenderCountry      string `json:"sender_country"`
-		BankName           string `json:"bank_name"`
-		BankIBAN           string `json:"bank_iban"`
-		BankAccountHolder  string `json:"bank_account_holder"`
+		Name               string               `json:"name"`
+		BuildingIDs        []int                `json:"building_ids"`
+		Apartments         []ApartmentSelection `json:"apartments"`
+		Frequency          string               `json:"frequency"`
+		GenerationDay      int                  `json:"generation_day"`
+		FirstExecutionDate string               `json:"first_execution_date"`
+		IsActive           bool                 `json:"is_active"`
+		SenderName         string               `json:"sender_name"`
+		SenderAddress      string               `json:"sender_address"`
+		SenderCity         string               `json:"sender_city"`
+		SenderZip          string               `json:"sender_zip"`
+		SenderCountry      string               `json:"sender_country"`
+		BankName           string               `json:"bank_name"`
+		BankIBAN           string               `json:"bank_iban"`
+		BankAccountHolder  string               `json:"bank_account_holder"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -359,21 +392,15 @@ func (h *AutoBillingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert slices to comma-separated strings
-	buildingIDsStr := ""
-	for i, id := range req.BuildingIDs {
-		if i > 0 {
-			buildingIDsStr += ","
-		}
-		buildingIDsStr += strconv.Itoa(id)
-	}
+	// Convert building IDs to comma-separated string
+	buildingIDsStr := idListToString(req.BuildingIDs)
 
-	userIDsStr := ""
-	for i, id := range req.UserIDs {
-		if i > 0 {
-			userIDsStr += ","
-		}
-		userIDsStr += strconv.Itoa(id)
+	// Convert apartments to JSON
+	apartmentsJSON, err := json.Marshal(req.Apartments)
+	if err != nil {
+		log.Printf("ERROR: Failed to marshal apartments: %v", err)
+		http.Error(w, "Failed to process apartments", http.StatusInternalServerError)
+		return
 	}
 
 	// Calculate next run using the scheduler's function
@@ -389,14 +416,14 @@ func (h *AutoBillingHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	_, err = h.db.Exec(`
 		UPDATE auto_billing_configs SET
-			name = ?, building_ids = ?, user_ids = ?, frequency = ?, 
+			name = ?, building_ids = ?, apartments_json = ?, frequency = ?, 
 			generation_day = ?, first_execution_date = ?, is_active = ?, next_run = ?,
 			sender_name = ?, sender_address = ?, sender_city = ?, 
 			sender_zip = ?, sender_country = ?, bank_name = ?, 
 			bank_iban = ?, bank_account_holder = ?,
 			updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
-	`, req.Name, buildingIDsStr, userIDsStr, req.Frequency, req.GenerationDay,
+	`, req.Name, buildingIDsStr, string(apartmentsJSON), req.Frequency, req.GenerationDay,
 		firstExecDateValue, req.IsActive, nextRun,
 		req.SenderName, req.SenderAddress, req.SenderCity,
 		req.SenderZip, req.SenderCountry, req.BankName, req.BankIBAN,
@@ -411,22 +438,22 @@ func (h *AutoBillingHandler) Update(w http.ResponseWriter, r *http.Request) {
 	log.Printf("SUCCESS: Updated auto billing config ID %d", id)
 
 	response := map[string]interface{}{
-		"id":              id,
-		"name":            req.Name,
-		"building_ids":    req.BuildingIDs,
-		"user_ids":        req.UserIDs,
-		"frequency":       req.Frequency,
-		"generation_day":  req.GenerationDay,
-		"is_active":       req.IsActive,
-		"next_run":        nextRun.Format(time.RFC3339),
-		"sender_name":     req.SenderName,
-		"sender_address":  req.SenderAddress,
-		"sender_city":     req.SenderCity,
-		"sender_zip":      req.SenderZip,
-		"sender_country":  req.SenderCountry,
-		"bank_name":       req.BankName,
-		"bank_iban":       req.BankIBAN,
-		"bank_account_holder": req.BankAccountHolder,
+		"id":                      id,
+		"name":                    req.Name,
+		"building_ids":            req.BuildingIDs,
+		"apartments":              req.Apartments,
+		"frequency":               req.Frequency,
+		"generation_day":          req.GenerationDay,
+		"is_active":               req.IsActive,
+		"next_run":                nextRun.Format(time.RFC3339),
+		"sender_name":             req.SenderName,
+		"sender_address":          req.SenderAddress,
+		"sender_city":             req.SenderCity,
+		"sender_zip":              req.SenderZip,
+		"sender_country":          req.SenderCountry,
+		"bank_name":               req.BankName,
+		"bank_iban":               req.BankIBAN,
+		"bank_account_holder":     req.BankAccountHolder,
 	}
 
 	if req.FirstExecutionDate != "" {
