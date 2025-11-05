@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ZEV Billing System - Automated Installation Script for Raspberry Pi
-# Updated with fresh install option
+# Updated with fresh install option and Chromium for PDF generation
 
 set -e  # Exit on any error
 
@@ -88,6 +88,20 @@ apt-get update
 # Install git and build tools
 apt-get install -y git build-essential sqlite3
 
+# Install Chromium for PDF generation
+echo "Installing Chromium for PDF generation..."
+if command -v chromium-browser &> /dev/null; then
+    echo -e "${GREEN}Chromium is already installed: $(chromium-browser --version)${NC}"
+else
+    apt-get install -y chromium-browser chromium-codecs-ffmpeg-extra
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ Chromium installed successfully${NC}"
+    else
+        echo -e "${YELLOW}Warning: Chromium installation from apt failed, trying alternative...${NC}"
+        apt-get install -y chromium
+    fi
+fi
+
 # Check if Go is already installed
 if command -v go &> /dev/null; then
     echo -e "${GREEN}Go is already installed: $(go version)${NC}"
@@ -120,7 +134,20 @@ fi
 apt-get install -y nginx
 
 echo ""
-echo -e "${GREEN}Step 2: Checking Go version${NC}"
+echo -e "${GREEN}Step 2: Verifying Chromium installation${NC}"
+if command -v chromium-browser &> /dev/null; then
+    chromium-browser --version
+    echo -e "${GREEN}✓ Chromium is available for PDF generation${NC}"
+elif command -v chromium &> /dev/null; then
+    chromium --version
+    echo -e "${GREEN}✓ Chromium is available for PDF generation${NC}"
+else
+    echo -e "${RED}✗ Chromium installation failed${NC}"
+    echo -e "${YELLOW}Warning: PDF generation may not work without Chromium${NC}"
+fi
+
+echo ""
+echo -e "${GREEN}Step 3: Checking Go version${NC}"
 go version
 if [ $? -ne 0 ]; then
     echo -e "${RED}Go installation failed${NC}"
@@ -128,7 +155,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo ""
-echo -e "${GREEN}Step 3: Checking Node.js and npm${NC}"
+echo -e "${GREEN}Step 4: Checking Node.js and npm${NC}"
 node --version
 npm --version
 if [ $? -ne 0 ]; then
@@ -137,7 +164,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo ""
-echo -e "${GREEN}Step 4: Cloning/Updating repository${NC}"
+echo -e "${GREEN}Step 5: Cloning/Updating repository${NC}"
 if [ -d "$INSTALL_DIR" ]; then
     echo "Directory exists, pulling latest changes..."
     cd "$INSTALL_DIR"
@@ -158,7 +185,7 @@ else
 fi
 
 echo ""
-echo -e "${GREEN}Step 5: Building Backend${NC}"
+echo -e "${GREEN}Step 6: Building Backend${NC}"
 cd "$INSTALL_DIR/backend"
 
 if [ ! -f "main.go" ]; then
@@ -192,7 +219,7 @@ chmod +x zev-billing
 echo -e "${GREEN}Backend built successfully!${NC}"
 
 echo ""
-echo -e "${GREEN}Step 6: Building Frontend${NC}"
+echo -e "${GREEN}Step 7: Building Frontend${NC}"
 cd "$INSTALL_DIR/frontend"
 
 if [ ! -f "package.json" ]; then
@@ -220,7 +247,15 @@ fi
 echo -e "${GREEN}Frontend built successfully!${NC}"
 
 echo ""
-echo -e "${GREEN}Step 7: Creating systemd service for auto-start${NC}"
+echo -e "${GREEN}Step 8: Creating systemd service for auto-start${NC}"
+
+# Determine Chromium executable path
+CHROMIUM_PATH=""
+if command -v chromium-browser &> /dev/null; then
+    CHROMIUM_PATH=$(which chromium-browser)
+elif command -v chromium &> /dev/null; then
+    CHROMIUM_PATH=$(which chromium)
+fi
 
 cat > /etc/systemd/system/zev-billing.service << EOF
 [Unit]
@@ -241,6 +276,7 @@ StandardError=journal
 Environment="DATABASE_PATH=$INSTALL_DIR/backend/zev-billing.db"
 Environment="SERVER_ADDRESS=:8080"
 Environment="JWT_SECRET=zev-billing-secret-change-in-production"
+Environment="CHROMIUM_PATH=$CHROMIUM_PATH"
 
 [Install]
 WantedBy=multi-user.target
@@ -249,7 +285,7 @@ EOF
 echo -e "${GREEN}Systemd service created${NC}"
 
 echo ""
-echo -e "${GREEN}Step 8: Setting up nginx for frontend${NC}"
+echo -e "${GREEN}Step 9: Setting up nginx for frontend${NC}"
 
 # Create nginx configuration
 cat > /etc/nginx/sites-available/zev-billing << EOF
@@ -289,7 +325,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo ""
-echo -e "${GREEN}Step 9: Setting up firewall${NC}"
+echo -e "${GREEN}Step 10: Setting up firewall${NC}"
 
 # Check if ufw is available
 if command -v ufw &> /dev/null; then
@@ -308,7 +344,7 @@ else
 fi
 
 echo ""
-echo -e "${GREEN}Step 10: Fixing permissions${NC}"
+echo -e "${GREEN}Step 11: Fixing permissions${NC}"
 
 # Fix permissions so nginx can access the frontend files
 chmod 755 "$ACTUAL_HOME"
@@ -325,7 +361,7 @@ chown -R "$ACTUAL_USER:$ACTUAL_USER" "$INSTALL_DIR"
 echo -e "${GREEN}Permissions fixed${NC}"
 
 echo ""
-echo -e "${GREEN}Step 11: Enabling and starting services${NC}"
+echo -e "${GREEN}Step 12: Enabling and starting services${NC}"
 
 # Reload systemd to recognize new service
 systemctl daemon-reload
@@ -376,7 +412,7 @@ else
 fi
 
 echo ""
-echo -e "${GREEN}Step 12: Creating management scripts${NC}"
+echo -e "${GREEN}Step 13: Creating management scripts${NC}"
 
 # Create start script
 cat > "$INSTALL_DIR/start.sh" << 'EOF'
@@ -554,7 +590,7 @@ chown "$ACTUAL_USER:$ACTUAL_USER" "$INSTALL_DIR"/*.sh
 echo -e "${GREEN}Management scripts created${NC}"
 
 echo ""
-echo -e "${GREEN}Step 13: Final verification${NC}"
+echo -e "${GREEN}Step 14: Final verification${NC}"
 
 # Test backend API
 sleep 2
@@ -578,6 +614,13 @@ else
     echo -e "${YELLOW}⚠  Warning: Frontend may not be accessible${NC}"
 fi
 
+# Verify Chromium for PDF generation
+if [ -n "$CHROMIUM_PATH" ] && [ -f "$CHROMIUM_PATH" ]; then
+    echo -e "${GREEN}✓ Chromium available for PDF generation at: $CHROMIUM_PATH${NC}"
+else
+    echo -e "${YELLOW}⚠  Warning: Chromium not found - PDF generation may not work${NC}"
+fi
+
 echo ""
 echo -e "${GREEN}=========================================="
 if [ "$FRESH_INSTALL" = true ]; then
@@ -589,6 +632,7 @@ fi
 echo "==========================================${NC}"
 echo ""
 echo -e "${GREEN}✓ System configured for auto-start on boot${NC}"
+echo -e "${GREEN}✓ Chromium installed for PDF generation${NC}"
 echo ""
 echo -e "${BLUE}Service Management:${NC}"
 echo "  Start:   sudo systemctl start zev-billing.service"
@@ -622,7 +666,7 @@ if [ "$FRESH_INSTALL" = true ]; then
     echo -e "${YELLOW}📦 Old database backed up to: $INSTALL_DIR/backups/${NC}"
     echo ""
 fi
-echo -e "${YELLOW}🗄  Database location: $INSTALL_DIR/backend/zev-billing.db${NC}"
+echo -e "${YELLOW}🗄 Database location: $INSTALL_DIR/backend/zev-billing.db${NC}"
 echo ""
 echo -e "${BLUE}🔧 Debugging:${NC}"
 echo "  - Check Admin Logs page in the web interface"
