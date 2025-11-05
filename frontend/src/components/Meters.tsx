@@ -1,10 +1,11 @@
 import { useState, useEffect, memo, useCallback } from 'react';
-import { Plus, Edit2, Trash2, X, Info, HelpCircle, Zap, Download, Search, Building, Radio, Settings, AlertCircle, Star, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Info, HelpCircle, Zap, Download, Search, Building, Radio, Settings, AlertCircle, Star, Wifi, WifiOff, AlertTriangle, RefreshCw, Archive } from 'lucide-react';
 import { api } from '../api/client';
 import type { Meter, Building as BuildingType, User } from '../types';
 import { useTranslation } from '../i18n';
 import ExportModal from '../components/ExportModal';
 import DeleteCaptcha from '../components/DeleteCaptcha';
+import MeterReplacementModal from '../components/MeterReplacementModal';
 
 interface ConnectionConfig {
   endpoint?: string;
@@ -130,7 +131,7 @@ const DeleteConfirmationModal = memo(({
               borderRadius: '12px', padding: '16px', marginBottom: '16px'
             }}>
               <p style={{ fontSize: '13px', fontWeight: '600', color: '#991b1b', margin: 0 }}>
-                Ã¢Å¡Â Ã¯Â¸Â {t('meters.dataLossWarning') || 'Warning: All historical data for this meter will be permanently lost. This cannot be recovered.'}
+                ⚠️ {t('meters.dataLossWarning') || 'Warning: All historical data for this meter will be permanently lost. This cannot be recovered.'}
               </p>
             </div>
 
@@ -228,6 +229,12 @@ export default function Meters() {
   const [captchaValid, setCaptchaValid] = useState(false);
   const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
   const [loxoneStatus, setLoxoneStatus] = useState<LoxoneConnectionStatus>({});
+  
+  // NEW: Meter replacement state
+  const [showReplacementModal, setShowReplacementModal] = useState(false);
+  const [meterToReplace, setMeterToReplace] = useState<Meter | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  
   const [formData, setFormData] = useState<Partial<Meter>>({
     name: '', meter_type: 'total_meter', building_id: 0, user_id: undefined, apartment_unit: '',
     connection_type: 'loxone_api', connection_config: '{}', notes: '', is_active: true
@@ -255,11 +262,11 @@ export default function Meters() {
     // Poll for Loxone status every 30 seconds
     const interval = setInterval(fetchLoxoneStatus, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [showArchived]);
 
   const loadData = async () => {
     const [metersData, buildingsData, usersData] = await Promise.all([
-      api.getMeters(),
+      api.getMeters(undefined, showArchived),
       api.getBuildings(),
       api.getUsers()
     ]);
@@ -429,6 +436,23 @@ export default function Meters() {
     setDeleteUnderstandChecked(false);
     setCaptchaValid(false);
   }, []);
+
+  // NEW: Meter replacement handlers
+  const handleReplaceClick = (meter: Meter) => {
+    if (meter.is_archived) {
+      alert(t('meters.cannotReplaceArchived') || 'Cannot replace an archived meter');
+      return;
+    }
+    setMeterToReplace(meter);
+    setShowReplacementModal(true);
+  };
+
+  const handleReplacementSuccess = () => {
+    setShowReplacementModal(false);
+    setMeterToReplace(null);
+    loadData();
+    fetchLoxoneStatus();
+  };
 
   const handleEdit = (meter: Meter) => {
     setEditingMeter(meter);
@@ -823,6 +847,24 @@ export default function Meters() {
           </p>
         </div>
         <div className="header-actions" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          {/* NEW: Show Archived Toggle */}
+          <label style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '10px 16px', backgroundColor: 'white',
+            borderRadius: '6px', cursor: 'pointer', border: '1px solid #e5e7eb'
+          }}>
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              style={{ cursor: 'pointer' }}
+            />
+            <Archive size={16} />
+            <span style={{ fontSize: '14px', fontWeight: '500' }}>
+              {t('meters.showArchived') || 'Show Archived'}
+            </span>
+          </label>
+          
           <button
             onClick={() => setShowExportModal(true)}
             style={{
@@ -957,6 +999,7 @@ export default function Meters() {
                   border: '1px solid #f0f0f0',
                   position: 'relative',
                   transition: 'all 0.2s ease',
+                  opacity: meter.is_archived ? 0.7 : 1
                 }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.boxShadow = '0 8px 12px rgba(0,0,0,0.12)';
@@ -1000,6 +1043,38 @@ export default function Meters() {
                     >
                       <Edit2 size={16} />
                     </button>
+                    
+                    {/* NEW: Replace Button - only show for active meters */}
+                    {!meter.is_archived && (
+                      <button
+                        onClick={() => handleReplaceClick(meter)}
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '50%',
+                          border: 'none',
+                          backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                          color: '#667eea',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = 'rgba(102, 126, 234, 0.2)';
+                          e.currentTarget.style.transform = 'scale(1.1)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'rgba(102, 126, 234, 0.1)';
+                          e.currentTarget.style.transform = 'scale(1)';
+                        }}
+                        title={t('meters.replaceMeter') || 'Replace Meter'}
+                      >
+                        <RefreshCw size={16} />
+                      </button>
+                    )}
+                    
                     <button
                       onClick={() => handleDeleteClick(meter)}
                       style={{
@@ -1029,7 +1104,7 @@ export default function Meters() {
                     </button>
                   </div>
 
-                  <div style={{ paddingRight: '72px' }}>
+                  <div style={{ paddingRight: '100px' }}>
                     <h3 style={{
                       fontSize: '20px',
                       fontWeight: '600',
@@ -1046,6 +1121,29 @@ export default function Meters() {
                     }}>
                       {getMeterTypeLabel(meter.meter_type)}
                     </p>
+                    
+                    {/* NEW: Archived Badge */}
+                    {meter.is_archived && (
+                      <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '4px 12px',
+                        backgroundColor: '#fef3c7',
+                        border: '1px solid #f59e0b',
+                        borderRadius: '12px',
+                        marginTop: '8px'
+                      }}>
+                        <Archive size={14} color="#f59e0b" />
+                        <span style={{ fontSize: '12px', fontWeight: '600', color: '#f59e0b' }}>
+                          {t('meters.archived') || 'ARCHIVED'}
+                          {meter.replaced_by_meter_id && (
+                            <> - {t('meters.replacedBy') || 'Replaced by'} #{meter.replaced_by_meter_id}</>
+                          )}
+                        </span>
+                      </div>
+                    )}
+                    
                     {meter.apartment_unit && (
                       <p style={{
                         fontSize: '13px',
@@ -1174,6 +1272,18 @@ export default function Meters() {
           onCancel={handleDeleteCancel}
           onConfirm={handleDeleteConfirm}
           t={t}
+        />
+      )}
+      
+      {/* NEW: Meter Replacement Modal */}
+      {showReplacementModal && meterToReplace && (
+        <MeterReplacementModal
+          meter={meterToReplace}
+          onClose={() => {
+            setShowReplacementModal(false);
+            setMeterToReplace(null);
+          }}
+          onSuccess={handleReplacementSuccess}
         />
       )}
       
@@ -1342,7 +1452,7 @@ export default function Meters() {
                                   fontSize: '11px',
                                   fontWeight: '600'
                                 }}>
-                                  âœ“ {t('common.active')}
+                                  ✓ {t('common.active')}
                                 </div>
                               </div>
                             ) : (
@@ -1354,7 +1464,7 @@ export default function Meters() {
                                 color: '#92400e',
                                 fontSize: '13px'
                               }}>
-                                âš ï¸ {t('meters.noUserLinked')}
+                                ⚠️ {t('meters.noUserLinked')}
                               </div>
                             )}
                             <p style={{ fontSize: '11px', color: '#666', marginTop: '6px' }}>
@@ -1372,7 +1482,7 @@ export default function Meters() {
                             color: '#6b7280',
                             fontSize: '13px'
                           }}>
-                            â„¹ï¸ {t('meters.apartmentNotSelected')}
+                            ℹ️ {t('meters.apartmentNotSelected')}
                           </div>
                         )}
                       </>
@@ -1447,7 +1557,7 @@ export default function Meters() {
                         </label>
                         <input type="password" required value={connectionConfig.loxone_password || ''}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_password: e.target.value })}
-                          placeholder="Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢"
+                          placeholder="••••••••"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
                     </div>

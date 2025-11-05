@@ -57,20 +57,51 @@ type FloorConfig struct {
 }
 
 type Meter struct {
-	ID               int        `json:"id"`
-	Name             string     `json:"name"`
-	MeterType        string     `json:"meter_type"`
-	BuildingID       int        `json:"building_id"`
-	UserID           *int       `json:"user_id"`
-	ApartmentUnit    string     `json:"apartment_unit"`
-	ConnectionType   string     `json:"connection_type"`
-	ConnectionConfig string     `json:"connection_config"`
-	Notes            string     `json:"notes"`
-	LastReading      float64    `json:"last_reading"`
-	LastReadingTime  *time.Time `json:"last_reading_time"`
-	IsActive         bool       `json:"is_active"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+	ID                 int        `json:"id"`
+	Name               string     `json:"name"`
+	MeterType          string     `json:"meter_type"`
+	BuildingID         int        `json:"building_id"`
+	UserID             *int       `json:"user_id"`
+	ApartmentUnit      string     `json:"apartment_unit"`
+	ConnectionType     string     `json:"connection_type"`
+	ConnectionConfig   string     `json:"connection_config"`
+	Notes              string     `json:"notes"`
+	LastReading        float64    `json:"last_reading"`
+	LastReadingTime    *time.Time `json:"last_reading_time"`
+	IsActive           bool       `json:"is_active"`
+	IsArchived         bool       `json:"is_archived"`
+	ReplacedByMeterID  *int       `json:"replaced_by_meter_id"`
+	ReplacesMetterID   *int       `json:"replaces_meter_id"`
+	ReplacementDate    *time.Time `json:"replacement_date"`
+	ReplacementNotes   string     `json:"replacement_notes"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
+}
+
+type MeterReplacement struct {
+	ID                     int       `json:"id"`
+	OldMeterID             int       `json:"old_meter_id"`
+	NewMeterID             int       `json:"new_meter_id"`
+	ReplacementDate        time.Time `json:"replacement_date"`
+	OldMeterFinalReading   float64   `json:"old_meter_final_reading"`
+	NewMeterInitialReading float64   `json:"new_meter_initial_reading"`
+	ReadingOffset          float64   `json:"reading_offset"`
+	Notes                  string    `json:"notes"`
+	PerformedBy            string    `json:"performed_by,omitempty"`
+	CreatedAt              time.Time `json:"created_at"`
+}
+
+type MeterReplacementRequest struct {
+	OldMeterID             int     `json:"old_meter_id"`
+	NewMeterName           string  `json:"new_meter_name"`
+	NewMeterType           string  `json:"new_meter_type"`
+	NewConnectionType      string  `json:"new_connection_type"`
+	NewConnectionConfig    string  `json:"new_connection_config"`
+	ReplacementDate        string  `json:"replacement_date"`
+	OldMeterFinalReading   float64 `json:"old_meter_final_reading"`
+	NewMeterInitialReading float64 `json:"new_meter_initial_reading"`
+	ReplacementNotes       string  `json:"replacement_notes"`
+	CopySettings           bool    `json:"copy_settings"`
 }
 
 type Charger struct {
@@ -89,11 +120,12 @@ type Charger struct {
 }
 
 type MeterReading struct {
-	ID          int       `json:"id"`
-	MeterID     int       `json:"meter_id"`
-	ReadingTime time.Time `json:"reading_time"`
-	PowerKWh    float64   `json:"power_kwh"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID             int       `json:"id"`
+	MeterID        int       `json:"meter_id"`
+	ReadingTime    time.Time `json:"reading_time"`
+	PowerKWh       float64   `json:"power_kwh"`
+	ConsumptionKWh float64   `json:"consumption_kwh"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type ChargerSession struct {

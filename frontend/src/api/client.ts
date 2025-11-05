@@ -2,7 +2,7 @@ import type {
   User, Building, Meter, Charger, BillingSettings,
   Invoice, DashboardStats, ConsumptionData, AdminLog,
   BuildingConsumption, SharedMeterConfig, CustomLineItem,
-  GenerateBillsRequest
+  GenerateBillsRequest, MeterReplacement, MeterReplacementRequest
 } from '../types';
 
 const API_BASE = '/api';
@@ -138,8 +138,11 @@ class ApiClient {
   }
 
   // Meters
-  async getMeters(building_id?: number): Promise<Meter[]> {
-    const query = building_id ? `?building_id=${building_id}` : '';
+  async getMeters(building_id?: number, include_archived?: boolean): Promise<Meter[]> {
+    const params = new URLSearchParams();
+    if (building_id) params.append('building_id', building_id.toString());
+    if (include_archived) params.append('include_archived', 'true');
+    const query = params.toString() ? `?${params}` : '';
     return this.request(`/meters${query}`);
   }
 
@@ -174,6 +177,36 @@ class ApiClient {
     has_data: boolean;
   }> {
     return this.request(`/meters/${id}/deletion-impact`);
+  }
+
+  // NEW: Meter Replacement endpoints
+  async replaceMeter(request: MeterReplacementRequest): Promise<{
+    replacement: MeterReplacement;
+    new_meter: Meter;
+    old_meter: Meter;
+  }> {
+    return this.request('/meters/replace', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async getMeterReplacementHistory(meterId: number): Promise<MeterReplacement[]> {
+    return this.request(`/meters/${meterId}/replacement-history`);
+  }
+
+  async getMeterReplacementChain(meterId: number): Promise<{
+    current_meter: Meter;
+    predecessor_meters: Meter[];
+    successor_meters: Meter[];
+    replacements: MeterReplacement[];
+  }> {
+    return this.request(`/meters/${meterId}/replacement-chain`);
+  }
+
+  async getArchivedMeters(building_id?: number): Promise<Meter[]> {
+    const query = building_id ? `?building_id=${building_id}` : '';
+    return this.request(`/meters/archived${query}`);
   }
 
   // Chargers
@@ -262,12 +295,11 @@ class ApiClient {
     return this.request(`/billing/invoices/${id}`, { method: 'DELETE' });
   }
 
-  // NEW: Download invoice PDF
   async downloadInvoicePDF(id: number): Promise<string> {
     return `${API_BASE}/billing/invoices/${id}/pdf`;
   }
 
-  // NEW: Shared Meters
+  // Shared Meters
   async getSharedMeterConfigs(building_id?: number): Promise<SharedMeterConfig[]> {
     const query = building_id ? `?building_id=${building_id}` : '';
     return this.request(`/shared-meters${query}`);
@@ -295,7 +327,7 @@ class ApiClient {
     return this.request(`/shared-meters/${id}`, { method: 'DELETE' });
   }
 
-  // NEW: Custom Line Items
+  // Custom Line Items
   async getCustomLineItems(building_id?: number): Promise<CustomLineItem[]> {
     const query = building_id ? `?building_id=${building_id}` : '';
     return this.request(`/custom-line-items${query}`);

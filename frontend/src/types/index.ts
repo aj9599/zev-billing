@@ -58,8 +58,39 @@ export interface Meter {
   last_reading_time?: string;
   is_active: boolean;
   is_shared: boolean;
+  is_archived: boolean;
+  replaced_by_meter_id?: number;
+  replaces_meter_id?: number;
+  replacement_date?: string;
+  replacement_notes?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface MeterReplacement {
+  id: number;
+  old_meter_id: number;
+  new_meter_id: number;
+  replacement_date: string;
+  old_meter_final_reading: number;
+  new_meter_initial_reading: number;
+  reading_offset: number;
+  notes: string;
+  performed_by?: string;
+  created_at: string;
+}
+
+export interface MeterReplacementRequest {
+  old_meter_id: number;
+  new_meter_name: string;
+  new_meter_type: string;
+  new_connection_type: string;
+  new_connection_config: string;
+  replacement_date: string;
+  old_meter_final_reading: number;
+  new_meter_initial_reading: number;
+  replacement_notes: string;
+  copy_settings: boolean;
 }
 
 export interface Charger {
@@ -118,7 +149,6 @@ export interface InvoiceItem {
   item_type: string;
 }
 
-// NEW: Shared meter configuration
 export interface SharedMeterConfig {
   id: number;
   meter_id: number;
@@ -130,7 +160,6 @@ export interface SharedMeterConfig {
   updated_at: string;
 }
 
-// NEW: Custom line item
 export interface CustomLineItem {
   id: number;
   building_id: number;
@@ -143,7 +172,6 @@ export interface CustomLineItem {
   updated_at: string;
 }
 
-// NEW: Apartment with user information for billing selection
 export interface ApartmentWithUser {
   building_id: number;
   apartment_unit: string;
@@ -152,11 +180,10 @@ export interface ApartmentWithUser {
   has_meter: boolean;
 }
 
-// NEW: Bill generation request with advanced options - UPDATED to use apartments
 export interface GenerateBillsRequest {
   building_ids: number[];
-  user_ids: number[];  // Still kept for backend compatibility but populated from apartment selection
-  apartments?: ApartmentSelection[];  // NEW: For frontend tracking
+  user_ids: number[];
+  apartments?: ApartmentSelection[];
   start_date: string;
   end_date: string;
   sender_name?: string;
@@ -172,14 +199,12 @@ export interface GenerateBillsRequest {
   custom_line_items?: CustomLineItemSelection[];
 }
 
-// NEW: Apartment selection tracking
 export interface ApartmentSelection {
   building_id: number;
   apartment_unit: string;
   user_id?: number;
 }
 
-// NEW: Custom line item selection for invoice
 export interface CustomLineItemSelection {
   item_id?: number;
   description: string;

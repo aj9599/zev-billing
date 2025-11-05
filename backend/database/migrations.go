@@ -2,6 +2,7 @@ package database
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 
 	"golang.org/x/crypto/bcrypt"
@@ -79,10 +80,17 @@ func RunMigrations(db *sql.DB) error {
 			last_reading_time DATETIME,
 			is_active INTEGER DEFAULT 1,
 			is_shared INTEGER DEFAULT 0,
+			is_archived INTEGER DEFAULT 0,
+			replaced_by_meter_id INTEGER,
+			replaces_meter_id INTEGER,
+			replacement_date DATETIME,
+			replacement_notes TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (building_id) REFERENCES buildings(id),
-			FOREIGN KEY (user_id) REFERENCES users(id)
+			FOREIGN KEY (user_id) REFERENCES users(id),
+			FOREIGN KEY (replaced_by_meter_id) REFERENCES meters(id),
+			FOREIGN KEY (replaces_meter_id) REFERENCES meters(id)
 		)`,
 
 		`CREATE TABLE IF NOT EXISTS chargers (
@@ -199,7 +207,25 @@ func RunMigrations(db *sql.DB) error {
 		)`,
 
 		// =====================================================================
-		// NEW: Shared Meter Configurations
+		// NEW: Meter Replacements Table
+		// =====================================================================
+		`CREATE TABLE IF NOT EXISTS meter_replacements (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			old_meter_id INTEGER NOT NULL,
+			new_meter_id INTEGER NOT NULL,
+			replacement_date DATETIME NOT NULL,
+			old_meter_final_reading REAL NOT NULL,
+			new_meter_initial_reading REAL NOT NULL,
+			reading_offset REAL NOT NULL,
+			notes TEXT,
+			performed_by TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (old_meter_id) REFERENCES meters(id),
+			FOREIGN KEY (new_meter_id) REFERENCES meters(id)
+		)`,
+
+		// =====================================================================
+		// Shared Meter Configurations
 		// =====================================================================
 		`CREATE TABLE IF NOT EXISTS shared_meter_configs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -215,7 +241,7 @@ func RunMigrations(db *sql.DB) error {
 		)`,
 
 		// =====================================================================
-		// NEW: Custom Line Items
+		// Custom Line Items
 		// =====================================================================
 		`CREATE TABLE IF NOT EXISTS custom_line_items (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -231,7 +257,7 @@ func RunMigrations(db *sql.DB) error {
 		)`,
 
 		// =====================================================================
-		// NEW: Shared Meter Custom Splits (for custom percentage splitting)
+		// Shared Meter Custom Splits
 		// =====================================================================
 		`CREATE TABLE IF NOT EXISTS shared_meter_custom_splits (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -259,7 +285,17 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_auto_billing_next_run ON auto_billing_configs(next_run)`,
 
 		// =====================================================================
-		// NEW: Indexes for shared meters and custom items
+		// NEW: Indexes for meter replacements
+		// =====================================================================
+		`CREATE INDEX IF NOT EXISTS idx_meters_archived ON meters(is_archived)`,
+		`CREATE INDEX IF NOT EXISTS idx_meters_replaced_by ON meters(replaced_by_meter_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_meters_replaces ON meters(replaces_meter_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_meter_replacements_old ON meter_replacements(old_meter_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_meter_replacements_new ON meter_replacements(new_meter_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_meter_replacements_date ON meter_replacements(replacement_date)`,
+
+		// =====================================================================
+		// Indexes for shared meters and custom items
 		// =====================================================================
 		`CREATE INDEX IF NOT EXISTS idx_shared_meters_building ON shared_meter_configs(building_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_shared_meters_meter ON shared_meter_configs(meter_id)`,
@@ -280,12 +316,14 @@ func RunMigrations(db *sql.DB) error {
 		}
 	}
 
-	// =====================================================================
-	// CRITICAL: Add apartments_json column to auto_billing_configs
-	// =====================================================================
+	// Add meter replacement columns if they don't exist
+	if err := addMeterReplacementColumns(db); err != nil {
+		log.Printf("Meter replacement columns migration: %v", err)
+	}
+
+	// Add apartments_json column to auto_billing_configs
 	if err := addApartmentsJsonColumn(db); err != nil {
 		log.Printf("Apartments JSON column migration: %v", err)
-		// Don't return error as it might already exist
 	}
 
 	// Additional indexes that may not be in the main migrations array
@@ -311,13 +349,11 @@ func RunMigrations(db *sql.DB) error {
 	// Fix email constraint for existing databases
 	if err := migrateEmailConstraint(db); err != nil {
 		log.Printf("Email constraint migration: %v", err)
-		// Don't return error here as it might be already migrated
 	}
 
 	// Create triggers for shared meters and custom items
 	if err := createTriggers(db); err != nil {
 		log.Printf("Trigger creation: %v", err)
-		// Don't return error as triggers might already exist
 	}
 
 	if err := createDefaultAdmin(db); err != nil {
@@ -327,15 +363,60 @@ func RunMigrations(db *sql.DB) error {
 	log.Println("✓ Migrations completed successfully")
 	log.Println("✓ Shared meter configurations table ready")
 	log.Println("✓ Custom line items table ready")
+	log.Println("✓ Meter replacements table ready")
 	log.Println("✓ Auto billing apartments_json column ready")
 	return nil
 }
 
 // =====================================================================
-// NEW: Add apartments_json column for apartment-based auto billing
+// NEW: Add meter replacement columns to existing meters table
+// =====================================================================
+func addMeterReplacementColumns(db *sql.DB) error {
+	// Check if columns already exist
+	var sql string
+	err := db.QueryRow(`
+		SELECT sql FROM sqlite_master 
+		WHERE type='table' AND name='meters'
+	`).Scan(&sql)
+
+	if err != nil {
+		return err
+	}
+
+	columns := []struct {
+		name       string
+		definition string
+	}{
+		{"is_archived", "INTEGER DEFAULT 0"},
+		{"replaced_by_meter_id", "INTEGER"},
+		{"replaces_meter_id", "INTEGER"},
+		{"replacement_date", "DATETIME"},
+		{"replacement_notes", "TEXT"},
+	}
+
+	for _, col := range columns {
+		if !contains(sql, col.name) {
+			log.Printf("Adding column %s to meters table...", col.name)
+			_, err := db.Exec(fmt.Sprintf("ALTER TABLE meters ADD COLUMN %s %s", col.name, col.definition))
+			if err != nil {
+				if contains(err.Error(), "duplicate column") {
+					log.Printf("✓ Column %s already exists", col.name)
+					continue
+				}
+				log.Printf("WARNING: Failed to add column %s: %v", col.name, err)
+			} else {
+				log.Printf("✓ Column %s added successfully", col.name)
+			}
+		}
+	}
+
+	return nil
+}
+
+// =====================================================================
+// Add apartments_json column for apartment-based auto billing
 // =====================================================================
 func addApartmentsJsonColumn(db *sql.DB) error {
-	// Check if the column already exists
 	var sql string
 	err := db.QueryRow(`
 		SELECT sql FROM sqlite_master 
@@ -346,18 +427,15 @@ func addApartmentsJsonColumn(db *sql.DB) error {
 		return err
 	}
 
-	// Check if apartments_json column already exists
 	if contains(sql, "apartments_json") {
 		log.Println("✓ apartments_json column already exists")
 		return nil
 	}
 
-	log.Println("🔄 Adding apartments_json column to auto_billing_configs table...")
+	log.Println("📄 Adding apartments_json column to auto_billing_configs table...")
 
-	// Add the column
 	_, err = db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN apartments_json TEXT`)
 	if err != nil {
-		// Column might already exist, which is fine
 		if contains(err.Error(), "duplicate column") {
 			log.Println("✓ apartments_json column already exists")
 			return nil
@@ -365,24 +443,20 @@ func addApartmentsJsonColumn(db *sql.DB) error {
 		return err
 	}
 
-	// Set default value for existing records
 	_, err = db.Exec(`UPDATE auto_billing_configs SET apartments_json = '[]' WHERE apartments_json IS NULL`)
 	if err != nil {
 		log.Printf("WARNING: Failed to set default apartments_json values: %v", err)
 	}
 
 	log.Println("✓ apartments_json column added successfully")
-	log.Println("✓ Auto billing now supports apartment-based selection")
-
 	return nil
 }
 
 // =====================================================================
-// NEW: Create triggers for automatic timestamp updates
+// Create triggers for automatic timestamp updates
 // =====================================================================
 func createTriggers(db *sql.DB) error {
 	triggers := []string{
-		// Trigger for shared_meter_configs
 		`CREATE TRIGGER IF NOT EXISTS update_shared_meters_timestamp 
 		AFTER UPDATE ON shared_meter_configs
 		FOR EACH ROW
@@ -392,7 +466,6 @@ func createTriggers(db *sql.DB) error {
 			WHERE id = NEW.id;
 		END`,
 
-		// Trigger for custom_line_items
 		`CREATE TRIGGER IF NOT EXISTS update_custom_items_timestamp 
 		AFTER UPDATE ON custom_line_items
 		FOR EACH ROW
@@ -402,7 +475,6 @@ func createTriggers(db *sql.DB) error {
 			WHERE id = NEW.id;
 		END`,
 
-		// Trigger for shared_meter_custom_splits
 		`CREATE TRIGGER IF NOT EXISTS update_custom_splits_timestamp 
 		AFTER UPDATE ON shared_meter_custom_splits
 		FOR EACH ROW
@@ -423,7 +495,6 @@ func createTriggers(db *sql.DB) error {
 }
 
 func migrateEmailConstraint(db *sql.DB) error {
-	// Check if users table exists and has UNIQUE constraint on email
 	var sql string
 	err := db.QueryRow(`
 		SELECT sql FROM sqlite_master 
@@ -434,11 +505,8 @@ func migrateEmailConstraint(db *sql.DB) error {
 		return err
 	}
 
-	// Check if the table still has UNIQUE constraint on email
-	// If it contains "email TEXT UNIQUE" or "email TEXT NOT NULL UNIQUE", we need to migrate
 	hasUniqueConstraint := false
 	if len(sql) > 0 {
-		// Simple check - if the schema contains "email TEXT UNIQUE" or similar
 		if containsEmailUnique(sql) {
 			hasUniqueConstraint = true
 		}
@@ -447,7 +515,6 @@ func migrateEmailConstraint(db *sql.DB) error {
 	if !hasUniqueConstraint {
 		log.Println("Email constraint already migrated or doesn't exist")
 
-		// Even if already migrated, ensure the compound unique index exists
 		_, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_type ON users(email, user_type)`)
 		if err != nil {
 			log.Printf("Note: Compound index may already exist: %v", err)
@@ -458,16 +525,14 @@ func migrateEmailConstraint(db *sql.DB) error {
 		return nil
 	}
 
-	log.Println("🔄 Migrating users table to remove email UNIQUE constraint...")
+	log.Println("📄 Migrating users table to remove email UNIQUE constraint...")
 
-	// Begin transaction
 	tx, err := db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	// Step 1: Create new users table without UNIQUE constraint on email
 	_, err = tx.Exec(`
 		CREATE TABLE users_new (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -498,28 +563,21 @@ func migrateEmailConstraint(db *sql.DB) error {
 		return err
 	}
 
-	// Step 2: Copy all data
-	_, err = tx.Exec(`
-		INSERT INTO users_new 
-		SELECT * FROM users
-	`)
+	_, err = tx.Exec(`INSERT INTO users_new SELECT * FROM users`)
 	if err != nil {
 		return err
 	}
 
-	// Step 3: Drop old table
 	_, err = tx.Exec(`DROP TABLE users`)
 	if err != nil {
 		return err
 	}
 
-	// Step 4: Rename new table
 	_, err = tx.Exec(`ALTER TABLE users_new RENAME TO users`)
 	if err != nil {
 		return err
 	}
 
-	// Step 5: Recreate indexes
 	indexes := []string{
 		`CREATE INDEX idx_users_email ON users(email)`,
 		`CREATE INDEX idx_users_building ON users(building_id)`,
@@ -536,19 +594,15 @@ func migrateEmailConstraint(db *sql.DB) error {
 		}
 	}
 
-	// Commit transaction
 	if err := tx.Commit(); err != nil {
 		return err
 	}
 
 	log.Println("✓ Email constraint migration completed successfully")
-	log.Println("✓ Administrators and regular users can now share the same email")
-
 	return nil
 }
 
 func containsEmailUnique(sql string) bool {
-	// Check for various forms of UNIQUE constraint on email
 	patterns := []string{
 		"email TEXT UNIQUE",
 		"email TEXT NOT NULL UNIQUE",

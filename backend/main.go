@@ -113,7 +113,7 @@ func main() {
 	api.HandleFunc("/auth/change-password", authHandler.ChangePassword).Methods("POST")
 	api.HandleFunc("/debug/status", debugStatusHandler).Methods("GET")
 	api.HandleFunc("/system/reboot", rebootHandler).Methods("POST")
-	
+
 	// NEW: Backup and Update endpoints
 	api.HandleFunc("/system/backup", createBackupHandler(cfg.DatabasePath)).Methods("POST")
 	api.HandleFunc("/system/backup/download", downloadBackupHandler).Methods("GET")
@@ -137,8 +137,13 @@ func main() {
 	api.HandleFunc("/buildings/{id}", buildingHandler.Delete).Methods("DELETE")
 
 	// Meter routes
+	api.HandleFunc("/meters/replace", meterHandler.ReplaceMeter).Methods("POST")
+	api.HandleFunc("/meters/archived", meterHandler.GetArchivedMeters).Methods("GET")
 	api.HandleFunc("/meters", meterHandler.List).Methods("GET")
 	api.HandleFunc("/meters", meterHandler.Create).Methods("POST")
+	api.HandleFunc("/meters/{id}/deletion-impact", meterHandler.GetDeletionImpact).Methods("GET")
+	api.HandleFunc("/meters/{id}/replacement-history", meterHandler.GetReplacementHistory).Methods("GET")
+	api.HandleFunc("/meters/{id}/replacement-chain", meterHandler.GetReplacementChain).Methods("GET")
 	api.HandleFunc("/meters/{id}", meterHandler.Get).Methods("GET")
 	api.HandleFunc("/meters/{id}", meterHandler.Update).Methods("PUT")
 	api.HandleFunc("/meters/{id}", meterHandler.Delete).Methods("DELETE")
@@ -286,7 +291,7 @@ func createBackupHandler(dbPath string) http.HandlerFunc {
 		if homeDir, err := os.UserHomeDir(); err == nil {
 			backupDir = filepath.Join(homeDir, "zev-billing-backups")
 		}
-		
+
 		if err := os.MkdirAll(backupDir, 0755); err != nil {
 			log.Printf("Failed to create backup directory: %v", err)
 			http.Error(w, "Failed to create backup directory", http.StatusInternalServerError)
@@ -341,13 +346,13 @@ func downloadBackupHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Security: prevent path traversal
 	backupName = filepath.Base(backupName)
-	
+
 	// Try to use home directory, fall back to current directory
 	backupDir := "./backups"
 	if homeDir, err := os.UserHomeDir(); err == nil {
 		backupDir = filepath.Join(homeDir, "zev-billing-backups")
 	}
-	
+
 	backupPath := filepath.Join(backupDir, backupName)
 
 	// Check if file exists
@@ -455,7 +460,7 @@ func checkUpdateHandler(w http.ResponseWriter, r *http.Request) {
 			} else {
 				repoPath = cwd
 			}
-			
+
 			// Verify we found the right directory by checking for .git
 			if _, err := os.Stat(filepath.Join(repoPath, ".git")); os.IsNotExist(err) {
 				// Try going up one more level
@@ -527,7 +532,7 @@ func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		time.Sleep(1 * time.Second)
-		
+
 		// Try to detect repository path
 		repoPath := "/home/pi/zev-billing"
 		if _, err := os.Stat(repoPath); os.IsNotExist(err) {
@@ -539,7 +544,7 @@ func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 				} else {
 					repoPath = cwd
 				}
-				
+
 				// Verify we found the right directory by checking for .git
 				if _, err := os.Stat(filepath.Join(repoPath, ".git")); os.IsNotExist(err) {
 					// Try going up one more level
@@ -547,13 +552,13 @@ func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		
+
 		// Try to detect home directory for log file
 		logFile := "./zev-billing-update.log"
 		if homeDir, err := os.UserHomeDir(); err == nil {
 			logFile = filepath.Join(homeDir, "zev-billing-update.log")
 		}
-		
+
 		log.Println("Starting update process...")
 		log.Printf("Repository path: %s", repoPath)
 		log.Printf("Log file: %s", logFile)
@@ -634,7 +639,7 @@ func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 
 		writeLog("Update completed successfully!")
 		writeLog("Exiting process - systemd will restart the service automatically...")
-		
+
 		// Exit the process - systemd will restart it automatically with the new binary
 		time.Sleep(500 * time.Millisecond)
 		os.Exit(0)
