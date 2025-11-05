@@ -955,7 +955,7 @@ export const de: Translations = {
   'billConfig.navigation.previous': 'Zurück',
   'billConfig.navigation.next': 'Weiter',
   'billConfig.navigation.generating': 'Generiere...',
-  'billConfig.navigation.generate': 'Erstellen',
+  'billConfig.navigation.generate': 'Erstelle',
 
   // Validation
   'billConfig.validation.selectDates': 'Bitte wählen Sie Start- und Enddatum',
