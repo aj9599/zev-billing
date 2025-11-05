@@ -1,6 +1,6 @@
 import type { Translations } from '../index';
 
-export const en: Translations = {
+export const de: Translations = {
   // ============================================================================
   // NAVIGATION
   // ============================================================================
