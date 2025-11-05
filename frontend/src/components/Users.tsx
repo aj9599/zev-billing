@@ -1017,7 +1017,7 @@ export default function Users() {
                         color: '#15803d',
                         lineHeight: '1.5'
                       }}>
-                        <strong>â„¹ï¸ {t('users.apartmentInfo')}</strong>
+                        <strong>ℹ️ {t('users.apartmentInfo')}</strong>
                         <br />
                         {t('users.apartmentExplanation')}
                       </div>

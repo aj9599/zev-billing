@@ -48,6 +48,9 @@ export const en: Translations = {
   'common.unknownBuilding': 'Unknown Building',
   'common.all': 'All',
   'common.from': 'from',
+  'common.of': 'of',
+  'common.next': 'Next',
+  'common.back': 'Back',
 
   // ============================================================================
   // DASHBOARD

@@ -335,16 +335,23 @@ func (h *BillingHandler) loadFullInvoice(invoiceID int) (models.Invoice, error) 
 
 	// Load user details
 	var user models.User
+	var language sql.NullString
 	err = h.db.QueryRow(`
-		SELECT id, first_name, last_name, email, phone, 
-		       address_street, address_city, address_zip, address_country,
-		       is_active
-		FROM users WHERE id = ?
+    	SELECT id, first_name, last_name, email, phone, 
+           address_street, address_city, address_zip, address_country,
+           COALESCE(language, 'de'), is_active
+    	FROM users WHERE id = ?
 	`, inv.UserID).Scan(
 		&user.ID, &user.FirstName, &user.LastName, &user.Email, &user.Phone,
 		&user.AddressStreet, &user.AddressCity, &user.AddressZip, &user.AddressCountry,
-		&user.IsActive,
+		&language, &user.IsActive,
 	)
+
+	if language.Valid {
+		user.Language = language.String
+	} else {
+		user.Language = "de"
+	}
 
 	if err == nil {
 		inv.User = &user
@@ -395,6 +402,7 @@ func (h *BillingHandler) invoiceToMap(inv models.Invoice) map[string]interface{}
 		userMap["address_city"] = inv.User.AddressCity
 		userMap["address_zip"] = inv.User.AddressZip
 		userMap["address_country"] = inv.User.AddressCountry
+		userMap["language"] = inv.User.Language
 		userMap["is_active"] = inv.User.IsActive
 		invoiceMap["user"] = userMap
 	}
@@ -749,7 +757,7 @@ func (h *BillingHandler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Searched filename: %s", filename)
 		log.Printf("Invoice number: %s", invoiceNumber)
 		log.Printf("Invoice ID: %d", invoiceID)
-		
+
 		// PDF was never generated or has been deleted
 		http.Error(w, "PDF file not found. Please regenerate the invoice from the Billing page.", http.StatusNotFound)
 		return
