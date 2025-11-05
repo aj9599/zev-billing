@@ -285,16 +285,6 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_auto_billing_next_run ON auto_billing_configs(next_run)`,
 
 		// =====================================================================
-		// NEW: Indexes for meter replacements
-		// =====================================================================
-		`CREATE INDEX IF NOT EXISTS idx_meters_archived ON meters(is_archived)`,
-		`CREATE INDEX IF NOT EXISTS idx_meters_replaced_by ON meters(replaced_by_meter_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_meters_replaces ON meters(replaces_meter_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_meter_replacements_old ON meter_replacements(old_meter_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_meter_replacements_new ON meter_replacements(new_meter_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_meter_replacements_date ON meter_replacements(replacement_date)`,
-
-		// =====================================================================
 		// Indexes for shared meters and custom items
 		// =====================================================================
 		`CREATE INDEX IF NOT EXISTS idx_shared_meters_building ON shared_meter_configs(building_id)`,
@@ -360,11 +350,11 @@ func RunMigrations(db *sql.DB) error {
 		return err
 	}
 
-	log.Println("✓ Migrations completed successfully")
-	log.Println("✓ Shared meter configurations table ready")
-	log.Println("✓ Custom line items table ready")
-	log.Println("✓ Meter replacements table ready")
-	log.Println("✓ Auto billing apartments_json column ready")
+	log.Println("âœ“ Migrations completed successfully")
+	log.Println("âœ“ Shared meter configurations table ready")
+	log.Println("âœ“ Custom line items table ready")
+	log.Println("âœ“ Meter replacements table ready")
+	log.Println("âœ“ Auto billing apartments_json column ready")
 	return nil
 }
 
@@ -400,15 +390,33 @@ func addMeterReplacementColumns(db *sql.DB) error {
 			_, err := db.Exec(fmt.Sprintf("ALTER TABLE meters ADD COLUMN %s %s", col.name, col.definition))
 			if err != nil {
 				if contains(err.Error(), "duplicate column") {
-					log.Printf("✓ Column %s already exists", col.name)
+					log.Printf("âœ“ Column %s already exists", col.name)
 					continue
 				}
 				log.Printf("WARNING: Failed to add column %s: %v", col.name, err)
 			} else {
-				log.Printf("✓ Column %s added successfully", col.name)
+				log.Printf("âœ“ Column %s added successfully", col.name)
 			}
 		}
 	}
+
+	// Create indexes for meter replacement columns
+	log.Println("Creating indexes for meter replacement columns...")
+	indexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_meters_archived ON meters(is_archived)`,
+		`CREATE INDEX IF NOT EXISTS idx_meters_replaced_by ON meters(replaced_by_meter_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_meters_replaces ON meters(replaces_meter_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_meter_replacements_old ON meter_replacements(old_meter_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_meter_replacements_new ON meter_replacements(new_meter_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_meter_replacements_date ON meter_replacements(replacement_date)`,
+	}
+
+	for _, idx := range indexes {
+		if _, err := db.Exec(idx); err != nil {
+			log.Printf("Note: Index may already exist: %v", err)
+		}
+	}
+	log.Println("Meter replacement indexes created")
 
 	return nil
 }
@@ -428,16 +436,16 @@ func addApartmentsJsonColumn(db *sql.DB) error {
 	}
 
 	if contains(sql, "apartments_json") {
-		log.Println("✓ apartments_json column already exists")
+		log.Println("âœ“ apartments_json column already exists")
 		return nil
 	}
 
-	log.Println("📄 Adding apartments_json column to auto_billing_configs table...")
+	log.Println("ðŸ“„ Adding apartments_json column to auto_billing_configs table...")
 
 	_, err = db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN apartments_json TEXT`)
 	if err != nil {
 		if contains(err.Error(), "duplicate column") {
-			log.Println("✓ apartments_json column already exists")
+			log.Println("âœ“ apartments_json column already exists")
 			return nil
 		}
 		return err
@@ -448,7 +456,7 @@ func addApartmentsJsonColumn(db *sql.DB) error {
 		log.Printf("WARNING: Failed to set default apartments_json values: %v", err)
 	}
 
-	log.Println("✓ apartments_json column added successfully")
+	log.Println("âœ“ apartments_json column added successfully")
 	return nil
 }
 
@@ -519,13 +527,13 @@ func migrateEmailConstraint(db *sql.DB) error {
 		if err != nil {
 			log.Printf("Note: Compound index may already exist: %v", err)
 		} else {
-			log.Println("✓ Compound unique index (email, user_type) created")
+			log.Println("âœ“ Compound unique index (email, user_type) created")
 		}
 
 		return nil
 	}
 
-	log.Println("📄 Migrating users table to remove email UNIQUE constraint...")
+	log.Println("ðŸ“„ Migrating users table to remove email UNIQUE constraint...")
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -598,7 +606,7 @@ func migrateEmailConstraint(db *sql.DB) error {
 		return err
 	}
 
-	log.Println("✓ Email constraint migration completed successfully")
+	log.Println("âœ“ Email constraint migration completed successfully")
 	return nil
 }
 
@@ -661,7 +669,7 @@ func createDefaultAdmin(db *sql.DB) error {
 		}
 
 		log.Println("Default admin user created (username: admin, password: admin123)")
-		log.Println("⚠️  IMPORTANT: Change the default password immediately!")
+		log.Println("âš ï¸  IMPORTANT: Change the default password immediately!")
 	}
 
 	return nil
