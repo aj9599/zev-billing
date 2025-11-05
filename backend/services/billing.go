@@ -178,6 +178,18 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 }
 
 func (bs *BillingService) calculateSharedMeterCosts(buildingID int, start, end time.Time, userID int, totalActiveUsers int) ([]models.InvoiceItem, float64, error) {
+	// Use German as default for old function calls
+	tr := GetTranslations("de")
+	return bs.calculateSharedMeterCostsWithTranslations(buildingID, start, end, userID, totalActiveUsers, tr, "CHF")
+}
+
+func (bs *BillingService) getCustomLineItems(buildingID int) ([]models.InvoiceItem, float64, error) {
+	// Use German as default for old function calls
+	tr := GetTranslations("de")
+	return bs.getCustomLineItemsWithTranslations(buildingID, tr)
+}
+
+func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID int, start, end time.Time, userID int, totalActiveUsers int, tr InvoiceTranslations, currency string) ([]models.InvoiceItem, float64, error) {
 	log.Printf("  [SHARED METERS] Calculating shared meter costs for building %d, user %d (%d active users)", buildingID, userID, totalActiveUsers)
 
 	// Get all shared meter configs for this building
@@ -255,7 +267,7 @@ func (bs *BillingService) calculateSharedMeterCosts(buildingID int, start, end t
 		case "equal":
 			if totalActiveUsers > 0 {
 				userShare = totalMeterCost / float64(totalActiveUsers)
-				splitDescription = fmt.Sprintf("Split equally among %d users", totalActiveUsers)
+				splitDescription = fmt.Sprintf("%s %s %d %s", tr.SplitEqually, tr.Among, totalActiveUsers, tr.Users)
 			}
 		case "by_area":
 			// Get user's apartment area
@@ -268,13 +280,13 @@ func (bs *BillingService) calculateSharedMeterCosts(buildingID int, start, end t
 
 			if err == nil && totalArea > 0 && userArea > 0 {
 				userShare = totalMeterCost * (userArea / totalArea)
-				splitDescription = fmt.Sprintf("Split by area: %.1fm² of %.1fm² total", userArea, totalArea)
+				splitDescription = fmt.Sprintf("Split by area: %.1fm² %s %.1fm² total", userArea, tr.Of, totalArea)
 			} else {
 				// Fallback to equal split if area data is missing
 				if totalActiveUsers > 0 {
 					userShare = totalMeterCost / float64(totalActiveUsers)
 				}
-				splitDescription = fmt.Sprintf("Split equally (area data not available) among %d users", totalActiveUsers)
+				splitDescription = fmt.Sprintf("%s (area data not available) %s %d %s", tr.SplitEqually, tr.Among, totalActiveUsers, tr.Users)
 				log.Printf("  [SHARED METERS]   WARNING: Area-based split requested but data missing, using equal split")
 			}
 
@@ -289,13 +301,13 @@ func (bs *BillingService) calculateSharedMeterCosts(buildingID int, start, end t
 
 			if err == nil && totalUnits > 0 {
 				userShare = totalMeterCost * (float64(userUnits) / float64(totalUnits))
-				splitDescription = fmt.Sprintf("Split by units: %d of %d total units", userUnits, totalUnits)
+				splitDescription = fmt.Sprintf("%s: %d %s %d %s", tr.SplitByUnits, userUnits, tr.Of, totalUnits, tr.TotalUnits)
 			} else {
 				// Fallback to equal split
 				if totalActiveUsers > 0 {
 					userShare = totalMeterCost / float64(totalActiveUsers)
 				}
-				splitDescription = fmt.Sprintf("Split equally (unit data not available) among %d users", totalActiveUsers)
+				splitDescription = fmt.Sprintf("%s (unit data not available) %s %d %s", tr.SplitEqually, tr.Among, totalActiveUsers, tr.Users)
 				log.Printf("  [SHARED METERS]   WARNING: Unit-based split requested but data missing, using equal split")
 			}
 
@@ -310,13 +322,13 @@ func (bs *BillingService) calculateSharedMeterCosts(buildingID int, start, end t
 
 			if err == nil && customPercentage > 0 {
 				userShare = totalMeterCost * (customPercentage / 100.0)
-				splitDescription = fmt.Sprintf("Custom split: %.1f%%", customPercentage)
+				splitDescription = fmt.Sprintf("%s: %.1f%%", tr.CustomSplit, customPercentage)
 			} else {
 				// Fallback to equal split
 				if totalActiveUsers > 0 {
 					userShare = totalMeterCost / float64(totalActiveUsers)
 				}
-				splitDescription = fmt.Sprintf("Split equally (custom % not configured) among %d users", totalActiveUsers)
+				splitDescription = fmt.Sprintf("%s (custom %% not configured) %s %d %s", tr.SplitEqually, tr.Among, totalActiveUsers, tr.Users)
 				log.Printf("  [SHARED METERS]   WARNING: Custom split requested but percentage not found, using equal split")
 			}
 
@@ -325,14 +337,14 @@ func (bs *BillingService) calculateSharedMeterCosts(buildingID int, start, end t
 			if totalActiveUsers > 0 {
 				userShare = totalMeterCost / float64(totalActiveUsers)
 			}
-			splitDescription = fmt.Sprintf("Split equally among %d users", totalActiveUsers)
+			splitDescription = fmt.Sprintf("%s %s %d %s", tr.SplitEqually, tr.Among, totalActiveUsers, tr.Users)
 		}
 
 		log.Printf("  [SHARED METERS]   User share: %.3f (%s)", userShare, splitDescription)
 
 		// Add header item (informational, no cost)
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("Shared Meter: %s", meterName),
+			Description: fmt.Sprintf("%s: %s", tr.SharedMeter, meterName),
 			Quantity:    0,
 			UnitPrice:   0,
 			TotalPrice:  0,
@@ -341,7 +353,7 @@ func (bs *BillingService) calculateSharedMeterCosts(buildingID int, start, end t
 
 		// Add consumption details
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  Total consumption: %.3f kWh × %.3f CHF/kWh = %.3f CHF", consumption, unitPrice, totalMeterCost),
+			Description: fmt.Sprintf("  %s: %.3f kWh × %.3f %s/kWh = %.3f %s", tr.TotalConsumption, consumption, unitPrice, currency, totalMeterCost, currency),
 			Quantity:    0,
 			UnitPrice:   0,
 			TotalPrice:  0,
@@ -350,7 +362,7 @@ func (bs *BillingService) calculateSharedMeterCosts(buildingID int, start, end t
 
 		// Add the billable charge
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  Your share: %.3f CHF (%s)", userShare, splitDescription),
+			Description: fmt.Sprintf("  %s: %.3f %s (%s)", tr.YourShare, userShare, currency, splitDescription),
 			Quantity:    consumption / float64(totalActiveUsers), // Approximate per-user consumption
 			UnitPrice:   unitPrice,
 			TotalPrice:  userShare,
@@ -378,7 +390,7 @@ func (bs *BillingService) calculateSharedMeterCosts(buildingID int, start, end t
 	return items, totalCost, nil
 }
 
-func (bs *BillingService) getCustomLineItems(buildingID int) ([]models.InvoiceItem, float64, error) {
+func (bs *BillingService) getCustomLineItemsWithTranslations(buildingID int, tr InvoiceTranslations) ([]models.InvoiceItem, float64, error) {
 	log.Printf("  [CUSTOM ITEMS] Getting custom line items for building %d", buildingID)
 
 	rows, err := bs.db.Query(`
@@ -409,7 +421,7 @@ func (bs *BillingService) getCustomLineItems(buildingID int) ([]models.InvoiceIt
 
 		itemCount++
 
-		// Format frequency label
+		// Format frequency label (these are technical, keep in English in DB but could translate if needed)
 		var frequencyLabel string
 		switch frequency {
 		case "once":
@@ -424,7 +436,7 @@ func (bs *BillingService) getCustomLineItems(buildingID int) ([]models.InvoiceIt
 			frequencyLabel = frequency
 		}
 
-		// Format category icon/label
+		// Format category icon/label (these are technical, keep in English in DB but could translate if needed)
 		var categoryLabel string
 		switch category {
 		case "meter_rent":
@@ -453,7 +465,7 @@ func (bs *BillingService) getCustomLineItems(buildingID int) ([]models.InvoiceIt
 			})
 			
 			items = append(items, models.InvoiceItem{
-				Description: "Additional Services",
+				Description: tr.AdditionalServices,
 				Quantity:    0,
 				UnitPrice:   0,
 				TotalPrice:  0,
@@ -493,6 +505,22 @@ func (bs *BillingService) countActiveUsers(buildingID int) (int, error) {
 }
 
 func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end time.Time, settings models.BillingSettings, rfidCards string) (*models.Invoice, error) {
+	// Get user language preference
+	var userLanguage string
+	err := bs.db.QueryRow(`
+		SELECT COALESCE(language, 'de') FROM users WHERE id = ?
+	`, userID).Scan(&userLanguage)
+	
+	if err != nil {
+		log.Printf("  WARNING: Could not fetch user language, defaulting to German: %v", err)
+		userLanguage = "de"
+	}
+	
+	log.Printf("  User language: %s", userLanguage)
+	
+	// Get translations for the user's language
+	tr := GetTranslations(userLanguage)
+	
 	// IMPROVED: Year-based invoice numbering for better organization
 	invoiceYear := start.Year()
 	timestamp := time.Now().Format("20060102150405")
@@ -513,18 +541,20 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 
 	if totalConsumption > 0 {
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("Apartment Meter: %s", meterName),
+			Description: fmt.Sprintf("%s: %s", tr.ApartmentMeter, meterName),
 			Quantity:    0,
 			UnitPrice:   0,
 			TotalPrice:  0,
 			ItemType:    "meter_info",
 		})
 
-		// Compact single-line meter reading
+		// Compact single-line meter reading with translations
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("Period: %s-%s | Old: %.3f kWh | New: %.3f kWh | Consumption: %.3f kWh",
-				start.Format("02.01"), end.Format("02.01"),
-				meterReadingFrom, meterReadingTo, totalConsumption),
+			Description: fmt.Sprintf("%s: %s-%s | %s: %.3f kWh | %s: %.3f kWh | %s: %.3f kWh",
+				tr.Period, start.Format("02.01"), end.Format("02.01"),
+				tr.OldReading, meterReadingFrom,
+				tr.NewReading, meterReadingTo,
+				tr.Consumption, totalConsumption),
 			Quantity:    totalConsumption,
 			UnitPrice:   0,
 			TotalPrice:  0,
@@ -544,7 +574,7 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 		solarCost := solarPower * settings.SolarPowerPrice
 		totalAmount += solarCost
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("Solar Power: %.3f kWh × %.3f %s/kWh", solarPower, settings.SolarPowerPrice, settings.Currency),
+			Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh", tr.SolarPower, solarPower, settings.SolarPowerPrice, settings.Currency),
 			Quantity:    solarPower,
 			UnitPrice:   settings.SolarPowerPrice,
 			TotalPrice:  solarCost,
@@ -557,7 +587,7 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 		normalCost := normalPower * settings.NormalPowerPrice
 		totalAmount += normalCost
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("Normal Power (Grid): %.3f kWh × %.3f %s/kWh", normalPower, settings.NormalPowerPrice, settings.Currency),
+			Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh", tr.NormalPowerGrid, normalPower, settings.NormalPowerPrice, settings.Currency),
 			Quantity:    normalPower,
 			UnitPrice:   settings.NormalPowerPrice,
 			TotalPrice:  normalCost,
@@ -582,7 +612,7 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 			})
 
 			items = append(items, models.InvoiceItem{
-				Description: "Car Charging",
+				Description: tr.CarCharging,
 				Quantity:    0,
 				UnitPrice:   0,
 				TotalPrice:  0,
@@ -590,12 +620,14 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 			})
 
 			if !firstSession.IsZero() && !lastSession.IsZero() {
-				// Compact single-line charging session info
+				// Compact single-line charging session info with translations
 				totalCharged := normalCharging + priorityCharging
 				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("Period: %s - %s | Total: %.3f kWh",
+					Description: fmt.Sprintf("%s: %s - %s | %s: %.3f kWh",
+						tr.Period,
 						firstSession.Format("02.01 15:04"),
 						lastSession.Format("02.01 15:04"),
+						tr.Total,
 						totalCharged),
 					Quantity:    totalCharged,
 					UnitPrice:   0,
@@ -616,7 +648,7 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 				normalChargingCost := normalCharging * settings.CarChargingNormalPrice
 				totalAmount += normalChargingCost
 				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("Solar Mode: %.3f kWh × %.3f %s/kWh", normalCharging, settings.CarChargingNormalPrice, settings.Currency),
+					Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh", tr.SolarMode, normalCharging, settings.CarChargingNormalPrice, settings.Currency),
 					Quantity:    normalCharging,
 					UnitPrice:   settings.CarChargingNormalPrice,
 					TotalPrice:  normalChargingCost,
@@ -629,7 +661,7 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 				priorityChargingCost := priorityCharging * settings.CarChargingPriorityPrice
 				totalAmount += priorityChargingCost
 				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("Priority Mode: %.3f kWh × %.3f %s/kWh", priorityCharging, settings.CarChargingPriorityPrice, settings.Currency),
+					Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh", tr.PriorityMode, priorityCharging, settings.CarChargingPriorityPrice, settings.Currency),
 					Quantity:    priorityCharging,
 					UnitPrice:   settings.CarChargingPriorityPrice,
 					TotalPrice:  priorityChargingCost,
@@ -649,10 +681,10 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 	}
 	log.Printf("  Total active users in building: %d", totalActiveUsers)
 
-	// Calculate and add shared meter costs
+	// Calculate and add shared meter costs (pass translations)
 	log.Printf("  Checking for shared meters...")
-	sharedMeterItems, sharedMeterCost, err := bs.calculateSharedMeterCosts(
-		buildingID, start, end, userID, totalActiveUsers,
+	sharedMeterItems, sharedMeterCost, err := bs.calculateSharedMeterCostsWithTranslations(
+		buildingID, start, end, userID, totalActiveUsers, tr, settings.Currency,
 	)
 	if err != nil {
 		log.Printf("  WARNING: Failed to calculate shared meter costs: %v", err)
@@ -663,9 +695,9 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 			len(sharedMeterItems), sharedMeterCost)
 	}
 
-	// Get and add custom line items
+	// Get and add custom line items (pass translations)
 	log.Printf("  Checking for custom line items...")
-	customItems, customCost, err := bs.getCustomLineItems(buildingID)
+	customItems, customCost, err := bs.getCustomLineItemsWithTranslations(buildingID, tr)
 	if err != nil {
 		log.Printf("  WARNING: Failed to get custom line items: %v", err)
 	} else if len(customItems) > 0 {
