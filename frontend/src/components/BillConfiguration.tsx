@@ -1239,7 +1239,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                 }}
               >
                 <FileText size={18} />
-                {loading ? t('billConfig.navigation.generating') : `${t('billConfig.navigation.generate')} ${config.user_ids.length} ${config.user_ids.length === 1 ? t('billing.invoice') : t('billConfig.invoicesPlural')}`}
+                {loading ? t('billConfig.navigation.generating') : `${t('billConfig.navigation.generate')} ${config.user_ids.length} ${config.user_ids.length === 1 ? t('billing.invoice') : t('billing.invoicesPlural')}`}
               </button>
             )}
           </div>
