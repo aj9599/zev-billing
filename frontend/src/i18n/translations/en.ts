@@ -1,7 +1,9 @@
 import type { Translations } from '../index';
 
 export const en: Translations = {
-  // Navigation
+  // ============================================================================
+  // NAVIGATION
+  // ============================================================================
   'nav.dashboard': 'Dashboard',
   'nav.users': 'Users',
   'nav.buildings': 'Buildings',
@@ -14,7 +16,9 @@ export const en: Translations = {
   'nav.logout': 'Logout',
   'nav.autoBilling': 'Auto Billing',
 
-  // Common
+  // ============================================================================
+  // COMMON
+  // ============================================================================
   'common.add': 'Add',
   'common.edit': 'Edit',
   'common.delete': 'Delete',
@@ -43,8 +47,11 @@ export const en: Translations = {
   'common.recommended': 'Recommended',
   'common.unknownBuilding': 'Unknown Building',
   'common.all': 'All',
+  'common.from': 'from',
 
-  // Dashboard
+  // ============================================================================
+  // DASHBOARD
+  // ============================================================================
   'dashboard.title': 'Dashboard',
   'dashboard.subtitle': 'Real-time overview of your energy management system',
   'dashboard.totalUsers': 'Total Users',
@@ -77,18 +84,23 @@ export const en: Translations = {
   'dashboard.complex': 'Complex',
   'dashboard.complexes': 'Complexes',
 
-  // Export
+  // ============================================================================
+  // EXPORT
+  // ============================================================================
   'export.title': 'Export',
   'export.exportData': 'Export Data',
   'export.exporting': 'Exporting...',
   'export.startDate': 'Start Date',
   'export.endDate': 'End Date',
-  'export.subtitle': 'Export {{type}} data to CSV',
-  'export.filterByBuilding': 'Filter {{type}} by building',
-  'export.exportingAllFrom': 'All {{type}} from {{building}}',
+  'export.subtitle': 'Export {type} data to CSV',
+  'export.filterByBuilding': 'Filter {type} by building',
+  'export.exportingAll': 'All {type}',
+  'export.from': 'from',
 
-  // Math CAPTCHA
-  'captcha.title': '🔐 Security Check - Complete to Continue',
+  // ============================================================================
+  // MATH CAPTCHA
+  // ============================================================================
+  'captcha.title': '🔒 Security Check - Complete to Continue',
   'captcha.mathInstruction': 'Solve the math problem to continue',
   'captcha.mathFooter': 'Select the correct answer',
   'captcha.new': 'New',
@@ -96,41 +108,11 @@ export const en: Translations = {
   'captcha.success': 'Verified!',
   'captcha.tryAgain': 'Wrong, try again',
 
-  // Meters Delete Confirmation
-  'meters.deleteConfirmTitle': 'Delete Meter',
-  'meters.deleteWarning': '⚠️ Warning: This action cannot be undone',
-  'meters.deleteImpactTitle': 'What will be deleted:',
-  'meters.meterWillBeDeleted': 'The meter will be permanently removed',
-  'meters.readingsWillBeDeleted': 'readings',
-  'meters.dataRange': 'Data from',
-  'meters.dataLossWarning': 'All meter readings and historical data will be lost',
-  'meters.typeToConfirm': 'Type the meter name to confirm:',
-  'meters.typeMeterName': 'Type meter name here...',
-  'meters.understandDataLoss': 'I understand that all data will be irrevocably deleted',
-  'meters.deletePermanently': 'Delete Permanently',
-  'meters.deleteNameMismatch': 'The meter name does not match. Please type it exactly as shown.',
-  'meters.deleteCheckRequired': 'Please check the confirmation box to proceed.',
-  'meters.captchaRequired': 'Please solve the security challenge to proceed.',
-  'meters.deleteFailed': 'Failed to delete meter. Please try again.',
-
-  // Chargers Delete Confirmation
-  'chargers.deleteConfirmTitle': 'Delete Charger',
-  'chargers.deleteWarning': '⚠️ Warning: This action cannot be undone',
-  'chargers.deleteImpactTitle': 'What will be deleted:',
-  'chargers.chargerWillBeDeleted': 'The charger will be permanently removed',
-  'chargers.sessionsWillBeDeleted': 'charging sessions',
-  'chargers.dataRange': 'Data from',
-  'chargers.dataLossWarning': 'All charging sessions and historical data will be lost',
-  'chargers.typeToConfirm': 'Type the charger name to confirm:',
-  'chargers.typeChargerName': 'Type charger name here...',
-  'chargers.understandDataLoss': 'I understand that all data will be irrevocably deleted',
-  'chargers.deletePermanently': 'Delete Permanently',
-  'chargers.deleteNameMismatch': 'The charger name does not match. Please type it exactly as shown.',
-  'chargers.deleteCheckRequired': 'Please check the confirmation box to proceed.',
-  'chargers.captchaRequired': 'Please solve the security challenge to proceed.',
-  'chargers.deleteFailed': 'Failed to delete charger. Please try again.',
-
-  // Users - General
+  // ============================================================================
+  // USERS
+  // ============================================================================
+  
+  // General
   'users.title': 'Users',
   'users.subtitle': 'Manage regular users and administrators',
   'users.archivedUsersSubtitle': 'Archived and inactive users',
@@ -238,7 +220,11 @@ export const en: Translations = {
   'users.instructions.tip3': 'Regular users can charge at any building, not just their assigned one',
   'users.instructions.tip4': 'Apartment assignments help organize users and link meters to specific units',
 
-  // Buildings
+  // ============================================================================
+  // BUILDINGS
+  // ============================================================================
+  
+  // General
   'buildings.title': 'Buildings',
   'buildings.subtitle': 'Manage properties and building groups',
   'buildings.addBuilding': 'Add Building',
@@ -353,7 +339,11 @@ export const en: Translations = {
   'buildings.instructions.tip3': 'Use descriptive floor and apartment names for easier user management',
   'buildings.instructions.tip4': 'The visual apartment builder shows your building structure at a glance',
 
-  // Meters - General
+  // ============================================================================
+  // METERS
+  // ============================================================================
+  
+  // General
   'meters.title': 'Meters',
   'meters.subtitle': 'Manage your energy meters and monitor consumption',
   'meters.addMeter': 'Add Meter',
@@ -365,6 +355,22 @@ export const en: Translations = {
   'meters.saveFailed': 'Failed to save meter',
   'meters.deleteConfirm': 'Are you sure you want to delete this meter?',
   'meters.exportFailed': 'Export failed',
+
+  // Delete Confirmation
+  'meters.deleteConfirmTitle': 'Delete Meter',
+  'meters.deleteWarning': 'âš ï¸ Warning: This action cannot be undone',
+  'meters.deleteImpactTitle': 'What will be deleted:',
+  'meters.meterWillBeDeleted': 'The meter will be permanently removed',
+  'meters.readingsWillBeDeleted': 'readings',
+  'meters.dataRange': 'Data from',
+  'meters.dataLossWarning': 'All meter readings and historical data will be lost',
+  'meters.typeToConfirm': 'Type the meter name to confirm:',
+  'meters.typeMeterName': 'Type meter name here...',
+  'meters.understandDataLoss': 'I understand that all data will be irrevocably deleted',
+  'meters.deletePermanently': 'Delete Permanently',
+  'meters.deleteNameMismatch': 'The meter name does not match. Please type it exactly as shown.',
+  'meters.deleteCheckRequired': 'Please check the confirmation box to proceed.',
+  'meters.captchaRequired': 'Please solve the security challenge to proceed.',
 
   // Meter Types
   'meters.totalMeter': 'Total Meter',
@@ -383,6 +389,13 @@ export const en: Translations = {
   'meters.connectionType': 'Connection Type',
   'meters.connectionConfig': 'Connection Configuration',
   'meters.activeCollectData': 'Active (collect data)',
+  'meters.apartmentUnit': 'Apartment Unit',
+  'meters.selectApartment': 'Select Apartment',
+  'meters.apartmentHelpText': 'Link this meter permanently to an apartment unit. The system will automatically show the tenant assigned to this apartment.',
+  'meters.userOptionalHelpText': 'This is the current tenant assigned to the selected apartment. To change the tenant, go to the Users page.',
+  'meters.linkedUser': 'Linked Tenant',
+  'meters.noUserLinked': 'No tenant currently assigned to this apartment',
+  'meters.apartmentNotSelected': 'Select an apartment first to see the linked tenant',
 
   // Connection Types
   'meters.loxoneApiRecommended': 'Loxone WebSocket API (Recommended)',
@@ -431,92 +444,6 @@ export const en: Translations = {
   'meters.registerCount': 'Register Count',
   'meters.unitId': 'Unit ID',
 
-  // Instructions Modal
-  'meters.instructions.title': 'Meter Setup Instructions',
-
-  // Loxone Instructions
-  'meters.instructions.loxoneTitle': 'Loxone WebSocket API (Recommended)',
-  'meters.instructions.loxoneRecommended': 'Recommended: Modern, real-time connection to Loxone Miniserver',
-
-  'meters.instructions.loxoneUuidTitle': 'Step 1: Find Your Device UUID',
-  'meters.instructions.loxoneUuidStep1': 'Open a web browser and navigate to: http://<YOUR-LOXONE-IP>/data/LoxAPP3.json',
-  'meters.instructions.loxoneUuidStep2': 'Log in with your Loxone credentials when prompted',
-  'meters.instructions.loxoneUuidStep3': 'Search for your power meter device in the JSON file (use Ctrl+F)',
-  'meters.instructions.loxoneUuidStep4': 'Copy the UUID of your device (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)',
-  'meters.instructions.loxoneUuidExample': 'Example URL:',
-
-  'meters.instructions.loxoneSetupTitle': 'Step 2: Configure the Meter',
-  'meters.instructions.loxoneStep1': 'Click "Add Meter" and select "Loxone WebSocket API"',
-  'meters.instructions.loxoneStep2': 'Enter your Loxone Miniserver IP address',
-  'meters.instructions.loxoneStep3': 'Paste the device UUID you copied',
-  'meters.instructions.loxoneStep4': 'Enter Loxone username and password (required for authentication)',
-  'meters.instructions.loxoneStep5': 'Save the meter - the system will automatically connect',
-
-  'meters.instructions.loxoneExample': 'Configuration Example:',
-  'meters.instructions.loxoneExampleHost': 'Host: 192.168.1.100',
-  'meters.instructions.loxoneExampleDevice': 'Device UUID: 1e475b8d-017e-c7b5-ffff336efb88726d',
-  'meters.instructions.loxoneExampleCredentials': 'Username: admin / Password: your-password',
-
-  'meters.instructions.loxoneBenefits': 'Why Loxone WebSocket?',
-  'meters.instructions.loxoneBenefit1': '✓ Real-time data updates every 15 minutes',
-  'meters.instructions.loxoneBenefit2': '✓ Automatic reconnection on connection loss',
-  'meters.instructions.loxoneBenefit3': '✓ No Loxone configuration required',
-
-  // UDP Instructions
-  'meters.instructions.udpTitle': 'UDP Connection (Legacy)',
-  'meters.instructions.udpDeprecated': 'Deprecated: Use Loxone WebSocket API for new installations',
-  'meters.instructions.udpStep1': 'Add a meter with UDP connection type',
-  'meters.instructions.udpStep2': 'Note the auto-generated UUID data key',
-  'meters.instructions.udpStep3': 'In Loxone, create a Virtual Output Command',
-  'meters.instructions.udpStep4': 'Set target to server IP:8888',
-  'meters.instructions.udpStep5': 'IMPORTANT: Use the exact UUID_power_kwh key shown in the meter configuration',
-  'meters.instructions.udpExample1Title': 'Example 1 - Kitchen Meter:',
-  'meters.instructions.udpExample2Title': 'Example 2 - Living Room Meter:',
-
-  // Modbus Instructions
-  'meters.instructions.modbusTitle': 'Modbus TCP Connection',
-  'meters.instructions.modbusSetup': 'For direct Modbus TCP connections to energy meters:',
-  'meters.instructions.modbusStep1': 'Enable Modbus TCP on your meter',
-  'meters.instructions.modbusStep2': 'Find the meter\'s IP address',
-  'meters.instructions.modbusStep3': 'Check documentation for register addresses',
-  'meters.instructions.modbusStep4': 'Default port is usually 502',
-  'meters.instructions.modbusStep5': 'Configure unit ID according to your device',
-
-  // Testing Instructions
-  'meters.instructions.testingTitle': 'Testing & Verification',
-  'meters.instructions.testingIntro': 'After setup, verify your connection:',
-  'meters.instructions.testingPoint1': 'Check the meter card for connection status (green = connected)',
-  'meters.instructions.testingPoint2': 'For Loxone WebSocket: Status updates automatically every 30 seconds',
-  'meters.instructions.testingPoint3': 'Check "Last Update" time to verify data is being received',
-  'meters.instructions.testingPoint4': 'View the Dashboard to see real-time consumption data',
-
-  // Troubleshooting Instructions
-  'meters.instructions.troubleshootingTitle': 'Troubleshooting',
-  'meters.instructions.troubleshootingLoxoneWebSocket': 'Verify Loxone IP is accessible from the server',
-  'meters.instructions.troubleshootingLoxoneAuth': 'Check username/password if authentication fails',
-  'meters.instructions.troubleshootingLoxoneDevice': 'Verify device UUID is correct (copy from LoxAPP3.json)',
-  'meters.instructions.troubleshootingService': 'Check service status:',
-  'meters.instructions.troubleshootingLogs': 'View logs:',
-  'meters.instructions.troubleshootingNetwork': 'Test network connection:',
-  'meters.instructions.troubleshootingMonitor': 'Monitor meter status on the Dashboard for real-time updates',
-
-  // Meters
-  'meters.type': 'Type',
-  'meters.http': 'HTTP (Loxone Virtual Output)',
-  'meters.udp': 'UDP (Shared Port - Recommended!)',
-  'meters.endpointUrl': 'Endpoint URL',
-  'meters.powerField': 'Power Field Name',
-  'meters.powerFieldHelp': 'JSON field name that contains the power value in kWh',
-  'meters.dataKeyHelp': 'Unique key like: apart1_kwh, solar_kwh, etc.',
-  'meters.sharedPortInfo': 'Shared UDP Port: Multiple meters can share the same port! Use unique data keys to distinguish them.',
-  'meters.instructions.udpNew': 'NEW: Auto-generated UUID_power_kwh keys for each meter!',
-  'meters.instructions.udpExample3Title': 'Solar Meter:',
-  'meters.instructions.udpBenefits': 'Benefits: Unique UUID_power_kwh keys prevent conflicts, one UDP port per building, cleaner network configuration!',
-  'meters.instructions.httpTitle': 'HTTP Connection (Alternative)',
-  'meters.instructions.httpSetup': 'Loxone Virtual Output Setup:',
-  'meters.instructions.troubleshootingFirewall': 'Check firewall:',
-  'meters.instructions.troubleshootingUDP': 'UDP: Copy the auto-generated UUID_power_kwh exactly into your Loxone config!',
-
   // HTTP Meter Configuration
   'meters.httpRecommended': 'HTTP (Raspberry Pi Polls - Recommended!)',
   'meters.httpPollingInfo': 'HTTP Polling: Raspberry Pi fetches data from Loxone every 15 minutes!',
@@ -535,7 +462,58 @@ export const en: Translations = {
   'meters.httpPolling': 'Polling:',
   'meters.httpRaspberryPi': 'Raspberry Pi → GET → Loxone every 15 min',
 
-  // HTTP Instructions
+  // Legacy
+  'meters.type': 'Type',
+  'meters.http': 'HTTP (Loxone Virtual Output)',
+  'meters.udp': 'UDP (Shared Port - Recommended!)',
+  'meters.endpointUrl': 'Endpoint URL',
+  'meters.powerField': 'Power Field Name',
+  'meters.powerFieldHelp': 'JSON field name that contains the power value in kWh',
+  'meters.dataKeyHelp': 'Unique key like: apart1_kwh, solar_kwh, etc.',
+  'meters.sharedPortInfo': 'Shared UDP Port: Multiple meters can share the same port! Use unique data keys to distinguish them.',
+
+  // Instructions Modal - Loxone
+  'meters.instructions.title': 'Meter Setup Instructions',
+  'meters.instructions.loxoneTitle': 'Loxone WebSocket API (Recommended)',
+  'meters.instructions.loxoneRecommended': 'Recommended: Modern, real-time connection to Loxone Miniserver',
+  'meters.instructions.loxoneUuidTitle': 'Step 1: Find Your Device UUID',
+  'meters.instructions.loxoneUuidStep1': 'Open a web browser and navigate to: http://<YOUR-LOXONE-IP>/data/LoxAPP3.json',
+  'meters.instructions.loxoneUuidStep2': 'Log in with your Loxone credentials when prompted',
+  'meters.instructions.loxoneUuidStep3': 'Search for your power meter device in the JSON file (use Ctrl+F)',
+  'meters.instructions.loxoneUuidStep4': 'Copy the UUID of your device (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)',
+  'meters.instructions.loxoneUuidExample': 'Example URL:',
+  'meters.instructions.loxoneSetupTitle': 'Step 2: Configure the Meter',
+  'meters.instructions.loxoneStep1': 'Click "Add Meter" and select "Loxone WebSocket API"',
+  'meters.instructions.loxoneStep2': 'Enter your Loxone Miniserver IP address',
+  'meters.instructions.loxoneStep3': 'Paste the device UUID you copied',
+  'meters.instructions.loxoneStep4': 'Enter Loxone username and password (required for authentication)',
+  'meters.instructions.loxoneStep5': 'Save the meter - the system will automatically connect',
+  'meters.instructions.loxoneExample': 'Configuration Example:',
+  'meters.instructions.loxoneExampleHost': 'Host: 192.168.1.100',
+  'meters.instructions.loxoneExampleDevice': 'Device UUID: 1e475b8d-017e-c7b5-ffff336efb88726d',
+  'meters.instructions.loxoneExampleCredentials': 'Username: admin / Password: your-password',
+  'meters.instructions.loxoneBenefits': 'Why Loxone WebSocket?',
+  'meters.instructions.loxoneBenefit1': '✓ Real-time data updates every 15 minutes',
+  'meters.instructions.loxoneBenefit2': '✓ Automatic reconnection on connection loss',
+  'meters.instructions.loxoneBenefit3': '✓ No Loxone configuration required',
+
+  // Instructions Modal - UDP
+  'meters.instructions.udpTitle': 'UDP Connection (Legacy)',
+  'meters.instructions.udpDeprecated': 'Deprecated: Use Loxone WebSocket API for new installations',
+  'meters.instructions.udpStep1': 'Add a meter with UDP connection type',
+  'meters.instructions.udpStep2': 'Note the auto-generated UUID data key',
+  'meters.instructions.udpStep3': 'In Loxone, create a Virtual Output Command',
+  'meters.instructions.udpStep4': 'Set target to server IP:8888',
+  'meters.instructions.udpStep5': 'IMPORTANT: Use the exact UUID_power_kwh key shown in the meter configuration',
+  'meters.instructions.udpExample1Title': 'Example 1 - Kitchen Meter:',
+  'meters.instructions.udpExample2Title': 'Example 2 - Living Room Meter:',
+  'meters.instructions.udpNew': 'NEW: Auto-generated UUID_power_kwh keys for each meter!',
+  'meters.instructions.udpExample3Title': 'Solar Meter:',
+  'meters.instructions.udpBenefits': 'Benefits: Unique UUID_power_kwh keys prevent conflicts, one UDP port per building, cleaner network configuration!',
+
+  // Instructions Modal - HTTP
+  'meters.instructions.httpTitle': 'HTTP Connection (Alternative)',
+  'meters.instructions.httpSetup': 'Loxone Virtual Output Setup:',
   'meters.instructions.httpNew': 'NEW: HTTP Polling with Authentication - Raspberry Pi is the master!',
   'meters.instructions.httpStep1': 'Click "Add Meter" - a unique UUID_power_kwh is generated automatically',
   'meters.instructions.httpStep2': 'Enter Loxone\'s base URL/IP address (e.g., http://192.168.1.100)',
@@ -557,117 +535,48 @@ export const en: Translations = {
   'meters.instructions.httpHowItWorks': 'How it works:',
   'meters.instructions.httpPollingExplained': 'Every 15 minutes, Raspberry Pi sends GET request to Loxone',
   'meters.instructions.httpRequestFormat': '→ http://192.168.1.100/api/meter/solar_meter (with Basic Auth if configured)',
-  'meters.instructions.httpResponseFormat': '← Loxone responds with: {"a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d_power_kwh": 123.45}',
+  'meters.instructions.httpResponseFormat': '→ Loxone responds with: {"a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d_power_kwh": 123.45}',
   'meters.instructions.httpBenefits': 'Benefits:',
   'meters.instructions.httpBenefitsDesc': 'Raspberry Pi is master and controls timing, no firewall issues, reliable 15-minute polling, supports HTTP authentication, Loxone just responds!',
 
-  // Testing and Troubleshooting
+  // Instructions Modal - Modbus
+  'meters.instructions.modbusTitle': 'Modbus TCP Connection',
+  'meters.instructions.modbusSetup': 'For direct Modbus TCP connections to energy meters:',
+  'meters.instructions.modbusStep1': 'Enable Modbus TCP on your meter',
+  'meters.instructions.modbusStep2': 'Find the meter\'s IP address',
+  'meters.instructions.modbusStep3': 'Check documentation for register addresses',
+  'meters.instructions.modbusStep4': 'Default port is usually 502',
+  'meters.instructions.modbusStep5': 'Configure unit ID according to your device',
+
+  // Instructions Modal - Testing
+  'meters.instructions.testingTitle': 'Testing & Verification',
+  'meters.instructions.testingIntro': 'After setup, verify your connection:',
+  'meters.instructions.testingPoint1': 'Check the meter card for connection status (green = connected)',
+  'meters.instructions.testingPoint2': 'For Loxone WebSocket: Status updates automatically every 30 seconds',
+  'meters.instructions.testingPoint3': 'Check "Last Update" time to verify data is being received',
+  'meters.instructions.testingPoint4': 'View the Dashboard to see real-time consumption data',
   'meters.instructions.testingHttpAuth': 'For HTTP: Check logs for "HTTP request to..." with authentication status and "SUCCESS: Collected meter data"',
+
+  // Instructions Modal - Troubleshooting
+  'meters.instructions.troubleshootingTitle': 'Troubleshooting',
+  'meters.instructions.troubleshootingLoxoneWebSocket': 'Verify Loxone IP is accessible from the server',
+  'meters.instructions.troubleshootingLoxoneAuth': 'Check username/password if authentication fails',
+  'meters.instructions.troubleshootingLoxoneDevice': 'Verify device UUID is correct (copy from LoxAPP3.json)',
+  'meters.instructions.troubleshootingService': 'Check service status:',
+  'meters.instructions.troubleshootingLogs': 'View logs:',
+  'meters.instructions.troubleshootingNetwork': 'Test network connection:',
+  'meters.instructions.troubleshootingMonitor': 'Monitor meter status on the Dashboard for real-time updates',
+  'meters.instructions.troubleshootingFirewall': 'Check firewall:',
+  'meters.instructions.troubleshootingUDP': 'UDP: Copy the auto-generated UUID_power_kwh exactly into your Loxone config!',
   'meters.instructions.troubleshootingHttpAccess': 'Ensure Loxone is accessible from Raspberry Pi (test with curl or browser)',
   'meters.instructions.troubleshootingHttpAuth': 'Verify HTTP credentials if authentication is enabled',
   'meters.instructions.troubleshootingHttpMeterId': 'Check that the Meter ID in the URL path matches your Loxone configuration',
-  'meters.apartmentUnit': 'Apartment Unit',
-  'meters.selectApartment': 'Select Apartment',
-  'meters.apartmentHelpText': 'Link this meter permanently to an apartment unit. The system will automatically show the tenant assigned to this apartment.',
-  'meters.userOptionalHelpText': 'This is the current tenant assigned to the selected apartment. To change the tenant, go to the Users page.',
-  'meters.linkedUser': 'Linked Tenant',
-  'meters.noUserLinked': 'No tenant currently assigned to this apartment',
-  'meters.apartmentNotSelected': 'Select an apartment first to see the linked tenant',
 
-
-
-  // Connection types
-  'chargers.loxoneApiRecommended': 'Loxone WebSocket API (Recommended)',
-  'chargers.udpAlternative': 'UDP (Legacy)',
-
-  // Loxone configuration
-  'chargers.loxoneApiDescription': 'Real-time WebSocket connection with automatic reconnection and status monitoring',
-  'chargers.loxoneHost': 'Loxone Host (IP Address)',
-  'chargers.loxoneHostDescription': 'IP address or hostname of your Loxone Miniserver',
-  'chargers.loxoneUsername': 'Username',
-  'chargers.loxonePassword': 'Password',
-  'chargers.loxoneCredentialsDescription': 'Loxone Miniserver login credentials for WebSocket authentication',
-
-  // UUID fields
-  'chargers.loxonePowerUuid': 'Power UUID',
-  'chargers.loxoneStateUuid': 'State UUID',
-  'chargers.loxoneUserIdUuid': 'User ID UUID',
-  'chargers.loxoneModeUuid': 'Mode UUID',
-  'chargers.loxoneUuidsDescription': 'Find these UUIDs in Loxone Config or in the LoxAPP3.json structure file',
-
-  // Connection status
-  'chargers.loxoneConnected': 'Loxone Connected',
-  'chargers.loxoneDisconnected': 'Loxone Disconnected',
-  'chargers.loxoneConnecting': 'Connecting to Loxone...',
-  'chargers.lastUpdate': 'Last Update',
-
-  // Setup guide
-  'chargers.loxoneSetupGuide': 'Quick Setup Guide:',
-  'chargers.loxoneSetupStep1': '1. Enter your Loxone Miniserver IP address',
-  'chargers.loxoneSetupStep2': '2. Enter the 4 UUIDs for power, state, user ID, and mode',
-  'chargers.loxoneSetupStep3': '3. Provide Loxone credentials (same as Loxone Config login)',
-  'chargers.loxoneSetupStep4': '4. Configure state and mode value mappings below',
-
-  // Features
-  'chargers.loxoneFeatures': 'Key Features:',
-  'chargers.loxoneFeature1': '✓ Real-time bidirectional communication',
-  'chargers.loxoneFeature2': '✓ Automatic reconnection on connection loss',
-  'chargers.loxoneFeature3': '✓ Connection status monitoring',
-
-  // Instructions modal
-  'chargers.instructions.title': 'Charger Setup Instructions',
-  'chargers.instructions.loxoneTitle': 'Loxone WebSocket API Connection',
-  'chargers.instructions.loxoneRecommended': 'Recommended: Best performance and reliability',
-  'chargers.instructions.loxoneChargerRequires': 'Each charger requires 4 separate UUIDs from your Loxone system:',
-  'chargers.instructions.loxonePowerUuid': 'Power UUID - Current power consumption value',
-  'chargers.instructions.loxoneStateUuid': 'State UUID - Charger state (cable locked, charging, idle, etc.)',
-  'chargers.instructions.loxoneUserIdUuid': 'User ID UUID - Authenticated user identifier',
-  'chargers.instructions.loxoneModeUuid': 'Mode UUID - Charging mode (normal or priority)',
-
-  'chargers.instructions.loxoneFindingUuid': 'How to Find UUIDs:',
-  'chargers.instructions.loxoneUuidStep1': '1. Open Loxone Config and connect to your Miniserver',
-  'chargers.instructions.loxoneUuidStep2': '2. Find your charger\'s virtual outputs in the programming',
-  'chargers.instructions.loxoneUuidStep3': '3. Right-click each output and select "Copy UUID"',
-  'chargers.instructions.loxoneUuidStep4': '4. Alternatively, browse to http://YOUR_MINISERVER_IP/data/LoxAPP3.json to see all UUIDs',
-
-  'chargers.instructions.loxoneSetupTitle': 'Configuration Steps:',
-  'chargers.instructions.loxoneStep1': '1. Select "Loxone WebSocket API" as connection type',
-  'chargers.instructions.loxoneStep2': '2. Enter your Miniserver IP address (e.g., 192.168.1.100)',
-  'chargers.instructions.loxoneStep3': '3. Paste the 4 UUIDs for power, state, user ID, and mode',
-  'chargers.instructions.loxoneStep4': '4. Enter your Loxone username and password',
-  'chargers.instructions.loxoneStep5': '5. Configure state and mode value mappings based on your charger',
-
-  'chargers.instructions.loxoneExample': 'Example Configuration:',
-  'chargers.instructions.loxoneExampleHost': 'Host: 192.168.1.100',
-  'chargers.instructions.loxoneExampleUuids': 'UUIDs: 4 separate UUIDs for power, state, user_id, and mode',
-  'chargers.instructions.loxoneExampleCredentials': 'Username/Password: Your Loxone Config credentials',
-
-  'chargers.instructions.loxoneBenefits': 'Benefits:',
-  'chargers.instructions.loxoneBenefit1': '✓ Real-time updates via WebSocket',
-  'chargers.instructions.loxoneBenefit2': '✓ Automatic reconnection on connection loss',
-  'chargers.instructions.loxoneBenefit3': '✓ Live connection status monitoring',
-
-  'chargers.instructions.udpTitle': 'UDP Connection (Legacy)',
-  'chargers.instructions.udpDeprecated': 'UDP is deprecated. Use Loxone WebSocket API for better reliability.',
-  'chargers.instructions.udpDescription': 'UDP connection requires unique auto-generated keys for each charger. Not recommended for new installations.',
-
-  'chargers.instructions.stateAndModeTitle': 'State and Mode Value Mappings',
-  'chargers.instructions.stateModeDescription': 'Configure the numeric values your charger uses for different states and modes',
-  'chargers.instructions.stateModeInfo': 'These values are specific to your charger brand. Check your charger documentation or use the preset defaults.',
-
-  'chargers.instructions.troubleshootingTitle': 'Troubleshooting',
-  'chargers.instructions.troubleshootingLoxoneWebSocket': 'Verify Miniserver IP is reachable and WebSocket is enabled',
-  'chargers.instructions.troubleshootingLoxoneAuth': 'Check username/password are correct (same as Loxone Config)',
-  'chargers.instructions.troubleshootingLoxoneUuids': 'Verify all 4 UUIDs are correct and exist in your Loxone configuration',
-  'chargers.instructions.troubleshootingService': 'Check service logs:',
-  'chargers.instructions.troubleshootingLogs': 'View real-time logs:',
-  'chargers.instructions.troubleshootingNetwork': 'Test network connectivity:',
-  'chargers.instructions.troubleshootingMonitor': 'Monitor the connection status indicators on each charger card',
-
-  // Warnings
-  'chargers.udpDeprecatedWarning': 'UDP connection is deprecated. Consider migrating to Loxone WebSocket API.',
-
-  // Chargers
+  // ============================================================================
+  // CHARGERS
+  // ============================================================================
+  
+  // General
   'chargers.title': 'Car Chargers',
   'chargers.subtitle': 'Manage EV charging infrastructure',
   'chargers.addCharger': 'Add Charger',
@@ -681,9 +590,79 @@ export const en: Translations = {
   'chargers.currentMode': 'Current Mode',
   'chargers.noChargers': 'No chargers found. Click "Setup Instructions" to learn how to configure your first charger.',
   'chargers.brandPreset': 'Brand / Preset',
-  'chargers.weidmuller': 'Weidmüller',
-  'chargers.weidmullerHelp': 'Weidmüller chargers require 4 data points: power, state, user ID, and mode',
-  'chargers.connectionConfig': 'Connection Configuration (Weidmüller - 4 Data Points)',
+  'chargers.weidmuller': 'WeidmÃ¼ller',
+  'chargers.weidmullerHelp': 'WeidmÃ¼ller chargers require 4 data points: power, state, user ID, and mode',
+  'chargers.connectionConfig': 'Connection Configuration (WeidmÃ¼ller - 4 Data Points)',
+  'chargers.deleteConfirm': 'Are you sure you want to delete this charger?',
+  'chargers.saveFailed': 'Failed to save charger',
+  'chargers.exportFailed': 'Failed to export data',
+  'chargers.chargersCount': 'chargers',
+  'chargers.chargers': 'chargers',
+  'chargers.connection': 'Connection',
+  'chargers.priorityMode': 'Priority Mode',
+  'chargers.supported': 'Supported',
+
+  // Delete Confirmation
+  'chargers.captchaRequired': 'Please solve the security challenge to proceed.',
+
+  // Connection Types
+  'chargers.loxoneApiRecommended': 'Loxone WebSocket API (Recommended)',
+  'chargers.udpAlternative': 'UDP (Legacy)',
+
+  // Loxone Configuration
+  'chargers.loxoneApiDescription': 'Real-time WebSocket connection with automatic reconnection and status monitoring',
+  'chargers.loxoneHost': 'Loxone Host (IP Address)',
+  'chargers.loxoneHostDescription': 'IP address or hostname of your Loxone Miniserver',
+  'chargers.loxoneUsername': 'Username',
+  'chargers.loxonePassword': 'Password',
+  'chargers.loxoneCredentialsDescription': 'Loxone Miniserver login credentials for WebSocket authentication',
+
+  // UUID Fields
+  'chargers.loxonePowerUuid': 'Power UUID',
+  'chargers.loxoneStateUuid': 'State UUID',
+  'chargers.loxoneUserIdUuid': 'User ID UUID',
+  'chargers.loxoneModeUuid': 'Mode UUID',
+  'chargers.loxoneUuidsDescription': 'Find these UUIDs in Loxone Config or in the LoxAPP3.json structure file',
+
+  // Connection Status
+  'chargers.loxoneConnected': 'Loxone Connected',
+  'chargers.loxoneDisconnected': 'Loxone Disconnected',
+  'chargers.loxoneConnecting': 'Connecting to Loxone...',
+  'chargers.lastUpdate': 'Last Update',
+
+  // Setup Guide
+  'chargers.loxoneSetupGuide': 'Quick Setup Guide:',
+  'chargers.loxoneSetupStep1': '1. Enter your Loxone Miniserver IP address',
+  'chargers.loxoneSetupStep2': '2. Enter the 4 UUIDs for power, state, user ID, and mode',
+  'chargers.loxoneSetupStep3': '3. Provide Loxone credentials (same as Loxone Config login)',
+  'chargers.loxoneSetupStep4': '4. Configure state and mode value mappings below',
+
+  // Features
+  'chargers.loxoneFeatures': 'Key Features:',
+  'chargers.loxoneFeature1': '✓ Real-time bidirectional communication',
+  'chargers.loxoneFeature2': '✓ Automatic reconnection on connection loss',
+  'chargers.loxoneFeature3': '✓ Connection status monitoring',
+
+  // Charger Setup
+  'chargers.chargerSetup': 'Charger Setup',
+  'chargers.requiresFourDataPoints': 'Chargers require 4 data points with UUID keys:',
+  'chargers.powerUuidPower': 'Power (UUID_power)',
+  'chargers.powerDescription': 'Current power consumption in kWh',
+  'chargers.stateUuidState': 'State (UUID_state)',
+  'chargers.stateDescription': 'Charging state as numeric value (e.g., 65=cable locked, 67=charging)',
+  'chargers.userIdUuidUser': 'User ID (UUID_user)',
+  'chargers.userIdDescription': 'Which user is using the charger',
+  'chargers.modeUuidMode': 'Mode (UUID_mode)',
+  'chargers.modeDescription': 'Charging mode as numeric value (e.g., 1=Solar, 2=priority)',
+
+  // UDP Connection
+  'chargers.udpConnection': 'UDP Connection (Recommended)',
+  'chargers.autoGeneratedUuidKeys': 'Auto-generated UUID keys for all 4 data points!',
+  'chargers.existingUuidKeys': 'Existing UUID keys',
+  'chargers.udpInstructions': 'Click "Add Charger" to generate unique UUIDs, use the same UDP port as your meters, send all 4 data points with their UUID keys.',
+  'chargers.udpDeprecatedWarning': 'UDP connection is deprecated. Consider migrating to Loxone WebSocket API.',
+
+  // Endpoints & Registers
   'chargers.powerEndpoint': 'Power Consumed Endpoint',
   'chargers.stateEndpoint': 'State Endpoint',
   'chargers.userIdEndpoint': 'User ID Endpoint',
@@ -699,10 +678,16 @@ export const en: Translations = {
   'chargers.modeKey': 'Mode Key',
   'chargers.supportsPriority': 'Supports Priority Charging',
   'chargers.sharedPortInfo': 'Shared UDP Port: Chargers can share the same port as meters! Use unique JSON keys for the 4 data points.',
-  'chargers.deleteConfirm': 'Are you sure you want to delete this charger?',
-  'chargers.saveFailed': 'Failed to save charger',
-  'chargers.exportFailed': 'Failed to export data',
-  'chargers.chargersCount': 'chargers',
+  'chargers.loxoneSendsTo': 'Loxone sends to port',
+  'chargers.powerReg': 'Power Reg',
+  'chargers.stateReg': 'State Reg',
+  'chargers.userReg': 'User Reg',
+  'chargers.modeReg': 'Mode Reg',
+
+  // State and Mode Value Mappings
+  'chargers.stateAndModeValues': 'State & Mode Value Mappings',
+  'chargers.configureNumericValues': 'Configure numeric values for states and modes',
+  'chargers.valueMappingsDescription': 'These mappings tell the system how to interpret the numeric values your charger sends.',
   'chargers.stateValueMappings': 'State Value Mappings',
   'chargers.configureStateValues': 'Configure the numeric values your charger sends for each state:',
   'chargers.stateCableLocked': 'Cable Locked',
@@ -713,6 +698,8 @@ export const en: Translations = {
   'chargers.configureModeValues': 'Configure the numeric values your charger sends for each charging mode:',
   'chargers.modeNormal': 'Solar Mode',
   'chargers.modePriority': 'Priority Mode',
+
+  // State & Mode Labels
   'chargers.state.cableLocked': 'Cable Locked',
   'chargers.state.waitingAuth': 'Waiting for Auth',
   'chargers.state.charging': 'Charging',
@@ -721,34 +708,55 @@ export const en: Translations = {
   'chargers.mode.normal': 'Solar',
   'chargers.mode.priority': 'Priority',
   'chargers.mode.unknown': 'Unknown',
-  'chargers.chargerSetup': 'Charger Setup',
-  'chargers.requiresFourDataPoints': 'Chargers require 4 data points with UUID keys:',
-  'chargers.powerUuidPower': 'Power (UUID_power)',
-  'chargers.powerDescription': 'Current power consumption in kWh',
-  'chargers.stateUuidState': 'State (UUID_state)',
-  'chargers.stateDescription': 'Charging state as numeric value (e.g., 65=cable locked, 67=charging)',
-  'chargers.userIdUuidUser': 'User ID (UUID_user)',
-  'chargers.userIdDescription': 'Which user is using the charger',
-  'chargers.modeUuidMode': 'Mode (UUID_mode)',
-  'chargers.modeDescription': 'Charging mode as numeric value (e.g., 1=Solar, 2=priority)',
-  'chargers.udpConnection': 'UDP Connection (Recommended)',
-  'chargers.autoGeneratedUuidKeys': 'Auto-generated UUID keys for all 4 data points!',
-  'chargers.existingUuidKeys': 'Existing UUID keys',
-  'chargers.udpInstructions': 'Click "Add Charger" to generate unique UUIDs, use the same UDP port as your meters, send all 4 data points with their UUID keys.',
-  'chargers.stateAndModeValues': 'State & Mode Value Mappings',
-  'chargers.configureNumericValues': 'Configure numeric values for states and modes',
-  'chargers.valueMappingsDescription': 'These mappings tell the system how to interpret the numeric values your charger sends.',
-  'chargers.loxoneSendsTo': 'Loxone sends to port',
-  'chargers.powerReg': 'Power Reg',
-  'chargers.stateReg': 'State Reg',
-  'chargers.userReg': 'User Reg',
-  'chargers.modeReg': 'Mode Reg',
-  'chargers.connection': 'Connection',
-  'chargers.priorityMode': 'Priority Mode',
-  'chargers.supported': 'Supported',
-  'chargers.chargers': 'chargers',
 
-  // Billing
+  // Instructions Modal
+  'chargers.instructions.title': 'Charger Setup Instructions',
+  'chargers.instructions.loxoneTitle': 'Loxone WebSocket API Connection',
+  'chargers.instructions.loxoneRecommended': 'Recommended: Best performance and reliability',
+  'chargers.instructions.loxoneChargerRequires': 'Each charger requires 4 separate UUIDs from your Loxone system:',
+  'chargers.instructions.loxonePowerUuid': 'Power UUID - Current power consumption value',
+  'chargers.instructions.loxoneStateUuid': 'State UUID - Charger state (cable locked, charging, idle, etc.)',
+  'chargers.instructions.loxoneUserIdUuid': 'User ID UUID - Authenticated user identifier',
+  'chargers.instructions.loxoneModeUuid': 'Mode UUID - Charging mode (normal or priority)',
+  'chargers.instructions.loxoneFindingUuid': 'How to Find UUIDs:',
+  'chargers.instructions.loxoneUuidStep1': '1. Open Loxone Config and connect to your Miniserver',
+  'chargers.instructions.loxoneUuidStep2': '2. Find your charger\'s virtual outputs in the programming',
+  'chargers.instructions.loxoneUuidStep3': '3. Right-click each output and select "Copy UUID"',
+  'chargers.instructions.loxoneUuidStep4': '4. Alternatively, browse to http://YOUR_MINISERVER_IP/data/LoxAPP3.json to see all UUIDs',
+  'chargers.instructions.loxoneSetupTitle': 'Configuration Steps:',
+  'chargers.instructions.loxoneStep1': '1. Select "Loxone WebSocket API" as connection type',
+  'chargers.instructions.loxoneStep2': '2. Enter your Miniserver IP address (e.g., 192.168.1.100)',
+  'chargers.instructions.loxoneStep3': '3. Paste the 4 UUIDs for power, state, user ID, and mode',
+  'chargers.instructions.loxoneStep4': '4. Enter your Loxone username and password',
+  'chargers.instructions.loxoneStep5': '5. Configure state and mode value mappings based on your charger',
+  'chargers.instructions.loxoneExample': 'Example Configuration:',
+  'chargers.instructions.loxoneExampleHost': 'Host: 192.168.1.100',
+  'chargers.instructions.loxoneExampleUuids': 'UUIDs: 4 separate UUIDs for power, state, user_id, and mode',
+  'chargers.instructions.loxoneExampleCredentials': 'Username/Password: Your Loxone Config credentials',
+  'chargers.instructions.loxoneBenefits': 'Benefits:',
+  'chargers.instructions.loxoneBenefit1': '✓ Real-time updates via WebSocket',
+  'chargers.instructions.loxoneBenefit2': '✓ Automatic reconnection on connection loss',
+  'chargers.instructions.loxoneBenefit3': '✓ Live connection status monitoring',
+  'chargers.instructions.udpTitle': 'UDP Connection (Legacy)',
+  'chargers.instructions.udpDeprecated': 'UDP is deprecated. Use Loxone WebSocket API for better reliability.',
+  'chargers.instructions.udpDescription': 'UDP connection requires unique auto-generated keys for each charger. Not recommended for new installations.',
+  'chargers.instructions.stateAndModeTitle': 'State and Mode Value Mappings',
+  'chargers.instructions.stateModeDescription': 'Configure the numeric values your charger uses for different states and modes',
+  'chargers.instructions.stateModeInfo': 'These values are specific to your charger brand. Check your charger documentation or use the preset defaults.',
+  'chargers.instructions.troubleshootingTitle': 'Troubleshooting',
+  'chargers.instructions.troubleshootingLoxoneWebSocket': 'Verify Miniserver IP is reachable and WebSocket is enabled',
+  'chargers.instructions.troubleshootingLoxoneAuth': 'Check username/password are correct (same as Loxone Config)',
+  'chargers.instructions.troubleshootingLoxoneUuids': 'Verify all 4 UUIDs are correct and exist in your Loxone configuration',
+  'chargers.instructions.troubleshootingService': 'Check service logs:',
+  'chargers.instructions.troubleshootingLogs': 'View real-time logs:',
+  'chargers.instructions.troubleshootingNetwork': 'Test network connectivity:',
+  'chargers.instructions.troubleshootingMonitor': 'Monitor the connection status indicators on each charger card',
+
+  // ============================================================================
+  // BILLING
+  // ============================================================================
+  
+  // General
   'billing.title': 'Billing & Invoices',
   'billing.subtitle': 'Manage invoices and billing for all buildings',
   'billing.generateBills': 'Generate Bills',
@@ -763,14 +771,13 @@ export const en: Translations = {
   'billing.atLeastOne': 'at least one',
   'billing.selectUsers': 'Select Users (Optional)',
   'billing.leaveEmptyForAll': 'Leave empty for all users',
-
-  // FIX 6: Missing translations
   'billing.onlyActiveUsers': 'Only active users shown - archived users are excluded',
   'billing.noActiveUsers': 'No active users in selected buildings',
   'billing.autoFilled': 'Auto-filled from admin',
-
   'billing.startDate': 'Start Date',
   'billing.endDate': 'End Date',
+
+  // Sender Information
   'billing.senderInfo': 'Sender Information',
   'billing.senderName': 'Name',
   'billing.senderNamePlaceholder': 'Your name or company name',
@@ -780,6 +787,8 @@ export const en: Translations = {
   'billing.zipPlaceholder': '8000',
   'billing.city': 'City',
   'billing.cityPlaceholder': 'Zurich',
+
+  // Banking Information
   'billing.bankingInfo': 'Banking Information',
   'billing.bankName': 'Bank Name',
   'billing.bankNamePlaceholder': 'Your bank name',
@@ -788,6 +797,8 @@ export const en: Translations = {
   'billing.accountHolder': 'Account Holder',
   'billing.accountHolderPlaceholder': 'Account holder name',
   'billing.qrNote': 'Banking information is optional but required for Swiss QR bill generation',
+
+  // Actions & Messages
   'billing.generating': 'Generating...',
   'billing.selectAtLeastOne': 'Please select at least one building',
   'billing.generatedSuccess': 'Bills generated successfully',
@@ -797,6 +808,8 @@ export const en: Translations = {
   'billing.deleteConfirm': 'Are you sure you want to delete this invoice?',
   'billing.deleteSuccess': 'Invoice deleted successfully',
   'billing.deleteFailed': 'Failed to delete invoice',
+
+  // Invoice Display
   'billing.invoiceNumber': 'Invoice Number',
   'billing.user': 'User',
   'billing.period': 'Period',
@@ -818,6 +831,15 @@ export const en: Translations = {
   'billing.downloadPdf': 'Download PDF',
   'billing.archived': 'Archived',
   'billing.archiveSection': 'Archive (Archived Users)',
+
+  // Tabs
+  'billing.tabs.invoices': 'Invoices',
+  'billing.tabs.sharedMeters': 'Shared Meters',
+  'billing.tabs.customItems': 'Custom Items',
+  'billing.createBill': 'Create Bill',
+  'billing.allBuildingsDesc': 'All invoices',
+  'billing.allBuildingsDescSharedMeters': 'All shared meter',
+  'billing.allBuildingsDescCustomItems': 'All custom line items',
 
   // Instructions
   'billing.instructions.title': 'How to Use Billing',
@@ -855,168 +877,61 @@ export const en: Translations = {
   'billing.instructions.tip4': 'Use the view function to check invoice details before downloading',
   'billing.instructions.tip5': 'Swiss QR bills can be scanned by banking apps for easy payment',
 
-  // Shared Meters Configuration
-  'sharedMeters.title': 'Shared Meter Configuration',
-  'sharedMeters.subtitle': 'Configure shared meters and how their costs are split among users',
-  'sharedMeters.loading': 'Loading shared meter configurations...',
-  'sharedMeters.addNew': 'Add Shared Meter',
-  'sharedMeters.infoTitle': 'About Shared Meters:',
-  'sharedMeters.infoDescription': 'Shared meters track common-area electricity (hallways, elevators, parking, etc.) that is split among multiple users. Configure how costs are divided using equal split, area-based, or custom percentages.',
-  'sharedMeters.noConfigs': 'No shared meters configured yet',
-  'sharedMeters.noConfigsDescription': 'Click "Add Shared Meter" to create your first configuration',
-  'sharedMeters.meterName': 'Meter Name',
-  'sharedMeters.building': 'Building',
-  'sharedMeters.splitType.label': 'Split Type',
-  'sharedMeters.splitType.equal': 'Equal Split',
-  'sharedMeters.splitType.byArea': 'By Area',
-  'sharedMeters.splitType.byUnits': 'By Units',
-  'sharedMeters.splitType.custom': 'Custom',
-  'sharedMeters.splitTypeDesc.equal': 'Cost is split equally among all active users in the building',
-  'sharedMeters.splitTypeDesc.byArea': 'Cost is proportional to apartment area (requires area data)',
-  'sharedMeters.splitTypeDesc.byUnits': 'Cost is proportional to number of units (requires unit count)',
-  'sharedMeters.splitTypeDesc.custom': 'Custom percentage split for each user (requires configuration)',
-  'sharedMeters.unitPrice': 'Unit Price',
-  'sharedMeters.meter': 'Meter',
-  'sharedMeters.selectBuilding': 'Select a building...',
-  'sharedMeters.selectMeter': 'Select a meter...',
-  'sharedMeters.noMetersFound': 'No building-level meters found for this building',
-  'sharedMeters.createTitle': 'Add Shared Meter',
-  'sharedMeters.createSubtitle': 'Configure a new shared meter for your building',
-  'sharedMeters.editTitle': 'Edit Shared Meter',
-  'sharedMeters.editSubtitle': 'Update shared meter configuration',
-  'sharedMeters.fillAllFields': 'Please fill in all required fields',
-  'sharedMeters.createSuccess': 'Shared meter configuration created successfully',
-  'sharedMeters.updateSuccess': 'Shared meter configuration updated successfully',
-  'sharedMeters.deleteSuccess': 'Shared meter configuration deleted successfully',
-  'sharedMeters.saveFailed': 'Failed to save shared meter configuration',
-  'sharedMeters.deleteFailed': 'Failed to delete shared meter configuration',
-  'sharedMeters.loadFailed': 'Failed to load shared meter configurations',
-  'sharedMeters.deleteConfirm': 'Are you sure you want to delete this shared meter configuration?',
-
-  // Custom Items
-  'customItems.title': 'Manage Custom Line Items',
-  'customItems.subtitle': 'Add custom charges like meter rental, maintenance fees, and other recurring items',
-  'customItems.selectBuilding': 'Select Building',
-  'customItems.selectBuildingPlaceholder': 'Select a building',
-  'customItems.loading': 'Loading...',
-  'customItems.addNew': 'Add New Custom Item',
-  'customItems.editItem': 'Edit Custom Item',
-  'customItems.newItem': 'New Custom Item',
-  'customItems.description': 'Description',
-  'customItems.descriptionPlaceholder': 'e.g., Monthly maintenance fee',
-  'customItems.amount': 'Amount',
-  'customItems.category.label': 'Category',
-  'customItems.category.meterRent': 'Meter Rent',
-  'customItems.category.maintenance': 'Maintenance',
-  'customItems.category.service': 'Service',
-  'customItems.category.other': 'Other',
-  'customItems.frequency.label': 'Frequency',
-  'customItems.frequency.once': 'One-time',
-  'customItems.frequency.monthly': 'Monthly',
-  'customItems.frequency.quarterly': 'Quarterly',
-  'customItems.frequency.yearly': 'Yearly',
-  'customItems.frequencyHelp.once': 'Added once to the first bill in the period',
-  'customItems.frequencyHelp.monthly': 'Multiplied by the number of months in the billing period',
-  'customItems.frequencyHelp.quarterly': 'Multiplied by the number of quarters in the billing period',
-  'customItems.frequencyHelp.yearly': 'Multiplied by the number of years in the billing period',
-  'customItems.active': 'Active (will be included in bills)',
-  'customItems.inactive': 'Inactive (will not be included in bills)',
-  'customItems.inactiveLabel': 'Inactive',
-  'customItems.itemsForBuilding': 'Custom Items for Building',
-  'customItems.item': 'item',
-  'customItems.items': 'items',
-  'customItems.noItems': 'No custom items found',
-  'customItems.noItemsDescription': 'Click "Add New Custom Item" to create one.',
-  'customItems.validation.descriptionRequired': 'Description is required',
-  'customItems.validation.descriptionTooLong': 'Description must be less than 200 characters',
-  'customItems.validation.amountPositive': 'Amount must be greater than 0',
-  'customItems.validation.amountTooLarge': 'Amount is too large',
-  'customItems.validation.fixErrors': 'Please fix the errors in the form',
-  'customItems.validation.selectBuilding': 'Please select a building',
-  'customItems.createSuccess': 'Custom item created successfully',
-  'customItems.updateSuccess': 'Custom item updated successfully',
-  'customItems.deleteSuccess': 'Custom item deleted successfully',
-  'customItems.saveFailed': 'Failed to save custom item',
-  'customItems.deleteFailed': 'Failed to delete custom item',
-  'customItems.loadBuildingsFailed': 'Failed to load buildings',
-  'customItems.loadItemsFailed': 'Failed to load custom items',
-  'customItems.deleteConfirm': 'Are you sure you want to delete this custom item? This action cannot be undone.',
-
-  // Bill Configuration (Advanced)
+  // ============================================================================
+  // BILL CONFIGURATION (Advanced Multi-Step Modal)
+  // ============================================================================
+  
+  // General
   'billConfig.title': 'Advanced Bill Configuration',
+  
+  // Steps
   'billConfig.steps.selection': 'Selection',
+  'billConfig.steps.dates': 'Dates',
   'billConfig.steps.meters': 'Meters',
   'billConfig.steps.items': 'Items',
   'billConfig.steps.review': 'Review',
+  
+  // Step 1: Building & Apartment Selection
   'billConfig.step1.title': 'Select Buildings, Users & Period',
-  'billConfig.step1.billingPeriod': 'Billing Period',
-  'billConfig.step1.startDate': 'Start Date',
-  'billConfig.step1.endDate': 'End Date',
   'billConfig.step1.selectBuildings': 'Select Buildings',
-  'billConfig.step1.selectUsers': 'Select Users',
-  'billConfig.step1.selected': 'selected',
+  'billConfig.step1.selectApartments': 'Select Apartments/Users',
   'billConfig.step1.selectAllActive': 'Select All Active',
   'billConfig.step1.selectBuildingFirst': 'Select a building first',
-  'billConfig.step1.noUsersFound': 'No users found',
-  'billConfig.step1.archived': 'Archived',
-  'billConfig.step2.title': 'Shared Meters (Optional)',
-  'billConfig.step2.description': 'Select which shared meters to include in the invoices. Leave empty to skip.',
-  'billConfig.step2.noMeters': 'No shared meters configured for selected buildings',
-  'billConfig.step2.split': 'split',
-  'billConfig.step2.selected': 'Selected',
-  'billConfig.step2.meters': 'shared meter(s)',
-  'billConfig.step3.title': 'Custom Line Items (Optional)',
-  'billConfig.step3.description': 'Add custom charges like meter rental, maintenance fees, etc.',
-  'billConfig.step3.noItems': 'No custom line items configured for selected buildings',
-  'billConfig.step3.selected': 'Selected',
-  'billConfig.step3.items': 'custom item(s)',
-  'billConfig.step4.title': 'Review & Sender Information',
-  'billConfig.step4.summary': 'Summary',
-  'billConfig.step4.period': 'Period',
-  'billConfig.step4.to': 'to',
-  'billConfig.step4.buildings': 'Buildings',
-  'billConfig.step4.users': 'Users',
-  'billConfig.step4.sharedMeters': 'Shared Meters',
-  'billConfig.step4.customItems': 'Custom Items',
-  'billConfig.step4.estimatedInvoices': 'Estimated Invoices',
-  'billConfig.step4.senderInfo': 'Sender Information',
-  'billConfig.step4.name': 'Name',
-  'billConfig.step4.address': 'Address',
-  'billConfig.step4.zip': 'ZIP',
-  'billConfig.step4.city': 'City',
-  'billConfig.step4.bankingInfo': 'Banking Information',
-  'billConfig.step4.bankName': 'Bank Name',
-  'billConfig.step4.iban': 'IBAN',
-  'billConfig.step4.accountHolder': 'Account Holder',
-  'billConfig.navigation.previous': 'Previous',
-  'billConfig.navigation.next': 'Next',
-  'billConfig.navigation.generating': 'Generating...',
-  'billConfig.navigation.generate': 'Generate',
-  'billConfig.validation.selectDates': 'Please select start and end dates',
-  'billConfig.validation.selectBuilding': 'Please select at least one building',
-  'billConfig.validation.selectUser': 'Please select at least one user',
-  'billConfig.successMessage': 'Successfully generated',
-  'billConfig.errorMessage': 'Failed to generate bills',
-  'billConfig.step1.selectApartments': 'Select Apartments/Users',
+  'billConfig.step1.noApartmentsFound': 'No apartments found',
+  'billConfig.step1.selected': 'selected',
   'billConfig.step1.apartment': 'apartment',
   'billConfig.step1.apartments': 'apartments',
   'billConfig.step1.apartmentLabel': 'Apartment',
-  'billConfig.step1.selectedSummary': 'Selected Summary',
   'billConfig.step1.user': 'user',
   'billConfig.step1.users': 'users',
-  'billConfig.steps.dates': 'Dates',
+  'billConfig.step1.noUserAssigned': 'No user assigned',
+  'billConfig.step1.archived': 'Archived',
+  'billConfig.step1.selectedSummary': 'Selected Summary',
+
+  // Step 2: Billing Period
   'billConfig.step2.titleNew': 'Billing Period',
   'billConfig.step2.selectPeriod': 'Select Billing Period',
   'billConfig.step2.startDate': 'Start Date',
   'billConfig.step2.endDate': 'End Date',
   'billConfig.step2.periodSummary': 'Period Summary',
   'billConfig.step2.days': 'days',
+
+  // Step 3: Shared Meters
+  'billConfig.step3.title': 'Shared Meters (Optional)',
+  'billConfig.step3.description': 'Select which shared meters to include in the invoices. Leave empty to skip.',
   'billConfig.step3.noMeters': 'No shared meters configured for selected buildings',
+  'billConfig.step3.split': 'split',
+  'billConfig.step3.selected': 'Selected',
   'billConfig.step3.meters': 'meters',
+
+  // Step 4: Custom Items
+  'billConfig.step4.title': 'Custom Line Items (Optional)',
+  'billConfig.step4.description': 'Select optional custom line items to include in the invoices.',
   'billConfig.step4.noItems': 'No custom items configured for selected buildings',
   'billConfig.step4.selected': 'Selected',
   'billConfig.step4.items': 'items',
-  'billConfig.step4.description': 'Select optional custom line items to include in the invoices.',
+
+  // Step 5: Review & Sender Info
   'billConfig.step5.title': 'Review & Finalize',
   'billConfig.step5.summary': 'Billing Summary',
   'billConfig.step5.period': 'Period',
@@ -1037,28 +952,155 @@ export const en: Translations = {
   'billConfig.step5.iban': 'IBAN',
   'billConfig.step5.accountHolder': 'Account Holder',
 
-  'billing.tabs.invoices': 'Invoices',
-  'billing.tabs.sharedMeters': 'Shared Meters',
-  'billing.tabs.customItems': 'Custom Items',
-  'billing.createBill': 'Create Bill',
-  'billing.allBuildingsDesc': 'All invoices',
-  'billing.allBuildingsDescSharedMeters': 'All shared meter',
-  'billing.allBuildingsDescCustomItems': 'All custom line items',
+  // Navigation
+  'billConfig.navigation.previous': 'Previous',
+  'billConfig.navigation.next': 'Next',
+  'billConfig.navigation.generating': 'Generating...',
+  'billConfig.navigation.generate': 'Generate',
 
-  'customItems.editSubtitle': 'Update the details of this custom line item',
-  'customItems.createSubtitle': 'Add a new custom charge to be included in invoices',
-  'customItems.organizedByBuilding': 'Custom Items by Building',
-  'customItems.noItemsForBuilding': 'No items for this building',
-  'customItems.buildingSection': 'Building: {name}',
+  // Validation
+  'billConfig.validation.selectDates': 'Please select start and end dates',
+  'billConfig.validation.selectBuilding': 'Please select at least one building',
+  'billConfig.validation.selectUser': 'Please select at least one user',
 
+  // Messages
+  'billConfig.successMessage': 'Successfully generated',
+  'billConfig.errorMessage': 'Failed to generate bills',
+
+  // ============================================================================
+  // SHARED METERS CONFIGURATION
+  // ============================================================================
+  
+  // General
+  'sharedMeters.title': 'Shared Meter Configuration',
+  'sharedMeters.subtitle': 'Configure shared meters and how their costs are split among users',
+  'sharedMeters.loading': 'Loading shared meter configurations...',
+  'sharedMeters.addNew': 'Add Shared Meter',
+  'sharedMeters.infoTitle': 'About Shared Meters:',
+  'sharedMeters.infoDescription': 'Shared meters track common-area electricity (hallways, elevators, parking, etc.) that is split among multiple users. Configure how costs are divided using equal split, area-based, or custom percentages.',
+  'sharedMeters.noConfigs': 'No shared meters configured yet',
+  'sharedMeters.noConfigsDescription': 'Click "Add Shared Meter" to create your first configuration',
+  
+  // Display Fields
+  'sharedMeters.meterName': 'Meter Name',
+  'sharedMeters.building': 'Building',
+  'sharedMeters.unitPrice': 'Unit Price',
+  'sharedMeters.meter': 'Meter',
+  'sharedMeters.selectBuilding': 'Select a building...',
+  'sharedMeters.selectMeter': 'Select a meter...',
+  'sharedMeters.noMetersFound': 'No building-level meters found for this building',
   'sharedMeters.onlyHeatingOther': 'Only heating and other meters can be shared',
+  
+  // Split Types
+  'sharedMeters.splitType.label': 'Split Type',
+  'sharedMeters.splitType.equal': 'Equal Split',
+  'sharedMeters.splitType.byArea': 'By Area',
+  'sharedMeters.splitType.byUnits': 'By Units',
+  'sharedMeters.splitType.custom': 'Custom',
+  'sharedMeters.splitTypeDesc.equal': 'Cost is split equally among all active users in the building',
+  'sharedMeters.splitTypeDesc.byArea': 'Cost is proportional to apartment area (requires area data)',
+  'sharedMeters.splitTypeDesc.byUnits': 'Cost is proportional to number of units (requires unit count)',
+  'sharedMeters.splitTypeDesc.custom': 'Custom percentage split for each user (requires configuration)',
+  
+  // Custom Split
   'sharedMeters.percentagePerApartment': 'Percentage per Apartment',
   'sharedMeters.totalMustBe100': 'Total must equal 100%',
   'sharedMeters.apartment': 'Apartment',
   'sharedMeters.percentage': 'Percentage (%)',
+  
+  // Modal Titles
+  'sharedMeters.createTitle': 'Add Shared Meter',
+  'sharedMeters.createSubtitle': 'Configure a new shared meter for your building',
+  'sharedMeters.editTitle': 'Edit Shared Meter',
+  'sharedMeters.editSubtitle': 'Update shared meter configuration',
+  
+  // Validation
+  'sharedMeters.fillAllFields': 'Please fill in all required fields',
+  
+  // Messages
+  'sharedMeters.createSuccess': 'Shared meter configuration created successfully',
+  'sharedMeters.updateSuccess': 'Shared meter configuration updated successfully',
+  'sharedMeters.deleteSuccess': 'Shared meter configuration deleted successfully',
+  'sharedMeters.saveFailed': 'Failed to save shared meter configuration',
+  'sharedMeters.deleteFailed': 'Failed to delete shared meter configuration',
+  'sharedMeters.loadFailed': 'Failed to load shared meter configurations',
+  'sharedMeters.deleteConfirm': 'Are you sure you want to delete this shared meter configuration?',
 
+  // ============================================================================
+  // CUSTOM ITEMS (Line Items for Invoices)
+  // ============================================================================
+  
+  // General
+  'customItems.title': 'Manage Custom Line Items',
+  'customItems.subtitle': 'Add custom charges like meter rental, maintenance fees, and other recurring items',
+  'customItems.selectBuilding': 'Select Building',
+  'customItems.selectBuildingPlaceholder': 'Select a building',
+  'customItems.loading': 'Loading...',
+  'customItems.addNew': 'Add New Custom Item',
+  'customItems.editItem': 'Edit Custom Item',
+  'customItems.newItem': 'New Custom Item',
+  'customItems.description': 'Description',
+  'customItems.descriptionPlaceholder': 'e.g., Monthly maintenance fee',
+  'customItems.amount': 'Amount',
+  
+  // Categories
+  'customItems.category.label': 'Category',
+  'customItems.category.meter_rent': 'Meter Rent',
+  'customItems.category.maintenance': 'Maintenance',
+  'customItems.category.service': 'Service',
+  'customItems.category.other': 'Other',
+  
+  // Frequency
+  'customItems.frequency.label': 'Frequency',
+  'customItems.frequency.once': 'One-time',
+  'customItems.frequency.monthly': 'Monthly',
+  'customItems.frequency.quarterly': 'Quarterly',
+  'customItems.frequency.yearly': 'Yearly',
+  'customItems.frequencyHelp.once': 'Added once to the first bill in the period',
+  'customItems.frequencyHelp.monthly': 'Multiplied by the number of months in the billing period',
+  'customItems.frequencyHelp.quarterly': 'Multiplied by the number of quarters in the billing period',
+  'customItems.frequencyHelp.yearly': 'Multiplied by the number of years in the billing period',
+  
+  // Status
+  'customItems.active': 'Active (will be included in bills)',
+  'customItems.inactive': 'Inactive (will not be included in bills)',
+  'customItems.inactiveLabel': 'Inactive',
+  
+  // Display
+  'customItems.itemsForBuilding': 'Custom Items for Building',
+  'customItems.item': 'item',
+  'customItems.items': 'items',
+  'customItems.noItems': 'No custom items found',
+  'customItems.noItemsDescription': 'Click "Add New Custom Item" to create one.',
+  'customItems.organizedByBuilding': 'Custom Items by Building',
+  'customItems.noItemsForBuilding': 'No items for this building',
+  'customItems.buildingSection': 'Building: {name}',
+  'customItems.editSubtitle': 'Update the details of this custom line item',
+  'customItems.createSubtitle': 'Add a new custom charge to be included in invoices',
+  
+  // Validation
+  'customItems.validation.descriptionRequired': 'Description is required',
+  'customItems.validation.descriptionTooLong': 'Description must be less than 200 characters',
+  'customItems.validation.amountPositive': 'Amount must be greater than 0',
+  'customItems.validation.amountTooLarge': 'Amount is too large',
+  'customItems.validation.fixErrors': 'Please fix the errors in the form',
+  'customItems.validation.selectBuilding': 'Please select a building',
+  
+  // Messages
+  'customItems.createSuccess': 'Custom item created successfully',
+  'customItems.updateSuccess': 'Custom item updated successfully',
+  'customItems.deleteSuccess': 'Custom item deleted successfully',
+  'customItems.saveFailed': 'Failed to save custom item',
+  'customItems.deleteFailed': 'Failed to delete custom item',
+  'customItems.loadBuildingsFailed': 'Failed to load buildings',
+  'customItems.loadItemsFailed': 'Failed to load custom items',
+  'customItems.deleteConfirm': 'Are you sure you want to delete this custom item? This action cannot be undone.',
 
-  // Main page
+  // ============================================================================
+  // AUTO BILLING (Scheduled Automatic Billing)
+  // ============================================================================
+  
+  // Main Page
   'autoBilling.title': 'Automatic Bill Generation',
   'autoBilling.subtitle': 'Configure automated billing schedules',
   'autoBilling.addConfig': 'Add Configuration',
@@ -1066,7 +1108,7 @@ export const en: Translations = {
   'autoBilling.setupInstructions': 'Setup Instructions',
   'autoBilling.noConfigs': 'No automatic billing configurations. Create your first configuration to automate bill generation.',
 
-  // Form labels
+  // Form Labels
   'autoBilling.configName': 'Configuration Name',
   'autoBilling.configNamePlaceholder': 'e.g., Monthly Billing for Building A',
   'autoBilling.selectBuildings': 'Select Buildings',
@@ -1075,14 +1117,14 @@ export const en: Translations = {
   'autoBilling.leaveEmptyForAll': 'leave empty for all users',
   'autoBilling.selectAtLeastOneBuilding': 'Please select at least one building',
 
-  // Frequency options
+  // Frequency Options
   'autoBilling.frequency': 'Billing Frequency',
   'autoBilling.frequency.monthly': 'Monthly',
   'autoBilling.frequency.quarterly': 'Quarterly (Every 3 months)',
   'autoBilling.frequency.half_yearly': 'Half-Yearly (Every 6 months)',
   'autoBilling.frequency.yearly': 'Yearly',
 
-  // Date and scheduling
+  // Date and Scheduling
   'autoBilling.generationDay': 'Generation Day',
   'autoBilling.generationDayHelp': 'Day of month to generate bills (1-28)',
   'autoBilling.firstExecutionDate': 'First Execution Date',
@@ -1091,7 +1133,7 @@ export const en: Translations = {
   'autoBilling.lastRun': 'Last Run',
   'autoBilling.nextRun': 'Next Run',
 
-  // Card display
+  // Card Display
   'autoBilling.building': 'Building',
   'autoBilling.buildings': 'Buildings',
   'autoBilling.user': 'User',
@@ -1112,43 +1154,42 @@ export const en: Translations = {
   'autoBilling.deleteFailed': 'Failed to delete configuration',
   'autoBilling.toggleFailed': 'Failed to toggle configuration status',
 
-  // Instructions modal
+  // Instructions Modal
   'autoBilling.instructions.title': 'Automatic Billing Guide',
   'autoBilling.instructions.whatIsAutoBilling': 'What is Automatic Billing?',
   'autoBilling.instructions.autoBillingDescription': 'Automatic billing schedules bill generation at regular intervals without manual intervention. Configure when and how often to generate invoices, and the system will automatically create them on schedule.',
-
   'autoBilling.instructions.howItWorks': 'How It Works',
   'autoBilling.instructions.work1': 'The system checks active configurations every hour',
   'autoBilling.instructions.work2': 'When the scheduled day arrives, bills are automatically generated',
   'autoBilling.instructions.work3': 'Bills appear in the regular Billing page alongside manual bills',
   'autoBilling.instructions.work4': 'You can pause, modify, or delete schedules at any time',
-
   'autoBilling.instructions.frequencies': 'Billing Frequencies',
   'autoBilling.instructions.freq1': 'Bills generated on the same day each month',
   'autoBilling.instructions.freq2': 'Bills generated every 3 months (Jan, Apr, Jul, Oct)',
   'autoBilling.instructions.freq3': 'Bills generated twice per year (Jan, Jul)',
   'autoBilling.instructions.freq4': 'Bills generated once per year in January',
-
   'autoBilling.instructions.howToUse': 'How to Use',
   'autoBilling.instructions.step1': 'Click "Add Configuration" to create a new billing schedule',
   'autoBilling.instructions.step2': 'Select buildings and optionally specific users to bill',
   'autoBilling.instructions.step3': 'Choose frequency (monthly, quarterly, etc.) and generation day',
   'autoBilling.instructions.step4': 'Add sender and banking information for invoices',
   'autoBilling.instructions.step5': 'Activate the configuration - bills will be generated automatically',
-
   'autoBilling.instructions.important': 'Important',
   'autoBilling.instructions.important1': 'Ensure active pricing is configured for all buildings before scheduling',
   'autoBilling.instructions.important2': 'Users must have apartment meters for consumption tracking',
   'autoBilling.instructions.important3': 'Configurations can be paused without deleting them',
   'autoBilling.instructions.important4': 'Review the Billing page regularly to verify generated invoices',
-
   'autoBilling.instructions.tips': 'Tips',
   'autoBilling.instructions.tip1': 'Set generation day to 1st-5th of month for most reliable results',
   'autoBilling.instructions.tip2': 'Use separate configurations for different building groups',
   'autoBilling.instructions.tip3': 'Banking info in configs will auto-populate invoice QR codes',
   'autoBilling.instructions.tip4': 'Both auto and manual bills appear in the same Billing page',
 
-  // Pricing
+  // ============================================================================
+  // PRICING
+  // ============================================================================
+  
+  // General
   'pricing.title': 'Pricing Settings',
   'pricing.subtitle': 'Configure electricity and charging rates',
   'pricing.addPricing': 'Add Pricing',
@@ -1172,8 +1213,11 @@ export const en: Translations = {
   'pricing.saveSuccess': 'Pricing settings saved successfully!',
   'pricing.saveFailed': 'Failed to save settings',
   'pricing.loadFailed': 'Failed to load data',
+  'pricing.searchBuildings': 'Search buildings...',
+  'pricing.allBuildings': 'All Buildings',
+  'pricing.pricingSettings': 'pricing settings',
 
-  // Pricing instructions
+  // Instructions
   'pricing.instructions.button': 'Setup Instructions',
   'pricing.instructions.title': 'Pricing Settings Guide',
   'pricing.instructions.whatIsPricing': 'What are Pricing Settings?',
@@ -1198,15 +1242,16 @@ export const en: Translations = {
   'pricing.instructions.tip2': 'Deactivate old pricing instead of deleting to keep historical records',
   'pricing.instructions.tip3': 'Solar power is typically priced lower than grid power to encourage usage',
 
-  // Pricing validation messages
+  // Validation
   'pricing.selectBuilding': 'Please select a building',
   'pricing.endDateBeforeStart': 'End date must be after start date',
   'pricing.dateOverlapError': 'This date range overlaps with an existing active pricing for this building. Please adjust the dates or deactivate the conflicting pricing.',
-  'pricing.searchBuildings': 'Search buildings...',
-  'pricing.allBuildings': 'All Buildings',
-  'pricing.pricingSettings': 'pricing settings',
 
-  // Logs
+  // ============================================================================
+  // LOGS (System Logs & Monitoring)
+  // ============================================================================
+  
+  // General
   'logs.title': 'System Logs',
   'logs.subtitle': 'Monitor system activity and debug information',
   'logs.refresh': 'Refresh',
@@ -1219,6 +1264,13 @@ export const en: Translations = {
   'logs.ipAddress': 'IP Address',
   'logs.noLogs': 'No logs available yet. System activity will appear here.',
   'logs.loadingLogs': 'Loading logs...',
+  'logs.loadFailed': 'Failed to load logs:',
+  'logs.debugInfoFailed': 'Failed to load debug information:',
+  'logs.rebootConfirm': 'Are you sure you want to reboot the system? This will restart the backend service.',
+  'logs.rebootSuccess': 'System is rebooting... The service will restart in a few seconds.',
+  'logs.rebootFailed': 'System reboot failed',
+
+  // Real-time Status
   'logs.realTimeStatus': 'Real-time System Status',
   'logs.dataCollectorStatus': 'Data Collector Status',
   'logs.running': 'Running',
@@ -1236,11 +1288,6 @@ export const en: Translations = {
   'logs.recentErrors': 'Recent Errors',
   'logs.last24Hours': 'Last 24 hours',
   'logs.activityLog': 'Activity Log (Last 200 entries)',
-  'logs.rebootConfirm': 'Are you sure you want to reboot the system? This will restart the backend service.',
-  'logs.rebootSuccess': 'System is rebooting... The service will restart in a few seconds.',
-  'logs.rebootFailed': 'System reboot failed',
-  'logs.loadFailed': 'Failed to load logs:',
-  'logs.debugInfoFailed': 'Failed to load debug information:',
 
   // Device Health
   'logs.deviceHealth': 'Device Health',
@@ -1253,6 +1300,9 @@ export const en: Translations = {
   'logs.tempNormal': 'Normal',
   'logs.tempWarm': 'Warm',
   'logs.tempHot': 'Hot',
+  'logs.cpuLow': 'Low usage',
+  'logs.cpuModerate': 'Moderate usage',
+  'logs.cpuHigh': 'High usage!',
 
   // Backup & Restore
   'logs.createBackup': 'Create Backup',
@@ -1282,15 +1332,14 @@ export const en: Translations = {
   'logs.updateStarted': 'Update started! The system will rebuild and restart. This may take a few minutes. The page will reload automatically.',
   'logs.updateCompleteReload': 'Update complete! Reloading the page now...',
   'logs.updateFailed': 'Update failed. Please check the system logs or try updating manually.',
-
-  'logs.cpuLow': 'Low usage',
-  'logs.cpuModerate': 'Moderate usage',
-  'logs.cpuHigh': 'High usage!',
   'logs.updatingSystem': 'Updating System',
   'logs.updateInProgress': 'Please wait while the system is being updated. This will take approximately 40 seconds.',
   'logs.doNotCloseWindow': 'Please do not close this window or navigate away.',
 
-  // Settings
+  // ============================================================================
+  // SETTINGS (User Account Settings)
+  // ============================================================================
+  
   'settings.title': 'Settings',
   'settings.subtitle': 'Manage your account settings and security preferences',
   'settings.changePassword': 'Change Password',
@@ -1320,7 +1369,10 @@ export const en: Translations = {
   'settings.monitorActivityDesc': 'Check Admin Logs for suspicious activity',
   'settings.updateYourPassword': 'Update your password to keep your account secure',
 
-  // Login
+  // ============================================================================
+  // LOGIN
+  // ============================================================================
+  
   'login.title': 'ZEV Billing',
   'login.subtitle': 'Swiss Energy Management',
   'login.username': 'Username',

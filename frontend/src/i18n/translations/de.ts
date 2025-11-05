@@ -1,7 +1,9 @@
 import type { Translations } from '../index';
 
-export const de: Translations = {
-  // Navigation
+export const en: Translations = {
+  // ============================================================================
+  // NAVIGATION
+  // ============================================================================
   'nav.dashboard': 'Dashboard',
   'nav.users': 'Benutzer',
   'nav.buildings': 'Gebäude',
@@ -14,7 +16,9 @@ export const de: Translations = {
   'nav.logout': 'Abmelden',
   'nav.autoBilling': 'Auto-Abrechnung',
 
-  // Common
+  // ============================================================================
+  // COMMON
+  // ============================================================================
   'common.add': 'Hinzufügen',
   'common.edit': 'Bearbeiten',
   'common.delete': 'Löschen',
@@ -45,7 +49,9 @@ export const de: Translations = {
   'common.all': 'Alle',
   'common.to': 'bis',
 
-  // Dashboard
+  // ============================================================================
+  // DASHBOARD
+  // ============================================================================
   'dashboard.title': 'Dashboard',
   'dashboard.subtitle': 'Echtzeit-Übersicht Ihres Energiemanagementsystems',
   'dashboard.totalUsers': 'Benutzer Gesamt',
@@ -78,17 +84,21 @@ export const de: Translations = {
   'dashboard.complex': 'Komplex',
   'dashboard.complexes': 'Komplexe',
 
-  // Export
+  // ============================================================================
+  // EXPORT
+  // ============================================================================
   'export.title': 'Export',
   'export.exportData': 'Daten exportieren',
   'export.exporting': 'Exportiere...',
   'export.startDate': 'Startdatum',
   'export.endDate': 'Enddatum',
-  'export.subtitle': '{{type}}-Daten nach CSV exportieren',
-  'export.filterByBuilding': '{{type}} nach Gebäude filtern',
-  'export.exportingAllFrom': 'Alle {{type}} von {{building}}',
+  'export.subtitle': '{type}-Daten nach CSV exportieren',
+  'export.filterByBuilding': 'Filter {type} by building',
+  'export.exportingAllFrom': 'Alle {type} von {building}',
 
-  // Math CAPTCHA
+  // ============================================================================
+  // MATH CAPTCHA
+  // ============================================================================
   'captcha.title': '🔒 Sicherheitsüberprüfung - Zum Fortfahren ausfüllen',
   'captcha.mathInstruction': 'Lösen Sie die Rechenaufgabe, um fortzufahren',
   'captcha.mathFooter': 'Wählen Sie die richtige Antwort',
@@ -97,48 +107,11 @@ export const de: Translations = {
   'captcha.success': 'Verifiziert!',
   'captcha.tryAgain': 'Falsch, versuchen Sie es erneut',
 
-  // Meters Delete Confirmation
-  'meters.deleteConfirmTitle': 'Zähler löschen',
-  'meters.deleteWarning': '⚠️ Warnung: Diese Aktion kann nicht rückgängig gemacht werden',
-  'meters.deleteImpactTitle': 'Was wird gelöscht:',
-  'meters.meterWillBeDeleted': 'Der Zähler wird dauerhaft entfernt',
-  'meters.readingsWillBeDeleted': 'Messwerte',
-  'meters.dataRange': 'Daten von',
-  'meters.dataLossWarning': 'Alle Zählerstände und historischen Daten gehen verloren',
-  'meters.typeToConfirm': 'Geben Sie den Zählernamen zur Bestätigung ein:',
-  'meters.typeMeterName': 'Zählernamen hier eingeben...',
-  'meters.understandDataLoss': 'Ich verstehe, dass alle Daten unwiderruflich gelöscht werden',
-  'meters.deletePermanently': 'Dauerhaft löschen',
-  'meters.deleteNameMismatch': 'Der Zählername stimmt nicht überein. Bitte geben Sie ihn genau wie angezeigt ein.',
-  'meters.deleteCheckRequired': 'Bitte aktivieren Sie das Bestätigungsfeld, um fortzufahren.',
-  'meters.captchaRequired': 'Bitte lösen Sie die Sicherheitsaufgabe, um fortzufahren.',
-  'meters.deleteFailed': 'Löschen des Zählers fehlgeschlagen. Bitte versuchen Sie es erneut.',
-  'meters.apartmentUnit': 'Wohnungseinheit',
-  'meters.selectApartment': 'Wohnung auswählen',
-  'meters.apartmentHelpText': 'Verknüpfen Sie diesen Zähler dauerhaft mit einer Wohnungseinheit. Das System zeigt automatisch den dieser Wohnung zugewiesenen Mieter an.',
-  'meters.userOptionalHelpText': 'Dies ist der aktuelle Mieter, der dieser Wohnung zugewiesen ist. Um den Mieter zu ändern, gehen Sie zur Benutzerseite.',
-  'meters.linkedUser': 'Verknüpfter Mieter',
-  'meters.noUserLinked': 'Dieser Wohnung ist derzeit kein Mieter zugewiesen',
-  'meters.apartmentNotSelected': 'Wählen Sie zuerst eine Wohnung aus, um den verknüpften Mieter zu sehen',
-
-  // Chargers Delete Confirmation
-  'chargers.deleteConfirmTitle': 'Ladestation löschen',
-  'chargers.deleteWarning': '⚠️ Warnung: Diese Aktion kann nicht rückgängig gemacht werden',
-  'chargers.deleteImpactTitle': 'Was wird gelöscht:',
-  'chargers.chargerWillBeDeleted': 'Die Ladestation wird dauerhaft entfernt',
-  'chargers.sessionsWillBeDeleted': 'Ladevorgänge',
-  'chargers.dataRange': 'Daten von',
-  'chargers.dataLossWarning': 'Alle Ladevorgänge und historischen Daten gehen verloren',
-  'chargers.typeToConfirm': 'Geben Sie den Ladestationsnamen zur Bestätigung ein:',
-  'chargers.typeChargerName': 'Ladestationsnamen hier eingeben...',
-  'chargers.understandDataLoss': 'Ich verstehe, dass alle Daten unwiderruflich gelöscht werden',
-  'chargers.deletePermanently': 'Dauerhaft löschen',
-  'chargers.deleteNameMismatch': 'Der Ladestationsname stimmt nicht überein. Bitte geben Sie ihn genau wie angezeigt ein.',
-  'chargers.deleteCheckRequired': 'Bitte aktivieren Sie das Bestätigungsfeld, um fortzufahren.',
-  'chargers.captchaRequired': 'Bitte lösen Sie die Sicherheitsaufgabe, um fortzufahren.',
-  'chargers.deleteFailed': 'Löschen der Ladestation fehlgeschlagen. Bitte versuchen Sie es erneut.',
-
-  // Users - General
+  // ============================================================================
+  // USERS
+  // ============================================================================
+  
+  // General
   'users.title': 'Benutzer',
   'users.subtitle': 'Verwalten Sie reguläre Benutzer und Administratoren',
   'users.archivedUsersSubtitle': 'Archivierte und inaktive Benutzer',
@@ -246,7 +219,11 @@ export const de: Translations = {
   'users.instructions.tip3': 'Normale Benutzer können in jedem Gebäude laden, nicht nur in ihrem zugewiesenen',
   'users.instructions.tip4': 'Wohnungszuweisungen helfen bei der Organisation von Benutzern und verknüpfen Zähler mit bestimmten Einheiten',
 
-  // Buildings
+  // ============================================================================
+  // BUILDINGS
+  // ============================================================================
+  
+  // General
   'buildings.title': 'Gebäude',
   'buildings.subtitle': 'Verwalten Sie Immobilien und Gebäudegruppen',
   'buildings.addBuilding': 'Gebäude hinzufügen',
@@ -361,7 +338,11 @@ export const de: Translations = {
   'buildings.instructions.tip3': 'Verwenden Sie aussagekräftige Stockwerk- und Wohnungsnamen für eine einfachere Benutzerverwaltung',
   'buildings.instructions.tip4': 'Der visuelle Wohnungs-Builder zeigt Ihre Gebäudestruktur auf einen Blick',
 
-  // Meters - General
+  // ============================================================================
+  // METERS
+  // ============================================================================
+  
+  // General
   'meters.title': 'Zähler',
   'meters.subtitle': 'Energiezähler verwalten und Verbrauch überwachen',
   'meters.addMeter': 'Zähler hinzufügen',
@@ -373,6 +354,22 @@ export const de: Translations = {
   'meters.saveFailed': 'Speichern des Zählers fehlgeschlagen',
   'meters.deleteConfirm': 'Sind Sie sicher, dass Sie diesen Zähler löschen möchten?',
   'meters.exportFailed': 'Export fehlgeschlagen',
+
+  // Delete Confirmation
+  'meters.deleteConfirmTitle': 'Zähler löschen',
+  'meters.deleteWarning': '⚠️ Warnung: Diese Aktion kann nicht rückgängig gemacht werden',
+  'meters.deleteImpactTitle': 'Was wird gelöscht:',
+  'meters.meterWillBeDeleted': 'Der Zähler wird dauerhaft entfernt',
+  'meters.readingsWillBeDeleted': 'Messwerte',
+  'meters.dataRange': 'Daten von',
+  'meters.dataLossWarning': 'Alle Zählerstände und historischen Daten gehen verloren',
+  'meters.typeToConfirm': 'Geben Sie den Zählernamen zur Bestätigung ein:',
+  'meters.typeMeterName': 'Zählernamen hier eingeben...',
+  'meters.understandDataLoss': 'Ich verstehe, dass alle Daten unwiderruflich gelöscht werden',
+  'meters.deletePermanently': 'Dauerhaft löschen',
+  'meters.deleteNameMismatch': 'Der Zählername stimmt nicht überein. Bitte geben Sie ihn genau wie angezeigt ein.',
+  'meters.deleteCheckRequired': 'Bitte aktivieren Sie das Bestätigungsfeld, um fortzufahren.',
+  'meters.captchaRequired': 'Bitte lösen Sie die Sicherheitsaufgabe, um fortzufahren.',
 
   // Meter Types
   'meters.totalMeter': 'Gesamtzähler',
@@ -391,6 +388,13 @@ export const de: Translations = {
   'meters.connectionType': 'Verbindungstyp',
   'meters.connectionConfig': 'Verbindungskonfiguration',
   'meters.activeCollectData': 'Aktiv (Daten sammeln)',
+  'meters.apartmentUnit': 'Wohnungseinheit',
+  'meters.selectApartment': 'Wohnung auswählen',
+  'meters.apartmentHelpText': 'Verknüpfen Sie diesen Zähler dauerhaft mit einer Wohnungseinheit. Das System zeigt automatisch den dieser Wohnung zugewiesenen Mieter an.',
+  'meters.userOptionalHelpText': 'Dies ist der aktuelle Mieter, der dieser Wohnung zugewiesen ist. Um den Mieter zu ändern, gehen Sie zur Benutzerseite.',
+  'meters.linkedUser': 'Verknüpfter Mieter',
+  'meters.noUserLinked': 'Dieser Wohnung ist derzeit kein Mieter zugewiesen',
+  'meters.apartmentNotSelected': 'Wählen Sie zuerst eine Wohnung aus, um den verknüpften Mieter zu sehen',
 
   // Connection Types
   'meters.loxoneApiRecommended': 'Loxone WebSocket API (Empfohlen)',
@@ -439,75 +443,6 @@ export const de: Translations = {
   'meters.registerCount': 'Registeranzahl',
   'meters.unitId': 'Einheiten-ID',
 
-  // Instructions Modal
-  'meters.instructions.title': 'Zähler-Einrichtungsanleitung',
-
-  // Loxone Instructions
-  'meters.instructions.loxoneTitle': 'Loxone WebSocket API (Empfohlen)',
-  'meters.instructions.loxoneRecommended': 'Empfohlen: Moderne Echtzeit-Verbindung zum Loxone Miniserver',
-
-  'meters.instructions.loxoneUuidTitle': 'Schritt 1: Geräte-UUID finden',
-  'meters.instructions.loxoneUuidStep1': 'Öffnen Sie einen Webbrowser und navigieren Sie zu: http://<IHRE-LOXONE-IP>/data/LoxAPP3.json',
-  'meters.instructions.loxoneUuidStep2': 'Melden Sie sich mit Ihren Loxone-Anmeldedaten an, wenn Sie dazu aufgefordert werden',
-  'meters.instructions.loxoneUuidStep3': 'Suchen Sie Ihr Stromzählergerät in der JSON-Datei (verwenden Sie Strg+F)',
-  'meters.instructions.loxoneUuidStep4': 'Kopieren Sie die UUID Ihres Geräts (Format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)',
-  'meters.instructions.loxoneUuidExample': 'Beispiel-URL:',
-
-  'meters.instructions.loxoneSetupTitle': 'Schritt 2: Zähler konfigurieren',
-  'meters.instructions.loxoneStep1': 'Klicken Sie auf "Zähler hinzufügen" und wählen Sie "Loxone WebSocket API"',
-  'meters.instructions.loxoneStep2': 'Geben Sie die IP-Adresse Ihres Loxone Miniservers ein',
-  'meters.instructions.loxoneStep3': 'Fügen Sie die kopierte Geräte-UUID ein',
-  'meters.instructions.loxoneStep4': 'Geben Sie Loxone-Benutzername und Passwort ein (erforderlich für Authentifizierung)',
-  'meters.instructions.loxoneStep5': 'Speichern Sie den Zähler - das System verbindet sich automatisch',
-
-  'meters.instructions.loxoneExample': 'Konfigurationsbeispiel:',
-  'meters.instructions.loxoneExampleHost': 'Host: 192.168.1.100',
-  'meters.instructions.loxoneExampleDevice': 'Geräte-UUID: 1e475b8d-017e-c7b5-ffff336efb88726d',
-  'meters.instructions.loxoneExampleCredentials': 'Benutzername: admin / Passwort: ihr-passwort',
-
-  'meters.instructions.loxoneBenefits': 'Warum Loxone WebSocket?',
-  'meters.instructions.loxoneBenefit1': '✓ Echtzeit-Datenaktualisierungen alle 15 Minuten',
-  'meters.instructions.loxoneBenefit2': '✓ Automatische Wiederverbindung bei Verbindungsabbruch',
-  'meters.instructions.loxoneBenefit3': '✓ Keine Loxone-Konfiguration erforderlich',
-
-  // UDP Instructions
-  'meters.instructions.udpTitle': 'UDP-Verbindung (Legacy)',
-  'meters.instructions.udpDeprecated': 'Veraltet: Verwenden Sie Loxone WebSocket API für neue Installationen',
-  'meters.instructions.udpStep1': 'Fügen Sie einen Zähler mit UDP-Verbindungstyp hinzu',
-  'meters.instructions.udpStep2': 'Notieren Sie sich den automatisch generierten UUID-Datenschlüssel',
-  'meters.instructions.udpStep3': 'Erstellen Sie in Loxone einen virtuellen Ausgangsbefehl',
-  'meters.instructions.udpStep4': 'Setzen Sie Ziel auf Server-IP:8888',
-  'meters.instructions.udpStep5': 'WICHTIG: Verwenden Sie den exakten UUID_power_kwh-Schlüssel aus der Zählerkonfiguration',
-  'meters.instructions.udpExample1Title': 'Beispiel 1 - Küchenzähler:',
-  'meters.instructions.udpExample2Title': 'Beispiel 2 - Wohnzimmerzähler:',
-
-  // Modbus Instructions
-  'meters.instructions.modbusTitle': 'Modbus TCP-Verbindung',
-  'meters.instructions.modbusSetup': 'Für direkte Modbus TCP-Verbindungen zu Energiezählern:',
-  'meters.instructions.modbusStep1': 'Aktivieren Sie Modbus TCP auf Ihrem Zähler',
-  'meters.instructions.modbusStep2': 'Finden Sie die IP-Adresse des Zählers',
-  'meters.instructions.modbusStep3': 'Überprüfen Sie die Dokumentation für Registeradressen',
-  'meters.instructions.modbusStep4': 'Standardport ist normalerweise 502',
-  'meters.instructions.modbusStep5': 'Konfigurieren Sie die Einheiten-ID gemäss Ihrem Gerät',
-
-  // Testing Instructions
-  'meters.instructions.testingTitle': 'Testen & Verifizierung',
-  'meters.instructions.testingIntro': 'Überprüfen Sie nach der Einrichtung Ihre Verbindung:',
-  'meters.instructions.testingPoint1': 'Überprüfen Sie die Zählerkarte auf den Verbindungsstatus (grün = verbunden)',
-  'meters.instructions.testingPoint2': 'Für Loxone WebSocket: Status wird automatisch alle 30 Sekunden aktualisiert',
-  'meters.instructions.testingPoint3': 'Überprüfen Sie die Zeit der "Letzten Aktualisierung", um zu bestätigen, dass Daten empfangen werden',
-  'meters.instructions.testingPoint4': 'Sehen Sie sich das Dashboard an, um Echtzeit-Verbrauchsdaten zu sehen',
-
-  // Troubleshooting Instructions
-  'meters.instructions.troubleshootingTitle': 'Fehlerbehebung',
-  'meters.instructions.troubleshootingLoxoneWebSocket': 'Überprüfen Sie, ob die Loxone-IP vom Server aus erreichbar ist',
-  'meters.instructions.troubleshootingLoxoneAuth': 'Überprüfen Sie Benutzername/Passwort, wenn die Authentifizierung fehlschlägt',
-  'meters.instructions.troubleshootingLoxoneDevice': 'Überprüfen Sie, ob die Geräte-UUID korrekt ist (aus LoxAPP3.json kopieren)',
-  'meters.instructions.troubleshootingService': 'Überprüfen Sie den Dienststatus:',
-  'meters.instructions.troubleshootingLogs': 'Protokolle anzeigen:',
-  'meters.instructions.troubleshootingNetwork': 'Netzwerkverbindung testen:',
-  'meters.instructions.troubleshootingMonitor': 'Überwachen Sie den Zählerstatus im Dashboard für Echtzeit-Updates',
-
   // HTTP Meter Configuration
   'meters.httpRecommended': 'HTTP (Raspberry Pi Polling - Empfohlen!)',
   'meters.httpPollingInfo': 'HTTP-Polling: Raspberry Pi holt Daten alle 15 Minuten von Loxone!',
@@ -526,8 +461,58 @@ export const de: Translations = {
   'meters.httpPolling': 'Polling:',
   'meters.httpRaspberryPi': 'Raspberry Pi → GET → Loxone alle 15 Min',
 
-  // HTTP Instructions
+  // Legacy
+  'meters.type': 'Typ',
+  'meters.http': 'HTTP (Loxone Virtueller Ausgang)',
+  'meters.udp': 'UDP (Gemeinsamer Port - Empfohlen!)',
+  'meters.endpointUrl': 'Endpunkt-URL',
+  'meters.powerField': 'Stromfeldname',
+  'meters.powerFieldHelp': 'JSON-Feldname, der den Stromwert in kWh enthält',
+  'meters.dataKeyHelp': 'Eindeutiger Schlüssel wie: apart1_kwh, solar_kwh, etc.',
+  'meters.sharedPortInfo': 'Gemeinsamer UDP-Port: Mehrere Zähler können denselben Port verwenden! Verwenden Sie eindeutige Datenschlüssel zur Unterscheidung.',
+
+  // Instructions Modal - Loxone
+  'meters.instructions.title': 'Zähler-Einrichtungsanleitung',
+  'meters.instructions.loxoneTitle': 'Loxone WebSocket API (Empfohlen)',
+  'meters.instructions.loxoneRecommended': 'Empfohlen: Moderne Echtzeit-Verbindung zum Loxone Miniserver',
+  'meters.instructions.loxoneUuidTitle': 'Schritt 1: Geräte-UUID finden',
+  'meters.instructions.loxoneUuidStep1': 'Öffnen Sie einen Webbrowser und navigieren Sie zu: http://<IHRE-LOXONE-IP>/data/LoxAPP3.json',
+  'meters.instructions.loxoneUuidStep2': 'Melden Sie sich mit Ihren Loxone-Anmeldedaten an, wenn Sie dazu aufgefordert werden',
+  'meters.instructions.loxoneUuidStep3': 'Suchen Sie Ihr Stromzählergerät in der JSON-Datei (verwenden Sie Strg+F)',
+  'meters.instructions.loxoneUuidStep4': 'Kopieren Sie die UUID Ihres Geräts (Format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)',
+  'meters.instructions.loxoneUuidExample': 'Beispiel-URL:',
+  'meters.instructions.loxoneSetupTitle': 'Schritt 2: Zähler konfigurieren',
+  'meters.instructions.loxoneStep1': 'Klicken Sie auf "Zähler hinzufügen" und wählen Sie "Loxone WebSocket API"',
+  'meters.instructions.loxoneStep2': 'Geben Sie die IP-Adresse Ihres Loxone Miniservers ein',
+  'meters.instructions.loxoneStep3': 'Fügen Sie die kopierte Geräte-UUID ein',
+  'meters.instructions.loxoneStep4': 'Geben Sie Loxone-Benutzername und Passwort ein (erforderlich für Authentifizierung)',
+  'meters.instructions.loxoneStep5': 'Speichern Sie den Zähler - das System verbindet sich automatisch',
+  'meters.instructions.loxoneExample': 'Konfigurationsbeispiel:',
+  'meters.instructions.loxoneExampleHost': 'Host: 192.168.1.100',
+  'meters.instructions.loxoneExampleDevice': 'Geräte-UUID: 1e475b8d-017e-c7b5-ffff336efb88726d',
+  'meters.instructions.loxoneExampleCredentials': 'Benutzername: admin / Passwort: ihr-passwort',
+  'meters.instructions.loxoneBenefits': 'Warum Loxone WebSocket?',
+  'meters.instructions.loxoneBenefit1': '✓ Echtzeit-Datenaktualisierungen alle 15 Minuten',
+  'meters.instructions.loxoneBenefit2': '✓ Automatische Wiederverbindung bei Verbindungsabbruch',
+  'meters.instructions.loxoneBenefit3': '✓ Keine Loxone-Konfiguration erforderlich',
+
+  // Instructions Modal - UDP
+  'meters.instructions.udpTitle': 'UDP-Verbindung (Legacy)',
+  'meters.instructions.udpDeprecated': 'Veraltet: Verwenden Sie Loxone WebSocket API für neue Installationen',
+  'meters.instructions.udpStep1': 'Fügen Sie einen Zähler mit UDP-Verbindungstyp hinzu',
+  'meters.instructions.udpStep2': 'Notieren Sie sich den automatisch generierten UUID-Datenschlüssel',
+  'meters.instructions.udpStep3': 'Erstellen Sie in Loxone einen virtuellen Ausgangsbefehl',
+  'meters.instructions.udpStep4': 'Setzen Sie Ziel auf Server-IP:8888',
+  'meters.instructions.udpStep5': 'WICHTIG: Verwenden Sie den exakten UUID_power_kwh-Schlüssel aus der Zählerkonfiguration',
+  'meters.instructions.udpExample1Title': 'Beispiel 1 - Küchenzähler:',
+  'meters.instructions.udpExample2Title': 'Beispiel 2 - Wohnzimmerzähler:',
+  'meters.instructions.udpNew': 'NEU: Automatisch generierte UUID_power_kwh-Schlüssel für jeden Zähler!',
+  'meters.instructions.udpExample3Title': 'Solarzähler:',
+  'meters.instructions.udpBenefits': 'Vorteile: Eindeutige UUID_power_kwh-Schlüssel verhindern Konflikte, ein UDP-Port pro Gebäude, sauberere Netzwerkkonfiguration!',
+
+  // Instructions Modal - HTTP
   'meters.instructions.httpTitle': 'HTTP-Verbindung (Alternative)',
+  'meters.instructions.httpSetup': 'Loxone Virtueller Ausgang Einrichtung:',
   'meters.instructions.httpNew': 'NEU: HTTP-Polling mit Authentifizierung - Raspberry Pi ist der Master!',
   'meters.instructions.httpStep1': 'Klicken Sie auf "Zähler hinzufügen" - eine eindeutige UUID_power_kwh wird automatisch generiert',
   'meters.instructions.httpStep2': 'Geben Sie die Basis-URL/IP-Adresse von Loxone ein (z.B. http://192.168.1.100)',
@@ -553,29 +538,44 @@ export const de: Translations = {
   'meters.instructions.httpBenefits': 'Vorteile:',
   'meters.instructions.httpBenefitsDesc': 'Raspberry Pi ist Master und kontrolliert Timing, keine Firewall-Probleme, zuverlässiges 15-Minuten-Polling, unterstützt HTTP-Authentifizierung, Loxone antwortet nur!',
 
-  // Testing and Troubleshooting
+  // Instructions Modal - Modbus
+  'meters.instructions.modbusTitle': 'Modbus TCP-Verbindung',
+  'meters.instructions.modbusSetup': 'Für direkte Modbus TCP-Verbindungen zu Energiezählern:',
+  'meters.instructions.modbusStep1': 'Aktivieren Sie Modbus TCP auf Ihrem Zähler',
+  'meters.instructions.modbusStep2': 'Finden Sie die IP-Adresse des Zählers',
+  'meters.instructions.modbusStep3': 'Überprüfen Sie die Dokumentation für Registeradressen',
+  'meters.instructions.modbusStep4': 'Standardport ist normalerweise 502',
+  'meters.instructions.modbusStep5': 'Konfigurieren Sie die Einheiten-ID gemäss Ihrem Gerät',
+
+  // Instructions Modal - Testing
+  'meters.instructions.testingTitle': 'Testen & Verifizierung',
+  'meters.instructions.testingIntro': 'Überprüfen Sie nach der Einrichtung Ihre Verbindung:',
+  'meters.instructions.testingPoint1': 'Überprüfen Sie die Zählerkarte auf den Verbindungsstatus (grün = verbunden)',
+  'meters.instructions.testingPoint2': 'Für Loxone WebSocket: Status wird automatisch alle 30 Sekunden aktualisiert',
+  'meters.instructions.testingPoint3': 'Überprüfen Sie die Zeit der "Letzten Aktualisierung", um zu bestätigen, dass Daten empfangen werden',
+  'meters.instructions.testingPoint4': 'Sehen Sie sich das Dashboard an, um Echtzeit-Verbrauchsdaten zu sehen',
   'meters.instructions.testingHttpAuth': 'Für HTTP: Überprüfen Sie Protokolle auf "HTTP-Anfrage an..." mit Authentifizierungsstatus und "ERFOLG: Zählerdaten gesammelt"',
+
+  // Instructions Modal - Troubleshooting
+  'meters.instructions.troubleshootingTitle': 'Fehlerbehebung',
+  'meters.instructions.troubleshootingLoxoneWebSocket': 'Überprüfen Sie, ob die Loxone-IP vom Server aus erreichbar ist',
+  'meters.instructions.troubleshootingLoxoneAuth': 'Überprüfen Sie Benutzername/Passwort, wenn die Authentifizierung fehlschlägt',
+  'meters.instructions.troubleshootingLoxoneDevice': 'Überprüfen Sie, ob die Geräte-UUID korrekt ist (aus LoxAPP3.json kopieren)',
+  'meters.instructions.troubleshootingService': 'Überprüfen Sie den Dienststatus:',
+  'meters.instructions.troubleshootingLogs': 'Protokolle anzeigen:',
+  'meters.instructions.troubleshootingNetwork': 'Netzwerkverbindung testen:',
+  'meters.instructions.troubleshootingMonitor': 'Überwachen Sie den Zählerstatus im Dashboard für Echtzeit-Updates',
+  'meters.instructions.troubleshootingFirewall': 'Firewall überprüfen:',
+  'meters.instructions.troubleshootingUDP': 'UDP: Kopieren Sie den automatisch generierten UUID_power_kwh exakt in Ihre Loxone-Konfiguration!',
   'meters.instructions.troubleshootingHttpAccess': 'Stellen Sie sicher, dass Loxone vom Raspberry Pi aus erreichbar ist (testen Sie mit curl oder Browser)',
   'meters.instructions.troubleshootingHttpAuth': 'Überprüfen Sie HTTP-Anmeldedaten, wenn Authentifizierung aktiviert ist',
   'meters.instructions.troubleshootingHttpMeterId': 'Überprüfen Sie, ob die Zähler-ID im URL-Pfad mit Ihrer Loxone-Konfiguration übereinstimmt',
-  'meters.instructions.troubleshootingFirewall': 'Firewall überprüfen:',
-  'meters.instructions.troubleshootingUDP': 'UDP: Kopieren Sie den automatisch generierten UUID_power_kwh exakt in Ihre Loxone-Konfiguration!',
 
-  // Additional meters translations
-  'meters.type': 'Typ',
-  'meters.http': 'HTTP (Loxone Virtueller Ausgang)',
-  'meters.udp': 'UDP (Gemeinsamer Port - Empfohlen!)',
-  'meters.endpointUrl': 'Endpunkt-URL',
-  'meters.powerField': 'Stromfeldname',
-  'meters.powerFieldHelp': 'JSON-Feldname, der den Stromwert in kWh enthält',
-  'meters.dataKeyHelp': 'Eindeutiger Schlüssel wie: apart1_kwh, solar_kwh, etc.',
-  'meters.sharedPortInfo': 'Gemeinsamer UDP-Port: Mehrere Zähler können denselben Port verwenden! Verwenden Sie eindeutige Datenschlüssel zur Unterscheidung.',
-  'meters.instructions.udpNew': 'NEU: Automatisch generierte UUID_power_kwh-Schlüssel für jeden Zähler!',
-  'meters.instructions.udpExample3Title': 'Solarzähler:',
-  'meters.instructions.udpBenefits': 'Vorteile: Eindeutige UUID_power_kwh-Schlüssel verhindern Konflikte, ein UDP-Port pro Gebäude, sauberere Netzwerkkonfiguration!',
-  'meters.instructions.httpSetup': 'Loxone Virtueller Ausgang Einrichtung:',
-
-  // Chargers
+  // ============================================================================
+  // CHARGERS
+  // ============================================================================
+  
+  // General
   'chargers.title': 'Ladestationen',
   'chargers.subtitle': 'EV-Ladeinfrastruktur verwalten',
   'chargers.addCharger': 'Ladestation hinzufügen',
@@ -592,6 +592,76 @@ export const de: Translations = {
   'chargers.weidmuller': 'Weidmüller',
   'chargers.weidmullerHelp': 'Weidmüller-Ladestationen benötigen 4 Datenpunkte: Strom, Status, Benutzer-ID und Modus',
   'chargers.connectionConfig': 'Verbindungskonfiguration (Weidmüller - 4 Datenpunkte)',
+  'chargers.deleteConfirm': 'Sind Sie sicher, dass Sie diese Ladestation löschen möchten?',
+  'chargers.saveFailed': 'Speichern der Ladestation fehlgeschlagen',
+  'chargers.exportFailed': 'Export der Daten fehlgeschlagen',
+  'chargers.chargersCount': 'Ladestationen',
+  'chargers.chargers': 'Ladestationen',
+  'chargers.connection': 'Verbindung',
+  'chargers.priorityMode': 'Prioritätsmodus',
+  'chargers.supported': 'Unterstützt',
+
+  // Delete Confirmation
+  'chargers.captchaRequired': 'Bitte lösen Sie die Sicherheitsaufgabe, um fortzufahren.',
+
+  // Connection Types
+  'chargers.loxoneApiRecommended': 'Loxone WebSocket API (Empfohlen)',
+  'chargers.udpAlternative': 'UDP (Legacy)',
+
+  // Loxone Configuration
+  'chargers.loxoneApiDescription': 'Echtzeit-WebSocket-Verbindung mit automatischer Wiederverbindung und Statusüberwachung',
+  'chargers.loxoneHost': 'Loxone Host (IP-Adresse)',
+  'chargers.loxoneHostDescription': 'IP-Adresse oder Hostname Ihres Loxone Miniservers',
+  'chargers.loxoneUsername': 'Benutzername',
+  'chargers.loxonePassword': 'Passwort',
+  'chargers.loxoneCredentialsDescription': 'Loxone Miniserver-Anmeldedaten für WebSocket-Authentifizierung',
+
+  // UUID Fields
+  'chargers.loxonePowerUuid': 'Strom-UUID',
+  'chargers.loxoneStateUuid': 'Status-UUID',
+  'chargers.loxoneUserIdUuid': 'Benutzer-ID-UUID',
+  'chargers.loxoneModeUuid': 'Modus-UUID',
+  'chargers.loxoneUuidsDescription': 'Finden Sie diese UUIDs in Loxone Config oder in der LoxAPP3.json-Strukturdatei',
+
+  // Connection Status
+  'chargers.loxoneConnected': 'Loxone Verbunden',
+  'chargers.loxoneDisconnected': 'Loxone Getrennt',
+  'chargers.loxoneConnecting': 'Verbinde mit Loxone...',
+  'chargers.lastUpdate': 'Letzte Aktualisierung',
+
+  // Setup Guide
+  'chargers.loxoneSetupGuide': 'Schnelleinrichtungsanleitung:',
+  'chargers.loxoneSetupStep1': '1. Geben Sie die IP-Adresse Ihres Loxone Miniservers ein',
+  'chargers.loxoneSetupStep2': '2. Geben Sie die 4 UUIDs für Strom, Status, Benutzer-ID und Modus ein',
+  'chargers.loxoneSetupStep3': '3. Geben Sie Loxone-Anmeldedaten an (gleich wie Loxone Config Login)',
+  'chargers.loxoneSetupStep4': '4. Konfigurieren Sie Status- und Modus-Wert-Zuordnungen unten',
+
+  // Features
+  'chargers.loxoneFeatures': 'Hauptmerkmale:',
+  'chargers.loxoneFeature1': '✓ Echtzeit bidirektionale Kommunikation',
+  'chargers.loxoneFeature2': '✓ Automatische Wiederverbindung bei Verbindungsabbruch',
+  'chargers.loxoneFeature3': '✓ Verbindungsstatusüberwachung',
+
+  // Charger Setup
+  'chargers.chargerSetup': 'Ladestations-Einrichtung',
+  'chargers.requiresFourDataPoints': 'Ladestationen benötigen 4 Datenpunkte mit UUID-Schlüsseln:',
+  'chargers.powerUuidPower': 'Strom (UUID_power)',
+  'chargers.powerDescription': 'Aktueller Stromverbrauch in kWh',
+  'chargers.stateUuidState': 'Status (UUID_state)',
+  'chargers.stateDescription': 'Ladestatus als numerischer Wert (z.B. 65=Kabel verriegelt, 67=lädt)',
+  'chargers.userIdUuidUser': 'Benutzer-ID (UUID_user)',
+  'chargers.userIdDescription': 'Welcher Benutzer die Ladestation benutzt',
+  'chargers.modeUuidMode': 'Modus (UUID_mode)',
+  'chargers.modeDescription': 'Lademodus als numerischer Wert (z.B. 1=Solar, 2=Priorität)',
+
+  // UDP Connection
+  'chargers.udpConnection': 'UDP-Verbindung (Empfohlen)',
+  'chargers.autoGeneratedUuidKeys': 'Automatisch generierte UUID-Schlüssel für alle 4 Datenpunkte!',
+  'chargers.existingUuidKeys': 'Vorhandene UUID-Schlüssel',
+  'chargers.udpInstructions': 'Klicken Sie auf "Ladestation hinzufügen", um eindeutige UUIDs zu generieren, verwenden Sie denselben UDP-Port wie Ihre Zähler, senden Sie alle 4 Datenpunkte mit ihren UUID-Schlüsseln.',
+  'chargers.udpDeprecatedWarning': 'UDP-Verbindung ist veraltet. Erwägen Sie Migration zu Loxone WebSocket API.',
+
+  // Endpoints & Registers
   'chargers.powerEndpoint': 'Stromverbrauchs-Endpunkt',
   'chargers.stateEndpoint': 'Status-Endpunkt',
   'chargers.userIdEndpoint': 'Benutzer-ID-Endpunkt',
@@ -607,10 +677,16 @@ export const de: Translations = {
   'chargers.modeKey': 'Modusschlüssel',
   'chargers.supportsPriority': 'Unterstützt Prioritätsladen',
   'chargers.sharedPortInfo': 'Gemeinsamer UDP-Port: Ladestationen können denselben Port wie Zähler verwenden! Verwenden Sie eindeutige JSON-Schlüssel für die 4 Datenpunkte.',
-  'chargers.deleteConfirm': 'Sind Sie sicher, dass Sie diese Ladestation löschen möchten?',
-  'chargers.saveFailed': 'Speichern der Ladestation fehlgeschlagen',
-  'chargers.exportFailed': 'Export der Daten fehlgeschlagen',
-  'chargers.chargersCount': 'Ladestationen',
+  'chargers.loxoneSendsTo': 'Loxone sendet an Port',
+  'chargers.powerReg': 'Strom Reg',
+  'chargers.stateReg': 'Status Reg',
+  'chargers.userReg': 'Benutzer Reg',
+  'chargers.modeReg': 'Modus Reg',
+
+  // State and Mode Value Mappings
+  'chargers.stateAndModeValues': 'Status & Modus Wert-Zuordnungen',
+  'chargers.configureNumericValues': 'Konfigurieren Sie numerische Werte für Status und Modi',
+  'chargers.valueMappingsDescription': 'Diese Zuordnungen teilen dem System mit, wie die numerischen Werte interpretiert werden sollen, die Ihre Ladestation sendet.',
   'chargers.stateValueMappings': 'Status-Wert-Zuordnungen',
   'chargers.configureStateValues': 'Konfigurieren Sie die numerischen Werte, die Ihre Ladestation für jeden Status sendet:',
   'chargers.stateCableLocked': 'Kabel verriegelt',
@@ -621,6 +697,8 @@ export const de: Translations = {
   'chargers.configureModeValues': 'Konfigurieren Sie die numerischen Werte, die Ihre Ladestation für jeden Lademodus sendet:',
   'chargers.modeNormal': 'Solarmodus',
   'chargers.modePriority': 'Prioritätsmodus',
+
+  // State & Mode Labels
   'chargers.state.cableLocked': 'Kabel verriegelt',
   'chargers.state.waitingAuth': 'Warten auf Auth',
   'chargers.state.charging': 'Lädt',
@@ -629,62 +707,8 @@ export const de: Translations = {
   'chargers.mode.normal': 'Solar',
   'chargers.mode.priority': 'Priorität',
   'chargers.mode.unknown': 'Unbekannt',
-  'chargers.chargerSetup': 'Ladestations-Einrichtung',
-  'chargers.requiresFourDataPoints': 'Ladestationen benötigen 4 Datenpunkte mit UUID-Schlüsseln:',
-  'chargers.powerUuidPower': 'Strom (UUID_power)',
-  'chargers.powerDescription': 'Aktueller Stromverbrauch in kWh',
-  'chargers.stateUuidState': 'Status (UUID_state)',
-  'chargers.stateDescription': 'Ladestatus als numerischer Wert (z.B. 65=Kabel verriegelt, 67=lädt)',
-  'chargers.userIdUuidUser': 'Benutzer-ID (UUID_user)',
-  'chargers.userIdDescription': 'Welcher Benutzer die Ladestation benutzt',
-  'chargers.modeUuidMode': 'Modus (UUID_mode)',
-  'chargers.modeDescription': 'Lademodus als numerischer Wert (z.B. 1=Solar, 2=Priorität)',
-  'chargers.udpConnection': 'UDP-Verbindung (Empfohlen)',
-  'chargers.autoGeneratedUuidKeys': 'Automatisch generierte UUID-Schlüssel für alle 4 Datenpunkte!',
-  'chargers.existingUuidKeys': 'Vorhandene UUID-Schlüssel',
-  'chargers.udpInstructions': 'Klicken Sie auf "Ladestation hinzufügen", um eindeutige UUIDs zu generieren, verwenden Sie denselben UDP-Port wie Ihre Zähler, senden Sie alle 4 Datenpunkte mit ihren UUID-Schlüsseln.',
-  'chargers.stateAndModeValues': 'Status & Modus Wert-Zuordnungen',
-  'chargers.configureNumericValues': 'Konfigurieren Sie numerische Werte für Status und Modi',
-  'chargers.valueMappingsDescription': 'Diese Zuordnungen teilen dem System mit, wie die numerischen Werte interpretiert werden sollen, die Ihre Ladestation sendet.',
-  'chargers.loxoneSendsTo': 'Loxone sendet an Port',
-  'chargers.powerReg': 'Strom Reg',
-  'chargers.stateReg': 'Status Reg',
-  'chargers.userReg': 'Benutzer Reg',
-  'chargers.modeReg': 'Modus Reg',
-  'chargers.connection': 'Verbindung',
-  'chargers.priorityMode': 'Prioritätsmodus',
-  'chargers.supported': 'Unterstützt',
-  'chargers.chargers': 'Ladestationen',
 
-  // Loxone charger connection
-  'chargers.loxoneApiRecommended': 'Loxone WebSocket API (Empfohlen)',
-  'chargers.udpAlternative': 'UDP (Legacy)',
-  'chargers.loxoneApiDescription': 'Echtzeit-WebSocket-Verbindung mit automatischer Wiederverbindung und Statusüberwachung',
-  'chargers.loxoneHost': 'Loxone Host (IP-Adresse)',
-  'chargers.loxoneHostDescription': 'IP-Adresse oder Hostname Ihres Loxone Miniservers',
-  'chargers.loxoneUsername': 'Benutzername',
-  'chargers.loxonePassword': 'Passwort',
-  'chargers.loxoneCredentialsDescription': 'Loxone Miniserver-Anmeldedaten für WebSocket-Authentifizierung',
-  'chargers.loxonePowerUuid': 'Strom-UUID',
-  'chargers.loxoneStateUuid': 'Status-UUID',
-  'chargers.loxoneUserIdUuid': 'Benutzer-ID-UUID',
-  'chargers.loxoneModeUuid': 'Modus-UUID',
-  'chargers.loxoneUuidsDescription': 'Finden Sie diese UUIDs in Loxone Config oder in der LoxAPP3.json-Strukturdatei',
-  'chargers.loxoneConnected': 'Loxone Verbunden',
-  'chargers.loxoneDisconnected': 'Loxone Getrennt',
-  'chargers.loxoneConnecting': 'Verbinde mit Loxone...',
-  'chargers.lastUpdate': 'Letzte Aktualisierung',
-  'chargers.loxoneSetupGuide': 'Schnelleinrichtungsanleitung:',
-  'chargers.loxoneSetupStep1': '1. Geben Sie die IP-Adresse Ihres Loxone Miniservers ein',
-  'chargers.loxoneSetupStep2': '2. Geben Sie die 4 UUIDs für Strom, Status, Benutzer-ID und Modus ein',
-  'chargers.loxoneSetupStep3': '3. Geben Sie Loxone-Anmeldedaten an (gleich wie Loxone Config Login)',
-  'chargers.loxoneSetupStep4': '4. Konfigurieren Sie Status- und Modus-Wert-Zuordnungen unten',
-  'chargers.loxoneFeatures': 'Hauptmerkmale:',
-  'chargers.loxoneFeature1': '✓ Echtzeit bidirektionale Kommunikation',
-  'chargers.loxoneFeature2': '✓ Automatische Wiederverbindung bei Verbindungsabbruch',
-  'chargers.loxoneFeature3': '✓ Verbindungsstatusüberwachung',
-
-  // Chargers instructions
+  // Instructions Modal
   'chargers.instructions.title': 'Ladestations-Einrichtungsanleitung',
   'chargers.instructions.loxoneTitle': 'Loxone WebSocket API-Verbindung',
   'chargers.instructions.loxoneRecommended': 'Empfohlen: Beste Leistung und Zuverlässigkeit',
@@ -726,9 +750,12 @@ export const de: Translations = {
   'chargers.instructions.troubleshootingLogs': 'Echtzeit-Protokolle anzeigen:',
   'chargers.instructions.troubleshootingNetwork': 'Netzwerkkonnektivität testen:',
   'chargers.instructions.troubleshootingMonitor': 'Überwachen Sie die Verbindungsstatusindikatoren auf jeder Ladestationskarte',
-  'chargers.udpDeprecatedWarning': 'UDP-Verbindung ist veraltet. Erwägen Sie Migration zu Loxone WebSocket API.',
 
-  // Billing
+  // ============================================================================
+  // BILLING
+  // ============================================================================
+  
+  // General
   'billing.title': 'Abrechnung & Rechnungen',
   'billing.subtitle': 'Rechnungen und Abrechnungen für alle Gebäude verwalten',
   'billing.generateBills': 'Rechnungen erstellen',
@@ -748,6 +775,8 @@ export const de: Translations = {
   'billing.autoFilled': 'Automatisch ausgefüllt vom Administrator',
   'billing.startDate': 'Startdatum',
   'billing.endDate': 'Enddatum',
+
+  // Sender Information
   'billing.senderInfo': 'Absenderinformationen',
   'billing.senderName': 'Name',
   'billing.senderNamePlaceholder': 'Ihr Name oder Firmenname',
@@ -757,6 +786,8 @@ export const de: Translations = {
   'billing.zipPlaceholder': '8000',
   'billing.city': 'Ort',
   'billing.cityPlaceholder': 'Zürich',
+
+  // Banking Information
   'billing.bankingInfo': 'Bankinformationen',
   'billing.bankName': 'Bankname',
   'billing.bankNamePlaceholder': 'Ihr Bankname',
@@ -765,6 +796,8 @@ export const de: Translations = {
   'billing.accountHolder': 'Kontoinhaber',
   'billing.accountHolderPlaceholder': 'Name des Kontoinhabers',
   'billing.qrNote': 'Bankinformationen sind optional, aber erforderlich für die Swiss QR-Rechnung',
+
+  // Actions & Messages
   'billing.generating': 'Wird erstellt...',
   'billing.selectAtLeastOne': 'Bitte wählen Sie mindestens ein Gebäude aus',
   'billing.generatedSuccess': 'Rechnungen erfolgreich erstellt',
@@ -774,6 +807,8 @@ export const de: Translations = {
   'billing.deleteConfirm': 'Möchten Sie diese Rechnung wirklich löschen?',
   'billing.deleteSuccess': 'Rechnung erfolgreich gelöscht',
   'billing.deleteFailed': 'Fehler beim Löschen der Rechnung',
+
+  // Invoice Display
   'billing.invoiceNumber': 'Rechnungsnummer',
   'billing.user': 'Benutzer',
   'billing.period': 'Zeitraum',
@@ -796,7 +831,16 @@ export const de: Translations = {
   'billing.archived': 'Archiviert',
   'billing.archiveSection': 'Archiv (Archivierte Benutzer)',
 
-  // Billing Instructions
+  // Tabs
+  'billing.tabs.invoices': 'Rechnungen',
+  'billing.tabs.sharedMeters': 'Gemeinsame Zähler',
+  'billing.tabs.customItems': 'Eigene Positionen',
+  'billing.createBill': 'Rechnung erstellen',
+  'billing.allBuildingsDesc': 'Alle Rechnungen',
+  'billing.allBuildingsDescSharedMeters': 'Alle Zählerkonfigurationen',
+  'billing.allBuildingsDescCustomItems': 'Alle benutzerdefinierten Posten',
+
+  // Instructions
   'billing.instructions.title': 'Anleitung zur Abrechnung',
   'billing.instructions.whatIsBilling': 'Was ist Abrechnung?',
   'billing.instructions.billingDescription': 'Das Abrechnungsmodul berechnet und erstellt automatisch Rechnungen für Benutzer basierend auf ihrem Energieverbrauch (Solar- und Netzstrom) und EV-Ladeverbrauch.',
@@ -832,168 +876,61 @@ export const de: Translations = {
   'billing.instructions.tip4': 'Verwenden Sie die Ansichtsfunktion, um Rechnungsdetails vor dem Herunterladen zu überprüfen',
   'billing.instructions.tip5': 'Swiss QR-Rechnungen können von Banking-Apps gescannt werden für einfache Zahlung',
 
-  // Gemeinsame Zählerkonfiguration
-  'sharedMeters.title': 'Gemeinsame Zählerkonfiguration',
-  'sharedMeters.subtitle': 'Konfigurieren Sie gemeinsame Zähler und wie deren Kosten unter den Nutzern aufgeteilt werden',
-  'sharedMeters.loading': 'Lade gemeinsame Zählerkonfigurationen...',
-  'sharedMeters.addNew': 'Gemeinsamen Zähler hinzufügen',
-  'sharedMeters.infoTitle': 'Über gemeinsame Zähler:',
-  'sharedMeters.infoDescription': 'Gemeinsame Zähler erfassen Strom für Gemeinschaftsflächen (Flure, Aufzüge, Parkplätze usw.), der unter mehreren Nutzern aufgeteilt wird. Konfigurieren Sie die Kostenverteilung über gleichmässige Aufteilung, flächenbasierte oder benutzerdefinierte Prozentsätze.',
-  'sharedMeters.noConfigs': 'Noch keine gemeinsamen Zähler konfiguriert',
-  'sharedMeters.noConfigsDescription': 'Klicken Sie auf "Gemeinsamen Zähler hinzufügen", um Ihre erste Konfiguration zu erstellen',
-  'sharedMeters.meterName': 'Zählername',
-  'sharedMeters.building': 'Gebäude',
-  'sharedMeters.splitType.label': 'Aufteilungsart',
-  'sharedMeters.splitType.equal': 'Gleichmässige Aufteilung',
-  'sharedMeters.splitType.byArea': 'Nach Fläche',
-  'sharedMeters.splitType.byUnits': 'Nach Einheiten',
-  'sharedMeters.splitType.custom': 'Benutzerdefiniert',
-  'sharedMeters.splitTypeDesc.equal': 'Kosten werden gleichmässig unter allen aktiven Nutzern im Gebäude aufgeteilt',
-  'sharedMeters.splitTypeDesc.byArea': 'Kosten sind proportional zur Wohnungsfläche (erfordert Flächendaten)',
-  'sharedMeters.splitTypeDesc.byUnits': 'Kosten sind proportional zur Anzahl der Einheiten (erfordert Einheitenzahl)',
-  'sharedMeters.splitTypeDesc.custom': 'Benutzerdefinierte prozentuale Aufteilung für jeden Nutzer (erfordert Konfiguration)',
-  'sharedMeters.unitPrice': 'Einheitspreis',
-  'sharedMeters.meter': 'Zähler',
-  'sharedMeters.selectBuilding': 'Wählen Sie ein Gebäude...',
-  'sharedMeters.selectMeter': 'Wählen Sie einen Zähler...',
-  'sharedMeters.noMetersFound': 'Keine Gebäudezähler für dieses Gebäude gefunden',
-  'sharedMeters.createTitle': 'Gemeinsamen Zähler hinzufügen',
-  'sharedMeters.createSubtitle': 'Konfigurieren Sie einen neuen gemeinsamen Zähler für Ihr Gebäude',
-  'sharedMeters.editTitle': 'Gemeinsamen Zähler bearbeiten',
-  'sharedMeters.editSubtitle': 'Gemeinsame Zählerkonfiguration aktualisieren',
-  'sharedMeters.fillAllFields': 'Bitte füllen Sie alle erforderlichen Felder aus',
-  'sharedMeters.createSuccess': 'Gemeinsame Zählerkonfiguration erfolgreich erstellt',
-  'sharedMeters.updateSuccess': 'Gemeinsame Zählerkonfiguration erfolgreich aktualisiert',
-  'sharedMeters.deleteSuccess': 'Gemeinsame Zählerkonfiguration erfolgreich gelöscht',
-  'sharedMeters.saveFailed': 'Speichern der gemeinsamen Zählerkonfiguration fehlgeschlagen',
-  'sharedMeters.deleteFailed': 'Löschen der gemeinsamen Zählerkonfiguration fehlgeschlagen',
-  'sharedMeters.loadFailed': 'Laden der gemeinsamen Zählerkonfigurationen fehlgeschlagen',
-  'sharedMeters.deleteConfirm': 'Sind Sie sicher, dass Sie diese gemeinsame Zählerkonfiguration löschen möchten?',
-
-  // Benutzerdefinierte Positionen
-  'customItems.title': 'Benutzerdefinierte Rechnungspositionen verwalten',
-  'customItems.subtitle': 'Fügen Sie benutzerdefinierte Gebühren wie Zählermiete, Wartungsgebühren und andere wiederkehrende Posten hinzu',
-  'customItems.selectBuilding': 'Gebäude auswählen',
-  'customItems.selectBuildingPlaceholder': 'Wählen Sie ein Gebäude',
-  'customItems.loading': 'Lädt...',
-  'customItems.addNew': 'Neue benutzerdefinierte Position hinzufügen',
-  'customItems.editItem': 'Benutzerdefinierte Position bearbeiten',
-  'customItems.newItem': 'Neue benutzerdefinierte Position',
-  'customItems.description': 'Beschreibung',
-  'customItems.descriptionPlaceholder': 'z.B. Monatliche Wartungsgebühr',
-  'customItems.amount': 'Betrag',
-  'customItems.category.label': 'Kategorie',
-  'customItems.category.meterRent': 'Zählermiete',
-  'customItems.category.maintenance': 'Wartung',
-  'customItems.category.service': 'Service',
-  'customItems.category.other': 'Sonstiges',
-  'customItems.frequency.label': 'Häufigkeit',
-  'customItems.frequency.once': 'Einmalig',
-  'customItems.frequency.monthly': 'Monatlich',
-  'customItems.frequency.quarterly': 'Vierteljährlich',
-  'customItems.frequency.yearly': 'Jährlich',
-  'customItems.frequencyHelp.once': 'Wird einmalig zur ersten Rechnung im Zeitraum hinzugefügt',
-  'customItems.frequencyHelp.monthly': 'Wird mit der Anzahl der Monate im Abrechnungszeitraum multipliziert',
-  'customItems.frequencyHelp.quarterly': 'Wird mit der Anzahl der Quartale im Abrechnungszeitraum multipliziert',
-  'customItems.frequencyHelp.yearly': 'Wird mit der Anzahl der Jahre im Abrechnungszeitraum multipliziert',
-  'customItems.active': 'Aktiv (wird in Rechnungen aufgenommen)',
-  'customItems.inactive': 'Inaktiv (wird nicht in Rechnungen aufgenommen)',
-  'customItems.inactiveLabel': 'Inaktiv',
-  'customItems.itemsForBuilding': 'Benutzerdefinierte Positionen für Gebäude',
-  'customItems.item': 'Position',
-  'customItems.items': 'Positionen',
-  'customItems.noItems': 'Keine benutzerdefinierten Positionen gefunden',
-  'customItems.noItemsDescription': 'Klicken Sie auf "Neue benutzerdefinierte Position hinzufügen", um eine zu erstellen.',
-  'customItems.validation.descriptionRequired': 'Beschreibung ist erforderlich',
-  'customItems.validation.descriptionTooLong': 'Beschreibung muss weniger als 200 Zeichen lang sein',
-  'customItems.validation.amountPositive': 'Betrag muss grösser als 0 sein',
-  'customItems.validation.amountTooLarge': 'Betrag ist zu gross',
-  'customItems.validation.fixErrors': 'Bitte beheben Sie die Fehler im Formular',
-  'customItems.validation.selectBuilding': 'Bitte wählen Sie ein Gebäude',
-  'customItems.createSuccess': 'Benutzerdefinierte Position erfolgreich erstellt',
-  'customItems.updateSuccess': 'Benutzerdefinierte Position erfolgreich aktualisiert',
-  'customItems.deleteSuccess': 'Benutzerdefinierte Position erfolgreich gelöscht',
-  'customItems.saveFailed': 'Speichern der benutzerdefinierten Position fehlgeschlagen',
-  'customItems.deleteFailed': 'Löschen der benutzerdefinierten Position fehlgeschlagen',
-  'customItems.loadBuildingsFailed': 'Laden der Gebäude fehlgeschlagen',
-  'customItems.loadItemsFailed': 'Laden der benutzerdefinierten Positionen fehlgeschlagen',
-  'customItems.deleteConfirm': 'Sind Sie sicher, dass Sie diese benutzerdefinierte Position löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.',
-
-  // Rechnungskonfiguration (Erweitert)
+  // ============================================================================
+  // BILL CONFIGURATION (Advanced Multi-Step Modal)
+  // ============================================================================
+  
+  // General
   'billConfig.title': 'Erweiterte Rechnungskonfiguration',
+  
+  // Steps
   'billConfig.steps.selection': 'Auswahl',
+  'billConfig.steps.dates': 'Daten',
   'billConfig.steps.meters': 'Zähler',
   'billConfig.steps.items': 'Positionen',
   'billConfig.steps.review': 'Überprüfung',
+  
+  // Step 1: Building & Apartment Selection
   'billConfig.step1.title': 'Gebäude, Nutzer & Zeitraum auswählen',
-  'billConfig.step1.billingPeriod': 'Abrechnungszeitraum',
-  'billConfig.step1.startDate': 'Startdatum',
-  'billConfig.step1.endDate': 'Enddatum',
   'billConfig.step1.selectBuildings': 'Gebäude auswählen',
-  'billConfig.step1.selectUsers': 'Nutzer auswählen',
-  'billConfig.step1.selected': 'ausgewählt',
+  'billConfig.step1.selectApartments': 'Wohnungen/Nutzer auswählen',
   'billConfig.step1.selectAllActive': 'Alle aktiven auswählen',
   'billConfig.step1.selectBuildingFirst': 'Wählen Sie zuerst ein Gebäude',
-  'billConfig.step1.noUsersFound': 'Keine Nutzer gefunden',
-  'billConfig.step1.archived': 'Archiviert',
-  'billConfig.step2.title': 'Gemeinsame Zähler (Optional)',
-  'billConfig.step2.description': 'Wählen Sie aus, welche gemeinsamen Zähler in die Rechnungen aufgenommen werden sollen. Leer lassen zum Überspringen.',
-  'billConfig.step2.noMeters': 'Keine gemeinsamen Zähler für ausgewählte Gebäude konfiguriert',
-  'billConfig.step2.split': 'Aufteilung',
-  'billConfig.step2.selected': 'Ausgewählt',
-  'billConfig.step2.meters': 'gemeinsame(r) Zähler',
-  'billConfig.step3.title': 'Benutzerdefinierte Rechnungspositionen (Optional)',
-  'billConfig.step3.description': 'Fügen Sie benutzerdefinierte Gebühren wie Zählermiete, Wartungsgebühren usw. hinzu.',
-  'billConfig.step3.noItems': 'Keine benutzerdefinierten Rechnungspositionen für ausgewählte Gebäude konfiguriert',
-  'billConfig.step3.selected': 'Ausgewählt',
-  'billConfig.step3.items': 'benutzerdefinierte Position(en)',
-  'billConfig.step4.title': 'Überprüfung & Absenderinformationen',
-  'billConfig.step4.summary': 'Zusammenfassung',
-  'billConfig.step4.period': 'Zeitraum',
-  'billConfig.step4.to': 'bis',
-  'billConfig.step4.buildings': 'Gebäude',
-  'billConfig.step4.users': 'Nutzer',
-  'billConfig.step4.sharedMeters': 'Gemeinsame Zähler',
-  'billConfig.step4.customItems': 'Benutzerdefinierte Positionen',
-  'billConfig.step4.estimatedInvoices': 'Geschätzte Rechnungen',
-  'billConfig.step4.senderInfo': 'Absenderinformationen',
-  'billConfig.step4.name': 'Name',
-  'billConfig.step4.address': 'Adresse',
-  'billConfig.step4.zip': 'PLZ',
-  'billConfig.step4.city': 'Stadt',
-  'billConfig.step4.bankingInfo': 'Bankinformationen',
-  'billConfig.step4.bankName': 'Bankname',
-  'billConfig.step4.iban': 'IBAN',
-  'billConfig.step4.accountHolder': 'Kontoinhaber',
-  'billConfig.navigation.previous': 'Zurück',
-  'billConfig.navigation.next': 'Weiter',
-  'billConfig.navigation.generating': 'Generiere...',
-  'billConfig.navigation.generate': 'Erstellen',
-  'billConfig.validation.selectDates': 'Bitte wählen Sie Start- und Enddatum',
-  'billConfig.validation.selectBuilding': 'Bitte wählen Sie mindestens ein Gebäude',
-  'billConfig.validation.selectUser': 'Bitte wählen Sie mindestens einen Nutzer',
-  'billConfig.successMessage': 'Erfolgreich erstellt',
-  'billConfig.errorMessage': 'Erstellen der Rechnungen fehlgeschlagen',
-  'billConfig.step1.selectApartments': 'Wohnungen/Nutzer auswählen',
+  'billConfig.step1.noApartmentsFound': 'Keine Wohnungen gefunden',
+  'billConfig.step1.selected': 'ausgewählt',
   'billConfig.step1.apartment': 'Wohnung',
   'billConfig.step1.apartments': 'Wohnungen',
   'billConfig.step1.apartmentLabel': 'Wohnung',
-  'billConfig.step1.selectedSummary': 'Auswahlzusammenfassung',
   'billConfig.step1.user': 'Nutzer',
   'billConfig.step1.users': 'Nutzer',
-  'billConfig.steps.dates': 'Daten',
+  'billConfig.step1.noUserAssigned': 'Kein Benutzer zugewiesen',
+  'billConfig.step1.archived': 'Archiviert',
+  'billConfig.step1.selectedSummary': 'Auswahlzusammenfassung',
+
+  // Step 2: Billing Period
   'billConfig.step2.titleNew': 'Abrechnungszeitraum',
   'billConfig.step2.selectPeriod': 'Abrechnungszeitraum auswählen',
   'billConfig.step2.startDate': 'Startdatum',
   'billConfig.step2.endDate': 'Enddatum',
   'billConfig.step2.periodSummary': 'Zeitraumzusammenfassung',
   'billConfig.step2.days': 'Tage',
+
+  // Step 3: Shared Meters
+  'billConfig.step3.title': 'Benutzerdefinierte Rechnungspositionen (Optional)',
+  'billConfig.step3.description': 'Fügen Sie benutzerdefinierte Gebühren wie Zählermiete, Wartungsgebühren usw. hinzu.',
   'billConfig.step3.noMeters': 'Keine gemeinsamen Zähler für ausgewählte Gebäude konfiguriert',
+  'billConfig.step3.split': 'Aufteilung',
+  'billConfig.step3.selected': 'Ausgewählt',
   'billConfig.step3.meters': 'Zähler',
+
+  // Step 4: Custom Items
+  'billConfig.step4.title': 'Überprüfung & Absenderinformationen',
+  'billConfig.step4.description': 'Optionale benutzerdefinierte Positionen auswählen, die in den Rechnungen enthalten sein sollen.',
   'billConfig.step4.noItems': 'Keine benutzerdefinierten Positionen für ausgewählte Gebäude konfiguriert',
   'billConfig.step4.selected': 'Ausgewählt',
   'billConfig.step4.items': 'Positionen',
-  'billConfig.step4.description': 'Optionale benutzerdefinierte Positionen auswählen, die in den Rechnungen enthalten sein sollen.',
+
+  // Step 5: Review & Sender Info
   'billConfig.step5.title': 'Überprüfen & Abschliessen',
   'billConfig.step5.summary': 'Abrechnungsübersicht',
   'billConfig.step5.period': 'Zeitraum',
@@ -1014,87 +951,163 @@ export const de: Translations = {
   'billConfig.step5.iban': 'IBAN',
   'billConfig.step5.accountHolder': 'Kontoinhaber',
 
-  'billing.tabs.invoices': 'Rechnungen',
-  'billing.tabs.sharedMeters': 'Gemeinsame Zähler',
-  'billing.tabs.customItems': 'Eigene Positionen',
-  'billing.createBill': 'Rechnung erstellen',
-  'billing.allBuildingsDesc': 'Alle Rechnungen',
-  'billing.allBuildingsDescSharedMeters': 'Alle Zählerkonfigurationen',
-  'billing.allBuildingsDescCustomItems': 'Alle benutzerdefinierten Posten',
+  // Navigation
+  'billConfig.navigation.previous': 'Zurück',
+  'billConfig.navigation.next': 'Weiter',
+  'billConfig.navigation.generating': 'Generiere...',
+  'billConfig.navigation.generate': 'Erstellen',
 
-  'customItems.editSubtitle': 'Details dieser benutzerdefinierten Position aktualisieren',
-  'customItems.createSubtitle': 'Neue benutzerdefinierte Gebühr hinzufügen, die in Rechnungen enthalten sein soll',
-  'customItems.organizedByBuilding': 'Eigene Positionen nach Gebäude',
-  'customItems.noItemsForBuilding': 'Keine Positionen für dieses Gebäude',
-  'customItems.buildingSection': 'Gebäude: {name}',
+  // Validation
+  'billConfig.validation.selectDates': 'Bitte wählen Sie Start- und Enddatum',
+  'billConfig.validation.selectBuilding': 'Bitte wählen Sie mindestens ein Gebäude',
+  'billConfig.validation.selectUser': 'Bitte wählen Sie mindestens einen Nutzer',
 
+  // Messages
+  'billConfig.successMessage': 'Erfolgreich erstellt',
+  'billConfig.errorMessage': 'Erstellen der Rechnungen fehlgeschlagen',
+
+  // ============================================================================
+  // SHARED METERS CONFIGURATION
+  // ============================================================================
+  
+  // General
+  'sharedMeters.title': 'Gemeinsame Zählerkonfiguration',
+  'sharedMeters.subtitle': 'Konfigurieren Sie gemeinsame Zähler und wie deren Kosten unter den Nutzern aufgeteilt werden',
+  'sharedMeters.loading': 'Lade gemeinsame Zählerkonfigurationen...',
+  'sharedMeters.addNew': 'Gemeinsamen Zähler hinzufügen',
+  'sharedMeters.infoTitle': 'Über gemeinsame Zähler:',
+  'sharedMeters.infoDescription': 'Gemeinsame Zähler erfassen Strom für Gemeinschaftsflächen (Flure, Aufzüge, Parkplätze usw.), der unter mehreren Nutzern aufgeteilt wird. Konfigurieren Sie die Kostenverteilung über gleichmässige Aufteilung, flächenbasierte oder benutzerdefinierte Prozentsätze.',
+  'sharedMeters.noConfigs': 'Noch keine gemeinsamen Zähler konfiguriert',
+  'sharedMeters.noConfigsDescription': 'Klicken Sie auf "Gemeinsamen Zähler hinzufügen", um Ihre erste Konfiguration zu erstellen',
+  
+  // Display Fields
+  'sharedMeters.meterName': 'Zählername',
+  'sharedMeters.building': 'Gebäude',
+  'sharedMeters.unitPrice': 'Einheitspreis',
+  'sharedMeters.meter': 'Zähler',
+  'sharedMeters.selectBuilding': 'Wählen Sie ein Gebäude...',
+  'sharedMeters.selectMeter': 'Wählen Sie einen Zähler...',
+  'sharedMeters.noMetersFound': 'Keine Gebäudezähler für dieses Gebäude gefunden',
   'sharedMeters.onlyHeatingOther': 'Nur Heizungs- und sonstige Zähler können geteilt werden',
+  
+  // Split Types
+  'sharedMeters.splitType.label': 'Aufteilungsart',
+  'sharedMeters.splitType.equal': 'Gleichmässige Aufteilung',
+  'sharedMeters.splitType.byArea': 'Nach Fläche',
+  'sharedMeters.splitType.byUnits': 'Nach Einheiten',
+  'sharedMeters.splitType.custom': 'Benutzerdefiniert',
+  'sharedMeters.splitTypeDesc.equal': 'Kosten werden gleichmässig unter allen aktiven Nutzern im Gebäude aufgeteilt',
+  'sharedMeters.splitTypeDesc.byArea': 'Kosten sind proportional zur Wohnungsfläche (erfordert Flächendaten)',
+  'sharedMeters.splitTypeDesc.byUnits': 'Kosten sind proportional zur Anzahl der Einheiten (erfordert Einheitenzahl)',
+  'sharedMeters.splitTypeDesc.custom': 'Benutzerdefinierte prozentuale Aufteilung für jeden Nutzer (erfordert Konfiguration)',
+  
+  // Custom Split
   'sharedMeters.percentagePerApartment': 'Prozentsatz pro Wohnung',
   'sharedMeters.totalMustBe100': 'Summe muss 100% ergeben',
   'sharedMeters.apartment': 'Wohnung',
   'sharedMeters.percentage': 'Prozentsatz (%)',
+  
+  // Modal Titles
+  'sharedMeters.createTitle': 'Gemeinsamen Zähler hinzufügen',
+  'sharedMeters.createSubtitle': 'Konfigurieren Sie einen neuen gemeinsamen Zähler für Ihr Gebäude',
+  'sharedMeters.editTitle': 'Gemeinsamen Zähler bearbeiten',
+  'sharedMeters.editSubtitle': 'Gemeinsame Zählerkonfiguration aktualisieren',
+  
+  // Validation
+  'sharedMeters.fillAllFields': 'Bitte füllen Sie alle erforderlichen Felder aus',
+  
+  // Messages
+  'sharedMeters.createSuccess': 'Gemeinsame Zählerkonfiguration erfolgreich erstellt',
+  'sharedMeters.updateSuccess': 'Gemeinsame Zählerkonfiguration erfolgreich aktualisiert',
+  'sharedMeters.deleteSuccess': 'Gemeinsame Zählerkonfiguration erfolgreich gelöscht',
+  'sharedMeters.saveFailed': 'Speichern der gemeinsamen Zählerkonfiguration fehlgeschlagen',
+  'sharedMeters.deleteFailed': 'Löschen der gemeinsamen Zählerkonfiguration fehlgeschlagen',
+  'sharedMeters.loadFailed': 'Laden der gemeinsamen Zählerkonfigurationen fehlgeschlagen',
+  'sharedMeters.deleteConfirm': 'Sind Sie sicher, dass Sie diese gemeinsame Zählerkonfiguration löschen möchten?',
 
-  // Pricing
-  'pricing.title': 'Preiseinstellungen',
-  'pricing.subtitle': 'Strom- und Ladetarife konfigurieren',
-  'pricing.addPricing': 'Preise hinzufügen',
-  'pricing.editPricing': 'Preise bearbeiten',
-  'pricing.normalPower': 'Normaler Strom (CHF/kWh)',
-  'pricing.solarPower': 'Solarstrom (CHF/kWh)',
-  'pricing.chargingNormal': 'Laden Solar (CHF/kWh)',
-  'pricing.chargingPriority': 'Laden Priorität (CHF/kWh)',
-  'pricing.validPeriod': 'Gültigkeitszeitraum',
-  'pricing.validFrom': 'Gültig ab',
-  'pricing.validTo': 'Gültig bis',
-  'pricing.activeUseForBilling': 'Aktiv (für Abrechnung verwenden)',
-  'pricing.noPricing': 'Keine Preiseinstellungen konfiguriert. Fügen Sie Ihre ersten Preise hinzu, um zu beginnen.',
-  'pricing.normalKwh': 'Normal (CHF/kWh)',
-  'pricing.solarKwh': 'Solar (CHF/kWh)',
-  'pricing.ongoing': 'laufend',
-  'pricing.to': 'bis',
-  'pricing.deleteConfirm': 'Sind Sie sicher, dass Sie diese Preiseinstellung löschen möchten?',
-  'pricing.deleteSuccess': 'Preiseinstellung erfolgreich gelöscht!',
-  'pricing.deleteFailed': 'Löschen der Einstellung fehlgeschlagen',
-  'pricing.saveSuccess': 'Preiseinstellungen erfolgreich gespeichert!',
-  'pricing.saveFailed': 'Speichern der Einstellungen fehlgeschlagen',
-  'pricing.loadFailed': 'Laden der Daten fehlgeschlagen',
-  'pricing.instructions.button': 'Einrichtungsanleitung',
-  'pricing.instructions.title': 'Preiseinstellungen Anleitung',
-  'pricing.instructions.whatIsPricing': 'Was sind Preiseinstellungen?',
-  'pricing.instructions.pricingDescription': 'Preiseinstellungen definieren die Tarife für verschiedene Arten des Stromverbrauchs in jedem Gebäude. Diese Tarife werden bei der Erstellung von Rechnungen für Mieter verwendet.',
-  'pricing.instructions.howPricingWorks': 'Wie Preise funktionieren',
-  'pricing.instructions.work1': 'Jedes Gebäude kann mehrere Preiseinstellungen für verschiedene Zeiträume haben',
-  'pricing.instructions.work2': 'Das System verwendet die aktive Preiseinstellung, die für den Abrechnungszeitraum gültig ist',
-  'pricing.instructions.work3': 'Verschiedene Tarife können für Netzstrom, Solarstrom und EV-Lademodi festgelegt werden',
-  'pricing.instructions.work4': 'Nur eine aktive Preiseinstellung kann für einen bestimmten Datumsbereich pro Gebäude gültig sein',
-  'pricing.instructions.howToUse': 'Verwendung',
-  'pricing.instructions.step1': 'Wählen Sie ein Gebäude aus den Gebäudekarten oder erstellen Sie Preise für alle Gebäude',
-  'pricing.instructions.step2': 'Klicken Sie auf "Preise hinzufügen", um neue Preiseinstellungen zu erstellen',
-  'pricing.instructions.step3': 'Legen Sie Tarife für Netzstrom, Solarstrom und EV-Laden (Solar- und Prioritätsmodi) fest',
-  'pricing.instructions.step4': 'Definieren Sie den Gültigkeitszeitraum - lassen Sie Enddatum leer für laufende Preise',
-  'pricing.instructions.step5': 'Als aktiv markieren, um diese Preise bei der Rechnungserstellung zu verwenden',
-  'pricing.instructions.important': 'Wichtig',
-  'pricing.instructions.important1': 'Datumsbereiche können sich nicht für aktive Preise im selben Gebäude überschneiden',
-  'pricing.instructions.important2': 'Das Enddatum muss nach dem Startdatum liegen',
-  'pricing.instructions.important3': 'Sie müssen aktive Preise konfiguriert haben, bevor Sie Rechnungen erstellen',
-  'pricing.instructions.tips': 'Tipps',
-  'pricing.instructions.tip1': 'Verwenden Sie verschiedene Preiszeiträume für saisonale Tarife oder Preisänderungen',
-  'pricing.instructions.tip2': 'Deaktivieren Sie alte Preise, anstatt sie zu löschen, um historische Aufzeichnungen zu behalten',
-  'pricing.instructions.tip3': 'Solarstrom wird typischerweise günstiger als Netzstrom bepreist, um die Nutzung zu fördern',
-  'pricing.selectBuilding': 'Bitte wählen Sie ein Gebäude aus',
-  'pricing.endDateBeforeStart': 'Enddatum muss nach Startdatum liegen',
-  'pricing.dateOverlapError': 'Dieser Datumsbereich überschneidet sich mit einer bestehenden aktiven Preiseinstellung für dieses Gebäude. Bitte passen Sie die Daten an oder deaktivieren Sie die in Konflikt stehende Preiseinstellung.',
-  'pricing.searchBuildings': 'Gebäude suchen...',
-  'pricing.allBuildings': 'Alle Gebäude',
-  'pricing.pricingSettings': 'Preiseinstellungen',
+  // ============================================================================
+  // CUSTOM ITEMS (Line Items for Invoices)
+  // ============================================================================
+  
+  // General
+  'customItems.title': 'Benutzerdefinierte Rechnungspositionen verwalten',
+  'customItems.subtitle': 'Fügen Sie benutzerdefinierte Gebühren wie Zählermiete, Wartungsgebühren und andere wiederkehrende Posten hinzu',
+  'customItems.selectBuilding': 'Gebäude auswählen',
+  'customItems.selectBuildingPlaceholder': 'Wählen Sie ein Gebäude',
+  'customItems.loading': 'Lädt...',
+  'customItems.addNew': 'Neue benutzerdefinierte Position hinzufügen',
+  'customItems.editItem': 'Benutzerdefinierte Position bearbeiten',
+  'customItems.newItem': 'Neue benutzerdefinierte Position',
+  'customItems.description': 'Beschreibung',
+  'customItems.descriptionPlaceholder': 'z.B. Monatliche Wartungsgebühr',
+  'customItems.amount': 'Betrag',
+  
+  // Categories
+  'customItems.category.label': 'Kategorie',
+  'customItems.category.meterRent': 'Zählermiete',
+  'customItems.category.maintenance': 'Wartung',
+  'customItems.category.service': 'Service',
+  'customItems.category.other': 'Sonstiges',
+  
+  // Frequency
+  'customItems.frequency.label': 'Häufigkeit',
+  'customItems.frequency.once': 'Einmalig',
+  'customItems.frequency.monthly': 'Monatlich',
+  'customItems.frequency.quarterly': 'Vierteljährlich',
+  'customItems.frequency.yearly': 'Jährlich',
+  'customItems.frequencyHelp.once': 'Wird einmalig zur ersten Rechnung im Zeitraum hinzugefügt',
+  'customItems.frequencyHelp.monthly': 'Wird mit der Anzahl der Monate im Abrechnungszeitraum multipliziert',
+  'customItems.frequencyHelp.quarterly': 'Wird mit der Anzahl der Quartale im Abrechnungszeitraum multipliziert',
+  'customItems.frequencyHelp.yearly': 'Wird mit der Anzahl der Jahre im Abrechnungszeitraum multipliziert',
+  
+  // Status
+  'customItems.active': 'Aktiv (wird in Rechnungen aufgenommen)',
+  'customItems.inactive': 'Inaktiv (wird nicht in Rechnungen aufgenommen)',
+  'customItems.inactiveLabel': 'Inaktiv',
+  
+  // Display
+  'customItems.itemsForBuilding': 'Benutzerdefinierte Positionen für Gebäude',
+  'customItems.item': 'Position',
+  'customItems.items': 'Positionen',
+  'customItems.noItems': 'Keine benutzerdefinierten Positionen gefunden',
+  'customItems.noItemsDescription': 'Klicken Sie auf "Neue benutzerdefinierte Position hinzufügen", um eine zu erstellen.',
+  'customItems.organizedByBuilding': 'Eigene Positionen nach Gebäude',
+  'customItems.noItemsForBuilding': 'Keine Positionen für dieses Gebäude',
+  'customItems.buildingSection': 'Gebäude: {name}',
+  'customItems.editSubtitle': 'Details dieser benutzerdefinierten Position aktualisieren',
+  'customItems.createSubtitle': 'Neue benutzerdefinierte Gebühr hinzufügen, die in Rechnungen enthalten sein soll',
+  
+  // Validation
+  'customItems.validation.descriptionRequired': 'Beschreibung ist erforderlich',
+  'customItems.validation.descriptionTooLong': 'Beschreibung muss weniger als 200 Zeichen lang sein',
+  'customItems.validation.amountPositive': 'Betrag muss grösser als 0 sein',
+  'customItems.validation.amountTooLarge': 'Betrag ist zu gross',
+  'customItems.validation.fixErrors': 'Bitte beheben Sie die Fehler im Formular',
+  'customItems.validation.selectBuilding': 'Bitte wählen Sie ein Gebäude',
+  
+  // Messages
+  'customItems.createSuccess': 'Benutzerdefinierte Position erfolgreich erstellt',
+  'customItems.updateSuccess': 'Benutzerdefinierte Position erfolgreich aktualisiert',
+  'customItems.deleteSuccess': 'Benutzerdefinierte Position erfolgreich gelöscht',
+  'customItems.saveFailed': 'Speichern der benutzerdefinierten Position fehlgeschlagen',
+  'customItems.deleteFailed': 'Löschen der benutzerdefinierten Position fehlgeschlagen',
+  'customItems.loadBuildingsFailed': 'Laden der Gebäude fehlgeschlagen',
+  'customItems.loadItemsFailed': 'Laden der benutzerdefinierten Positionen fehlgeschlagen',
+  'customItems.deleteConfirm': 'Sind Sie sicher, dass Sie diese benutzerdefinierte Position löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.',
 
-  // Auto Billing
+  // ============================================================================
+  // AUTO BILLING (Scheduled Automatic Billing)
+  // ============================================================================
+  
+  // Main Page
   'autoBilling.title': 'Automatische Rechnungserstellung',
   'autoBilling.subtitle': 'Automatische Abrechnungspläne konfigurieren',
   'autoBilling.addConfig': 'Konfiguration hinzufügen',
   'autoBilling.editConfig': 'Konfiguration bearbeiten',
   'autoBilling.setupInstructions': 'Einrichtungsanleitung',
   'autoBilling.noConfigs': 'Keine automatischen Abrechnungskonfigurationen. Erstellen Sie Ihre erste Konfiguration, um die Rechnungserstellung zu automatisieren.',
+
+  // Form Labels
   'autoBilling.configName': 'Konfigurationsname',
   'autoBilling.configNamePlaceholder': 'z.B. Monatliche Abrechnung für Gebäude A',
   'autoBilling.selectBuildings': 'Gebäude auswählen',
@@ -1102,11 +1115,15 @@ export const de: Translations = {
   'autoBilling.atLeastOne': 'mindestens eins',
   'autoBilling.leaveEmptyForAll': 'leer lassen für alle Benutzer',
   'autoBilling.selectAtLeastOneBuilding': 'Bitte wählen Sie mindestens ein Gebäude aus',
+
+  // Frequency Options
   'autoBilling.frequency': 'Abrechnungsfrequenz',
   'autoBilling.frequency.monthly': 'Monatlich',
   'autoBilling.frequency.quarterly': 'Vierteljährlich (Alle 3 Monate)',
   'autoBilling.frequency.half_yearly': 'Halbjährlich (Alle 6 Monate)',
   'autoBilling.frequency.yearly': 'Jährlich',
+
+  // Date and Scheduling
   'autoBilling.generationDay': 'Erstellungstag',
   'autoBilling.generationDayHelp': 'Tag des Monats zur Rechnungserstellung (1-28)',
   'autoBilling.firstExecutionDate': 'Erstes Ausführungsdatum',
@@ -1114,14 +1131,20 @@ export const de: Translations = {
   'autoBilling.day': 'Tag',
   'autoBilling.lastRun': 'Letzte Ausführung',
   'autoBilling.nextRun': 'Nächste Ausführung',
+
+  // Card Display
   'autoBilling.building': 'Gebäude',
   'autoBilling.buildings': 'Gebäude',
   'autoBilling.user': 'Benutzer',
   'autoBilling.users': 'Benutzer',
   'autoBilling.allUsers': 'Alle Benutzer in ausgewählten Gebäuden',
   'autoBilling.noBuildings': 'Keine Gebäude ausgewählt',
+
+  // Actions
   'autoBilling.pause': 'Pausieren',
   'autoBilling.activate': 'Aktivieren',
+
+  // Messages
   'autoBilling.createSuccess': 'Auto-Abrechnungskonfiguration erfolgreich erstellt!',
   'autoBilling.updateSuccess': 'Auto-Abrechnungskonfiguration erfolgreich aktualisiert!',
   'autoBilling.saveFailed': 'Speichern der Konfiguration fehlgeschlagen',
@@ -1129,6 +1152,8 @@ export const de: Translations = {
   'autoBilling.deleteSuccess': 'Auto-Abrechnungskonfiguration erfolgreich gelöscht',
   'autoBilling.deleteFailed': 'Löschen der Konfiguration fehlgeschlagen',
   'autoBilling.toggleFailed': 'Umschalten des Konfigurationsstatus fehlgeschlagen',
+
+  // Instructions Modal
   'autoBilling.instructions.title': 'Automatische Abrechnung Anleitung',
   'autoBilling.instructions.whatIsAutoBilling': 'Was ist automatische Abrechnung?',
   'autoBilling.instructions.autoBillingDescription': 'Automatische Abrechnungspläne erstellen Rechnungen in regelmässigen Abständen ohne manuelles Eingreifen. Konfigurieren Sie, wann und wie oft Rechnungen erstellt werden sollen, und das System erstellt sie automatisch nach Zeitplan.',
@@ -1159,7 +1184,73 @@ export const de: Translations = {
   'autoBilling.instructions.tip3': 'Bankverbindung in Konfigurationen füllt Rechnungs-QR-Codes automatisch aus',
   'autoBilling.instructions.tip4': 'Sowohl automatische als auch manuelle Rechnungen erscheinen auf derselben Abrechnungsseite',
 
-  // Logs
+  // ============================================================================
+  // PRICING
+  // ============================================================================
+  
+  // General
+  'pricing.title': 'Preiseinstellungen',
+  'pricing.subtitle': 'Strom- und Ladetarife konfigurieren',
+  'pricing.addPricing': 'Preise hinzufügen',
+  'pricing.editPricing': 'Preise bearbeiten',
+  'pricing.normalPower': 'Normaler Strom (CHF/kWh)',
+  'pricing.solarPower': 'Solarstrom (CHF/kWh)',
+  'pricing.chargingNormal': 'Laden Solar (CHF/kWh)',
+  'pricing.chargingPriority': 'Laden Priorität (CHF/kWh)',
+  'pricing.validPeriod': 'Gültigkeitszeitraum',
+  'pricing.validFrom': 'Gültig ab',
+  'pricing.validTo': 'Gültig bis',
+  'pricing.activeUseForBilling': 'Aktiv (für Abrechnung verwenden)',
+  'pricing.noPricing': 'Keine Preiseinstellungen konfiguriert. Fügen Sie Ihre ersten Preise hinzu, um zu beginnen.',
+  'pricing.normalKwh': 'Normal (CHF/kWh)',
+  'pricing.solarKwh': 'Solar (CHF/kWh)',
+  'pricing.ongoing': 'laufend',
+  'pricing.to': 'bis',
+  'pricing.deleteConfirm': 'Sind Sie sicher, dass Sie diese Preiseinstellung löschen möchten?',
+  'pricing.deleteSuccess': 'Preiseinstellung erfolgreich gelöscht!',
+  'pricing.deleteFailed': 'Löschen der Einstellung fehlgeschlagen',
+  'pricing.saveSuccess': 'Preiseinstellungen erfolgreich gespeichert!',
+  'pricing.saveFailed': 'Speichern der Einstellungen fehlgeschlagen',
+  'pricing.loadFailed': 'Laden der Daten fehlgeschlagen',
+  'pricing.searchBuildings': 'Gebäude suchen...',
+  'pricing.allBuildings': 'Alle Gebäude',
+  'pricing.pricingSettings': 'Preiseinstellungen',
+
+  // Instructions
+  'pricing.instructions.button': 'Einrichtungsanleitung',
+  'pricing.instructions.title': 'Preiseinstellungen Anleitung',
+  'pricing.instructions.whatIsPricing': 'Was sind Preiseinstellungen?',
+  'pricing.instructions.pricingDescription': 'Preiseinstellungen definieren die Tarife für verschiedene Arten des Stromverbrauchs in jedem Gebäude. Diese Tarife werden bei der Erstellung von Rechnungen für Mieter verwendet.',
+  'pricing.instructions.howPricingWorks': 'Wie Preise funktionieren',
+  'pricing.instructions.work1': 'Jedes Gebäude kann mehrere Preiseinstellungen für verschiedene Zeiträume haben',
+  'pricing.instructions.work2': 'Das System verwendet die aktive Preiseinstellung, die für den Abrechnungszeitraum gültig ist',
+  'pricing.instructions.work3': 'Verschiedene Tarife können für Netzstrom, Solarstrom und EV-Lademodi festgelegt werden',
+  'pricing.instructions.work4': 'Nur eine aktive Preiseinstellung kann für einen bestimmten Datumsbereich pro Gebäude gültig sein',
+  'pricing.instructions.howToUse': 'Verwendung',
+  'pricing.instructions.step1': 'Wählen Sie ein Gebäude aus den Gebäudekarten oder erstellen Sie Preise für alle Gebäude',
+  'pricing.instructions.step2': 'Klicken Sie auf "Preise hinzufügen", um neue Preiseinstellungen zu erstellen',
+  'pricing.instructions.step3': 'Legen Sie Tarife für Netzstrom, Solarstrom und EV-Laden (Solar- und Prioritätsmodi) fest',
+  'pricing.instructions.step4': 'Definieren Sie den Gültigkeitszeitraum - lassen Sie Enddatum leer für laufende Preise',
+  'pricing.instructions.step5': 'Als aktiv markieren, um diese Preise bei der Rechnungserstellung zu verwenden',
+  'pricing.instructions.important': 'Wichtig',
+  'pricing.instructions.important1': 'Datumsbereiche können sich nicht für aktive Preise im selben Gebäude überschneiden',
+  'pricing.instructions.important2': 'Das Enddatum muss nach dem Startdatum liegen',
+  'pricing.instructions.important3': 'Sie müssen aktive Preise konfiguriert haben, bevor Sie Rechnungen erstellen',
+  'pricing.instructions.tips': 'Tipps',
+  'pricing.instructions.tip1': 'Verwenden Sie verschiedene Preiszeiträume für saisonale Tarife oder Preisänderungen',
+  'pricing.instructions.tip2': 'Deaktivieren Sie alte Preise, anstatt sie zu löschen, um historische Aufzeichnungen zu behalten',
+  'pricing.instructions.tip3': 'Solarstrom wird typischerweise günstiger als Netzstrom bepreist, um die Nutzung zu fördern',
+
+  // Validation
+  'pricing.selectBuilding': 'Bitte wählen Sie ein Gebäude aus',
+  'pricing.endDateBeforeStart': 'Enddatum muss nach Startdatum liegen',
+  'pricing.dateOverlapError': 'Dieser Datumsbereich überschneidet sich mit einer bestehenden aktiven Preiseinstellung für dieses Gebäude. Bitte passen Sie die Daten an oder deaktivieren Sie die in Konflikt stehende Preiseinstellung.',
+
+  // ============================================================================
+  // LOGS (System Logs & Monitoring)
+  // ============================================================================
+  
+  // General
   'logs.title': 'Systemprotokolle',
   'logs.subtitle': 'Systemaktivität überwachen und Debug-Informationen',
   'logs.refresh': 'Aktualisieren',
@@ -1172,6 +1263,13 @@ export const de: Translations = {
   'logs.ipAddress': 'IP-Adresse',
   'logs.noLogs': 'Noch keine Protokolle verfügbar. Systemaktivität erscheint hier.',
   'logs.loadingLogs': 'Protokolle werden geladen...',
+  'logs.loadFailed': 'Laden der Protokolle fehlgeschlagen:',
+  'logs.debugInfoFailed': 'Laden der Debug-Informationen fehlgeschlagen:',
+  'logs.rebootConfirm': 'Sind Sie sicher, dass Sie das System neu starten möchten? Dies startet den Backend-Service neu.',
+  'logs.rebootSuccess': 'System wird neu gestartet... Der Service wird in wenigen Sekunden neu gestartet.',
+  'logs.rebootFailed': 'Systemneustart fehlgeschlagen',
+
+  // Real-time Status
   'logs.realTimeStatus': 'Echtzeit-Systemstatus',
   'logs.dataCollectorStatus': 'Datensammler-Status',
   'logs.running': 'Läuft',
@@ -1189,11 +1287,8 @@ export const de: Translations = {
   'logs.recentErrors': 'Aktuelle Fehler',
   'logs.last24Hours': 'Letzte 24 Stunden',
   'logs.activityLog': 'Aktivitätsprotokoll (Letzte 200 Einträge)',
-  'logs.rebootConfirm': 'Sind Sie sicher, dass Sie das System neu starten möchten? Dies startet den Backend-Service neu.',
-  'logs.rebootSuccess': 'System wird neu gestartet... Der Service wird in wenigen Sekunden neu gestartet.',
-  'logs.rebootFailed': 'Systemneustart fehlgeschlagen',
-  'logs.loadFailed': 'Laden der Protokolle fehlgeschlagen:',
-  'logs.debugInfoFailed': 'Laden der Debug-Informationen fehlgeschlagen:',
+
+  // Device Health
   'logs.deviceHealth': 'Geräte-Gesundheit',
   'logs.cpuUsage': 'CPU-Auslastung',
   'logs.memoryUsage': 'Speicherauslastung',
@@ -1204,6 +1299,11 @@ export const de: Translations = {
   'logs.tempNormal': 'Normal',
   'logs.tempWarm': 'Warm',
   'logs.tempHot': 'Heiss',
+  'logs.cpuLow': 'Geringe Auslastung',
+  'logs.cpuModerate': 'Moderate Auslastung',
+  'logs.cpuHigh': 'Hohe Auslastung!',
+
+  // Backup & Restore
   'logs.createBackup': 'Backup erstellen',
   'logs.creatingBackup': 'Erstelle Backup...',
   'logs.restoreBackup': 'Backup wiederherstellen',
@@ -1214,6 +1314,8 @@ export const de: Translations = {
   'logs.restoreSuccess': 'Datenbank erfolgreich wiederhergestellt! Das System wird in wenigen Sekunden neu gestartet.',
   'logs.restoreFailed': 'Backup-Wiederherstellung fehlgeschlagen. Bitte überprüfen Sie die Datei und versuchen Sie es erneut.',
   'logs.invalidBackupFile': 'Ungültige Backup-Datei. Bitte wählen Sie eine .db-Datei.',
+
+  // Software Updates
   'logs.checkUpdates': 'Nach Updates suchen',
   'logs.checkingUpdates': 'Überprüfe...',
   'logs.applyUpdate': 'Update anwenden',
@@ -1229,14 +1331,14 @@ export const de: Translations = {
   'logs.updateStarted': 'Update gestartet! Das System wird neu erstellt und neu gestartet. Dies kann einige Minuten dauern. Die Seite wird automatisch neu geladen.',
   'logs.updateCompleteReload': 'Update abgeschlossen! Seite wird jetzt neu geladen...',
   'logs.updateFailed': 'Update fehlgeschlagen. Bitte überprüfen Sie die Systemprotokolle oder versuchen Sie, manuell zu aktualisieren.',
-  'logs.cpuLow': 'Geringe Auslastung',
-  'logs.cpuModerate': 'Moderate Auslastung',
-  'logs.cpuHigh': 'Hohe Auslastung!',
   'logs.updatingSystem': 'System wird aktualisiert',
   'logs.updateInProgress': 'Bitte warten Sie, während das System aktualisiert wird. Dies dauert ungefähr 40 Sekunden.',
   'logs.doNotCloseWindow': 'Bitte schliessen Sie dieses Fenster nicht oder navigieren Sie nicht weg.',
 
-  // Settings
+  // ============================================================================
+  // SETTINGS (User Account Settings)
+  // ============================================================================
+  
   'settings.title': 'Einstellungen',
   'settings.subtitle': 'Kontoeinstellungen und Sicherheitseinstellungen verwalten',
   'settings.changePassword': 'Passwort ändern',
@@ -1266,7 +1368,10 @@ export const de: Translations = {
   'settings.monitorActivityDesc': 'Überprüfen Sie Admin-Protokolle auf verdächtige Aktivitäten',
   'settings.updateYourPassword': 'Aktualisieren Sie Ihr Passwort, um Ihr Konto sicher zu halten',
 
-  // Login
+  // ============================================================================
+  // LOGIN
+  // ============================================================================
+  
   'login.title': 'ZEV Abrechnung',
   'login.subtitle': 'Schweizer Energiemanagement',
   'login.username': 'Benutzername',
