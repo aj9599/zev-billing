@@ -30,7 +30,7 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 		       address_street, address_city, address_zip, address_country,
 		       bank_name, bank_iban, bank_account_holder, charger_ids, 
 		       notes, building_id, apartment_unit, user_type, managed_buildings, 
-		       COALESCE(is_active, 1), created_at, updated_at
+		       COALESCE(language, 'de'), COALESCE(is_active, 1), created_at, updated_at
 		FROM users
 	`
 
@@ -66,6 +66,7 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 		var userType sql.NullString
 		var managedBuildings sql.NullString
 		var apartmentUnit sql.NullString
+		var language sql.NullString
 		var isActive sql.NullInt64
 
 		err := rows.Scan(
@@ -73,7 +74,7 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 			&u.AddressStreet, &u.AddressCity, &u.AddressZip, &u.AddressCountry,
 			&u.BankName, &u.BankIBAN, &u.BankAccountHolder, &u.ChargerIDs,
 			&u.Notes, &u.BuildingID, &apartmentUnit, &userType, &managedBuildings, 
-			&isActive, &u.CreatedAt, &u.UpdatedAt,
+			&language, &isActive, &u.CreatedAt, &u.UpdatedAt,
 		)
 		if err != nil {
 			log.Printf("Error scanning user: %v", err)
@@ -92,6 +93,12 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 
 		if apartmentUnit.Valid {
 			u.ApartmentUnit = apartmentUnit.String
+		}
+
+		if language.Valid {
+			u.Language = language.String
+		} else {
+			u.Language = "de" // Default to German
 		}
 
 		u.IsActive = isActive.Valid && isActive.Int64 == 1
@@ -115,6 +122,7 @@ func (h *UserHandler) Get(w http.ResponseWriter, r *http.Request) {
 	var userType sql.NullString
 	var managedBuildings sql.NullString
 	var apartmentUnit sql.NullString
+	var language sql.NullString
 	var isActive sql.NullInt64
 
 	err = h.db.QueryRow(`
@@ -122,14 +130,14 @@ func (h *UserHandler) Get(w http.ResponseWriter, r *http.Request) {
 		       address_street, address_city, address_zip, address_country,
 		       bank_name, bank_iban, bank_account_holder, charger_ids, 
 		       notes, building_id, apartment_unit, user_type, managed_buildings, 
-		       COALESCE(is_active, 1), created_at, updated_at
+		       COALESCE(language, 'de'), COALESCE(is_active, 1), created_at, updated_at
 		FROM users WHERE id = ?
 	`, id).Scan(
 		&u.ID, &u.FirstName, &u.LastName, &u.Email, &u.Phone,
 		&u.AddressStreet, &u.AddressCity, &u.AddressZip, &u.AddressCountry,
 		&u.BankName, &u.BankIBAN, &u.BankAccountHolder, &u.ChargerIDs,
 		&u.Notes, &u.BuildingID, &apartmentUnit, &userType, &managedBuildings, 
-		&isActive, &u.CreatedAt, &u.UpdatedAt,
+		&language, &isActive, &u.CreatedAt, &u.UpdatedAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -156,6 +164,12 @@ func (h *UserHandler) Get(w http.ResponseWriter, r *http.Request) {
 		u.ApartmentUnit = apartmentUnit.String
 	}
 
+	if language.Valid {
+		u.Language = language.String
+	} else {
+		u.Language = "de"
+	}
+
 	u.IsActive = isActive.Valid && isActive.Int64 == 1
 
 	w.Header().Set("Content-Type", "application/json")
@@ -172,6 +186,11 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	if u.UserType == "" {
 		u.UserType = "regular"
+	}
+
+	// Default language to German if not specified
+	if u.Language == "" {
+		u.Language = "de"
 	}
 
 	// Default to active if not specified
@@ -217,12 +236,12 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 			first_name, last_name, email, phone,
 			address_street, address_city, address_zip, address_country,
 			bank_name, bank_iban, bank_account_holder, charger_ids,
-			notes, building_id, apartment_unit, user_type, managed_buildings, is_active
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			notes, building_id, apartment_unit, user_type, managed_buildings, language, is_active
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, u.FirstName, u.LastName, u.Email, u.Phone,
 		u.AddressStreet, u.AddressCity, u.AddressZip, u.AddressCountry,
 		u.BankName, u.BankIBAN, u.BankAccountHolder, u.ChargerIDs,
-		u.Notes, u.BuildingID, u.ApartmentUnit, u.UserType, u.ManagedBuildings, isActiveVal)
+		u.Notes, u.BuildingID, u.ApartmentUnit, u.UserType, u.ManagedBuildings, u.Language, isActiveVal)
 
 	if err != nil {
 		log.Printf("Error creating user: %v", err)
@@ -256,6 +275,11 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	if u.UserType == "" {
 		u.UserType = "regular"
+	}
+
+	// Default language to German if not specified
+	if u.Language == "" {
+		u.Language = "de"
 	}
 
 	isActiveVal := 0
@@ -301,13 +325,13 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 			address_street = ?, address_city = ?, address_zip = ?, address_country = ?,
 			bank_name = ?, bank_iban = ?, bank_account_holder = ?, charger_ids = ?,
 			notes = ?, building_id = ?, apartment_unit = ?, user_type = ?, 
-			managed_buildings = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
+			managed_buildings = ?, language = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`, u.FirstName, u.LastName, u.Email, u.Phone,
 		u.AddressStreet, u.AddressCity, u.AddressZip, u.AddressCountry,
 		u.BankName, u.BankIBAN, u.BankAccountHolder, u.ChargerIDs,
 		u.Notes, u.BuildingID, u.ApartmentUnit, u.UserType, 
-		u.ManagedBuildings, isActiveVal, id)
+		u.ManagedBuildings, u.Language, isActiveVal, id)
 
 	if err != nil {
 		log.Printf("Error updating user ID %d: %v", id, err)
@@ -461,7 +485,7 @@ func (h *UserHandler) GetAdminUsersForBuildings(w http.ResponseWriter, r *http.R
 			// (includes both requested buildings AND their parent complexes)
 			for _, managedID := range managedBuildingIDs {
 				if allRelevantBuildingIDs[managedID] {
-					log.Printf("✓ Admin user %s %s (ID: %d) manages building/complex %d", 
+					log.Printf("âœ“ Admin user %s %s (ID: %d) manages building/complex %d", 
 						u.FirstName, u.LastName, u.ID, managedID)
 					matchingUsers = append(matchingUsers, u)
 					break

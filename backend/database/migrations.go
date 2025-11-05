@@ -316,6 +316,11 @@ func RunMigrations(db *sql.DB) error {
 		log.Printf("Apartments JSON column migration: %v", err)
 	}
 
+	// Add language column for multi-language invoices
+	if err := addLanguageColumn(db); err != nil {
+		log.Printf("Language column migration: %v", err)
+	}
+
 	// Additional indexes that may not be in the main migrations array
 	newIndexes := []string{
 		`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`,
@@ -350,11 +355,11 @@ func RunMigrations(db *sql.DB) error {
 		return err
 	}
 
-	log.Println("âœ“ Migrations completed successfully")
-	log.Println("âœ“ Shared meter configurations table ready")
-	log.Println("âœ“ Custom line items table ready")
-	log.Println("âœ“ Meter replacements table ready")
-	log.Println("âœ“ Auto billing apartments_json column ready")
+	log.Println("Ã¢Å“â€œ Migrations completed successfully")
+	log.Println("Ã¢Å“â€œ Shared meter configurations table ready")
+	log.Println("Ã¢Å“â€œ Custom line items table ready")
+	log.Println("Ã¢Å“â€œ Meter replacements table ready")
+	log.Println("Ã¢Å“â€œ Auto billing apartments_json column ready")
 	return nil
 }
 
@@ -390,12 +395,12 @@ func addMeterReplacementColumns(db *sql.DB) error {
 			_, err := db.Exec(fmt.Sprintf("ALTER TABLE meters ADD COLUMN %s %s", col.name, col.definition))
 			if err != nil {
 				if contains(err.Error(), "duplicate column") {
-					log.Printf("âœ“ Column %s already exists", col.name)
+					log.Printf("Ã¢Å“â€œ Column %s already exists", col.name)
 					continue
 				}
 				log.Printf("WARNING: Failed to add column %s: %v", col.name, err)
 			} else {
-				log.Printf("âœ“ Column %s added successfully", col.name)
+				log.Printf("Ã¢Å“â€œ Column %s added successfully", col.name)
 			}
 		}
 	}
@@ -436,16 +441,16 @@ func addApartmentsJsonColumn(db *sql.DB) error {
 	}
 
 	if contains(sql, "apartments_json") {
-		log.Println("âœ“ apartments_json column already exists")
+		log.Println("Ã¢Å“â€œ apartments_json column already exists")
 		return nil
 	}
 
-	log.Println("ðŸ“„ Adding apartments_json column to auto_billing_configs table...")
+	log.Println("Ã°Å¸â€œâ€ž Adding apartments_json column to auto_billing_configs table...")
 
 	_, err = db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN apartments_json TEXT`)
 	if err != nil {
 		if contains(err.Error(), "duplicate column") {
-			log.Println("âœ“ apartments_json column already exists")
+			log.Println("Ã¢Å“â€œ apartments_json column already exists")
 			return nil
 		}
 		return err
@@ -456,7 +461,41 @@ func addApartmentsJsonColumn(db *sql.DB) error {
 		log.Printf("WARNING: Failed to set default apartments_json values: %v", err)
 	}
 
-	log.Println("âœ“ apartments_json column added successfully")
+	log.Println("Ã¢Å“â€œ apartments_json column added successfully")
+	return nil
+}
+
+// =====================================================================
+// Add language column for multi-language invoice support
+// =====================================================================
+func addLanguageColumn(db *sql.DB) error {
+	var sql string
+	err := db.QueryRow(`
+		SELECT sql FROM sqlite_master 
+		WHERE type='table' AND name='users'
+	`).Scan(&sql)
+
+	if err != nil {
+		return err
+	}
+
+	if contains(sql, "language") {
+		log.Println("✓ language column already exists")
+		return nil
+	}
+
+	log.Println("📝 Adding language column to users table...")
+
+	_, err = db.Exec(`ALTER TABLE users ADD COLUMN language TEXT DEFAULT 'de'`)
+	if err != nil {
+		if contains(err.Error(), "duplicate column") {
+			log.Println("✓ language column already exists")
+			return nil
+		}
+		return fmt.Errorf("failed to add language column: %v", err)
+	}
+
+	log.Println("✓ language column added successfully (default: 'de' for German)")
 	return nil
 }
 
@@ -527,13 +566,13 @@ func migrateEmailConstraint(db *sql.DB) error {
 		if err != nil {
 			log.Printf("Note: Compound index may already exist: %v", err)
 		} else {
-			log.Println("âœ“ Compound unique index (email, user_type) created")
+			log.Println("Ã¢Å“â€œ Compound unique index (email, user_type) created")
 		}
 
 		return nil
 	}
 
-	log.Println("ðŸ“„ Migrating users table to remove email UNIQUE constraint...")
+	log.Println("Ã°Å¸â€œâ€ž Migrating users table to remove email UNIQUE constraint...")
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -606,7 +645,7 @@ func migrateEmailConstraint(db *sql.DB) error {
 		return err
 	}
 
-	log.Println("âœ“ Email constraint migration completed successfully")
+	log.Println("Ã¢Å“â€œ Email constraint migration completed successfully")
 	return nil
 }
 
@@ -669,7 +708,7 @@ func createDefaultAdmin(db *sql.DB) error {
 		}
 
 		log.Println("Default admin user created (username: admin, password: admin123)")
-		log.Println("âš ï¸  IMPORTANT: Change the default password immediately!")
+		log.Println("Ã¢Å¡Â Ã¯Â¸Â  IMPORTANT: Change the default password immediately!")
 	}
 
 	return nil

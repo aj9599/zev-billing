@@ -29,6 +29,7 @@ type User struct {
 	ApartmentUnit     string    `json:"apartment_unit"`
 	UserType          string    `json:"user_type"`
 	ManagedBuildings  string    `json:"managed_buildings"`
+	Language          string    `json:"language"` // NEW: Invoice language (de, fr, it, en)
 	IsActive          bool      `json:"is_active"`
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`

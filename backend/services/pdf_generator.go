@@ -73,7 +73,7 @@ func (pg *PDFGenerator) GenerateInvoicePDF(invoice interface{}, senderInfo Sende
 		return "", fmt.Errorf("failed to convert to PDF: %v", err)
 	}
 
-	log.Printf("ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ Generated PDF: %s", filename)
+	log.Printf("ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ Generated PDF: %s", filename)
 	return filename, nil
 }
 
@@ -136,6 +136,15 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		currency = "CHF"
 	}
 
+	// Get user language and load translations
+	userLanguage := "de" // Default to German
+	if user, ok := inv["user"].(map[string]interface{}); ok {
+		if lang, ok := user["language"].(string); ok && lang != "" {
+			userLanguage = lang
+		}
+	}
+	tr := GetTranslations(userLanguage)
+
 	totalAmount := 0.0
 	if ta, ok := inv["total_amount"].(float64); ok {
 		totalAmount = ta
@@ -195,7 +204,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 	if isArchived {
 		archivedBanner = `
 		<div class="archived-banner">
-			ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â ARCHIVED USER - This invoice is for an archived user
+			ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ARCHIVED USER - This invoice is for an archived user
 		</div>`
 	}
 
@@ -221,17 +230,22 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 	if banking.IBAN != "" && banking.AccountHolder != "" {
 		paymentSection = fmt.Sprintf(`
 		<div class="payment-details-bottom">
-			<h4>Payment Details</h4>
-			<p><strong>Bank Name:</strong> %s</p>
-			<p><strong>Account Holder:</strong> %s</p>
-			<p><strong>IBAN:</strong> %s</p>
+			<h4>%s</h4>
+			<p><strong>%s:</strong> %s</p>
+			<p><strong>%s:</strong> %s</p>
+			<p><strong>%s:</strong> %s</p>
 			<div class="footer-timestamp">
-				<p>Generated: %s</p>
+				<p>%s: %s</p>
 			</div>
 		</div>`,
+			tr.PaymentInfo,
+			tr.BankDetails,
 			banking.Name,
+			tr.AccountHolder,
 			banking.AccountHolder,
-			banking.IBAN,
+			tr.IBAN,
+			formatIBAN(banking.IBAN),
+			tr.Generated,
 			time.Now().Format("02.01.2006 15:04"),
 		)
 	}
@@ -318,7 +332,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 								<p>%s</p>
 							</div>
 							<div class="qr-info">
-								<strong>Zusätzliche Informationen</strong>
+								<strong>ZusÃ¤tzliche Informationen</strong>
 								<p>%s</p>
 							</div>
 							<div class="qr-info">
@@ -742,7 +756,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		
 		<div class="header">
 			<div class="header-left">
-				<h1>Invoice</h1>
+				<h1>%s</h1>
 				<div class="invoice-number">#%s</div>
 				<div class="status-badge">%s</div>
 			</div>
@@ -751,16 +765,16 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 
 		<div class="addresses">
 			<div class="info-section">
-				<h3>Bill To</h3>
+				<h3>%s</h3>
 				<p>%s</p>
 			</div>
 
 			<div class="info-section">
-				<h3>Invoice Details</h3>
+				<h3>%s</h3>
 				<p>
-					<strong>Period:</strong> %s to %s<br>
-					<strong>Generated:</strong> %s<br>
-					<strong>Status:</strong> %s
+					<strong>%s:</strong> %s to %s<br>
+					<strong>%s:</strong> %s<br>
+					<strong>%s:</strong> %s
 				</p>
 			</div>
 		</div>
@@ -768,8 +782,8 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		<table>
 			<thead>
 				<tr>
-					<th>Description</th>
-					<th class="text-right">Amount</th>
+					<th>%s</th>
+					<th class="text-right">%s</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -778,7 +792,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		</table>
 
 		<div class="total-section">
-			<p>Total %s %.2f</p>
+			<p>%s %s %.2f</p>
 		</div>
 
 		%s
@@ -790,14 +804,23 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		invoiceNumber,
 		statusColors.bg, statusColors.color,
 		archivedBanner,
+		tr.Invoice,
 		invoiceNumber,
 		strings.ToUpper(status),
 		senderSection,
+		tr.BillTo,
 		userInfo,
+		tr.InvoiceDetails,
+		tr.Period,
 		formatDate(periodStart), formatDate(periodEnd),
+		tr.Generated,
 		formatDate(generatedAt),
+		tr.Status,
 		status,
+		tr.Description,
+		tr.Amount,
 		itemsHTML,
+		tr.Total,
 		currency, totalAmount,
 		paymentSection,
 		qrPage,
@@ -1039,7 +1062,7 @@ func (pg *PDFGenerator) generateSwissQRData(inv map[string]interface{}, sender S
 		return ""
 	}
 
-	log.Println("âœ… Generated valid Swiss QR data with 31 elements")
+	log.Println("Ã¢Å“â€¦ Generated valid Swiss QR data with 31 elements")
 	return qrData
 }
 

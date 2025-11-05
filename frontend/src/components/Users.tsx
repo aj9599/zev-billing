@@ -21,6 +21,7 @@ export default function Users() {
     charger_ids: '', notes: '', building_id: undefined, apartment_unit: '',
     user_type: 'regular',
     managed_buildings: [],
+    language: 'de', // Default to German
     is_active: true
   });
 
@@ -123,6 +124,7 @@ export default function Users() {
       charger_ids: '', notes: '', building_id: undefined, apartment_unit: '',
       user_type: 'regular',
       managed_buildings: [],
+      language: 'de',
       is_active: true
     });
   };
@@ -1015,7 +1017,7 @@ export default function Users() {
                         color: '#15803d',
                         lineHeight: '1.5'
                       }}>
-                        <strong>ℹ️ {t('users.apartmentInfo')}</strong>
+                        <strong>â„¹ï¸ {t('users.apartmentInfo')}</strong>
                         <br />
                         {t('users.apartmentExplanation')}
                       </div>
@@ -1109,6 +1111,21 @@ export default function Users() {
                   placeholder={t('users.iban')} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', marginBottom: '8px' }} />
                 <input type="text" value={formData.bank_account_holder} onChange={(e) => setFormData({ ...formData, bank_account_holder: e.target.value })}
                   placeholder={t('users.accountHolder')} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+              </div>
+
+              {/* Invoice Language */}
+              <div style={{ marginTop: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>Invoice Language</label>
+                <select 
+                  value={formData.language || 'de'} 
+                  onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
+                >
+                  <option value="de">🇩🇪 German (Deutsch)</option>
+                  <option value="fr">🇫🇷 French (Français)</option>
+                  <option value="it">🇮🇹 Italian (Italiano)</option>
+                  <option value="en">🇬🇧 English</option>
+                </select>
               </div>
 
               {/* Notes */}
