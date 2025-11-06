@@ -270,11 +270,11 @@ export default function Users() {
     
     // Don't show end date if it's the default far future date
     if (!endDate || endDate === '2099-01-01') {
-      return `${start} â†’`;
+      return `${start} →`;
     }
     
     const end = formatDate(endDate);
-    return `${start} â†’ ${end}`;
+    return `${start} → ${end}`;
   };
 
   const InstructionsModal = () => (
