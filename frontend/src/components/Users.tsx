@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Users as UsersIcon, Mail, Phone, MapPin, CreditCard, Search, Building, User, HelpCircle, Archive, CheckCircle, XCircle, Home } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Users as UsersIcon, Mail, Phone, MapPin, CreditCard, Search, Building, User, HelpCircle, Archive, CheckCircle, XCircle, Home, Calendar } from 'lucide-react';
 import { api } from '../api/client';
 import type { User as UserType, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
@@ -22,7 +22,9 @@ export default function Users() {
     user_type: 'regular',
     managed_buildings: [],
     language: 'de', // Default to German
-    is_active: true
+    is_active: true,
+    rent_start_date: '', // NEW: Rent period start date
+    rent_end_date: ''    // NEW: Rent period end date
   });
 
   useEffect(() => {
@@ -49,6 +51,12 @@ export default function Users() {
         alert(t('users.pleaseSelectApartment'));
         return;
       }
+    }
+    
+    // Validate rent period for regular users
+    if (formData.user_type === 'regular' && !formData.rent_start_date) {
+      alert('Rent start date is required for regular users');
+      return;
     }
     
     try {
@@ -111,7 +119,9 @@ export default function Users() {
     
     setFormData({
       ...user,
-      managed_buildings: managedBuildingsArray
+      managed_buildings: managedBuildingsArray,
+      rent_start_date: user.rent_start_date || '',
+      rent_end_date: user.rent_end_date || ''
     });
     setShowModal(true);
   };
@@ -125,7 +135,9 @@ export default function Users() {
       user_type: 'regular',
       managed_buildings: [],
       language: 'de',
-      is_active: true
+      is_active: true,
+      rent_start_date: '',
+      rent_end_date: ''
     });
   };
 
@@ -240,6 +252,21 @@ export default function Users() {
       .map(u => u.apartment_unit);
     
     return allApartments.filter(apt => !occupiedApartments.includes(apt));
+  };
+
+  // Helper function to format rent period display
+  const formatRentPeriod = (startDate?: string, endDate?: string) => {
+    if (!startDate) return '-';
+    
+    const start = new Date(startDate).toLocaleDateString();
+    
+    // Don't show end date if it's the default far future date
+    if (!endDate || endDate === '2099-01-01') {
+      return `${start} →`;
+    }
+    
+    const end = new Date(endDate).toLocaleDateString();
+    return `${start} → ${end}`;
   };
 
   const InstructionsModal = () => (
@@ -664,6 +691,7 @@ export default function Users() {
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.name')}</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.email')}</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.apartment')}</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Rent Period</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.rfidCards')}</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.building')}</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.actions')}</th>
@@ -699,6 +727,25 @@ export default function Users() {
                         {user.apartment_unit}
                       </span>
                     ) : '-'}
+                  </td>
+                  <td style={{ padding: '16px', fontSize: '13px' }}>
+                    {user.rent_start_date ? (
+                      <span style={{ 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        gap: '4px',
+                        padding: '4px 8px',
+                        backgroundColor: '#fef3c7',
+                        color: '#92400e',
+                        borderRadius: '4px',
+                        fontSize: '12px'
+                      }}>
+                        <Calendar size={14} />
+                        {formatRentPeriod(user.rent_start_date, user.rent_end_date)}
+                      </span>
+                    ) : (
+                      <span style={{ color: '#ef4444', fontSize: '12px' }}>⚠️ Not set</span>
+                    )}
                   </td>
                   <td style={{ padding: '16px' }}>
                     {user.charger_ids ? (
@@ -795,6 +842,12 @@ export default function Users() {
                     <div style={{ fontSize: '13px', color: '#15803d', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                       <Home size={14} />
                       {t('users.apartment')}: {user.apartment_unit}
+                    </div>
+                  )}
+                  {user.rent_start_date && (
+                    <div style={{ fontSize: '13px', color: '#92400e', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                      <Calendar size={14} />
+                      {formatRentPeriod(user.rent_start_date, user.rent_end_date)}
                     </div>
                   )}
                   {user.charger_ids && (
@@ -965,7 +1018,7 @@ export default function Users() {
                     </small>
                   </div>
 
-                  {/* Apartment Selection - More Prominent */}
+                  {/* Apartment Selection */}
                   {formData.building_id && buildings.find(b => b.id === formData.building_id)?.has_apartments && (
                     <div style={{ 
                       marginTop: '16px', 
@@ -1024,6 +1077,86 @@ export default function Users() {
                     </div>
                   )}
 
+                  {/* NEW: Rent Period Section */}
+                  <div style={{ 
+                    marginTop: '16px', 
+                    padding: '20px', 
+                    backgroundColor: '#fef3c7', 
+                    borderRadius: '8px', 
+                    border: '2px solid #f59e0b',
+                    boxShadow: '0 2px 8px rgba(245, 158, 11, 0.1)'
+                  }}>
+                    <label style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '8px', 
+                      marginBottom: '12px', 
+                      fontWeight: '600', 
+                      fontSize: '15px', 
+                      color: '#92400e' 
+                    }}>
+                      <Calendar size={20} />
+                      Rent Period *
+                    </label>
+                    
+                    <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          Start Date *
+                        </label>
+                        <input 
+                          type="date" 
+                          required
+                          value={formData.rent_start_date || ''} 
+                          onChange={(e) => setFormData({ ...formData, rent_start_date: e.target.value })}
+                          style={{ 
+                            width: '100%', 
+                            padding: '10px', 
+                            border: '2px solid #f59e0b', 
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            backgroundColor: 'white'
+                          }}
+                        />
+                      </div>
+                      
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          End Date
+                        </label>
+                        <input 
+                          type="date" 
+                          value={formData.rent_end_date || ''} 
+                          onChange={(e) => setFormData({ ...formData, rent_end_date: e.target.value })}
+                          placeholder="2099-01-01"
+                          style={{ 
+                            width: '100%', 
+                            padding: '10px', 
+                            border: '2px solid #f59e0b', 
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            backgroundColor: 'white'
+                          }}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div style={{ 
+                      marginTop: '10px', 
+                      padding: '10px', 
+                      backgroundColor: '#fef3c7', 
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      color: '#92400e',
+                      lineHeight: '1.5'
+                    }}>
+                      <strong>ℹ️ Rent Period Info</strong>
+                      <br />
+                      The rent period determines when this user is active in the apartment. If no end date is specified, it defaults to 2099-01-01. This allows for proper billing when users move in or out mid-month.
+                    </div>
+                  </div>
+
+                  {/* RFID Card IDs - Now Optional */}
                   <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#0369a1' }}>
                       <CreditCard size={18} />
@@ -1031,8 +1164,7 @@ export default function Users() {
                     </label>
                     <input 
                       type="text" 
-                      required
-                      value={formData.charger_ids} 
+                      value={formData.charger_ids || ''} 
                       onChange={(e) => setFormData({ ...formData, charger_ids: e.target.value })}
                       placeholder="15"
                       style={{ width: '100%', padding: '10px', border: '1px solid #bae6fd', borderRadius: '6px', fontFamily: 'monospace' }} 
@@ -1040,7 +1172,7 @@ export default function Users() {
                     <small style={{ display: 'block', marginTop: '6px', color: '#0369a1', fontSize: '12px', lineHeight: '1.4' }}>
                       <strong>{t('users.rfidImportant')}:</strong> {t('users.rfidEnterNumber')}
                       <br />
-                      {t('users.rfidNotChargerId')}
+                      {t('users.rfidNotChargerId')} (Now optional - can be added later)
                     </small>
                   </div>
                 </>
