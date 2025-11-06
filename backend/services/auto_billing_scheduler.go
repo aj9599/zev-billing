@@ -185,7 +185,7 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 		// Generate PDFs for each invoice
 		successCount := 0
 		for _, invoice := range invoices {
-			// Load full invoice with items and user details
+			// Load full invoice with items and user details (INCLUDING LANGUAGE)
 			fullInvoice, err := s.loadFullInvoice(invoice.ID)
 			if err != nil {
 				log.Printf("WARNING: Failed to load full invoice %d: %v", invoice.ID, err)
@@ -252,7 +252,7 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 	}
 }
 
-// Helper function to load full invoice with items and user
+// Helper function to load full invoice with items and user (INCLUDING LANGUAGE)
 func (s *AutoBillingScheduler) loadFullInvoice(invoiceID int) (map[string]interface{}, error) {
 	inv := make(map[string]interface{})
 
@@ -317,21 +317,22 @@ func (s *AutoBillingScheduler) loadFullInvoice(invoiceID int) (map[string]interf
 		inv["items"] = items
 	}
 
-	// Load user details
+	// Load user details INCLUDING LANGUAGE
 	userMap := make(map[string]interface{})
 	var firstName, lastName, email, phone string
 	var addressStreet, addressCity, addressZip, addressCountry string
+	var language sql.NullString
 	var isActive bool
 
 	err = s.db.QueryRow(`
 		SELECT id, first_name, last_name, email, phone, 
 		       address_street, address_city, address_zip, address_country,
-		       is_active
+		       COALESCE(language, 'de'), is_active
 		FROM users WHERE id = ?
 	`, userID).Scan(
 		&id, &firstName, &lastName, &email, &phone,
 		&addressStreet, &addressCity, &addressZip, &addressCountry,
-		&isActive,
+		&language, &isActive,
 	)
 
 	if err == nil {
@@ -345,7 +346,19 @@ func (s *AutoBillingScheduler) loadFullInvoice(invoiceID int) (map[string]interf
 		userMap["address_zip"] = addressZip
 		userMap["address_country"] = addressCountry
 		userMap["is_active"] = isActive
+		
+		// CRITICAL: Include language in user map for PDF generator
+		if language.Valid && language.String != "" {
+			userMap["language"] = language.String
+		} else {
+			userMap["language"] = "de" // Default to German
+		}
+		
+		log.Printf("Loaded user %d with language: %s", userID, userMap["language"])
+		
 		inv["user"] = userMap
+	} else {
+		log.Printf("ERROR: Failed to load user %d: %v", userID, err)
 	}
 
 	return inv, nil
