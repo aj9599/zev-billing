@@ -55,7 +55,9 @@ type InvoiceTranslations struct {
 	AmountLabel       string  // "Betrag" / "Amount" / "Montant" / "Importo"
 	AcceptancePoint   string  // "Annahmestelle" / "Acceptance point" / "Point d'acceptation" / "Punto di accettazione"
 	AdditionalInfo    string  // "Zusätzliche Informationen" / "Additional information" / "Informations supplémentaires" / "Informazioni aggiuntive"
-	InvoiceLabel      string  // "Invoice" / "Rechnung" / "Facture" / "Fattura"
+	InvoiceLabel      string  // "Invoice" / "Rechnung" / "Facture" / "Fattura"	
+		
+	PartialPeriod        string
 }
 
 // GetTranslations returns translations for the specified language
@@ -111,6 +113,7 @@ func GetTranslations(language string) InvoiceTranslations {
 			AcceptancePoint:    "Annahmestelle",
 			AdditionalInfo:     "Zusätzliche Informationen",
 			InvoiceLabel:       "Rechnung",
+			PartialPeriod:      "Anteiliger Zeitraum",
 		}
 	case "fr": // French
 		return InvoiceTranslations{
@@ -162,6 +165,7 @@ func GetTranslations(language string) InvoiceTranslations {
 			AcceptancePoint:    "Point de dépot",
 			AdditionalInfo:     "Informations supplémentaires",
 			InvoiceLabel:       "Facture",
+			PartialPeriod:      "Période partielle",
 		}
 	case "it": // Italian
 		return InvoiceTranslations{
@@ -213,6 +217,7 @@ func GetTranslations(language string) InvoiceTranslations {
 			AcceptancePoint:    "Punto di accettazione",
 			AdditionalInfo:     "Informazioni supplementari",
 			InvoiceLabel:       "Fattura",
+			PartialPeriod:      "Periodo parziale",
 		}
 	default: // English
 		return InvoiceTranslations{
@@ -264,6 +269,7 @@ func GetTranslations(language string) InvoiceTranslations {
 			AcceptancePoint:    "Acceptance point",
 			AdditionalInfo:     "Additional information",
 			InvoiceLabel:       "Invoice",
+			PartialPeriod:      "Partial Period",
 		}
 	}
 }
