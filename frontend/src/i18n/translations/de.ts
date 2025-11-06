@@ -222,6 +222,16 @@ export const de: Translations = {
   'users.instructions.tip3': 'Normale Benutzer können in jedem Gebäude laden, nicht nur in ihrem zugewiesenen',
   'users.instructions.tip4': 'Wohnungszuweisungen helfen bei der Organisation von Benutzern und verknüpfen Zähler mit bestimmten Einheiten',
 
+  'users.rentPeriod': 'Mietdauer',
+  'users.startDate': 'Startdatum',
+  'users.endDate': 'Enddatum',
+  'users.rentPeriodInfo': 'Mietdauer Info',
+  'users.rentPeriodExplanation': 'Die Mietdauer bestimmt, wann dieser Benutzer in der Wohnung aktiv ist. Wenn kein Enddatum angegeben wird, wird standardmäßig 2099-01-01 verwendet. Dies ermöglicht eine korrekte Abrechnung, wenn Benutzer mitten im Monat ein- oder ausziehen.',
+  'users.rentStartDateRequired': 'Startdatum der Miete ist für normale Benutzer erforderlich',
+  'users.notSet': 'Nicht gesetzt',
+  'users.invoiceLanguage': 'Rechnungssprache',
+  'users.rfidOptional': 'Jetzt optional - kann später hinzugefügt werden',
+
   // ============================================================================
   // BUILDINGS
   // ============================================================================

@@ -55,7 +55,7 @@ export default function Users() {
     
     // Validate rent period for regular users
     if (formData.user_type === 'regular' && !formData.rent_start_date) {
-      alert('Rent start date is required for regular users');
+      alert(t('users.rentStartDateRequired'));
       return;
     }
     
@@ -254,18 +254,26 @@ export default function Users() {
     return allApartments.filter(apt => !occupiedApartments.includes(apt));
   };
 
-  // Helper function to format rent period display
+  // Helper function to format rent period display (DD.MM.YYYY format)
   const formatRentPeriod = (startDate?: string, endDate?: string) => {
     if (!startDate) return '-';
     
-    const start = new Date(startDate).toLocaleDateString();
+    const formatDate = (dateStr: string) => {
+      const date = new Date(dateStr);
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}.${month}.${year}`;
+    };
+    
+    const start = formatDate(startDate);
     
     // Don't show end date if it's the default far future date
     if (!endDate || endDate === '2099-01-01') {
       return `${start} →`;
     }
     
-    const end = new Date(endDate).toLocaleDateString();
+    const end = formatDate(endDate);
     return `${start} → ${end}`;
   };
 
@@ -691,7 +699,7 @@ export default function Users() {
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.name')}</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.email')}</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.apartment')}</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Rent Period</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.rentPeriod')}</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.rfidCards')}</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.building')}</th>
                 <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.actions')}</th>
@@ -744,7 +752,7 @@ export default function Users() {
                         {formatRentPeriod(user.rent_start_date, user.rent_end_date)}
                       </span>
                     ) : (
-                      <span style={{ color: '#ef4444', fontSize: '12px' }}>⚠️ Not set</span>
+                      <span style={{ color: '#ef4444', fontSize: '12px' }}>⚠️ {t('users.notSet')}</span>
                     )}
                   </td>
                   <td style={{ padding: '16px' }}>
@@ -1077,7 +1085,7 @@ export default function Users() {
                     </div>
                   )}
 
-                  {/* NEW: Rent Period Section */}
+                  {/* Rent Period Section */}
                   <div style={{ 
                     marginTop: '16px', 
                     padding: '20px', 
@@ -1096,13 +1104,13 @@ export default function Users() {
                       color: '#92400e' 
                     }}>
                       <Calendar size={20} />
-                      Rent Period *
+                      {t('users.rentPeriod')} *
                     </label>
                     
                     <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          Start Date *
+                          {t('users.startDate')} *
                         </label>
                         <input 
                           type="date" 
@@ -1122,7 +1130,7 @@ export default function Users() {
                       
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                          End Date
+                          {t('users.endDate')}
                         </label>
                         <input 
                           type="date" 
@@ -1150,9 +1158,9 @@ export default function Users() {
                       color: '#92400e',
                       lineHeight: '1.5'
                     }}>
-                      <strong>ℹ️ Rent Period Info</strong>
+                      <strong>ℹ️ {t('users.rentPeriodInfo')}</strong>
                       <br />
-                      The rent period determines when this user is active in the apartment. If no end date is specified, it defaults to 2099-01-01. This allows for proper billing when users move in or out mid-month.
+                      {t('users.rentPeriodExplanation')}
                     </div>
                   </div>
 
@@ -1172,7 +1180,7 @@ export default function Users() {
                     <small style={{ display: 'block', marginTop: '6px', color: '#0369a1', fontSize: '12px', lineHeight: '1.4' }}>
                       <strong>{t('users.rfidImportant')}:</strong> {t('users.rfidEnterNumber')}
                       <br />
-                      {t('users.rfidNotChargerId')} (Now optional - can be added later)
+                      {t('users.rfidNotChargerId')} ({t('users.rfidOptional')})
                     </small>
                   </div>
                 </>
@@ -1247,7 +1255,7 @@ export default function Users() {
 
               {/* Invoice Language */}
               <div style={{ marginTop: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>Invoice Language</label>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('users.invoiceLanguage')}</label>
                 <select 
                   value={formData.language || 'de'} 
                   onChange={(e) => setFormData({ ...formData, language: e.target.value })}

@@ -223,6 +223,16 @@ export const en: Translations = {
   'users.instructions.tip3': 'Regular users can charge at any building, not just their assigned one',
   'users.instructions.tip4': 'Apartment assignments help organize users and link meters to specific units',
 
+  'users.rentPeriod': 'Rent Period',
+  'users.startDate': 'Start Date',
+  'users.endDate': 'End Date',
+  'users.rentPeriodInfo': 'Rent Period Info',
+  'users.rentPeriodExplanation': 'The rent period determines when this user is active in the apartment. If no end date is specified, it defaults to 2099-01-01. This allows for proper billing when users move in or out mid-month.',
+  'users.rentStartDateRequired': 'Rent start date is required for regular users',
+  'users.notSet': 'Not set',
+  'users.invoiceLanguage': 'Invoice Language',
+  'users.rfidOptional': 'Now optional - can be added later',
+
   // ============================================================================
   // BUILDINGS
   // ============================================================================
