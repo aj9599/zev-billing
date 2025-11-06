@@ -17,8 +17,10 @@ export interface User {
   apartment_unit?: string;
   user_type: 'regular' | 'administration';
   managed_buildings?: number[] | string;
-  language?: string; // NEW: Invoice language (de, fr, it, en)
+  language?: string; // Invoice language (de, fr, it, en)
   is_active: boolean;
+  rent_start_date?: string; // NEW: Rent period start date (required for regular users)
+  rent_end_date?: string;   // NEW: Rent period end date (default: 2099-01-01)
   created_at: string;
   updated_at: string;
 }

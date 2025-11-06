@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aj9599/zev-billing/backend/models"
 	"github.com/gorilla/mux"
@@ -30,7 +31,8 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 		       address_street, address_city, address_zip, address_country,
 		       bank_name, bank_iban, bank_account_holder, charger_ids, 
 		       notes, building_id, apartment_unit, user_type, managed_buildings, 
-		       COALESCE(language, 'de'), COALESCE(is_active, 1), created_at, updated_at
+		       COALESCE(language, 'de'), COALESCE(is_active, 1), 
+		       rent_start_date, rent_end_date, created_at, updated_at
 		FROM users
 	`
 
@@ -68,13 +70,15 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 		var apartmentUnit sql.NullString
 		var language sql.NullString
 		var isActive sql.NullInt64
+		var rentStartDate sql.NullString
+		var rentEndDate sql.NullString
 
 		err := rows.Scan(
 			&u.ID, &u.FirstName, &u.LastName, &u.Email, &u.Phone,
 			&u.AddressStreet, &u.AddressCity, &u.AddressZip, &u.AddressCountry,
 			&u.BankName, &u.BankIBAN, &u.BankAccountHolder, &u.ChargerIDs,
 			&u.Notes, &u.BuildingID, &apartmentUnit, &userType, &managedBuildings, 
-			&language, &isActive, &u.CreatedAt, &u.UpdatedAt,
+			&language, &isActive, &rentStartDate, &rentEndDate, &u.CreatedAt, &u.UpdatedAt,
 		)
 		if err != nil {
 			log.Printf("Error scanning user: %v", err)
@@ -98,10 +102,18 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 		if language.Valid {
 			u.Language = language.String
 		} else {
-			u.Language = "de" // Default to German
+			u.Language = "de"
 		}
 
 		u.IsActive = isActive.Valid && isActive.Int64 == 1
+
+		if rentStartDate.Valid {
+			u.RentStartDate = &rentStartDate.String
+		}
+
+		if rentEndDate.Valid {
+			u.RentEndDate = &rentEndDate.String
+		}
 
 		users = append(users, u)
 	}
@@ -124,20 +136,23 @@ func (h *UserHandler) Get(w http.ResponseWriter, r *http.Request) {
 	var apartmentUnit sql.NullString
 	var language sql.NullString
 	var isActive sql.NullInt64
+	var rentStartDate sql.NullString
+	var rentEndDate sql.NullString
 
 	err = h.db.QueryRow(`
 		SELECT id, first_name, last_name, email, phone, 
 		       address_street, address_city, address_zip, address_country,
 		       bank_name, bank_iban, bank_account_holder, charger_ids, 
 		       notes, building_id, apartment_unit, user_type, managed_buildings, 
-		       COALESCE(language, 'de'), COALESCE(is_active, 1), created_at, updated_at
+		       COALESCE(language, 'de'), COALESCE(is_active, 1), 
+		       rent_start_date, rent_end_date, created_at, updated_at
 		FROM users WHERE id = ?
 	`, id).Scan(
 		&u.ID, &u.FirstName, &u.LastName, &u.Email, &u.Phone,
 		&u.AddressStreet, &u.AddressCity, &u.AddressZip, &u.AddressCountry,
 		&u.BankName, &u.BankIBAN, &u.BankAccountHolder, &u.ChargerIDs,
 		&u.Notes, &u.BuildingID, &apartmentUnit, &userType, &managedBuildings, 
-		&language, &isActive, &u.CreatedAt, &u.UpdatedAt,
+		&language, &isActive, &rentStartDate, &rentEndDate, &u.CreatedAt, &u.UpdatedAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -172,6 +187,14 @@ func (h *UserHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	u.IsActive = isActive.Valid && isActive.Int64 == 1
 
+	if rentStartDate.Valid {
+		u.RentStartDate = &rentStartDate.String
+	}
+
+	if rentEndDate.Valid {
+		u.RentEndDate = &rentEndDate.String
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(u)
 }
@@ -188,15 +211,72 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		u.UserType = "regular"
 	}
 
-	// Default language to German if not specified
 	if u.Language == "" {
 		u.Language = "de"
 	}
 
-	// Default to active if not specified
 	isActiveVal := 1
 	if !u.IsActive {
 		isActiveVal = 0
+	}
+
+	// Validate rent period for regular users
+	if u.UserType == "regular" {
+		if u.RentStartDate == nil || *u.RentStartDate == "" {
+			http.Error(w, "Rent start date is required for regular users", http.StatusBadRequest)
+			return
+		}
+
+		// Set default end date if not provided
+		if u.RentEndDate == nil || *u.RentEndDate == "" {
+			defaultEndDate := "2099-01-01"
+			u.RentEndDate = &defaultEndDate
+		}
+
+		// Validate date format and order
+		startDate, err := time.Parse("2006-01-02", *u.RentStartDate)
+		if err != nil {
+			http.Error(w, "Invalid rent start date format (use YYYY-MM-DD)", http.StatusBadRequest)
+			return
+		}
+
+		endDate, err := time.Parse("2006-01-02", *u.RentEndDate)
+		if err != nil {
+			http.Error(w, "Invalid rent end date format (use YYYY-MM-DD)", http.StatusBadRequest)
+			return
+		}
+
+		if !endDate.After(startDate) {
+			http.Error(w, "Rent end date must be after start date", http.StatusBadRequest)
+			return
+		}
+
+		// Check for overlapping rent periods in the same apartment
+		if u.ApartmentUnit != "" && u.BuildingID != nil {
+			var overlappingUserID int
+			err := h.db.QueryRow(`
+				SELECT id FROM users 
+				WHERE building_id = ? 
+				AND apartment_unit = ? 
+				AND user_type = 'regular'
+				AND is_active = 1
+				AND id != ?
+				AND (
+					(rent_start_date <= ? AND rent_end_date >= ?)
+					OR (rent_start_date <= ? AND rent_end_date >= ?)
+					OR (rent_start_date >= ? AND rent_end_date <= ?)
+				)
+			`, u.BuildingID, u.ApartmentUnit, 0, *u.RentStartDate, *u.RentStartDate, 
+			   *u.RentEndDate, *u.RentEndDate, *u.RentStartDate, *u.RentEndDate).Scan(&overlappingUserID)
+			
+			if err != sql.ErrNoRows {
+				if err == nil {
+					http.Error(w, "This apartment already has a user during this rent period", http.StatusBadRequest)
+					return
+				}
+				log.Printf("Error checking rent period overlap: %v", err)
+			}
+		}
 	}
 
 	// Check if email already exists with the same user_type
@@ -214,7 +294,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error checking email uniqueness: %v", err)
 	}
 
-	// Check if apartment is already occupied (if apartment_unit is provided)
+	// Check if apartment is already occupied by an active user (if apartment_unit is provided)
 	if u.ApartmentUnit != "" && u.BuildingID != nil {
 		var existingUserID int
 		err := h.db.QueryRow(`
@@ -236,12 +316,14 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 			first_name, last_name, email, phone,
 			address_street, address_city, address_zip, address_country,
 			bank_name, bank_iban, bank_account_holder, charger_ids,
-			notes, building_id, apartment_unit, user_type, managed_buildings, language, is_active
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			notes, building_id, apartment_unit, user_type, managed_buildings, 
+			language, is_active, rent_start_date, rent_end_date
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, u.FirstName, u.LastName, u.Email, u.Phone,
 		u.AddressStreet, u.AddressCity, u.AddressZip, u.AddressCountry,
 		u.BankName, u.BankIBAN, u.BankAccountHolder, u.ChargerIDs,
-		u.Notes, u.BuildingID, u.ApartmentUnit, u.UserType, u.ManagedBuildings, u.Language, isActiveVal)
+		u.Notes, u.BuildingID, u.ApartmentUnit, u.UserType, u.ManagedBuildings, 
+		u.Language, isActiveVal, u.RentStartDate, u.RentEndDate)
 
 	if err != nil {
 		log.Printf("Error creating user: %v", err)
@@ -277,7 +359,6 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 		u.UserType = "regular"
 	}
 
-	// Default language to German if not specified
 	if u.Language == "" {
 		u.Language = "de"
 	}
@@ -285,6 +366,65 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 	isActiveVal := 0
 	if u.IsActive {
 		isActiveVal = 1
+	}
+
+	// Validate rent period for regular users
+	if u.UserType == "regular" {
+		if u.RentStartDate == nil || *u.RentStartDate == "" {
+			http.Error(w, "Rent start date is required for regular users", http.StatusBadRequest)
+			return
+		}
+
+		// Set default end date if not provided
+		if u.RentEndDate == nil || *u.RentEndDate == "" {
+			defaultEndDate := "2099-01-01"
+			u.RentEndDate = &defaultEndDate
+		}
+
+		// Validate date format and order
+		startDate, err := time.Parse("2006-01-02", *u.RentStartDate)
+		if err != nil {
+			http.Error(w, "Invalid rent start date format (use YYYY-MM-DD)", http.StatusBadRequest)
+			return
+		}
+
+		endDate, err := time.Parse("2006-01-02", *u.RentEndDate)
+		if err != nil {
+			http.Error(w, "Invalid rent end date format (use YYYY-MM-DD)", http.StatusBadRequest)
+			return
+		}
+
+		if !endDate.After(startDate) {
+			http.Error(w, "Rent end date must be after start date", http.StatusBadRequest)
+			return
+		}
+
+		// Check for overlapping rent periods in the same apartment (excluding current user)
+		if u.ApartmentUnit != "" && u.BuildingID != nil {
+			var overlappingUserID int
+			err := h.db.QueryRow(`
+				SELECT id FROM users 
+				WHERE building_id = ? 
+				AND apartment_unit = ? 
+				AND user_type = 'regular'
+				AND is_active = 1
+				AND id != ?
+				AND (
+					(rent_start_date <= ? AND rent_end_date >= ?)
+					OR (rent_start_date <= ? AND rent_end_date >= ?)
+					OR (rent_start_date >= ? AND rent_end_date <= ?)
+				)
+			`, u.BuildingID, u.ApartmentUnit, id, *u.RentStartDate, *u.RentStartDate, 
+			   *u.RentEndDate, *u.RentEndDate, *u.RentStartDate, *u.RentEndDate).Scan(&overlappingUserID)
+			
+			if err != sql.ErrNoRows {
+				if err == nil {
+					http.Error(w, "This apartment already has a user during this rent period", http.StatusBadRequest)
+					return
+				}
+				log.Printf("Error checking rent period overlap: %v", err)
+			}
+		}
 	}
 
 	// Check if email already exists with the same user_type (excluding current user)
@@ -325,13 +465,14 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 			address_street = ?, address_city = ?, address_zip = ?, address_country = ?,
 			bank_name = ?, bank_iban = ?, bank_account_holder = ?, charger_ids = ?,
 			notes = ?, building_id = ?, apartment_unit = ?, user_type = ?, 
-			managed_buildings = ?, language = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
+			managed_buildings = ?, language = ?, is_active = ?, 
+			rent_start_date = ?, rent_end_date = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`, u.FirstName, u.LastName, u.Email, u.Phone,
 		u.AddressStreet, u.AddressCity, u.AddressZip, u.AddressCountry,
 		u.BankName, u.BankIBAN, u.BankAccountHolder, u.ChargerIDs,
 		u.Notes, u.BuildingID, u.ApartmentUnit, u.UserType, 
-		u.ManagedBuildings, u.Language, isActiveVal, id)
+		u.ManagedBuildings, u.Language, isActiveVal, u.RentStartDate, u.RentEndDate, id)
 
 	if err != nil {
 		log.Printf("Error updating user ID %d: %v", id, err)
@@ -391,7 +532,6 @@ func (h *UserHandler) GetAdminUsersForBuildings(w http.ResponseWriter, r *http.R
 	log.Printf("Parsed %d building IDs: %v", len(requestedBuildingIDs), requestedBuildingIDs)
 
 	// STEP 1: Check if any of these buildings belong to a complex (building group)
-	// We need to find all complexes that contain any of the requested buildings
 	allRelevantBuildingIDs := make(map[int]bool)
 	for _, bid := range requestedBuildingIDs {
 		allRelevantBuildingIDs[bid] = true
@@ -482,10 +622,9 @@ func (h *UserHandler) GetAdminUsersForBuildings(w http.ResponseWriter, r *http.R
 			}
 
 			// Check if any of the managed buildings match our relevant building IDs
-			// (includes both requested buildings AND their parent complexes)
 			for _, managedID := range managedBuildingIDs {
 				if allRelevantBuildingIDs[managedID] {
-					log.Printf("âœ“ Admin user %s %s (ID: %d) manages building/complex %d", 
+					log.Printf("✓ Admin user %s %s (ID: %d) manages building/complex %d", 
 						u.FirstName, u.LastName, u.ID, managedID)
 					matchingUsers = append(matchingUsers, u)
 					break

@@ -38,6 +38,8 @@ func RunMigrations(db *sql.DB) error {
 			user_type TEXT DEFAULT 'regular',
 			managed_buildings TEXT,
 			is_active INTEGER DEFAULT 1,
+			rent_start_date DATE,
+			rent_end_date DATE,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (building_id) REFERENCES buildings(id)
@@ -206,9 +208,6 @@ func RunMigrations(db *sql.DB) error {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
-		// =====================================================================
-		// NEW: Meter Replacements Table
-		// =====================================================================
 		`CREATE TABLE IF NOT EXISTS meter_replacements (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			old_meter_id INTEGER NOT NULL,
@@ -224,9 +223,6 @@ func RunMigrations(db *sql.DB) error {
 			FOREIGN KEY (new_meter_id) REFERENCES meters(id)
 		)`,
 
-		// =====================================================================
-		// Shared Meter Configurations
-		// =====================================================================
 		`CREATE TABLE IF NOT EXISTS shared_meter_configs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			meter_id INTEGER NOT NULL,
@@ -240,9 +236,6 @@ func RunMigrations(db *sql.DB) error {
 			FOREIGN KEY (building_id) REFERENCES buildings(id) ON DELETE CASCADE
 		)`,
 
-		// =====================================================================
-		// Custom Line Items
-		// =====================================================================
 		`CREATE TABLE IF NOT EXISTS custom_line_items (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			building_id INTEGER NOT NULL,
@@ -256,9 +249,6 @@ func RunMigrations(db *sql.DB) error {
 			FOREIGN KEY (building_id) REFERENCES buildings(id) ON DELETE CASCADE
 		)`,
 
-		// =====================================================================
-		// Shared Meter Custom Splits
-		// =====================================================================
 		`CREATE TABLE IF NOT EXISTS shared_meter_custom_splits (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			config_id INTEGER NOT NULL,
@@ -272,9 +262,6 @@ func RunMigrations(db *sql.DB) error {
 			UNIQUE(config_id, user_id)
 		)`,
 
-		// =====================================================================
-		// Indexes for existing tables
-		// =====================================================================
 		`CREATE INDEX IF NOT EXISTS idx_meter_readings_time ON meter_readings(reading_time)`,
 		`CREATE INDEX IF NOT EXISTS idx_meter_readings_meter ON meter_readings(meter_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_charger_sessions_time ON charger_sessions(session_time)`,
@@ -283,10 +270,6 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_invoices_building ON invoices(building_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_invoices_pdf_path ON invoices(pdf_path)`,
 		`CREATE INDEX IF NOT EXISTS idx_auto_billing_next_run ON auto_billing_configs(next_run)`,
-
-		// =====================================================================
-		// Indexes for shared meters and custom items
-		// =====================================================================
 		`CREATE INDEX IF NOT EXISTS idx_shared_meters_building ON shared_meter_configs(building_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_shared_meters_meter ON shared_meter_configs(meter_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_custom_items_building ON custom_line_items(building_id)`,
@@ -321,6 +304,11 @@ func RunMigrations(db *sql.DB) error {
 		log.Printf("Language column migration: %v", err)
 	}
 
+	// NEW: Add rent period columns
+	if err := addRentPeriodColumns(db); err != nil {
+		log.Printf("Rent period columns migration: %v", err)
+	}
+
 	// Additional indexes that may not be in the main migrations array
 	newIndexes := []string{
 		`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`,
@@ -328,6 +316,7 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_users_user_type ON users(user_type)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_apartment_unit ON users(apartment_unit)`,
+		`CREATE INDEX IF NOT EXISTS idx_users_rent_dates ON users(rent_start_date, rent_end_date)`,
 		`CREATE INDEX IF NOT EXISTS idx_meters_user ON meters(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_meters_apartment_unit ON meters(apartment_unit)`,
 		`CREATE INDEX IF NOT EXISTS idx_meters_building ON meters(building_id)`,
@@ -355,19 +344,16 @@ func RunMigrations(db *sql.DB) error {
 		return err
 	}
 
-	log.Println("Ã¢Å“â€œ Migrations completed successfully")
-	log.Println("Ã¢Å“â€œ Shared meter configurations table ready")
-	log.Println("Ã¢Å“â€œ Custom line items table ready")
-	log.Println("Ã¢Å“â€œ Meter replacements table ready")
-	log.Println("Ã¢Å“â€œ Auto billing apartments_json column ready")
+	log.Println("✅ Migrations completed successfully")
+	log.Println("✅ Shared meter configurations table ready")
+	log.Println("✅ Custom line items table ready")
+	log.Println("✅ Meter replacements table ready")
+	log.Println("✅ Auto billing apartments_json column ready")
+	log.Println("✅ Rent period columns ready")
 	return nil
 }
 
-// =====================================================================
-// NEW: Add meter replacement columns to existing meters table
-// =====================================================================
 func addMeterReplacementColumns(db *sql.DB) error {
-	// Check if columns already exist
 	var sql string
 	err := db.QueryRow(`
 		SELECT sql FROM sqlite_master 
@@ -395,17 +381,16 @@ func addMeterReplacementColumns(db *sql.DB) error {
 			_, err := db.Exec(fmt.Sprintf("ALTER TABLE meters ADD COLUMN %s %s", col.name, col.definition))
 			if err != nil {
 				if contains(err.Error(), "duplicate column") {
-					log.Printf("Ã¢Å“â€œ Column %s already exists", col.name)
+					log.Printf("✅ Column %s already exists", col.name)
 					continue
 				}
 				log.Printf("WARNING: Failed to add column %s: %v", col.name, err)
 			} else {
-				log.Printf("Ã¢Å“â€œ Column %s added successfully", col.name)
+				log.Printf("✅ Column %s added successfully", col.name)
 			}
 		}
 	}
 
-	// Create indexes for meter replacement columns
 	log.Println("Creating indexes for meter replacement columns...")
 	indexes := []string{
 		`CREATE INDEX IF NOT EXISTS idx_meters_archived ON meters(is_archived)`,
@@ -426,9 +411,6 @@ func addMeterReplacementColumns(db *sql.DB) error {
 	return nil
 }
 
-// =====================================================================
-// Add apartments_json column for apartment-based auto billing
-// =====================================================================
 func addApartmentsJsonColumn(db *sql.DB) error {
 	var sql string
 	err := db.QueryRow(`
@@ -441,16 +423,16 @@ func addApartmentsJsonColumn(db *sql.DB) error {
 	}
 
 	if contains(sql, "apartments_json") {
-		log.Println("Ã¢Å“â€œ apartments_json column already exists")
+		log.Println("✅ apartments_json column already exists")
 		return nil
 	}
 
-	log.Println("Ã°Å¸â€œâ€ž Adding apartments_json column to auto_billing_configs table...")
+	log.Println("🔧 Adding apartments_json column to auto_billing_configs table...")
 
 	_, err = db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN apartments_json TEXT`)
 	if err != nil {
 		if contains(err.Error(), "duplicate column") {
-			log.Println("Ã¢Å“â€œ apartments_json column already exists")
+			log.Println("✅ apartments_json column already exists")
 			return nil
 		}
 		return err
@@ -461,13 +443,10 @@ func addApartmentsJsonColumn(db *sql.DB) error {
 		log.Printf("WARNING: Failed to set default apartments_json values: %v", err)
 	}
 
-	log.Println("Ã¢Å“â€œ apartments_json column added successfully")
+	log.Println("✅ apartments_json column added successfully")
 	return nil
 }
 
-// =====================================================================
-// Add language column for multi-language invoice support
-// =====================================================================
 func addLanguageColumn(db *sql.DB) error {
 	var sql string
 	err := db.QueryRow(`
@@ -480,28 +459,71 @@ func addLanguageColumn(db *sql.DB) error {
 	}
 
 	if contains(sql, "language") {
-		log.Println("✓ language column already exists")
+		log.Println("✅ language column already exists")
 		return nil
 	}
 
-	log.Println("📝 Adding language column to users table...")
+	log.Println("🔧 Adding language column to users table...")
 
 	_, err = db.Exec(`ALTER TABLE users ADD COLUMN language TEXT DEFAULT 'de'`)
 	if err != nil {
 		if contains(err.Error(), "duplicate column") {
-			log.Println("✓ language column already exists")
+			log.Println("✅ language column already exists")
 			return nil
 		}
 		return fmt.Errorf("failed to add language column: %v", err)
 	}
 
-	log.Println("✓ language column added successfully (default: 'de' for German)")
+	log.Println("✅ language column added successfully (default: 'de' for German)")
 	return nil
 }
 
-// =====================================================================
-// Create triggers for automatic timestamp updates
-// =====================================================================
+// NEW: Add rent period columns
+func addRentPeriodColumns(db *sql.DB) error {
+	var sql string
+	err := db.QueryRow(`
+		SELECT sql FROM sqlite_master 
+		WHERE type='table' AND name='users'
+	`).Scan(&sql)
+
+	if err != nil {
+		return err
+	}
+
+	columns := []struct {
+		name       string
+		definition string
+	}{
+		{"rent_start_date", "DATE"},
+		{"rent_end_date", "DATE"},
+	}
+
+	for _, col := range columns {
+		if !contains(sql, col.name) {
+			log.Printf("Adding column %s to users table...", col.name)
+			_, err := db.Exec(fmt.Sprintf("ALTER TABLE users ADD COLUMN %s %s", col.name, col.definition))
+			if err != nil {
+				if contains(err.Error(), "duplicate column") {
+					log.Printf("✅ Column %s already exists", col.name)
+					continue
+				}
+				log.Printf("WARNING: Failed to add column %s: %v", col.name, err)
+			} else {
+				log.Printf("✅ Column %s added successfully", col.name)
+			}
+		}
+	}
+
+	// Create index for rent period queries
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_users_rent_dates ON users(rent_start_date, rent_end_date)`)
+	if err != nil {
+		log.Printf("Note: Rent dates index may already exist: %v", err)
+	}
+
+	log.Println("✅ Rent period columns ready")
+	return nil
+}
+
 func createTriggers(db *sql.DB) error {
 	triggers := []string{
 		`CREATE TRIGGER IF NOT EXISTS update_shared_meters_timestamp 
@@ -566,13 +588,13 @@ func migrateEmailConstraint(db *sql.DB) error {
 		if err != nil {
 			log.Printf("Note: Compound index may already exist: %v", err)
 		} else {
-			log.Println("Ã¢Å“â€œ Compound unique index (email, user_type) created")
+			log.Println("✅ Compound unique index (email, user_type) created")
 		}
 
 		return nil
 	}
 
-	log.Println("Ã°Å¸â€œâ€ž Migrating users table to remove email UNIQUE constraint...")
+	log.Println("🔧 Migrating users table to remove email UNIQUE constraint...")
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -601,6 +623,9 @@ func migrateEmailConstraint(db *sql.DB) error {
 			user_type TEXT DEFAULT 'regular',
 			managed_buildings TEXT,
 			is_active INTEGER DEFAULT 1,
+			language TEXT DEFAULT 'de',
+			rent_start_date DATE,
+			rent_end_date DATE,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (building_id) REFERENCES buildings(id)
@@ -631,6 +656,7 @@ func migrateEmailConstraint(db *sql.DB) error {
 		`CREATE INDEX idx_users_user_type ON users(user_type)`,
 		`CREATE INDEX idx_users_active ON users(is_active)`,
 		`CREATE INDEX idx_users_apartment_unit ON users(apartment_unit)`,
+		`CREATE INDEX idx_users_rent_dates ON users(rent_start_date, rent_end_date)`,
 		`CREATE UNIQUE INDEX idx_users_email_type ON users(email, user_type)`,
 	}
 
@@ -645,7 +671,7 @@ func migrateEmailConstraint(db *sql.DB) error {
 		return err
 	}
 
-	log.Println("Ã¢Å“â€œ Email constraint migration completed successfully")
+	log.Println("✅ Email constraint migration completed successfully")
 	return nil
 }
 
@@ -708,7 +734,7 @@ func createDefaultAdmin(db *sql.DB) error {
 		}
 
 		log.Println("Default admin user created (username: admin, password: admin123)")
-		log.Println("Ã¢Å¡Â Ã¯Â¸Â  IMPORTANT: Change the default password immediately!")
+		log.Println("⚠️  IMPORTANT: Change the default password immediately!")
 	}
 
 	return nil
