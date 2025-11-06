@@ -1082,7 +1082,7 @@ export default function Users() {
                         color: '#15803d',
                         lineHeight: '1.5'
                       }}>
-                        <strong>ℹ️ {t('users.apartmentInfo')}</strong>
+                        <strong>ℹ️ {t('users.apartmentInfo')}</strong>
                         <br />
                         {t('users.apartmentExplanation')}
                       </div>
@@ -1162,7 +1162,7 @@ export default function Users() {
                       color: '#92400e',
                       lineHeight: '1.5'
                     }}>
-                      <strong>ℹ️ {t('users.rentPeriodInfo')}</strong>
+                      <strong>ℹ️ {t('users.rentPeriodInfo')}</strong>
                       <br />
                       {t('users.rentPeriodExplanation')}
                     </div>

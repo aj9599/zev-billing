@@ -92,13 +92,30 @@ apt-get install -y git build-essential sqlite3
 echo "Installing Chromium for PDF generation..."
 if command -v chromium-browser &> /dev/null; then
     echo -e "${GREEN}Chromium is already installed: $(chromium-browser --version)${NC}"
+elif command -v chromium &> /dev/null; then
+    echo -e "${GREEN}Chromium is already installed: $(chromium --version)${NC}"
 else
-    apt-get install -y chromium-browser chromium-codecs-ffmpeg-extra
+    # Try Debian/Ubuntu package names first
+    apt-get install -y chromium chromium-common chromium-sandbox 2>/dev/null
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ Chromium installed successfully${NC}"
     else
-        echo -e "${YELLOW}Warning: Chromium installation from apt failed, trying alternative...${NC}"
-        apt-get install -y chromium
+        # Fallback to older package names (Raspbian/older Ubuntu)
+        echo -e "${YELLOW}Warning: Trying alternative package names...${NC}"
+        apt-get install -y chromium-browser chromium-codecs-ffmpeg-extra 2>/dev/null
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ Chromium installed successfully${NC}"
+        else
+            # Final fallback - just chromium
+            echo -e "${YELLOW}Warning: Trying minimal chromium package...${NC}"
+            apt-get install -y chromium
+            if [ $? -eq 0 ]; then
+                echo -e "${GREEN}✓ Chromium installed successfully${NC}"
+            else
+                echo -e "${RED}✗ Chromium installation failed${NC}"
+                echo -e "${YELLOW}Warning: PDF generation may not work without Chromium${NC}"
+            fi
+        fi
     fi
 fi
 
