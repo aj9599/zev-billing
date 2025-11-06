@@ -117,11 +117,15 @@ export default function Users() {
       }
     }
     
+    // Ensure dates are properly set - handle empty strings and undefined
+    const startDate = user.rent_start_date && user.rent_start_date !== '' ? user.rent_start_date : '';
+    const endDate = user.rent_end_date && user.rent_end_date !== '' ? user.rent_end_date : '2099-01-01';
+    
     setFormData({
       ...user,
       managed_buildings: managedBuildingsArray,
-      rent_start_date: user.rent_start_date || '',
-      rent_end_date: user.rent_end_date || '2099-01-01' // Set default end date if missing
+      rent_start_date: startDate,
+      rent_end_date: endDate
     });
     setShowModal(true);
   };
@@ -752,7 +756,7 @@ export default function Users() {
                         {formatRentPeriod(user.rent_start_date, user.rent_end_date)}
                       </span>
                     ) : (
-                      <span style={{ color: '#ef4444', fontSize: '12px' }}>âš ï¸ {t('users.notSet')}</span>
+                      <span style={{ color: '#ef4444', fontSize: '12px' }}>⚠️ {t('users.notSet')}</span>
                     )}
                   </td>
                   <td style={{ padding: '16px' }}>
@@ -1078,7 +1082,7 @@ export default function Users() {
                         color: '#15803d',
                         lineHeight: '1.5'
                       }}>
-                        <strong>â„¹ï¸ {t('users.apartmentInfo')}</strong>
+                        <strong>ℹ️ {t('users.apartmentInfo')}</strong>
                         <br />
                         {t('users.apartmentExplanation')}
                       </div>
@@ -1158,7 +1162,7 @@ export default function Users() {
                       color: '#92400e',
                       lineHeight: '1.5'
                     }}>
-                      <strong>â„¹ï¸ {t('users.rentPeriodInfo')}</strong>
+                      <strong>ℹ️ {t('users.rentPeriodInfo')}</strong>
                       <br />
                       {t('users.rentPeriodExplanation')}
                     </div>
@@ -1261,10 +1265,10 @@ export default function Users() {
                   onChange={(e) => setFormData({ ...formData, language: e.target.value })}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
                 >
-                  <option value="de">ðŸ‡©ðŸ‡ª German (Deutsch)</option>
-                  <option value="fr">ðŸ‡«ðŸ‡· French (FranÃ§ais)</option>
-                  <option value="it">ðŸ‡®ðŸ‡¹ Italian (Italiano)</option>
-                  <option value="en">ðŸ‡¬ðŸ‡§ English</option>
+                  <option value="de">🇩🇪 German (Deutsch)</option>
+                  <option value="fr">🇫🇷 French (Français)</option>
+                  <option value="it">🇮🇹 Italian (Italiano)</option>
+                  <option value="en">🇬🇧 English</option>
                 </select>
               </div>
 
