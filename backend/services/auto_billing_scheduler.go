@@ -155,7 +155,7 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 
 		log.Printf("Generating bills for period: %s to %s", startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
 
-		// Generate bills using the billing service
+		// NEW: Generate bills using the billing service (now handles rent periods automatically)
 		invoices, err := s.billingService.GenerateBills(buildingIDs, userIDs,
 			startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
 

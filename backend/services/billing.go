@@ -36,6 +36,22 @@ func getConfigString(config map[string]interface{}, key string, defaultValue str
 	return defaultValue
 }
 
+// UserPeriod represents a user's rental period within the billing period
+type UserPeriod struct {
+	UserID          int
+	FirstName       string
+	LastName        string
+	Email           string
+	ChargerIDs      string
+	IsActive        bool
+	Language        string
+	RentStartDate   time.Time
+	RentEndDate     time.Time
+	BillingStart    time.Time // Actual billing start for this tenant
+	BillingEnd      time.Time // Actual billing end for this tenant
+	ProrationFactor float64   // For shared costs only (days in period / total days)
+}
+
 func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, endDate string) ([]models.Invoice, error) {
 	log.Printf("=== BILL GENERATION START ===")
 	log.Printf("Buildings: %v, Users: %v, Period: %s to %s", buildingIDs, userIDs, startDate, endDate)
@@ -77,6 +93,7 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 		return nil, fmt.Errorf("invalid end date: %v", err)
 	}
 
+	// Set end to end of day
 	end = end.Add(24 * time.Hour).Add(-1 * time.Second)
 
 	log.Printf("Parsed dates - Start: %s, End: %s", start, end)
@@ -105,94 +122,205 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 			settings.NormalPowerPrice, settings.SolarPowerPrice,
 			settings.CarChargingNormalPrice, settings.CarChargingPriorityPrice, settings.Currency)
 
-		// IMPROVED: Filter only active users (exclude archived users where is_active = 0)
-		var usersQuery string
-		var args []interface{}
-		if len(userIDs) > 0 {
-			usersQuery = "SELECT id, first_name, last_name, email, charger_ids, is_active FROM users WHERE building_id = ? AND is_active = 1 AND id IN (?"
-			args = append(args, buildingID, userIDs[0])
-			for i := 1; i < len(userIDs); i++ {
-				usersQuery += ",?"
-				args = append(args, userIDs[i])
-			}
-			usersQuery += ")"
-		} else {
-			// CRITICAL: Only select ACTIVE users (is_active = 1)
-			usersQuery = "SELECT id, first_name, last_name, email, charger_ids, is_active FROM users WHERE building_id = ? AND is_active = 1"
-			args = append(args, buildingID)
-		}
-
-		log.Printf("Users query: %s", usersQuery)
-
-		userRows, err := bs.db.Query(usersQuery, args...)
+		// Get all users with rent periods overlapping the billing period
+		userPeriods, err := bs.getUserPeriodsForBilling(buildingID, userIDs, start, end)
 		if err != nil {
-			log.Printf("ERROR: Failed to query users: %v", err)
+			log.Printf("ERROR: Failed to get user periods: %v", err)
 			continue
 		}
 
-		userCount := 0
-		skippedCount := 0
+		if len(userPeriods) == 0 {
+			log.Printf("WARNING: No active users with valid rent periods found for building %d", buildingID)
+			continue
+		}
 
-		for userRows.Next() {
-			var userID int
-			var firstName, lastName, email string
-			var chargerIDs sql.NullString
-			var isActive bool
+		log.Printf("Found %d user periods to process", len(userPeriods))
 
-			if err := userRows.Scan(&userID, &firstName, &lastName, &email, &chargerIDs, &isActive); err != nil {
-				continue
-			}
+		// Process each user period
+		for _, userPeriod := range userPeriods {
+			log.Printf("\n  Processing User Period: %s %s (ID: %d)", 
+				userPeriod.FirstName, userPeriod.LastName, userPeriod.UserID)
+			log.Printf("  Billing Period: %s to %s (%.1f%% of total period)",
+				userPeriod.BillingStart.Format("2006-01-02"),
+				userPeriod.BillingEnd.Format("2006-01-02"),
+				userPeriod.ProrationFactor*100)
 
-			// DOUBLE CHECK: Skip if user is not active (archived)
-			if !isActive {
-				skippedCount++
-				log.Printf("  SKIPPED archived user: %s %s (ID: %d)", firstName, lastName, userID)
-				continue
-			}
-
-			userCount++
-			log.Printf("\n  Processing User #%d: %s %s (ID: %d, Active: %v)", userCount, firstName, lastName, userID, isActive)
-
-			rfidCards := ""
-			if chargerIDs.Valid {
-				rfidCards = chargerIDs.String
-			}
-			log.Printf("  User RFID cards: '%s'", rfidCards)
-
-			invoice, err := bs.generateUserInvoice(userID, buildingID, start, end, settings, rfidCards)
+			invoice, err := bs.generateUserInvoiceForPeriod(userPeriod, buildingID, start, end, settings)
 			if err != nil {
-				log.Printf("ERROR: Failed to generate invoice for user %d: %v", userID, err)
+				log.Printf("ERROR: Failed to generate invoice for user %d: %v", userPeriod.UserID, err)
 				continue
 			}
 
 			invoices = append(invoices, *invoice)
-			log.Printf("  ✓ Generated invoice %s: %s %.3f", invoice.InvoiceNumber, settings.Currency, invoice.TotalAmount)
+			log.Printf("  ✅ Generated invoice %s: %s %.3f", invoice.InvoiceNumber, settings.Currency, invoice.TotalAmount)
 		}
-		userRows.Close()
-
-		log.Printf("--- Building %d: Generated %d invoices, skipped %d archived users ---", buildingID, userCount, skippedCount)
 	}
 
 	log.Printf("\n=== BILL GENERATION COMPLETE: %d total invoices ===\n", len(invoices))
 	return invoices, nil
 }
 
+// getUserPeriodsForBilling returns all user periods that overlap with the billing period
+func (bs *BillingService) getUserPeriodsForBilling(buildingID int, userIDs []int, start, end time.Time) ([]UserPeriod, error) {
+	var usersQuery string
+	var args []interface{}
+
+	// Base query - get users with their rent periods
+	baseQuery := `
+		SELECT id, first_name, last_name, email, charger_ids, is_active, 
+		       COALESCE(language, 'de'), rent_start_date, rent_end_date
+		FROM users 
+		WHERE building_id = ?
+	`
+	args = append(args, buildingID)
+
+	// Filter by specific user IDs if provided
+	if len(userIDs) > 0 {
+		placeholders := make([]string, len(userIDs))
+		for i, userID := range userIDs {
+			placeholders[i] = "?"
+			args = append(args, userID)
+		}
+		usersQuery = baseQuery + " AND id IN (" + strings.Join(placeholders, ",") + ")"
+	} else {
+		usersQuery = baseQuery
+	}
+
+	rows, err := bs.db.Query(usersQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query users: %v", err)
+	}
+	defer rows.Close()
+
+	var userPeriods []UserPeriod
+
+	for rows.Next() {
+		var userID int
+		var firstName, lastName, email string
+		var chargerIDs sql.NullString
+		var isActive bool
+		var language string
+		var rentStartStr, rentEndStr sql.NullString
+
+		if err := rows.Scan(&userID, &firstName, &lastName, &email, &chargerIDs, 
+			&isActive, &language, &rentStartStr, &rentEndStr); err != nil {
+			log.Printf("ERROR: Failed to scan user row: %v", err)
+			continue
+		}
+
+		// Parse rent periods
+		var rentStart, rentEnd time.Time
+		var hasRentPeriod bool
+
+		if rentStartStr.Valid && rentStartStr.String != "" {
+			if parsed, err := time.Parse("2006-01-02", rentStartStr.String); err == nil {
+				rentStart = parsed
+				hasRentPeriod = true
+			}
+		}
+
+		if rentEndStr.Valid && rentEndStr.String != "" {
+			if parsed, err := time.Parse("2006-01-02", rentEndStr.String); err == nil {
+				rentEnd = parsed
+			}
+		}
+
+		// If no rent period is defined, use the full billing period
+		if !hasRentPeriod {
+			log.Printf("  User %d (%s %s) has no rent period - using full billing period", 
+				userID, firstName, lastName)
+			
+			userPeriods = append(userPeriods, UserPeriod{
+				UserID:          userID,
+				FirstName:       firstName,
+				LastName:        lastName,
+				Email:           email,
+				ChargerIDs:      chargerIDs.String,
+				IsActive:        isActive,
+				Language:        language,
+				RentStartDate:   start,
+				RentEndDate:     end,
+				BillingStart:    start,
+				BillingEnd:      end,
+				ProrationFactor: 1.0,
+			})
+			continue
+		}
+
+		// Check if rent period overlaps with billing period
+		rentEndsAfterBillingStarts := rentEnd.IsZero() || rentEnd.After(start) || rentEnd.Equal(start)
+		rentStartsBeforeBillingEnds := rentStart.Before(end) || rentStart.Equal(start)
+
+		if !rentStartsBeforeBillingEnds || !rentEndsAfterBillingStarts {
+			log.Printf("  User %d (%s %s) rent period (%s to %s) does not overlap with billing period - SKIPPING",
+				userID, firstName, lastName,
+				rentStart.Format("2006-01-02"),
+				formatDateOrEmpty(rentEnd))
+			continue
+		}
+
+		// Calculate the actual billing period for this user
+		billingStart := start
+		if rentStart.After(start) {
+			billingStart = rentStart
+		}
+
+		billingEnd := end
+		if !rentEnd.IsZero() && rentEnd.Before(end) {
+			billingEnd = rentEnd
+		}
+
+		// Calculate proration factor (for shared costs like rent, maintenance)
+		totalDays := end.Sub(start).Hours() / 24
+		userDays := billingEnd.Sub(billingStart).Hours() / 24
+		prorationFactor := userDays / totalDays
+
+		log.Printf("  User %d (%s %s): Rent %s to %s, Billing %s to %s (%.1f days / %.1f days = %.3f)",
+			userID, firstName, lastName,
+			rentStart.Format("2006-01-02"), formatDateOrEmpty(rentEnd),
+			billingStart.Format("2006-01-02"), billingEnd.Format("2006-01-02"),
+			userDays, totalDays, prorationFactor)
+
+		userPeriods = append(userPeriods, UserPeriod{
+			UserID:          userID,
+			FirstName:       firstName,
+			LastName:        lastName,
+			Email:           email,
+			ChargerIDs:      chargerIDs.String,
+			IsActive:        isActive,
+			Language:        language,
+			RentStartDate:   rentStart,
+			RentEndDate:     rentEnd,
+			BillingStart:    billingStart,
+			BillingEnd:      billingEnd,
+			ProrationFactor: prorationFactor,
+		})
+	}
+
+	return userPeriods, nil
+}
+
+// Helper function to format date or return "ongoing"
+func formatDateOrEmpty(t time.Time) string {
+	if t.IsZero() {
+		return "ongoing"
+	}
+	return t.Format("2006-01-02")
+}
+
 func (bs *BillingService) calculateSharedMeterCosts(buildingID int, start, end time.Time, userID int, totalActiveUsers int) ([]models.InvoiceItem, float64, error) {
-	// Use German as default for old function calls
 	tr := GetTranslations("de")
-	return bs.calculateSharedMeterCostsWithTranslations(buildingID, start, end, userID, totalActiveUsers, tr, "CHF")
+	return bs.calculateSharedMeterCostsWithTranslations(buildingID, start, end, userID, totalActiveUsers, tr, "CHF", 1.0)
 }
 
 func (bs *BillingService) getCustomLineItems(buildingID int) ([]models.InvoiceItem, float64, error) {
-	// Use German as default for old function calls
 	tr := GetTranslations("de")
-	return bs.getCustomLineItemsWithTranslations(buildingID, tr)
+	return bs.getCustomLineItemsWithTranslations(buildingID, tr, 1.0)
 }
 
-func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID int, start, end time.Time, userID int, totalActiveUsers int, tr InvoiceTranslations, currency string) ([]models.InvoiceItem, float64, error) {
-	log.Printf("  [SHARED METERS] Calculating shared meter costs for building %d, user %d (%d active users)", buildingID, userID, totalActiveUsers)
+func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID int, start, end time.Time, userID int, totalActiveUsers int, tr InvoiceTranslations, currency string, prorationFactor float64) ([]models.InvoiceItem, float64, error) {
+	log.Printf("  [SHARED METERS] Calculating shared meter costs for building %d, user %d (%d active users, proration: %.3f)", buildingID, userID, totalActiveUsers, prorationFactor)
 
-	// Get all shared meter configs for this building
 	rows, err := bs.db.Query(`
 		SELECT id, meter_id, meter_name, split_type, unit_price
 		FROM shared_meter_configs
@@ -222,7 +350,6 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 		log.Printf("  [SHARED METERS] Config #%d: Meter '%s' (ID %d), split=%s, price=%.3f",
 			configCount, meterName, meterID, splitType, unitPrice)
 
-		// Get meter readings for this period
 		var readingFrom, readingTo float64
 		err := bs.db.QueryRow(`
 			SELECT 
@@ -259,7 +386,6 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 		log.Printf("  [SHARED METERS]   Total meter cost: %.3f × %.3f = %.3f",
 			consumption, unitPrice, totalMeterCost)
 
-		// Calculate this user's share based on split_type
 		var userShare float64
 		var splitDescription string
 
@@ -270,7 +396,6 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 				splitDescription = fmt.Sprintf("%s %s %d %s", tr.SplitEqually, tr.Among, totalActiveUsers, tr.Users)
 			}
 		case "by_area":
-			// Get user's apartment area
 			var userArea, totalArea float64
 			err := bs.db.QueryRow(`
 				SELECT 
@@ -282,7 +407,6 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 				userShare = totalMeterCost * (userArea / totalArea)
 				splitDescription = fmt.Sprintf("Split by area: %.1fm² %s %.1fm² total", userArea, tr.Of, totalArea)
 			} else {
-				// Fallback to equal split if area data is missing
 				if totalActiveUsers > 0 {
 					userShare = totalMeterCost / float64(totalActiveUsers)
 				}
@@ -291,7 +415,6 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 			}
 
 		case "by_units":
-			// Get number of units occupied by this user
 			var userUnits, totalUnits int
 			err := bs.db.QueryRow(`
 				SELECT 
@@ -303,7 +426,6 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 				userShare = totalMeterCost * (float64(userUnits) / float64(totalUnits))
 				splitDescription = fmt.Sprintf("%s: %d %s %d %s", tr.SplitByUnits, userUnits, tr.Of, totalUnits, tr.TotalUnits)
 			} else {
-				// Fallback to equal split
 				if totalActiveUsers > 0 {
 					userShare = totalMeterCost / float64(totalActiveUsers)
 				}
@@ -312,7 +434,6 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 			}
 
 		case "custom":
-			// Get custom percentage for this user
 			var customPercentage float64
 			err := bs.db.QueryRow(`
 				SELECT COALESCE(percentage, 0) 
@@ -324,7 +445,6 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 				userShare = totalMeterCost * (customPercentage / 100.0)
 				splitDescription = fmt.Sprintf("%s: %.1f%%", tr.CustomSplit, customPercentage)
 			} else {
-				// Fallback to equal split
 				if totalActiveUsers > 0 {
 					userShare = totalMeterCost / float64(totalActiveUsers)
 				}
@@ -333,16 +453,20 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 			}
 
 		default:
-			// Default to equal split
 			if totalActiveUsers > 0 {
 				userShare = totalMeterCost / float64(totalActiveUsers)
 			}
 			splitDescription = fmt.Sprintf("%s %s %d %s", tr.SplitEqually, tr.Among, totalActiveUsers, tr.Users)
 		}
 
+		// Apply proration factor for shared costs
+		userShare = userShare * prorationFactor
+		if prorationFactor < 1.0 {
+			splitDescription += fmt.Sprintf(" × %.1f%% of period", prorationFactor*100)
+		}
+
 		log.Printf("  [SHARED METERS]   User share: %.3f (%s)", userShare, splitDescription)
 
-		// Add header item (informational, no cost)
 		items = append(items, models.InvoiceItem{
 			Description: fmt.Sprintf("%s: %s", tr.SharedMeter, meterName),
 			Quantity:    0,
@@ -351,7 +475,6 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 			ItemType:    "shared_meter_info",
 		})
 
-		// Add consumption details
 		items = append(items, models.InvoiceItem{
 			Description: fmt.Sprintf("  %s: %.3f kWh × %.3f %s/kWh = %.3f %s", tr.TotalConsumption, consumption, unitPrice, currency, totalMeterCost, currency),
 			Quantity:    0,
@@ -360,16 +483,14 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 			ItemType:    "shared_meter_detail",
 		})
 
-		// Add the billable charge
 		items = append(items, models.InvoiceItem{
 			Description: fmt.Sprintf("  %s: %.3f %s (%s)", tr.YourShare, userShare, currency, splitDescription),
-			Quantity:    consumption / float64(totalActiveUsers), // Approximate per-user consumption
+			Quantity:    consumption / float64(totalActiveUsers),
 			UnitPrice:   unitPrice,
 			TotalPrice:  userShare,
 			ItemType:    "shared_meter_charge",
 		})
 
-		// Add separator
 		items = append(items, models.InvoiceItem{
 			Description: "",
 			Quantity:    0,
@@ -390,8 +511,8 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 	return items, totalCost, nil
 }
 
-func (bs *BillingService) getCustomLineItemsWithTranslations(buildingID int, tr InvoiceTranslations) ([]models.InvoiceItem, float64, error) {
-	log.Printf("  [CUSTOM ITEMS] Getting custom line items for building %d", buildingID)
+func (bs *BillingService) getCustomLineItemsWithTranslations(buildingID int, tr InvoiceTranslations, prorationFactor float64) ([]models.InvoiceItem, float64, error) {
+	log.Printf("  [CUSTOM ITEMS] Getting custom line items for building %d (proration: %.3f)", buildingID, prorationFactor)
 
 	rows, err := bs.db.Query(`
 		SELECT id, description, amount, frequency, category
@@ -421,7 +542,6 @@ func (bs *BillingService) getCustomLineItemsWithTranslations(buildingID int, tr 
 
 		itemCount++
 
-		// Format frequency label (these are technical, keep in English in DB but could translate if needed)
 		var frequencyLabel string
 		switch frequency {
 		case "once":
@@ -436,7 +556,6 @@ func (bs *BillingService) getCustomLineItemsWithTranslations(buildingID int, tr 
 			frequencyLabel = frequency
 		}
 
-		// Format category icon/label (these are technical, keep in English in DB but could translate if needed)
 		var categoryLabel string
 		switch category {
 		case "meter_rent":
@@ -451,10 +570,11 @@ func (bs *BillingService) getCustomLineItemsWithTranslations(buildingID int, tr 
 			categoryLabel = category
 		}
 
-		log.Printf("  [CUSTOM ITEMS] Item #%d: %s - %.3f CHF (%s, %s)",
-			itemCount, description, amount, frequencyLabel, categoryLabel)
+		proratedAmount := amount * prorationFactor
+		
+		log.Printf("  [CUSTOM ITEMS] Item #%d: %s - %.3f CHF (%.3f before proration) (%s, %s)",
+			itemCount, description, proratedAmount, amount, frequencyLabel, categoryLabel)
 
-		// Add header for first item
 		if itemCount == 1 {
 			items = append(items, models.InvoiceItem{
 				Description: "",
@@ -473,15 +593,20 @@ func (bs *BillingService) getCustomLineItemsWithTranslations(buildingID int, tr 
 			})
 		}
 
+		descriptionText := fmt.Sprintf("%s: %s", categoryLabel, description)
+		if prorationFactor < 1.0 {
+			descriptionText += fmt.Sprintf(" (%.1f%% of period)", prorationFactor*100)
+		}
+
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("%s: %s", categoryLabel, description),
-			Quantity:    1,
+			Description: descriptionText,
+			Quantity:    prorationFactor,
 			UnitPrice:   amount,
-			TotalPrice:  amount,
+			TotalPrice:  proratedAmount,
 			ItemType:    "custom_item",
 		})
 
-		totalCost += amount
+		totalCost += proratedAmount
 	}
 
 	if itemCount == 0 {
@@ -504,39 +629,52 @@ func (bs *BillingService) countActiveUsers(buildingID int) (int, error) {
 	return count, err
 }
 
-func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end time.Time, settings models.BillingSettings, rfidCards string) (*models.Invoice, error) {
-	// Get user language preference
-	var userLanguage string
-	err := bs.db.QueryRow(`
-		SELECT COALESCE(language, 'de') FROM users WHERE id = ?
-	`, userID).Scan(&userLanguage)
+// Generate invoice for a specific user period with ACTUAL consumption
+func (bs *BillingService) generateUserInvoiceForPeriod(userPeriod UserPeriod, buildingID int, fullStart, fullEnd time.Time, settings models.BillingSettings) (*models.Invoice, error) {
+	tr := GetTranslations(userPeriod.Language)
 	
-	if err != nil {
-		log.Printf("  WARNING: Could not fetch user language, defaulting to German: %v", err)
-		userLanguage = "de"
-	}
-	
-	log.Printf("  User language: %s", userLanguage)
-	
-	// Get translations for the user's language
-	tr := GetTranslations(userLanguage)
-	
-	// IMPROVED: Year-based invoice numbering for better organization
-	invoiceYear := start.Year()
+	invoiceYear := fullStart.Year()
 	timestamp := time.Now().Format("20060102150405")
-
-	// Format: INV-YEAR-BUILDING-USER-TIMESTAMP
-	invoiceNumber := fmt.Sprintf("INV-%d-%d-%d-%s", invoiceYear, buildingID, userID, timestamp)
+	invoiceNumber := fmt.Sprintf("INV-%d-%d-%d-%s", invoiceYear, buildingID, userPeriod.UserID, timestamp)
 
 	totalAmount := 0.0
 	items := []models.InvoiceItem{}
 
-	meterReadingFrom, meterReadingTo, meterName := bs.getMeterReadings(userID, start, end)
-	normalPower, solarPower, totalConsumption := bs.calculateZEVConsumption(userID, buildingID, start, end)
+	// Use the user's ACTUAL billing period for consumption calculation
+	start := userPeriod.BillingStart
+	end := userPeriod.BillingEnd
 
-	log.Printf("  Meter: %s", meterName)
+	// Add proration notice if not full period
+	if userPeriod.ProrationFactor < 1.0 {
+		items = append(items, models.InvoiceItem{
+			Description: fmt.Sprintf("⚠️ %s: %s to %s (%.1f%% of billing period)", 
+				tr.PartialPeriod,
+				start.Format("02.01.2006"),
+				end.Format("02.01.2006"),
+				userPeriod.ProrationFactor*100),
+			Quantity:    0,
+			UnitPrice:   0,
+			TotalPrice:  0,
+			ItemType:    "proration_notice",
+		})
+		items = append(items, models.InvoiceItem{
+			Description: "",
+			Quantity:    0,
+			UnitPrice:   0,
+			TotalPrice:  0,
+			ItemType:    "separator",
+		})
+	}
+
+	// CRITICAL: Get meter readings for THIS USER'S ACTUAL PERIOD
+	meterReadingFrom, meterReadingTo, meterName := bs.getMeterReadings(userPeriod.UserID, start, end)
+	
+	// CRITICAL: Calculate consumption for THIS USER'S ACTUAL PERIOD
+	normalPower, solarPower, totalConsumption := bs.calculateZEVConsumption(userPeriod.UserID, buildingID, start, end)
+
+	log.Printf("  Meter: %s (Period: %s to %s)", meterName, start.Format("2006-01-02"), end.Format("2006-01-02"))
 	log.Printf("  Reading from: %.3f kWh, Reading to: %.3f kWh", meterReadingFrom, meterReadingTo)
-	log.Printf("  Calculated consumption: %.3f kWh (Normal: %.3f, Solar: %.3f)",
+	log.Printf("  Calculated ACTUAL consumption for this period: %.3f kWh (Normal: %.3f, Solar: %.3f)",
 		totalConsumption, normalPower, solarPower)
 
 	if totalConsumption > 0 {
@@ -548,7 +686,6 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 			ItemType:    "meter_info",
 		})
 
-		// Compact single-line meter reading with translations
 		items = append(items, models.InvoiceItem{
 			Description: fmt.Sprintf("%s: %s-%s | %s: %.3f kWh | %s: %.3f kWh | %s: %.3f kWh",
 				tr.Period, start.Format("02.01"), end.Format("02.01"),
@@ -596,9 +733,10 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 		log.Printf("  Normal Cost: %.3f kWh × %.3f = %.3f %s", normalPower, settings.NormalPowerPrice, normalCost, settings.Currency)
 	}
 
-	if rfidCards != "" {
-		log.Printf("  [CHARGING] Starting charging calculation for RFID cards: '%s'", rfidCards)
-		normalCharging, priorityCharging, firstSession, lastSession := bs.calculateChargingConsumption(buildingID, rfidCards, start, end)
+	// CRITICAL: Car charging for THIS USER'S ACTUAL PERIOD
+	if userPeriod.ChargerIDs != "" {
+		log.Printf("  [CHARGING] Calculating for period: %s to %s", start.Format("2006-01-02"), end.Format("2006-01-02"))
+		normalCharging, priorityCharging, firstSession, lastSession := bs.calculateChargingConsumption(buildingID, userPeriod.ChargerIDs, start, end)
 
 		log.Printf("  [CHARGING] Results: Solar=%.3f kWh, Priority=%.3f kWh", normalCharging, priorityCharging)
 
@@ -620,7 +758,6 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 			})
 
 			if !firstSession.IsZero() && !lastSession.IsZero() {
-				// Compact single-line charging session info with translations
 				totalCharged := normalCharging + priorityCharging
 				items = append(items, models.InvoiceItem{
 					Description: fmt.Sprintf("%s: %s - %s | %s: %.3f kWh",
@@ -670,41 +807,35 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 				log.Printf("  Priority Charging: %.3f kWh × %.3f = %.3f %s", priorityCharging, settings.CarChargingPriorityPrice, priorityChargingCost, settings.Currency)
 			}
 		}
-	} else {
-		log.Printf("  [CHARGING] No RFID cards configured for this user - skipping charging calculation")
 	}
 
-	// Get total active users for shared meter split calculations
+	// Shared meters and custom items ARE pro-rated by days
 	totalActiveUsers, err := bs.countActiveUsers(buildingID)
 	if err != nil || totalActiveUsers == 0 {
-		totalActiveUsers = 1 // Fallback to prevent division by zero
+		totalActiveUsers = 1
 	}
 	log.Printf("  Total active users in building: %d", totalActiveUsers)
 
-	// Calculate and add shared meter costs (pass translations)
-	log.Printf("  Checking for shared meters...")
+	log.Printf("  Checking for shared meters (pro-rated by %.1f%% of period)...", userPeriod.ProrationFactor*100)
 	sharedMeterItems, sharedMeterCost, err := bs.calculateSharedMeterCostsWithTranslations(
-		buildingID, start, end, userID, totalActiveUsers, tr, settings.Currency,
+		buildingID, start, end, userPeriod.UserID, totalActiveUsers, tr, settings.Currency, userPeriod.ProrationFactor,
 	)
 	if err != nil {
 		log.Printf("  WARNING: Failed to calculate shared meter costs: %v", err)
 	} else if len(sharedMeterItems) > 0 {
 		items = append(items, sharedMeterItems...)
 		totalAmount += sharedMeterCost
-		log.Printf("  ✓ Added %d shared meter items (total: %.3f)",
-			len(sharedMeterItems), sharedMeterCost)
+		log.Printf("  ✅ Added %d shared meter items (total: %.3f)", len(sharedMeterItems), sharedMeterCost)
 	}
 
-	// Get and add custom line items (pass translations)
-	log.Printf("  Checking for custom line items...")
-	customItems, customCost, err := bs.getCustomLineItemsWithTranslations(buildingID, tr)
+	log.Printf("  Checking for custom line items (pro-rated by %.1f%% of period)...", userPeriod.ProrationFactor*100)
+	customItems, customCost, err := bs.getCustomLineItemsWithTranslations(buildingID, tr, userPeriod.ProrationFactor)
 	if err != nil {
 		log.Printf("  WARNING: Failed to get custom line items: %v", err)
 	} else if len(customItems) > 0 {
 		items = append(items, customItems...)
 		totalAmount += customCost
-		log.Printf("  ✓ Added %d custom line items (total: %.3f)",
-			len(customItems), customCost)
+		log.Printf("  ✅ Added %d custom items (total: %.3f)", len(customItems), customCost)
 	}
 
 	log.Printf("  INVOICE TOTAL: %s %.3f", settings.Currency, totalAmount)
@@ -715,7 +846,7 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 			invoice_number, user_id, building_id, period_start, period_end,
 			total_amount, currency, status
 		) VALUES (?, ?, ?, ?, ?, ?, ?, 'issued')
-	`, invoiceNumber, userID, buildingID, start.Format("2006-01-02"), end.Format("2006-01-02"),
+	`, invoiceNumber, userPeriod.UserID, buildingID, fullStart.Format("2006-01-02"), fullEnd.Format("2006-01-02"),
 		totalAmount, settings.Currency)
 
 	if err != nil {
@@ -739,10 +870,10 @@ func (bs *BillingService) generateUserInvoice(userID, buildingID int, start, end
 	invoice := &models.Invoice{
 		ID:            int(invoiceID),
 		InvoiceNumber: invoiceNumber,
-		UserID:        userID,
+		UserID:        userPeriod.UserID,
 		BuildingID:    buildingID,
-		PeriodStart:   start.Format("2006-01-02"),
-		PeriodEnd:     end.Format("2006-01-02"),
+		PeriodStart:   fullStart.Format("2006-01-02"),
+		PeriodEnd:     fullEnd.Format("2006-01-02"),
 		TotalAmount:   totalAmount,
 		Currency:      settings.Currency,
 		Status:        "issued",
