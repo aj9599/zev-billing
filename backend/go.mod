@@ -9,6 +9,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.19
 	github.com/rs/cors v1.10.1
 	golang.org/x/crypto v0.18.0
+	github.com/goburrow/modbus v0.1.0
 
 	// Add these two:
 	github.com/jung-kurt/gofpdf v1.16.2 // or latest
