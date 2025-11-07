@@ -18,6 +18,7 @@ type ModbusCollector struct {
 	clients         map[int]*ModbusClient
 	mu              sync.RWMutex
 	reconnectTicker *time.Ticker
+	stopChan        chan bool
 }
 
 type ModbusClient struct {
@@ -52,6 +53,7 @@ func NewModbusCollector(db *sql.DB) *ModbusCollector {
 		db:              db,
 		clients:         make(map[int]*ModbusClient),
 		reconnectTicker: time.NewTicker(30 * time.Second),
+		stopChan:        make(chan bool),
 	}
 	return mc
 }
@@ -84,7 +86,7 @@ func (mc *ModbusCollector) initializeModbusConnections() {
 	rows, err := mc.db.Query(`
 		SELECT id, name, connection_config
 		FROM meters
-		WHERE is_active = 1 AND connection_type = 'modbus_tcp' AND is_archived = 0
+		WHERE is_active = 1 AND connection_type = 'modbus_tcp'
 	`)
 	if err != nil {
 		log.Printf("ERROR: Failed to query Modbus meters: %v", err)
@@ -147,25 +149,31 @@ func (mc *ModbusCollector) createModbusClient(config ModbusMeterConfig) *ModbusC
 }
 
 func (mc *ModbusCollector) reconnectionRoutine() {
-	for range mc.reconnectTicker.C {
-		mc.mu.RLock()
-		clients := make([]*ModbusClient, 0, len(mc.clients))
-		for _, client := range mc.clients {
-			clients = append(clients, client)
-		}
-		mc.mu.RUnlock()
-		
-		for _, client := range clients {
-			client.mu.Lock()
-			if !client.isConnected {
-				log.Printf("Attempting to reconnect to Modbus meter '%s'...", client.meterName)
-				if err := client.connect(); err != nil {
-					log.Printf("Reconnection failed for '%s': %v", client.meterName, err)
-				} else {
-					log.Printf("Successfully reconnected to '%s'", client.meterName)
-				}
+	for {
+		select {
+		case <-mc.stopChan:
+			log.Println("Modbus reconnection routine stopping")
+			return
+		case <-mc.reconnectTicker.C:
+			mc.mu.RLock()
+			clients := make([]*ModbusClient, 0, len(mc.clients))
+			for _, client := range mc.clients {
+				clients = append(clients, client)
 			}
-			client.mu.Unlock()
+			mc.mu.RUnlock()
+			
+			for _, client := range clients {
+				client.mu.Lock()
+				if !client.isConnected {
+					log.Printf("Attempting to reconnect to Modbus meter '%s'...", client.meterName)
+					if err := client.connect(); err != nil {
+						log.Printf("Reconnection failed for '%s': %v", client.meterName, err)
+					} else {
+						log.Printf("Successfully reconnected to '%s'", client.meterName)
+					}
+				}
+				client.mu.Unlock()
+			}
 		}
 	}
 }
@@ -175,6 +183,7 @@ func (mc *ModbusCollector) RestartConnections() {
 	mc.initializeModbusConnections()
 }
 
+// ReadMeter reads a single meter (called by data_collector during 15-min cycle)
 func (mc *ModbusCollector) ReadMeter(meterID int) (float64, error) {
 	mc.mu.RLock()
 	client, exists := mc.clients[meterID]
@@ -185,6 +194,55 @@ func (mc *ModbusCollector) ReadMeter(meterID int) (float64, error) {
 	}
 	
 	return client.readValue()
+}
+
+// NEW: ReadAllMeters reads all meters in parallel (for independent operation)
+func (mc *ModbusCollector) ReadAllMeters() map[int]float64 {
+	mc.mu.RLock()
+	clients := make([]*ModbusClient, 0, len(mc.clients))
+	for _, client := range mc.clients {
+		clients = append(clients, client)
+	}
+	mc.mu.RUnlock()
+	
+	results := make(map[int]float64)
+	resultsMu := sync.Mutex{}
+	wg := sync.WaitGroup{}
+	
+	for _, client := range clients {
+		wg.Add(1)
+		go func(c *ModbusClient) {
+			defer wg.Done()
+			
+			value, err := c.readValue()
+			if err != nil {
+				log.Printf("ERROR: Failed to read Modbus meter '%s': %v", c.meterName, err)
+				return
+			}
+			
+			resultsMu.Lock()
+			results[c.meterID] = value
+			resultsMu.Unlock()
+			
+			log.Printf("SUCCESS: Read Modbus meter '%s': %.3f kWh", c.meterName, value)
+		}(client)
+	}
+	
+	// Wait for all reads to complete (with timeout)
+	done := make(chan bool)
+	go func() {
+		wg.Wait()
+		done <- true
+	}()
+	
+	select {
+	case <-done:
+		log.Printf("All Modbus meters read successfully (%d devices)", len(results))
+	case <-time.After(30 * time.Second):
+		log.Printf("WARNING: Modbus read timeout - some devices may not have responded")
+	}
+	
+	return results
 }
 
 func (mc *ModbusCollector) GetConnectionStatus() map[string]interface{} {
@@ -208,11 +266,16 @@ func (mc *ModbusCollector) GetConnectionStatus() map[string]interface{} {
 		client.mu.Unlock()
 	}
 	
-	return status
+	return map[string]interface{}{
+		"modbus_connections": status,
+	}
 }
 
 func (mc *ModbusCollector) Stop() {
 	log.Println("Stopping Modbus TCP Collector...")
+	
+	// Signal reconnection routine to stop
+	close(mc.stopChan)
 	
 	if mc.reconnectTicker != nil {
 		mc.reconnectTicker.Stop()

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,9 +9,11 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/aj9599/zev-billing/backend/config"
@@ -226,8 +229,36 @@ func main() {
 		IdleTimeout:  180 * time.Second,
 	}
 
+	// Setup graceful shutdown
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-stop
+		log.Println("Shutting down gracefully...")
+		
+		// Stop data collector (which will stop Loxone and Modbus collectors)
+		if dataCollector != nil {
+			dataCollector.Stop()
+		}
+		
+		// Create a deadline for shutdown
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		
+		if err := server.Shutdown(ctx); err != nil {
+			log.Printf("Server forced to shutdown: %v", err)
+		}
+		
+		log.Println("Server stopped")
+	}()
+
 	log.Printf("Server starting on %s", cfg.ServerAddress)
 	log.Println("Data collector running (15-minute intervals)")
+	log.Println("  - HTTP Polling (primary)")
+	log.Println("  - UDP Monitoring (backup)")
+	log.Println("  - Loxone WebSocket (real-time)")
+	log.Println("  - Modbus TCP (direct polling)")
 	log.Println("Auto billing scheduler running (hourly checks)")
 	log.Println("Webhook endpoints available:")
 	log.Println("  - POST/GET /webhook/meter?meter_id=X")
@@ -237,7 +268,7 @@ func main() {
 	log.Println("IMPORTANT: Change default password after first login!")
 	log.Println("===========================================")
 
-	if err := server.ListenAndServe(); err != nil {
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Server failed to start: %v", err)
 	}
 }
@@ -271,6 +302,12 @@ func rebootHandler(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		time.Sleep(1 * time.Second)
+		
+		// Gracefully stop data collector
+		if dataCollector != nil {
+			dataCollector.Stop()
+		}
+		
 		log.Println("Executing service restart...")
 
 		cmd := exec.Command("systemctl", "restart", "zev-billing.service")
@@ -436,6 +473,11 @@ func restoreBackupHandler(dbPath string) http.HandlerFunc {
 
 		// Restart service after successful restore
 		go func() {
+			// Gracefully stop data collector
+			if dataCollector != nil {
+				dataCollector.Stop()
+			}
+			
 			time.Sleep(1 * time.Second)
 			cmd := exec.Command("systemctl", "restart", "zev-billing.service")
 			if err := cmd.Run(); err != nil {
@@ -531,6 +573,12 @@ func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	})
 
 	go func() {
+		// Gracefully stop data collector before update
+		if dataCollector != nil {
+			log.Println("Stopping data collector before update...")
+			dataCollector.Stop()
+		}
+		
 		time.Sleep(1 * time.Second)
 
 		// Try to detect repository path
