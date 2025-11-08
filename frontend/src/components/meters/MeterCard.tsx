@@ -1,7 +1,7 @@
 import { Edit2, Trash2, RefreshCw, Building, Archive } from 'lucide-react';
 import { useTranslation } from '../../i18n';
 import type { Meter, User } from '../../types';
-import { getMeterTypeLabel } from '../utils/meterUtils';
+import { getMeterTypeLabel } from './utils/meterUtils';
 import MeterConnectionStatus from './MeterConnectionStatus';
 
 interface MeterCardProps {

@@ -1,4 +1,4 @@
-import { X, Info, AlertCircle, Wifi, Rss } from 'lucide-react';
+import { X, Info, AlertCircle, Star, Wifi, Radio, Zap, Rss } from 'lucide-react';
 import { useTranslation } from '../../i18n';
 import type { Meter, Building, User } from '../../types';
 
@@ -30,7 +30,6 @@ interface MeterFormModalProps {
     connectionConfig: ConnectionConfig;
     buildings: Building[];
     users: User[];
-    meters: Meter[];
     onSubmit: (e: React.FormEvent) => Promise<void>;
     onCancel: () => void;
     onFormDataChange: (data: Partial<Meter>) => void;
@@ -46,7 +45,6 @@ export default function MeterFormModal({
     connectionConfig,
     buildings,
     users,
-    meters,
     onSubmit,
     onCancel,
     onFormDataChange,
