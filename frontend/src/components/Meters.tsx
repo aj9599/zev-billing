@@ -45,7 +45,7 @@ export default function Meters() {
         handleNameChange,
         setFormData,
         setConnectionConfig
-    } = useMeterForm(loadData, fetchConnectionStatus, meters); // Pass meters array here
+    } = useMeterForm(loadData, fetchConnectionStatus, meters); // Pass meters array
     
     const {
         showDeleteConfirmation,

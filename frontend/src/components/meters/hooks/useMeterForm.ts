@@ -26,7 +26,7 @@ interface ConnectionConfig {
     mqtt_qos?: number;
 }
 
-export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => void, meters: any[] = [], buildings: any[] = []) {
+export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => void, meters: any[] = []) {
     const { t } = useTranslation();
     const [showModal, setShowModal] = useState(false);
     const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
