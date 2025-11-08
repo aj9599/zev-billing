@@ -26,7 +26,7 @@ interface ConnectionConfig {
     mqtt_qos?: number;
 }
 
-export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => void, meters: any[] = []) {
+export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => void, meters: any[] = [], buildings: any[] = []) {
     const { t } = useTranslation();
     const [showModal, setShowModal] = useState(false);
     const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
@@ -207,10 +207,10 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
         resetForm();
     };
 
-    const handleConnectionTypeChange = (connectionType: string, meterName: string) => {
+    const handleConnectionTypeChange = (connectionType: string, meterName: string, buildingName?: string, apartmentUnit?: string) => {
         // Auto-generate MQTT topic when switching to MQTT
         if (connectionType === 'mqtt' && meterName) {
-            const topic = generateUniqueMqttTopic(meters, meterName);
+            const topic = generateUniqueMqttTopic(meters, meterName, buildingName, apartmentUnit);
             setConnectionConfig(prev => ({
                 ...prev,
                 mqtt_topic: topic
@@ -218,11 +218,16 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
         }
     };
 
-    const handleNameChange = (name: string, currentConnectionType: string) => {
+    const handleNameChange = (
+        name: string, 
+        currentConnectionType: string,
+        buildingName?: string,
+        apartmentUnit?: string
+    ) => {
         setFormData(prev => ({ ...prev, name }));
         // Auto-generate MQTT topic when name changes for MQTT connections
         if (!editingMeter && currentConnectionType === 'mqtt' && name) {
-            const topic = generateUniqueMqttTopic(meters, name);
+            const topic = generateUniqueMqttTopic(meters, name, buildingName, apartmentUnit);
             setConnectionConfig(prev => ({
                 ...prev,
                 mqtt_topic: topic
