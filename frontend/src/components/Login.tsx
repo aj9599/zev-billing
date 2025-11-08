@@ -61,7 +61,7 @@ export default function Login({ onLogin }: LoginProps) {
             marginBottom: '24px',
             padding: '10px'
           }}>
-            <Logo size={90} />
+            <Logo size={100} />
           </div>
           <h1 style={{
             fontSize: '32px',
