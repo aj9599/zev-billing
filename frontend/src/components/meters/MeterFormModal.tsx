@@ -34,8 +34,8 @@ interface MeterFormModalProps {
     onCancel: () => void;
     onFormDataChange: (data: Partial<Meter>) => void;
     onConnectionConfigChange: (config: ConnectionConfig) => void;
-    onConnectionTypeChange: (connectionType: string, meterName: string) => void;
-    onNameChange: (name: string, connectionType: string) => void;
+    onConnectionTypeChange: (connectionType: string, meterName: string, buildingName?: string, apartmentUnit?: string) => void;
+    onNameChange: (name: string, connectionType: string, buildingName?: string, apartmentUnit?: string) => void;
     onShowInstructions: () => void;
 }
 
@@ -64,14 +64,16 @@ export default function MeterFormModal({
     ];
 
     const handleNameChange = (name: string) => {
-        onNameChange(name, formData.connection_type || 'loxone_api');
+        const building = buildings.find(b => b.id === formData.building_id);
+        onNameChange(name, formData.connection_type || 'loxone_api', building?.name, formData.apartment_unit);
     };
 
     const handleConnectionTypeChange = (connectionType: string) => {
         onFormDataChange({ ...formData, connection_type: connectionType });
         // Auto-generate MQTT topic when switching to MQTT
         if (connectionType === 'mqtt' && formData.name) {
-            onConnectionTypeChange(connectionType, formData.name);
+            const building = buildings.find(b => b.id === formData.building_id);
+            onConnectionTypeChange(connectionType, formData.name, building?.name, formData.apartment_unit);
         }
     };
 
@@ -195,7 +197,15 @@ export default function MeterFormModal({
                         <select
                             required
                             value={formData.building_id}
-                            onChange={(e) => onFormDataChange({ ...formData, building_id: parseInt(e.target.value) })}
+                            onChange={(e) => {
+                                const newBuildingId = parseInt(e.target.value);
+                                onFormDataChange({ ...formData, building_id: newBuildingId });
+                                // Regenerate MQTT topic if using MQTT
+                                if (formData.connection_type === 'mqtt' && formData.name) {
+                                    const building = buildings.find(b => b.id === newBuildingId);
+                                    onConnectionTypeChange('mqtt', formData.name, building?.name, formData.apartment_unit);
+                                }
+                            }}
                             style={{
                                 width: '100%',
                                 padding: '10px',
@@ -260,6 +270,11 @@ export default function MeterFormModal({
                                                             apartment_unit: selectedApt,
                                                             user_id: aptUser ? aptUser.id : undefined
                                                         });
+                                                        // Regenerate MQTT topic if using MQTT
+                                                        if (formData.connection_type === 'mqtt' && formData.name) {
+                                                            const building = buildings.find(b => b.id === formData.building_id);
+                                                            onConnectionTypeChange('mqtt', formData.name, building?.name, selectedApt);
+                                                        }
                                                     }}
                                                     style={{
                                                         width: '100%',
@@ -329,7 +344,7 @@ export default function MeterFormModal({
                                                             fontSize: '11px',
                                                             fontWeight: '600'
                                                         }}>
-                                                            ✓ {t('common.active')}
+                                                            âœ“ {t('common.active')}
                                                         </div>
                                                     </div>
                                                 ) : (
@@ -341,7 +356,7 @@ export default function MeterFormModal({
                                                         color: '#92400e',
                                                         fontSize: '13px'
                                                     }}>
-                                                        ⚠️ {t('meters.noUserLinked')}
+                                                        âš ï¸ {t('meters.noUserLinked')}
                                                     </div>
                                                 )}
                                                 <p style={{ fontSize: '11px', color: '#666', marginTop: '6px' }}>
@@ -359,7 +374,7 @@ export default function MeterFormModal({
                                                 color: '#6b7280',
                                                 fontSize: '13px'
                                             }}>
-                                                ℹ️ {t('meters.apartmentNotSelected')}
+                                                â„¹ï¸ {t('meters.apartmentNotSelected')}
                                             </div>
                                         )}
                                     </>
@@ -536,7 +551,7 @@ export default function MeterFormModal({
                                                 ...connectionConfig,
                                                 loxone_password: e.target.value
                                             })}
-                                            placeholder="••••••••"
+                                            placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                                             style={{
                                                 width: '100%',
                                                 padding: '10px',
@@ -616,7 +631,7 @@ export default function MeterFormModal({
                                             ...connectionConfig,
                                             mqtt_topic: e.target.value
                                         })}
-                                        placeholder="meters/building1/meter1"
+                                        placeholder="meters/building_name/apartment/meter_name"
                                         style={{
                                             width: '100%',
                                             padding: '10px',
@@ -739,7 +754,7 @@ export default function MeterFormModal({
                                                 ...connectionConfig,
                                                 mqtt_password: e.target.value
                                             })}
-                                            placeholder="••••••••"
+                                            placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                                             style={{
                                                 width: '100%',
                                                 padding: '10px',

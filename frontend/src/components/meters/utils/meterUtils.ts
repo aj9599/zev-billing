@@ -54,15 +54,34 @@ export const isMqttTopicUsed = (meters: any[], topic: string): boolean => {
     });
 };
 
-export const generateUniqueMqttTopic = (meters: any[], meterName: string): string => {
-    const safeName = meterName.toLowerCase().replace(/[^a-z0-9]/g, '_');
-    let topic = `meters/${safeName}`;
+export const generateUniqueMqttTopic = (
+    meters: any[], 
+    meterName: string, 
+    buildingName?: string, 
+    apartmentUnit?: string
+): string => {
+    const safeName = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    
+    let topic: string;
+    
+    if (buildingName && apartmentUnit) {
+        // For apartment meters: meters/BuildingName/ApartmentUnit/MeterName
+        topic = `meters/${safeName(buildingName)}/${safeName(apartmentUnit)}/${safeName(meterName)}`;
+    } else if (buildingName) {
+        // For building-level meters: meters/BuildingName/MeterName
+        topic = `meters/${safeName(buildingName)}/${safeName(meterName)}`;
+    } else {
+        // Fallback if building name not provided
+        topic = `meters/${safeName(meterName)}`;
+    }
+    
     let counter = 1;
+    let finalTopic = topic;
 
-    while (isMqttTopicUsed(meters, topic)) {
-        topic = `meters/${safeName}_${counter}`;
+    while (isMqttTopicUsed(meters, finalTopic)) {
+        finalTopic = `${topic}_${counter}`;
         counter++;
     }
 
-    return topic;
+    return finalTopic;
 };
