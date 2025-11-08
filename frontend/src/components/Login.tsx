@@ -63,7 +63,7 @@ export default function Login({ onLogin }: LoginProps) {
             boxShadow: '0 8px 24px rgba(102, 126, 234, 0.3)',
             padding: '10px'
           }}>
-            <Logo size={80} animated={true} />
+            <Logo size={80} />
           </div>
           <h1 style={{
             fontSize: '32px',

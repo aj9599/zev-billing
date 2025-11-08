@@ -53,7 +53,7 @@ export default function Layout({ onLogout }: LayoutProps) {
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Logo size={32} animated={false} />
+          <Logo size={32} />
           <h1 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0 }}>ZEV Billing</h1>
         </div>
         <button
@@ -115,7 +115,7 @@ export default function Layout({ onLogout }: LayoutProps) {
           gap: '12px', 
           marginBottom: '30px' 
         }}>
-          <Logo size={40} animated={false} />
+          <Logo size={40} />
           <h1 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>
             ZEV Billing
           </h1>
