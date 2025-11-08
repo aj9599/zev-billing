@@ -1,4 +1,4 @@
-import { X, Info, AlertCircle, Star, Wifi, Radio, Zap, Rss } from 'lucide-react';
+import { X, Info, AlertCircle, Wifi, Rss } from 'lucide-react';
 import { useTranslation } from '../../i18n';
 import type { Meter, Building, User } from '../../types';
 

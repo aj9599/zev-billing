@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, HelpCircle, Download, Search, Archive } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { api } from '../api/client';
 import type { Meter, Building as BuildingType, User } from '../types';
 import { useTranslation } from '../i18n';
