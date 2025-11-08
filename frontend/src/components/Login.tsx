@@ -51,7 +51,16 @@ export default function Login({ onLogin }: LoginProps) {
         boxSizing: 'border-box'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-          
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '100px',
+            height: '100px',
+            borderRadius: '16px',
+            marginBottom: '24px',
+            padding: '10px'
+          }}>
             <Logo size={90} />
           </div>
           <h1 style={{
