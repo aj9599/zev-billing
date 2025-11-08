@@ -58,9 +58,9 @@ export default function Login({ onLogin }: LoginProps) {
             width: '100px',
             height: '100px',
             borderRadius: '16px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            backgroundColor: '#0A4C5A',
             marginBottom: '24px',
-            boxShadow: '0 8px 24px rgba(102, 126, 234, 0.3)',
+            boxShadow: '0 8px 24px rgba(10, 76, 90, 0.4)',
             padding: '10px'
           }}>
             <Logo size={80} />
@@ -225,7 +225,7 @@ export default function Login({ onLogin }: LoginProps) {
             style={{
               width: '100%',
               padding: '16px',
-              background: loading ? '#555' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              backgroundColor: loading ? '#555' : '#667eea',
               color: 'white',
               border: 'none',
               borderRadius: '12px',
@@ -242,12 +242,14 @@ export default function Login({ onLogin }: LoginProps) {
               if (!loading) {
                 e.currentTarget.style.transform = 'translateY(-2px)';
                 e.currentTarget.style.boxShadow = '0 8px 24px rgba(102, 126, 234, 0.5)';
+                e.currentTarget.style.backgroundColor = '#7c92ff';
               }
             }}
             onMouseLeave={(e) => {
               if (!loading) {
                 e.currentTarget.style.transform = 'translateY(0)';
                 e.currentTarget.style.boxShadow = '0 6px 20px rgba(102, 126, 234, 0.4)';
+                e.currentTarget.style.backgroundColor = '#667eea';
               }
             }}
           >
