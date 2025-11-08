@@ -60,7 +60,7 @@ export default function Login({ onLogin }: LoginProps) {
             borderRadius: '16px',
             backgroundColor: '#0A4C5A',
             marginBottom: '24px',
-            boxShadow: '0 8px 24px rgba(10, 76, 90, 0.4)',
+            boxShadow: '0 8px 24px rgba(10, 10, 10, 1)',
             padding: '10px'
           }}>
             <Logo size={80} />
