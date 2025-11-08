@@ -58,7 +58,7 @@ export default function Login({ onLogin }: LoginProps) {
             width: '100px',
             height: '100px',
             borderRadius: '16px',
-            backgroundColor: '#1a1a1a',
+            backgroundColor: '#2a2a2a',
             marginBottom: '24px',
             boxShadow: '0 8px 24px rgba(10, 76, 90, 0.4)',
             padding: '10px'
