@@ -251,7 +251,6 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 	for key, value := range mqttStatus {
 		result[key] = value
 	}
-	}
 	for key, value := range udpStatus {
 		result[key] = value
 	}
