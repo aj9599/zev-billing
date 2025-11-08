@@ -214,6 +214,12 @@ func (h *MeterHandler) Create(w http.ResponseWriter, r *http.Request) {
 		log.Printf("New Loxone API meter created, restarting Loxone connections...")
 		go h.dataCollector.RestartUDPListeners() // This also restarts Loxone connections
 	}
+	
+	// If it's an MQTT meter, restart MQTT connections
+	if m.ConnectionType == "mqtt" {
+		log.Printf("New MQTT meter created, restarting MQTT connections...")
+		go h.dataCollector.RestartUDPListeners() // This also restarts MQTT connections
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -261,6 +267,12 @@ func (h *MeterHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if m.ConnectionType == "loxone_api" {
 		log.Printf("Loxone API meter updated, restarting Loxone connections...")
 		go h.dataCollector.RestartUDPListeners() // This also restarts Loxone connections
+	}
+	
+	// If it's an MQTT meter, restart MQTT connections
+	if m.ConnectionType == "mqtt" {
+		log.Printf("MQTT meter updated, restarting MQTT connections...")
+		go h.dataCollector.RestartUDPListeners() // This also restarts MQTT connections
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -381,6 +393,12 @@ func (h *MeterHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if connectionType == "loxone_api" {
 		log.Printf("Loxone API meter deleted, restarting Loxone connections...")
 		go h.dataCollector.RestartUDPListeners() // This also restarts Loxone connections
+	}
+	
+	// If it was an MQTT meter, restart MQTT connections
+	if connectionType == "mqtt" {
+		log.Printf("MQTT meter deleted, restarting MQTT connections...")
+		go h.dataCollector.RestartUDPListeners() // This also restarts MQTT connections
 	}
 
 	w.WriteHeader(http.StatusNoContent)

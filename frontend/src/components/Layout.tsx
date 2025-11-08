@@ -1,8 +1,9 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useState } from 'react';
-import { LayoutDashboard, Users, Building, Zap, Car, FileText, Settings, LogOut, Activity, DollarSign, Menu, X, Calendar } from 'lucide-react';
+import { LayoutDashboard, Users, Building, Car, FileText, Settings, LogOut, Activity, DollarSign, Menu, X, Calendar, Zap } from 'lucide-react';
 import { api } from '../api/client';
 import { useTranslation } from '../i18n';
+import Logo from './Logo';
 
 interface LayoutProps {
   onLogout: () => void;
@@ -51,7 +52,10 @@ export default function Layout({ onLogout }: LayoutProps) {
         zIndex: 1001,
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
       }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0 }}>ZEV Billing</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Logo size={32} animated={false} />
+          <h1 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0 }}>ZEV Billing</h1>
+        </div>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           style={{
@@ -105,9 +109,17 @@ export default function Layout({ onLogout }: LayoutProps) {
         transition: 'transform 0.3s ease',
         WebkitOverflowScrolling: 'touch'
       }}>
-        <h1 className="desktop-only" style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '30px' }}>
-          ZEV Billing
-        </h1>
+        <div className="desktop-only" style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '12px', 
+          marginBottom: '30px' 
+        }}>
+          <Logo size={40} animated={false} />
+          <h1 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>
+            ZEV Billing
+          </h1>
+        </div>
         
         <nav style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', marginBottom: '12px' }}>
           {navItems.map(item => {

@@ -14,6 +14,7 @@ type DataCollector struct {
 	loxoneCollector    *LoxoneCollector
 	modbusCollector    *ModbusCollector
 	udpCollector       *UDPCollector
+	mqttCollector      *MQTTCollector
 	mu                 sync.Mutex
 	lastCollection     time.Time
 }
@@ -90,6 +91,7 @@ func NewDataCollector(db *sql.DB) *DataCollector {
 	dc.loxoneCollector = NewLoxoneCollector(db)
 	dc.modbusCollector = NewModbusCollector(db)
 	dc.udpCollector = NewUDPCollector(db)
+	dc.mqttCollector = NewMQTTCollector(db)
 	
 	return dc
 }
@@ -101,6 +103,7 @@ func (dc *DataCollector) Start() {
 	log.Println("  - Loxone WebSocket (real-time, independent)")
 	log.Println("  - Modbus TCP (coordinated parallel polling)")
 	log.Println("  - UDP Monitoring (continuous listening)")
+	log.Println("  - MQTT Broker (flexible pub/sub messaging)")
 	log.Println("Collection Interval: 15 minutes (fixed at :00, :15, :30, :45)")
 	log.Println("===================================")
 
@@ -108,6 +111,7 @@ func (dc *DataCollector) Start() {
 	go dc.loxoneCollector.Start()
 	go dc.modbusCollector.Start()
 	go dc.udpCollector.Start()
+	go dc.mqttCollector.Start()
 	
 	dc.logSystemStatus()
 	
@@ -158,6 +162,10 @@ func (dc *DataCollector) Stop() {
 		dc.udpCollector.Stop()
 	}
 	
+	if dc.mqttCollector != nil {
+		dc.mqttCollector.Stop()
+	}
+	
 	log.Println("Data Collector stopped")
 }
 
@@ -167,9 +175,10 @@ func (dc *DataCollector) RestartUDPListeners() {
 	dc.loxoneCollector.RestartConnections()
 	dc.modbusCollector.RestartConnections()
 	dc.udpCollector.RestartConnections()
+	dc.mqttCollector.RestartConnections()
 	
 	log.Println("=== All Collectors Restarted ===")
-	dc.logToDatabase("Collectors Restarted", "All collectors (Loxone, Modbus, UDP) have been reinitialized")
+	dc.logToDatabase("Collectors Restarted", "All collectors (Loxone, Modbus, UDP, MQTT) have been reinitialized")
 }
 
 func (dc *DataCollector) logSystemStatus() {
@@ -179,20 +188,23 @@ func (dc *DataCollector) logSystemStatus() {
 	dc.db.QueryRow("SELECT COUNT(*) FROM chargers WHERE is_active = 1").Scan(&activeChargers)
 	dc.db.QueryRow("SELECT COUNT(*) FROM chargers").Scan(&totalChargers)
 
-	var loxoneMeterCount, modbusMeterCount, udpMeterCount int
-	var loxoneChargerCount, udpChargerCount int
+	var loxoneMeterCount, modbusMeterCount, udpMeterCount, mqttMeterCount int
+	var loxoneChargerCount, udpChargerCount, mqttChargerCount int
 	
 	dc.db.QueryRow("SELECT COUNT(*) FROM meters WHERE is_active = 1 AND connection_type = 'loxone_api'").Scan(&loxoneMeterCount)
 	dc.db.QueryRow("SELECT COUNT(*) FROM meters WHERE is_active = 1 AND connection_type = 'modbus_tcp'").Scan(&modbusMeterCount)
 	dc.db.QueryRow("SELECT COUNT(*) FROM meters WHERE is_active = 1 AND connection_type = 'udp'").Scan(&udpMeterCount)
+	dc.db.QueryRow("SELECT COUNT(*) FROM meters WHERE is_active = 1 AND connection_type = 'mqtt'").Scan(&mqttMeterCount)
 	
 	dc.db.QueryRow("SELECT COUNT(*) FROM chargers WHERE is_active = 1 AND connection_type = 'loxone_api'").Scan(&loxoneChargerCount)
 	dc.db.QueryRow("SELECT COUNT(*) FROM chargers WHERE is_active = 1 AND connection_type = 'udp'").Scan(&udpChargerCount)
+	dc.db.QueryRow("SELECT COUNT(*) FROM chargers WHERE is_active = 1 AND connection_type = 'mqtt'").Scan(&mqttChargerCount)
 
 	log.Printf("System Status: %d/%d meters active, %d/%d chargers active", activeMeters, totalMeters, activeChargers, totalChargers)
 	log.Printf("  - Loxone API: %d meters, %d chargers (WebSocket real-time)", loxoneMeterCount, loxoneChargerCount)
 	log.Printf("  - Modbus TCP: %d meters (coordinated polling)", modbusMeterCount)
 	log.Printf("  - UDP: %d meters, %d chargers (continuous listening)", udpMeterCount, udpChargerCount)
+	log.Printf("  - MQTT: %d meters, %d chargers (pub/sub messaging)", mqttMeterCount, mqttChargerCount)
 }
 
 func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
@@ -212,6 +224,7 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 	loxoneStatus := dc.loxoneCollector.GetConnectionStatus()
 	modbusStatus := dc.modbusCollector.GetConnectionStatus()
 	udpStatus := dc.udpCollector.GetConnectionStatus()
+	mqttStatus := dc.mqttCollector.GetConnectionStatus()
 
 	result := map[string]interface{}{
 		"active_meters":           activeMeters,
@@ -222,7 +235,7 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 		"next_collection":         nextCollection.Format("2006-01-02 15:04:05"),
 		"next_collection_minutes": minutesToNext,
 		"recent_errors":           recentErrors,
-		"collection_mode":         "Multi-Collector: Loxone (independent) + Modbus (coordinated) + UDP (continuous)",
+		"collection_mode":         "Multi-Collector: Loxone (independent) + Modbus (coordinated) + UDP (continuous) + MQTT (pub/sub)",
 	}
    
 	// Merge collector statuses
@@ -231,6 +244,13 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 	}
 	for key, value := range modbusStatus {
 		result[key] = value
+	}
+	for key, value := range udpStatus {
+		result[key] = value
+	}
+	for key, value := range mqttStatus {
+		result[key] = value
+	}
 	}
 	for key, value := range udpStatus {
 		result[key] = value
@@ -292,6 +312,7 @@ func (dc *DataCollector) collectAndSaveMeters() {
 	// Separate meters by type for optimized collection
 	modbusMeters := []int{}
 	udpMeters := []int{}
+	mqttMeters := []int{}
 	
 	meterInfo := make(map[int]struct{
 		name string
@@ -326,6 +347,9 @@ func (dc *DataCollector) collectAndSaveMeters() {
 			
 		case "udp":
 			udpMeters = append(udpMeters, id)
+			
+		case "mqtt":
+			mqttMeters = append(mqttMeters, id)
 		}
 	}
 
@@ -358,6 +382,23 @@ func (dc *DataCollector) collectAndSaveMeters() {
 		
 		if err := dc.saveMeterReading(meterID, info.name, currentTime, reading); err != nil {
 			log.Printf("ERROR: Failed to save UDP meter '%s': %v", info.name, err)
+		} else {
+			successCount++
+		}
+	}
+
+	// MQTT meters: Get buffered readings
+	for _, meterID := range mqttMeters {
+		info := meterInfo[meterID]
+		reading, hasReading := dc.mqttCollector.GetMeterReading(meterID)
+		
+		if !hasReading || reading == 0 {
+			log.Printf("WARNING: No MQTT data for meter '%s'", info.name)
+			continue
+		}
+		
+		if err := dc.saveMeterReading(meterID, info.name, currentTime, reading); err != nil {
+			log.Printf("ERROR: Failed to save MQTT meter '%s': %v", info.name, err)
 		} else {
 			successCount++
 		}
@@ -482,6 +523,18 @@ func (dc *DataCollector) collectAndSaveChargers() {
 			data, exists := dc.udpCollector.GetChargerData(id)
 			if !exists {
 				log.Printf("[%d/%d] WARNING: No UDP data for charger '%s'", totalCount, totalCount, name)
+				continue
+			}
+			power = data.Power
+			userID = data.UserID
+			mode = data.Mode
+			state = data.State
+			hasData = true
+			
+		case "mqtt":
+			data, exists := dc.mqttCollector.GetChargerData(id)
+			if !exists {
+				log.Printf("[%d/%d] WARNING: No MQTT data for charger '%s'", totalCount, totalCount, name)
 				continue
 			}
 			power = data.Power
