@@ -344,7 +344,7 @@ export default function MeterFormModal({
                                                             fontSize: '11px',
                                                             fontWeight: '600'
                                                         }}>
-                                                            âœ“ {t('common.active')}
+                                                            ✓{t('common.active')}
                                                         </div>
                                                     </div>
                                                 ) : (
@@ -356,7 +356,7 @@ export default function MeterFormModal({
                                                         color: '#92400e',
                                                         fontSize: '13px'
                                                     }}>
-                                                        âš ï¸ {t('meters.noUserLinked')}
+                                                        ⚠️ {t('meters.noUserLinked')}
                                                     </div>
                                                 )}
                                                 <p style={{ fontSize: '11px', color: '#666', marginTop: '6px' }}>
@@ -374,7 +374,7 @@ export default function MeterFormModal({
                                                 color: '#6b7280',
                                                 fontSize: '13px'
                                             }}>
-                                                â„¹ï¸ {t('meters.apartmentNotSelected')}
+                                                ℹ️ {t('meters.apartmentNotSelected')}
                                             </div>
                                         )}
                                     </>
