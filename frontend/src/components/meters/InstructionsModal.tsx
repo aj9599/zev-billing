@@ -154,7 +154,7 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                         gap: '8px'
                     }}>
                         <Rss size={20} color="#8b5cf6" />
-                        MQTT Protocol (WhatWatt Go & More)
+                        {t('meters.instructions.mqttTitle')}
                     </h3>
                     <div style={{
                         backgroundColor: '#f3e8ff',
@@ -170,7 +170,7 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             marginBottom: '12px'
                         }}>
                             <Star size={16} fill="#8b5cf6" color="#8b5cf6" />
-                            <strong>Universal MQTT support for energy meters</strong>
+                            <strong>{t('meters.instructions.mqttDescription')}</strong>
                         </p>
 
                         <h4 style={{
@@ -179,15 +179,15 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             marginTop: '16px',
                             marginBottom: '8px'
                         }}>
-                            Setup Instructions:
+                            {t('meters.instructions.mqttSetupTitle')}
                         </h4>
                         <ol style={{ marginLeft: '20px', marginBottom: '12px' }}>
-                            <li>Configure your MQTT meter/device to publish to a unique topic</li>
-                            <li>Ensure the MQTT broker is running (default: localhost:1883)</li>
-                            <li>In the meter form, select "MQTT" as connection type</li>
-                            <li>Enter the MQTT topic your device publishes to</li>
-                            <li>Configure broker settings (host, port, credentials if needed)</li>
-                            <li>The system will automatically subscribe and collect readings</li>
+                            <li>{t('meters.instructions.mqttStep1')}</li>
+                            <li>{t('meters.instructions.mqttStep2')}</li>
+                            <li>{t('meters.instructions.mqttStep3')}</li>
+                            <li>{t('meters.instructions.mqttStep4')}</li>
+                            <li>{t('meters.instructions.mqttStep5')}</li>
+                            <li>{t('meters.instructions.mqttStep6')}</li>
                         </ol>
 
                         <h4 style={{
@@ -196,7 +196,7 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             marginTop: '16px',
                             marginBottom: '8px'
                         }}>
-                            Supported Message Formats:
+                            {t('meters.instructions.mqttFormatsTitle')}
                         </h4>
                         <div style={{
                             backgroundColor: '#fff',
@@ -206,7 +206,7 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             fontFamily: 'monospace',
                             fontSize: '12px'
                         }}>
-                            <strong>1. WhatWatt Go Format:</strong><br />
+                            <strong>{t('meters.instructions.mqttFormat1Title')}</strong><br />
                             {`{`}<br />
                             &nbsp;&nbsp;"device_id": "YOUR_DEVICE_ID",<br />
                             &nbsp;&nbsp;"timestamp": 1234567890000,<br />
@@ -214,16 +214,16 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             &nbsp;&nbsp;"power": 1500<br />
                             {`}`}<br /><br />
 
-                            <strong>2. Generic JSON Format:</strong><br />
+                            <strong>{t('meters.instructions.mqttFormat2Title')}</strong><br />
                             {`{`}<br />
                             &nbsp;&nbsp;"energy": 123.456<br />
                             {`}`}<br />
-                            or<br />
+                            {t('common.or')}<br />
                             {`{`}<br />
                             &nbsp;&nbsp;"power_kwh": 123.456<br />
                             {`}`}<br /><br />
 
-                            <strong>3. Simple Numeric Value:</strong><br />
+                            <strong>{t('meters.instructions.mqttFormat3Title')}</strong><br />
                             123.456
                         </div>
 
@@ -233,7 +233,7 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             marginTop: '16px',
                             marginBottom: '8px'
                         }}>
-                            Configuration Example:
+                            {t('meters.instructions.mqttConfigTitle')}
                         </h4>
                         <div style={{
                             backgroundColor: '#fff',
@@ -243,17 +243,17 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             fontFamily: 'monospace',
                             fontSize: '13px'
                         }}>
-                            <strong>Topic:</strong> meters/building1/meter1<br />
-                            <strong>Broker:</strong> localhost (or mqtt.yourdomain.com)<br />
-                            <strong>Port:</strong> 1883<br />
-                            <strong>QoS:</strong> 1 (recommended)<br /><br />
+                            <strong>{t('meters.instructions.mqttTopicLabel')}</strong> {t('meters.instructions.mqttTopicExample')}<br />
+                            <strong>{t('meters.instructions.mqttBrokerLabel')}</strong> {t('meters.instructions.mqttBrokerExample')}<br />
+                            <strong>{t('meters.instructions.mqttPortLabel')}</strong> {t('meters.instructions.mqttPortExample')}<br />
+                            <strong>{t('meters.instructions.mqttQosLabel')}</strong> {t('meters.instructions.mqttQosExample')}<br /><br />
 
-                            <strong>Benefits:</strong><br />
-                            ✓ Real-time data collection<br />
-                            ✓ Supports multiple message formats<br />
-                            ✓ Works with WhatWatt Go and other MQTT devices<br />
-                            ✓ Secure with username/password authentication<br />
-                            ✓ Automatic reconnection on network issues
+                            <strong>{t('meters.instructions.mqttBenefitsTitle')}</strong><br />
+                            {t('meters.instructions.mqttBenefit1')}<br />
+                            {t('meters.instructions.mqttBenefit2')}<br />
+                            {t('meters.instructions.mqttBenefit3')}<br />
+                            {t('meters.instructions.mqttBenefit4')}<br />
+                            {t('meters.instructions.mqttBenefit5')}
                         </div>
                     </div>
 
@@ -298,14 +298,14 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             fontSize: '13px'
                         }}>
                             <strong>{t('meters.instructions.udpExample1Title')}</strong><br />
-                            Port: 8888<br />
-                            Data Key: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d_power_kwh" (auto-generated)<br />
-                            Loxone sends: {"{\"a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d_power_kwh\": <v>}"}<br /><br />
+                            {t('meters.instructions.udpPort')} 8888<br />
+                            {t('meters.instructions.udpDataKey')} "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d_power_kwh" {t('meters.instructions.udpAutoGenerated')}<br />
+                            {t('meters.instructions.udpLoxoneSends')} {"{\"a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d_power_kwh\": <v>}"}<br /><br />
 
                             <strong>{t('meters.instructions.udpExample2Title')}</strong><br />
-                            Port: 8888 (same port!)<br />
-                            Data Key: "f6e5d4c3-b2a1-4098-7654-321fedcba098_power_kwh" (auto-generated)<br />
-                            Loxone sends: {"{\"f6e5d4c3-b2a1-4098-7654-321fedcba098_power_kwh\": <v>}"}
+                            {t('meters.instructions.udpPort')} 8888 {t('meters.instructions.udpSamePort')}<br />
+                            {t('meters.instructions.udpDataKey')} "f6e5d4c3-b2a1-4098-7654-321fedcba098_power_kwh" {t('meters.instructions.udpAutoGenerated')}<br />
+                            {t('meters.instructions.udpLoxoneSends')} {"{\"f6e5d4c3-b2a1-4098-7654-321fedcba098_power_kwh\": <v>}"}
                         </div>
                     </div>
 
@@ -403,7 +403,7 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                                 {t('meters.instructions.troubleshootingLoxoneDevice')}
                             </li>
                             <li>
-                                <strong>MQTT:</strong> Check if MQTT broker is running:{' '}
+                                <strong>MQTT:</strong> {t('meters.instructions.troubleshootingMqttBroker')}{' '}
                                 <code style={{
                                     backgroundColor: '#fff',
                                     padding: '2px 6px',
@@ -413,7 +413,7 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                                 </code>
                             </li>
                             <li>
-                                <strong>MQTT:</strong> Test topic subscription:{' '}
+                                <strong>MQTT:</strong> {t('meters.instructions.troubleshootingMqttSubscribe')}{' '}
                                 <code style={{
                                     backgroundColor: '#fff',
                                     padding: '2px 6px',
@@ -423,7 +423,7 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                                 </code>
                             </li>
                             <li>
-                                <strong>MQTT:</strong> Check device is publishing:{' '}
+                                <strong>MQTT:</strong> {t('meters.instructions.troubleshootingMqttPublish')}{' '}
                                 <code style={{
                                     backgroundColor: '#fff',
                                     padding: '2px 6px',

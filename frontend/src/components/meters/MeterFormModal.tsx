@@ -390,7 +390,7 @@ export default function MeterFormModal({
                             }}
                         >
                             <option value="loxone_api">{t('meters.loxoneApiRecommended')}</option>
-                            <option value="mqtt">MQTT (WhatWatt Go, etc.)</option>
+                            <option value="mqtt">{t('meters.mqttProtocol')}</option>
                             <option value="udp">{t('meters.udpAlternative')}</option>
                             <option value="modbus_tcp">{t('meters.modbusTcp')}</option>
                         </select>
@@ -595,7 +595,7 @@ export default function MeterFormModal({
                                 }}>
                                     <Rss size={16} color="#8b5cf6" />
                                     <p style={{ fontSize: '13px', color: '#5b21b6', margin: 0 }}>
-                                        <strong>MQTT Protocol - Universal support for energy meters</strong>
+                                        <strong>{t('meters.mqttProtocolDescription')}</strong>
                                     </p>
                                 </div>
 
@@ -606,7 +606,7 @@ export default function MeterFormModal({
                                         fontWeight: '500',
                                         fontSize: '14px'
                                     }}>
-                                        MQTT Topic *
+                                        {t('meters.mqttTopic')} *
                                     </label>
                                     <input
                                         type="text"
@@ -627,8 +627,8 @@ export default function MeterFormModal({
                                     />
                                     <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
                                         {editingMeter
-                                            ? 'The MQTT topic this meter subscribes to (can be modified)'
-                                            : 'Auto-generated unique topic (you can modify if needed)'}
+                                            ? t('meters.mqttTopicHelpEdit')
+                                            : t('meters.mqttTopicHelpNew')}
                                     </p>
                                 </div>
 
@@ -645,7 +645,7 @@ export default function MeterFormModal({
                                             fontWeight: '500',
                                             fontSize: '14px'
                                         }}>
-                                            MQTT Broker Host *
+                                            {t('meters.mqttBrokerHost')} *
                                         </label>
                                         <input
                                             type="text"
@@ -655,7 +655,7 @@ export default function MeterFormModal({
                                                 ...connectionConfig,
                                                 mqtt_broker: e.target.value
                                             })}
-                                            placeholder="localhost or mqtt.example.com"
+                                            placeholder={t('meters.mqttBrokerPlaceholder')}
                                             style={{
                                                 width: '100%',
                                                 padding: '10px',
@@ -671,7 +671,7 @@ export default function MeterFormModal({
                                             fontWeight: '500',
                                             fontSize: '14px'
                                         }}>
-                                            Port *
+                                            {t('meters.port')} *
                                         </label>
                                         <input
                                             type="number"
@@ -705,7 +705,7 @@ export default function MeterFormModal({
                                             fontWeight: '500',
                                             fontSize: '14px'
                                         }}>
-                                            Username (optional)
+                                            {t('meters.mqttUsername')}
                                         </label>
                                         <input
                                             type="text"
@@ -730,7 +730,7 @@ export default function MeterFormModal({
                                             fontWeight: '500',
                                             fontSize: '14px'
                                         }}>
-                                            Password (optional)
+                                            {t('meters.mqttPassword')}
                                         </label>
                                         <input
                                             type="password"
@@ -757,7 +757,7 @@ export default function MeterFormModal({
                                         fontWeight: '500',
                                         fontSize: '14px'
                                     }}>
-                                        QoS Level *
+                                        {t('meters.mqttQos')} *
                                     </label>
                                     <select
                                         value={connectionConfig.mqtt_qos}
@@ -772,12 +772,12 @@ export default function MeterFormModal({
                                             borderRadius: '6px'
                                         }}
                                     >
-                                        <option value={0}>0 - At most once</option>
-                                        <option value={1}>1 - At least once (recommended)</option>
-                                        <option value={2}>2 - Exactly once</option>
+                                        <option value={0}>{t('meters.mqttQos0')}</option>
+                                        <option value={1}>{t('meters.mqttQos1')}</option>
+                                        <option value={2}>{t('meters.mqttQos2')}</option>
                                     </select>
                                     <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                                        QoS 1 is recommended for reliable delivery without excessive overhead
+                                        {t('meters.mqttQosHelp')}
                                     </p>
                                 </div>
 
@@ -790,12 +790,14 @@ export default function MeterFormModal({
                                     fontSize: '12px',
                                     border: '1px solid #e5e7eb'
                                 }}>
-                                    <strong>Supported Message Formats:</strong><br /><br />
-                                    <strong>1. WhatWatt Go:</strong><br />
+                                    <strong>{t('meters.mqttSupportedFormats')}</strong><br /><br />
+                                    <strong>{t('meters.mqttFormat1')}</strong><br />
                                     {`{ "device_id": "...", "energy": 123.456, "power": 1500 }`}<br /><br />
-                                    <strong>2. Generic JSON:</strong><br />
-                                    {`{ "energy": 123.456 }`} or {`{ "power_kwh": 123.456 }`}<br /><br />
-                                    <strong>3. Simple Value:</strong><br />
+
+                                    <strong>{t('meters.mqttFormat2')}</strong><br />
+                                    {`{ "energy": 123.456 }`} {t('common.or')} {`{ "power_kwh": 123.456 }`}<br /><br />
+
+                                    <strong>{t('meters.mqttFormat3')}</strong><br />
                                     123.456
                                 </div>
                             </>

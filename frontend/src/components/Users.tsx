@@ -1265,9 +1265,9 @@ export default function Users() {
                   onChange={(e) => setFormData({ ...formData, language: e.target.value })}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
                 >
-                  <option value="de">🇩🇪 German (Deutsch)</option>
-                  <option value="fr">🇫🇷 French (Français)</option>
-                  <option value="it">🇮🇹 Italian (Italiano)</option>
+                  <option value="de">🇨🇭 Deutsch</option>
+                  <option value="fr">🇫🇷 Français</option>
+                  <option value="it">🇮🇹 Italiano</option>
                   <option value="en">🇬🇧 English</option>
                 </select>
               </div>
