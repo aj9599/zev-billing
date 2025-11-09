@@ -426,16 +426,9 @@ func (mc *MQTTCollector) subscribeToDevices(brokerURL string) {
 		mc.meterTopics[id] = topic
 		mc.mu.Unlock()
 
-		// Subscribe to the meter's topic with wildcard support for Shelly devices
+		// Subscribe to the meter's topic
+		// Note: If you need wildcard subscriptions, add # or + to the topic in the meter configuration
 		subscribeTopics := []string{topic}
-		
-		// For Shelly devices, also subscribe to the status topic if not already included
-		if strings.Contains(deviceTypeStr, "shelly") && !strings.Contains(topic, "#") {
-			// Add wildcard topic to catch all Shelly status updates
-			if !strings.HasSuffix(topic, "/") {
-				subscribeTopics = append(subscribeTopics, topic+"/#")
-			}
-		}
 
 		for _, subTopic := range subscribeTopics {
 			// Check if already subscribed to prevent duplicate subscriptions
