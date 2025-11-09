@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ZEV Billing System - Automated Installation Script for Raspberry Pi
-# Updated with fresh install option and Chromium for PDF generation
+# Updated with MQTT support, fresh install option and Chromium for PDF generation
 
 set -e  # Exit on any error
 
@@ -58,6 +58,7 @@ if [ "$FRESH_INSTALL" = true ]; then
     echo "Stopping services..."
     systemctl stop zev-billing.service 2>/dev/null || true
     systemctl stop nginx 2>/dev/null || true
+    systemctl stop mosquitto 2>/dev/null || true
     
     # Backup old database if exists
     if [ -f "$DB_PATH" ]; then
@@ -119,6 +120,201 @@ else
     fi
 fi
 
+# Install Mosquitto MQTT Broker
+echo ""
+echo -e "${BLUE}Installing Mosquitto MQTT Broker...${NC}"
+
+# Variables for MQTT authentication
+MQTT_AUTH_ENABLED=false
+MQTT_USERNAME=""
+MQTT_PASSWORD=""
+
+if command -v mosquitto &> /dev/null; then
+    echo -e "${GREEN}Mosquitto is already installed: $(mosquitto -h 2>&1 | head -1)${NC}"
+else
+    echo "Installing Mosquitto MQTT broker and clients..."
+    apt-get install -y mosquitto mosquitto-clients
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ Mosquitto installed successfully${NC}"
+        
+        # Ask about authentication
+        echo ""
+        echo -e "${YELLOW}========================================${NC}"
+        echo -e "${YELLOW}MQTT Broker Authentication Setup${NC}"
+        echo -e "${YELLOW}========================================${NC}"
+        echo ""
+        echo "Do you want to enable MQTT authentication?"
+        echo "  - Choose 'yes' for production (more secure, requires password)"
+        echo "  - Choose 'no' for development (easier testing, no password)"
+        echo ""
+        read -p "Enable MQTT authentication? (yes/no) [no]: " enable_auth
+        
+        if [ "$enable_auth" == "yes" ] || [ "$enable_auth" == "y" ] || [ "$enable_auth" == "YES" ]; then
+            MQTT_AUTH_ENABLED=true
+            echo ""
+            echo -e "${GREEN}Setting up MQTT authentication...${NC}"
+            
+            # Get username
+            while [ -z "$MQTT_USERNAME" ]; do
+                read -p "Enter MQTT username [zev-billing]: " mqtt_user_input
+                MQTT_USERNAME="${mqtt_user_input:-zev-billing}"
+            done
+            
+            # Get password
+            while [ -z "$MQTT_PASSWORD" ]; do
+                read -s -p "Enter MQTT password: " mqtt_pass1
+                echo ""
+                read -s -p "Confirm MQTT password: " mqtt_pass2
+                echo ""
+                
+                if [ "$mqtt_pass1" == "$mqtt_pass2" ]; then
+                    MQTT_PASSWORD="$mqtt_pass1"
+                else
+                    echo -e "${RED}Passwords don't match. Please try again.${NC}"
+                fi
+            done
+            
+            # Create password file
+            echo "Creating password file..."
+            mosquitto_passwd -c -b /etc/mosquitto/passwd "$MQTT_USERNAME" "$MQTT_PASSWORD"
+            chmod 600 /etc/mosquitto/passwd
+            chown mosquitto:mosquitto /etc/mosquitto/passwd
+            
+            echo -e "${GREEN}✓ MQTT authentication configured${NC}"
+            echo -e "${GREEN}  Username: $MQTT_USERNAME${NC}"
+            echo -e "${YELLOW}  Password: (hidden)${NC}"
+        else
+            echo -e "${YELLOW}MQTT authentication disabled - anonymous connections allowed${NC}"
+        fi
+        
+        # Create Mosquitto configuration for ZEV Billing
+        echo "Configuring Mosquitto for ZEV Billing..."
+        
+        # Backup existing config if it exists
+        if [ -f /etc/mosquitto/mosquitto.conf ]; then
+            cp /etc/mosquitto/mosquitto.conf /etc/mosquitto/mosquitto.conf.backup 2>/dev/null || true
+        fi
+        
+        # Create ZEV Billing specific configuration
+        mkdir -p /etc/mosquitto/conf.d
+        
+        if [ "$MQTT_AUTH_ENABLED" = true ]; then
+            # Configuration WITH authentication
+            cat > /etc/mosquitto/conf.d/zev-billing.conf << 'MQTT_EOF'
+# ZEV Billing System MQTT Configuration
+
+# Listen on default MQTT port (localhost only for security)
+listener 1883 localhost
+
+# Authentication enabled - password required
+allow_anonymous false
+password_file /etc/mosquitto/passwd
+
+# Persistence settings
+persistence true
+persistence_location /var/lib/mosquitto/
+
+# Logging
+log_dest file /var/log/mosquitto/mosquitto.log
+log_dest stdout
+log_type error
+log_type warning
+log_type notice
+log_type information
+
+# Connection settings
+max_connections -1
+max_queued_messages 1000
+
+# Message size limit (10MB for large payloads)
+message_size_limit 10485760
+MQTT_EOF
+        else
+            # Configuration WITHOUT authentication
+            cat > /etc/mosquitto/conf.d/zev-billing.conf << 'MQTT_EOF'
+# ZEV Billing System MQTT Configuration
+
+# Listen on default MQTT port (localhost only for security)
+listener 1883 localhost
+
+# Allow anonymous connections (no authentication required)
+# For production, consider setting up authentication
+allow_anonymous true
+
+# Persistence settings
+persistence true
+persistence_location /var/lib/mosquitto/
+
+# Logging
+log_dest file /var/log/mosquitto/mosquitto.log
+log_dest stdout
+log_type error
+log_type warning
+log_type notice
+log_type information
+
+# Connection settings
+max_connections -1
+max_queued_messages 1000
+
+# Message size limit (10MB for large payloads)
+message_size_limit 10485760
+MQTT_EOF
+        fi
+        
+        # Set proper permissions
+        chown mosquitto:mosquitto /var/lib/mosquitto -R 2>/dev/null || true
+        chown mosquitto:mosquitto /var/log/mosquitto -R 2>/dev/null || true
+        
+        # Enable and start Mosquitto
+        systemctl enable mosquitto
+        systemctl restart mosquitto
+        
+        # Wait for service to start
+        sleep 2
+        
+        # Check if service is running
+        if systemctl is-active --quiet mosquitto; then
+            echo -e "${GREEN}✓ Mosquitto service is running${NC}"
+            
+            # Test MQTT broker
+            echo "Testing MQTT broker..."
+            
+            # Test with or without authentication
+            if [ "$MQTT_AUTH_ENABLED" = true ]; then
+                echo "Testing with authentication (user: $MQTT_USERNAME)..."
+                timeout 3 mosquitto_sub -h localhost -t "test/zev" -u "$MQTT_USERNAME" -P "$MQTT_PASSWORD" > /tmp/mqtt_test.txt 2>&1 &
+                SUB_PID=$!
+                sleep 1
+                mosquitto_pub -h localhost -t "test/zev" -m "ZEV Billing MQTT Test" -u "$MQTT_USERNAME" -P "$MQTT_PASSWORD" 2>/dev/null || true
+            else
+                timeout 3 mosquitto_sub -h localhost -t "test/zev" > /tmp/mqtt_test.txt 2>&1 &
+                SUB_PID=$!
+                sleep 1
+                mosquitto_pub -h localhost -t "test/zev" -m "ZEV Billing MQTT Test" 2>/dev/null || true
+            fi
+            
+            sleep 1
+            
+            if grep -q "ZEV Billing MQTT Test" /tmp/mqtt_test.txt 2>/dev/null; then
+                echo -e "${GREEN}✓ MQTT broker is working correctly${NC}"
+            else
+                echo -e "${YELLOW}⚠ MQTT test inconclusive - broker should still work${NC}"
+            fi
+            
+            kill $SUB_PID 2>/dev/null || true
+            rm -f /tmp/mqtt_test.txt
+        else
+            echo -e "${YELLOW}⚠ Warning: Mosquitto service failed to start${NC}"
+            echo "Check logs: journalctl -u mosquitto -n 20"
+        fi
+    else
+        echo -e "${RED}✗ Mosquitto installation failed${NC}"
+        echo -e "${YELLOW}Warning: MQTT functionality will not be available${NC}"
+    fi
+fi
+
 # Check if Go is already installed
 if command -v go &> /dev/null; then
     echo -e "${GREEN}Go is already installed: $(go version)${NC}"
@@ -151,7 +347,9 @@ fi
 apt-get install -y nginx
 
 echo ""
-echo -e "${GREEN}Step 2: Verifying Chromium installation${NC}"
+echo -e "${GREEN}Step 2: Verifying installations${NC}"
+
+# Verify Chromium
 if command -v chromium-browser &> /dev/null; then
     chromium-browser --version
     echo -e "${GREEN}✓ Chromium is available for PDF generation${NC}"
@@ -161,6 +359,13 @@ elif command -v chromium &> /dev/null; then
 else
     echo -e "${RED}✗ Chromium installation failed${NC}"
     echo -e "${YELLOW}Warning: PDF generation may not work without Chromium${NC}"
+fi
+
+# Verify Mosquitto
+if command -v mosquitto &> /dev/null && systemctl is-active --quiet mosquitto; then
+    echo -e "${GREEN}✓ Mosquitto MQTT broker is running${NC}"
+else
+    echo -e "${YELLOW}⚠ Mosquitto may not be properly installed${NC}"
 fi
 
 echo ""
@@ -245,6 +450,14 @@ if [ ! -f "package.json" ]; then
     exit 1
 fi
 
+# Ensure meterUtils.ts exists
+if [ ! -f "src/utils/meterUtils.ts" ]; then
+    echo -e "${YELLOW}⚠ Warning: meterUtils.ts not found${NC}"
+    echo -e "${YELLOW}Creating utils directory and placeholder file...${NC}"
+    mkdir -p src/utils
+    echo -e "${YELLOW}Please add the meterUtils.ts file to src/utils/ after installation${NC}"
+fi
+
 # Clean old builds
 rm -rf node_modules dist package-lock.json
 
@@ -264,20 +477,89 @@ fi
 echo -e "${GREEN}Frontend built successfully!${NC}"
 
 echo ""
-echo -e "${GREEN}Step 8: Creating systemd service for auto-start${NC}"
+echo -e "${GREEN}Step 8: Configuring Nginx${NC}"
 
-# Determine Chromium executable path
+# Find Chromium path
 CHROMIUM_PATH=""
 if command -v chromium-browser &> /dev/null; then
-    CHROMIUM_PATH=$(which chromium-browser)
+    CHROMIUM_PATH=$(command -v chromium-browser)
 elif command -v chromium &> /dev/null; then
-    CHROMIUM_PATH=$(which chromium)
+    CHROMIUM_PATH=$(command -v chromium)
 fi
 
-cat > /etc/systemd/system/zev-billing.service << EOF
+# Configure nginx
+cat > /etc/nginx/sites-available/zev-billing << NGINX_EOF
+server {
+    listen 80;
+    server_name _;
+    
+    # Frontend
+    root $INSTALL_DIR/frontend/dist;
+    index index.html;
+    
+    # API proxy
+    location /api/ {
+        proxy_pass http://localhost:8080/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_cache_bypass \$http_upgrade;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        
+        # Increased timeouts for long-running operations
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+    }
+    
+    # Webhook endpoints (no auth required)
+    location /webhook/ {
+        proxy_pass http://localhost:8080/webhook/;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    }
+    
+    # Frontend routing
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
+    
+    # Cache static assets
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}
+NGINX_EOF
+
+# Enable site
+ln -sf /etc/nginx/sites-available/zev-billing /etc/nginx/sites-enabled/
+rm -f /etc/nginx/sites-enabled/default
+
+# Test nginx configuration
+nginx -t
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Nginx configuration test failed${NC}"
+    exit 1
+fi
+
+# Reload nginx
+systemctl reload nginx
+
+echo -e "${GREEN}Nginx configured successfully${NC}"
+
+echo ""
+echo -e "${GREEN}Step 9: Creating systemd service${NC}"
+
+cat > /etc/systemd/system/zev-billing.service << SERVICE_EOF
 [Unit]
 Description=ZEV Billing System Backend
-After=network.target
+After=network.target mosquitto.service
+Wants=mosquitto.service
 
 [Service]
 Type=simple
@@ -291,126 +573,27 @@ StandardError=journal
 
 # Environment variables
 Environment="DATABASE_PATH=$INSTALL_DIR/backend/zev-billing.db"
-Environment="SERVER_ADDRESS=:8080"
-Environment="JWT_SECRET=zev-billing-secret-change-in-production"
 Environment="CHROMIUM_PATH=$CHROMIUM_PATH"
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
-EOF
+SERVICE_EOF
 
-echo -e "${GREEN}Systemd service created${NC}"
-
-echo ""
-echo -e "${GREEN}Step 9: Setting up nginx for frontend${NC}"
-
-# Create nginx configuration
-cat > /etc/nginx/sites-available/zev-billing << EOF
-server {
-    listen 80;
-    server_name _;
-
-    # Frontend
-    location / {
-        root $INSTALL_DIR/frontend/dist;
-        try_files \$uri \$uri/ /index.html;
-    }
-
-    # Backend API
-    location /api/ {
-        proxy_pass http://localhost:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_cache_bypass \$http_upgrade;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    }
-}
-EOF
-
-# Enable site
-ln -sf /etc/nginx/sites-available/zev-billing /etc/nginx/sites-enabled/
-rm -f /etc/nginx/sites-enabled/default
-
-# Test nginx configuration
-nginx -t
-if [ $? -ne 0 ]; then
-    echo -e "${RED}Nginx configuration test failed${NC}"
-    exit 1
-fi
-
-echo ""
-echo -e "${GREEN}Step 10: Setting up firewall${NC}"
-
-# Check if ufw is available
-if command -v ufw &> /dev/null; then
-    # Configure firewall
-    ufw --force enable
-    ufw allow 22/tcp   # SSH
-    ufw allow 80/tcp   # HTTP
-    ufw allow 443/tcp  # HTTPS (for future SSL)
-    ufw allow 8080/tcp # Backend (for development)
-    ufw allow 8888/udp # UDP meters (default port)
-    
-    echo -e "${GREEN}Firewall configured${NC}"
-else
-    echo -e "${YELLOW}ufw not installed, skipping firewall configuration${NC}"
-    echo "Please configure your firewall manually to allow ports: 22, 80, 443, 8080, 8888/udp"
-fi
-
-echo ""
-echo -e "${GREEN}Step 11: Fixing permissions${NC}"
-
-# Fix permissions so nginx can access the frontend files
-chmod 755 "$ACTUAL_HOME"
-chmod 755 "$INSTALL_DIR"
-chmod -R 755 "$INSTALL_DIR/frontend"
-
-# Ensure backend directory is accessible
-chmod 755 "$INSTALL_DIR/backend"
-chmod 644 "$INSTALL_DIR/backend/zev-billing.db" 2>/dev/null || true
-
-# Set ownership
-chown -R "$ACTUAL_USER:$ACTUAL_USER" "$INSTALL_DIR"
-
-echo -e "${GREEN}Permissions fixed${NC}"
-
-echo ""
-echo -e "${GREEN}Step 12: Enabling and starting services${NC}"
-
-# Reload systemd to recognize new service
+# Reload systemd
 systemctl daemon-reload
 
-# Enable backend service for auto-start on boot
+# Enable and start service
 systemctl enable zev-billing.service
-echo -e "${GREEN}✓ ZEV Billing service enabled for auto-start on boot${NC}"
-
-# Enable nginx for auto-start on boot
-systemctl enable nginx
-echo -e "${GREEN}✓ Nginx enabled for auto-start on boot${NC}"
-
-# Start backend service
 systemctl start zev-billing.service
-echo -e "${GREEN}✓ ZEV Billing service started${NC}"
-
-# Restart nginx
-systemctl restart nginx
-echo -e "${GREEN}✓ Nginx restarted${NC}"
-
-# Wait a moment for services to start
-sleep 3
 
 # Check service status
-echo ""
-echo -e "${BLUE}Verifying services...${NC}"
-
+sleep 3
 if systemctl is-active --quiet zev-billing.service; then
-    echo -e "${GREEN}✓ Backend service is running${NC}"
-    if systemctl is-enabled --quiet zev-billing.service; then
-        echo -e "${GREEN}✓ Backend service is enabled for auto-start${NC}"
-    fi
+    echo -e "${GREEN}✓ Backend service started successfully${NC}"
 else
     echo -e "${RED}✗ Backend service failed to start${NC}"
     echo "Checking logs..."
@@ -418,15 +601,26 @@ else
     exit 1
 fi
 
-if systemctl is-active --quiet nginx; then
-    echo -e "${GREEN}✓ Nginx is running${NC}"
-    if systemctl is-enabled --quiet nginx; then
-        echo -e "${GREEN}✓ Nginx is enabled for auto-start${NC}"
-    fi
-else
-    echo -e "${RED}✗ Nginx failed to start${NC}"
-    exit 1
-fi
+echo ""
+echo -e "${GREEN}Step 10: Setting up auto-start on boot${NC}"
+systemctl enable nginx
+systemctl enable mosquitto
+systemctl enable zev-billing.service
+echo -e "${GREEN}✓ All services configured for auto-start${NC}"
+
+echo ""
+echo -e "${GREEN}Step 11: Setting permissions${NC}"
+chown -R "$ACTUAL_USER:$ACTUAL_USER" "$INSTALL_DIR"
+chmod 755 "$INSTALL_DIR/backend/zev-billing"
+echo -e "${GREEN}Permissions set${NC}"
+
+echo ""
+echo -e "${GREEN}Step 12: Creating backup directories${NC}"
+mkdir -p "$INSTALL_DIR/backups"
+mkdir -p "$INSTALL_DIR/invoices"
+chown -R "$ACTUAL_USER:$ACTUAL_USER" "$INSTALL_DIR/backups"
+chown -R "$ACTUAL_USER:$ACTUAL_USER" "$INSTALL_DIR/invoices"
+echo -e "${GREEN}Backup directories created${NC}"
 
 echo ""
 echo -e "${GREEN}Step 13: Creating management scripts${NC}"
@@ -434,27 +628,32 @@ echo -e "${GREEN}Step 13: Creating management scripts${NC}"
 # Create start script
 cat > "$INSTALL_DIR/start.sh" << 'EOF'
 #!/bin/bash
+sudo systemctl start mosquitto
 sudo systemctl start zev-billing.service
 sudo systemctl start nginx
 echo "ZEV Billing System started"
 systemctl status zev-billing.service --no-pager
+systemctl status mosquitto --no-pager | head -5
 EOF
 
 # Create stop script
 cat > "$INSTALL_DIR/stop.sh" << 'EOF'
 #!/bin/bash
 sudo systemctl stop zev-billing.service
+sudo systemctl stop mosquitto
 echo "ZEV Billing System stopped"
 EOF
 
 # Create restart script
 cat > "$INSTALL_DIR/restart.sh" << 'EOF'
 #!/bin/bash
+sudo systemctl restart mosquitto
 sudo systemctl restart zev-billing.service
 sudo systemctl restart nginx
 echo "ZEV Billing System restarted"
 sleep 2
 systemctl status zev-billing.service --no-pager
+systemctl status mosquitto --no-pager | head -5
 EOF
 
 # Create status script
@@ -462,6 +661,9 @@ cat > "$INSTALL_DIR/status.sh" << 'EOF'
 #!/bin/bash
 echo "=== Backend Status ==="
 systemctl status zev-billing.service --no-pager
+echo ""
+echo "=== MQTT Broker Status ==="
+systemctl status mosquitto --no-pager
 echo ""
 echo "=== Nginx Status ==="
 systemctl status nginx --no-pager
@@ -472,14 +674,71 @@ if systemctl is-enabled --quiet zev-billing.service; then
 else
     echo "✗ Backend auto-start: DISABLED"
 fi
+if systemctl is-enabled --quiet mosquitto; then
+    echo "✓ MQTT Broker auto-start: ENABLED"
+else
+    echo "✗ MQTT Broker auto-start: DISABLED"
+fi
 if systemctl is-enabled --quiet nginx; then
     echo "✓ Nginx auto-start: ENABLED"
 else
     echo "✗ Nginx auto-start: DISABLED"
 fi
 echo ""
-echo "=== Recent Logs ==="
-journalctl -u zev-billing.service -n 20 --no-pager
+echo "=== Recent Backend Logs ==="
+journalctl -u zev-billing.service -n 10 --no-pager
+echo ""
+echo "=== MQTT Connection Status ==="
+journalctl -u zev-billing.service --since "5 minutes ago" | grep -i mqtt | tail -5 || echo "No recent MQTT logs"
+EOF
+
+# Create test MQTT script
+cat > "$INSTALL_DIR/test-mqtt.sh" << 'EOF'
+#!/bin/bash
+echo "=========================================="
+echo "ZEV Billing - MQTT Quick Test"
+echo "=========================================="
+echo ""
+
+# Check if mosquitto is running
+if ! systemctl is-active --quiet mosquitto; then
+    echo "✗ MQTT broker is NOT running"
+    echo "Start it with: sudo systemctl start mosquitto"
+    exit 1
+fi
+
+echo "✓ MQTT broker is running"
+echo ""
+
+# Test MQTT publish/subscribe
+echo "Testing MQTT broker..."
+timeout 3 mosquitto_sub -h localhost -t "test/zev" > /tmp/mqtt_quick_test.txt 2>&1 &
+SUB_PID=$!
+
+sleep 1
+
+mosquitto_pub -h localhost -t "test/zev" -m "Test message from ZEV Billing" 2>/dev/null
+
+sleep 1
+
+if grep -q "Test message" /tmp/mqtt_quick_test.txt 2>/dev/null; then
+    echo "✓ MQTT broker is working correctly"
+else
+    echo "⚠ MQTT test inconclusive"
+fi
+
+kill $SUB_PID 2>/dev/null || true
+rm -f /tmp/mqtt_quick_test.txt
+
+echo ""
+echo "To send a test meter reading:"
+echo "  mosquitto_pub -h localhost -t 'meters/test/meter1' -m '{\"energy\": 123.456}'"
+echo ""
+echo "To monitor all MQTT messages:"
+echo "  mosquitto_sub -h localhost -t 'meters/#' -v"
+echo ""
+echo "Check backend MQTT logs:"
+echo "  sudo journalctl -u zev-billing.service | grep MQTT"
 EOF
 
 # Create update script
@@ -520,6 +779,13 @@ cat > "$INSTALL_DIR/logs.sh" << 'EOF'
 #!/bin/bash
 echo "Following live logs (Ctrl+C to exit)..."
 journalctl -u zev-billing.service -f
+EOF
+
+# Create MQTT logs script
+cat > "$INSTALL_DIR/mqtt-logs.sh" << 'EOF'
+#!/bin/bash
+echo "Filtering MQTT-related logs (Ctrl+C to exit)..."
+journalctl -u zev-billing.service -f | grep --line-buffered -i mqtt
 EOF
 
 # Create fresh install script
@@ -604,6 +870,36 @@ EOF
 chmod +x "$INSTALL_DIR"/*.sh
 chown "$ACTUAL_USER:$ACTUAL_USER" "$INSTALL_DIR"/*.sh
 
+# Save MQTT credentials if authentication is enabled
+if [ "$MQTT_AUTH_ENABLED" = true ]; then
+    cat > "$INSTALL_DIR/.mqtt_credentials" << CRED_EOF
+# MQTT Broker Credentials
+# Created during installation: $(date)
+# DO NOT COMMIT THIS FILE TO VERSION CONTROL!
+
+MQTT_BROKER=localhost
+MQTT_PORT=1883
+MQTT_USERNAME=$MQTT_USERNAME
+MQTT_PASSWORD=$MQTT_PASSWORD
+
+# To use these credentials:
+# 1. When creating MQTT meters in the web interface, enter:
+#    - Broker: localhost
+#    - Port: 1883
+#    - Username: $MQTT_USERNAME
+#    - Password: (the password you set)
+#
+# 2. For command-line testing:
+#    mosquitto_pub -h localhost -t "test/topic" -u "$MQTT_USERNAME" -P "$MQTT_PASSWORD" -m "test"
+#    mosquitto_sub -h localhost -t "test/topic" -u "$MQTT_USERNAME" -P "$MQTT_PASSWORD"
+CRED_EOF
+    
+    chmod 600 "$INSTALL_DIR/.mqtt_credentials"
+    chown "$ACTUAL_USER:$ACTUAL_USER" "$INSTALL_DIR/.mqtt_credentials"
+    
+    echo -e "${GREEN}✓ MQTT credentials saved to: $INSTALL_DIR/.mqtt_credentials${NC}"
+fi
+
 echo -e "${GREEN}Management scripts created${NC}"
 
 echo ""
@@ -638,6 +934,20 @@ else
     echo -e "${YELLOW}⚠  Warning: Chromium not found - PDF generation may not work${NC}"
 fi
 
+# Verify MQTT
+if systemctl is-active --quiet mosquitto; then
+    echo -e "${GREEN}✓ MQTT broker is running${NC}"
+    
+    # Check if backend connected to MQTT
+    if journalctl -u zev-billing.service --since "2 minutes ago" | grep -q "MQTT"; then
+        echo -e "${GREEN}✓ Backend MQTT collector initialized${NC}"
+    else
+        echo -e "${YELLOW}⚠  MQTT collector may not be connected yet${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠  Warning: MQTT broker not running${NC}"
+fi
+
 echo ""
 echo -e "${GREEN}=========================================="
 if [ "$FRESH_INSTALL" = true ]; then
@@ -650,6 +960,7 @@ echo "==========================================${NC}"
 echo ""
 echo -e "${GREEN}✓ System configured for auto-start on boot${NC}"
 echo -e "${GREEN}✓ Chromium installed for PDF generation${NC}"
+echo -e "${GREEN}✓ MQTT broker installed and configured${NC}"
 echo ""
 echo -e "${BLUE}Service Management:${NC}"
 echo "  Start:   sudo systemctl start zev-billing.service"
@@ -658,12 +969,20 @@ echo "  Restart: sudo systemctl restart zev-billing.service"
 echo "  Status:  sudo systemctl status zev-billing.service"
 echo "  Logs:    journalctl -u zev-billing.service -f"
 echo ""
+echo -e "${BLUE}MQTT Management:${NC}"
+echo "  Status:  sudo systemctl status mosquitto"
+echo "  Restart: sudo systemctl restart mosquitto"
+echo "  Test:    ./test-mqtt.sh"
+echo "  Monitor: mosquitto_sub -h localhost -t 'meters/#' -v"
+echo ""
 echo -e "${BLUE}Convenient scripts in $INSTALL_DIR:${NC}"
-echo "  ./start.sh         - Start the system"
+echo "  ./start.sh         - Start the system (including MQTT)"
 echo "  ./stop.sh          - Stop the system"
 echo "  ./restart.sh       - Restart the system"
-echo "  ./status.sh        - Check status and auto-start configuration"
-echo "  ./logs.sh          - Follow live logs"
+echo "  ./status.sh        - Check status of all services"
+echo "  ./logs.sh          - Follow live backend logs"
+echo "  ./mqtt-logs.sh     - Follow MQTT-related logs only"
+echo "  ./test-mqtt.sh     - Quick MQTT functionality test"
 echo "  ./update.sh        - Update to latest version from Git"
 echo "  ./fix_database.sh  - Recover corrupted database"
 echo "  ./fresh_install.sh - Reinstall with fresh database"
@@ -688,9 +1007,30 @@ echo ""
 echo -e "${BLUE}🔧 Debugging:${NC}"
 echo "  - Check Admin Logs page in the web interface"
 echo "  - Use ./logs.sh to see live system logs"
+echo "  - Use ./mqtt-logs.sh to see MQTT-specific logs"
 echo "  - See Setup Instructions in Meters/Chargers pages"
+echo ""
+echo -e "${BLUE}📡 MQTT Support:${NC}"
+echo "  - MQTT broker: localhost:1883"
+echo "  - Protocol: MQTT v3.1.1"
+if [ "$MQTT_AUTH_ENABLED" = true ]; then
+    echo "  - Authentication: ${GREEN}ENABLED${NC}"
+    echo "  - Username: ${GREEN}$MQTT_USERNAME${NC}"
+    echo "  - Password: ${YELLOW}(set during installation)${NC}"
+    echo "  - ${YELLOW}Note: Update meter configs in web interface with these credentials${NC}"
+else
+    echo "  - Authentication: Anonymous (no password required)"
+fi
+echo "  - Supported formats: WhatWatt Go, Generic JSON, Simple numeric"
+echo "  - Topic pattern: meters/{building}/{apartment}/{meter_name}"
 echo ""
 echo -e "${BLUE}💡 To perform a fresh install later:${NC}"
 echo "  sudo bash install.sh --fresh"
 echo "  or run: ./fresh_install.sh"
+echo ""
+echo -e "${BLUE}📖 For MQTT setup and usage:${NC}"
+echo "  - Create a meter with MQTT connection type in the web interface"
+echo "  - Topics are auto-generated based on building/meter names"
+echo "  - Test with: mosquitto_pub -h localhost -t 'YOUR_TOPIC' -m '{\"energy\": 123.456}'"
+echo "  - Monitor with: mosquitto_sub -h localhost -t 'meters/#' -v"
 echo ""
