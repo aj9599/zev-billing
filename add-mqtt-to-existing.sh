@@ -1,6 +1,7 @@
 #!/bin/bash
 # ZEV Billing - Add MQTT to Existing Installation
 # This script adds MQTT support to an already running ZEV Billing system
+# FIXED: Properly handles Mosquitto configuration to avoid duplicate persistence_location errors
 
 set -e
 
@@ -166,7 +167,19 @@ if [ "$SKIP_MQTT_INSTALL" != true ]; then
         cp /etc/mosquitto/mosquitto.conf /etc/mosquitto/mosquitto.conf.backup 2>/dev/null || true
     fi
     
-    # Create ZEV Billing specific configuration
+    # FIXED: Create clean main config to avoid duplicate settings
+    print_info "Creating clean main Mosquitto configuration..."
+    cat > /etc/mosquitto/mosquitto.conf << 'MAIN_CONF_EOF'
+# Place your local configuration in /etc/mosquitto/conf.d/
+#
+# A full description of the configuration file is at
+# /usr/share/doc/mosquitto/examples/mosquitto.conf
+
+# Include all configurations from conf.d directory
+include_dir /etc/mosquitto/conf.d
+MAIN_CONF_EOF
+    
+    # Create ZEV Billing specific configuration in conf.d
     mkdir -p /etc/mosquitto/conf.d
     
     if [ "$MQTT_AUTH_ENABLED" = true ]; then

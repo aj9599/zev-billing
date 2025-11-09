@@ -2,6 +2,7 @@
 
 # ZEV Billing System - Automated Installation Script for Raspberry Pi
 # Updated with MQTT support, fresh install option and Chromium for PDF generation
+# FIXED: Mosquitto configuration properly handles main config to avoid duplicates
 
 set -e  # Exit on any error
 
@@ -196,7 +197,21 @@ else
             cp /etc/mosquitto/mosquitto.conf /etc/mosquitto/mosquitto.conf.backup 2>/dev/null || true
         fi
         
-        # Create ZEV Billing specific configuration
+        # =================================================
+        # FIXED: Create clean main config to avoid duplicate persistence_location errors
+        # =================================================
+        echo "Creating clean main Mosquitto configuration..."
+        cat > /etc/mosquitto/mosquitto.conf << 'MAIN_CONF_EOF'
+# Place your local configuration in /etc/mosquitto/conf.d/
+#
+# A full description of the configuration file is at
+# /usr/share/doc/mosquitto/examples/mosquitto.conf
+
+# Include all configurations from conf.d directory
+include_dir /etc/mosquitto/conf.d
+MAIN_CONF_EOF
+        
+        # Create ZEV Billing specific configuration in conf.d
         mkdir -p /etc/mosquitto/conf.d
         
         if [ "$MQTT_AUTH_ENABLED" = true ]; then
@@ -239,7 +254,6 @@ MQTT_EOF
 listener 1883 localhost
 
 # Allow anonymous connections (no authentication required)
-# For production, consider setting up authentication
 allow_anonymous true
 
 # Persistence settings
