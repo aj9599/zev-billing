@@ -299,8 +299,40 @@ func (mc *MQTTCollector) monitorConnections() {
 	}
 }
 
+func (mc *MQTTCollector) unsubscribeFromAllTopics(brokerURL string) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	
+	client := mc.clients[brokerURL]
+	if client == nil || !client.IsConnected() {
+		log.Printf("Cannot unsubscribe - client for %s is not connected", brokerURL)
+		return
+	}
+	
+	// Unsubscribe from all topics for this broker
+	if topics, exists := mc.subscriptions[brokerURL]; exists && len(topics) > 0 {
+		log.Printf("Unsubscribing from %d existing topics for broker %s", len(topics), brokerURL)
+		for _, topic := range topics {
+			log.Printf("  - Unsubscribing from: %s", topic)
+			if token := client.Unsubscribe(topic); token.Wait() && token.Error() != nil {
+				log.Printf("    WARNING: Failed to unsubscribe: %v", token.Error())
+			}
+		}
+		// Clear the subscription list for this broker
+		mc.subscriptions[brokerURL] = []string{}
+		log.Printf("✓ Cleared all subscriptions for broker %s", brokerURL)
+	} else {
+		log.Printf("No existing subscriptions found for broker %s", brokerURL)
+	}
+}
+
 func (mc *MQTTCollector) subscribeToDevices(brokerURL string) {
-	// Subscribe to all MQTT meters using this broker
+	log.Printf("=== Starting subscription process for broker: %s ===", brokerURL)
+	
+	// First, unsubscribe from all existing topics for this broker to prevent duplicates
+	mc.unsubscribeFromAllTopics(brokerURL)
+	
+	// Get all MQTT meters using this broker
 	rows, err := mc.db.Query(`
 		SELECT id, name, connection_config, device_type
 		FROM meters 
@@ -322,6 +354,8 @@ func (mc *MQTTCollector) subscribeToDevices(brokerURL string) {
 	}
 
 	meterCount := 0
+	subscribedTopics := []string{}
+	
 	for rows.Next() {
 		var id int
 		var name, configJSON string
@@ -380,10 +414,25 @@ func (mc *MQTTCollector) subscribeToDevices(brokerURL string) {
 		}
 
 		for _, subTopic := range subscribeTopics {
+			// Check if already subscribed to prevent duplicate subscriptions
+			alreadySubscribed := false
+			for _, existingTopic := range subscribedTopics {
+				if existingTopic == subTopic {
+					alreadySubscribed = true
+					break
+				}
+			}
+			
+			if alreadySubscribed {
+				log.Printf("⚠️  Already subscribed to topic '%s' in this session, skipping", subTopic)
+				continue
+			}
+			
 			if token := client.Subscribe(subTopic, 1, mc.createMeterHandler(id, name, deviceTypeStr, brokerURL)); token.Wait() && token.Error() != nil {
 				log.Printf("ERROR: Failed to subscribe to topic '%s' for meter '%s': %v", subTopic, name, token.Error())
 			} else {
-				log.Printf("✓ Subscribed to MQTT topic '%s' for meter '%s' (device: %s, broker: %s)", subTopic, name, deviceTypeStr, brokerURL)
+				log.Printf("✓ Subscribed to MQTT topic '%s' for meter '%s' (device: %s)", subTopic, name, deviceTypeStr)
+				subscribedTopics = append(subscribedTopics, subTopic)
 				meterCount++
 			}
 		}
@@ -436,16 +485,38 @@ func (mc *MQTTCollector) subscribeToDevices(brokerURL string) {
 			continue
 		}
 
+		// Check if already subscribed
+		alreadySubscribed := false
+		for _, existingTopic := range subscribedTopics {
+			if existingTopic == topic {
+				alreadySubscribed = true
+				break
+			}
+		}
+		
+		if alreadySubscribed {
+			log.Printf("⚠️  Already subscribed to topic '%s' in this session, skipping", topic)
+			continue
+		}
+
 		// Subscribe to the charger's topic
 		if token := client.Subscribe(topic, 1, mc.createChargerHandler(id, name)); token.Wait() && token.Error() != nil {
 			log.Printf("ERROR: Failed to subscribe to topic '%s' for charger '%s': %v", topic, name, token.Error())
 		} else {
-			log.Printf("✓ Subscribed to MQTT topic '%s' for charger '%s' (broker: %s)", topic, name, brokerURL)
+			log.Printf("✓ Subscribed to MQTT topic '%s' for charger '%s'", topic, name)
+			subscribedTopics = append(subscribedTopics, topic)
 			chargerCount++
 		}
 	}
 
-	log.Printf("MQTT Subscriptions for %s: %d meters, %d chargers", brokerURL, meterCount, chargerCount)
+	// Store all subscribed topics for this broker
+	mc.mu.Lock()
+	mc.subscriptions[brokerURL] = subscribedTopics
+	mc.mu.Unlock()
+
+	log.Printf("=== MQTT Subscriptions Complete for %s ===", brokerURL)
+	log.Printf("    Meters: %d, Chargers: %d, Unique Topics: %d", meterCount, chargerCount, len(subscribedTopics))
+	log.Printf("    Topics: %v", subscribedTopics)
 }
 
 func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, deviceType string, brokerURL string) mqtt.MessageHandler {
