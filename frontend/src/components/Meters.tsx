@@ -64,9 +64,13 @@ export default function Meters() {
     useEffect(() => {
         loadData();
         fetchConnectionStatus();
-
-        const interval = setInterval(fetchConnectionStatus, 30000);
-        return () => clearInterval(interval);
+        
+        const dataInterval = setInterval(loadData, 10000);
+        const statusInterval = setInterval(fetchConnectionStatus, 30000);
+        return () => {
+            clearInterval(dataInterval);
+            clearInterval(statusInterval);
+        };
     }, [showArchived]);
 
     async function loadData() {
