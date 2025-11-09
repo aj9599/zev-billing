@@ -104,7 +104,9 @@ func (h *ExportHandler) exportMeterData(startDate, endDate, meterIDStr string) (
 			COALESCE(u.first_name || ' ' || u.last_name, 'N/A') as user_name,
 			mr.reading_time,
 			mr.power_kwh,
-			COALESCE(mr.consumption_kwh, 0) as consumption_kwh
+			COALESCE(mr.power_kwh_export, 0) as power_kwh_export,
+			COALESCE(mr.consumption_kwh, 0) as consumption_kwh,
+			COALESCE(mr.consumption_export, 0) as consumption_export
 		FROM meter_readings mr
 		JOIN meters m ON mr.meter_id = m.id
 		JOIN buildings b ON m.building_id = b.id
@@ -133,15 +135,17 @@ func (h *ExportHandler) exportMeterData(startDate, endDate, meterIDStr string) (
 	defer rows.Close()
 
 	data := [][]string{
-		{"Meter ID", "Meter Name", "Meter Type", "Building", "User", "Reading Time", "Power (kWh)", "Consumption (kWh)"},
+		{"Meter ID", "Meter Name", "Meter Type", "Building", "User", "Reading Time", 
+		 "Import Energy (kWh)", "Export Energy (kWh)", "Import Consumption (kWh)", "Export Consumption (kWh)"},
 	}
 
 	for rows.Next() {
 		var meterID int
 		var meterName, meterType, buildingName, userName, readingTime string
-		var powerKWh, consumptionKWh float64
+		var powerKWh, powerKWhExport, consumptionKWh, consumptionExport float64
 
-		err := rows.Scan(&meterID, &meterName, &meterType, &buildingName, &userName, &readingTime, &powerKWh, &consumptionKWh)
+		err := rows.Scan(&meterID, &meterName, &meterType, &buildingName, &userName, &readingTime, 
+			&powerKWh, &powerKWhExport, &consumptionKWh, &consumptionExport)
 		if err != nil {
 			log.Printf("Error scanning meter row: %v", err)
 			continue
@@ -155,7 +159,9 @@ func (h *ExportHandler) exportMeterData(startDate, endDate, meterIDStr string) (
 			userName,
 			readingTime,
 			fmt.Sprintf("%.3f", powerKWh),
+			fmt.Sprintf("%.3f", powerKWhExport),
 			fmt.Sprintf("%.3f", consumptionKWh),
+			fmt.Sprintf("%.3f", consumptionExport),
 		})
 	}
 

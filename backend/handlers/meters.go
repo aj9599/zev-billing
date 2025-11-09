@@ -32,8 +32,9 @@ func (h *MeterHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	query := `
 		SELECT id, name, meter_type, building_id, user_id, apartment_unit,
-		       connection_type, connection_config, notes, last_reading, 
-		       last_reading_time, is_active, is_archived, replaced_by_meter_id,
+		       connection_type, connection_config, device_type, notes, 
+		       last_reading, last_reading_export, last_reading_time, 
+		       is_active, is_archived, replaced_by_meter_id,
 		       replaces_meter_id, replacement_date, replacement_notes,
 		       created_at, updated_at
 		FROM meters
@@ -80,14 +81,15 @@ func (h *MeterHandler) List(w http.ResponseWriter, r *http.Request) {
 	meters := []models.Meter{}
 	for rows.Next() {
 		var m models.Meter
-		var apartmentUnit, replacementNotes sql.NullString
+		var apartmentUnit, replacementNotes, deviceType sql.NullString
 		var replacedBy, replaces sql.NullInt64
 		var replacementDate sql.NullTime
 		
 		err := rows.Scan(
 			&m.ID, &m.Name, &m.MeterType, &m.BuildingID, &m.UserID, &apartmentUnit,
-			&m.ConnectionType, &m.ConnectionConfig, &m.Notes, &m.LastReading, 
-			&m.LastReadingTime, &m.IsActive, &m.IsArchived, &replacedBy, &replaces,
+			&m.ConnectionType, &m.ConnectionConfig, &deviceType, &m.Notes, 
+			&m.LastReading, &m.LastReadingExport, &m.LastReadingTime, 
+			&m.IsActive, &m.IsArchived, &replacedBy, &replaces,
 			&replacementDate, &replacementNotes, &m.CreatedAt, &m.UpdatedAt,
 		)
 		if err != nil {
@@ -97,6 +99,9 @@ func (h *MeterHandler) List(w http.ResponseWriter, r *http.Request) {
 		
 		if apartmentUnit.Valid {
 			m.ApartmentUnit = apartmentUnit.String
+		}
+		if deviceType.Valid {
+			m.DeviceType = deviceType.String
 		}
 		if replacementNotes.Valid {
 			m.ReplacementNotes = replacementNotes.String
@@ -129,21 +134,23 @@ func (h *MeterHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var m models.Meter
-	var apartmentUnit, replacementNotes sql.NullString
+	var apartmentUnit, replacementNotes, deviceType sql.NullString
 	var replacedBy, replaces sql.NullInt64
 	var replacementDate sql.NullTime
 	
 	err = h.db.QueryRow(`
 		SELECT id, name, meter_type, building_id, user_id, apartment_unit,
-		       connection_type, connection_config, notes, last_reading, 
-		       last_reading_time, is_active, is_archived, replaced_by_meter_id,
+		       connection_type, connection_config, device_type, notes, 
+		       last_reading, last_reading_export, last_reading_time, 
+		       is_active, is_archived, replaced_by_meter_id,
 		       replaces_meter_id, replacement_date, replacement_notes,
 		       created_at, updated_at
 		FROM meters WHERE id = ?
 	`, id).Scan(
 		&m.ID, &m.Name, &m.MeterType, &m.BuildingID, &m.UserID, &apartmentUnit,
-		&m.ConnectionType, &m.ConnectionConfig, &m.Notes, &m.LastReading, 
-		&m.LastReadingTime, &m.IsActive, &m.IsArchived, &replacedBy, &replaces,
+		&m.ConnectionType, &m.ConnectionConfig, &deviceType, &m.Notes, 
+		&m.LastReading, &m.LastReadingExport, &m.LastReadingTime, 
+		&m.IsActive, &m.IsArchived, &replacedBy, &replaces,
 		&replacementDate, &replacementNotes, &m.CreatedAt, &m.UpdatedAt,
 	)
 
@@ -159,6 +166,9 @@ func (h *MeterHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	if apartmentUnit.Valid {
 		m.ApartmentUnit = apartmentUnit.String
+	}
+	if deviceType.Valid {
+		m.DeviceType = deviceType.String
 	}
 	if replacementNotes.Valid {
 		m.ReplacementNotes = replacementNotes.String
@@ -186,13 +196,18 @@ func (h *MeterHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Default device_type to 'generic' if not specified
+	if m.DeviceType == "" {
+		m.DeviceType = "generic"
+	}
+
 	result, err := h.db.Exec(`
 		INSERT INTO meters (
 			name, meter_type, building_id, user_id, apartment_unit,
-			connection_type, connection_config, notes, is_active
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			connection_type, connection_config, device_type, notes, is_active
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, m.Name, m.MeterType, m.BuildingID, m.UserID, m.ApartmentUnit,
-		m.ConnectionType, m.ConnectionConfig, m.Notes, m.IsActive)
+		m.ConnectionType, m.ConnectionConfig, m.DeviceType, m.Notes, m.IsActive)
 
 	if err != nil {
 		log.Printf("ERROR: Failed to create meter: %v", err)
@@ -217,7 +232,7 @@ func (h *MeterHandler) Create(w http.ResponseWriter, r *http.Request) {
 	
 	// If it's an MQTT meter, restart MQTT connections
 	if m.ConnectionType == "mqtt" {
-		log.Printf("New MQTT meter created, restarting MQTT connections...")
+		log.Printf("New MQTT meter created (device type: %s), restarting MQTT connections...", m.DeviceType)
 		go h.dataCollector.RestartUDPListeners() // This also restarts MQTT connections
 	}
 
@@ -240,14 +255,19 @@ func (h *MeterHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Default device_type to 'generic' if not specified
+	if m.DeviceType == "" {
+		m.DeviceType = "generic"
+	}
+
 	_, err = h.db.Exec(`
 		UPDATE meters SET
 			name = ?, meter_type = ?, building_id = ?, user_id = ?, 
 			apartment_unit = ?, connection_type = ?, connection_config = ?, 
-			notes = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
+			device_type = ?, notes = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`, m.Name, m.MeterType, m.BuildingID, m.UserID, m.ApartmentUnit,
-		m.ConnectionType, m.ConnectionConfig, m.Notes, m.IsActive, id)
+		m.ConnectionType, m.ConnectionConfig, m.DeviceType, m.Notes, m.IsActive, id)
 
 	if err != nil {
 		log.Printf("ERROR: Failed to update meter: %v", err)
@@ -271,7 +291,7 @@ func (h *MeterHandler) Update(w http.ResponseWriter, r *http.Request) {
 	
 	// If it's an MQTT meter, restart MQTT connections
 	if m.ConnectionType == "mqtt" {
-		log.Printf("MQTT meter updated, restarting MQTT connections...")
+		log.Printf("MQTT meter updated (device type: %s), restarting MQTT connections...", m.DeviceType)
 		go h.dataCollector.RestartUDPListeners() // This also restarts MQTT connections
 	}
 
@@ -335,7 +355,7 @@ func (h *MeterHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if it's a UDP or Loxone API meter before deletion
+	// Check if it's a UDP or Loxone API or MQTT meter before deletion
 	var connectionType, meterName string
 	err = h.db.QueryRow("SELECT connection_type, name FROM meters WHERE id = ?", id).Scan(&connectionType, &meterName)
 	if err == sql.ErrNoRows {
@@ -420,12 +440,12 @@ func (h *MeterHandler) ReplaceMeter(w http.ResponseWriter, r *http.Request) {
 	var oldMeter models.Meter
 	err := h.db.QueryRow(`
 		SELECT id, name, meter_type, building_id, user_id, apartment_unit,
-		       connection_type, is_active, is_archived
+		       connection_type, device_type, is_active, is_archived
 		FROM meters WHERE id = ?
 	`, req.OldMeterID).Scan(
 		&oldMeter.ID, &oldMeter.Name, &oldMeter.MeterType, &oldMeter.BuildingID,
 		&oldMeter.UserID, &oldMeter.ApartmentUnit, &oldMeter.ConnectionType,
-		&oldMeter.IsActive, &oldMeter.IsArchived,
+		&oldMeter.DeviceType, &oldMeter.IsActive, &oldMeter.IsArchived,
 	)
 
 	if err == sql.ErrNoRows {
@@ -474,20 +494,21 @@ func (h *MeterHandler) ReplaceMeter(w http.ResponseWriter, r *http.Request) {
 		newMeterConfig = req.NewConnectionConfig
 	}
 
-	// Determine meter type and apartment from old meter if copying
+	// Determine meter type, apartment, and device_type from old meter if copying
 	meterType := req.NewMeterType
 	apartmentUnit := oldMeter.ApartmentUnit
 	userID := oldMeter.UserID
 	buildingID := oldMeter.BuildingID
+	deviceType := oldMeter.DeviceType // Copy device type from old meter
 
 	result, err := tx.Exec(`
 		INSERT INTO meters (
 			name, meter_type, building_id, user_id, apartment_unit,
-			connection_type, connection_config, notes, is_active, is_archived,
+			connection_type, connection_config, device_type, notes, is_active, is_archived,
 			replaces_meter_id, last_reading
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)
 	`, req.NewMeterName, meterType, buildingID, userID, apartmentUnit,
-		req.NewConnectionType, newMeterConfig, 
+		req.NewConnectionType, newMeterConfig, deviceType,
 		fmt.Sprintf("Replaces meter: %s", oldMeter.Name),
 		req.OldMeterID, req.NewMeterInitialReading)
 
@@ -561,18 +582,22 @@ func (h *MeterHandler) ReplaceMeter(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Loxone API meter involved in replacement, restarting Loxone connections...")
 		go h.dataCollector.RestartUDPListeners()
 	}
+	if oldMeter.ConnectionType == "mqtt" || req.NewConnectionType == "mqtt" {
+		log.Printf("MQTT meter involved in replacement, restarting MQTT connections...")
+		go h.dataCollector.RestartUDPListeners()
+	}
 
 	// Get the newly created meter for response
 	var newMeter models.Meter
 	h.db.QueryRow(`
 		SELECT id, name, meter_type, building_id, user_id, apartment_unit,
-		       connection_type, connection_config, notes, last_reading,
+		       connection_type, connection_config, device_type, notes, last_reading,
 		       is_active, is_archived, replaces_meter_id, created_at, updated_at
 		FROM meters WHERE id = ?
 	`, newMeterID).Scan(
 		&newMeter.ID, &newMeter.Name, &newMeter.MeterType, &newMeter.BuildingID,
 		&newMeter.UserID, &newMeter.ApartmentUnit, &newMeter.ConnectionType,
-		&newMeter.ConnectionConfig, &newMeter.Notes, &newMeter.LastReading,
+		&newMeter.ConnectionConfig, &newMeter.DeviceType, &newMeter.Notes, &newMeter.LastReading,
 		&newMeter.IsActive, &newMeter.IsArchived, &newMeter.ReplacesMetterID,
 		&newMeter.CreatedAt, &newMeter.UpdatedAt,
 	)
