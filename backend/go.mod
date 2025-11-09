@@ -3,7 +3,6 @@ module github.com/aj9599/zev-billing/backend
 go 1.25
 
 require (
-	github.com/chromedp/chromedp v0.14.2
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/goburrow/modbus v0.1.0
 	github.com/golang-jwt/jwt/v5 v5.3.0
