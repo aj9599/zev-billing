@@ -258,59 +258,73 @@ export default function MeterCard({
                     </span>
                 </div>
                 
-                {/* Energy Readings - Import & Export */}
-                <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: '1fr 1fr', 
-                    gap: '12px',
-                    marginBottom: '12px' 
-                }}>
-                    {/* Import Energy */}
-                    <div style={{
-                        padding: '10px',
-                        backgroundColor: '#f0f9ff',
-                        borderRadius: '8px',
-                        border: '1px solid #e0f2fe'
+                {/* Energy Readings - Import & Export (only for total_meter and solar_meter) */}
+                {(meter.meter_type === 'total_meter' || meter.meter_type === 'solar_meter') ? (
+                    <div style={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: '1fr 1fr', 
+                        gap: '12px',
+                        marginBottom: '12px' 
                     }}>
-                        <div style={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: '6px',
-                            marginBottom: '4px'
+                        {/* Import Energy */}
+                        <div style={{
+                            padding: '10px',
+                            backgroundColor: '#f0f9ff',
+                            borderRadius: '8px',
+                            border: '1px solid #e0f2fe'
                         }}>
-                            <TrendingUp size={14} style={{ color: '#0284c7' }} />
-                            <span style={{ fontSize: '11px', color: '#0369a1', fontWeight: '600' }}>
-                                Import
-                            </span>
+                            <div style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '6px',
+                                marginBottom: '4px'
+                            }}>
+                                <TrendingUp size={14} style={{ color: '#0284c7' }} />
+                                <span style={{ fontSize: '11px', color: '#0369a1', fontWeight: '600' }}>
+                                    Import
+                                </span>
+                            </div>
+                            <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
+                                {meter.last_reading ? `${meter.last_reading.toFixed(3)} kWh` : '-'}
+                            </div>
                         </div>
-                        <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
-                            {meter.last_reading ? `${meter.last_reading.toFixed(3)} kWh` : '-'}
+                        
+                        {/* Export Energy */}
+                        <div style={{
+                            padding: '10px',
+                            backgroundColor: '#f0fdf4',
+                            borderRadius: '8px',
+                            border: '1px solid #dcfce7'
+                        }}>
+                            <div style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '6px',
+                                marginBottom: '4px'
+                            }}>
+                                <TrendingDown size={14} style={{ color: '#16a34a' }} />
+                                <span style={{ fontSize: '11px', color: '#15803d', fontWeight: '600' }}>
+                                    Export
+                                </span>
+                            </div>
+                            <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
+                                {meter.last_reading_export ? `${meter.last_reading_export.toFixed(3)} kWh` : '0.000 kWh'}
+                            </div>
                         </div>
                     </div>
-                    
-                    {/* Export Energy */}
-                    <div style={{
-                        padding: '10px',
-                        backgroundColor: '#f0fdf4',
-                        borderRadius: '8px',
-                        border: '1px solid #dcfce7'
-                    }}>
-                        <div style={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: '6px',
-                            marginBottom: '4px'
-                        }}>
-                            <TrendingDown size={14} style={{ color: '#16a34a' }} />
-                            <span style={{ fontSize: '11px', color: '#15803d', fontWeight: '600' }}>
-                                Export
+                ) : (
+                    /* Single reading display for other meter types */
+                    <div style={{ marginBottom: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>
+                                {t('meters.lastReading')}
+                            </span>
+                            <span style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
+                                {meter.last_reading ? `${meter.last_reading.toFixed(3)} kWh` : '-'}
                             </span>
                         </div>
-                        <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
-                            {meter.last_reading_export ? `${meter.last_reading_export.toFixed(3)} kWh` : '0.000 kWh'}
-                        </div>
                     </div>
-                </div>
+                )}
                 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>

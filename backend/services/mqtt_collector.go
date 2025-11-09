@@ -14,12 +14,12 @@ import (
 // MQTTCollector manages MQTT connections and collects meter data from MQTT devices
 type MQTTCollector struct {
 	db             *sql.DB
-	client         mqtt.Client
+	clients        map[string]mqtt.Client    // broker URL -> MQTT client
 	isRunning      bool
-	isConnected    bool  // NEW: Track actual connection state
 	mu             sync.RWMutex
 	meterReadings  map[int]MQTTMeterReading  // meter_id -> last reading
 	chargerData    map[int]MQTTChargerData   // charger_id -> last data
+	meterBrokers   map[int]string            // meter_id -> broker URL
 	stopChan       chan bool
 }
 
@@ -29,6 +29,7 @@ type MQTTMeterReading struct {
 	PowerExport   float64   // Export/return energy in kWh
 	Timestamp     time.Time
 	LastUpdated   time.Time
+	IsConnected   bool      // Track if this specific meter's broker is connected
 }
 
 // MQTTChargerData stores the latest data from an MQTT charger
@@ -96,10 +97,11 @@ type GenericMQTTMessage struct {
 func NewMQTTCollector(db *sql.DB) *MQTTCollector {
 	return &MQTTCollector{
 		db:            db,
+		clients:       make(map[string]mqtt.Client),
 		meterReadings: make(map[int]MQTTMeterReading),
 		chargerData:   make(map[int]MQTTChargerData),
+		meterBrokers:  make(map[int]string),
 		stopChan:      make(chan bool),
-		isConnected:   false,
 	}
 }
 
@@ -114,19 +116,16 @@ func (mc *MQTTCollector) Start() {
 
 	log.Println("=== MQTT Collector Starting ===")
 	
-	// Connect to MQTT broker
-	if err := mc.connectToBroker(); err != nil {
-		log.Printf("ERROR: Failed to connect to MQTT broker: %v", err)
+	// Connect to all configured MQTT brokers
+	if err := mc.connectToAllBrokers(); err != nil {
+		log.Printf("ERROR: Failed to initialize MQTT connections: %v", err)
 		return
 	}
-
-	// Subscribe to all active MQTT meters and chargers
-	mc.subscribeToDevices()
 
 	log.Println("=== MQTT Collector Started Successfully ===")
 
 	// Keep running and reconnect if needed
-	go mc.monitorConnection()
+	go mc.monitorConnections()
 }
 
 func (mc *MQTTCollector) Stop() {
@@ -139,20 +138,76 @@ func (mc *MQTTCollector) Stop() {
 
 	log.Println("Stopping MQTT Collector...")
 	mc.isRunning = false
-	mc.isConnected = false
 	
-	if mc.client != nil && mc.client.IsConnected() {
-		mc.client.Disconnect(250)
+	// Disconnect all clients
+	for brokerURL, client := range mc.clients {
+		if client != nil && client.IsConnected() {
+			log.Printf("Disconnecting from MQTT broker: %s", brokerURL)
+			client.Disconnect(250)
+		}
 	}
 	
 	close(mc.stopChan)
 	log.Println("MQTT Collector stopped")
 }
 
-func (mc *MQTTCollector) connectToBroker() error {
-	// MQTT broker configuration - using localhost since broker runs on same Pi
-	brokerURL := "tcp://localhost:1883"
-	clientID := fmt.Sprintf("zev-billing-%d", time.Now().Unix())
+func (mc *MQTTCollector) connectToAllBrokers() error {
+	// Get all unique broker configurations from meters
+	rows, err := mc.db.Query(`
+		SELECT DISTINCT connection_config
+		FROM meters 
+		WHERE is_active = 1 AND connection_type = 'mqtt'
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to query MQTT meters: %v", err)
+	}
+	defer rows.Close()
+
+	brokerConfigs := make(map[string]map[string]interface{}) // broker URL -> config
+
+	for rows.Next() {
+		var configJSON string
+		if err := rows.Scan(&configJSON); err != nil {
+			continue
+		}
+
+		var config map[string]interface{}
+		if err := json.Unmarshal([]byte(configJSON), &config); err != nil {
+			log.Printf("ERROR: Failed to parse config: %v", err)
+			continue
+		}
+
+		broker, _ := config["mqtt_broker"].(string)
+		port, _ := config["mqtt_port"].(float64)
+		if broker == "" {
+			broker = "localhost"
+		}
+		if port == 0 {
+			port = 1883
+		}
+
+		brokerURL := fmt.Sprintf("tcp://%s:%.0f", broker, port)
+		brokerConfigs[brokerURL] = config
+	}
+
+	if len(brokerConfigs) == 0 {
+		log.Println("No MQTT brokers configured")
+		return nil
+	}
+
+	// Connect to each unique broker
+	for brokerURL, config := range brokerConfigs {
+		if err := mc.connectToBroker(brokerURL, config); err != nil {
+			log.Printf("ERROR: Failed to connect to broker %s: %v", brokerURL, err)
+			// Continue with other brokers even if one fails
+		}
+	}
+
+	return nil
+}
+
+func (mc *MQTTCollector) connectToBroker(brokerURL string, config map[string]interface{}) error {
+	clientID := fmt.Sprintf("zev-billing-%d-%s", time.Now().Unix(), brokerURL)
 
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(brokerURL)
@@ -160,45 +215,60 @@ func (mc *MQTTCollector) connectToBroker() error {
 	opts.SetCleanSession(true)
 	opts.SetAutoReconnect(true)
 	opts.SetMaxReconnectInterval(10 * time.Second)
-	opts.SetConnectionLostHandler(mc.onConnectionLost)
-	opts.SetOnConnectHandler(mc.onConnect)
+	opts.SetConnectionLostHandler(mc.createConnectionLostHandler(brokerURL))
+	opts.SetOnConnectHandler(mc.createOnConnectHandler(brokerURL))
 	
-	// Note: Authentication is optional. If your MQTT broker doesn't require
-	// authentication, leave username and password empty in meter configuration.
+	// Set authentication if provided
+	username, _ := config["mqtt_username"].(string)
+	password, _ := config["mqtt_password"].(string)
+	if username != "" {
+		opts.SetUsername(username)
+		opts.SetPassword(password)
+		log.Printf("Using authentication for broker %s (username: %s)", brokerURL, username)
+	}
 
-	mc.client = mqtt.NewClient(opts)
+	client := mqtt.NewClient(opts)
 
 	log.Printf("Connecting to MQTT broker at %s...", brokerURL)
 	
-	if token := mc.client.Connect(); token.Wait() && token.Error() != nil {
-		mc.isConnected = false
-		return fmt.Errorf("failed to connect to MQTT broker: %v", token.Error())
+	if token := client.Connect(); token.Wait() && token.Error() != nil {
+		return fmt.Errorf("failed to connect: %v", token.Error())
 	}
 
 	mc.mu.Lock()
-	mc.isConnected = true
+	mc.clients[brokerURL] = client
 	mc.mu.Unlock()
 
-	log.Println("✓ Connected to MQTT broker successfully")
+	log.Printf("✓ Connected to MQTT broker successfully: %s", brokerURL)
 	return nil
 }
 
-func (mc *MQTTCollector) onConnect(client mqtt.Client) {
-	log.Println("MQTT connection established, subscribing to device topics...")
-	mc.mu.Lock()
-	mc.isConnected = true
-	mc.mu.Unlock()
-	mc.subscribeToDevices()
+func (mc *MQTTCollector) createOnConnectHandler(brokerURL string) func(mqtt.Client) {
+	return func(client mqtt.Client) {
+		log.Printf("MQTT connection established to %s, subscribing to device topics...", brokerURL)
+		mc.subscribeToDevices(brokerURL)
+	}
 }
 
-func (mc *MQTTCollector) onConnectionLost(client mqtt.Client, err error) {
-	log.Printf("⚠️ MQTT connection lost: %v - Will attempt to reconnect", err)
-	mc.mu.Lock()
-	mc.isConnected = false
-	mc.mu.Unlock()
+func (mc *MQTTCollector) createConnectionLostHandler(brokerURL string) func(mqtt.Client, error) {
+	return func(client mqtt.Client, err error) {
+		log.Printf("⚠️ MQTT connection lost to %s: %v - Will attempt to reconnect", brokerURL, err)
+		
+		// Mark all meters using this broker as disconnected
+		mc.mu.Lock()
+		for meterID, broker := range mc.meterBrokers {
+			if broker == brokerURL {
+				if reading, exists := mc.meterReadings[meterID]; exists {
+					reading.IsConnected = false
+					mc.meterReadings[meterID] = reading
+				}
+			}
+		}
+		mc.mu.Unlock()
+	}
 }
 
-func (mc *MQTTCollector) monitorConnection() {
+func (mc *MQTTCollector) monitorConnections() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
@@ -207,21 +277,22 @@ func (mc *MQTTCollector) monitorConnection() {
 		case <-mc.stopChan:
 			return
 		case <-ticker.C:
-			if !mc.client.IsConnected() {
-				log.Println("MQTT client disconnected, attempting to reconnect...")
-				mc.mu.Lock()
-				mc.isConnected = false
-				mc.mu.Unlock()
-				if token := mc.client.Connect(); token.Wait() && token.Error() != nil {
-					log.Printf("Failed to reconnect: %v", token.Error())
+			mc.mu.RLock()
+			for brokerURL, client := range mc.clients {
+				if !client.IsConnected() {
+					log.Printf("MQTT client disconnected from %s, attempting to reconnect...", brokerURL)
+					if token := client.Connect(); token.Wait() && token.Error() != nil {
+						log.Printf("Failed to reconnect to %s: %v", brokerURL, token.Error())
+					}
 				}
 			}
+			mc.mu.RUnlock()
 		}
 	}
 }
 
-func (mc *MQTTCollector) subscribeToDevices() {
-	// Subscribe to all MQTT meters
+func (mc *MQTTCollector) subscribeToDevices(brokerURL string) {
+	// Subscribe to all MQTT meters using this broker
 	rows, err := mc.db.Query(`
 		SELECT id, name, connection_config, device_type
 		FROM meters 
@@ -232,6 +303,15 @@ func (mc *MQTTCollector) subscribeToDevices() {
 		return
 	}
 	defer rows.Close()
+
+	mc.mu.RLock()
+	client := mc.clients[brokerURL]
+	mc.mu.RUnlock()
+
+	if client == nil {
+		log.Printf("ERROR: No client found for broker %s", brokerURL)
+		return
+	}
 
 	meterCount := 0
 	for rows.Next() {
@@ -248,6 +328,21 @@ func (mc *MQTTCollector) subscribeToDevices() {
 			continue
 		}
 
+		// Check if this meter uses this broker
+		broker, _ := config["mqtt_broker"].(string)
+		port, _ := config["mqtt_port"].(float64)
+		if broker == "" {
+			broker = "localhost"
+		}
+		if port == 0 {
+			port = 1883
+		}
+		meterBrokerURL := fmt.Sprintf("tcp://%s:%.0f", broker, port)
+
+		if meterBrokerURL != brokerURL {
+			continue // This meter uses a different broker
+		}
+
 		topic, ok := config["mqtt_topic"].(string)
 		if !ok || topic == "" {
 			log.Printf("WARNING: No MQTT topic configured for meter '%s'", name)
@@ -259,16 +354,21 @@ func (mc *MQTTCollector) subscribeToDevices() {
 			deviceTypeStr = deviceType.String
 		}
 
+		// Store broker mapping
+		mc.mu.Lock()
+		mc.meterBrokers[id] = brokerURL
+		mc.mu.Unlock()
+
 		// Subscribe to the meter's topic
-		if token := mc.client.Subscribe(topic, 1, mc.createMeterHandler(id, name, deviceTypeStr)); token.Wait() && token.Error() != nil {
+		if token := client.Subscribe(topic, 1, mc.createMeterHandler(id, name, deviceTypeStr, brokerURL)); token.Wait() && token.Error() != nil {
 			log.Printf("ERROR: Failed to subscribe to topic '%s' for meter '%s': %v", topic, name, token.Error())
 		} else {
-			log.Printf("✓ Subscribed to MQTT topic '%s' for meter '%s' (device: %s)", topic, name, deviceTypeStr)
+			log.Printf("✓ Subscribed to MQTT topic '%s' for meter '%s' (device: %s, broker: %s)", topic, name, deviceTypeStr, brokerURL)
 			meterCount++
 		}
 	}
 
-	// Subscribe to all MQTT chargers
+	// Subscribe to all MQTT chargers using this broker
 	rows, err = mc.db.Query(`
 		SELECT id, name, connection_config
 		FROM chargers 
@@ -294,6 +394,21 @@ func (mc *MQTTCollector) subscribeToDevices() {
 			continue
 		}
 
+		// Check if this charger uses this broker
+		broker, _ := config["mqtt_broker"].(string)
+		port, _ := config["mqtt_port"].(float64)
+		if broker == "" {
+			broker = "localhost"
+		}
+		if port == 0 {
+			port = 1883
+		}
+		chargerBrokerURL := fmt.Sprintf("tcp://%s:%.0f", broker, port)
+
+		if chargerBrokerURL != brokerURL {
+			continue // This charger uses a different broker
+		}
+
 		topic, ok := config["mqtt_topic"].(string)
 		if !ok || topic == "" {
 			log.Printf("WARNING: No MQTT topic configured for charger '%s'", name)
@@ -301,18 +416,18 @@ func (mc *MQTTCollector) subscribeToDevices() {
 		}
 
 		// Subscribe to the charger's topic
-		if token := mc.client.Subscribe(topic, 1, mc.createChargerHandler(id, name)); token.Wait() && token.Error() != nil {
+		if token := client.Subscribe(topic, 1, mc.createChargerHandler(id, name)); token.Wait() && token.Error() != nil {
 			log.Printf("ERROR: Failed to subscribe to topic '%s' for charger '%s': %v", topic, name, token.Error())
 		} else {
-			log.Printf("✓ Subscribed to MQTT topic '%s' for charger '%s'", topic, name)
+			log.Printf("✓ Subscribed to MQTT topic '%s' for charger '%s' (broker: %s)", topic, name, brokerURL)
 			chargerCount++
 		}
 	}
 
-	log.Printf("MQTT Subscriptions: %d meters, %d chargers", meterCount, chargerCount)
+	log.Printf("MQTT Subscriptions for %s: %d meters, %d chargers", brokerURL, meterCount, chargerCount)
 }
 
-func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, deviceType string) mqtt.MessageHandler {
+func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, deviceType string, brokerURL string) mqtt.MessageHandler {
 	return func(client mqtt.Client, msg mqtt.Message) {
 		payload := msg.Payload()
 		topic := msg.Topic()
@@ -430,6 +545,7 @@ func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, devic
 				PowerExport: exportValue,
 				Timestamp:   timestamp,
 				LastUpdated: time.Now(),
+				IsConnected: true,
 			}
 			mc.mu.Unlock()
 			
@@ -561,7 +677,17 @@ func (mc *MQTTCollector) GetConnectionStatus() map[string]interface{} {
 	mc.mu.RLock()
 	defer mc.mu.RUnlock()
 
-	isConnected := mc.isConnected && mc.client != nil && mc.client.IsConnected()
+	// Check if any broker is connected
+	anyBrokerConnected := false
+	connectedBrokers := []string{}
+	totalBrokers := len(mc.clients)
+
+	for brokerURL, client := range mc.clients {
+		if client != nil && client.IsConnected() {
+			anyBrokerConnected = true
+			connectedBrokers = append(connectedBrokers, brokerURL)
+		}
+	}
 
 	// Count active MQTT devices
 	var mqttMeterCount, mqttChargerCount int
@@ -570,17 +696,43 @@ func (mc *MQTTCollector) GetConnectionStatus() map[string]interface{} {
 
 	// Get recent readings info
 	recentReadings := 0
+	connectedMeters := 0
 	for _, reading := range mc.meterReadings {
-		if time.Since(reading.LastUpdated) < 5*time.Minute {
+		if reading.IsConnected && time.Since(reading.LastUpdated) < 5*time.Minute {
 			recentReadings++
+			connectedMeters++
+		}
+	}
+
+	// Build per-meter connection status
+	mqttConnections := make(map[int]map[string]interface{})
+	for meterID, reading := range mc.meterReadings {
+		brokerURL := mc.meterBrokers[meterID]
+		client := mc.clients[brokerURL]
+		isBrokerConnected := client != nil && client.IsConnected()
+		
+		mqttConnections[meterID] = map[string]interface{}{
+			"is_connected":       reading.IsConnected && isBrokerConnected,
+			"last_reading":       reading.Power,
+			"last_reading_export": reading.PowerExport,
+			"last_update":        reading.LastUpdated.Format(time.RFC3339),
+			"topic":              "", // Will be filled by handler if needed
+		}
+		
+		if !isBrokerConnected {
+			mqttConnections[meterID]["last_error"] = fmt.Sprintf("Broker %s is not connected", brokerURL)
 		}
 	}
 
 	return map[string]interface{}{
-		"mqtt_broker_connected": isConnected,
-		"mqtt_meters_count":     mqttMeterCount,
-		"mqtt_chargers_count":   mqttChargerCount,
-		"mqtt_recent_readings":  recentReadings,
-		"mqtt_broker_url":       "tcp://localhost:1883",
+		"mqtt_broker_connected":  anyBrokerConnected,
+		"mqtt_brokers_total":     totalBrokers,
+		"mqtt_brokers_connected": len(connectedBrokers),
+		"mqtt_connected_brokers": connectedBrokers,
+		"mqtt_meters_count":      mqttMeterCount,
+		"mqtt_chargers_count":    mqttChargerCount,
+		"mqtt_recent_readings":   recentReadings,
+		"mqtt_connected_meters":  connectedMeters,
+		"mqtt_connections":       mqttConnections,
 	}
 }
