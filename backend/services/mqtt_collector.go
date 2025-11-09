@@ -22,6 +22,7 @@ type MQTTCollector struct {
 	chargerData    map[int]MQTTChargerData   // charger_id -> last data
 	meterBrokers   map[int]string            // meter_id -> broker URL
 	meterTopics    map[int]string            // meter_id -> topic
+	subscriptions  map[string][]string       // broker URL -> list of topics
 	stopChan       chan bool
 }
 
@@ -78,6 +79,28 @@ type ShellyEMMessage struct {
 	TotalActRet     float64 `json:"total_act_ret"`         // Total export (Wh)
 }
 
+// Shelly2PMMessage represents the JSON structure from Shelly 2PM devices (dual channel)
+type Shelly2PMMessage struct {
+	ID         int                    `json:"id"`
+	Source     string                 `json:"source"`
+	Output     bool                   `json:"output"`
+	APower     float64                `json:"apower"`      // Current power in W
+	Voltage    float64                `json:"voltage"`     // Voltage in V
+	Freq       float64                `json:"freq"`        // Frequency in Hz
+	Current    float64                `json:"current"`     // Current in A
+	PF         float64                `json:"pf"`          // Power factor
+	AEnergy    Shelly2PMEnergyObject  `json:"aenergy"`     // Import energy
+	RetAEnergy Shelly2PMEnergyObject  `json:"ret_aenergy"` // Export/return energy
+	Temperature map[string]float64    `json:"temperature"` // Temperature readings
+}
+
+// Shelly2PMEnergyObject represents the nested energy object in Shelly 2PM messages
+type Shelly2PMEnergyObject struct {
+	Total     float64   `json:"total"`      // Total energy in Wh
+	ByMinute  []float64 `json:"by_minute"`  // Energy by minute
+	MinuteTS  int64     `json:"minute_ts"`  // Timestamp
+}
+
 // GenericMQTTMessage for flexible JSON parsing
 type GenericMQTTMessage struct {
 	Energy       *float64 `json:"energy"`
@@ -104,6 +127,7 @@ func NewMQTTCollector(db *sql.DB) *MQTTCollector {
 		chargerData:   make(map[int]MQTTChargerData),
 		meterBrokers:  make(map[int]string),
 		meterTopics:   make(map[int]string),
+		subscriptions: make(map[string][]string),
 		stopChan:      make(chan bool),
 	}
 }
@@ -582,6 +606,23 @@ func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, devic
 					found = true
 					log.Printf("✓ Parsed Shelly EM format (alt): import=%.3f kWh, export=%.3f kWh", importValue, exportValue)
 				}
+			}
+
+		case "shelly-2pm":
+			var shelly2PMMsg Shelly2PMMessage
+			if err := json.Unmarshal(payload, &shelly2PMMsg); err == nil {
+				// Check if we have valid energy data (Wh values)
+				if shelly2PMMsg.AEnergy.Total > 0 {
+					// Convert Wh to kWh
+					importValue = shelly2PMMsg.AEnergy.Total / 1000.0
+					exportValue = shelly2PMMsg.RetAEnergy.Total / 1000.0
+					timestamp = time.Now()
+					found = true
+					log.Printf("✓ Parsed Shelly 2PM format: import=%.3f kWh, export=%.3f kWh, power=%.1f W", 
+						importValue, exportValue, shelly2PMMsg.APower)
+				}
+			} else {
+				log.Printf("DEBUG: Failed to parse as Shelly 2PM: %v", err)
 			}
 
 		case "generic", "custom", "":

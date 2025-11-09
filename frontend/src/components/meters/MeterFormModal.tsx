@@ -68,6 +68,7 @@ export default function MeterFormModal({
         { value: 'whatwatt-go', label: 'WhatWatt Go' },
         { value: 'shelly-3em', label: 'Shelly 3EM (3-Phase)' },
         { value: 'shelly-em', label: 'Shelly EM (Single Phase)' },
+        { value: 'shelly-2pm', label: 'Shelly 2PM (Dual Channel)' },
         { value: 'custom', label: 'Custom Device' }
     ];
 
@@ -357,7 +358,7 @@ export default function MeterFormModal({
                                                             fontSize: '11px',
                                                             fontWeight: '600'
                                                         }}>
-                                                            ✓ {t('common.active')}
+                                                            âœ“ {t('common.active')}
                                                         </div>
                                                     </div>
                                                 ) : (
@@ -369,7 +370,7 @@ export default function MeterFormModal({
                                                         color: '#92400e',
                                                         fontSize: '13px'
                                                     }}>
-                                                        ⚠️ {t('meters.noUserLinked')}
+                                                        âš ï¸ {t('meters.noUserLinked')}
                                                     </div>
                                                 )}
                                                 <p style={{ fontSize: '11px', color: '#666', marginTop: '6px' }}>
@@ -387,7 +388,7 @@ export default function MeterFormModal({
                                                 color: '#6b7280',
                                                 fontSize: '13px'
                                             }}>
-                                                ℹ️ {t('meters.apartmentNotSelected')}
+                                                â„¹ï¸ {t('meters.apartmentNotSelected')}
                                             </div>
                                         )}
                                     </>
@@ -564,7 +565,7 @@ export default function MeterFormModal({
                                                 ...connectionConfig,
                                                 loxone_password: e.target.value
                                             })}
-                                            placeholder="••••••••"
+                                            placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                                             style={{
                                                 width: '100%',
                                                 padding: '10px',
@@ -817,7 +818,7 @@ export default function MeterFormModal({
                                     color: '#0c4a6e',
                                     border: '1px solid #7dd3fc'
                                 }}>
-                                    ℹ️ <strong>Authentication is optional.</strong> Leave username and password empty if your MQTT broker doesn't require authentication (allow_anonymous = true). Fill them in if authentication is enabled.
+                                    â„¹ï¸ <strong>Authentication is optional.</strong> Leave username and password empty if your MQTT broker doesn't require authentication (allow_anonymous = true). Fill them in if authentication is enabled.
                                 </div>
 
                                 <div style={{ marginBottom: '12px' }}>
@@ -863,6 +864,9 @@ export default function MeterFormModal({
                                     <strong>{t('meters.mqttSupportedFormats')}</strong><br /><br />
                                     <strong>Shelly 3EM Format:</strong><br />
                                     {`{ "id": 0, "total_act": 12345.67, "total_act_ret": 678.9 }`}<br /><br />
+
+                                    <strong>Shelly 2PM Format:</strong><br />
+                                    {`{ "id": 1, "aenergy": {"total": 170204.016}, "ret_aenergy": {"total": 168518.016} }`}<br /><br />
 
                                     <strong>{t('meters.mqttFormat1')}</strong><br />
                                     {`{ "device_id": "...", "energy": 123.456, "power": 1500 }`}<br /><br />
