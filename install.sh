@@ -151,6 +151,33 @@ else
         echo ""
         read -p "Enable MQTT authentication? (yes/no) [no]: " enable_auth
         
+        # Ask about network access
+        echo ""
+        echo -e "${YELLOW}========================================${NC}"
+        echo -e "${YELLOW}MQTT Network Access Configuration${NC}"
+        echo -e "${YELLOW}========================================${NC}"
+        echo ""
+        echo "Where should MQTT be accessible from?"
+        echo "  - 'localhost' = Only from this Raspberry Pi (more secure)"
+        echo "  - 'network' = From any device on your network (more flexible)"
+        echo ""
+        echo "Choose 'network' if you want to:"
+        echo "  - Use MQTT Explorer from another computer"
+        echo "  - Connect external MQTT devices/meters"
+        echo "  - Access MQTT from other machines"
+        echo ""
+        read -p "Access mode? (localhost/network) [localhost]: " access_mode
+        
+        MQTT_BIND_ADDRESS="localhost"
+        if [ "$access_mode" == "network" ] || [ "$access_mode" == "n" ] || [ "$access_mode" == "NETWORK" ]; then
+            MQTT_BIND_ADDRESS="0.0.0.0"
+            echo -e "${YELLOW}⚠  MQTT will be accessible from the network${NC}"
+            echo -e "${YELLOW}   Make sure your network is trusted!${NC}"
+        else
+            echo -e "${GREEN}MQTT will only be accessible from localhost${NC}"
+        fi
+        echo ""
+        
         if [ "$enable_auth" == "yes" ] || [ "$enable_auth" == "y" ] || [ "$enable_auth" == "YES" ]; then
             MQTT_AUTH_ENABLED=true
             echo ""
@@ -216,11 +243,11 @@ MAIN_CONF_EOF
         
         if [ "$MQTT_AUTH_ENABLED" = true ]; then
             # Configuration WITH authentication
-            cat > /etc/mosquitto/conf.d/zev-billing.conf << 'MQTT_EOF'
+            cat > /etc/mosquitto/conf.d/zev-billing.conf << MQTT_EOF
 # ZEV Billing System MQTT Configuration
 
-# Listen on default MQTT port (localhost only for security)
-listener 1883 localhost
+# Listen on MQTT port
+listener 1883 $MQTT_BIND_ADDRESS
 
 # Authentication enabled - password required
 allow_anonymous false
@@ -247,11 +274,11 @@ message_size_limit 10485760
 MQTT_EOF
         else
             # Configuration WITHOUT authentication
-            cat > /etc/mosquitto/conf.d/zev-billing.conf << 'MQTT_EOF'
+            cat > /etc/mosquitto/conf.d/zev-billing.conf << MQTT_EOF
 # ZEV Billing System MQTT Configuration
 
-# Listen on default MQTT port (localhost only for security)
-listener 1883 localhost
+# Listen on MQTT port
+listener 1883 $MQTT_BIND_ADDRESS
 
 # Allow anonymous connections (no authentication required)
 allow_anonymous true

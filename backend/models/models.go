@@ -68,9 +68,11 @@ type Meter struct {
 	ApartmentUnit      string     `json:"apartment_unit"`
 	ConnectionType     string     `json:"connection_type"`
 	ConnectionConfig   string     `json:"connection_config"`
+	DeviceType         string     `json:"device_type"` // NEW: whatwatt-go, shelly-3em, shelly-em, generic, custom
 	Notes              string     `json:"notes"`
 	LastReading        float64    `json:"last_reading"`
 	LastReadingTime    *time.Time `json:"last_reading_time"`
+	LastReadingExport  float64    `json:"last_reading_export"`  // NEW: Export/return energy
 	IsActive           bool       `json:"is_active"`
 	IsArchived         bool       `json:"is_archived"`
 	ReplacedByMeterID  *int       `json:"replaced_by_meter_id"`
@@ -123,12 +125,14 @@ type Charger struct {
 }
 
 type MeterReading struct {
-	ID             int       `json:"id"`
-	MeterID        int       `json:"meter_id"`
-	ReadingTime    time.Time `json:"reading_time"`
-	PowerKWh       float64   `json:"power_kwh"`
-	ConsumptionKWh float64   `json:"consumption_kwh"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID                int       `json:"id"`
+	MeterID           int       `json:"meter_id"`
+	ReadingTime       time.Time `json:"reading_time"`
+	PowerKWh          float64   `json:"power_kwh"`
+	PowerKWhExport    float64   `json:"power_kwh_export"`    // NEW: Export energy
+	ConsumptionKWh    float64   `json:"consumption_kwh"`
+	ConsumptionExport float64   `json:"consumption_export"`  // NEW: Export consumption
+	CreatedAt         time.Time `json:"created_at"`
 }
 
 type ChargerSession struct {

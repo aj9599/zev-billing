@@ -19,8 +19,8 @@ export interface User {
   managed_buildings?: number[] | string;
   language?: string; // Invoice language (de, fr, it, en)
   is_active: boolean;
-  rent_start_date?: string; // NEW: Rent period start date (required for regular users)
-  rent_end_date?: string;   // NEW: Rent period end date (default: 2099-01-01)
+  rent_start_date?: string; // Rent period start date (required for regular users)
+  rent_end_date?: string;   // Rent period end date (default: 2099-01-01)
   created_at: string;
   updated_at: string;
 }
@@ -56,9 +56,11 @@ export interface Meter {
   apartment_unit?: string;
   connection_type: string;
   connection_config: string;
+  device_type?: string; // NEW: whatwatt-go, shelly-3em, shelly-em, generic, custom
   notes: string;
   last_reading: number;
   last_reading_time?: string;
+  last_reading_export?: number; // NEW: Export/return energy
   is_active: boolean;
   is_shared: boolean;
   is_archived: boolean;

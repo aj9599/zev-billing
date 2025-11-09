@@ -344,7 +344,7 @@ export default function MeterFormModal({
                                                             fontSize: '11px',
                                                             fontWeight: '600'
                                                         }}>
-                                                            ✓{t('common.active')}
+                                                            âœ“{t('common.active')}
                                                         </div>
                                                     </div>
                                                 ) : (
@@ -356,7 +356,7 @@ export default function MeterFormModal({
                                                         color: '#92400e',
                                                         fontSize: '13px'
                                                     }}>
-                                                        ⚠️ {t('meters.noUserLinked')}
+                                                        âš ï¸ {t('meters.noUserLinked')}
                                                     </div>
                                                 )}
                                                 <p style={{ fontSize: '11px', color: '#666', marginTop: '6px' }}>
@@ -374,7 +374,7 @@ export default function MeterFormModal({
                                                 color: '#6b7280',
                                                 fontSize: '13px'
                                             }}>
-                                                ℹ️ {t('meters.apartmentNotSelected')}
+                                                â„¹ï¸ {t('meters.apartmentNotSelected')}
                                             </div>
                                         )}
                                     </>
@@ -551,7 +551,7 @@ export default function MeterFormModal({
                                                 ...connectionConfig,
                                                 loxone_password: e.target.value
                                             })}
-                                            placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                                            placeholder="Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢"
                                             style={{
                                                 width: '100%',
                                                 padding: '10px',
@@ -720,7 +720,7 @@ export default function MeterFormModal({
                                             fontWeight: '500',
                                             fontSize: '14px'
                                         }}>
-                                            {t('meters.mqttUsername')}
+                                            {t('meters.mqttUsername')} (Optional)
                                         </label>
                                         <input
                                             type="text"
@@ -729,7 +729,7 @@ export default function MeterFormModal({
                                                 ...connectionConfig,
                                                 mqtt_username: e.target.value
                                             })}
-                                            placeholder="mqtt_user"
+                                            placeholder="Leave empty if no authentication"
                                             style={{
                                                 width: '100%',
                                                 padding: '10px',
@@ -745,7 +745,7 @@ export default function MeterFormModal({
                                             fontWeight: '500',
                                             fontSize: '14px'
                                         }}>
-                                            {t('meters.mqttPassword')}
+                                            {t('meters.mqttPassword')} (Optional)
                                         </label>
                                         <input
                                             type="password"
@@ -754,7 +754,7 @@ export default function MeterFormModal({
                                                 ...connectionConfig,
                                                 mqtt_password: e.target.value
                                             })}
-                                            placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                                            placeholder="Leave empty if no authentication"
                                             style={{
                                                 width: '100%',
                                                 padding: '10px',
@@ -763,6 +763,18 @@ export default function MeterFormModal({
                                             }}
                                         />
                                     </div>
+                                </div>
+
+                                <div style={{
+                                    backgroundColor: '#e0f2fe',
+                                    padding: '10px',
+                                    borderRadius: '6px',
+                                    marginBottom: '12px',
+                                    fontSize: '12px',
+                                    color: '#0c4a6e',
+                                    border: '1px solid #7dd3fc'
+                                }}>
+                                    ℹ️ <strong>Authentication is optional.</strong> Leave username and password empty if your MQTT broker doesn't require authentication (allow_anonymous = true). Fill them in if authentication is enabled.
                                 </div>
 
                                 <div style={{ marginBottom: '12px' }}>

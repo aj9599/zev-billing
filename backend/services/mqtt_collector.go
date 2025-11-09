@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +16,7 @@ type MQTTCollector struct {
 	db             *sql.DB
 	client         mqtt.Client
 	isRunning      bool
+	isConnected    bool  // NEW: Track actual connection state
 	mu             sync.RWMutex
 	meterReadings  map[int]MQTTMeterReading  // meter_id -> last reading
 	chargerData    map[int]MQTTChargerData   // charger_id -> last data
@@ -25,7 +25,8 @@ type MQTTCollector struct {
 
 // MQTTMeterReading stores the latest reading from an MQTT meter
 type MQTTMeterReading struct {
-	Power         float64   // Current power in kWh
+	Power         float64   // Current power in kWh (import)
+	PowerExport   float64   // Export/return energy in kWh
 	Timestamp     time.Time
 	LastUpdated   time.Time
 }
@@ -52,17 +53,44 @@ type WhatWattGoMessage struct {
 	PowerFactor float64 `json:"power_factor"`  // Power factor (0-1)
 }
 
+// Shelly3EMMessage represents the JSON structure from Shelly 3EM devices
+type Shelly3EMMessage struct {
+	ID                  int     `json:"id"`
+	ATotalActEnergy     float64 `json:"a_total_act_energy"`      // Phase A import
+	ATotalActRetEnergy  float64 `json:"a_total_act_ret_energy"`  // Phase A export
+	BTotalActEnergy     float64 `json:"b_total_act_energy"`      // Phase B import
+	BTotalActRetEnergy  float64 `json:"b_total_act_ret_energy"`  // Phase B export
+	CTotalActEnergy     float64 `json:"c_total_act_energy"`      // Phase C import
+	CTotalActRetEnergy  float64 `json:"c_total_act_ret_energy"`  // Phase C export
+	TotalAct            float64 `json:"total_act"`               // Total import
+	TotalActRet         float64 `json:"total_act_ret"`           // Total export
+}
+
+// ShellyEMMessage represents the JSON structure from Shelly EM devices (single phase)
+type ShellyEMMessage struct {
+	ID              int     `json:"id"`
+	TotalActEnergy  float64 `json:"total_act_energy"`      // Import
+	TotalActRetEnergy float64 `json:"total_act_ret_energy"` // Export
+	TotalAct        float64 `json:"total_act"`             // Total import
+	TotalActRet     float64 `json:"total_act_ret"`         // Total export
+}
+
 // GenericMQTTMessage for flexible JSON parsing
 type GenericMQTTMessage struct {
-	Energy      *float64 `json:"energy"`
-	Power       *float64 `json:"power"`
-	PowerKWh    *float64 `json:"power_kwh"`
-	Consumption *float64 `json:"consumption"`
-	TotalKWh    *float64 `json:"total_kwh"`
-	Value       *float64 `json:"value"`
-	Reading     *float64 `json:"reading"`
-	DeviceID    string   `json:"device_id"`
-	Timestamp   int64    `json:"timestamp"`
+	Energy       *float64 `json:"energy"`
+	EnergyExport *float64 `json:"energy_export"`
+	Power        *float64 `json:"power"`
+	PowerKWh     *float64 `json:"power_kwh"`
+	PowerExport  *float64 `json:"power_export"`
+	Consumption  *float64 `json:"consumption"`
+	TotalKWh     *float64 `json:"total_kwh"`
+	TotalExport  *float64 `json:"total_export"`
+	Import       *float64 `json:"import"`
+	Export       *float64 `json:"export"`
+	Value        *float64 `json:"value"`
+	Reading      *float64 `json:"reading"`
+	DeviceID     string   `json:"device_id"`
+	Timestamp    int64    `json:"timestamp"`
 }
 
 func NewMQTTCollector(db *sql.DB) *MQTTCollector {
@@ -71,6 +99,7 @@ func NewMQTTCollector(db *sql.DB) *MQTTCollector {
 		meterReadings: make(map[int]MQTTMeterReading),
 		chargerData:   make(map[int]MQTTChargerData),
 		stopChan:      make(chan bool),
+		isConnected:   false,
 	}
 }
 
@@ -110,6 +139,7 @@ func (mc *MQTTCollector) Stop() {
 
 	log.Println("Stopping MQTT Collector...")
 	mc.isRunning = false
+	mc.isConnected = false
 	
 	if mc.client != nil && mc.client.IsConnected() {
 		mc.client.Disconnect(250)
@@ -132,30 +162,40 @@ func (mc *MQTTCollector) connectToBroker() error {
 	opts.SetMaxReconnectInterval(10 * time.Second)
 	opts.SetConnectionLostHandler(mc.onConnectionLost)
 	opts.SetOnConnectHandler(mc.onConnect)
-
-	// Optional: Set username/password if configured
-	// opts.SetUsername("zev-billing")
-	// opts.SetPassword("your-password")
+	
+	// Note: Authentication is optional. If your MQTT broker doesn't require
+	// authentication, leave username and password empty in meter configuration.
 
 	mc.client = mqtt.NewClient(opts)
 
 	log.Printf("Connecting to MQTT broker at %s...", brokerURL)
 	
 	if token := mc.client.Connect(); token.Wait() && token.Error() != nil {
+		mc.isConnected = false
 		return fmt.Errorf("failed to connect to MQTT broker: %v", token.Error())
 	}
 
-	log.Println("âœ… Connected to MQTT broker successfully")
+	mc.mu.Lock()
+	mc.isConnected = true
+	mc.mu.Unlock()
+
+	log.Println("✓ Connected to MQTT broker successfully")
 	return nil
 }
 
 func (mc *MQTTCollector) onConnect(client mqtt.Client) {
 	log.Println("MQTT connection established, subscribing to device topics...")
+	mc.mu.Lock()
+	mc.isConnected = true
+	mc.mu.Unlock()
 	mc.subscribeToDevices()
 }
 
 func (mc *MQTTCollector) onConnectionLost(client mqtt.Client, err error) {
-	log.Printf("âš ï¸ MQTT connection lost: %v - Will attempt to reconnect", err)
+	log.Printf("⚠️ MQTT connection lost: %v - Will attempt to reconnect", err)
+	mc.mu.Lock()
+	mc.isConnected = false
+	mc.mu.Unlock()
 }
 
 func (mc *MQTTCollector) monitorConnection() {
@@ -169,6 +209,9 @@ func (mc *MQTTCollector) monitorConnection() {
 		case <-ticker.C:
 			if !mc.client.IsConnected() {
 				log.Println("MQTT client disconnected, attempting to reconnect...")
+				mc.mu.Lock()
+				mc.isConnected = false
+				mc.mu.Unlock()
 				if token := mc.client.Connect(); token.Wait() && token.Error() != nil {
 					log.Printf("Failed to reconnect: %v", token.Error())
 				}
@@ -180,7 +223,7 @@ func (mc *MQTTCollector) monitorConnection() {
 func (mc *MQTTCollector) subscribeToDevices() {
 	// Subscribe to all MQTT meters
 	rows, err := mc.db.Query(`
-		SELECT id, name, connection_config
+		SELECT id, name, connection_config, device_type
 		FROM meters 
 		WHERE is_active = 1 AND connection_type = 'mqtt'
 	`)
@@ -194,7 +237,8 @@ func (mc *MQTTCollector) subscribeToDevices() {
 	for rows.Next() {
 		var id int
 		var name, configJSON string
-		if err := rows.Scan(&id, &name, &configJSON); err != nil {
+		var deviceType sql.NullString
+		if err := rows.Scan(&id, &name, &configJSON, &deviceType); err != nil {
 			continue
 		}
 
@@ -210,11 +254,16 @@ func (mc *MQTTCollector) subscribeToDevices() {
 			continue
 		}
 
+		deviceTypeStr := "generic"
+		if deviceType.Valid && deviceType.String != "" {
+			deviceTypeStr = deviceType.String
+		}
+
 		// Subscribe to the meter's topic
-		if token := mc.client.Subscribe(topic, 1, mc.createMeterHandler(id, name)); token.Wait() && token.Error() != nil {
+		if token := mc.client.Subscribe(topic, 1, mc.createMeterHandler(id, name, deviceTypeStr)); token.Wait() && token.Error() != nil {
 			log.Printf("ERROR: Failed to subscribe to topic '%s' for meter '%s': %v", topic, name, token.Error())
 		} else {
-			log.Printf("âœ… Subscribed to MQTT topic '%s' for meter '%s'", topic, name)
+			log.Printf("✓ Subscribed to MQTT topic '%s' for meter '%s' (device: %s)", topic, name, deviceTypeStr)
 			meterCount++
 		}
 	}
@@ -255,7 +304,7 @@ func (mc *MQTTCollector) subscribeToDevices() {
 		if token := mc.client.Subscribe(topic, 1, mc.createChargerHandler(id, name)); token.Wait() && token.Error() != nil {
 			log.Printf("ERROR: Failed to subscribe to topic '%s' for charger '%s': %v", topic, name, token.Error())
 		} else {
-			log.Printf("âœ… Subscribed to MQTT topic '%s' for charger '%s'", topic, name)
+			log.Printf("✓ Subscribed to MQTT topic '%s' for charger '%s'", topic, name)
 			chargerCount++
 		}
 	}
@@ -263,89 +312,133 @@ func (mc *MQTTCollector) subscribeToDevices() {
 	log.Printf("MQTT Subscriptions: %d meters, %d chargers", meterCount, chargerCount)
 }
 
-func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string) mqtt.MessageHandler {
+func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, deviceType string) mqtt.MessageHandler {
 	return func(client mqtt.Client, msg mqtt.Message) {
 		payload := msg.Payload()
 		topic := msg.Topic()
 		
-		log.Printf("MQTT: Received message for meter '%s' on topic '%s': %s", meterName, topic, string(payload))
+		log.Printf("MQTT: Received message for meter '%s' (type: %s) on topic '%s': %s", meterName, deviceType, topic, string(payload))
 
-		// Try to parse as WhatWatt Go format first
-		var whatwattMsg WhatWattGoMessage
-		if err := json.Unmarshal(payload, &whatwattMsg); err == nil && whatwattMsg.Energy > 0 {
-			// WhatWatt Go format detected
+		var importValue, exportValue float64
+		var timestamp time.Time
+		found := false
+
+		// Parse based on device type
+		switch deviceType {
+		case "whatwatt-go":
+			var whatwattMsg WhatWattGoMessage
+			if err := json.Unmarshal(payload, &whatwattMsg); err == nil && whatwattMsg.Energy > 0 {
+				importValue = whatwattMsg.Energy
+				exportValue = 0 // WhatWatt Go doesn't track export
+				timestamp = time.Unix(whatwattMsg.Timestamp/1000, 0)
+				found = true
+				log.Printf("✓ Parsed WhatWatt Go format: import=%.3f kWh", importValue)
+			}
+
+		case "shelly-3em":
+			var shellyMsg Shelly3EMMessage
+			if err := json.Unmarshal(payload, &shellyMsg); err == nil && shellyMsg.TotalAct > 0 {
+				// Convert Wh to kWh
+				importValue = shellyMsg.TotalAct / 1000.0
+				exportValue = shellyMsg.TotalActRet / 1000.0
+				timestamp = time.Now()
+				found = true
+				log.Printf("✓ Parsed Shelly 3EM format: import=%.3f kWh, export=%.3f kWh", importValue, exportValue)
+			}
+
+		case "shelly-em":
+			var shellyMsg ShellyEMMessage
+			if err := json.Unmarshal(payload, &shellyMsg); err == nil {
+				if shellyMsg.TotalAct > 0 {
+					// Convert Wh to kWh
+					importValue = shellyMsg.TotalAct / 1000.0
+					exportValue = shellyMsg.TotalActRet / 1000.0
+					timestamp = time.Now()
+					found = true
+					log.Printf("✓ Parsed Shelly EM format: import=%.3f kWh, export=%.3f kWh", importValue, exportValue)
+				} else if shellyMsg.TotalActEnergy > 0 {
+					// Alternative field names
+					importValue = shellyMsg.TotalActEnergy / 1000.0
+					exportValue = shellyMsg.TotalActRetEnergy / 1000.0
+					timestamp = time.Now()
+					found = true
+					log.Printf("✓ Parsed Shelly EM format (alt): import=%.3f kWh, export=%.3f kWh", importValue, exportValue)
+				}
+			}
+
+		case "generic", "custom", "":
+			// Try generic JSON format with flexible field names
+			var genericMsg GenericMQTTMessage
+			if err := json.Unmarshal(payload, &genericMsg); err == nil {
+				// Check various possible field names for import energy reading
+				if genericMsg.Energy != nil {
+					importValue = *genericMsg.Energy
+				} else if genericMsg.PowerKWh != nil {
+					importValue = *genericMsg.PowerKWh
+				} else if genericMsg.TotalKWh != nil {
+					importValue = *genericMsg.TotalKWh
+				} else if genericMsg.Consumption != nil {
+					importValue = *genericMsg.Consumption
+				} else if genericMsg.Import != nil {
+					importValue = *genericMsg.Import
+				} else if genericMsg.Value != nil {
+					importValue = *genericMsg.Value
+				} else if genericMsg.Reading != nil {
+					importValue = *genericMsg.Reading
+				} else if genericMsg.Power != nil {
+					importValue = *genericMsg.Power
+				}
+
+				// Check for export energy
+				if genericMsg.EnergyExport != nil {
+					exportValue = *genericMsg.EnergyExport
+				} else if genericMsg.PowerExport != nil {
+					exportValue = *genericMsg.PowerExport
+				} else if genericMsg.TotalExport != nil {
+					exportValue = *genericMsg.TotalExport
+				} else if genericMsg.Export != nil {
+					exportValue = *genericMsg.Export
+				}
+
+				if importValue > 0 {
+					timestamp = time.Now()
+					if genericMsg.Timestamp > 0 {
+						timestamp = time.Unix(genericMsg.Timestamp/1000, 0)
+					}
+					found = true
+					log.Printf("✓ Parsed generic format: import=%.3f kWh, export=%.3f kWh", importValue, exportValue)
+				}
+			}
+
+			// Try simple numeric value as fallback
+			if !found {
+				var numericValue float64
+				if err := json.Unmarshal(payload, &numericValue); err == nil && numericValue > 0 {
+					importValue = numericValue
+					exportValue = 0
+					timestamp = time.Now()
+					found = true
+					log.Printf("✓ Parsed numeric format: import=%.3f kWh", importValue)
+				}
+			}
+		}
+
+		if found && importValue > 0 {
 			mc.mu.Lock()
 			mc.meterReadings[meterID] = MQTTMeterReading{
-				Power:       whatwattMsg.Energy, // Energy field contains total kWh
-				Timestamp:   time.Unix(whatwattMsg.Timestamp/1000, 0),
+				Power:       importValue,
+				PowerExport: exportValue,
+				Timestamp:   timestamp,
 				LastUpdated: time.Now(),
 			}
 			mc.mu.Unlock()
 			
-			log.Printf("âœ… MQTT: Saved WhatWatt Go reading for meter '%s': %.3f kWh (power: %.0f W)", 
-				meterName, whatwattMsg.Energy, whatwattMsg.Power)
-			return
+			log.Printf("✓ MQTT: Saved reading for meter '%s': import=%.3f kWh, export=%.3f kWh", 
+				meterName, importValue, exportValue)
+		} else {
+			log.Printf("WARNING: Could not parse MQTT message for meter '%s' (device type: %s): %s", 
+				meterName, deviceType, string(payload))
 		}
-
-		// Try generic JSON format with flexible field names
-		var genericMsg GenericMQTTMessage
-		if err := json.Unmarshal(payload, &genericMsg); err == nil {
-			var powerValue float64
-			
-			// Check various possible field names for energy reading
-			if genericMsg.Energy != nil {
-				powerValue = *genericMsg.Energy
-			} else if genericMsg.PowerKWh != nil {
-				powerValue = *genericMsg.PowerKWh
-			} else if genericMsg.TotalKWh != nil {
-				powerValue = *genericMsg.TotalKWh
-			} else if genericMsg.Consumption != nil {
-				powerValue = *genericMsg.Consumption
-			} else if genericMsg.Value != nil {
-				powerValue = *genericMsg.Value
-			} else if genericMsg.Reading != nil {
-				powerValue = *genericMsg.Reading
-			} else if genericMsg.Power != nil {
-				// If only instant power is provided, we might need to integrate it
-				// For now, treat it as kWh if it's the only value
-				powerValue = *genericMsg.Power
-			}
-
-			if powerValue > 0 {
-				timestamp := time.Now()
-				if genericMsg.Timestamp > 0 {
-					timestamp = time.Unix(genericMsg.Timestamp/1000, 0)
-				}
-
-				mc.mu.Lock()
-				mc.meterReadings[meterID] = MQTTMeterReading{
-					Power:       powerValue,
-					Timestamp:   timestamp,
-					LastUpdated: time.Now(),
-				}
-				mc.mu.Unlock()
-				
-				log.Printf("âœ… MQTT: Saved reading for meter '%s': %.3f kWh", meterName, powerValue)
-				return
-			}
-		}
-
-		// Try simple numeric value
-		var numericValue float64
-		if err := json.Unmarshal(payload, &numericValue); err == nil && numericValue > 0 {
-			mc.mu.Lock()
-			mc.meterReadings[meterID] = MQTTMeterReading{
-				Power:       numericValue,
-				Timestamp:   time.Now(),
-				LastUpdated: time.Now(),
-			}
-			mc.mu.Unlock()
-			
-			log.Printf("âœ… MQTT: Saved numeric reading for meter '%s': %.3f kWh", meterName, numericValue)
-			return
-		}
-
-		log.Printf("WARNING: Could not parse MQTT message for meter '%s': %s", meterName, string(payload))
 	}
 }
 
@@ -381,7 +474,7 @@ func (mc *MQTTCollector) createChargerHandler(chargerID int, chargerName string)
 			}
 			mc.mu.Unlock()
 			
-			log.Printf("âœ… MQTT: Saved charger data for '%s': %.3f kWh (user: %s, mode: %s)", 
+			log.Printf("✓ MQTT: Saved charger data for '%s': %.3f kWh (user: %s, mode: %s)", 
 				chargerName, power, userID, mode)
 		}
 	}
@@ -418,23 +511,23 @@ func extractString(data map[string]interface{}, keys ...string) (string, bool) {
 	return "", false
 }
 
-func (mc *MQTTCollector) GetMeterReading(meterID int) (float64, bool) {
+func (mc *MQTTCollector) GetMeterReading(meterID int) (float64, float64, bool) {
 	mc.mu.RLock()
 	defer mc.mu.RUnlock()
 
 	reading, exists := mc.meterReadings[meterID]
 	if !exists {
-		return 0, false
+		return 0, 0, false
 	}
 
 	// Check if reading is too old (more than 30 minutes)
 	if time.Since(reading.LastUpdated) > 30*time.Minute {
 		log.Printf("WARNING: MQTT reading for meter %d is stale (%.0f minutes old)", 
 			meterID, time.Since(reading.LastUpdated).Minutes())
-		return 0, false
+		return 0, 0, false
 	}
 
-	return reading.Power, true
+	return reading.Power, reading.PowerExport, true
 }
 
 func (mc *MQTTCollector) GetChargerData(chargerID int) (MQTTChargerData, bool) {
@@ -468,10 +561,7 @@ func (mc *MQTTCollector) GetConnectionStatus() map[string]interface{} {
 	mc.mu.RLock()
 	defer mc.mu.RUnlock()
 
-	isConnected := false
-	if mc.client != nil {
-		isConnected = mc.client.IsConnected()
-	}
+	isConnected := mc.isConnected && mc.client != nil && mc.client.IsConnected()
 
 	// Count active MQTT devices
 	var mqttMeterCount, mqttChargerCount int
@@ -494,4 +584,3 @@ func (mc *MQTTCollector) GetConnectionStatus() map[string]interface{} {
 		"mqtt_broker_url":       "tcp://localhost:1883",
 	}
 }
-

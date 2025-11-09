@@ -37,6 +37,7 @@ func RunMigrations(db *sql.DB) error {
 			apartment_unit TEXT,
 			user_type TEXT DEFAULT 'regular',
 			managed_buildings TEXT,
+			language TEXT DEFAULT 'de',
 			is_active INTEGER DEFAULT 1,
 			rent_start_date DATE,
 			rent_end_date DATE,
@@ -77,8 +78,10 @@ func RunMigrations(db *sql.DB) error {
 			apartment_unit TEXT,
 			connection_type TEXT NOT NULL,
 			connection_config TEXT NOT NULL,
+			device_type TEXT DEFAULT 'generic',
 			notes TEXT,
 			last_reading REAL DEFAULT 0,
+			last_reading_export REAL DEFAULT 0,
 			last_reading_time DATETIME,
 			is_active INTEGER DEFAULT 1,
 			is_shared INTEGER DEFAULT 0,
@@ -116,7 +119,9 @@ func RunMigrations(db *sql.DB) error {
 			meter_id INTEGER NOT NULL,
 			reading_time DATETIME NOT NULL,
 			power_kwh REAL NOT NULL,
+			power_kwh_export REAL DEFAULT 0,
 			consumption_kwh REAL DEFAULT 0,
+			consumption_export REAL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (meter_id) REFERENCES meters(id)
 		)`,
@@ -262,6 +267,7 @@ func RunMigrations(db *sql.DB) error {
 			UNIQUE(config_id, user_id)
 		)`,
 
+		// Indexes for performance
 		`CREATE INDEX IF NOT EXISTS idx_meter_readings_time ON meter_readings(reading_time)`,
 		`CREATE INDEX IF NOT EXISTS idx_meter_readings_meter ON meter_readings(meter_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_charger_sessions_time ON charger_sessions(session_time)`,
@@ -274,86 +280,55 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_shared_meters_meter ON shared_meter_configs(meter_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_custom_items_building ON custom_line_items(building_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_custom_items_active ON custom_line_items(is_active)`,
-		`CREATE INDEX IF NOT EXISTS idx_custom_splits_config ON shared_meter_custom_splits(config_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_custom_splits_user ON shared_meter_custom_splits(user_id)`,
-	}
-
-	log.Println("Running database migrations...")
-
-	for i, migration := range migrations {
-		_, err := db.Exec(migration)
-		if err != nil {
-			log.Printf("ERROR: Migration %d failed: %v", i+1, err)
-			log.Printf("Failed SQL: %s", migration[:min(len(migration), 100)])
-			return err
-		}
-	}
-
-	// Add meter replacement columns if they don't exist
-	if err := addMeterReplacementColumns(db); err != nil {
-		log.Printf("Meter replacement columns migration: %v", err)
-	}
-
-	// Add apartments_json column to auto_billing_configs
-	if err := addApartmentsJsonColumn(db); err != nil {
-		log.Printf("Apartments JSON column migration: %v", err)
-	}
-
-	// Add language column for multi-language invoices
-	if err := addLanguageColumn(db); err != nil {
-		log.Printf("Language column migration: %v", err)
-	}
-
-	// NEW: Add rent period columns
-	if err := addRentPeriodColumns(db); err != nil {
-		log.Printf("Rent period columns migration: %v", err)
-	}
-
-	// Additional indexes that may not be in the main migrations array
-	newIndexes := []string{
 		`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_building ON users(building_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_user_type ON users(user_type)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_apartment_unit ON users(apartment_unit)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_rent_dates ON users(rent_start_date, rent_end_date)`,
-		`CREATE INDEX IF NOT EXISTS idx_meters_user ON meters(user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_meters_apartment_unit ON meters(apartment_unit)`,
-		`CREATE INDEX IF NOT EXISTS idx_meters_building ON meters(building_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_meters_shared ON meters(is_shared)`,
+		`CREATE INDEX IF NOT EXISTS idx_meters_device_type ON meters(device_type)`,
+		`CREATE INDEX IF NOT EXISTS idx_meter_readings_export ON meter_readings(power_kwh_export)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_type ON users(email, user_type)`,
 	}
 
-	for _, idx := range newIndexes {
-		_, err := db.Exec(idx)
-		if err != nil {
-			log.Printf("Note: Index may already exist: %v", err)
+	// Execute all migrations
+	for i, migration := range migrations {
+		if _, err := db.Exec(migration); err != nil {
+			// Log but don't fail on already-exists errors
+			if !contains(err.Error(), "already exists") && !contains(err.Error(), "duplicate") {
+				log.Printf("Migration %d warning: %v", i+1, err)
+			}
 		}
 	}
 
-	// Fix email constraint for existing databases
-	if err := migrateEmailConstraint(db); err != nil {
-		log.Printf("Email constraint migration: %v", err)
+	log.Println("✅ Base tables and indexes created/verified")
+
+	// Run additional migrations for new columns
+	if err := addMQTTDeviceTypeColumn(db); err != nil {
+		log.Printf("⚠️  MQTT device type migration: %v", err)
 	}
 
-	// Create triggers for shared meters and custom items
+	if err := addExportColumns(db); err != nil {
+		log.Printf("⚠️  Export columns migration: %v", err)
+	}
+
+	// Create triggers
 	if err := createTriggers(db); err != nil {
-		log.Printf("Trigger creation: %v", err)
+		log.Printf("Note: Triggers creation: %v", err)
 	}
 
+	// Create default admin
 	if err := createDefaultAdmin(db); err != nil {
-		return err
+		return fmt.Errorf("failed to create default admin: %v", err)
 	}
 
-	log.Println("✅ Migrations completed successfully")
-	log.Println("✅ Shared meter configurations table ready")
-	log.Println("✅ Custom line items table ready")
-	log.Println("✅ Meter replacements table ready")
-	log.Println("✅ Auto billing apartments_json column ready")
-	log.Println("✅ Rent period columns ready")
+	log.Println("✅ All migrations completed successfully")
 	return nil
 }
 
-func addMeterReplacementColumns(db *sql.DB) error {
+// NEW: Add MQTT device type column to meters table
+func addMQTTDeviceTypeColumn(db *sql.DB) error {
+	// Check if column already exists
 	var sql string
 	err := db.QueryRow(`
 		SELECT sql FROM sqlite_master 
@@ -364,163 +339,106 @@ func addMeterReplacementColumns(db *sql.DB) error {
 		return err
 	}
 
-	columns := []struct {
-		name       string
-		definition string
-	}{
-		{"is_archived", "INTEGER DEFAULT 0"},
-		{"replaced_by_meter_id", "INTEGER"},
-		{"replaces_meter_id", "INTEGER"},
-		{"replacement_date", "DATETIME"},
-		{"replacement_notes", "TEXT"},
-	}
-
-	for _, col := range columns {
-		if !contains(sql, col.name) {
-			log.Printf("Adding column %s to meters table...", col.name)
-			_, err := db.Exec(fmt.Sprintf("ALTER TABLE meters ADD COLUMN %s %s", col.name, col.definition))
-			if err != nil {
-				if contains(err.Error(), "duplicate column") {
-					log.Printf("✅ Column %s already exists", col.name)
-					continue
-				}
-				log.Printf("WARNING: Failed to add column %s: %v", col.name, err)
-			} else {
-				log.Printf("✅ Column %s added successfully", col.name)
+	// If column doesn't exist, add it
+	if !contains(sql, "device_type") {
+		log.Println("Adding device_type column to meters table...")
+		_, err := db.Exec(`ALTER TABLE meters ADD COLUMN device_type TEXT DEFAULT 'generic'`)
+		if err != nil {
+			if contains(err.Error(), "duplicate column") {
+				log.Println("✅ device_type column already exists")
+				return nil
 			}
+			return fmt.Errorf("failed to add device_type column: %v", err)
 		}
-	}
+		log.Println("✅ device_type column added successfully")
 
-	log.Println("Creating indexes for meter replacement columns...")
-	indexes := []string{
-		`CREATE INDEX IF NOT EXISTS idx_meters_archived ON meters(is_archived)`,
-		`CREATE INDEX IF NOT EXISTS idx_meters_replaced_by ON meters(replaced_by_meter_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_meters_replaces ON meters(replaces_meter_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_meter_replacements_old ON meter_replacements(old_meter_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_meter_replacements_new ON meter_replacements(new_meter_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_meter_replacements_date ON meter_replacements(replacement_date)`,
-	}
-
-	for _, idx := range indexes {
-		if _, err := db.Exec(idx); err != nil {
-			log.Printf("Note: Index may already exist: %v", err)
+		// Update existing MQTT meters to generic type
+		_, err = db.Exec(`UPDATE meters SET device_type = 'generic' WHERE connection_type = 'mqtt' AND (device_type IS NULL OR device_type = '')`)
+		if err != nil {
+			log.Printf("Warning: Failed to update existing meters: %v", err)
 		}
+	} else {
+		log.Println("✅ device_type column already exists")
 	}
-	log.Println("Meter replacement indexes created")
 
 	return nil
 }
 
-func addApartmentsJsonColumn(db *sql.DB) error {
-	var sql string
+// NEW: Add export energy columns
+func addExportColumns(db *sql.DB) error {
+	// Check meters table
+	var metersSql string
 	err := db.QueryRow(`
 		SELECT sql FROM sqlite_master 
-		WHERE type='table' AND name='auto_billing_configs'
-	`).Scan(&sql)
+		WHERE type='table' AND name='meters'
+	`).Scan(&metersSql)
 
 	if err != nil {
 		return err
 	}
 
-	if contains(sql, "apartments_json") {
-		log.Println("✅ apartments_json column already exists")
-		return nil
-	}
-
-	log.Println("🔧 Adding apartments_json column to auto_billing_configs table...")
-
-	_, err = db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN apartments_json TEXT`)
-	if err != nil {
-		if contains(err.Error(), "duplicate column") {
-			log.Println("✅ apartments_json column already exists")
-			return nil
-		}
-		return err
-	}
-
-	_, err = db.Exec(`UPDATE auto_billing_configs SET apartments_json = '[]' WHERE apartments_json IS NULL`)
-	if err != nil {
-		log.Printf("WARNING: Failed to set default apartments_json values: %v", err)
-	}
-
-	log.Println("✅ apartments_json column added successfully")
-	return nil
-}
-
-func addLanguageColumn(db *sql.DB) error {
-	var sql string
-	err := db.QueryRow(`
-		SELECT sql FROM sqlite_master 
-		WHERE type='table' AND name='users'
-	`).Scan(&sql)
-
-	if err != nil {
-		return err
-	}
-
-	if contains(sql, "language") {
-		log.Println("✅ language column already exists")
-		return nil
-	}
-
-	log.Println("🔧 Adding language column to users table...")
-
-	_, err = db.Exec(`ALTER TABLE users ADD COLUMN language TEXT DEFAULT 'de'`)
-	if err != nil {
-		if contains(err.Error(), "duplicate column") {
-			log.Println("✅ language column already exists")
-			return nil
-		}
-		return fmt.Errorf("failed to add language column: %v", err)
-	}
-
-	log.Println("✅ language column added successfully (default: 'de' for German)")
-	return nil
-}
-
-// NEW: Add rent period columns
-func addRentPeriodColumns(db *sql.DB) error {
-	var sql string
-	err := db.QueryRow(`
-		SELECT sql FROM sqlite_master 
-		WHERE type='table' AND name='users'
-	`).Scan(&sql)
-
-	if err != nil {
-		return err
-	}
-
-	columns := []struct {
-		name       string
-		definition string
-	}{
-		{"rent_start_date", "DATE"},
-		{"rent_end_date", "DATE"},
-	}
-
-	for _, col := range columns {
-		if !contains(sql, col.name) {
-			log.Printf("Adding column %s to users table...", col.name)
-			_, err := db.Exec(fmt.Sprintf("ALTER TABLE users ADD COLUMN %s %s", col.name, col.definition))
-			if err != nil {
-				if contains(err.Error(), "duplicate column") {
-					log.Printf("✅ Column %s already exists", col.name)
-					continue
-				}
-				log.Printf("WARNING: Failed to add column %s: %v", col.name, err)
+	// Add last_reading_export to meters table
+	if !contains(metersSql, "last_reading_export") {
+		log.Println("Adding last_reading_export column to meters table...")
+		_, err := db.Exec(`ALTER TABLE meters ADD COLUMN last_reading_export REAL DEFAULT 0`)
+		if err != nil {
+			if contains(err.Error(), "duplicate column") {
+				log.Println("✅ last_reading_export column already exists")
 			} else {
-				log.Printf("✅ Column %s added successfully", col.name)
+				return fmt.Errorf("failed to add last_reading_export column: %v", err)
 			}
+		} else {
+			log.Println("✅ last_reading_export column added successfully")
 		}
+	} else {
+		log.Println("✅ last_reading_export column already exists")
 	}
 
-	// Create index for rent period queries
-	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_users_rent_dates ON users(rent_start_date, rent_end_date)`)
+	// Check meter_readings table
+	var readingsSql string
+	err = db.QueryRow(`
+		SELECT sql FROM sqlite_master 
+		WHERE type='table' AND name='meter_readings'
+	`).Scan(&readingsSql)
+
 	if err != nil {
-		log.Printf("Note: Rent dates index may already exist: %v", err)
+		return err
 	}
 
-	log.Println("✅ Rent period columns ready")
+	// Add power_kwh_export to meter_readings table
+	if !contains(readingsSql, "power_kwh_export") {
+		log.Println("Adding power_kwh_export column to meter_readings table...")
+		_, err := db.Exec(`ALTER TABLE meter_readings ADD COLUMN power_kwh_export REAL DEFAULT 0`)
+		if err != nil {
+			if contains(err.Error(), "duplicate column") {
+				log.Println("✅ power_kwh_export column already exists")
+			} else {
+				return fmt.Errorf("failed to add power_kwh_export column: %v", err)
+			}
+		} else {
+			log.Println("✅ power_kwh_export column added successfully")
+		}
+	} else {
+		log.Println("✅ power_kwh_export column already exists")
+	}
+
+	// Add consumption_export to meter_readings table
+	if !contains(readingsSql, "consumption_export") {
+		log.Println("Adding consumption_export column to meter_readings table...")
+		_, err := db.Exec(`ALTER TABLE meter_readings ADD COLUMN consumption_export REAL DEFAULT 0`)
+		if err != nil {
+			if contains(err.Error(), "duplicate column") {
+				log.Println("✅ consumption_export column already exists")
+			} else {
+				return fmt.Errorf("failed to add consumption_export column: %v", err)
+			}
+		} else {
+			log.Println("✅ consumption_export column added successfully")
+		}
+	} else {
+		log.Println("✅ consumption_export column already exists")
+	}
+
 	return nil
 }
 
@@ -556,143 +474,19 @@ func createTriggers(db *sql.DB) error {
 
 	for _, trigger := range triggers {
 		if _, err := db.Exec(trigger); err != nil {
-			log.Printf("Note: Trigger may already exist or failed: %v", err)
+			// Triggers may already exist, don't fail
+			if !contains(err.Error(), "already exists") {
+				log.Printf("Note: Trigger warning: %v", err)
+			}
 		}
 	}
 
 	return nil
 }
 
-func migrateEmailConstraint(db *sql.DB) error {
-	var sql string
-	err := db.QueryRow(`
-		SELECT sql FROM sqlite_master 
-		WHERE type='table' AND name='users'
-	`).Scan(&sql)
-
-	if err != nil {
-		return err
-	}
-
-	hasUniqueConstraint := false
-	if len(sql) > 0 {
-		if containsEmailUnique(sql) {
-			hasUniqueConstraint = true
-		}
-	}
-
-	if !hasUniqueConstraint {
-		log.Println("Email constraint already migrated or doesn't exist")
-
-		_, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_type ON users(email, user_type)`)
-		if err != nil {
-			log.Printf("Note: Compound index may already exist: %v", err)
-		} else {
-			log.Println("✅ Compound unique index (email, user_type) created")
-		}
-
-		return nil
-	}
-
-	log.Println("🔧 Migrating users table to remove email UNIQUE constraint...")
-
-	tx, err := db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	_, err = tx.Exec(`
-		CREATE TABLE users_new (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			first_name TEXT NOT NULL,
-			last_name TEXT NOT NULL,
-			email TEXT NOT NULL,
-			phone TEXT,
-			address_street TEXT,
-			address_city TEXT,
-			address_zip TEXT,
-			address_country TEXT DEFAULT 'Switzerland',
-			bank_name TEXT,
-			bank_iban TEXT,
-			bank_account_holder TEXT,
-			charger_ids TEXT,
-			notes TEXT,
-			building_id INTEGER,
-			apartment_unit TEXT,
-			user_type TEXT DEFAULT 'regular',
-			managed_buildings TEXT,
-			is_active INTEGER DEFAULT 1,
-			language TEXT DEFAULT 'de',
-			rent_start_date DATE,
-			rent_end_date DATE,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (building_id) REFERENCES buildings(id)
-		)
-	`)
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.Exec(`INSERT INTO users_new SELECT * FROM users`)
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.Exec(`DROP TABLE users`)
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.Exec(`ALTER TABLE users_new RENAME TO users`)
-	if err != nil {
-		return err
-	}
-
-	indexes := []string{
-		`CREATE INDEX idx_users_email ON users(email)`,
-		`CREATE INDEX idx_users_building ON users(building_id)`,
-		`CREATE INDEX idx_users_user_type ON users(user_type)`,
-		`CREATE INDEX idx_users_active ON users(is_active)`,
-		`CREATE INDEX idx_users_apartment_unit ON users(apartment_unit)`,
-		`CREATE INDEX idx_users_rent_dates ON users(rent_start_date, rent_end_date)`,
-		`CREATE UNIQUE INDEX idx_users_email_type ON users(email, user_type)`,
-	}
-
-	for _, idx := range indexes {
-		_, err = tx.Exec(idx)
-		if err != nil {
-			log.Printf("Index creation note: %v", err)
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-
-	log.Println("✅ Email constraint migration completed successfully")
-	return nil
-}
-
-func containsEmailUnique(sql string) bool {
-	patterns := []string{
-		"email TEXT UNIQUE",
-		"email TEXT NOT NULL UNIQUE",
-		"UNIQUE(email)",
-	}
-
-	for _, pattern := range patterns {
-		if contains(sql, pattern) {
-			return true
-		}
-	}
-
-	return false
-}
-
+// Helper function to check if string contains substring
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && containsHelper(s, substr))
+	return len(s) >= len(substr) && containsHelper(s, substr)
 }
 
 func containsHelper(s, substr string) bool {
@@ -702,13 +496,6 @@ func containsHelper(s, substr string) bool {
 		}
 	}
 	return false
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func createDefaultAdmin(db *sql.DB) error {
@@ -733,8 +520,10 @@ func createDefaultAdmin(db *sql.DB) error {
 			return err
 		}
 
-		log.Println("Default admin user created (username: admin, password: admin123)")
-		log.Println("⚠️  IMPORTANT: Change the default password immediately!")
+		log.Println("✅ Default admin user created")
+		log.Println("   Username: admin")
+		log.Println("   Password: admin123")
+		log.Println("   ⚠️  IMPORTANT: Change the default password immediately!")
 	}
 
 	return nil

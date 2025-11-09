@@ -360,7 +360,7 @@ func (dc *DataCollector) collectAndSaveMeters() {
 		for meterID, reading := range modbusReadings {
 			info := meterInfo[meterID]
 			if reading > 0 {
-				if err := dc.saveMeterReading(meterID, info.name, currentTime, reading); err != nil {
+				if err := dc.saveMeterReading(meterID, info.name, currentTime, reading, 0); err != nil {
 					log.Printf("ERROR: Failed to save Modbus meter '%s': %v", info.name, err)
 				} else {
 					successCount++
@@ -379,24 +379,24 @@ func (dc *DataCollector) collectAndSaveMeters() {
 			continue
 		}
 		
-		if err := dc.saveMeterReading(meterID, info.name, currentTime, reading); err != nil {
+		if err := dc.saveMeterReading(meterID, info.name, currentTime, reading, 0); err != nil {
 			log.Printf("ERROR: Failed to save UDP meter '%s': %v", info.name, err)
 		} else {
 			successCount++
 		}
 	}
 
-	// MQTT meters: Get buffered readings
+	// MQTT meters: Get buffered readings with import/export
 	for _, meterID := range mqttMeters {
 		info := meterInfo[meterID]
-		reading, hasReading := dc.mqttCollector.GetMeterReading(meterID)
+		readingImport, readingExport, hasReading := dc.mqttCollector.GetMeterReading(meterID)
 		
-		if !hasReading || reading == 0 {
+		if !hasReading || readingImport == 0 {
 			log.Printf("WARNING: No MQTT data for meter '%s'", info.name)
 			continue
 		}
 		
-		if err := dc.saveMeterReading(meterID, info.name, currentTime, reading); err != nil {
+		if err := dc.saveMeterReading(meterID, info.name, currentTime, readingImport, readingExport); err != nil {
 			log.Printf("ERROR: Failed to save MQTT meter '%s': %v", info.name, err)
 		} else {
 			successCount++
@@ -406,39 +406,51 @@ func (dc *DataCollector) collectAndSaveMeters() {
 	log.Printf("--- METER COLLECTION COMPLETED: %d/%d successful ---", successCount, totalCount)
 }
 
-func (dc *DataCollector) saveMeterReading(meterID int, meterName string, currentTime time.Time, reading float64) error {
+func (dc *DataCollector) saveMeterReading(meterID int, meterName string, currentTime time.Time, reading float64, readingExport float64) error {
 	// Get last reading for interpolation
-	var lastReading float64
+	var lastReading, lastReadingExport float64
 	var lastTime time.Time
 	err := dc.db.QueryRow(`
-		SELECT power_kwh, reading_time FROM meter_readings 
+		SELECT power_kwh, power_kwh_export, reading_time FROM meter_readings 
 		WHERE meter_id = ? 
 		ORDER BY reading_time DESC LIMIT 1
-	`, meterID).Scan(&lastReading, &lastTime)
+	`, meterID).Scan(&lastReading, &lastReadingExport, &lastTime)
 
-	var consumption float64
+	var consumption, consumptionExport float64
 	isFirstReading := false
 
 	if err == nil && !lastTime.IsZero() {
 		// Interpolate missing intervals
 		interpolated := interpolateReadings(lastTime, lastReading, currentTime, reading)
+		interpolatedExport := interpolateReadings(lastTime, lastReadingExport, currentTime, readingExport)
 		
 		if len(interpolated) > 0 {
 			log.Printf("Meter '%s': Interpolating %d missing intervals", meterName, len(interpolated))
 		}
 		
-		for _, point := range interpolated {
+		for i, point := range interpolated {
 			intervalConsumption := point.value - lastReading
 			if intervalConsumption < 0 {
 				intervalConsumption = 0
 			}
 			
+			intervalExport := float64(0)
+			if i < len(interpolatedExport) {
+				intervalExport = interpolatedExport[i].value - lastReadingExport
+				if intervalExport < 0 {
+					intervalExport = 0
+				}
+			}
+			
 			dc.db.Exec(`
-				INSERT INTO meter_readings (meter_id, reading_time, power_kwh, consumption_kwh)
-				VALUES (?, ?, ?, ?)
-			`, meterID, point.time, point.value, intervalConsumption)
+				INSERT INTO meter_readings (meter_id, reading_time, power_kwh, power_kwh_export, consumption_kwh, consumption_export)
+				VALUES (?, ?, ?, ?, ?, ?)
+			`, meterID, point.time, point.value, interpolatedExport[i].value, intervalConsumption, intervalExport)
 			
 			lastReading = point.value
+			if i < len(interpolatedExport) {
+				lastReadingExport = interpolatedExport[i].value
+			}
 		}
 		
 		// Calculate consumption for current reading
@@ -446,18 +458,24 @@ func (dc *DataCollector) saveMeterReading(meterID int, meterName string, current
 		if consumption < 0 {
 			consumption = 0
 		}
+		
+		consumptionExport = readingExport - lastReadingExport
+		if consumptionExport < 0 {
+			consumptionExport = 0
+		}
 	} else {
 		// First reading
 		log.Printf("Meter '%s': First reading - consumption set to 0", meterName)
 		consumption = 0
+		consumptionExport = 0
 		isFirstReading = true
 	}
 
 	// Save current reading
 	_, err = dc.db.Exec(`
-		INSERT INTO meter_readings (meter_id, reading_time, power_kwh, consumption_kwh)
-		VALUES (?, ?, ?, ?)
-	`, meterID, currentTime, reading, consumption)
+		INSERT INTO meter_readings (meter_id, reading_time, power_kwh, power_kwh_export, consumption_kwh, consumption_export)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, meterID, currentTime, reading, readingExport, consumption, consumptionExport)
 
 	if err != nil {
 		return err
@@ -466,14 +484,16 @@ func (dc *DataCollector) saveMeterReading(meterID int, meterName string, current
 	// Update meter table
 	dc.db.Exec(`
 		UPDATE meters 
-		SET last_reading = ?, last_reading_time = ?
+		SET last_reading = ?, last_reading_export = ?, last_reading_time = ?
 		WHERE id = ?
-	`, reading, currentTime, meterID)
+	`, reading, readingExport, currentTime, meterID)
 
 	if isFirstReading {
-		log.Printf("SUCCESS: First reading for meter '%s' = %.3f kWh (consumption: 0 kWh)", meterName, reading)
+		log.Printf("SUCCESS: First reading for meter '%s' = %.3f kWh import, %.3f kWh export (consumption: 0 kWh)", 
+			meterName, reading, readingExport)
 	} else {
-		log.Printf("SUCCESS: Saved meter data: '%s' = %.3f kWh (consumption: %.3f kWh)", meterName, reading, consumption)
+		log.Printf("SUCCESS: Saved meter data: '%s' = %.3f kWh import (Δ%.3f), %.3f kWh export (Δ%.3f)", 
+			meterName, reading, consumption, readingExport, consumptionExport)
 	}
 
 	return nil
