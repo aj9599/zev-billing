@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,6 +21,7 @@ type MQTTCollector struct {
 	meterReadings  map[int]MQTTMeterReading  // meter_id -> last reading
 	chargerData    map[int]MQTTChargerData   // charger_id -> last data
 	meterBrokers   map[int]string            // meter_id -> broker URL
+	meterTopics    map[int]string            // meter_id -> topic
 	stopChan       chan bool
 }
 
@@ -57,23 +59,23 @@ type WhatWattGoMessage struct {
 // Shelly3EMMessage represents the JSON structure from Shelly 3EM devices
 type Shelly3EMMessage struct {
 	ID                  int     `json:"id"`
-	ATotalActEnergy     float64 `json:"a_total_act_energy"`      // Phase A import
-	ATotalActRetEnergy  float64 `json:"a_total_act_ret_energy"`  // Phase A export
-	BTotalActEnergy     float64 `json:"b_total_act_energy"`      // Phase B import
-	BTotalActRetEnergy  float64 `json:"b_total_act_ret_energy"`  // Phase B export
-	CTotalActEnergy     float64 `json:"c_total_act_energy"`      // Phase C import
-	CTotalActRetEnergy  float64 `json:"c_total_act_ret_energy"`  // Phase C export
-	TotalAct            float64 `json:"total_act"`               // Total import
-	TotalActRet         float64 `json:"total_act_ret"`           // Total export
+	ATotalActEnergy     float64 `json:"a_total_act_energy"`      // Phase A import (Wh)
+	ATotalActRetEnergy  float64 `json:"a_total_act_ret_energy"`  // Phase A export (Wh)
+	BTotalActEnergy     float64 `json:"b_total_act_energy"`      // Phase B import (Wh)
+	BTotalActRetEnergy  float64 `json:"b_total_act_ret_energy"`  // Phase B export (Wh)
+	CTotalActEnergy     float64 `json:"c_total_act_energy"`      // Phase C import (Wh)
+	CTotalActRetEnergy  float64 `json:"c_total_act_ret_energy"`  // Phase C export (Wh)
+	TotalAct            float64 `json:"total_act"`               // Total import (Wh)
+	TotalActRet         float64 `json:"total_act_ret"`           // Total export (Wh)
 }
 
 // ShellyEMMessage represents the JSON structure from Shelly EM devices (single phase)
 type ShellyEMMessage struct {
 	ID              int     `json:"id"`
-	TotalActEnergy  float64 `json:"total_act_energy"`      // Import
-	TotalActRetEnergy float64 `json:"total_act_ret_energy"` // Export
-	TotalAct        float64 `json:"total_act"`             // Total import
-	TotalActRet     float64 `json:"total_act_ret"`         // Total export
+	TotalActEnergy  float64 `json:"total_act_energy"`      // Import (Wh)
+	TotalActRetEnergy float64 `json:"total_act_ret_energy"` // Export (Wh)
+	TotalAct        float64 `json:"total_act"`             // Total import (Wh)
+	TotalActRet     float64 `json:"total_act_ret"`         // Total export (Wh)
 }
 
 // GenericMQTTMessage for flexible JSON parsing
@@ -101,6 +103,7 @@ func NewMQTTCollector(db *sql.DB) *MQTTCollector {
 		meterReadings: make(map[int]MQTTMeterReading),
 		chargerData:   make(map[int]MQTTChargerData),
 		meterBrokers:  make(map[int]string),
+		meterTopics:   make(map[int]string),
 		stopChan:      make(chan bool),
 	}
 }
@@ -207,7 +210,7 @@ func (mc *MQTTCollector) connectToAllBrokers() error {
 }
 
 func (mc *MQTTCollector) connectToBroker(brokerURL string, config map[string]interface{}) error {
-	clientID := fmt.Sprintf("zev-billing-%d-%s", time.Now().Unix(), brokerURL)
+	clientID := fmt.Sprintf("zev-billing-%d-%s", time.Now().Unix(), strings.ReplaceAll(brokerURL, ":", "_"))
 
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(brokerURL)
@@ -215,6 +218,9 @@ func (mc *MQTTCollector) connectToBroker(brokerURL string, config map[string]int
 	opts.SetCleanSession(true)
 	opts.SetAutoReconnect(true)
 	opts.SetMaxReconnectInterval(10 * time.Second)
+	opts.SetKeepAlive(60 * time.Second)
+	opts.SetPingTimeout(10 * time.Second)
+	opts.SetWriteTimeout(10 * time.Second)
 	opts.SetConnectionLostHandler(mc.createConnectionLostHandler(brokerURL))
 	opts.SetOnConnectHandler(mc.createOnConnectHandler(brokerURL))
 	
@@ -225,6 +231,8 @@ func (mc *MQTTCollector) connectToBroker(brokerURL string, config map[string]int
 		opts.SetUsername(username)
 		opts.SetPassword(password)
 		log.Printf("Using authentication for broker %s (username: %s)", brokerURL, username)
+	} else {
+		log.Printf("No authentication configured for broker %s", brokerURL)
 	}
 
 	client := mqtt.NewClient(opts)
@@ -354,17 +362,30 @@ func (mc *MQTTCollector) subscribeToDevices(brokerURL string) {
 			deviceTypeStr = deviceType.String
 		}
 
-		// Store broker mapping
+		// Store broker and topic mapping
 		mc.mu.Lock()
 		mc.meterBrokers[id] = brokerURL
+		mc.meterTopics[id] = topic
 		mc.mu.Unlock()
 
-		// Subscribe to the meter's topic
-		if token := client.Subscribe(topic, 1, mc.createMeterHandler(id, name, deviceTypeStr, brokerURL)); token.Wait() && token.Error() != nil {
-			log.Printf("ERROR: Failed to subscribe to topic '%s' for meter '%s': %v", topic, name, token.Error())
-		} else {
-			log.Printf("✓ Subscribed to MQTT topic '%s' for meter '%s' (device: %s, broker: %s)", topic, name, deviceTypeStr, brokerURL)
-			meterCount++
+		// Subscribe to the meter's topic with wildcard support for Shelly devices
+		subscribeTopics := []string{topic}
+		
+		// For Shelly devices, also subscribe to the status topic if not already included
+		if strings.Contains(deviceTypeStr, "shelly") && !strings.Contains(topic, "#") {
+			// Add wildcard topic to catch all Shelly status updates
+			if !strings.HasSuffix(topic, "/") {
+				subscribeTopics = append(subscribeTopics, topic+"/#")
+			}
+		}
+
+		for _, subTopic := range subscribeTopics {
+			if token := client.Subscribe(subTopic, 1, mc.createMeterHandler(id, name, deviceTypeStr, brokerURL)); token.Wait() && token.Error() != nil {
+				log.Printf("ERROR: Failed to subscribe to topic '%s' for meter '%s': %v", subTopic, name, token.Error())
+			} else {
+				log.Printf("✓ Subscribed to MQTT topic '%s' for meter '%s' (device: %s, broker: %s)", subTopic, name, deviceTypeStr, brokerURL)
+				meterCount++
+			}
 		}
 	}
 
@@ -452,13 +473,24 @@ func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, devic
 
 		case "shelly-3em":
 			var shellyMsg Shelly3EMMessage
-			if err := json.Unmarshal(payload, &shellyMsg); err == nil && shellyMsg.TotalAct > 0 {
-				// Convert Wh to kWh
-				importValue = shellyMsg.TotalAct / 1000.0
-				exportValue = shellyMsg.TotalActRet / 1000.0
-				timestamp = time.Now()
-				found = true
-				log.Printf("✓ Parsed Shelly 3EM format: import=%.3f kWh, export=%.3f kWh", importValue, exportValue)
+			if err := json.Unmarshal(payload, &shellyMsg); err == nil {
+				// Check if we have valid data (Wh values)
+				if shellyMsg.TotalAct > 0 || shellyMsg.ATotalActEnergy > 0 {
+					// Convert Wh to kWh
+					if shellyMsg.TotalAct > 0 {
+						importValue = shellyMsg.TotalAct / 1000.0
+						exportValue = shellyMsg.TotalActRet / 1000.0
+					} else {
+						// Sum individual phases
+						importValue = (shellyMsg.ATotalActEnergy + shellyMsg.BTotalActEnergy + shellyMsg.CTotalActEnergy) / 1000.0
+						exportValue = (shellyMsg.ATotalActRetEnergy + shellyMsg.BTotalActRetEnergy + shellyMsg.CTotalActRetEnergy) / 1000.0
+					}
+					timestamp = time.Now()
+					found = true
+					log.Printf("✓ Parsed Shelly 3EM format: import=%.3f kWh, export=%.3f kWh", importValue, exportValue)
+				}
+			} else {
+				log.Printf("DEBUG: Failed to parse as Shelly 3EM: %v", err)
 			}
 
 		case "shelly-em":
@@ -708,6 +740,7 @@ func (mc *MQTTCollector) GetConnectionStatus() map[string]interface{} {
 	mqttConnections := make(map[int]map[string]interface{})
 	for meterID, reading := range mc.meterReadings {
 		brokerURL := mc.meterBrokers[meterID]
+		topic := mc.meterTopics[meterID]
 		client := mc.clients[brokerURL]
 		isBrokerConnected := client != nil && client.IsConnected()
 		
@@ -716,11 +749,13 @@ func (mc *MQTTCollector) GetConnectionStatus() map[string]interface{} {
 			"last_reading":       reading.Power,
 			"last_reading_export": reading.PowerExport,
 			"last_update":        reading.LastUpdated.Format(time.RFC3339),
-			"topic":              "", // Will be filled by handler if needed
+			"topic":              topic,
 		}
 		
 		if !isBrokerConnected {
 			mqttConnections[meterID]["last_error"] = fmt.Sprintf("Broker %s is not connected", brokerURL)
+		} else if !reading.IsConnected {
+			mqttConnections[meterID]["last_error"] = "Waiting for data"
 		}
 	}
 

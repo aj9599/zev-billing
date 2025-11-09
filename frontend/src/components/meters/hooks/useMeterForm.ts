@@ -114,7 +114,12 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
 
     const handleEdit = (meter: Meter) => {
         setEditingMeter(meter);
-        setFormData(meter);
+        
+        // Set form data with device_type
+        setFormData({
+            ...meter,
+            device_type: meter.device_type || 'generic'
+        });
 
         try {
             const config = JSON.parse(meter.connection_config);
@@ -182,11 +187,16 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
             };
         }
 
+        // Ensure device_type is set, with default fallback
+        const deviceType = formData.device_type || 'generic';
+
         const dataToSend = {
             ...formData,
             connection_config: JSON.stringify(config),
-            device_type: formData.device_type || 'generic'
+            device_type: deviceType
         };
+
+        console.log('Submitting meter data:', dataToSend);
 
         try {
             if (editingMeter) {
@@ -200,6 +210,7 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
             loadData();
             setTimeout(fetchConnectionStatus, 2000);
         } catch (err) {
+            console.error('Failed to save meter:', err);
             alert(t('meters.saveFailed'));
         }
     };

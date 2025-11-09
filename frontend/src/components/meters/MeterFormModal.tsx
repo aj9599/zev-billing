@@ -85,6 +85,11 @@ export default function MeterFormModal({
         }
     };
 
+    const handleDeviceTypeChange = (deviceType: string) => {
+        console.log('Device type changed to:', deviceType);
+        onFormDataChange({ ...formData, device_type: deviceType });
+    };
+
     return (
         <div style={{
             position: 'fixed',
@@ -154,7 +159,7 @@ export default function MeterFormModal({
                         <input
                             type="text"
                             required
-                            value={formData.name}
+                            value={formData.name || ''}
                             onChange={(e) => handleNameChange(e.target.value)}
                             style={{
                                 width: '100%',
@@ -177,7 +182,7 @@ export default function MeterFormModal({
                         </label>
                         <select
                             required
-                            value={formData.meter_type}
+                            value={formData.meter_type || 'total_meter'}
                             onChange={(e) => onFormDataChange({ ...formData, meter_type: e.target.value })}
                             style={{
                                 width: '100%',
@@ -204,7 +209,7 @@ export default function MeterFormModal({
                         </label>
                         <select
                             required
-                            value={formData.building_id}
+                            value={formData.building_id || 0}
                             onChange={(e) => {
                                 const newBuildingId = parseInt(e.target.value);
                                 onFormDataChange({ ...formData, building_id: newBuildingId });
@@ -403,7 +408,7 @@ export default function MeterFormModal({
                         </label>
                         <select
                             required
-                            value={formData.connection_type}
+                            value={formData.connection_type || 'loxone_api'}
                             onChange={(e) => handleConnectionTypeChange(e.target.value)}
                             style={{
                                 width: '100%',
@@ -633,11 +638,9 @@ export default function MeterFormModal({
                                         Device Type *
                                     </label>
                                     <select
+                                        required
                                         value={formData.device_type || 'generic'}
-                                        onChange={(e) => onFormDataChange({
-                                            ...formData,
-                                            device_type: e.target.value
-                                        })}
+                                        onChange={(e) => handleDeviceTypeChange(e.target.value)}
                                         style={{
                                             width: '100%',
                                             padding: '10px',
@@ -731,10 +734,10 @@ export default function MeterFormModal({
                                         <input
                                             type="number"
                                             required
-                                            value={connectionConfig.mqtt_port}
+                                            value={connectionConfig.mqtt_port || 1883}
                                             onChange={(e) => onConnectionConfigChange({
                                                 ...connectionConfig,
-                                                mqtt_port: parseInt(e.target.value)
+                                                mqtt_port: parseInt(e.target.value) || 1883
                                             })}
                                             placeholder="1883"
                                             style={{
@@ -827,7 +830,7 @@ export default function MeterFormModal({
                                         {t('meters.mqttQos')} *
                                     </label>
                                     <select
-                                        value={connectionConfig.mqtt_qos}
+                                        value={connectionConfig.mqtt_qos || 1}
                                         onChange={(e) => onConnectionConfigChange({
                                             ...connectionConfig,
                                             mqtt_qos: parseInt(e.target.value)
@@ -858,6 +861,9 @@ export default function MeterFormModal({
                                     border: '1px solid #e5e7eb'
                                 }}>
                                     <strong>{t('meters.mqttSupportedFormats')}</strong><br /><br />
+                                    <strong>Shelly 3EM Format:</strong><br />
+                                    {`{ "id": 0, "total_act": 12345.67, "total_act_ret": 678.9 }`}<br /><br />
+
                                     <strong>{t('meters.mqttFormat1')}</strong><br />
                                     {`{ "device_id": "...", "energy": 123.456, "power": 1500 }`}<br /><br />
 
@@ -901,7 +907,7 @@ export default function MeterFormModal({
                                         <input
                                             type="number"
                                             required
-                                            value={connectionConfig.listen_port}
+                                            value={connectionConfig.listen_port || 8888}
                                             onChange={(e) => onConnectionConfigChange({
                                                 ...connectionConfig,
                                                 listen_port: parseInt(e.target.value)
@@ -930,7 +936,7 @@ export default function MeterFormModal({
                                         <input
                                             type="text"
                                             required
-                                            value={connectionConfig.data_key}
+                                            value={connectionConfig.data_key || ''}
                                             onChange={(e) => onConnectionConfigChange({
                                                 ...connectionConfig,
                                                 data_key: e.target.value
@@ -992,7 +998,7 @@ export default function MeterFormModal({
                                         <input
                                             type="text"
                                             required
-                                            value={connectionConfig.ip_address}
+                                            value={connectionConfig.ip_address || ''}
                                             onChange={(e) => onConnectionConfigChange({
                                                 ...connectionConfig,
                                                 ip_address: e.target.value
@@ -1018,7 +1024,7 @@ export default function MeterFormModal({
                                         <input
                                             type="number"
                                             required
-                                            value={connectionConfig.port}
+                                            value={connectionConfig.port || 502}
                                             onChange={(e) => onConnectionConfigChange({
                                                 ...connectionConfig,
                                                 port: parseInt(e.target.value)
@@ -1046,7 +1052,7 @@ export default function MeterFormModal({
                                         <input
                                             type="number"
                                             required
-                                            value={connectionConfig.register_address}
+                                            value={connectionConfig.register_address || 0}
                                             onChange={(e) => onConnectionConfigChange({
                                                 ...connectionConfig,
                                                 register_address: parseInt(e.target.value)
@@ -1072,7 +1078,7 @@ export default function MeterFormModal({
                                         <input
                                             type="number"
                                             required
-                                            value={connectionConfig.register_count}
+                                            value={connectionConfig.register_count || 2}
                                             onChange={(e) => onConnectionConfigChange({
                                                 ...connectionConfig,
                                                 register_count: parseInt(e.target.value)
@@ -1098,7 +1104,7 @@ export default function MeterFormModal({
                                         <input
                                             type="number"
                                             required
-                                            value={connectionConfig.unit_id}
+                                            value={connectionConfig.unit_id || 1}
                                             onChange={(e) => onConnectionConfigChange({
                                                 ...connectionConfig,
                                                 unit_id: parseInt(e.target.value)
@@ -1122,7 +1128,7 @@ export default function MeterFormModal({
                         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                             <input
                                 type="checkbox"
-                                checked={formData.is_active}
+                                checked={formData.is_active !== false}
                                 onChange={(e) => onFormDataChange({
                                     ...formData,
                                     is_active: e.target.checked
@@ -1145,7 +1151,7 @@ export default function MeterFormModal({
                             {t('common.notes')}
                         </label>
                         <textarea
-                            value={formData.notes}
+                            value={formData.notes || ''}
                             onChange={(e) => onFormDataChange({ ...formData, notes: e.target.value })}
                             rows={2}
                             style={{
