@@ -63,6 +63,14 @@ export default function MeterFormModal({
         { value: 'other', label: t('meters.other') }
     ];
 
+    const deviceTypes = [
+        { value: 'generic', label: 'Generic Device (Flexible JSON)' },
+        { value: 'whatwatt-go', label: 'WhatWatt Go' },
+        { value: 'shelly-3em', label: 'Shelly 3EM (3-Phase)' },
+        { value: 'shelly-em', label: 'Shelly EM (Single Phase)' },
+        { value: 'custom', label: 'Custom Device' }
+    ];
+
     const handleNameChange = (name: string) => {
         const building = buildings.find(b => b.id === formData.building_id);
         onNameChange(name, formData.connection_type || 'loxone_api', building?.name, formData.apartment_unit);
@@ -344,7 +352,7 @@ export default function MeterFormModal({
                                                             fontSize: '11px',
                                                             fontWeight: '600'
                                                         }}>
-                                                            âœ“{t('common.active')}
+                                                            ✓ {t('common.active')}
                                                         </div>
                                                     </div>
                                                 ) : (
@@ -356,7 +364,7 @@ export default function MeterFormModal({
                                                         color: '#92400e',
                                                         fontSize: '13px'
                                                     }}>
-                                                        âš ï¸ {t('meters.noUserLinked')}
+                                                        ⚠️ {t('meters.noUserLinked')}
                                                     </div>
                                                 )}
                                                 <p style={{ fontSize: '11px', color: '#666', marginTop: '6px' }}>
@@ -374,7 +382,7 @@ export default function MeterFormModal({
                                                 color: '#6b7280',
                                                 fontSize: '13px'
                                             }}>
-                                                â„¹ï¸ {t('meters.apartmentNotSelected')}
+                                                ℹ️ {t('meters.apartmentNotSelected')}
                                             </div>
                                         )}
                                     </>
@@ -551,7 +559,7 @@ export default function MeterFormModal({
                                                 ...connectionConfig,
                                                 loxone_password: e.target.value
                                             })}
-                                            placeholder="Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢"
+                                            placeholder="••••••••"
                                             style={{
                                                 width: '100%',
                                                 padding: '10px',
@@ -611,6 +619,38 @@ export default function MeterFormModal({
                                     <Rss size={16} color="#8b5cf6" />
                                     <p style={{ fontSize: '13px', color: '#5b21b6', margin: 0 }}>
                                         <strong>{t('meters.mqttProtocolDescription')}</strong>
+                                    </p>
+                                </div>
+
+                                {/* Device Type Selection */}
+                                <div style={{ marginBottom: '12px' }}>
+                                    <label style={{
+                                        display: 'block',
+                                        marginBottom: '8px',
+                                        fontWeight: '500',
+                                        fontSize: '14px'
+                                    }}>
+                                        Device Type *
+                                    </label>
+                                    <select
+                                        value={formData.device_type || 'generic'}
+                                        onChange={(e) => onFormDataChange({
+                                            ...formData,
+                                            device_type: e.target.value
+                                        })}
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px',
+                                            border: '1px solid #ddd',
+                                            borderRadius: '6px'
+                                        }}
+                                    >
+                                        {deviceTypes.map(dt => (
+                                            <option key={dt.value} value={dt.value}>{dt.label}</option>
+                                        ))}
+                                    </select>
+                                    <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                                        Select the type of device sending MQTT data. Use "Generic" for flexible JSON parsing.
                                     </p>
                                 </div>
 

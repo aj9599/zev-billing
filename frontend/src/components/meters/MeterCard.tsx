@@ -1,4 +1,4 @@
-import { Edit2, Trash2, RefreshCw, Building, Archive } from 'lucide-react';
+import { Edit2, Trash2, RefreshCw, Building, Archive, TrendingUp, TrendingDown } from 'lucide-react';
 import { useTranslation } from '../../i18n';
 import type { Meter, User } from '../../types';
 import { getMeterTypeLabel } from './utils/meterUtils';
@@ -9,6 +9,7 @@ interface MeterCardProps {
     users: User[];
     loxoneStatus: any;
     mqttStatus: any;
+    mqttBrokerConnected?: boolean;
     onEdit: (meter: Meter) => void;
     onReplace: (meter: Meter) => void;
     onDelete: (meter: Meter) => void;
@@ -19,6 +20,7 @@ export default function MeterCard({
     users,
     loxoneStatus,
     mqttStatus,
+    mqttBrokerConnected,
     onEdit,
     onReplace,
     onDelete
@@ -255,14 +257,61 @@ export default function MeterCard({
                                 meter.connection_type}
                     </span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>
-                        {t('meters.lastReading')}
-                    </span>
-                    <span style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
-                        {meter.last_reading ? `${meter.last_reading.toFixed(3)} kWh` : '-'}
-                    </span>
+                
+                {/* Energy Readings - Import & Export */}
+                <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: '1fr 1fr', 
+                    gap: '12px',
+                    marginBottom: '12px' 
+                }}>
+                    {/* Import Energy */}
+                    <div style={{
+                        padding: '10px',
+                        backgroundColor: '#f0f9ff',
+                        borderRadius: '8px',
+                        border: '1px solid #e0f2fe'
+                    }}>
+                        <div style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '6px',
+                            marginBottom: '4px'
+                        }}>
+                            <TrendingUp size={14} style={{ color: '#0284c7' }} />
+                            <span style={{ fontSize: '11px', color: '#0369a1', fontWeight: '600' }}>
+                                Import
+                            </span>
+                        </div>
+                        <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
+                            {meter.last_reading ? `${meter.last_reading.toFixed(3)} kWh` : '-'}
+                        </div>
+                    </div>
+                    
+                    {/* Export Energy */}
+                    <div style={{
+                        padding: '10px',
+                        backgroundColor: '#f0fdf4',
+                        borderRadius: '8px',
+                        border: '1px solid #dcfce7'
+                    }}>
+                        <div style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '6px',
+                            marginBottom: '4px'
+                        }}>
+                            <TrendingDown size={14} style={{ color: '#16a34a' }} />
+                            <span style={{ fontSize: '11px', color: '#15803d', fontWeight: '600' }}>
+                                Export
+                            </span>
+                        </div>
+                        <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
+                            {meter.last_reading_export ? `${meter.last_reading_export.toFixed(3)} kWh` : '0.000 kWh'}
+                        </div>
+                    </div>
                 </div>
+                
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>
                         {t('common.status')}
@@ -285,6 +334,7 @@ export default function MeterCard({
                 meter={meter}
                 loxoneStatus={loxoneStatus}
                 mqttStatus={mqttStatus}
+                mqttBrokerConnected={mqttBrokerConnected}
             />
         </div>
     );

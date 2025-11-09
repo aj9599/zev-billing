@@ -19,6 +19,7 @@ interface MQTTConnectionStatus {
         topic: string;
         is_connected: boolean;
         last_reading: number;
+        last_reading_export: number;
         last_update: string;
         last_error?: string;
     };
@@ -27,6 +28,7 @@ interface MQTTConnectionStatus {
 export function useMeterStatus() {
     const [loxoneStatus, setLoxoneStatus] = useState<LoxoneConnectionStatus>({});
     const [mqttStatus, setMqttStatus] = useState<MQTTConnectionStatus>({});
+    const [mqttBrokerConnected, setMqttBrokerConnected] = useState<boolean>(false);
 
     const fetchConnectionStatus = async () => {
         try {
@@ -37,6 +39,10 @@ export function useMeterStatus() {
             if (debugData.mqtt_connections) {
                 setMqttStatus(debugData.mqtt_connections);
             }
+            // Get MQTT broker connection status
+            if (typeof debugData.mqtt_broker_connected === 'boolean') {
+                setMqttBrokerConnected(debugData.mqtt_broker_connected);
+            }
         } catch (error) {
             console.error('Failed to fetch connection status:', error);
         }
@@ -45,6 +51,7 @@ export function useMeterStatus() {
     return {
         loxoneStatus,
         mqttStatus,
+        mqttBrokerConnected,
         fetchConnectionStatus
     };
 }

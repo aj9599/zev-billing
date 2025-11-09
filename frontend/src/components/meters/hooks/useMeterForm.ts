@@ -38,7 +38,7 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
         apartment_unit: '',
         connection_type: 'loxone_api',
         connection_config: '{}',
-        device_type: 'generic', // NEW: Default device type
+        device_type: 'generic', // Default device type
         notes: '',
         is_active: true
     });
@@ -184,7 +184,8 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
 
         const dataToSend = {
             ...formData,
-            connection_config: JSON.stringify(config)
+            connection_config: JSON.stringify(config),
+            device_type: formData.device_type || 'generic'
         };
 
         try {
