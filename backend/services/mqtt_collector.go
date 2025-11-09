@@ -604,18 +604,25 @@ func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, devic
 		case "shelly-2pm":
 			var shelly2PMMsg Shelly2PMMessage
 			if err := json.Unmarshal(payload, &shelly2PMMsg); err == nil {
+				log.Printf("DEBUG: Shelly 2PM parsed - ID:%d, AEnergy.Total:%.3f, RetAEnergy.Total:%.3f", 
+					shelly2PMMsg.ID, shelly2PMMsg.AEnergy.Total, shelly2PMMsg.RetAEnergy.Total)
+				
 				// Check if we have valid energy data (Wh values)
-				if shelly2PMMsg.AEnergy.Total > 0 {
+				// Note: Total can be very large (e.g., 170204.016 Wh), so just check >= 0
+				if shelly2PMMsg.AEnergy.Total >= 0 {
 					// Convert Wh to kWh
 					importValue = shelly2PMMsg.AEnergy.Total / 1000.0
 					exportValue = shelly2PMMsg.RetAEnergy.Total / 1000.0
 					timestamp = time.Now()
 					found = true
-					log.Printf("✓ Parsed Shelly 2PM format: import=%.3f kWh, export=%.3f kWh, power=%.1f W", 
-						importValue, exportValue, shelly2PMMsg.APower)
+					log.Printf("✓ Parsed Shelly 2PM format: import=%.3f kWh, export=%.3f kWh, power=%.1f W, voltage=%.1f V", 
+						importValue, exportValue, shelly2PMMsg.APower, shelly2PMMsg.Voltage)
+				} else {
+					log.Printf("DEBUG: Shelly 2PM AEnergy.Total is not valid: %.3f", shelly2PMMsg.AEnergy.Total)
 				}
 			} else {
 				log.Printf("DEBUG: Failed to parse as Shelly 2PM: %v", err)
+				log.Printf("DEBUG: Payload was: %s", string(payload))
 			}
 
 		case "generic", "custom", "":
@@ -675,7 +682,7 @@ func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, devic
 			}
 		}
 
-		if found && importValue > 0 {
+		if found && importValue >= 0 {
 			mc.mu.Lock()
 			mc.meterReadings[meterID] = MQTTMeterReading{
 				Power:       importValue,
