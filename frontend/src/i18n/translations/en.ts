@@ -274,6 +274,7 @@ export const en: Translations = {
   'buildings.energyFlow.consumption': 'Building',
   'buildings.energyFlow.grid': 'Grid',
   'buildings.energyFlow.production': 'Producing',
+  'buildings.energyFlow.productiontogrid': 'Consuming from Grid',
   'buildings.energyFlow.solarCoverage': 'Solar Coverage',
   'buildings.energyFlow.feedIn': 'Feed-in',
   'buildings.energyFlow.gridPower': 'From Grid',

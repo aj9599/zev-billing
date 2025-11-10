@@ -179,11 +179,24 @@ export default function Buildings() {
 
   const getBuildingConsumption = (buildingId: number) => {
     const data = consumptionData.find(d => d.building_id === buildingId);
-    if (!data) return { total: 0, solar: 0, charging: 0, actualHouseConsumption: 0, gridPower: 0, solarProduction: 0, solarToGrid: 0 };
+    if (!data) return {
+      total: 0,
+      solar: 0,
+      charging: 0,
+      actualHouseConsumption: 0,
+      gridPower: 0,
+      solarProduction: 0,
+      solarConsumption: 0,
+      solarToGrid: 0,
+      solarToHouse: 0,
+      gridToHouse: 0
+    };
 
     const buildingMeters = data.meters || [];
-    let mainMeterPower = 0;
-    let solarPower = 0;
+    let totalMeterImport = 0;
+    let totalMeterExport = 0;
+    let solarMeterImport = 0;
+    let solarMeterExport = 0;
     let charging = 0;
 
     buildingMeters.forEach(meter => {
@@ -191,29 +204,75 @@ export default function Buildings() {
       if (!latestData) return;
 
       if (meter.meter_type === 'total_meter') {
-        mainMeterPower += latestData.power / 1000;
+        // Total meter: import = buying from grid, export = selling to grid
+        totalMeterImport += latestData.power / 1000; // Convert W to kW
+
+        // Look for export data - it may be in a separate data point
+        const exportData = meter.data.find(d => d.source === 'total_meter_export');
+        if (exportData) {
+          totalMeterExport += exportData.power / 1000;
+        }
       }
       else if (meter.meter_type === 'solar_meter') {
-        solarPower += latestData.power / 1000;
+        // Solar meter: import = consuming from grid (at night), export = producing
+        solarMeterImport += latestData.power / 1000;
+
+        const exportData = meter.data.find(d => d.source === 'solar_meter_export');
+        if (exportData) {
+          solarMeterExport += exportData.power / 1000;
+        }
       }
       else if (meter.meter_type === 'charger') {
         charging += latestData.power / 1000;
       }
     });
 
-    const solarProduction = Math.abs(solarPower);
-    const gridPower = mainMeterPower;
-    const actualHouseConsumption = solarProduction + mainMeterPower;
-    const solarToGrid = gridPower < 0 ? Math.abs(gridPower) : 0;
+    // Determine solar behavior: producing (export > import) or consuming (import > export)
+    const solarNetProduction = solarMeterExport - solarMeterImport;
+    const solarProduction = solarNetProduction > 0 ? solarNetProduction : 0;
+    const solarConsumption = solarNetProduction < 0 ? Math.abs(solarNetProduction) : 0;
+
+    // Determine grid behavior: importing (import > export) or exporting (export > import)
+    const gridNet = totalMeterImport - totalMeterExport;
+    const gridPower = gridNet; // Positive = importing, Negative = exporting
+    const isExporting = gridNet < 0;
+
+    // Calculate energy flows
+    let solarToHouse = 0;
+    let solarToGrid = 0;
+    let gridToHouse = 0;
+    let actualHouseConsumption = 0;
+
+    if (solarProduction > 0) {
+      // Solar is producing
+      if (isExporting) {
+        // Producing more than consuming - exporting to grid
+        solarToGrid = Math.abs(gridNet);
+        solarToHouse = solarProduction - solarToGrid;
+        actualHouseConsumption = solarToHouse + charging;
+      } else {
+        // Producing but still need grid power
+        solarToHouse = solarProduction;
+        gridToHouse = gridNet;
+        actualHouseConsumption = solarToHouse + gridToHouse + charging;
+      }
+    } else {
+      // Solar not producing or consuming
+      gridToHouse = gridNet;
+      actualHouseConsumption = gridToHouse + charging + solarConsumption;
+    }
 
     return {
-      total: mainMeterPower,
-      solar: solarPower,
+      total: totalMeterImport,
+      solar: solarNetProduction, // Positive = producing, Negative = consuming
       charging,
       actualHouseConsumption,
-      gridPower,
+      gridPower, // Positive = importing, Negative = exporting
       solarProduction,
-      solarToGrid
+      solarConsumption,
+      solarToGrid,
+      solarToHouse,
+      gridToHouse
     };
   };
 
@@ -236,10 +295,12 @@ export default function Buildings() {
   // Mobile-Responsive Energy Flow Card Component
   const EnergyFlowCard = ({ building }: { building: BuildingType }) => {
     const consumption = getBuildingConsumption(building.id);
-    const { actualHouseConsumption, gridPower, solarProduction, solarToGrid } = consumption;
+    const { actualHouseConsumption, gridPower, solarProduction, solarConsumption, solarToGrid } = consumption;
     const solarCoverage = actualHouseConsumption > 0 ? (solarProduction / actualHouseConsumption * 100) : 0;
     const isExporting = gridPower < 0;
     const isImporting = gridPower > 0;
+    const isSolarProducing = solarProduction > 0;
+    const isSolarConsuming = solarConsumption > 0;
     const solarToHouse = solarProduction - solarToGrid;
 
     const buildingMeters = meters.filter(m => m.building_id === building.id);
@@ -388,15 +449,15 @@ export default function Buildings() {
                   width: isMobile ? '80px' : '100px',
                   height: isMobile ? '80px' : '100px',
                   borderRadius: '50%',
-                  backgroundColor: '#fef3c7',
-                  border: '4px solid #f59e0b',
+                  backgroundColor: isSolarProducing ? '#fef3c7' : '#fee2e2',
+                  border: `4px solid ${isSolarProducing ? '#f59e0b' : '#ef4444'}`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   marginBottom: isMobile ? '0' : '12px',
                   flexShrink: 0
                 }}>
-                  <Sun size={isMobile ? 32 : 40} color="#f59e0b" />
+                  <Sun size={isMobile ? 32 : 40} color={isSolarProducing ? '#f59e0b' : '#ef4444'} />
                 </div>
                 <div style={{
                   display: 'flex',
@@ -409,13 +470,22 @@ export default function Buildings() {
                   <span style={{ fontSize: isMobile ? '12px' : '14px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
                     {t('buildings.energyFlow.solar')}
                   </span>
-                  <span style={{ fontSize: isMobile ? '20px' : '24px', fontWeight: '800', color: '#f59e0b' }}>
-                    {solarProduction.toFixed(3)} kW
+                  <span style={{
+                    fontSize: isMobile ? '20px' : '24px',
+                    fontWeight: '800',
+                    color: isSolarProducing ? '#f59e0b' : '#ef4444'
+                  }}>
+                    {isSolarProducing ? solarProduction.toFixed(3) : solarConsumption.toFixed(3)} kW
                   </span>
                   <div style={{ minHeight: '20px', marginTop: '4px' }}>
-                    {solarProduction > 0 && (
+                    {isSolarProducing && (
                       <span style={{ fontSize: isMobile ? '11px' : '12px', color: '#22c55e', fontWeight: '600' }}>
                         {t('buildings.energyFlow.production')}
+                      </span>
+                    )}
+                    {isSolarConsuming && (
+                      <span style={{ fontSize: isMobile ? '11px' : '12px', color: '#ef4444', fontWeight: '600' }}>
+                        {t('buildings.energyFlow.productiontogrid')}Consuming from Grid
                       </span>
                     )}
                   </div>
@@ -430,10 +500,23 @@ export default function Buildings() {
                 gap: '4px',
                 marginTop: isMobile ? '0' : '38px'
               }}>
-                {isMobile ? <ArrowDown size={28} color="#22c55e" strokeWidth={3} /> : <ArrowRight size={32} color="#22c55e" strokeWidth={3} />}
-                <span style={{ fontSize: '11px', fontWeight: '600', color: '#22c55e' }}>
-                  {solarToHouse.toFixed(2)} kW
-                </span>
+                {isSolarProducing ? (
+                  <>
+                    {isMobile ? <ArrowDown size={28} color="#22c55e" strokeWidth={3} /> : <ArrowRight size={32} color="#22c55e" strokeWidth={3} />}
+                    <span style={{ fontSize: '11px', fontWeight: '600', color: '#22c55e' }}>
+                      {solarToHouse.toFixed(2)} kW
+                    </span>
+                  </>
+                ) : isSolarConsuming ? (
+                  <>
+                    {isMobile ? <ArrowUp size={28} color="#ef4444" strokeWidth={3} /> : <ArrowLeft size={32} color="#ef4444" strokeWidth={3} />}
+                    <span style={{ fontSize: '11px', fontWeight: '600', color: '#ef4444' }}>
+                      {solarConsumption.toFixed(2)} kW
+                    </span>
+                  </>
+                ) : (
+                  isMobile ? <ArrowDown size={28} color="#e5e7eb" strokeWidth={3} /> : <ArrowRight size={32} color="#e5e7eb" strokeWidth={3} />
+                )}
               </div>
             </>
           )}
@@ -573,7 +656,7 @@ export default function Buildings() {
           </div>
 
           {/* Solar to Grid Arrow (desktop only) */}
-          {isExporting && hasSolarMeter && !isMobile && (
+          {isExporting && hasSolarMeter && isSolarProducing && solarToGrid > 0 && !isMobile && (
             <div style={{
               display: 'flex',
               alignItems: 'center',

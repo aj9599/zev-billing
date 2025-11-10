@@ -273,6 +273,7 @@ export const de: Translations = {
   'buildings.energyFlow.consumption': 'Gebäude',
   'buildings.energyFlow.grid': 'Netz',
   'buildings.energyFlow.production': 'Produziert',
+  'buildings.energyFlow.productiontogrid': 'Beziehe vom Netz',
   'buildings.energyFlow.solarCoverage': 'Solarabdeckung',
   'buildings.energyFlow.feedIn': 'Einspeisung',
   'buildings.energyFlow.gridPower': 'Vom Netz',
