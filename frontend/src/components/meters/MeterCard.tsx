@@ -119,7 +119,7 @@ export default function MeterCard({
                             e.currentTarget.style.backgroundColor = 'rgba(102, 126, 234, 0.1)';
                             e.currentTarget.style.transform = 'scale(1)';
                         }}
-                        title={t('meters.replaceMeter') || 'Replace Meter'}
+                        title={t('meters.replaceMeter')}
                     >
                         <RefreshCw size={16} />
                     </button>
@@ -187,9 +187,9 @@ export default function MeterCard({
                     }}>
                         <Archive size={14} color="#f59e0b" />
                         <span style={{ fontSize: '12px', fontWeight: '600', color: '#f59e0b' }}>
-                            {t('meters.archived') || 'ARCHIVED'}
+                            {t('meters.archived')}
                             {meter.replaced_by_meter_id && (
-                                <> - {t('meters.replacedBy') || 'Replaced by'} #{meter.replaced_by_meter_id}</>
+                                <> - {t('meters.replacedBy')} #{meter.replaced_by_meter_id}</>
                             )}
                         </span>
                     </div>
@@ -252,7 +252,7 @@ export default function MeterCard({
                         textTransform: 'uppercase',
                         letterSpacing: '0.5px'
                     }}>
-                        {meter.connection_type === 'loxone_api' ? 'Loxone WebSocket' :
+                        {meter.connection_type === 'loxone_api' ? t('meters.loxoneWebSocket') :
                             meter.connection_type === 'mqtt' ? 'MQTT' :
                                 meter.connection_type}
                     </span>
@@ -281,7 +281,7 @@ export default function MeterCard({
                             }}>
                                 <TrendingUp size={14} style={{ color: '#0284c7' }} />
                                 <span style={{ fontSize: '11px', color: '#0369a1', fontWeight: '600' }}>
-                                    Import
+                                    {t('meters.import')}
                                 </span>
                             </div>
                             <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
@@ -304,7 +304,7 @@ export default function MeterCard({
                             }}>
                                 <TrendingDown size={14} style={{ color: '#16a34a' }} />
                                 <span style={{ fontSize: '11px', color: '#15803d', fontWeight: '600' }}>
-                                    Export
+                                    {t('meters.export')}
                                 </span>
                             </div>
                             <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>

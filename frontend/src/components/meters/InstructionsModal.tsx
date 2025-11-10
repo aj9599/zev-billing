@@ -336,11 +336,10 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             gap: '8px',
                             marginBottom: '12px'
                         }}>
-                            <strong>Modbus TCP - Professional Industrial Protocol</strong>
+                            <strong>{t('meters.instructions.modbusSubtitle')}</strong>
                         </p>
                         <p style={{ marginBottom: '12px', fontSize: '14px' }}>
-                            Direct connection to industrial energy meters using Modbus TCP/IP protocol. 
-                            Configure function codes, data types, and separate import/export registers.
+                            {t('meters.instructions.modbusDescription')}
                         </p>
 
                         <h4 style={{
@@ -350,7 +349,7 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             marginBottom: '8px',
                             color: '#0c4a6e'
                         }}>
-                            📋 What You Need From Your Device Manual:
+                            {t('meters.instructions.modbusWhatYouNeed')}
                         </h4>
                         <div style={{
                             backgroundColor: '#fff',
@@ -360,12 +359,12 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             fontSize: '13px'
                         }}>
                             <ol style={{ marginLeft: '20px', marginTop: '8px', marginBottom: '8px' }}>
-                                <li><strong>IP Address & Port</strong> (usually port 502)</li>
-                                <li><strong>Unit ID / Slave ID</strong> (typically 1-247)</li>
-                                <li><strong>Function Code</strong> (Befehl): FC01, FC02, FC03, or FC04</li>
-                                <li><strong>Data Type</strong> (Datentyp): float32, int16, int32, etc.</li>
-                                <li><strong>Register Address</strong> (IO-Adresse) for import energy</li>
-                                <li><strong>Export Register Address</strong> (optional, for bidirectional meters)</li>
+                                <li><strong>{t('meters.instructions.modbusNeed1')}</strong> {t('meters.instructions.modbusNeed1Desc')}</li>
+                                <li><strong>{t('meters.instructions.modbusNeed2')}</strong> {t('meters.instructions.modbusNeed2Desc')}</li>
+                                <li><strong>{t('meters.instructions.modbusNeed3')}</strong> {t('meters.instructions.modbusNeed3Desc')}</li>
+                                <li><strong>{t('meters.instructions.modbusNeed4')}</strong> {t('meters.instructions.modbusNeed4Desc')}</li>
+                                <li><strong>{t('meters.instructions.modbusNeed5')}</strong> {t('meters.instructions.modbusNeed5Desc')}</li>
+                                <li><strong>{t('meters.instructions.modbusNeed6')}</strong> {t('meters.instructions.modbusNeed6Desc')}</li>
                             </ol>
                         </div>
 
@@ -376,48 +375,48 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             marginBottom: '8px',
                             color: '#0c4a6e'
                         }}>
-                            ⚙️ Configuration Steps:
+                            {t('meters.instructions.modbusConfigSteps')}
                         </h4>
                         <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
                             <li>
-                                <strong>Basic Connection:</strong>
+                                <strong>{t('meters.instructions.modbusStep1Title')}</strong>
                                 <ul style={{ marginLeft: '20px', marginTop: '4px' }}>
-                                    <li>Enter IP address (e.g., 192.168.1.100)</li>
-                                    <li>Enter port (usually 502)</li>
-                                    <li>Enter Unit ID from device (usually 1)</li>
+                                    <li>{t('meters.instructions.modbusStep1a')}</li>
+                                    <li>{t('meters.instructions.modbusStep1b')}</li>
+                                    <li>{t('meters.instructions.modbusStep1c')}</li>
                                 </ul>
                             </li>
                             <li style={{ marginTop: '8px' }}>
-                                <strong>Function Code:</strong> Select based on your manual
+                                <strong>{t('meters.instructions.modbusStep2Title')}</strong> {t('meters.instructions.modbusStep2Desc')}
                                 <ul style={{ marginLeft: '20px', marginTop: '4px' }}>
-                                    <li><strong>FC03</strong> - Read Holding Registers (most common ✓)</li>
-                                    <li><strong>FC04</strong> - Read Input Registers</li>
-                                    <li>FC01 - Read Coils | FC02 - Read Discrete Inputs</li>
+                                    <li><strong>FC03</strong> - {t('meters.instructions.modbusFc03Desc')}</li>
+                                    <li><strong>FC04</strong> - {t('meters.instructions.modbusFc04Desc')}</li>
+                                    <li>FC01 - {t('meters.instructions.modbusFc01Desc')} | FC02 - {t('meters.instructions.modbusFc02Desc')}</li>
                                 </ul>
                             </li>
                             <li style={{ marginTop: '8px' }}>
-                                <strong>Data Type:</strong> Select the format from your manual
+                                <strong>{t('meters.instructions.modbusStep3Title')}</strong> {t('meters.instructions.modbusStep3Desc')}
                                 <ul style={{ marginLeft: '20px', marginTop: '4px' }}>
-                                    <li><strong>float32</strong> - 32-bit Float (most energy meters ✓)</li>
-                                    <li>float64 - 64-bit Float (high precision)</li>
-                                    <li>int16/int32 - Integer values</li>
-                                    <li>uint16/uint32 - Unsigned integers</li>
+                                    <li><strong>float32</strong> - {t('meters.instructions.modbusFloat32Desc')}</li>
+                                    <li>float64 - {t('meters.instructions.modbusFloat64Desc')}</li>
+                                    <li>int16/int32 - {t('meters.instructions.modbusIntDesc')}</li>
+                                    <li>uint16/uint32 - {t('meters.instructions.modbusUintDesc')}</li>
                                 </ul>
                             </li>
                             <li style={{ marginTop: '8px' }}>
-                                <strong>Import Register:</strong> Enter starting address
+                                <strong>{t('meters.instructions.modbusStep4Title')}</strong> {t('meters.instructions.modbusStep4Desc')}
                                 <ul style={{ marginLeft: '20px', marginTop: '4px' }}>
-                                    <li>Use address from manual (starting from 0)</li>
-                                    <li>If manual shows 40001 → enter 0</li>
-                                    <li>If manual shows 40002 → enter 1</li>
+                                    <li>{t('meters.instructions.modbusStep4a')}</li>
+                                    <li>{t('meters.instructions.modbusStep4b')}</li>
+                                    <li>{t('meters.instructions.modbusStep4c')}</li>
                                 </ul>
                             </li>
                             <li style={{ marginTop: '8px' }}>
-                                <strong>Export Register (Optional):</strong> For solar/bidirectional meters
+                                <strong>{t('meters.instructions.modbusStep5Title')}</strong> {t('meters.instructions.modbusStep5Desc')}
                                 <ul style={{ marginLeft: '20px', marginTop: '4px' }}>
-                                    <li>Check the box to enable</li>
-                                    <li>Enter export register address from manual</li>
-                                    <li>Must be different from import address</li>
+                                    <li>{t('meters.instructions.modbusStep5a')}</li>
+                                    <li>{t('meters.instructions.modbusStep5b')}</li>
+                                    <li>{t('meters.instructions.modbusStep5c')}</li>
                                 </ul>
                             </li>
                         </ol>
@@ -429,7 +428,7 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             marginBottom: '8px',
                             color: '#0c4a6e'
                         }}>
-                            📖 Reading Your Device Manual:
+                            {t('meters.instructions.modbusReadingManual')}
                         </h4>
                         <div style={{
                             backgroundColor: '#fff',
@@ -442,44 +441,44 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                                 <thead>
                                     <tr style={{ backgroundColor: '#f0f9ff' }}>
                                         <th style={{ padding: '8px', textAlign: 'left', borderBottom: '2px solid #0284c7' }}>
-                                            Manual Term (German)
+                                            {t('meters.instructions.modbusManualTerm')}
                                         </th>
                                         <th style={{ padding: '8px', textAlign: 'left', borderBottom: '2px solid #0284c7' }}>
-                                            System Field
+                                            {t('meters.instructions.modbusSystemField')}
                                         </th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr>
                                         <td style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>
-                                            <strong>IO-Adresse</strong> (0-65535)
+                                            <strong>{t('meters.instructions.modbusIoAddress')}</strong>
                                         </td>
                                         <td style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>
-                                            Register Address
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>
-                                            <strong>Befehl</strong> (03, 04, etc.)
-                                        </td>
-                                        <td style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>
-                                            Function Code
+                                            {t('meters.instructions.modbusRegisterAddress')}
                                         </td>
                                     </tr>
                                     <tr>
                                         <td style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>
-                                            <strong>Datentyp</strong> (Float, 16-Bit)
+                                            <strong>{t('meters.instructions.modbusBefehl')}</strong>
                                         </td>
                                         <td style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>
-                                            Data Type
+                                            {t('meters.instructions.modbusFunctionCode')}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>
+                                            <strong>{t('meters.instructions.modbusDatentyp')}</strong>
+                                        </td>
+                                        <td style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>
+                                            {t('meters.instructions.modbusDataType')}
                                         </td>
                                     </tr>
                                     <tr>
                                         <td style={{ padding: '8px' }}>
-                                            <strong>Wirkenergie Import/Export</strong>
+                                            <strong>{t('meters.instructions.modbusWirkenergie')}</strong>
                                         </td>
                                         <td style={{ padding: '8px' }}>
-                                            Import/Export Register
+                                            {t('meters.instructions.modbusImportExportRegister')}
                                         </td>
                                     </tr>
                                 </tbody>
@@ -493,7 +492,7 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             marginBottom: '8px',
                             color: '#0c4a6e'
                         }}>
-                            💡 Common Configurations:
+                            {t('meters.instructions.modbusCommonConfigs')}
                         </h4>
                         <div style={{
                             backgroundColor: '#fff',
@@ -503,28 +502,28 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             fontFamily: 'monospace',
                             fontSize: '12px'
                         }}>
-                            <strong>Standard Energy Meter (Import Only):</strong><br />
+                            <strong>{t('meters.instructions.modbusConfig1Title')}</strong><br />
                             IP: 192.168.1.100:502<br />
-                            Unit ID: 1<br />
-                            Function: FC03<br />
-                            Data Type: float32<br />
-                            Import Register: 0<br />
-                            Export: Disabled<br /><br />
+                            {t('meters.instructions.modbusUnitId')}: 1<br />
+                            {t('meters.instructions.modbusFunction')}: FC03<br />
+                            {t('meters.instructions.modbusDataType')}: float32<br />
+                            {t('meters.instructions.modbusImportRegister')}: 0<br />
+                            {t('meters.instructions.modbusExport')}: {t('meters.instructions.modbusDisabled')}<br /><br />
 
-                            <strong>Solar Meter (Import + Export):</strong><br />
+                            <strong>{t('meters.instructions.modbusConfig2Title')}</strong><br />
                             IP: 192.168.1.100:502<br />
-                            Unit ID: 1<br />
-                            Function: FC03<br />
-                            Data Type: float32<br />
-                            Import Register: 0<br />
-                            Export Register: ✓ Enabled → 100<br /><br />
+                            {t('meters.instructions.modbusUnitId')}: 1<br />
+                            {t('meters.instructions.modbusFunction')}: FC03<br />
+                            {t('meters.instructions.modbusDataType')}: float32<br />
+                            {t('meters.instructions.modbusImportRegister')}: 0<br />
+                            {t('meters.instructions.modbusExportRegister')}: ✓ {t('meters.instructions.modbusEnabled')} → 100<br /><br />
 
-                            <strong>Using Input Registers:</strong><br />
+                            <strong>{t('meters.instructions.modbusConfig3Title')}</strong><br />
                             IP: 192.168.1.100:502<br />
-                            Unit ID: 1<br />
-                            Function: FC04 ← Different!<br />
-                            Data Type: float32<br />
-                            Import Register: 0
+                            {t('meters.instructions.modbusUnitId')}: 1<br />
+                            {t('meters.instructions.modbusFunction')}: FC04 {t('meters.instructions.modbusDifferent')}<br />
+                            {t('meters.instructions.modbusDataType')}: float32<br />
+                            {t('meters.instructions.modbusImportRegister')}: 0
                         </div>
 
                         <div style={{
@@ -535,13 +534,13 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             fontSize: '13px',
                             border: '1px solid #f59e0b'
                         }}>
-                            <strong>⚠️ Important Notes:</strong>
+                            <strong>{t('meters.instructions.modbusImportantNotes')}</strong>
                             <ul style={{ marginLeft: '20px', marginTop: '8px', marginBottom: '0' }}>
-                                <li>Register addresses start from 0 in this system</li>
-                                <li>If manual shows 40001-49999, subtract 40001 to get protocol address</li>
-                                <li>Most energy meters use FC03 and float32</li>
-                                <li>Export register only needed for bidirectional meters (solar, feed-in)</li>
-                                <li>Register count is automatically calculated from data type</li>
+                                <li>{t('meters.instructions.modbusNote1')}</li>
+                                <li>{t('meters.instructions.modbusNote2')}</li>
+                                <li>{t('meters.instructions.modbusNote3')}</li>
+                                <li>{t('meters.instructions.modbusNote4')}</li>
+                                <li>{t('meters.instructions.modbusNote5')}</li>
                             </ul>
                         </div>
                     </div>
@@ -598,19 +597,19 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                     }}>
                         <ul style={{ marginLeft: '20px' }}>
                             <li>
-                                <strong>Loxone WebSocket:</strong>{' '}
+                                <strong>{t('meters.instructions.troubleshootingLoxoneLabel')}</strong>{' '}
                                 {t('meters.instructions.troubleshootingLoxoneWebSocket')}
                             </li>
                             <li>
-                                <strong>Loxone WebSocket:</strong>{' '}
+                                <strong>{t('meters.instructions.troubleshootingLoxoneLabel')}</strong>{' '}
                                 {t('meters.instructions.troubleshootingLoxoneAuth')}
                             </li>
                             <li>
-                                <strong>Loxone WebSocket:</strong>{' '}
+                                <strong>{t('meters.instructions.troubleshootingLoxoneLabel')}</strong>{' '}
                                 {t('meters.instructions.troubleshootingLoxoneDevice')}
                             </li>
                             <li>
-                                <strong>Modbus TCP:</strong> Check connection: {' '}
+                                <strong>{t('meters.instructions.troubleshootingModbusLabel')}</strong> {t('meters.instructions.troubleshootingModbus1')}{' '}
                                 <code style={{
                                     backgroundColor: '#fff',
                                     padding: '2px 6px',
@@ -620,16 +619,16 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                                 </code>
                             </li>
                             <li>
-                                <strong>Modbus TCP:</strong> Wrong register address? Try address ±1 or check if you need to subtract 40001
+                                <strong>{t('meters.instructions.troubleshootingModbusLabel')}</strong> {t('meters.instructions.troubleshootingModbus2')}
                             </li>
                             <li>
-                                <strong>Modbus TCP:</strong> Wrong data type? Try float32 first (most common for energy meters)
+                                <strong>{t('meters.instructions.troubleshootingModbusLabel')}</strong> {t('meters.instructions.troubleshootingModbus3')}
                             </li>
                             <li>
-                                <strong>Modbus TCP:</strong> Connection refused? Switch between FC03 and FC04 function codes
+                                <strong>{t('meters.instructions.troubleshootingModbusLabel')}</strong> {t('meters.instructions.troubleshootingModbus4')}
                             </li>
                             <li>
-                                <strong>MQTT:</strong> {t('meters.instructions.troubleshootingMqttBroker')}{' '}
+                                <strong>{t('meters.instructions.troubleshootingMqttLabel')}</strong> {t('meters.instructions.troubleshootingMqttBroker')}{' '}
                                 <code style={{
                                     backgroundColor: '#fff',
                                     padding: '2px 6px',
@@ -639,7 +638,7 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                                 </code>
                             </li>
                             <li>
-                                <strong>MQTT:</strong> {t('meters.instructions.troubleshootingMqttSubscribe')}{' '}
+                                <strong>{t('meters.instructions.troubleshootingMqttLabel')}</strong> {t('meters.instructions.troubleshootingMqttSubscribe')}{' '}
                                 <code style={{
                                     backgroundColor: '#fff',
                                     padding: '2px 6px',
@@ -649,7 +648,7 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                                 </code>
                             </li>
                             <li>
-                                <strong>MQTT:</strong> {t('meters.instructions.troubleshootingMqttPublish')}{' '}
+                                <strong>{t('meters.instructions.troubleshootingMqttLabel')}</strong> {t('meters.instructions.troubleshootingMqttPublish')}{' '}
                                 <code style={{
                                     backgroundColor: '#fff',
                                     padding: '2px 6px',

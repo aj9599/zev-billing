@@ -68,12 +68,12 @@ export default function MeterFormModal({
     ];
 
     const deviceTypes = [
-        { value: 'generic', label: 'Generic Device (Flexible JSON)' },
-        { value: 'whatwatt-go', label: 'WhatWatt Go' },
-        { value: 'shelly-3em', label: 'Shelly 3EM (3-Phase)' },
-        { value: 'shelly-em', label: 'Shelly EM (Single Phase)' },
-        { value: 'shelly-2pm', label: 'Shelly 2PM (Dual Channel)' },
-        { value: 'custom', label: 'Custom Device' }
+        { value: 'generic', label: t('meters.deviceTypes.generic') },
+        { value: 'whatwatt-go', label: t('meters.deviceTypes.whatwattGo') },
+        { value: 'shelly-3em', label: t('meters.deviceTypes.shelly3em') },
+        { value: 'shelly-em', label: t('meters.deviceTypes.shellyEm') },
+        { value: 'shelly-2pm', label: t('meters.deviceTypes.shelly2pm') },
+        { value: 'custom', label: t('meters.deviceTypes.custom') }
     ];
 
     const handleNameChange = (name: string) => {
@@ -362,7 +362,7 @@ export default function MeterFormModal({
                                                             fontSize: '11px',
                                                             fontWeight: '600'
                                                         }}>
-                                                            Ã¢Å“â€œ {t('common.active')}
+                                                            ✓ {t('common.active')}
                                                         </div>
                                                     </div>
                                                 ) : (
@@ -374,7 +374,7 @@ export default function MeterFormModal({
                                                         color: '#92400e',
                                                         fontSize: '13px'
                                                     }}>
-                                                        Ã¢Å¡Â Ã¯Â¸Â {t('meters.noUserLinked')}
+                                                        ⚠️ {t('meters.noUserLinked')}
                                                     </div>
                                                 )}
                                                 <p style={{ fontSize: '11px', color: '#666', marginTop: '6px' }}>
@@ -392,7 +392,7 @@ export default function MeterFormModal({
                                                 color: '#6b7280',
                                                 fontSize: '13px'
                                             }}>
-                                                Ã¢â€žÂ¹Ã¯Â¸Â {t('meters.apartmentNotSelected')}
+                                                ℹ️ {t('meters.apartmentNotSelected')}
                                             </div>
                                         )}
                                     </>
@@ -569,7 +569,7 @@ export default function MeterFormModal({
                                                 ...connectionConfig,
                                                 loxone_password: e.target.value
                                             })}
-                                            placeholder="Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢"
+                                            placeholder="••••••••"
                                             style={{
                                                 width: '100%',
                                                 padding: '10px',
@@ -640,7 +640,7 @@ export default function MeterFormModal({
                                         fontWeight: '500',
                                         fontSize: '14px'
                                     }}>
-                                        Device Type *
+                                        {t('meters.deviceType')} *
                                     </label>
                                     <select
                                         required
@@ -658,7 +658,7 @@ export default function MeterFormModal({
                                         ))}
                                     </select>
                                     <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                                        Select the type of device sending MQTT data. Use "Generic" for flexible JSON parsing.
+                                        {t('meters.deviceTypeHelp')}
                                     </p>
                                 </div>
 
@@ -768,7 +768,7 @@ export default function MeterFormModal({
                                             fontWeight: '500',
                                             fontSize: '14px'
                                         }}>
-                                            {t('meters.mqttUsername')} (Optional)
+                                            {t('meters.mqttUsername')} ({t('common.optional')})
                                         </label>
                                         <input
                                             type="text"
@@ -777,7 +777,7 @@ export default function MeterFormModal({
                                                 ...connectionConfig,
                                                 mqtt_username: e.target.value
                                             })}
-                                            placeholder="Leave empty if no authentication"
+                                            placeholder={t('meters.mqttAuthPlaceholder')}
                                             style={{
                                                 width: '100%',
                                                 padding: '10px',
@@ -793,7 +793,7 @@ export default function MeterFormModal({
                                             fontWeight: '500',
                                             fontSize: '14px'
                                         }}>
-                                            {t('meters.mqttPassword')} (Optional)
+                                            {t('meters.mqttPassword')} ({t('common.optional')})
                                         </label>
                                         <input
                                             type="password"
@@ -802,7 +802,7 @@ export default function MeterFormModal({
                                                 ...connectionConfig,
                                                 mqtt_password: e.target.value
                                             })}
-                                            placeholder="Leave empty if no authentication"
+                                            placeholder={t('meters.mqttAuthPlaceholder')}
                                             style={{
                                                 width: '100%',
                                                 padding: '10px',
@@ -822,7 +822,7 @@ export default function MeterFormModal({
                                     color: '#0c4a6e',
                                     border: '1px solid #7dd3fc'
                                 }}>
-                                    Ã¢â€žÂ¹Ã¯Â¸Â <strong>Authentication is optional.</strong> Leave username and password empty if your MQTT broker doesn't require authentication (allow_anonymous = true). Fill them in if authentication is enabled.
+                                    ℹ️ <strong>{t('meters.mqttAuthInfo')}</strong> {t('meters.mqttAuthDescription')}
                                 </div>
 
                                 <div style={{ marginBottom: '12px' }}>
@@ -866,10 +866,10 @@ export default function MeterFormModal({
                                     border: '1px solid #e5e7eb'
                                 }}>
                                     <strong>{t('meters.mqttSupportedFormats')}</strong><br /><br />
-                                    <strong>Shelly 3EM Format:</strong><br />
+                                    <strong>{t('meters.mqttShellyFormat')}:</strong><br />
                                     {`{ "id": 0, "total_act": 12345.67, "total_act_ret": 678.9 }`}<br /><br />
 
-                                    <strong>Shelly 2PM Format:</strong><br />
+                                    <strong>{t('meters.mqttShelly2pmFormat')}:</strong><br />
                                     {`{ "id": 1, "aenergy": {"total": 170204.016}, "ret_aenergy": {"total": 168518.016} }`}<br /><br />
 
                                     <strong>{t('meters.mqttFormat1')}</strong><br />
@@ -939,7 +939,7 @@ export default function MeterFormModal({
                                             fontWeight: '500',
                                             fontSize: '14px'
                                         }}>
-                                            {t('meters.dataKey')} * (UUID_power_kwh)
+                                            {t('meters.dataKey')} * ({t('meters.uuidPowerKwh')})
                                         </label>
                                         <input
                                             type="text"
@@ -996,8 +996,8 @@ export default function MeterFormModal({
                                     border: '1px solid #0284c7'
                                 }}>
                                     <p style={{ fontSize: '13px', color: '#0c4a6e', margin: 0 }}>
-                                        <strong>Modbus TCP Configuration</strong><br />
-                                        Configure according to your device manual
+                                        <strong>{t('meters.modbusConfigTitle')}</strong><br />
+                                        {t('meters.modbusConfigDescription')}
                                     </p>
                                 </div>
 
@@ -1068,7 +1068,7 @@ export default function MeterFormModal({
                                         fontWeight: '500',
                                         fontSize: '14px'
                                     }}>
-                                        Unit ID (Slave ID) *
+                                        {t('meters.modbusUnitId')} *
                                     </label>
                                     <input
                                         type="number"
@@ -1087,7 +1087,7 @@ export default function MeterFormModal({
                                         }}
                                     />
                                     <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                                        Modbus device/slave ID (typically 1-247)
+                                        {t('meters.modbusUnitIdHelp')}
                                     </p>
                                 </div>
 
@@ -1098,7 +1098,7 @@ export default function MeterFormModal({
                                         fontWeight: '500',
                                         fontSize: '14px'
                                     }}>
-                                        Function Code *
+                                        {t('meters.modbusFunctionCode')} *
                                     </label>
                                     <select
                                         required
@@ -1114,13 +1114,13 @@ export default function MeterFormModal({
                                             borderRadius: '6px'
                                         }}
                                     >
-                                        <option value={3}>Read Holding Registers (FC03)</option>
-                                        <option value={4}>Read Input Registers (FC04)</option>
-                                        <option value={1}>Read Coils (FC01)</option>
-                                        <option value={2}>Read Discrete Inputs (FC02)</option>
+                                        <option value={3}>{t('meters.modbusFc03')}</option>
+                                        <option value={4}>{t('meters.modbusFc04')}</option>
+                                        <option value={1}>{t('meters.modbusFc01')}</option>
+                                        <option value={2}>{t('meters.modbusFc02')}</option>
                                     </select>
                                     <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                                        Most energy meters use FC03 or FC04
+                                        {t('meters.modbusFunctionCodeHelp')}
                                     </p>
                                 </div>
 
@@ -1131,7 +1131,7 @@ export default function MeterFormModal({
                                         fontWeight: '500',
                                         fontSize: '14px'
                                     }}>
-                                        Data Type *
+                                        {t('meters.modbusDataType')} *
                                     </label>
                                     <select
                                         required
@@ -1150,15 +1150,15 @@ export default function MeterFormModal({
                                             borderRadius: '6px'
                                         }}
                                     >
-                                        <option value="float32">32-bit Float (2 registers)</option>
-                                        <option value="float64">64-bit Float (4 registers)</option>
-                                        <option value="int32">32-bit Integer (2 registers)</option>
-                                        <option value="int16">16-bit Integer (1 register)</option>
-                                        <option value="uint32">32-bit Unsigned (2 registers)</option>
-                                        <option value="uint16">16-bit Unsigned (1 register)</option>
+                                        <option value="float32">{t('meters.modbusFloat32')}</option>
+                                        <option value="float64">{t('meters.modbusFloat64')}</option>
+                                        <option value="int32">{t('meters.modbusInt32')}</option>
+                                        <option value="int16">{t('meters.modbusInt16')}</option>
+                                        <option value="uint32">{t('meters.modbusUint32')}</option>
+                                        <option value="uint16">{t('meters.modbusUint16')}</option>
                                     </select>
                                     <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                                        Most energy meters use 32-bit Float
+                                        {t('meters.modbusDataTypeHelp')}
                                     </p>
                                 </div>
 
@@ -1170,7 +1170,7 @@ export default function MeterFormModal({
                                     marginBottom: '12px',
                                     border: '1px solid #22c55e'
                                 }}>
-                                    <strong style={{ color: '#15803d' }}>Import Energy</strong>
+                                    <strong style={{ color: '#15803d' }}>{t('meters.modbusImportEnergy')}</strong>
                                     <div style={{ marginTop: '12px' }}>
                                         <label style={{
                                             display: 'block',
@@ -1178,7 +1178,7 @@ export default function MeterFormModal({
                                             fontWeight: '500',
                                             fontSize: '14px'
                                         }}>
-                                            Register Address *
+                                            {t('meters.modbusRegisterAddress')} *
                                         </label>
                                         <input
                                             type="number"
@@ -1197,7 +1197,7 @@ export default function MeterFormModal({
                                             }}
                                         />
                                         <p style={{ fontSize: '11px', color: '#15803d', marginTop: '4px' }}>
-                                            Starting from 0 (e.g., 40001 → 0)
+                                            {t('meters.modbusRegisterAddressHelp')}
                                         </p>
                                     </div>
                                 </div>
@@ -1225,7 +1225,7 @@ export default function MeterFormModal({
                                                     has_export_register: e.target.checked
                                                 })}
                                             />
-                                            <strong style={{ color: '#92400e' }}>Export Energy Register</strong>
+                                            <strong style={{ color: '#92400e' }}>{t('meters.modbusExportRegister')}</strong>
                                         </label>
 
                                         {connectionConfig.has_export_register && (
@@ -1236,7 +1236,7 @@ export default function MeterFormModal({
                                                     fontWeight: '500',
                                                     fontSize: '14px'
                                                 }}>
-                                                    Export Register Address *
+                                                    {t('meters.modbusExportAddress')} *
                                                 </label>
                                                 <input
                                                     type="number"
@@ -1255,7 +1255,7 @@ export default function MeterFormModal({
                                                     }}
                                                 />
                                                 <p style={{ fontSize: '11px', color: '#92400e', marginTop: '4px' }}>
-                                                    Separate register for export/feed-in
+                                                    {t('meters.modbusExportAddressHelp')}
                                                 </p>
                                             </div>
                                         )}
@@ -1270,12 +1270,12 @@ export default function MeterFormModal({
                                     fontSize: '12px',
                                     border: '1px solid #e5e7eb'
                                 }}>
-                                    <strong>Summary:</strong><br />
+                                    <strong>{t('meters.modbusSummary')}:</strong><br />
                                     {connectionConfig.ip_address || '192.168.1.100'}:{connectionConfig.port || 502}<br />
-                                    Unit: {connectionConfig.unit_id || 1} | FC{String(connectionConfig.function_code || 3).padStart(2, '0')}<br />
-                                    Type: {connectionConfig.data_type || 'float32'}<br />
-                                    Import@{connectionConfig.register_address || 0}
-                                    {connectionConfig.has_export_register && ` | Export@${connectionConfig.export_register_address || 0}`}
+                                    {t('meters.modbusUnit')}: {connectionConfig.unit_id || 1} | FC{String(connectionConfig.function_code || 3).padStart(2, '0')}<br />
+                                    {t('meters.modbusType')}: {connectionConfig.data_type || 'float32'}<br />
+                                    {t('meters.modbusImport')}@{connectionConfig.register_address || 0}
+                                    {connectionConfig.has_export_register && ` | ${t('meters.modbusExport')}@${connectionConfig.export_register_address || 0}`}
                                 </div>
                             </>
                         )}
