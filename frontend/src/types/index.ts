@@ -116,10 +116,12 @@ export interface Charger {
 export interface BillingSettings {
   id: number;
   building_id: number;
+  is_complex: boolean;
   normal_power_price: number;
   solar_power_price: number;
   car_charging_normal_price: number;
   car_charging_priority_price: number;
+  vzev_export_price?: number;
   currency: string;
   valid_from: string;
   valid_to: string;
@@ -202,6 +204,7 @@ export interface GenerateBillsRequest {
   include_shared_meters?: boolean;
   shared_meter_configs?: SharedMeterConfig[];
   custom_line_items?: CustomLineItemSelection[];
+  is_vzev?: boolean;
 }
 
 export interface ApartmentSelection {

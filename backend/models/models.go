@@ -29,10 +29,10 @@ type User struct {
 	ApartmentUnit     string    `json:"apartment_unit"`
 	UserType          string    `json:"user_type"`
 	ManagedBuildings  string    `json:"managed_buildings"`
-	Language          string    `json:"language"` // Invoice language (de, fr, it, en)
+	Language          string    `json:"language"`
 	IsActive          bool      `json:"is_active"`
-	RentStartDate     *string   `json:"rent_start_date"` // NEW: Rent period start date
-	RentEndDate       *string   `json:"rent_end_date"`   // NEW: Rent period end date
+	RentStartDate     *string   `json:"rent_start_date"`
+	RentEndDate       *string   `json:"rent_end_date"`
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
 }
@@ -68,11 +68,11 @@ type Meter struct {
 	ApartmentUnit      string     `json:"apartment_unit"`
 	ConnectionType     string     `json:"connection_type"`
 	ConnectionConfig   string     `json:"connection_config"`
-	DeviceType         string     `json:"device_type"` // NEW: whatwatt-go, shelly-3em, shelly-em, generic, custom
+	DeviceType         string     `json:"device_type"`
 	Notes              string     `json:"notes"`
 	LastReading        float64    `json:"last_reading"`
 	LastReadingTime    *time.Time `json:"last_reading_time"`
-	LastReadingExport  float64    `json:"last_reading_export"`  // NEW: Export/return energy
+	LastReadingExport  float64    `json:"last_reading_export"`
 	IsActive           bool       `json:"is_active"`
 	IsArchived         bool       `json:"is_archived"`
 	ReplacedByMeterID  *int       `json:"replaced_by_meter_id"`
@@ -129,9 +129,9 @@ type MeterReading struct {
 	MeterID           int       `json:"meter_id"`
 	ReadingTime       time.Time `json:"reading_time"`
 	PowerKWh          float64   `json:"power_kwh"`
-	PowerKWhExport    float64   `json:"power_kwh_export"`    // NEW: Export energy
+	PowerKWhExport    float64   `json:"power_kwh_export"`
 	ConsumptionKWh    float64   `json:"consumption_kwh"`
-	ConsumptionExport float64   `json:"consumption_export"`  // NEW: Export consumption
+	ConsumptionExport float64   `json:"consumption_export"`
 	CreatedAt         time.Time `json:"created_at"`
 }
 
@@ -149,10 +149,12 @@ type ChargerSession struct {
 type BillingSettings struct {
 	ID                       int       `json:"id"`
 	BuildingID               int       `json:"building_id"`
+	IsComplex                bool      `json:"is_complex"`
 	NormalPowerPrice         float64   `json:"normal_power_price"`
 	SolarPowerPrice          float64   `json:"solar_power_price"`
 	CarChargingNormalPrice   float64   `json:"car_charging_normal_price"`
 	CarChargingPriorityPrice float64   `json:"car_charging_priority_price"`
+	VZEVExportPrice          float64   `json:"vzev_export_price"`
 	Currency                 string    `json:"currency"`
 	ValidFrom                string    `json:"valid_from"`
 	ValidTo                  string    `json:"valid_to"`
@@ -172,6 +174,7 @@ type Invoice struct {
 	Currency      string        `json:"currency"`
 	Status        string        `json:"status"`
 	PDFPath       string        `json:"pdf_path,omitempty"`
+	IsVZEV        bool          `json:"is_vzev"`
 	Items         []InvoiceItem `json:"items,omitempty"`
 	User          *User         `json:"user,omitempty"`
 	GeneratedAt   time.Time     `json:"generated_at"`

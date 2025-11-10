@@ -145,6 +145,8 @@ func RunMigrations(db *sql.DB) error {
 			solar_power_price REAL NOT NULL DEFAULT 0.15,
 			car_charging_normal_price REAL NOT NULL DEFAULT 0.30,
 			car_charging_priority_price REAL NOT NULL DEFAULT 0.40,
+			is_complex INTEGER DEFAULT 0,
+			vzev_export_price REAL DEFAULT 0.18,
 			currency TEXT DEFAULT 'CHF',
 			valid_from DATE NOT NULL,
 			valid_to DATE,
@@ -164,6 +166,7 @@ func RunMigrations(db *sql.DB) error {
 			total_amount REAL NOT NULL,
 			currency TEXT DEFAULT 'CHF',
 			status TEXT DEFAULT 'draft',
+			is_vzev INTEGER DEFAULT 0,
 			pdf_path TEXT,
 			generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (user_id) REFERENCES users(id),
@@ -301,15 +304,19 @@ func RunMigrations(db *sql.DB) error {
 		}
 	}
 
-	log.Println("✅ Base tables and indexes created/verified")
+	log.Println("âœ… Base tables and indexes created/verified")
 
 	// Run additional migrations for new columns
 	if err := addMQTTDeviceTypeColumn(db); err != nil {
-		log.Printf("⚠️  MQTT device type migration: %v", err)
+		log.Printf("âš ï¸  MQTT device type migration: %v", err)
 	}
 
 	if err := addExportColumns(db); err != nil {
-		log.Printf("⚠️  Export columns migration: %v", err)
+		log.Printf("âš ï¸  Export columns migration: %v", err)
+	}
+
+	if err := addVZEVColumns(db); err != nil {
+		log.Printf("⚠️  vZEV columns migration: %v", err)
 	}
 
 	// Create triggers
@@ -322,7 +329,7 @@ func RunMigrations(db *sql.DB) error {
 		return fmt.Errorf("failed to create default admin: %v", err)
 	}
 
-	log.Println("✅ All migrations completed successfully")
+	log.Println("âœ… All migrations completed successfully")
 	return nil
 }
 
@@ -345,12 +352,12 @@ func addMQTTDeviceTypeColumn(db *sql.DB) error {
 		_, err := db.Exec(`ALTER TABLE meters ADD COLUMN device_type TEXT DEFAULT 'generic'`)
 		if err != nil {
 			if contains(err.Error(), "duplicate column") {
-				log.Println("✅ device_type column already exists")
+				log.Println("âœ… device_type column already exists")
 				return nil
 			}
 			return fmt.Errorf("failed to add device_type column: %v", err)
 		}
-		log.Println("✅ device_type column added successfully")
+		log.Println("âœ… device_type column added successfully")
 
 		// Update existing MQTT meters to generic type
 		_, err = db.Exec(`UPDATE meters SET device_type = 'generic' WHERE connection_type = 'mqtt' AND (device_type IS NULL OR device_type = '')`)
@@ -358,7 +365,7 @@ func addMQTTDeviceTypeColumn(db *sql.DB) error {
 			log.Printf("Warning: Failed to update existing meters: %v", err)
 		}
 	} else {
-		log.Println("✅ device_type column already exists")
+		log.Println("âœ… device_type column already exists")
 	}
 
 	return nil
@@ -383,15 +390,15 @@ func addExportColumns(db *sql.DB) error {
 		_, err := db.Exec(`ALTER TABLE meters ADD COLUMN last_reading_export REAL DEFAULT 0`)
 		if err != nil {
 			if contains(err.Error(), "duplicate column") {
-				log.Println("✅ last_reading_export column already exists")
+				log.Println("âœ… last_reading_export column already exists")
 			} else {
 				return fmt.Errorf("failed to add last_reading_export column: %v", err)
 			}
 		} else {
-			log.Println("✅ last_reading_export column added successfully")
+			log.Println("âœ… last_reading_export column added successfully")
 		}
 	} else {
-		log.Println("✅ last_reading_export column already exists")
+		log.Println("âœ… last_reading_export column already exists")
 	}
 
 	// Check meter_readings table
@@ -411,15 +418,15 @@ func addExportColumns(db *sql.DB) error {
 		_, err := db.Exec(`ALTER TABLE meter_readings ADD COLUMN power_kwh_export REAL DEFAULT 0`)
 		if err != nil {
 			if contains(err.Error(), "duplicate column") {
-				log.Println("✅ power_kwh_export column already exists")
+				log.Println("âœ… power_kwh_export column already exists")
 			} else {
 				return fmt.Errorf("failed to add power_kwh_export column: %v", err)
 			}
 		} else {
-			log.Println("✅ power_kwh_export column added successfully")
+			log.Println("âœ… power_kwh_export column added successfully")
 		}
 	} else {
-		log.Println("✅ power_kwh_export column already exists")
+		log.Println("âœ… power_kwh_export column already exists")
 	}
 
 	// Add consumption_export to meter_readings table
@@ -428,15 +435,15 @@ func addExportColumns(db *sql.DB) error {
 		_, err := db.Exec(`ALTER TABLE meter_readings ADD COLUMN consumption_export REAL DEFAULT 0`)
 		if err != nil {
 			if contains(err.Error(), "duplicate column") {
-				log.Println("✅ consumption_export column already exists")
+				log.Println("âœ… consumption_export column already exists")
 			} else {
 				return fmt.Errorf("failed to add consumption_export column: %v", err)
 			}
 		} else {
-			log.Println("✅ consumption_export column added successfully")
+			log.Println("âœ… consumption_export column added successfully")
 		}
 	} else {
-		log.Println("✅ consumption_export column already exists")
+		log.Println("âœ… consumption_export column already exists")
 	}
 
 	return nil
@@ -520,10 +527,88 @@ func createDefaultAdmin(db *sql.DB) error {
 			return err
 		}
 
-		log.Println("✅ Default admin user created")
+		log.Println("âœ… Default admin user created")
 		log.Println("   Username: admin")
 		log.Println("   Password: admin123")
-		log.Println("   ⚠️  IMPORTANT: Change the default password immediately!")
+		log.Println("   âš ï¸  IMPORTANT: Change the default password immediately!")
+	}
+
+	return nil
+}}
+
+// addVZEVColumns adds vZEV support columns to billing_settings and invoices tables
+func addVZEVColumns(db *sql.DB) error {
+	// Check billing_settings table
+	var billingSettingsSql string
+	err := db.QueryRow(`
+		SELECT sql FROM sqlite_master 
+		WHERE type='table' AND name='billing_settings'
+	`).Scan(&billingSettingsSql)
+
+	if err != nil {
+		return err
+	}
+
+	// Add is_complex to billing_settings table
+	if !contains(billingSettingsSql, "is_complex") {
+		log.Println("Adding is_complex column to billing_settings table...")
+		_, err := db.Exec(`ALTER TABLE billing_settings ADD COLUMN is_complex INTEGER DEFAULT 0`)
+		if err != nil {
+			if contains(err.Error(), "duplicate column") {
+				log.Println("✅ is_complex column already exists")
+			} else {
+				return fmt.Errorf("failed to add is_complex column: %v", err)
+			}
+		} else {
+			log.Println("✅ is_complex column added successfully")
+		}
+	} else {
+		log.Println("✅ is_complex column already exists")
+	}
+
+	// Add vzev_export_price to billing_settings table
+	if !contains(billingSettingsSql, "vzev_export_price") {
+		log.Println("Adding vzev_export_price column to billing_settings table...")
+		_, err := db.Exec(`ALTER TABLE billing_settings ADD COLUMN vzev_export_price REAL DEFAULT 0.18`)
+		if err != nil {
+			if contains(err.Error(), "duplicate column") {
+				log.Println("✅ vzev_export_price column already exists")
+			} else {
+				return fmt.Errorf("failed to add vzev_export_price column: %v", err)
+			}
+		} else {
+			log.Println("✅ vzev_export_price column added successfully")
+		}
+	} else {
+		log.Println("✅ vzev_export_price column already exists")
+	}
+
+	// Check invoices table
+	var invoicesSql string
+	err = db.QueryRow(`
+		SELECT sql FROM sqlite_master 
+		WHERE type='table' AND name='invoices'
+	`).Scan(&invoicesSql)
+
+	if err != nil {
+		return err
+	}
+
+	// Add is_vzev to invoices table
+	if !contains(invoicesSql, "is_vzev") {
+		log.Println("Adding is_vzev column to invoices table...")
+		_, err := db.Exec(`ALTER TABLE invoices ADD COLUMN is_vzev INTEGER DEFAULT 0`)
+		if err != nil {
+			if contains(err.Error(), "duplicate column") {
+				log.Println("✅ is_vzev column already exists")
+			} else {
+				return fmt.Errorf("failed to add is_vzev column: %v", err)
+			}
+		} else {
+			log.Println("✅ is_vzev column added successfully")
+		}
+	} else {
+		log.Println("✅ is_vzev column already exists")
 	}
 
 	return nil

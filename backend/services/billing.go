@@ -52,9 +52,11 @@ type UserPeriod struct {
 	ProrationFactor float64   // For shared costs only (days in period / total days)
 }
 
-func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, endDate string) ([]models.Invoice, error) {
+func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, endDate string, isVZEV bool) ([]models.Invoice, error) {
 	log.Printf("=== BILL GENERATION START ===")
-	log.Printf("Buildings: %v, Users: %v, Period: %s to %s", buildingIDs, userIDs, startDate, endDate)
+	log.Printf("Mode: %s, Buildings: %v, Users: %v, Period: %s to %s", 
+		func() string { if isVZEV { return "vZEV (Virtual Allocation)" } else { return "ZEV (Direct Sharing)" } }(),
+		buildingIDs, userIDs, startDate, endDate)
 
 	// VALIDATION: Check if all buildings have active pricing
 	buildingsWithoutPricing := []string{}
@@ -100,59 +102,70 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 
 	for _, buildingID := range buildingIDs {
 		log.Printf("\n--- Processing Building ID: %d ---", buildingID)
-
-		var settings models.BillingSettings
+	
+		// Check if this is a vZEV complex
+		var isComplex bool
+		var groupBuildings string
 		err := bs.db.QueryRow(`
-			SELECT id, building_id, normal_power_price, solar_power_price, 
-			       car_charging_normal_price, car_charging_priority_price, currency
+			SELECT is_group, COALESCE(group_buildings, '') 
+			FROM buildings WHERE id = ?
+		`, buildingID).Scan(&isComplex, &groupBuildings)
+	
+		if err != nil {
+			log.Printf("ERROR: Failed to get building info: %v", err)
+			continue
+		}
+	
+		var settings models.BillingSettings
+		err = bs.db.QueryRow(`
+			SELECT id, building_id, is_complex, normal_power_price, solar_power_price, 
+				   car_charging_normal_price, car_charging_priority_price, 
+				   vzev_export_price, currency
 			FROM billing_settings WHERE building_id = ? AND is_active = 1
 			LIMIT 1
 		`, buildingID).Scan(
-			&settings.ID, &settings.BuildingID, &settings.NormalPowerPrice,
-			&settings.SolarPowerPrice, &settings.CarChargingNormalPrice,
-			&settings.CarChargingPriorityPrice, &settings.Currency,
+			&settings.ID, &settings.BuildingID, &settings.IsComplex,
+			&settings.NormalPowerPrice, &settings.SolarPowerPrice,
+			&settings.CarChargingNormalPrice, &settings.CarChargingPriorityPrice,
+			&settings.VZEVExportPrice, &settings.Currency,
 		)
-
+	
 		if err != nil {
 			log.Printf("ERROR: No active billing settings for building %d: %v", buildingID, err)
 			continue
 		}
-
-		log.Printf("Billing Settings - Normal: %.3f, Solar: %.3f, Car Solar: %.3f, Car Priority: %.3f %s",
-			settings.NormalPowerPrice, settings.SolarPowerPrice,
-			settings.CarChargingNormalPrice, settings.CarChargingPriorityPrice, settings.Currency)
-
-		// Get all users with rent periods overlapping the billing period
-		userPeriods, err := bs.getUserPeriodsForBilling(buildingID, userIDs, start, end)
-		if err != nil {
-			log.Printf("ERROR: Failed to get user periods: %v", err)
-			continue
-		}
-
-		if len(userPeriods) == 0 {
-			log.Printf("WARNING: No active users with valid rent periods found for building %d", buildingID)
-			continue
-		}
-
-		log.Printf("Found %d user periods to process", len(userPeriods))
-
-		// Process each user period
-		for _, userPeriod := range userPeriods {
-			log.Printf("\n  Processing User Period: %s %s (ID: %d)", 
-				userPeriod.FirstName, userPeriod.LastName, userPeriod.UserID)
-			log.Printf("  Billing Period: %s to %s (%.1f%% of total period)",
-				userPeriod.BillingStart.Format("2006-01-02"),
-				userPeriod.BillingEnd.Format("2006-01-02"),
-				userPeriod.ProrationFactor*100)
-
-			invoice, err := bs.generateUserInvoiceForPeriod(userPeriod, buildingID, start, end, settings)
+	
+		log.Printf("Billing Settings - Type: %s, Normal: %.3f, Solar: %.3f, vZEV Export: %.3f",
+			func() string { if settings.IsComplex { return "vZEV" } else { return "ZEV" } }(),
+			settings.NormalPowerPrice, settings.SolarPowerPrice, settings.VZEVExportPrice)
+	
+		// Route to appropriate billing logic
+		if isVZEV && isComplex {
+			// vZEV: Virtual allocation between buildings in complex
+			log.Printf("Using vZEV billing logic for complex %d", buildingID)
+			complexInvoices, err := bs.generateVZEVBills(buildingID, groupBuildings, userIDs, start, end, settings)
 			if err != nil {
-				log.Printf("ERROR: Failed to generate invoice for user %d: %v", userPeriod.UserID, err)
+				log.Printf("ERROR: vZEV billing failed: %v", err)
 				continue
 			}
-
-			invoices = append(invoices, *invoice)
-			log.Printf("  ✅ Generated invoice %s: %s %.3f", invoice.InvoiceNumber, settings.Currency, invoice.TotalAmount)
+			invoices = append(invoices, complexInvoices...)
+		} else {
+			// ZEV: Direct meter-based billing
+			log.Printf("Using ZEV billing logic for building %d", buildingID)
+			userPeriods, err := bs.getUserPeriodsForBilling(buildingID, userIDs, start, end)
+			if err != nil {
+				log.Printf("ERROR: Failed to get user periods: %v", err)
+				continue
+			}
+	
+			for _, userPeriod := range userPeriods {
+				invoice, err := bs.generateUserInvoiceForPeriod(userPeriod, buildingID, start, end, settings)
+				if err != nil {
+					log.Printf("ERROR: Failed to generate invoice for user %d: %v", userPeriod.UserID, err)
+					continue
+				}
+				invoices = append(invoices, *invoice)
+			}
 		}
 	}
 
@@ -877,6 +890,377 @@ func (bs *BillingService) generateUserInvoiceForPeriod(userPeriod UserPeriod, bu
 		TotalAmount:   totalAmount,
 		Currency:      settings.Currency,
 		Status:        "issued",
+		Items:         items,
+		GeneratedAt:   time.Now(),
+	}
+
+	return invoice, nil
+}
+
+// generateVZEVBills handles virtual energy allocation for building complexes
+func (bs *BillingService) generateVZEVBills(complexID int, groupBuildingsJSON string, userIDs []int, start, end time.Time, settings models.BillingSettings) ([]models.Invoice, error) {
+	log.Printf("\n=== vZEV BILLING START ===")
+	log.Printf("Complex ID: %d, Period: %s to %s", complexID, start.Format("2006-01-02"), end.Format("2006-01-02"))
+
+	// Parse group buildings
+	var groupBuildings []int
+	if groupBuildingsJSON != "" {
+		if err := json.Unmarshal([]byte(groupBuildingsJSON), &groupBuildings); err != nil {
+			return nil, fmt.Errorf("failed to parse group buildings: %v", err)
+		}
+	}
+
+	if len(groupBuildings) == 0 {
+		return nil, fmt.Errorf("no buildings in complex group")
+	}
+
+	log.Printf("Complex contains %d buildings: %v", len(groupBuildings), groupBuildings)
+
+	// Step 1: Calculate total PV export available from all buildings in complex
+	totalPVExport := 0.0
+	for _, buildingID := range groupBuildings {
+		// Get solar meters for this building
+		rows, err := bs.db.Query(`
+			SELECT meter_id FROM meters 
+			WHERE building_id = ? AND meter_type = 'solar_meter' AND is_active = 1
+		`, buildingID)
+
+		if err != nil {
+			continue
+		}
+
+		var solarMeters []int
+		for rows.Next() {
+			var meterID int
+			if err := rows.Scan(&meterID); err == nil {
+				solarMeters = append(solarMeters, meterID)
+			}
+		}
+		rows.Close()
+
+		// Calculate export for this building
+		for _, meterID := range solarMeters {
+			var exportKWh float64
+			err := bs.db.QueryRow(`
+				SELECT COALESCE(SUM(consumption_export), 0)
+				FROM meter_readings
+				WHERE meter_id = ? AND reading_time >= ? AND reading_time <= ?
+			`, meterID, start, end).Scan(&exportKWh)
+
+			if err == nil {
+				totalPVExport += exportKWh
+				log.Printf("  Building %d, Meter %d: %.3f kWh PV export", buildingID, meterID, exportKWh)
+			}
+		}
+	}
+
+	log.Printf("Total PV export available for virtual allocation: %.3f kWh", totalPVExport)
+
+	// Step 2: Calculate total consumption across all apartments in complex
+	totalComplexConsumption := 0.0
+	apartmentConsumption := make(map[int]float64) // userID -> consumption
+
+	for _, buildingID := range groupBuildings {
+		userPeriods, err := bs.getUserPeriodsForBilling(buildingID, userIDs, start, end)
+		if err != nil {
+			continue
+		}
+
+		for _, userPeriod := range userPeriods {
+			_, _, consumption := bs.calculateZEVConsumption(userPeriod.UserID, buildingID, userPeriod.BillingStart, userPeriod.BillingEnd)
+			apartmentConsumption[userPeriod.UserID] = consumption
+			totalComplexConsumption += consumption
+		}
+	}
+
+	log.Printf("Total complex consumption: %.3f kWh across %d apartments", totalComplexConsumption, len(apartmentConsumption))
+
+	// Step 3: Calculate virtual allocation ratios
+	// PV is allocated proportionally to consumption
+	invoices := []models.Invoice{}
+
+	for _, buildingID := range groupBuildings {
+		userPeriods, err := bs.getUserPeriodsForBilling(buildingID, userIDs, start, end)
+		if err != nil {
+			continue
+		}
+
+		for _, userPeriod := range userPeriods {
+			consumption := apartmentConsumption[userPeriod.UserID]
+			if consumption == 0 {
+				continue
+			}
+
+			// Calculate this apartment's share of virtual PV
+			virtualPVShare := 0.0
+			if totalComplexConsumption > 0 {
+				virtualPVShare = totalPVExport * (consumption / totalComplexConsumption)
+			}
+
+			// Rest comes from grid
+			gridEnergy := consumption - virtualPVShare
+			if gridEnergy < 0 {
+				gridEnergy = 0
+				virtualPVShare = consumption
+			}
+
+			log.Printf("\n  User %d (%s %s):", userPeriod.UserID, userPeriod.FirstName, userPeriod.LastName)
+			log.Printf("    Consumption: %.3f kWh", consumption)
+			log.Printf("    Virtual PV: %.3f kWh (%.1f%%)", virtualPVShare, (virtualPVShare/consumption)*100)
+			log.Printf("    Grid: %.3f kWh (%.1f%%)", gridEnergy, (gridEnergy/consumption)*100)
+
+			// Generate invoice with virtual allocation
+			invoice, err := bs.generateVZEVInvoice(userPeriod, buildingID, start, end, settings, consumption, virtualPVShare, gridEnergy)
+			if err != nil {
+				log.Printf("ERROR: Failed to generate vZEV invoice: %v", err)
+				continue
+			}
+
+			invoices = append(invoices, *invoice)
+		}
+	}
+
+	log.Printf("\n=== vZEV BILLING COMPLETE: %d invoices ===", len(invoices))
+	return invoices, nil
+}
+
+// generateVZEVInvoice creates an invoice with virtual PV allocation
+func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID int, fullStart, fullEnd time.Time, settings models.BillingSettings, totalConsumption, virtualPV, gridEnergy float64) (*models.Invoice, error) {
+	tr := GetTranslations(userPeriod.Language)
+
+	invoiceYear := fullStart.Year()
+	timestamp := time.Now().Format("20060102150405")
+	invoiceNumber := fmt.Sprintf("VZEV-%d-%d-%d-%s", invoiceYear, buildingID, userPeriod.UserID, timestamp)
+
+	items := []models.InvoiceItem{}
+	totalAmount := 0.0
+
+	start := userPeriod.BillingStart
+	end := userPeriod.BillingEnd
+
+	// Add vZEV mode notice
+	items = append(items, models.InvoiceItem{
+		Description: "⚡ vZEV Mode: Virtual Energy Allocation",
+		Quantity:    0,
+		UnitPrice:   0,
+		TotalPrice:  0,
+		ItemType:    "vzev_notice",
+	})
+
+	// Add period notice if prorated
+	if userPeriod.ProrationFactor < 1.0 {
+		items = append(items, models.InvoiceItem{
+			Description: fmt.Sprintf("⚠️ %s: %s to %s (%.1f%% of billing period)",
+				tr.PartialPeriod,
+				start.Format("02.01.2006"),
+				end.Format("02.01.2006"),
+				userPeriod.ProrationFactor*100),
+			Quantity:    0,
+			UnitPrice:   0,
+			TotalPrice:  0,
+			ItemType:    "proration_notice",
+		})
+	}
+
+	items = append(items, models.InvoiceItem{
+		Description: "",
+		Quantity:    0,
+		UnitPrice:   0,
+		TotalPrice:  0,
+		ItemType:    "separator",
+	})
+
+	// Meter reading info
+	meterReadingFrom, meterReadingTo, meterName := bs.getMeterReadings(userPeriod.UserID, start, end)
+
+	items = append(items, models.InvoiceItem{
+		Description: fmt.Sprintf("%s: %s", tr.ApartmentMeter, meterName),
+		Quantity:    0,
+		UnitPrice:   0,
+		TotalPrice:  0,
+		ItemType:    "meter_info",
+	})
+
+	items = append(items, models.InvoiceItem{
+		Description: fmt.Sprintf("%s: %s-%s | %s: %.3f kWh | %s: %.3f kWh | %s: %.3f kWh",
+			tr.Period, start.Format("02.01"), end.Format("02.01"),
+			tr.OldReading, meterReadingFrom,
+			tr.NewReading, meterReadingTo,
+			tr.Consumption, totalConsumption),
+		Quantity:    totalConsumption,
+		UnitPrice:   0,
+		TotalPrice:  0,
+		ItemType:    "meter_reading_compact",
+	})
+
+	items = append(items, models.InvoiceItem{
+		Description: "",
+		Quantity:    0,
+		UnitPrice:   0,
+		TotalPrice:  0,
+		ItemType:    "separator",
+	})
+
+	// Virtual PV allocation
+	if virtualPV > 0 {
+		virtualPVCost := virtualPV * settings.VZEVExportPrice
+		totalAmount += virtualPVCost
+		items = append(items, models.InvoiceItem{
+			Description: fmt.Sprintf("Virtual PV (allocated from complex): %.3f kWh × %.3f %s/kWh",
+				virtualPV, settings.VZEVExportPrice, settings.Currency),
+			Quantity:    virtualPV,
+			UnitPrice:   settings.VZEVExportPrice,
+			TotalPrice:  virtualPVCost,
+			ItemType:    "vzev_virtual_pv",
+		})
+	}
+
+	// Grid energy
+	if gridEnergy > 0 {
+		gridCost := gridEnergy * settings.NormalPowerPrice
+		totalAmount += gridCost
+		items = append(items, models.InvoiceItem{
+			Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh",
+				tr.NormalPowerGrid, gridEnergy, settings.NormalPowerPrice, settings.Currency),
+			Quantity:    gridEnergy,
+			UnitPrice:   settings.NormalPowerPrice,
+			TotalPrice:  gridCost,
+			ItemType:    "normal_power",
+		})
+	}
+
+	// Car charging (same as ZEV)
+	if userPeriod.ChargerIDs != "" {
+		normalCharging, priorityCharging, firstSession, lastSession := bs.calculateChargingConsumption(buildingID, userPeriod.ChargerIDs, start, end)
+
+		if normalCharging > 0 || priorityCharging > 0 {
+			items = append(items, models.InvoiceItem{
+				Description: "",
+				Quantity:    0,
+				UnitPrice:   0,
+				TotalPrice:  0,
+				ItemType:    "separator",
+			})
+
+			items = append(items, models.InvoiceItem{
+				Description: tr.CarCharging,
+				Quantity:    0,
+				UnitPrice:   0,
+				TotalPrice:  0,
+				ItemType:    "charging_header",
+			})
+
+			if !firstSession.IsZero() {
+				totalCharged := normalCharging + priorityCharging
+				items = append(items, models.InvoiceItem{
+					Description: fmt.Sprintf("%s: %s - %s | %s: %.3f kWh",
+						tr.Period,
+						firstSession.Format("02.01 15:04"),
+						lastSession.Format("02.01 15:04"),
+						tr.Total,
+						totalCharged),
+					Quantity:    totalCharged,
+					UnitPrice:   0,
+					TotalPrice:  0,
+					ItemType:    "charging_session_compact",
+				})
+
+				items = append(items, models.InvoiceItem{
+					Description: "",
+					Quantity:    0,
+					UnitPrice:   0,
+					TotalPrice:  0,
+					ItemType:    "separator",
+				})
+			}
+
+			if normalCharging > 0 {
+				normalChargingCost := normalCharging * settings.CarChargingNormalPrice
+				totalAmount += normalChargingCost
+				items = append(items, models.InvoiceItem{
+					Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh",
+						tr.SolarMode, normalCharging, settings.CarChargingNormalPrice, settings.Currency),
+					Quantity:    normalCharging,
+					UnitPrice:   settings.CarChargingNormalPrice,
+					TotalPrice:  normalChargingCost,
+					ItemType:    "car_charging_normal",
+				})
+			}
+
+			if priorityCharging > 0 {
+				priorityChargingCost := priorityCharging * settings.CarChargingPriorityPrice
+				totalAmount += priorityChargingCost
+				items = append(items, models.InvoiceItem{
+					Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh",
+						tr.PriorityMode, priorityCharging, settings.CarChargingPriorityPrice, settings.Currency),
+					Quantity:    priorityCharging,
+					UnitPrice:   settings.CarChargingPriorityPrice,
+					TotalPrice:  priorityChargingCost,
+					ItemType:    "car_charging_priority",
+				})
+			}
+		}
+	}
+
+	// Shared meters and custom items (pro-rated)
+	totalActiveUsers, _ := bs.countActiveUsers(buildingID)
+	if totalActiveUsers == 0 {
+		totalActiveUsers = 1
+	}
+
+	sharedMeterItems, sharedMeterCost, _ := bs.calculateSharedMeterCostsWithTranslations(
+		buildingID, start, end, userPeriod.UserID, totalActiveUsers, tr, settings.Currency, userPeriod.ProrationFactor,
+	)
+	if len(sharedMeterItems) > 0 {
+		items = append(items, sharedMeterItems...)
+		totalAmount += sharedMeterCost
+	}
+
+	customItems, customCost, _ := bs.getCustomLineItemsWithTranslations(buildingID, tr, userPeriod.ProrationFactor)
+	if len(customItems) > 0 {
+		items = append(items, customItems...)
+		totalAmount += customCost
+	}
+
+	// Create invoice record
+	result, err := bs.db.Exec(`
+		INSERT INTO invoices (
+			invoice_number, user_id, building_id, period_start, period_end,
+			total_amount, currency, status, is_vzev
+		) VALUES (?, ?, ?, ?, ?, ?, ?, 'issued', 1)
+	`, invoiceNumber, userPeriod.UserID, buildingID, fullStart.Format("2006-01-02"), fullEnd.Format("2006-01-02"),
+		totalAmount, settings.Currency)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create vZEV invoice: %v", err)
+	}
+
+	invoiceID, _ := result.LastInsertId()
+
+	// Insert invoice items
+	for _, item := range items {
+		_, err := bs.db.Exec(`
+			INSERT INTO invoice_items (
+				invoice_id, description, quantity, unit_price, total_price, item_type
+			) VALUES (?, ?, ?, ?, ?, ?)
+		`, invoiceID, item.Description, item.Quantity, item.UnitPrice, item.TotalPrice, item.ItemType)
+
+		if err != nil {
+			log.Printf("WARNING: Failed to insert invoice item: %v", err)
+		}
+	}
+
+	invoice := &models.Invoice{
+		ID:            int(invoiceID),
+		InvoiceNumber: invoiceNumber,
+		UserID:        userPeriod.UserID,
+		BuildingID:    buildingID,
+		PeriodStart:   fullStart.Format("2006-01-02"),
+		PeriodEnd:     fullEnd.Format("2006-01-02"),
+		TotalAmount:   totalAmount,
+		Currency:      settings.Currency,
+		Status:        "issued",
+		IsVZEV:        true,
 		Items:         items,
 		GeneratedAt:   time.Now(),
 	}

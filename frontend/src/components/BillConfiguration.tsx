@@ -30,6 +30,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     include_shared_meters: false,
     shared_meter_configs: [],
     custom_line_items: [],
+    is_vzev: false,
     sender_name: '',
     sender_address: '',
     sender_city: '',
@@ -43,6 +44,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
   const [selectedApartments, setSelectedApartments] = useState<Set<string>>(new Set());
   const [selectedSharedMeters, setSelectedSharedMeters] = useState<number[]>([]);
   const [selectedCustomItems, setSelectedCustomItems] = useState<number[]>([]);
+  const [isVZEVMode, setIsVZEVMode] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -50,6 +52,27 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       loadSavedInfo();
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (config.building_ids.length > 0) {
+      const selectedBuildings = buildings.filter(b => config.building_ids.includes(b.id));
+      const hasComplex = selectedBuildings.some(b => b.is_group);
+      const hasRegularBuilding = selectedBuildings.some(b => !b.is_group);
+      
+      // vZEV mode: Only complexes selected, no regular buildings
+      const vzevMode = hasComplex && !hasRegularBuilding;
+      setIsVZEVMode(vzevMode);
+      setConfig(prev => ({ ...prev, is_vzev: vzevMode }));
+      
+      // Show warning if mixing complexes and buildings
+      if (hasComplex && hasRegularBuilding) {
+        alert('Warning: Cannot mix building complexes (vZEV) with regular buildings (ZEV). Please select only complexes OR only regular buildings.');
+      }
+    } else {
+      setIsVZEVMode(false);
+      setConfig(prev => ({ ...prev, is_vzev: false }));
+    }
+  }, [config.building_ids, buildings]);
 
   // Rebuild apartments list whenever buildings, users, or meters change AND building_ids is set
   useEffect(() => {
@@ -71,7 +94,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         api.getCustomLineItems()
       ]);
       setBuildings(buildingsData);
-      
+
       // Filter out administration users - only show regular users
       const regularUsers = usersData.filter(u => u.user_type === 'regular');
       setUsers(regularUsers);
@@ -122,57 +145,57 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       const building = buildings.find(b => b.id === buildingId);
       if (!building) return;
 
+      let buildingsToProcess: number[] = [buildingId];
+
+      // If this is a complex (vZEV), process all buildings in the group
+      if (building.is_group && building.group_buildings) {
+        buildingsToProcess = building.group_buildings;
+        console.log(`vZEV Complex: Processing ${buildingsToProcess.length} buildings in group`);
+      }
+
       const apartments: ApartmentWithUser[] = [];
       const apartmentSet = new Set<string>();
 
-      // Get apartment meters for this building
-      const buildingMeters = meters.filter(
-        m => m.building_id === buildingId && 
-        m.apartment_unit && 
-        m.meter_type === 'apartment_meter' &&
-        m.is_active
-      );
+      // Process all buildings (either just the one, or all in the complex)
+      buildingsToProcess.forEach(processBuildingId => {
+        const buildingMeters = meters.filter(
+          m => m.building_id === processBuildingId &&
+            m.apartment_unit &&
+            m.meter_type === 'apartment_meter' &&
+            m.is_active
+        );
 
-      console.log(`Building ${buildingId} (${building.name}): Found ${buildingMeters.length} apartment meters`);
+        console.log(`Building ${processBuildingId}: Found ${buildingMeters.length} apartment meters`);
 
-      buildingMeters.forEach(meter => {
-        if (meter.apartment_unit && !apartmentSet.has(meter.apartment_unit)) {
-          apartmentSet.add(meter.apartment_unit);
-          
-          // Find user - prioritize meter.user_id since it's the direct relationship
-          let user: User | undefined;
-          
-          // Method 1: Direct user_id from meter (most reliable)
-          if (meter.user_id) {
-            user = users.find(u => u.id === meter.user_id);
+        buildingMeters.forEach(meter => {
+          const key = `${processBuildingId}-${meter.apartment_unit}`;
+          if (meter.apartment_unit && !apartmentSet.has(key)) {
+            apartmentSet.add(key);
+
+            // Find user
+            let user: User | undefined;
+            if (meter.user_id) {
+              user = users.find(u => u.id === meter.user_id);
+            }
+            if (!user) {
+              user = users.find(
+                u => u.building_id === processBuildingId &&
+                  u.apartment_unit === meter.apartment_unit
+              );
+            }
+
+            apartments.push({
+              building_id: processBuildingId,
+              apartment_unit: meter.apartment_unit,
+              user: user,
+              meter: meter,
+              has_meter: true
+            });
           }
-          
-          // Method 2: Match by building_id AND apartment_unit
-          if (!user) {
-            user = users.find(
-              u => u.building_id === buildingId && 
-              u.apartment_unit === meter.apartment_unit
-            );
-          }
-          
-          // Method 3: Match by apartment_unit only (less reliable)
-          if (!user) {
-            user = users.find(u => u.apartment_unit === meter.apartment_unit);
-          }
-
-          console.log(`  Apartment "${meter.apartment_unit}": ${user ? `Found user ${user.first_name} ${user.last_name}` : 'NO USER'}`);
-
-          apartments.push({
-            building_id: buildingId,
-            apartment_unit: meter.apartment_unit,
-            user: user,
-            meter: meter,
-            has_meter: true
-          });
-        }
+        });
       });
 
-      // Sort apartments naturally
+      // Sort apartments
       apartments.sort((a, b) => {
         const aNum = parseInt(a.apartment_unit.replace(/[^0-9]/g, '')) || 0;
         const bNum = parseInt(b.apartment_unit.replace(/[^0-9]/g, '')) || 0;
@@ -194,10 +217,27 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
   );
 
   const handleBuildingToggle = (buildingId: number) => {
+    const building = buildings.find(b => b.id === buildingId);
+    if (!building) return;
+
+    // Check if trying to mix complex and regular buildings
+    const currentlySelectedBuildings = buildings.filter(b => config.building_ids.includes(b.id));
+    const hasComplex = currentlySelectedBuildings.some(b => b.is_group);
+    const hasRegular = currentlySelectedBuildings.some(b => !b.is_group);
+
+    // If adding a building
+    if (!config.building_ids.includes(buildingId)) {
+      // Prevent mixing
+      if ((building.is_group && hasRegular) || (!building.is_group && hasComplex)) {
+        alert('Cannot mix building complexes (vZEV) with regular buildings (ZEV). Please deselect existing buildings first.');
+        return;
+      }
+    }
+
     const newBuildings = config.building_ids.includes(buildingId)
       ? config.building_ids.filter(id => id !== buildingId)
       : [...config.building_ids, buildingId];
-    
+
     // Clear apartment selections for removed buildings
     if (!newBuildings.includes(buildingId)) {
       const newSelectedApartments = new Set(selectedApartments);
@@ -208,20 +248,20 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       });
       setSelectedApartments(newSelectedApartments);
     }
-    
+
     setConfig({ ...config, building_ids: newBuildings });
   };
 
   const handleApartmentToggle = (buildingId: number, apartmentUnit: string) => {
     const key = `${buildingId}|||${apartmentUnit}`; // Use ||| as separator since apartment names can contain dashes
     const newSelected = new Set(selectedApartments);
-    
+
     if (newSelected.has(key)) {
       newSelected.delete(key);
     } else {
       newSelected.add(key);
     }
-    
+
     setSelectedApartments(newSelected);
 
     console.log('Current apartmentsWithUsers map:', apartmentsWithUsers);
@@ -229,26 +269,26 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
 
     const userIds: number[] = [];
     const apartmentSelections: { building_id: number; apartment_unit: string; user_id?: number }[] = [];
-    
+
     newSelected.forEach(selectedKey => {
       const [bId, aptUnit] = selectedKey.split('|||'); // Split by ||| separator
       const parsedBuildingId = parseInt(bId);
       const apartments = apartmentsWithUsers.get(parsedBuildingId);
-      
+
       console.log(`Processing key: ${selectedKey}`);
       console.log(`  Building ID: ${parsedBuildingId}`);
       console.log(`  Apartment unit: "${aptUnit}"`);
       console.log(`  Apartments for this building:`, apartments);
-      
+
       const apartment = apartments?.find(a => a.apartment_unit === aptUnit);
-      
+
       console.log(`  Found apartment:`, apartment);
-      
+
       // Add user if exists and is active (already filtered for regular users in loadData)
       if (apartment?.user?.is_active) {
         console.log(`  ✓ Adding user ${apartment.user.id}: ${apartment.user.first_name} ${apartment.user.last_name}`);
         userIds.push(apartment.user.id);
-        
+
         apartmentSelections.push({
           building_id: parsedBuildingId,
           apartment_unit: aptUnit,
@@ -268,8 +308,8 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
 
     console.log('Final user IDs:', userIds);
 
-    setConfig(prev => ({ 
-      ...prev, 
+    setConfig(prev => ({
+      ...prev,
       user_ids: userIds,
       apartments: apartmentSelections
     }));
@@ -293,7 +333,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
 
   const handleSelectAllActiveApartments = () => {
     const newSelected = new Set(selectedApartments);
-    
+
     config.building_ids.forEach(buildingId => {
       const apartments = apartmentsWithUsers.get(buildingId) || [];
       apartments.forEach(apt => {
@@ -309,17 +349,17 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     // Update config with only active users
     const userIds: number[] = [];
     const apartmentSelections: { building_id: number; apartment_unit: string; user_id?: number }[] = [];
-    
+
     newSelected.forEach(key => {
       const [bId, aptUnit] = key.split('|||');
       const parsedBuildingId = parseInt(bId);
       const apartments = apartmentsWithUsers.get(parsedBuildingId);
       const apartment = apartments?.find(a => a.apartment_unit === aptUnit);
-      
+
       // Only add apartments with active users
       if (apartment?.user?.is_active) {
         userIds.push(apartment.user.id);
-        
+
         apartmentSelections.push({
           building_id: parsedBuildingId,
           apartment_unit: aptUnit,
@@ -328,8 +368,8 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       }
     });
 
-    setConfig(prev => ({ 
-      ...prev, 
+    setConfig(prev => ({
+      ...prev,
       user_ids: userIds,
       apartments: apartmentSelections
     }));
@@ -340,15 +380,24 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       alert(t('billConfig.validation.selectDates'));
       return;
     }
-
+  
     if (config.building_ids.length === 0) {
-      alert(t('billConfig.validation.selectBuilding'));
+      alert(isVZEVMode ? 'Please select a building complex' : t('billConfig.validation.selectBuilding'));
       return;
     }
-
+  
     if (config.user_ids.length === 0) {
       alert(t('billConfig.validation.selectUser'));
       return;
+    }
+  
+    // Additional vZEV validation
+    if (isVZEVMode) {
+      const selectedBuildings = buildings.filter(b => config.building_ids.includes(b.id));
+      if (selectedBuildings.some(b => !b.is_group)) {
+        alert('vZEV mode requires all selected buildings to be complexes');
+        return;
+      }
     }
 
     setLoading(true);
@@ -449,18 +498,60 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
 
   const renderStep1 = () => (
     <div>
-      <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px' }}>
+      <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px' }}>
         {t('billConfig.step1.title')}
       </h3>
 
+      {/* NEW: vZEV Mode Indicator */}
+      {isVZEVMode && (
+        <div style={{
+          padding: '16px',
+          backgroundColor: '#e0e7ff',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          border: '2px solid #4338ca'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <span style={{ fontSize: '24px' }}>⚡</span>
+            <h4 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#4338ca' }}>
+              vZEV Mode (Virtual Energy Allocation)
+            </h4>
+          </div>
+          <p style={{ fontSize: '14px', margin: 0, color: '#4338ca' }}>
+            You are billing a building complex with virtual energy allocation.
+            Surplus PV from buildings with solar will be virtually allocated to other buildings in the complex.
+          </p>
+        </div>
+      )}
+
+      {config.building_ids.length > 0 && !isVZEVMode && (
+        <div style={{
+          padding: '16px',
+          backgroundColor: '#dbeafe',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          border: '2px solid #3b82f6'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <span style={{ fontSize: '24px' }}>🔌</span>
+            <h4 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#1e40af' }}>
+              ZEV Mode (Direct Energy Sharing)
+            </h4>
+          </div>
+          <p style={{ fontSize: '14px', margin: 0, color: '#1e40af' }}>
+            You are billing regular buildings with direct energy sharing.
+          </p>
+        </div>
+      )}
+
       <div style={{ marginBottom: '30px' }}>
         <label style={{ display: 'block', fontWeight: '600', marginBottom: '12px', fontSize: '15px' }}>
-          1. {t('billConfig.step1.selectBuildings')} ({config.building_ids.length} {t('billConfig.step1.selected')})
+          1. {isVZEVMode ? 'Select Complex (vZEV)' : 'Select Buildings (ZEV)'} ({config.building_ids.length} {t('billConfig.step1.selected')})
         </label>
-        <div style={{ 
-          maxHeight: '200px', 
-          overflowY: 'auto', 
-          border: '1px solid #dee2e6', 
+        <div style={{
+          maxHeight: '200px',
+          overflowY: 'auto',
+          border: '1px solid #dee2e6',
           borderRadius: '6px',
           backgroundColor: 'white'
         }}>
@@ -473,10 +564,11 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                 padding: '12px 16px',
                 cursor: 'pointer',
                 borderBottom: '1px solid #f0f0f0',
-                transition: 'background-color 0.2s'
+                transition: 'background-color 0.2s',
+                backgroundColor: building.is_group ? '#f0f9ff' : 'white'
               }}
-              onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-              onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'white'}
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = building.is_group ? '#e0f2fe' : '#f8f9fa'}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = building.is_group ? '#f0f9ff' : 'white'}
             >
               <input
                 type="checkbox"
@@ -484,8 +576,21 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                 onChange={() => handleBuildingToggle(building.id)}
                 style={{ marginRight: '12px', cursor: 'pointer', width: '18px', height: '18px' }}
               />
-              <Home size={16} style={{ marginRight: '8px', color: '#667EEA' }} />
+              <Home size={16} style={{ marginRight: '8px', color: building.is_group ? '#0284c7' : '#667EEA' }} />
               <span style={{ fontSize: '15px', fontWeight: '500' }}>{building.name}</span>
+              {building.is_group && (
+                <span style={{
+                  marginLeft: '8px',
+                  padding: '2px 8px',
+                  backgroundColor: '#4338ca',
+                  color: 'white',
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  fontWeight: '600'
+                }}>
+                  vZEV COMPLEX
+                </span>
+              )}
             </label>
           ))}
         </div>
@@ -514,11 +619,11 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
             </button>
           )}
         </div>
-        
-        <div style={{ 
-          maxHeight: '350px', 
-          overflowY: 'auto', 
-          border: '1px solid #dee2e6', 
+
+        <div style={{
+          maxHeight: '350px',
+          overflowY: 'auto',
+          border: '1px solid #dee2e6',
           borderRadius: '6px',
           backgroundColor: 'white'
         }}>
@@ -547,8 +652,8 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
 
               return (
                 <div key={buildingId} style={{ borderBottom: '2px solid #e9ecef' }}>
-                  <div style={{ 
-                    padding: '12px 16px', 
+                  <div style={{
+                    padding: '12px 16px',
                     backgroundColor: '#f8f9fa',
                     fontWeight: '600',
                     color: '#667EEA',
@@ -584,8 +689,8 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                           checked={isSelected}
                           onChange={() => hasUser && handleApartmentToggle(buildingId, apartment.apartment_unit)}
                           disabled={!hasUser}
-                          style={{ 
-                            marginRight: '12px', 
+                          style={{
+                            marginRight: '12px',
                             cursor: hasUser ? 'pointer' : 'not-allowed',
                             width: '18px',
                             height: '18px'
@@ -627,9 +732,9 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       </div>
 
       {selectedApartments.size > 0 && (
-        <div style={{ 
-          padding: '16px', 
-          backgroundColor: '#e7f3ff', 
+        <div style={{
+          padding: '16px',
+          backgroundColor: '#e7f3ff',
           borderRadius: '6px',
           fontSize: '14px',
           color: '#004a99'
@@ -709,10 +814,10 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       </p>
 
       {filteredSharedMeters.length === 0 ? (
-        <div style={{ 
-          padding: '40px', 
-          textAlign: 'center', 
-          backgroundColor: '#f8f9fa', 
+        <div style={{
+          padding: '40px',
+          textAlign: 'center',
+          backgroundColor: '#f8f9fa',
           borderRadius: '8px',
           color: '#6c757d'
         }}>
@@ -720,8 +825,8 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           <p>{t('billConfig.step3.noMeters')}</p>
         </div>
       ) : (
-        <div style={{ 
-          border: '1px solid #dee2e6', 
+        <div style={{
+          border: '1px solid #dee2e6',
           borderRadius: '6px',
           backgroundColor: 'white'
         }}>
@@ -761,10 +866,10 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         </div>
       )}
 
-      <div style={{ 
-        marginTop: '20px', 
-        padding: '16px', 
-        backgroundColor: '#e7f3ff', 
+      <div style={{
+        marginTop: '20px',
+        padding: '16px',
+        backgroundColor: '#e7f3ff',
         borderRadius: '6px',
         fontSize: '14px',
         color: '#004a99'
@@ -784,10 +889,10 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       </p>
 
       {filteredCustomItems.length === 0 ? (
-        <div style={{ 
-          padding: '40px', 
-          textAlign: 'center', 
-          backgroundColor: '#f8f9fa', 
+        <div style={{
+          padding: '40px',
+          textAlign: 'center',
+          backgroundColor: '#f8f9fa',
           borderRadius: '8px',
           color: '#6c757d'
         }}>
@@ -795,8 +900,8 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           <p>{t('billConfig.step4.noItems')}</p>
         </div>
       ) : (
-        <div style={{ 
-          border: '1px solid #dee2e6', 
+        <div style={{
+          border: '1px solid #dee2e6',
           borderRadius: '6px',
           backgroundColor: 'white'
         }}>
@@ -836,10 +941,10 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         </div>
       )}
 
-      <div style={{ 
-        marginTop: '20px', 
-        padding: '16px', 
-        backgroundColor: '#e7f3ff', 
+      <div style={{
+        marginTop: '20px',
+        padding: '16px',
+        backgroundColor: '#e7f3ff',
         borderRadius: '6px',
         fontSize: '14px',
         color: '#004a99'
@@ -855,18 +960,19 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         {t('billConfig.step5.title')}
       </h3>
 
-      <div style={{ 
-        marginBottom: '24px', 
-        padding: '20px', 
-        backgroundColor: '#f8f9fa', 
+      <div style={{
+        marginBottom: '24px',
+        padding: '20px',
+        backgroundColor: '#f8f9fa',
         borderRadius: '8px'
       }}>
         <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px', color: '#667EEA' }}>
           {t('billConfig.step5.summary')}
         </h4>
         <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '14px', lineHeight: '1.8' }}>
+          <li><strong>Mode:</strong> {isVZEVMode ? 'vZEV (Virtual Allocation)' : 'ZEV (Direct Sharing)'}</li>
           <li><strong>{t('billConfig.step5.period')}:</strong> {config.start_date} {t('billConfig.step5.to')} {config.end_date}</li>
-          <li><strong>{t('billConfig.step5.buildings')}:</strong> {config.building_ids.length}</li>
+          <li><strong>{isVZEVMode ? 'Complexes' : t('billConfig.step5.buildings')}:</strong> {config.building_ids.length}</li>
           <li><strong>{t('billConfig.step5.apartments')}:</strong> {selectedApartments.size}</li>
           <li><strong>{t('billConfig.step5.users')}:</strong> {config.user_ids.length}</li>
           <li><strong>{t('billConfig.step5.sharedMeters')}:</strong> {selectedSharedMeters.length}</li>
@@ -1047,16 +1153,16 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         flexDirection: 'column',
         boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
       }}>
-        <div style={{ 
-          padding: '24px 30px', 
+        <div style={{
+          padding: '24px 30px',
           borderBottom: '1px solid #dee2e6',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
         }}>
-          <h2 style={{ 
-            fontSize: '24px', 
-            fontWeight: 'bold', 
+          <h2 style={{
+            fontSize: '24px',
+            fontWeight: 'bold',
             margin: 0,
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             WebkitBackgroundClip: 'text',
@@ -1081,17 +1187,17 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           </button>
         </div>
 
-        <div style={{ 
-          padding: '20px 30px', 
+        <div style={{
+          padding: '20px 30px',
           borderBottom: '1px solid #dee2e6',
           backgroundColor: '#f8f9fa'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative' }}>
             {[1, 2, 3, 4, 5].map(s => (
-              <div key={s} style={{ 
-                flex: 1, 
-                display: 'flex', 
-                flexDirection: 'column', 
+              <div key={s} style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
                 position: 'relative'
               }}>
@@ -1121,9 +1227,9 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                 }}>
                   {step > s ? <Check size={20} /> : s}
                 </div>
-                <div style={{ 
-                  marginTop: '8px', 
-                  fontSize: '11px', 
+                <div style={{
+                  marginTop: '8px',
+                  fontSize: '11px',
                   textAlign: 'center',
                   fontWeight: step === s ? '600' : 'normal',
                   color: step === s ? '#667EEA' : '#6c757d',
@@ -1140,10 +1246,10 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           </div>
         </div>
 
-        <div style={{ 
-          padding: '30px', 
-          flex: 1, 
-          overflowY: 'auto' 
+        <div style={{
+          padding: '30px',
+          flex: 1,
+          overflowY: 'auto'
         }}>
           {step === 1 && renderStep1()}
           {step === 2 && renderStep2()}
@@ -1152,8 +1258,8 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           {step === 5 && renderStep5()}
         </div>
 
-        <div style={{ 
-          padding: '20px 30px', 
+        <div style={{
+          padding: '20px 30px',
           borderTop: '1px solid #dee2e6',
           display: 'flex',
           justifyContent: 'space-between',
@@ -1175,7 +1281,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           >
             {t('common.cancel')}
           </button>
-          
+
           <div style={{ display: 'flex', gap: '12px' }}>
             {step > 1 && (
               <button
@@ -1198,7 +1304,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                 {t('billConfig.navigation.previous')}
               </button>
             )}
-            
+
             {step < 5 ? (
               <button
                 onClick={() => setStep(step + 1)}

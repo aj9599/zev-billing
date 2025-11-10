@@ -36,6 +36,7 @@ type GenerateBillsRequest struct {
 	UserIDs     []int  `json:"user_ids"`
 	StartDate   string `json:"start_date"`
 	EndDate     string `json:"end_date"`
+	IsVZEV      bool   `json:"is_vzev"`
 
 	// Sender information
 	SenderName    string `json:"sender_name"`
@@ -68,11 +69,12 @@ func (h *BillingHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 		args = append(args, buildingID)
 	} else {
 		query = `
-			SELECT id, building_id, normal_power_price, solar_power_price, 
-			       car_charging_normal_price, car_charging_priority_price, 
-			       currency, valid_from, valid_to, is_active, created_at, updated_at
-			FROM billing_settings
-			ORDER BY building_id, valid_from DESC
+    		SELECT id, building_id, is_complex, normal_power_price, solar_power_price, 
+           			car_charging_normal_price, car_charging_priority_price, 
+           			vzev_export_price, currency, valid_from, valid_to, is_active, 
+           			created_at, updated_at
+    		FROM billing_settings
+    		ORDER BY building_id, valid_from DESC
 		`
 	}
 
@@ -89,8 +91,8 @@ func (h *BillingHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 		var s models.BillingSettings
 		var validTo sql.NullString
 		err := rows.Scan(
-			&s.ID, &s.BuildingID, &s.NormalPowerPrice, &s.SolarPowerPrice,
-			&s.CarChargingNormalPrice, &s.CarChargingPriorityPrice,
+			&s.ID, &s.BuildingID, &s.IsComplex, &s.NormalPowerPrice, &s.SolarPowerPrice,
+			&s.CarChargingNormalPrice, &s.CarChargingPriorityPrice, &s.VZEVExportPrice,
 			&s.Currency, &s.ValidFrom, &validTo, &s.IsActive, &s.CreatedAt, &s.UpdatedAt,
 		)
 		if err == nil {
@@ -120,14 +122,14 @@ func (h *BillingHandler) CreateSettings(w http.ResponseWriter, r *http.Request) 
 	}
 
 	result, err := h.db.Exec(`
-		INSERT INTO billing_settings (
-			building_id, normal_power_price, solar_power_price,
-			car_charging_normal_price, car_charging_priority_price, 
-			currency, valid_from, valid_to, is_active
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, s.BuildingID, s.NormalPowerPrice, s.SolarPowerPrice,
+    	INSERT INTO billing_settings (
+        	building_id, is_complex, normal_power_price, solar_power_price,
+        	car_charging_normal_price, car_charging_priority_price, 
+        	vzev_export_price, currency, valid_from, valid_to, is_active
+    		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, s.BuildingID, s.IsComplex, s.NormalPowerPrice, s.SolarPowerPrice,
 		s.CarChargingNormalPrice, s.CarChargingPriorityPrice,
-		s.Currency, s.ValidFrom, validTo, s.IsActive)
+		s.VZEVExportPrice, s.Currency, s.ValidFrom, validTo, s.IsActive)
 
 	if err != nil {
 		log.Printf("ERROR: Failed to create billing settings: %v", err)
@@ -228,12 +230,13 @@ func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("=== Starting bill generation ===")
-	log.Printf("Buildings: %v, Users: %v, Period: %s to %s",
+	log.Printf("Mode: %s, Buildings: %v, Users: %v, Period: %s to %s",
+		func() string { if req.IsVZEV { return "vZEV" } else { return "ZEV" } }(),
 		req.BuildingIDs, req.UserIDs, req.StartDate, req.EndDate)
 	log.Printf("Sender: %s, IBAN: %s", req.SenderName, req.BankIBAN)
 
-	// Generate invoices
-	invoices, err := h.billingService.GenerateBills(req.BuildingIDs, req.UserIDs, req.StartDate, req.EndDate)
+	// Generate invoices (service will handle vZEV vs ZEV logic)
+	invoices, err := h.billingService.GenerateBills(req.BuildingIDs, req.UserIDs, req.StartDate, req.EndDate, req.IsVZEV)
 	if err != nil {
 		log.Printf("ERROR: Bill generation failed: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
