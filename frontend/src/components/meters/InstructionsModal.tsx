@@ -320,23 +320,230 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                         alignItems: 'center',
                         gap: '8px'
                     }}>
-                        <Zap size={20} color="#6b7280" />
+                        <Zap size={20} color="#0284c7" />
                         {t('meters.instructions.modbusTitle')}
                     </h3>
                     <div style={{
-                        backgroundColor: '#f3f4f6',
+                        backgroundColor: '#e0f2fe',
                         padding: '16px',
                         borderRadius: '8px',
-                        marginBottom: '16px'
+                        marginBottom: '16px',
+                        border: '2px solid #0284c7'
                     }}>
-                        <p><strong>{t('meters.instructions.modbusSetup')}</strong></p>
+                        <p style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            marginBottom: '12px'
+                        }}>
+                            <strong>Modbus TCP - Professional Industrial Protocol</strong>
+                        </p>
+                        <p style={{ marginBottom: '12px', fontSize: '14px' }}>
+                            Direct connection to industrial energy meters using Modbus TCP/IP protocol. 
+                            Configure function codes, data types, and separate import/export registers.
+                        </p>
+
+                        <h4 style={{
+                            fontSize: '15px',
+                            fontWeight: '600',
+                            marginTop: '16px',
+                            marginBottom: '8px',
+                            color: '#0c4a6e'
+                        }}>
+                            📋 What You Need From Your Device Manual:
+                        </h4>
+                        <div style={{
+                            backgroundColor: '#fff',
+                            padding: '12px',
+                            borderRadius: '6px',
+                            marginBottom: '12px',
+                            fontSize: '13px'
+                        }}>
+                            <ol style={{ marginLeft: '20px', marginTop: '8px', marginBottom: '8px' }}>
+                                <li><strong>IP Address & Port</strong> (usually port 502)</li>
+                                <li><strong>Unit ID / Slave ID</strong> (typically 1-247)</li>
+                                <li><strong>Function Code</strong> (Befehl): FC01, FC02, FC03, or FC04</li>
+                                <li><strong>Data Type</strong> (Datentyp): float32, int16, int32, etc.</li>
+                                <li><strong>Register Address</strong> (IO-Adresse) for import energy</li>
+                                <li><strong>Export Register Address</strong> (optional, for bidirectional meters)</li>
+                            </ol>
+                        </div>
+
+                        <h4 style={{
+                            fontSize: '15px',
+                            fontWeight: '600',
+                            marginTop: '16px',
+                            marginBottom: '8px',
+                            color: '#0c4a6e'
+                        }}>
+                            ⚙️ Configuration Steps:
+                        </h4>
                         <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
-                            <li>{t('meters.instructions.modbusStep1')}</li>
-                            <li>{t('meters.instructions.modbusStep2')}</li>
-                            <li>{t('meters.instructions.modbusStep3')}</li>
-                            <li>{t('meters.instructions.modbusStep4')}</li>
-                            <li>{t('meters.instructions.modbusStep5')}</li>
+                            <li>
+                                <strong>Basic Connection:</strong>
+                                <ul style={{ marginLeft: '20px', marginTop: '4px' }}>
+                                    <li>Enter IP address (e.g., 192.168.1.100)</li>
+                                    <li>Enter port (usually 502)</li>
+                                    <li>Enter Unit ID from device (usually 1)</li>
+                                </ul>
+                            </li>
+                            <li style={{ marginTop: '8px' }}>
+                                <strong>Function Code:</strong> Select based on your manual
+                                <ul style={{ marginLeft: '20px', marginTop: '4px' }}>
+                                    <li><strong>FC03</strong> - Read Holding Registers (most common ✓)</li>
+                                    <li><strong>FC04</strong> - Read Input Registers</li>
+                                    <li>FC01 - Read Coils | FC02 - Read Discrete Inputs</li>
+                                </ul>
+                            </li>
+                            <li style={{ marginTop: '8px' }}>
+                                <strong>Data Type:</strong> Select the format from your manual
+                                <ul style={{ marginLeft: '20px', marginTop: '4px' }}>
+                                    <li><strong>float32</strong> - 32-bit Float (most energy meters ✓)</li>
+                                    <li>float64 - 64-bit Float (high precision)</li>
+                                    <li>int16/int32 - Integer values</li>
+                                    <li>uint16/uint32 - Unsigned integers</li>
+                                </ul>
+                            </li>
+                            <li style={{ marginTop: '8px' }}>
+                                <strong>Import Register:</strong> Enter starting address
+                                <ul style={{ marginLeft: '20px', marginTop: '4px' }}>
+                                    <li>Use address from manual (starting from 0)</li>
+                                    <li>If manual shows 40001 → enter 0</li>
+                                    <li>If manual shows 40002 → enter 1</li>
+                                </ul>
+                            </li>
+                            <li style={{ marginTop: '8px' }}>
+                                <strong>Export Register (Optional):</strong> For solar/bidirectional meters
+                                <ul style={{ marginLeft: '20px', marginTop: '4px' }}>
+                                    <li>Check the box to enable</li>
+                                    <li>Enter export register address from manual</li>
+                                    <li>Must be different from import address</li>
+                                </ul>
+                            </li>
                         </ol>
+
+                        <h4 style={{
+                            fontSize: '15px',
+                            fontWeight: '600',
+                            marginTop: '16px',
+                            marginBottom: '8px',
+                            color: '#0c4a6e'
+                        }}>
+                            📖 Reading Your Device Manual:
+                        </h4>
+                        <div style={{
+                            backgroundColor: '#fff',
+                            padding: '12px',
+                            borderRadius: '6px',
+                            marginBottom: '12px',
+                            fontSize: '13px'
+                        }}>
+                            <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+                                <thead>
+                                    <tr style={{ backgroundColor: '#f0f9ff' }}>
+                                        <th style={{ padding: '8px', textAlign: 'left', borderBottom: '2px solid #0284c7' }}>
+                                            Manual Term (German)
+                                        </th>
+                                        <th style={{ padding: '8px', textAlign: 'left', borderBottom: '2px solid #0284c7' }}>
+                                            System Field
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>
+                                            <strong>IO-Adresse</strong> (0-65535)
+                                        </td>
+                                        <td style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>
+                                            Register Address
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>
+                                            <strong>Befehl</strong> (03, 04, etc.)
+                                        </td>
+                                        <td style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>
+                                            Function Code
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>
+                                            <strong>Datentyp</strong> (Float, 16-Bit)
+                                        </td>
+                                        <td style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>
+                                            Data Type
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style={{ padding: '8px' }}>
+                                            <strong>Wirkenergie Import/Export</strong>
+                                        </td>
+                                        <td style={{ padding: '8px' }}>
+                                            Import/Export Register
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <h4 style={{
+                            fontSize: '15px',
+                            fontWeight: '600',
+                            marginTop: '16px',
+                            marginBottom: '8px',
+                            color: '#0c4a6e'
+                        }}>
+                            💡 Common Configurations:
+                        </h4>
+                        <div style={{
+                            backgroundColor: '#fff',
+                            padding: '12px',
+                            borderRadius: '6px',
+                            marginBottom: '12px',
+                            fontFamily: 'monospace',
+                            fontSize: '12px'
+                        }}>
+                            <strong>Standard Energy Meter (Import Only):</strong><br />
+                            IP: 192.168.1.100:502<br />
+                            Unit ID: 1<br />
+                            Function: FC03<br />
+                            Data Type: float32<br />
+                            Import Register: 0<br />
+                            Export: Disabled<br /><br />
+
+                            <strong>Solar Meter (Import + Export):</strong><br />
+                            IP: 192.168.1.100:502<br />
+                            Unit ID: 1<br />
+                            Function: FC03<br />
+                            Data Type: float32<br />
+                            Import Register: 0<br />
+                            Export Register: ✓ Enabled → 100<br /><br />
+
+                            <strong>Using Input Registers:</strong><br />
+                            IP: 192.168.1.100:502<br />
+                            Unit ID: 1<br />
+                            Function: FC04 ← Different!<br />
+                            Data Type: float32<br />
+                            Import Register: 0
+                        </div>
+
+                        <div style={{
+                            backgroundColor: '#fef3c7',
+                            padding: '12px',
+                            borderRadius: '6px',
+                            marginTop: '12px',
+                            fontSize: '13px',
+                            border: '1px solid #f59e0b'
+                        }}>
+                            <strong>⚠️ Important Notes:</strong>
+                            <ul style={{ marginLeft: '20px', marginTop: '8px', marginBottom: '0' }}>
+                                <li>Register addresses start from 0 in this system</li>
+                                <li>If manual shows 40001-49999, subtract 40001 to get protocol address</li>
+                                <li>Most energy meters use FC03 and float32</li>
+                                <li>Export register only needed for bidirectional meters (solar, feed-in)</li>
+                                <li>Register count is automatically calculated from data type</li>
+                            </ul>
+                        </div>
                     </div>
 
                     {/* Testing Section */}
@@ -401,6 +608,25 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             <li>
                                 <strong>Loxone WebSocket:</strong>{' '}
                                 {t('meters.instructions.troubleshootingLoxoneDevice')}
+                            </li>
+                            <li>
+                                <strong>Modbus TCP:</strong> Check connection: {' '}
+                                <code style={{
+                                    backgroundColor: '#fff',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px'
+                                }}>
+                                    ping YOUR_DEVICE_IP
+                                </code>
+                            </li>
+                            <li>
+                                <strong>Modbus TCP:</strong> Wrong register address? Try address ±1 or check if you need to subtract 40001
+                            </li>
+                            <li>
+                                <strong>Modbus TCP:</strong> Wrong data type? Try float32 first (most common for energy meters)
+                            </li>
+                            <li>
+                                <strong>Modbus TCP:</strong> Connection refused? Switch between FC03 and FC04 function codes
                             </li>
                             <li>
                                 <strong>MQTT:</strong> {t('meters.instructions.troubleshootingMqttBroker')}{' '}
