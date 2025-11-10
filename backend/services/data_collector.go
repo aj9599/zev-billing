@@ -357,10 +357,10 @@ func (dc *DataCollector) collectAndSaveMeters() {
 		log.Printf("Reading %d Modbus meters in parallel...", len(modbusMeters))
 		modbusReadings := dc.modbusCollector.ReadAllMeters()
 		
-		for meterID, reading := range modbusReadings {
+		for meterID, readings := range modbusReadings {
 			info := meterInfo[meterID]
-			if reading > 0 {
-				if err := dc.saveMeterReading(meterID, info.name, currentTime, reading, 0); err != nil {
+			if readings.Import > 0 {
+				if err := dc.saveMeterReading(meterID, info.name, currentTime, readings.Import, readings.Export); err != nil {
 					log.Printf("ERROR: Failed to save Modbus meter '%s': %v", info.name, err)
 				} else {
 					successCount++
@@ -492,7 +492,7 @@ func (dc *DataCollector) saveMeterReading(meterID int, meterName string, current
 		log.Printf("SUCCESS: First reading for meter '%s' = %.3f kWh import, %.3f kWh export (consumption: 0 kWh)", 
 			meterName, reading, readingExport)
 	} else {
-		log.Printf("SUCCESS: Saved meter data: '%s' = %.3f kWh import (Δ%.3f), %.3f kWh export (Δ%.3f)", 
+		log.Printf("SUCCESS: Saved meter data: '%s' = %.3f kWh import (Î”%.3f), %.3f kWh export (Î”%.3f)", 
 			meterName, reading, consumption, readingExport, consumptionExport)
 	}
 

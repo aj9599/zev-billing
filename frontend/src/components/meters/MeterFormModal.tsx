@@ -10,6 +10,10 @@ interface ConnectionConfig {
     register_address?: number;
     register_count?: number;
     unit_id?: number;
+    function_code?: number;
+    data_type?: string;
+    has_export_register?: boolean;
+    export_register_address?: number;
     listen_port?: number;
     data_key?: string;
     loxone_host?: string;
@@ -358,7 +362,7 @@ export default function MeterFormModal({
                                                             fontSize: '11px',
                                                             fontWeight: '600'
                                                         }}>
-                                                            âœ“ {t('common.active')}
+                                                            Ã¢Å“â€œ {t('common.active')}
                                                         </div>
                                                     </div>
                                                 ) : (
@@ -370,7 +374,7 @@ export default function MeterFormModal({
                                                         color: '#92400e',
                                                         fontSize: '13px'
                                                     }}>
-                                                        âš ï¸ {t('meters.noUserLinked')}
+                                                        Ã¢Å¡Â Ã¯Â¸Â {t('meters.noUserLinked')}
                                                     </div>
                                                 )}
                                                 <p style={{ fontSize: '11px', color: '#666', marginTop: '6px' }}>
@@ -388,7 +392,7 @@ export default function MeterFormModal({
                                                 color: '#6b7280',
                                                 fontSize: '13px'
                                             }}>
-                                                â„¹ï¸ {t('meters.apartmentNotSelected')}
+                                                Ã¢â€žÂ¹Ã¯Â¸Â {t('meters.apartmentNotSelected')}
                                             </div>
                                         )}
                                     </>
@@ -565,7 +569,7 @@ export default function MeterFormModal({
                                                 ...connectionConfig,
                                                 loxone_password: e.target.value
                                             })}
-                                            placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                                            placeholder="Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢"
                                             style={{
                                                 width: '100%',
                                                 padding: '10px',
@@ -818,7 +822,7 @@ export default function MeterFormModal({
                                     color: '#0c4a6e',
                                     border: '1px solid #7dd3fc'
                                 }}>
-                                    â„¹ï¸ <strong>Authentication is optional.</strong> Leave username and password empty if your MQTT broker doesn't require authentication (allow_anonymous = true). Fill them in if authentication is enabled.
+                                    Ã¢â€žÂ¹Ã¯Â¸Â <strong>Authentication is optional.</strong> Leave username and password empty if your MQTT broker doesn't require authentication (allow_anonymous = true). Fill them in if authentication is enabled.
                                 </div>
 
                                 <div style={{ marginBottom: '12px' }}>
@@ -985,6 +989,19 @@ export default function MeterFormModal({
                         {formData.connection_type === 'modbus_tcp' && (
                             <>
                                 <div style={{
+                                    backgroundColor: '#e0f2fe',
+                                    padding: '12px',
+                                    borderRadius: '6px',
+                                    marginBottom: '12px',
+                                    border: '1px solid #0284c7'
+                                }}>
+                                    <p style={{ fontSize: '13px', color: '#0c4a6e', margin: 0 }}>
+                                        <strong>Modbus TCP Configuration</strong><br />
+                                        Configure according to your device manual
+                                    </p>
+                                </div>
+
+                                <div style={{
                                     display: 'grid',
                                     gridTemplateColumns: '2fr 1fr',
                                     gap: '12px',
@@ -1043,15 +1060,125 @@ export default function MeterFormModal({
                                         />
                                     </div>
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-                                    <div>
+
+                                <div style={{ marginBottom: '12px' }}>
+                                    <label style={{
+                                        display: 'block',
+                                        marginBottom: '8px',
+                                        fontWeight: '500',
+                                        fontSize: '14px'
+                                    }}>
+                                        Unit ID (Slave ID) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        required
+                                        value={connectionConfig.unit_id || 1}
+                                        onChange={(e) => onConnectionConfigChange({
+                                            ...connectionConfig,
+                                            unit_id: parseInt(e.target.value)
+                                        })}
+                                        placeholder="1"
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px',
+                                            border: '1px solid #ddd',
+                                            borderRadius: '6px'
+                                        }}
+                                    />
+                                    <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                                        Modbus device/slave ID (typically 1-247)
+                                    </p>
+                                </div>
+
+                                <div style={{ marginBottom: '12px' }}>
+                                    <label style={{
+                                        display: 'block',
+                                        marginBottom: '8px',
+                                        fontWeight: '500',
+                                        fontSize: '14px'
+                                    }}>
+                                        Function Code *
+                                    </label>
+                                    <select
+                                        required
+                                        value={connectionConfig.function_code || 3}
+                                        onChange={(e) => onConnectionConfigChange({
+                                            ...connectionConfig,
+                                            function_code: parseInt(e.target.value)
+                                        })}
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px',
+                                            border: '1px solid #ddd',
+                                            borderRadius: '6px'
+                                        }}
+                                    >
+                                        <option value={3}>Read Holding Registers (FC03)</option>
+                                        <option value={4}>Read Input Registers (FC04)</option>
+                                        <option value={1}>Read Coils (FC01)</option>
+                                        <option value={2}>Read Discrete Inputs (FC02)</option>
+                                    </select>
+                                    <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                                        Most energy meters use FC03 or FC04
+                                    </p>
+                                </div>
+
+                                <div style={{ marginBottom: '12px' }}>
+                                    <label style={{
+                                        display: 'block',
+                                        marginBottom: '8px',
+                                        fontWeight: '500',
+                                        fontSize: '14px'
+                                    }}>
+                                        Data Type *
+                                    </label>
+                                    <select
+                                        required
+                                        value={connectionConfig.data_type || 'float32'}
+                                        onChange={(e) => onConnectionConfigChange({
+                                            ...connectionConfig,
+                                            data_type: e.target.value,
+                                            register_count: e.target.value === 'float32' ? 2 : 
+                                                           e.target.value === 'float64' ? 4 :
+                                                           e.target.value === 'int32' ? 2 : 1
+                                        })}
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px',
+                                            border: '1px solid #ddd',
+                                            borderRadius: '6px'
+                                        }}
+                                    >
+                                        <option value="float32">32-bit Float (2 registers)</option>
+                                        <option value="float64">64-bit Float (4 registers)</option>
+                                        <option value="int32">32-bit Integer (2 registers)</option>
+                                        <option value="int16">16-bit Integer (1 register)</option>
+                                        <option value="uint32">32-bit Unsigned (2 registers)</option>
+                                        <option value="uint16">16-bit Unsigned (1 register)</option>
+                                    </select>
+                                    <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                                        Most energy meters use 32-bit Float
+                                    </p>
+                                </div>
+
+                                {/* Import Energy */}
+                                <div style={{
+                                    backgroundColor: '#f0fdf4',
+                                    padding: '12px',
+                                    borderRadius: '6px',
+                                    marginBottom: '12px',
+                                    border: '1px solid #22c55e'
+                                }}>
+                                    <strong style={{ color: '#15803d' }}>Import Energy</strong>
+                                    <div style={{ marginTop: '12px' }}>
                                         <label style={{
                                             display: 'block',
                                             marginBottom: '8px',
                                             fontWeight: '500',
                                             fontSize: '14px'
                                         }}>
-                                            {t('meters.registerAddress')} *
+                                            Register Address *
                                         </label>
                                         <input
                                             type="number"
@@ -1065,63 +1192,90 @@ export default function MeterFormModal({
                                             style={{
                                                 width: '100%',
                                                 padding: '10px',
-                                                border: '1px solid #ddd',
+                                                border: '1px solid #22c55e',
                                                 borderRadius: '6px'
                                             }}
                                         />
+                                        <p style={{ fontSize: '11px', color: '#15803d', marginTop: '4px' }}>
+                                            Starting from 0 (e.g., 40001 → 0)
+                                        </p>
                                     </div>
-                                    <div>
+                                </div>
+
+                                {/* Export Energy */}
+                                {(formData.meter_type === 'total_meter' || formData.meter_type === 'solar_meter') && (
+                                    <div style={{
+                                        backgroundColor: '#fef3c7',
+                                        padding: '12px',
+                                        borderRadius: '6px',
+                                        marginBottom: '12px',
+                                        border: '1px solid #f59e0b'
+                                    }}>
                                         <label style={{
-                                            display: 'block',
-                                            marginBottom: '8px',
-                                            fontWeight: '500',
-                                            fontSize: '14px'
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            cursor: 'pointer'
                                         }}>
-                                            {t('meters.registerCount')} *
+                                            <input
+                                                type="checkbox"
+                                                checked={connectionConfig.has_export_register === true}
+                                                onChange={(e) => onConnectionConfigChange({
+                                                    ...connectionConfig,
+                                                    has_export_register: e.target.checked
+                                                })}
+                                            />
+                                            <strong style={{ color: '#92400e' }}>Export Energy Register</strong>
                                         </label>
-                                        <input
-                                            type="number"
-                                            required
-                                            value={connectionConfig.register_count || 2}
-                                            onChange={(e) => onConnectionConfigChange({
-                                                ...connectionConfig,
-                                                register_count: parseInt(e.target.value)
-                                            })}
-                                            placeholder="2"
-                                            style={{
-                                                width: '100%',
-                                                padding: '10px',
-                                                border: '1px solid #ddd',
-                                                borderRadius: '6px'
-                                            }}
-                                        />
+
+                                        {connectionConfig.has_export_register && (
+                                            <div style={{ marginTop: '12px' }}>
+                                                <label style={{
+                                                    display: 'block',
+                                                    marginBottom: '8px',
+                                                    fontWeight: '500',
+                                                    fontSize: '14px'
+                                                }}>
+                                                    Export Register Address *
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    required={connectionConfig.has_export_register}
+                                                    value={connectionConfig.export_register_address || 0}
+                                                    onChange={(e) => onConnectionConfigChange({
+                                                        ...connectionConfig,
+                                                        export_register_address: parseInt(e.target.value)
+                                                    })}
+                                                    placeholder="0"
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '10px',
+                                                        border: '1px solid #f59e0b',
+                                                        borderRadius: '6px'
+                                                    }}
+                                                />
+                                                <p style={{ fontSize: '11px', color: '#92400e', marginTop: '4px' }}>
+                                                    Separate register for export/feed-in
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
-                                    <div>
-                                        <label style={{
-                                            display: 'block',
-                                            marginBottom: '8px',
-                                            fontWeight: '500',
-                                            fontSize: '14px'
-                                        }}>
-                                            {t('meters.unitId')} *
-                                        </label>
-                                        <input
-                                            type="number"
-                                            required
-                                            value={connectionConfig.unit_id || 1}
-                                            onChange={(e) => onConnectionConfigChange({
-                                                ...connectionConfig,
-                                                unit_id: parseInt(e.target.value)
-                                            })}
-                                            placeholder="1"
-                                            style={{
-                                                width: '100%',
-                                                padding: '10px',
-                                                border: '1px solid #ddd',
-                                                borderRadius: '6px'
-                                            }}
-                                        />
-                                    </div>
+                                )}
+
+                                <div style={{
+                                    backgroundColor: '#fff',
+                                    padding: '12px',
+                                    borderRadius: '6px',
+                                    fontFamily: 'monospace',
+                                    fontSize: '12px',
+                                    border: '1px solid #e5e7eb'
+                                }}>
+                                    <strong>Summary:</strong><br />
+                                    {connectionConfig.ip_address || '192.168.1.100'}:{connectionConfig.port || 502}<br />
+                                    Unit: {connectionConfig.unit_id || 1} | FC{String(connectionConfig.function_code || 3).padStart(2, '0')}<br />
+                                    Type: {connectionConfig.data_type || 'float32'}<br />
+                                    Import@{connectionConfig.register_address || 0}
+                                    {connectionConfig.has_export_register && ` | Export@${connectionConfig.export_register_address || 0}`}
                                 </div>
                             </>
                         )}

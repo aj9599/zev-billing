@@ -22,30 +22,39 @@ type ModbusCollector struct {
 }
 
 type ModbusClient struct {
-	meterID         int
-	meterName       string
-	handler         *modbus.TCPClientHandler
-	client          modbus.Client
-	ipAddress       string
-	port            int
-	registerAddress uint16
-	registerCount   uint16
-	unitID          byte
-	isConnected     bool
-	lastReading     float64
-	lastReadTime    time.Time
-	lastError       string
-	mu              sync.Mutex
+	meterID              int
+	meterName            string
+	handler              *modbus.TCPClientHandler
+	client               modbus.Client
+	ipAddress            string
+	port                 int
+	registerAddress      uint16
+	registerCount        uint16
+	unitID               byte
+	functionCode         byte
+	dataType             string
+	hasExportRegister    bool
+	exportRegisterAddr   uint16
+	isConnected          bool
+	lastReadingImport    float64
+	lastReadingExport    float64
+	lastReadTime         time.Time
+	lastError            string
+	mu                   sync.Mutex
 }
 
 type ModbusMeterConfig struct {
-	MeterID         int
-	MeterName       string
-	IPAddress       string
-	Port            int
-	RegisterAddress int
-	RegisterCount   int
-	UnitID          int
+	MeterID              int
+	MeterName            string
+	IPAddress            string
+	Port                 int
+	RegisterAddress      int
+	RegisterCount        int
+	UnitID               int
+	FunctionCode         int
+	DataType             string
+	HasExportRegister    bool
+	ExportRegisterAddr   int
 }
 
 func NewModbusCollector(db *sql.DB) *ModbusCollector {
@@ -124,8 +133,11 @@ func (mc *ModbusCollector) initializeModbusConnections() {
 		if err := client.connect(); err != nil {
 			log.Printf("WARNING: Failed initial connection to meter '%s': %v", config.MeterName, err)
 		} else {
-			log.Printf("SUCCESS: Connected to Modbus meter '%s' at %s:%d", 
-				config.MeterName, config.IPAddress, config.Port)
+			log.Printf("SUCCESS: Connected to Modbus meter '%s' at %s:%d (Unit:%d, FC:%d, Type:%s)", 
+				config.MeterName, config.IPAddress, config.Port, config.UnitID, config.FunctionCode, config.DataType)
+			if config.HasExportRegister {
+				log.Printf("  → Export register enabled at address %d", config.ExportRegisterAddr)
+			}
 		}
 	}
 }
@@ -136,15 +148,19 @@ func (mc *ModbusCollector) createModbusClient(config ModbusMeterConfig) *ModbusC
 	handler.SlaveId = byte(config.UnitID)
 	
 	return &ModbusClient{
-		meterID:         config.MeterID,
-		meterName:       config.MeterName,
-		handler:         handler,
-		ipAddress:       config.IPAddress,
-		port:            config.Port,
-		registerAddress: uint16(config.RegisterAddress),
-		registerCount:   uint16(config.RegisterCount),
-		unitID:          byte(config.UnitID),
-		isConnected:     false,
+		meterID:            config.MeterID,
+		meterName:          config.MeterName,
+		handler:            handler,
+		ipAddress:          config.IPAddress,
+		port:               config.Port,
+		registerAddress:    uint16(config.RegisterAddress),
+		registerCount:      uint16(config.RegisterCount),
+		unitID:             byte(config.UnitID),
+		functionCode:       byte(config.FunctionCode),
+		dataType:           config.DataType,
+		hasExportRegister:  config.HasExportRegister,
+		exportRegisterAddr: uint16(config.ExportRegisterAddr),
+		isConnected:        false,
 	}
 }
 
@@ -183,21 +199,21 @@ func (mc *ModbusCollector) RestartConnections() {
 	mc.initializeModbusConnections()
 }
 
-// ReadMeter reads a single meter (called by data_collector during 15-min cycle)
-func (mc *ModbusCollector) ReadMeter(meterID int) (float64, error) {
+// ReadMeter reads import and export energy for a single meter
+func (mc *ModbusCollector) ReadMeter(meterID int) (float64, float64, error) {
 	mc.mu.RLock()
 	client, exists := mc.clients[meterID]
 	mc.mu.RUnlock()
 	
 	if !exists {
-		return 0, fmt.Errorf("meter %d not found in Modbus collector", meterID)
+		return 0, 0, fmt.Errorf("meter %d not found in Modbus collector", meterID)
 	}
 	
-	return client.readValue()
+	return client.readValues()
 }
 
-// NEW: ReadAllMeters reads all meters in parallel (for independent operation)
-func (mc *ModbusCollector) ReadAllMeters() map[int]float64 {
+// ReadAllMeters reads all meters in parallel
+func (mc *ModbusCollector) ReadAllMeters() map[int]struct{ Import, Export float64 } {
 	mc.mu.RLock()
 	clients := make([]*ModbusClient, 0, len(mc.clients))
 	for _, client := range mc.clients {
@@ -205,7 +221,7 @@ func (mc *ModbusCollector) ReadAllMeters() map[int]float64 {
 	}
 	mc.mu.RUnlock()
 	
-	results := make(map[int]float64)
+	results := make(map[int]struct{ Import, Export float64 })
 	resultsMu := sync.Mutex{}
 	wg := sync.WaitGroup{}
 	
@@ -214,17 +230,21 @@ func (mc *ModbusCollector) ReadAllMeters() map[int]float64 {
 		go func(c *ModbusClient) {
 			defer wg.Done()
 			
-			value, err := c.readValue()
+			importVal, exportVal, err := c.readValues()
 			if err != nil {
 				log.Printf("ERROR: Failed to read Modbus meter '%s': %v", c.meterName, err)
 				return
 			}
 			
 			resultsMu.Lock()
-			results[c.meterID] = value
+			results[c.meterID] = struct{ Import, Export float64 }{importVal, exportVal}
 			resultsMu.Unlock()
 			
-			log.Printf("SUCCESS: Read Modbus meter '%s': %.3f kWh", c.meterName, value)
+			if c.hasExportRegister {
+				log.Printf("SUCCESS: Read Modbus meter '%s': %.3f kWh import, %.3f kWh export", c.meterName, importVal, exportVal)
+			} else {
+				log.Printf("SUCCESS: Read Modbus meter '%s': %.3f kWh", c.meterName, importVal)
+			}
 		}(client)
 	}
 	
@@ -253,16 +273,24 @@ func (mc *ModbusCollector) GetConnectionStatus() map[string]interface{} {
 	
 	for meterID, client := range mc.clients {
 		client.mu.Lock()
-		status[fmt.Sprintf("meter_%d", meterID)] = map[string]interface{}{
-			"meter_name":    client.meterName,
-			"ip_address":    fmt.Sprintf("%s:%d", client.ipAddress, client.port),
-			"is_connected":  client.isConnected,
-			"last_reading":  client.lastReading,
-			"last_update":   client.lastReadTime.Format("2006-01-02 15:04:05"),
-			"last_error":    client.lastError,
-			"register_addr": client.registerAddress,
-			"unit_id":       client.unitID,
+		clientStatus := map[string]interface{}{
+			"meter_name":         client.meterName,
+			"ip_address":         fmt.Sprintf("%s:%d", client.ipAddress, client.port),
+			"is_connected":       client.isConnected,
+			"last_reading":       client.lastReadingImport,
+			"last_reading_export": client.lastReadingExport,
+			"last_update":        client.lastReadTime.Format("2006-01-02 15:04:05"),
+			"last_error":         client.lastError,
+			"unit_id":            client.unitID,
+			"function_code":      client.functionCode,
+			"data_type":          client.dataType,
+			"register_addr":      client.registerAddress,
+			"has_export":         client.hasExportRegister,
 		}
+		if client.hasExportRegister {
+			clientStatus["export_register_addr"] = client.exportRegisterAddr
+		}
+		status[fmt.Sprintf("meter_%d", meterID)] = clientStatus
 		client.mu.Unlock()
 	}
 	
@@ -308,55 +336,123 @@ func (c *ModbusClient) connect() error {
 	return nil
 }
 
-func (c *ModbusClient) readValue() (float64, error) {
+func (c *ModbusClient) readValues() (float64, float64, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	
 	if !c.isConnected {
 		if err := c.connect(); err != nil {
-			return 0, fmt.Errorf("not connected: %v", err)
+			return 0, 0, fmt.Errorf("not connected: %v", err)
 		}
 	}
 	
-	// Read holding registers (function code 3)
-	results, err := c.client.ReadHoldingRegisters(c.registerAddress, c.registerCount)
+	// Read import energy
+	importValue, err := c.readRegister(c.registerAddress, c.registerCount)
 	if err != nil {
 		c.isConnected = false
 		c.lastError = err.Error()
 		log.Printf("ERROR: Modbus read failed for '%s': %v", c.meterName, err)
-		return 0, err
+		return 0, 0, err
 	}
 	
-	// Parse the result based on register count
-	var value float64
-	
-	if c.registerCount == 1 {
-		// Single 16-bit register (unsigned integer)
-		value = float64(binary.BigEndian.Uint16(results))
-	} else if c.registerCount == 2 {
-		// Two 16-bit registers = 32-bit float (IEEE 754)
-		bits := binary.BigEndian.Uint32(results)
-		value = float64(math.Float32frombits(bits))
-	} else if c.registerCount == 4 {
-		// Four 16-bit registers = 64-bit float (IEEE 754)
-		bits := binary.BigEndian.Uint64(results)
-		value = math.Float64frombits(bits)
-	} else {
-		// Default: treat as 32-bit unsigned integer
-		if len(results) >= 4 {
-			value = float64(binary.BigEndian.Uint32(results[:4]))
-		} else {
-			value = float64(binary.BigEndian.Uint16(results))
+	// Read export energy if available
+	var exportValue float64
+	if c.hasExportRegister {
+		exportValue, err = c.readRegister(c.exportRegisterAddr, c.registerCount)
+		if err != nil {
+			log.Printf("WARNING: Export register read failed for '%s': %v (continuing with import only)", c.meterName, err)
+			exportValue = 0 // Continue even if export fails
 		}
 	}
 	
 	// Update status
-	c.lastReading = value
+	c.lastReadingImport = importValue
+	c.lastReadingExport = exportValue
 	c.lastReadTime = time.Now()
 	c.lastError = ""
 	c.isConnected = true
 	
-	return value, nil
+	return importValue, exportValue, nil
+}
+
+func (c *ModbusClient) readRegister(address uint16, count uint16) (float64, error) {
+	var results []byte
+	var err error
+	
+	// Use the configured function code
+	switch c.functionCode {
+	case 1: // Read Coils
+		results, err = c.client.ReadCoils(address, count)
+	case 2: // Read Discrete Inputs
+		results, err = c.client.ReadDiscreteInputs(address, count)
+	case 3: // Read Holding Registers
+		results, err = c.client.ReadHoldingRegisters(address, count)
+	case 4: // Read Input Registers
+		results, err = c.client.ReadInputRegisters(address, count)
+	default:
+		return 0, fmt.Errorf("unsupported function code: %d", c.functionCode)
+	}
+	
+	if err != nil {
+		return 0, err
+	}
+	
+	// Parse the result based on data type
+	return c.parseValue(results)
+}
+
+func (c *ModbusClient) parseValue(data []byte) (float64, error) {
+	if len(data) < 2 {
+		return 0, fmt.Errorf("insufficient data: got %d bytes", len(data))
+	}
+	
+	switch c.dataType {
+	case "float32":
+		if len(data) < 4 {
+			return 0, fmt.Errorf("insufficient data for float32: got %d bytes", len(data))
+		}
+		bits := binary.BigEndian.Uint32(data)
+		return float64(math.Float32frombits(bits)), nil
+		
+	case "float64":
+		if len(data) < 8 {
+			return 0, fmt.Errorf("insufficient data for float64: got %d bytes", len(data))
+		}
+		bits := binary.BigEndian.Uint64(data)
+		return math.Float64frombits(bits), nil
+		
+	case "int16":
+		value := int16(binary.BigEndian.Uint16(data))
+		return float64(value), nil
+		
+	case "int32":
+		if len(data) < 4 {
+			return 0, fmt.Errorf("insufficient data for int32: got %d bytes", len(data))
+		}
+		value := int32(binary.BigEndian.Uint32(data))
+		return float64(value), nil
+		
+	case "uint16":
+		value := binary.BigEndian.Uint16(data)
+		return float64(value), nil
+		
+	case "uint32":
+		if len(data) < 4 {
+			return 0, fmt.Errorf("insufficient data for uint32: got %d bytes", len(data))
+		}
+		value := binary.BigEndian.Uint32(data)
+		return float64(value), nil
+		
+	default:
+		// Default to float32 if type not recognized
+		if len(data) >= 4 {
+			bits := binary.BigEndian.Uint32(data)
+			return float64(math.Float32frombits(bits)), nil
+		}
+		// Fallback to uint16
+		value := binary.BigEndian.Uint16(data)
+		return float64(value), nil
+	}
 }
 
 // Helper functions
@@ -368,10 +464,14 @@ func parseModbusConfig(configJSON string) (ModbusMeterConfig, error) {
 	}
 	
 	result := ModbusMeterConfig{
-		Port:            502, // Default Modbus port
-		RegisterAddress: 0,
-		RegisterCount:   2,
-		UnitID:          1,
+		Port:               502,
+		RegisterAddress:    0,
+		RegisterCount:      2,
+		UnitID:             1,
+		FunctionCode:       3,
+		DataType:           "float32",
+		HasExportRegister:  false,
+		ExportRegisterAddr: 0,
 	}
 	
 	if ip, ok := rawConfig["ip_address"].(string); ok {
@@ -392,6 +492,22 @@ func parseModbusConfig(configJSON string) (ModbusMeterConfig, error) {
 	
 	if unitID, ok := rawConfig["unit_id"].(float64); ok {
 		result.UnitID = int(unitID)
+	}
+	
+	if funcCode, ok := rawConfig["function_code"].(float64); ok {
+		result.FunctionCode = int(funcCode)
+	}
+	
+	if dataType, ok := rawConfig["data_type"].(string); ok {
+		result.DataType = dataType
+	}
+	
+	if hasExport, ok := rawConfig["has_export_register"].(bool); ok {
+		result.HasExportRegister = hasExport
+	}
+	
+	if exportAddr, ok := rawConfig["export_register_address"].(float64); ok {
+		result.ExportRegisterAddr = int(exportAddr)
 	}
 	
 	if result.IPAddress == "" {

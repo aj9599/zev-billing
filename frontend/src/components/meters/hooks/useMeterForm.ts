@@ -12,6 +12,10 @@ interface ConnectionConfig {
     register_address?: number;
     register_count?: number;
     unit_id?: number;
+    function_code?: number;
+    data_type?: string;
+    has_export_register?: boolean;
+    export_register_address?: number;
     listen_port?: number;
     data_key?: string;
     loxone_host?: string;
@@ -50,6 +54,10 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
         register_address: 0,
         register_count: 2,
         unit_id: 1,
+        function_code: 3,
+        data_type: 'float32',
+        has_export_register: false,
+        export_register_address: 0,
         listen_port: 8888,
         data_key: 'power_kwh',
         loxone_host: '',
@@ -85,6 +93,10 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
             register_address: 0,
             register_count: 2,
             unit_id: 1,
+            function_code: 3,
+            data_type: 'float32',
+            has_export_register: false,
+            export_register_address: 0,
             listen_port: 8888,
             data_key: 'power_kwh',
             loxone_host: '',
@@ -131,6 +143,10 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
                 register_address: config.register_address || 0,
                 register_count: config.register_count || 2,
                 unit_id: config.unit_id || 1,
+                function_code: config.function_code || 3,
+                data_type: config.data_type || 'float32',
+                has_export_register: config.has_export_register || false,
+                export_register_address: config.export_register_address || 0,
                 listen_port: config.listen_port || 8888,
                 data_key: config.data_key || 'power_kwh',
                 loxone_host: config.loxone_host || '',
@@ -167,9 +183,13 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
             config = {
                 ip_address: connectionConfig.ip_address,
                 port: connectionConfig.port,
+                unit_id: connectionConfig.unit_id,
+                function_code: connectionConfig.function_code,
+                data_type: connectionConfig.data_type,
                 register_address: connectionConfig.register_address,
                 register_count: connectionConfig.register_count,
-                unit_id: connectionConfig.unit_id
+                has_export_register: connectionConfig.has_export_register,
+                export_register_address: connectionConfig.export_register_address
             };
         } else if (formData.connection_type === 'udp') {
             config = {
