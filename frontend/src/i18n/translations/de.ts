@@ -586,70 +586,73 @@ export const de: Translations = {
   'meters.instructions.troubleshootingHttpAuth': 'Überprüfen Sie HTTP-Anmeldedaten, wenn Authentifizierung aktiviert ist',
   'meters.instructions.troubleshootingHttpMeterId': 'Überprüfen Sie, ob die Zähler-ID im URL-Pfad mit Ihrer Loxone-Konfiguration übereinstimmt',
 
-  // Zählerersatz
-  'meters.replacement.title': 'Zähler ersetzen',
-  'meters.replacement.subtitle': 'Schritt',
-  'meters.replacement.failed': 'Zähler konnte nicht ersetzt werden',
-  'meters.replacement.replacing': 'Wird ersetzt...',
-  'meters.replacement.confirmReplace': 'Zähler ersetzen',
-  'meters.showArchived': 'Archivierte anzeigen',
-
-  // Validierung
+  // Error messages
   'meters.replacement.invalidOldReading': 'Ungültiger Endwert',
   'meters.replacement.readingTooLow': 'Endwert muss >= letztem aufgezeichneten Wert sein',
   'meters.replacement.nameRequired': 'Zählername ist erforderlich',
   'meters.replacement.loxoneConfigRequired': 'Loxone Host und Geräte-ID sind erforderlich',
+  'meters.replacement.loxoneExportRequired': 'Export-Geräte-ID ist für Virtual Output Modus erforderlich',
   'meters.replacement.modbusConfigRequired': 'IP-Adresse ist erforderlich',
+  'meters.replacement.mqttConfigRequired': 'MQTT Topic und Broker sind erforderlich',
   'meters.replacement.invalidNewReading': 'Ungültiger Anfangswert',
+  'meters.replacement.failed': 'Zähleraustausch fehlgeschlagen',
 
-  // Schritt 1
-  'meters.replacement.step1.title': 'Zählerersatz Übersicht',
+  // Modal title and navigation
+  'meters.replacement.title': 'Zähler ersetzen',
+  'meters.replacement.subtitle': 'Schritt',
+  
+  // Step 1: Overview
+  'meters.replacement.step1.title': 'Übersicht Zähleraustausch',
   'meters.replacement.step1.currentMeter': 'Aktueller Zähler',
-  'meters.replacement.step1.lastReading': 'Letzter Messwert',
+  'meters.replacement.step1.lastReading': 'Letzter Zählerstand',
   'meters.replacement.step1.connectionType': 'Verbindungstyp',
-  'meters.replacement.step1.whatHappens': 'Was geschieht beim Ersatz:',
+  'meters.replacement.step1.whatHappens': 'Was passiert beim Austausch:',
   'meters.replacement.step1.point1': 'Alter Zähler wird archiviert (nicht gelöscht)',
-  'meters.replacement.step1.point2': 'Historische Daten bleiben erhalten',
+  'meters.replacement.step1.point2': 'Historische Daten werden erhalten',
   'meters.replacement.step1.point3': 'Neuer Zähler übernimmt die Datenerfassung',
   'meters.replacement.step1.point4': 'Abrechnung läuft nahtlos mit Offset-Berechnung weiter',
-  'meters.replacement.step1.point5': 'Sie können den Verbindungstyp bei Bedarf ändern',
-  'meters.replacement.step1.warning': 'Wichtig: Diese Aktion kann nicht rückgängig gemacht werden. Stellen Sie sicher, dass Sie die richtigen Werte haben, bevor Sie fortfahren.',
+  'meters.replacement.step1.point5': 'Sie können bei Bedarf den Verbindungstyp ändern',
+  'meters.replacement.step1.warning': 'Wichtig: Diese Aktion kann nicht rückgängig gemacht werden. Stellen Sie sicher, dass Sie die korrekten Zählerstände haben, bevor Sie fortfahren.',
 
-  // Schritt 2
+  // Step 2: Old meter final reading
   'meters.replacement.step2.title': 'Endwert des alten Zählers',
   'meters.replacement.step2.instruction': 'Geben Sie den Endwert des alten Zählers ein. Dies sollte der letzte Wert sein, den Sie am physischen Zähler ablesen können, bevor Sie ihn trennen.',
-  'meters.replacement.step2.lastRecorded': 'Letzter aufgezeichneter Messwert',
-  'meters.replacement.step2.reference': 'Als Referenz verwenden - Ihr Endwert sollte ≥ diesem Wert sein',
+  'meters.replacement.step2.lastRecorded': 'Letzter aufgezeichneter Wert',
+  'meters.replacement.step2.reference': 'Nutzen Sie dies als Referenz - Ihr Endwert sollte ≥ diesem Wert sein',
   'meters.replacement.step2.finalReading': 'Endwert (kWh)',
   'meters.replacement.step2.tip': 'Tipp: Notieren Sie diesen Wert genau. Er wird zur Berechnung des Offsets für die Abrechnungskontinuität verwendet.',
 
-  // Schritt 3
+  // Step 3: New meter configuration
   'meters.replacement.step3.title': 'Konfiguration des neuen Zählers',
-  'meters.replacement.step3.namePlaceholder': 'Namen des neuen Zählers eingeben',
+  'meters.replacement.step3.namePlaceholder': 'Neuen Zählernamen eingeben',
   'meters.replacement.step3.copySettings': 'Gebäude- und Wohnungseinstellungen vom alten Zähler übernehmen',
 
-  // Schritt 4
+  // Step 4: Connection configuration
   'meters.replacement.step4.title': 'Verbindungskonfiguration',
-  'meters.replacement.step4.subtitle': 'Wählen Sie aus, wie der neue Zähler Daten sendet. Sie können den Verbindungstyp bei Bedarf ändern.',
+  'meters.replacement.step4.subtitle': 'Wählen Sie aus, wie der neue Zähler Daten sendet. Sie können bei Bedarf den Verbindungstyp ändern.',
 
-  // Schritt 5
+  // Step 5: New meter initial reading
   'meters.replacement.step5.title': 'Anfangswert des neuen Zählers',
-  'meters.replacement.step5.instruction': 'Geben Sie den Anfangswert des neuen Zählers ein. Dies ist typischerweise 0 oder eine kleine Zahl für einen neuen Zähler.',
+  'meters.replacement.step5.instruction': 'Geben Sie den Anfangswert des neuen Zählers ein. Dies ist typischerweise 0 oder eine kleine Zahl bei einem neuen Zähler.',
   'meters.replacement.step5.initialReading': 'Anfangswert (kWh)',
-  'meters.replacement.step5.offsetCalculation': 'Offset-Berechnung Vorschau',
-  'meters.replacement.step5.offsetExplanation': 'Dieser Offset wird auf alle neuen Messwerte für die Abrechnungskontinuität angewendet',
+  'meters.replacement.step5.offsetCalculation': 'Vorschau Offset-Berechnung',
+  'meters.replacement.step5.offsetExplanation': 'Dieser Offset wird auf alle neuen Zählerstände für die Abrechnungskontinuität angewendet',
 
-  // Schritt 6
-  'meters.replacement.step6.title': 'Überprüfung & Bestätigung',
+  // Step 6: Review and confirm
+  'meters.replacement.step6.title': 'Überprüfen & Bestätigen',
   'meters.replacement.step6.oldMeter': 'Alter Zähler',
   'meters.replacement.step6.newMeter': 'Neuer Zähler',
   'meters.replacement.step6.finalReading': 'Endwert',
   'meters.replacement.step6.initialReading': 'Anfangswert',
-  'meters.replacement.step6.readingOffset': 'Messwert-Offset',
-  'meters.replacement.step6.notes': 'Ersatz-Notizen (Optional)',
-  'meters.replacement.step6.notesPlaceholder': 'z.B. Zählerfehlfunktion, geplante Wartung, Upgrade...',
+  'meters.replacement.step6.readingOffset': 'Zählerstand-Offset',
+  'meters.replacement.step6.notes': 'Austausch-Notizen (Optional)',
+  'meters.replacement.step6.notesPlaceholder': 'z.B. Zählerdefekt, planmäßige Wartung, Upgrade...',
   'meters.replacement.step6.finalWarning': 'Letzte Warnung',
-  'meters.replacement.step6.cannotUndo': 'Dieser Ersatz kann nicht rückgängig gemacht werden. Der alte Zähler wird archiviert und der neue Zähler beginnt sofort mit der Datenerfassung.',
+  'meters.replacement.step6.cannotUndo': 'Dieser Austausch kann nicht rückgängig gemacht werden. Der alte Zähler wird archiviert und der neue Zähler beginnt sofort mit der Datenerfassung.',
+
+  // Action buttons
+  'meters.replacement.replacing': 'Wird ersetzt...',
+  'meters.replacement.confirmReplace': 'Zähler ersetzen',
 
   // MQTT Configuration
   'meters.mqttProtocol': 'MQTT (WhatWatt Go & Mehr)',

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, AlertTriangle, RefreshCw, Check, Info, Wifi, Radio, Zap, ArrowRight } from 'lucide-react';
+import { X, AlertTriangle, RefreshCw, Check, Info, Wifi, Radio, Zap, Rss, ArrowRight } from 'lucide-react';
 import { api } from '../api/client';
 import type { Meter, MeterReplacementRequest } from '../types';
 import { useTranslation } from '../i18n';
@@ -33,7 +33,9 @@ export default function MeterReplacementModal({ meter, onClose, onSuccess }: Met
         loxone_host: '',
         loxone_username: '',
         loxone_password: '',
-        loxone_device_id: ''
+        loxone_device_id: '',
+        loxone_mode: 'meter_block',
+        loxone_export_device_id: ''
       });
     } else if (newConnectionType === 'udp') {
       // Generate unique UUID for UDP
@@ -48,7 +50,20 @@ export default function MeterReplacementModal({ meter, onClose, onSuccess }: Met
         port: 502,
         register_address: 0,
         register_count: 2,
-        unit_id: 1
+        unit_id: 1,
+        function_code: 3,
+        data_type: 'float32',
+        has_export_register: false,
+        export_register_address: 0
+      });
+    } else if (newConnectionType === 'mqtt') {
+      setNewConnectionConfig({
+        mqtt_topic: '',
+        mqtt_broker: 'localhost',
+        mqtt_port: 1883,
+        mqtt_username: '',
+        mqtt_password: '',
+        mqtt_qos: 1
       });
     }
   }, [newConnectionType]);
@@ -97,9 +112,19 @@ export default function MeterReplacementModal({ meter, onClose, onSuccess }: Met
           setError(t('meters.replacement.loxoneConfigRequired') || 'Loxone host and device ID are required');
           return;
         }
+        const supportsExport = newMeterType === 'total_meter' || newMeterType === 'solar_meter';
+        if (supportsExport && newConnectionConfig.loxone_mode === 'virtual_output' && !newConnectionConfig.loxone_export_device_id) {
+          setError(t('meters.replacement.loxoneExportRequired') || 'Export device ID is required for virtual output mode');
+          return;
+        }
       } else if (newConnectionType === 'modbus_tcp') {
         if (!newConnectionConfig.ip_address) {
           setError(t('meters.replacement.modbusConfigRequired') || 'IP address is required');
+          return;
+        }
+      } else if (newConnectionType === 'mqtt') {
+        if (!newConnectionConfig.mqtt_topic || !newConnectionConfig.mqtt_broker) {
+          setError(t('meters.replacement.mqttConfigRequired') || 'MQTT topic and broker are required');
           return;
         }
       }
@@ -161,9 +186,12 @@ export default function MeterReplacementModal({ meter, onClose, onSuccess }: Met
 
   const connectionTypes = [
     { value: 'loxone_api', label: 'Loxone WebSocket API', icon: Wifi, color: '#10b981' },
+    { value: 'mqtt', label: 'MQTT', icon: Rss, color: '#8b5cf6' },
     { value: 'udp', label: 'UDP (Legacy)', icon: Radio, color: '#f59e0b' },
     { value: 'modbus_tcp', label: 'Modbus TCP', icon: Zap, color: '#6b7280' }
   ];
+
+  const supportsExport = newMeterType === 'total_meter' || newMeterType === 'solar_meter';
 
   return (
     <div style={{
@@ -445,6 +473,29 @@ export default function MeterReplacementModal({ meter, onClose, onSuccess }: Met
                 backgroundColor: '#d1fae5', padding: '16px', borderRadius: '12px',
                 border: '2px solid #10b981', marginBottom: '16px'
               }}>
+                {/* Loxone Mode Selection */}
+                {supportsExport && (
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#065f46' }}>
+                      {t('meters.loxoneMode')} *
+                    </label>
+                    <select
+                      value={newConnectionConfig.loxone_mode || 'meter_block'}
+                      onChange={(e) => setNewConnectionConfig({ ...newConnectionConfig, loxone_mode: e.target.value as 'virtual_output' | 'meter_block' })}
+                      style={{
+                        width: '100%', padding: '10px', border: '1px solid #10b981',
+                        borderRadius: '6px', fontSize: '14px'
+                      }}
+                    >
+                      <option value="meter_block">{t('meters.loxoneModeMeterBlock')}</option>
+                      <option value="virtual_output">{t('meters.loxoneModeVirtualOutput')}</option>
+                    </select>
+                    <p style={{ fontSize: '11px', color: '#065f46', marginTop: '4px', margin: '4px 0 0 0' }}>
+                      {t('meters.loxoneModeHelp')}
+                    </p>
+                  </div>
+                )}
+
                 <div style={{ marginBottom: '12px' }}>
                   <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#065f46' }}>
                     {t('meters.loxoneHost')} *
@@ -463,7 +514,9 @@ export default function MeterReplacementModal({ meter, onClose, onSuccess }: Met
 
                 <div style={{ marginBottom: '12px' }}>
                   <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#065f46' }}>
-                    {t('meters.loxoneDeviceId')} *
+                    {supportsExport && newConnectionConfig.loxone_mode === 'meter_block'
+                      ? t('meters.loxoneMeterUuid')
+                      : t('meters.loxoneDeviceUuidImport')} *
                   </label>
                   <input
                     type="text"
@@ -475,10 +528,34 @@ export default function MeterReplacementModal({ meter, onClose, onSuccess }: Met
                       borderRadius: '6px', fontSize: '12px', fontFamily: 'monospace'
                     }}
                   />
-                  <p style={{ fontSize: '11px', color: '#065f46', marginTop: '4px', margin: 0 }}>
-                    {t('meters.loxoneDeviceIdDescription')}
+                  <p style={{ fontSize: '11px', color: '#065f46', marginTop: '4px', margin: '4px 0 0 0' }}>
+                    {supportsExport && newConnectionConfig.loxone_mode === 'meter_block'
+                      ? t('meters.loxoneMeterUuidDescription')
+                      : t('meters.loxoneDeviceIdDescription')}
                   </p>
                 </div>
+
+                {/* Export UUID field for virtual_output mode */}
+                {supportsExport && newConnectionConfig.loxone_mode === 'virtual_output' && (
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#065f46' }}>
+                      {t('meters.loxoneDeviceUuidExport')} *
+                    </label>
+                    <input
+                      type="text"
+                      value={newConnectionConfig.loxone_export_device_id || ''}
+                      onChange={(e) => setNewConnectionConfig({ ...newConnectionConfig, loxone_export_device_id: e.target.value })}
+                      placeholder="1fa3ef88-035e-7e1b-ffffed57184a04d2"
+                      style={{
+                        width: '100%', padding: '10px', border: '1px solid #10b981',
+                        borderRadius: '6px', fontSize: '12px', fontFamily: 'monospace'
+                      }}
+                    />
+                    <p style={{ fontSize: '11px', color: '#065f46', marginTop: '4px', margin: '4px 0 0 0' }}>
+                      {t('meters.loxoneExportUuidDescription')}
+                    </p>
+                  </div>
+                )}
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div>
@@ -507,6 +584,92 @@ export default function MeterReplacementModal({ meter, onClose, onSuccess }: Met
                       placeholder="••••••••"
                       style={{
                         width: '100%', padding: '10px', border: '1px solid #10b981',
+                        borderRadius: '6px', fontSize: '14px'
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {newConnectionType === 'mqtt' && (
+              <div style={{
+                backgroundColor: '#f3e8ff', padding: '16px', borderRadius: '12px',
+                border: '2px solid #8b5cf6'
+              }}>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#5b21b6' }}>
+                    {t('meters.mqttTopic')} *
+                  </label>
+                  <input
+                    type="text"
+                    value={newConnectionConfig.mqtt_topic || ''}
+                    onChange={(e) => setNewConnectionConfig({ ...newConnectionConfig, mqtt_topic: e.target.value })}
+                    placeholder="meters/building_name/meter_name"
+                    style={{
+                      width: '100%', padding: '10px', border: '1px solid #8b5cf6',
+                      borderRadius: '6px', fontSize: '12px', fontFamily: 'monospace'
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#5b21b6' }}>
+                      {t('meters.mqttBrokerHost')} *
+                    </label>
+                    <input
+                      type="text"
+                      value={newConnectionConfig.mqtt_broker || ''}
+                      onChange={(e) => setNewConnectionConfig({ ...newConnectionConfig, mqtt_broker: e.target.value })}
+                      placeholder="localhost"
+                      style={{
+                        width: '100%', padding: '10px', border: '1px solid #8b5cf6',
+                        borderRadius: '6px', fontSize: '14px'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#5b21b6' }}>
+                      {t('meters.port')} *
+                    </label>
+                    <input
+                      type="number"
+                      value={newConnectionConfig.mqtt_port || 1883}
+                      onChange={(e) => setNewConnectionConfig({ ...newConnectionConfig, mqtt_port: parseInt(e.target.value) })}
+                      style={{
+                        width: '100%', padding: '10px', border: '1px solid #8b5cf6',
+                        borderRadius: '6px', fontSize: '14px'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#5b21b6' }}>
+                      {t('meters.mqttUsername')} ({t('common.optional')})
+                    </label>
+                    <input
+                      type="text"
+                      value={newConnectionConfig.mqtt_username || ''}
+                      onChange={(e) => setNewConnectionConfig({ ...newConnectionConfig, mqtt_username: e.target.value })}
+                      style={{
+                        width: '100%', padding: '10px', border: '1px solid #8b5cf6',
+                        borderRadius: '6px', fontSize: '14px'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#5b21b6' }}>
+                      {t('meters.mqttPassword')} ({t('common.optional')})
+                    </label>
+                    <input
+                      type="password"
+                      value={newConnectionConfig.mqtt_password || ''}
+                      onChange={(e) => setNewConnectionConfig({ ...newConnectionConfig, mqtt_password: e.target.value })}
+                      style={{
+                        width: '100%', padding: '10px', border: '1px solid #8b5cf6',
                         borderRadius: '6px', fontSize: '14px'
                       }}
                     />
@@ -590,50 +753,125 @@ export default function MeterReplacementModal({ meter, onClose, onSuccess }: Met
                     />
                   </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#374151' }}>
-                      {t('meters.registerAddress')}
+
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#374151' }}>
+                    {t('meters.modbusUnitId')} *
+                  </label>
+                  <input
+                    type="number"
+                    value={newConnectionConfig.unit_id || 1}
+                    onChange={(e) => setNewConnectionConfig({ ...newConnectionConfig, unit_id: parseInt(e.target.value) })}
+                    style={{
+                      width: '100%', padding: '10px', border: '1px solid #6b7280',
+                      borderRadius: '6px', fontSize: '14px'
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#374151' }}>
+                    {t('meters.modbusFunctionCode')} *
+                  </label>
+                  <select
+                    value={newConnectionConfig.function_code || 3}
+                    onChange={(e) => setNewConnectionConfig({ ...newConnectionConfig, function_code: parseInt(e.target.value) })}
+                    style={{
+                      width: '100%', padding: '10px', border: '1px solid #6b7280',
+                      borderRadius: '6px', fontSize: '14px'
+                    }}
+                  >
+                    <option value={3}>{t('meters.modbusFc03')}</option>
+                    <option value={4}>{t('meters.modbusFc04')}</option>
+                  </select>
+                </div>
+
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#374151' }}>
+                    {t('meters.modbusDataType')} *
+                  </label>
+                  <select
+                    value={newConnectionConfig.data_type || 'float32'}
+                    onChange={(e) => setNewConnectionConfig({
+                      ...newConnectionConfig,
+                      data_type: e.target.value,
+                      register_count: e.target.value === 'float32' ? 2 :
+                        e.target.value === 'float64' ? 4 :
+                          e.target.value === 'int32' ? 2 : 1
+                    })}
+                    style={{
+                      width: '100%', padding: '10px', border: '1px solid #6b7280',
+                      borderRadius: '6px', fontSize: '14px'
+                    }}
+                  >
+                    <option value="float32">{t('meters.modbusFloat32')}</option>
+                    <option value="float64">{t('meters.modbusFloat64')}</option>
+                    <option value="int32">{t('meters.modbusInt32')}</option>
+                    <option value="int16">{t('meters.modbusInt16')}</option>
+                  </select>
+                </div>
+
+                <div style={{
+                  backgroundColor: '#f0fdf4', padding: '12px', borderRadius: '6px',
+                  marginBottom: '12px', border: '1px solid #22c55e'
+                }}>
+                  <strong style={{ color: '#15803d', fontSize: '14px' }}>{t('meters.modbusImportEnergy')}</strong>
+                  <div style={{ marginTop: '12px' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#15803d' }}>
+                      {t('meters.modbusRegisterAddress')} *
                     </label>
                     <input
                       type="number"
                       value={newConnectionConfig.register_address || 0}
                       onChange={(e) => setNewConnectionConfig({ ...newConnectionConfig, register_address: parseInt(e.target.value) })}
                       style={{
-                        width: '100%', padding: '10px', border: '1px solid #6b7280',
-                        borderRadius: '6px', fontSize: '14px'
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#374151' }}>
-                      {t('meters.registerCount')}
-                    </label>
-                    <input
-                      type="number"
-                      value={newConnectionConfig.register_count || 2}
-                      onChange={(e) => setNewConnectionConfig({ ...newConnectionConfig, register_count: parseInt(e.target.value) })}
-                      style={{
-                        width: '100%', padding: '10px', border: '1px solid #6b7280',
-                        borderRadius: '6px', fontSize: '14px'
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#374151' }}>
-                      {t('meters.unitId')}
-                    </label>
-                    <input
-                      type="number"
-                      value={newConnectionConfig.unit_id || 1}
-                      onChange={(e) => setNewConnectionConfig({ ...newConnectionConfig, unit_id: parseInt(e.target.value) })}
-                      style={{
-                        width: '100%', padding: '10px', border: '1px solid #6b7280',
+                        width: '100%', padding: '10px', border: '1px solid #22c55e',
                         borderRadius: '6px', fontSize: '14px'
                       }}
                     />
                   </div>
                 </div>
+
+                {supportsExport && (
+                  <div style={{
+                    backgroundColor: '#fef3c7', padding: '12px', borderRadius: '6px',
+                    border: '1px solid #f59e0b'
+                  }}>
+                    <label style={{
+                      display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer'
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={newConnectionConfig.has_export_register === true}
+                        onChange={(e) => setNewConnectionConfig({
+                          ...newConnectionConfig,
+                          has_export_register: e.target.checked
+                        })}
+                      />
+                      <strong style={{ color: '#92400e', fontSize: '14px' }}>{t('meters.modbusExportRegister')}</strong>
+                    </label>
+
+                    {newConnectionConfig.has_export_register && (
+                      <div style={{ marginTop: '12px' }}>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#92400e' }}>
+                          {t('meters.modbusExportAddress')} *
+                        </label>
+                        <input
+                          type="number"
+                          value={newConnectionConfig.export_register_address || 0}
+                          onChange={(e) => setNewConnectionConfig({
+                            ...newConnectionConfig,
+                            export_register_address: parseInt(e.target.value)
+                          })}
+                          style={{
+                            width: '100%', padding: '10px', border: '1px solid #f59e0b',
+                            borderRadius: '6px', fontSize: '14px'
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

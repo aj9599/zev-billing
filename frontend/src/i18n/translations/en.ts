@@ -587,23 +587,22 @@ export const en: Translations = {
   'meters.instructions.troubleshootingHttpAuth': 'Verify HTTP credentials if authentication is enabled',
   'meters.instructions.troubleshootingHttpMeterId': 'Check that the Meter ID in the URL path matches your Loxone configuration',
 
-  // Meter Replacement
-  'meters.replacement.title': 'Replace Meter',
-  'meters.replacement.subtitle': 'Step',
-  'meters.replacement.failed': 'Failed to replace meter',
-  'meters.replacement.replacing': 'Replacing...',
-  'meters.replacement.confirmReplace': 'Replace Meter',
-  'meters.showArchived': 'Show Archived',
-
-  // Validation
+  // Error messages
   'meters.replacement.invalidOldReading': 'Invalid final reading',
   'meters.replacement.readingTooLow': 'Final reading must be >= last recorded reading',
   'meters.replacement.nameRequired': 'Meter name is required',
   'meters.replacement.loxoneConfigRequired': 'Loxone host and device ID are required',
+  'meters.replacement.loxoneExportRequired': 'Export device ID is required for virtual output mode',
   'meters.replacement.modbusConfigRequired': 'IP address is required',
+  'meters.replacement.mqttConfigRequired': 'MQTT topic and broker are required',
   'meters.replacement.invalidNewReading': 'Invalid initial reading',
+  'meters.replacement.failed': 'Meter replacement failed',
 
-  // Step 1
+  // Modal title and navigation
+  'meters.replacement.title': 'Replace Meter',
+  'meters.replacement.subtitle': 'Step',
+  
+  // Step 1: Overview
   'meters.replacement.step1.title': 'Meter Replacement Overview',
   'meters.replacement.step1.currentMeter': 'Current Meter',
   'meters.replacement.step1.lastReading': 'Last Reading',
@@ -616,7 +615,7 @@ export const en: Translations = {
   'meters.replacement.step1.point5': 'You can change connection type if needed',
   'meters.replacement.step1.warning': 'Important: This action cannot be undone. Make sure you have the correct readings before proceeding.',
 
-  // Step 2
+  // Step 2: Old meter final reading
   'meters.replacement.step2.title': 'Old Meter Final Reading',
   'meters.replacement.step2.instruction': 'Enter the final reading from the old meter. This should be the last reading you can see on the physical meter before disconnecting it.',
   'meters.replacement.step2.lastRecorded': 'Last Recorded Reading',
@@ -624,23 +623,23 @@ export const en: Translations = {
   'meters.replacement.step2.finalReading': 'Final Reading (kWh)',
   'meters.replacement.step2.tip': 'Tip: Record this reading accurately. It will be used to calculate the offset for billing continuity.',
 
-  // Step 3
+  // Step 3: New meter configuration
   'meters.replacement.step3.title': 'New Meter Configuration',
   'meters.replacement.step3.namePlaceholder': 'Enter new meter name',
   'meters.replacement.step3.copySettings': 'Copy building and apartment settings from old meter',
 
-  // Step 4
+  // Step 4: Connection configuration
   'meters.replacement.step4.title': 'Connection Configuration',
   'meters.replacement.step4.subtitle': 'Select how the new meter will send data. You can change the connection type if needed.',
 
-  // Step 5
+  // Step 5: New meter initial reading
   'meters.replacement.step5.title': 'New Meter Initial Reading',
   'meters.replacement.step5.instruction': 'Enter the initial reading from the new meter. This is typically 0 or a small number for a new meter.',
   'meters.replacement.step5.initialReading': 'Initial Reading (kWh)',
   'meters.replacement.step5.offsetCalculation': 'Offset Calculation Preview',
   'meters.replacement.step5.offsetExplanation': 'This offset will be applied to all new readings for billing continuity',
 
-  // Step 6
+  // Step 6: Review and confirm
   'meters.replacement.step6.title': 'Review & Confirm',
   'meters.replacement.step6.oldMeter': 'Old Meter',
   'meters.replacement.step6.newMeter': 'New Meter',
@@ -651,6 +650,10 @@ export const en: Translations = {
   'meters.replacement.step6.notesPlaceholder': 'e.g., Meter malfunction, scheduled maintenance, upgrade...',
   'meters.replacement.step6.finalWarning': 'Final Warning',
   'meters.replacement.step6.cannotUndo': 'This replacement cannot be undone. The old meter will be archived and the new meter will immediately start collecting data.',
+
+  // Action buttons
+  'meters.replacement.replacing': 'Replacing...',
+  'meters.replacement.confirmReplace': 'Replace Meter',
 
   // MQTT Configuration
   'meters.mqttProtocol': 'MQTT (WhatWatt Go & More)',
