@@ -89,8 +89,8 @@ type Shelly2PMMessage struct {
 	Freq       float64                `json:"freq"`        // Frequency in Hz
 	Current    float64                `json:"current"`     // Current in A
 	PF         float64                `json:"pf"`          // Power factor
-	AEnergy    Shelly2PMEnergyObject  `json:"aenergy"`     // Import energy
-	RetAEnergy Shelly2PMEnergyObject  `json:"ret_aenergy"` // Export/return energy
+	AEnergy    Shelly2PMEnergyObject  `json:"aenergy"`     // Total active energy (import+export)
+	RetAEnergy Shelly2PMEnergyObject  `json:"ret_aenergy"` // Return/export energy
 	Temperature map[string]float64    `json:"temperature"` // Temperature readings
 }
 
@@ -611,11 +611,14 @@ func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, devic
 				// Note: Total can be very large (e.g., 170204.016 Wh), so just check >= 0
 				if shelly2PMMsg.AEnergy.Total >= 0 {
 					// Convert Wh to kWh
-					importValue = shelly2PMMsg.AEnergy.Total / 1000.0
+					// aenergy contains total active energy (import + export)
+					// ret_aenergy contains return/export energy
+					// Therefore: real import = aenergy - ret_aenergy
+					importValue = (shelly2PMMsg.AEnergy.Total - shelly2PMMsg.RetAEnergy.Total) / 1000.0
 					exportValue = shelly2PMMsg.RetAEnergy.Total / 1000.0
 					timestamp = time.Now()
 					found = true
-					log.Printf("✓ Parsed Shelly 2PM format: import=%.3f kWh, export=%.3f kWh, power=%.1f W, voltage=%.1f V", 
+					log.Printf("✓ Parsed Shelly 2PM format: import=%.3f kWh (calculated from aenergy-ret_aenergy), export=%.3f kWh, power=%.1f W, voltage=%.1f V", 
 						importValue, exportValue, shelly2PMMsg.APower, shelly2PMMsg.Voltage)
 				} else {
 					log.Printf("DEBUG: Shelly 2PM AEnergy.Total is not valid: %.3f", shelly2PMMsg.AEnergy.Total)
