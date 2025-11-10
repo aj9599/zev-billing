@@ -189,10 +189,12 @@ func RunMigrations(db *sql.DB) error {
 			name TEXT NOT NULL,
 			building_ids TEXT NOT NULL,
 			user_ids TEXT,
+			apartments_json TEXT,
 			frequency TEXT NOT NULL,
 			generation_day INTEGER NOT NULL,
 			first_execution_date DATE,
 			is_active INTEGER DEFAULT 1,
+			is_vzev INTEGER DEFAULT 0,
 			last_run DATETIME,
 			next_run DATETIME,
 			sender_name TEXT,
@@ -262,102 +264,136 @@ func RunMigrations(db *sql.DB) error {
 			config_id INTEGER NOT NULL,
 			user_id INTEGER NOT NULL,
 			percentage REAL NOT NULL CHECK(percentage > 0 AND percentage <= 100),
-			notes TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (config_id) REFERENCES shared_meter_configs(id) ON DELETE CASCADE,
 			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
 			UNIQUE(config_id, user_id)
 		)`,
-
-		// Indexes for performance
-		`CREATE INDEX IF NOT EXISTS idx_meter_readings_time ON meter_readings(reading_time)`,
-		`CREATE INDEX IF NOT EXISTS idx_meter_readings_meter ON meter_readings(meter_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_charger_sessions_time ON charger_sessions(session_time)`,
-		`CREATE INDEX IF NOT EXISTS idx_charger_sessions_charger ON charger_sessions(charger_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_invoices_building ON invoices(building_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_invoices_pdf_path ON invoices(pdf_path)`,
-		`CREATE INDEX IF NOT EXISTS idx_auto_billing_next_run ON auto_billing_configs(next_run)`,
-		`CREATE INDEX IF NOT EXISTS idx_shared_meters_building ON shared_meter_configs(building_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_shared_meters_meter ON shared_meter_configs(meter_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_custom_items_building ON custom_line_items(building_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_custom_items_active ON custom_line_items(is_active)`,
-		`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`,
-		`CREATE INDEX IF NOT EXISTS idx_users_building ON users(building_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_users_user_type ON users(user_type)`,
-		`CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)`,
-		`CREATE INDEX IF NOT EXISTS idx_users_apartment_unit ON users(apartment_unit)`,
-		`CREATE INDEX IF NOT EXISTS idx_users_rent_dates ON users(rent_start_date, rent_end_date)`,
-		`CREATE INDEX IF NOT EXISTS idx_meters_device_type ON meters(device_type)`,
-		`CREATE INDEX IF NOT EXISTS idx_meter_readings_export ON meter_readings(power_kwh_export)`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_type ON users(email, user_type)`,
 	}
 
-	// Execute all migrations
-	for i, migration := range migrations {
+	for _, migration := range migrations {
 		if _, err := db.Exec(migration); err != nil {
-			// Log but don't fail on already-exists errors
-			if !contains(err.Error(), "already exists") && !contains(err.Error(), "duplicate") {
-				log.Printf("Migration %d warning: %v", i+1, err)
-			}
+			return fmt.Errorf("migration failed: %v", err)
 		}
 	}
 
-	log.Println("âœ… Base tables and indexes created/verified")
+	// Create indexes
+	indexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_meter_readings_meter_time ON meter_readings(meter_id, reading_time)`,
+		`CREATE INDEX IF NOT EXISTS idx_charger_sessions_charger_time ON charger_sessions(charger_id, session_time)`,
+		`CREATE INDEX IF NOT EXISTS idx_users_building ON users(building_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_meters_building ON meters(building_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_invoices_building ON invoices(building_id)`,
+	}
 
-	// Run additional migrations for new columns
-	if err := addMQTTDeviceTypeColumn(db); err != nil {
-		log.Printf("âš ï¸  MQTT device type migration: %v", err)
+	for _, index := range indexes {
+		if _, err := db.Exec(index); err != nil {
+			log.Printf("Index creation warning: %v", err)
+		}
+	}
+
+	// Add additional columns that might be missing from older versions
+	if err := addDeviceTypeColumn(db); err != nil {
+		return err
 	}
 
 	if err := addExportColumns(db); err != nil {
-		log.Printf("âš ï¸  Export columns migration: %v", err)
+		return err
 	}
 
 	if err := addVZEVColumns(db); err != nil {
-		log.Printf("⚠️  vZEV columns migration: %v", err)
+		return err
 	}
 
-	// Create triggers
+	// NEW: Add apartments_json and is_vzev to auto_billing_configs
+	if err := addAutoBillingApartmentsColumn(db); err != nil {
+		return err
+	}
+
 	if err := createTriggers(db); err != nil {
-		log.Printf("Note: Triggers creation: %v", err)
+		return err
 	}
 
-	// Create default admin
-	if err := createDefaultAdmin(db); err != nil {
-		return fmt.Errorf("failed to create default admin: %v", err)
-	}
-
-	log.Println("âœ… All migrations completed successfully")
-	return nil
+	return createDefaultAdmin(db)
 }
 
-// NEW: Add MQTT device type column to meters table
-func addMQTTDeviceTypeColumn(db *sql.DB) error {
-	// Check if column already exists
-	var sql string
+// NEW: Add apartments_json and is_vzev columns to auto_billing_configs
+func addAutoBillingApartmentsColumn(db *sql.DB) error {
+	// Check auto_billing_configs table
+	var autoBillingConfigsSql string
 	err := db.QueryRow(`
 		SELECT sql FROM sqlite_master 
-		WHERE type='table' AND name='meters'
-	`).Scan(&sql)
+		WHERE type='table' AND name='auto_billing_configs'
+	`).Scan(&autoBillingConfigsSql)
 
 	if err != nil {
 		return err
 	}
 
-	// If column doesn't exist, add it
-	if !contains(sql, "device_type") {
+	// Add apartments_json column
+	if !contains(autoBillingConfigsSql, "apartments_json") {
+		log.Println("Adding apartments_json column to auto_billing_configs table...")
+		_, err := db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN apartments_json TEXT`)
+		if err != nil {
+			if contains(err.Error(), "duplicate column") {
+				log.Println("✅ apartments_json column already exists")
+			} else {
+				return fmt.Errorf("failed to add apartments_json column: %v", err)
+			}
+		} else {
+			log.Println("✅ apartments_json column added successfully")
+		}
+	} else {
+		log.Println("✅ apartments_json column already exists")
+	}
+
+	// Add is_vzev column
+	if !contains(autoBillingConfigsSql, "is_vzev") {
+		log.Println("Adding is_vzev column to auto_billing_configs table...")
+		_, err := db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN is_vzev INTEGER DEFAULT 0`)
+		if err != nil {
+			if contains(err.Error(), "duplicate column") {
+				log.Println("✅ is_vzev column already exists")
+			} else {
+				return fmt.Errorf("failed to add is_vzev column: %v", err)
+			}
+		} else {
+			log.Println("✅ is_vzev column added successfully")
+		}
+	} else {
+		log.Println("✅ is_vzev column already exists")
+	}
+
+	return nil
+}
+
+// addDeviceTypeColumn adds device_type column to meters table
+func addDeviceTypeColumn(db *sql.DB) error {
+	// Check if device_type column exists in meters table
+	var metersSql string
+	err := db.QueryRow(`
+		SELECT sql FROM sqlite_master 
+		WHERE type='table' AND name='meters'
+	`).Scan(&metersSql)
+
+	if err != nil {
+		return err
+	}
+
+	// Add device_type if it doesn't exist
+	if !contains(metersSql, "device_type") {
 		log.Println("Adding device_type column to meters table...")
 		_, err := db.Exec(`ALTER TABLE meters ADD COLUMN device_type TEXT DEFAULT 'generic'`)
 		if err != nil {
 			if contains(err.Error(), "duplicate column") {
-				log.Println("âœ… device_type column already exists")
+				log.Println("✅ device_type column already exists")
 				return nil
 			}
 			return fmt.Errorf("failed to add device_type column: %v", err)
 		}
-		log.Println("âœ… device_type column added successfully")
+		log.Println("✅ device_type column added successfully")
 
 		// Update existing MQTT meters to generic type
 		_, err = db.Exec(`UPDATE meters SET device_type = 'generic' WHERE connection_type = 'mqtt' AND (device_type IS NULL OR device_type = '')`)
@@ -365,7 +401,7 @@ func addMQTTDeviceTypeColumn(db *sql.DB) error {
 			log.Printf("Warning: Failed to update existing meters: %v", err)
 		}
 	} else {
-		log.Println("âœ… device_type column already exists")
+		log.Println("✅ device_type column already exists")
 	}
 
 	return nil
@@ -390,15 +426,15 @@ func addExportColumns(db *sql.DB) error {
 		_, err := db.Exec(`ALTER TABLE meters ADD COLUMN last_reading_export REAL DEFAULT 0`)
 		if err != nil {
 			if contains(err.Error(), "duplicate column") {
-				log.Println("âœ… last_reading_export column already exists")
+				log.Println("✅ last_reading_export column already exists")
 			} else {
 				return fmt.Errorf("failed to add last_reading_export column: %v", err)
 			}
 		} else {
-			log.Println("âœ… last_reading_export column added successfully")
+			log.Println("✅ last_reading_export column added successfully")
 		}
 	} else {
-		log.Println("âœ… last_reading_export column already exists")
+		log.Println("✅ last_reading_export column already exists")
 	}
 
 	// Check meter_readings table
@@ -418,15 +454,15 @@ func addExportColumns(db *sql.DB) error {
 		_, err := db.Exec(`ALTER TABLE meter_readings ADD COLUMN power_kwh_export REAL DEFAULT 0`)
 		if err != nil {
 			if contains(err.Error(), "duplicate column") {
-				log.Println("âœ… power_kwh_export column already exists")
+				log.Println("✅ power_kwh_export column already exists")
 			} else {
 				return fmt.Errorf("failed to add power_kwh_export column: %v", err)
 			}
 		} else {
-			log.Println("âœ… power_kwh_export column added successfully")
+			log.Println("✅ power_kwh_export column added successfully")
 		}
 	} else {
-		log.Println("âœ… power_kwh_export column already exists")
+		log.Println("✅ power_kwh_export column already exists")
 	}
 
 	// Add consumption_export to meter_readings table
@@ -435,15 +471,15 @@ func addExportColumns(db *sql.DB) error {
 		_, err := db.Exec(`ALTER TABLE meter_readings ADD COLUMN consumption_export REAL DEFAULT 0`)
 		if err != nil {
 			if contains(err.Error(), "duplicate column") {
-				log.Println("âœ… consumption_export column already exists")
+				log.Println("✅ consumption_export column already exists")
 			} else {
 				return fmt.Errorf("failed to add consumption_export column: %v", err)
 			}
 		} else {
-			log.Println("âœ… consumption_export column added successfully")
+			log.Println("✅ consumption_export column added successfully")
 		}
 	} else {
-		log.Println("âœ… consumption_export column already exists")
+		log.Println("✅ consumption_export column already exists")
 	}
 
 	return nil
@@ -527,10 +563,10 @@ func createDefaultAdmin(db *sql.DB) error {
 			return err
 		}
 
-		log.Println("âœ… Default admin user created")
+		log.Println("✅ Default admin user created")
 		log.Println("   Username: admin")
 		log.Println("   Password: admin123")
-		log.Println("   âš ï¸  IMPORTANT: Change the default password immediately!")
+		log.Println("   ⚠️  IMPORTANT: Change the default password immediately!")
 	}
 
 	return nil
