@@ -20,6 +20,8 @@ interface ConnectionConfig {
     loxone_username?: string;
     loxone_password?: string;
     loxone_device_id?: string;
+    loxone_mode?: 'virtual_output' | 'meter_block';
+    loxone_export_device_id?: string;
     mqtt_topic?: string;
     mqtt_broker?: string;
     mqtt_port?: number;
@@ -94,6 +96,8 @@ export default function MeterFormModal({
         console.log('Device type changed to:', deviceType);
         onFormDataChange({ ...formData, device_type: deviceType });
     };
+
+    const supportsExport = formData.meter_type === 'total_meter' || formData.meter_type === 'solar_meter';
 
     return (
         <div style={{
@@ -459,6 +463,41 @@ export default function MeterFormModal({
                                     </p>
                                 </div>
 
+                                {/* Loxone Mode Selection (only for total_meter and solar_meter) */}
+                                {supportsExport && (
+                                    <div style={{ marginBottom: '12px' }}>
+                                        <label style={{
+                                            display: 'block',
+                                            marginBottom: '8px',
+                                            fontWeight: '500',
+                                            fontSize: '14px'
+                                        }}>
+                                            Loxone Configuration Mode *
+                                        </label>
+                                        <select
+                                            required
+                                            value={connectionConfig.loxone_mode || 'meter_block'}
+                                            onChange={(e) => onConnectionConfigChange({
+                                                ...connectionConfig,
+                                                loxone_mode: e.target.value as 'virtual_output' | 'meter_block'
+                                            })}
+                                            style={{
+                                                width: '100%',
+                                                padding: '10px',
+                                                border: '1px solid #ddd',
+                                                borderRadius: '6px'
+                                            }}
+                                        >
+                                            <option value="meter_block">Meter Block (output1=Mrc, output8=Mrd)</option>
+                                            <option value="virtual_output">Virtual Output (2 separate UUIDs)</option>
+                                        </select>
+                                        <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                                            <strong>Meter Block:</strong> Single UUID, import from output1 (Mrc), export from output8 (Mrd)<br />
+                                            <strong>Virtual Output:</strong> Two UUIDs, one for import, one for export
+                                        </p>
+                                    </div>
+                                )}
+
                                 <div style={{ marginBottom: '12px' }}>
                                     <label style={{
                                         display: 'block',
@@ -496,7 +535,9 @@ export default function MeterFormModal({
                                         fontWeight: '500',
                                         fontSize: '14px'
                                     }}>
-                                        {t('meters.loxoneDeviceId')} *
+                                        {supportsExport && connectionConfig.loxone_mode === 'meter_block'
+                                            ? 'Loxone Meter UUID (Import + Export) *'
+                                            : 'Loxone Device UUID (Import) *'}
                                     </label>
                                     <input
                                         type="text"
@@ -516,9 +557,45 @@ export default function MeterFormModal({
                                         }}
                                     />
                                     <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                                        {t('meters.loxoneDeviceIdDescription')}
+                                        {supportsExport && connectionConfig.loxone_mode === 'meter_block'
+                                            ? 'UUID of meter block - import from output1 (Mrc), export from output8 (Mrd)'
+                                            : t('meters.loxoneDeviceIdDescription')}
                                     </p>
                                 </div>
+
+                                {/* Export UUID field for virtual_output mode */}
+                                {supportsExport && connectionConfig.loxone_mode === 'virtual_output' && (
+                                    <div style={{ marginBottom: '12px' }}>
+                                        <label style={{
+                                            display: 'block',
+                                            marginBottom: '8px',
+                                            fontWeight: '500',
+                                            fontSize: '14px'
+                                        }}>
+                                            Loxone Device UUID (Export) *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={connectionConfig.loxone_export_device_id || ''}
+                                            onChange={(e) => onConnectionConfigChange({
+                                                ...connectionConfig,
+                                                loxone_export_device_id: e.target.value
+                                            })}
+                                            placeholder="1fa3ef88-035e-7e1b-ffffed57184a04d2"
+                                            style={{
+                                                width: '100%',
+                                                padding: '10px',
+                                                border: '1px solid #ddd',
+                                                borderRadius: '6px',
+                                                fontFamily: 'monospace'
+                                            }}
+                                        />
+                                        <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                                            UUID of virtual output for export/return energy
+                                        </p>
+                                    </div>
+                                )}
 
                                 <div style={{
                                     display: 'grid',
@@ -608,6 +685,7 @@ export default function MeterFormModal({
                                         {t('meters.loxoneFeature1')}<br />
                                         {t('meters.loxoneFeature2')}<br />
                                         {t('meters.loxoneFeature3')}
+                                        {supportsExport && <><br />✓ Import/Export tracking with meter blocks or virtual outputs</>}
                                     </div>
                                 </div>
                             </>

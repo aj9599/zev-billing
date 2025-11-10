@@ -22,6 +22,8 @@ interface ConnectionConfig {
     loxone_username?: string;
     loxone_password?: string;
     loxone_device_id?: string;
+    loxone_mode?: 'virtual_output' | 'meter_block';
+    loxone_export_device_id?: string;
     mqtt_topic?: string;
     mqtt_broker?: string;
     mqtt_port?: number;
@@ -64,6 +66,8 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
         loxone_username: '',
         loxone_password: '',
         loxone_device_id: '',
+        loxone_mode: 'meter_block',
+        loxone_export_device_id: '',
         mqtt_topic: '',
         mqtt_broker: 'localhost',
         mqtt_port: 1883,
@@ -103,6 +107,8 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
             loxone_username: '',
             loxone_password: '',
             loxone_device_id: '',
+            loxone_mode: 'meter_block',
+            loxone_export_device_id: '',
             mqtt_topic: '',
             mqtt_broker: 'localhost',
             mqtt_port: 1883,
@@ -153,6 +159,8 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
                 loxone_username: config.loxone_username || '',
                 loxone_password: config.loxone_password || '',
                 loxone_device_id: config.loxone_device_id || '',
+                loxone_mode: config.loxone_mode || 'meter_block',
+                loxone_export_device_id: config.loxone_export_device_id || '',
                 mqtt_topic: config.mqtt_topic || '',
                 mqtt_broker: config.mqtt_broker || 'localhost',
                 mqtt_port: config.mqtt_port || 1883,
@@ -177,7 +185,9 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
                 loxone_host: connectionConfig.loxone_host,
                 loxone_username: connectionConfig.loxone_username,
                 loxone_password: connectionConfig.loxone_password,
-                loxone_device_id: connectionConfig.loxone_device_id
+                loxone_device_id: connectionConfig.loxone_device_id,
+                loxone_mode: connectionConfig.loxone_mode,
+                loxone_export_device_id: connectionConfig.loxone_export_device_id
             };
         } else if (formData.connection_type === 'modbus_tcp') {
             config = {
