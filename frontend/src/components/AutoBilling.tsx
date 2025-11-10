@@ -13,6 +13,7 @@ interface AutoBillingConfig {
   generation_day: number;
   first_execution_date?: string;
   is_active: boolean;
+  is_vzev?: boolean;
   last_run?: string;
   next_run?: string;
   sender_name?: string;
@@ -45,6 +46,7 @@ export default function AutoBilling() {
   const [step, setStep] = useState(1);
   const [apartmentsWithUsers, setApartmentsWithUsers] = useState<Map<number, ApartmentWithUser[]>>(new Map());
   const [selectedApartments, setSelectedApartments] = useState<Set<string>>(new Set());
+  const [isVZEVMode, setIsVZEVMode] = useState(false);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -54,6 +56,7 @@ export default function AutoBilling() {
     generation_day: 1,
     first_execution_date: '',
     is_active: true,
+    is_vzev: false,
     sender_name: '',
     sender_address: '',
     sender_city: '',
@@ -68,6 +71,28 @@ export default function AutoBilling() {
     loadData();
     loadSavedInfo();
   }, []);
+
+  // Detect vZEV mode based on selected buildings
+  useEffect(() => {
+    if (formData.building_ids.length > 0) {
+      const selectedBuildings = buildings.filter(b => formData.building_ids.includes(b.id));
+      const hasComplex = selectedBuildings.some(b => b.is_group);
+      const hasRegularBuilding = selectedBuildings.some(b => !b.is_group);
+      
+      // vZEV mode: Only complexes selected, no regular buildings
+      const vzevMode = hasComplex && !hasRegularBuilding;
+      setIsVZEVMode(vzevMode);
+      setFormData(prev => ({ ...prev, is_vzev: vzevMode }));
+      
+      // Show warning if mixing complexes and buildings
+      if (hasComplex && hasRegularBuilding) {
+        alert('Warning: Cannot mix building complexes (vZEV) with regular buildings (ZEV). Please select only complexes OR only regular buildings.');
+      }
+    } else {
+      setIsVZEVMode(false);
+      setFormData(prev => ({ ...prev, is_vzev: false }));
+    }
+  }, [formData.building_ids, buildings]);
 
   // Rebuild apartments list when buildings, users, or meters change
   useEffect(() => {
@@ -88,7 +113,7 @@ export default function AutoBilling() {
         api.getMeters()
       ]);
       setConfigs(configsData);
-      setBuildings(buildingsData.filter(b => !b.is_group));
+      setBuildings(buildingsData); // Load ALL buildings including complexes
       
       // Filter out administration users - only show regular users
       const regularUsers = usersData.filter(u => u.user_type === 'regular');
@@ -137,54 +162,57 @@ export default function AutoBilling() {
       const building = buildings.find(b => b.id === buildingId);
       if (!building) return;
 
+      let buildingsToProcess: number[] = [buildingId];
+
+      // If this is a complex (vZEV), process all buildings in the group
+      if (building.is_group && building.group_buildings) {
+        buildingsToProcess = building.group_buildings;
+        console.log(`vZEV Complex: Processing ${buildingsToProcess.length} buildings in group`);
+      }
+
       const apartments: ApartmentWithUser[] = [];
       const apartmentSet = new Set<string>();
 
-      // Get apartment meters for this building
-      const buildingMeters = meters.filter(
-        m => m.building_id === buildingId && 
-        m.apartment_unit && 
-        m.meter_type === 'apartment_meter' &&
-        m.is_active
-      );
+      // Process all buildings (either just the one, or all in the complex)
+      buildingsToProcess.forEach(processBuildingId => {
+        const buildingMeters = meters.filter(
+          m => m.building_id === processBuildingId &&
+            m.apartment_unit &&
+            m.meter_type === 'apartment_meter' &&
+            m.is_active
+        );
 
-      console.log(`Building ${buildingId} (${building.name}): Found ${buildingMeters.length} apartment meters`);
+        console.log(`Building ${processBuildingId}: Found ${buildingMeters.length} apartment meters`);
 
-      buildingMeters.forEach(meter => {
-        if (meter.apartment_unit && !apartmentSet.has(meter.apartment_unit)) {
-          apartmentSet.add(meter.apartment_unit);
-          
-          // Find user - prioritize meter.user_id
-          let user: User | undefined;
-          
-          if (meter.user_id) {
-            user = users.find(u => u.id === meter.user_id);
+        buildingMeters.forEach(meter => {
+          const key = `${processBuildingId}-${meter.apartment_unit}`;
+          if (meter.apartment_unit && !apartmentSet.has(key)) {
+            apartmentSet.add(key);
+
+            // Find user
+            let user: User | undefined;
+            if (meter.user_id) {
+              user = users.find(u => u.id === meter.user_id);
+            }
+            if (!user) {
+              user = users.find(
+                u => u.building_id === processBuildingId &&
+                  u.apartment_unit === meter.apartment_unit
+              );
+            }
+
+            apartments.push({
+              building_id: processBuildingId,
+              apartment_unit: meter.apartment_unit,
+              user: user,
+              meter: meter,
+              has_meter: true
+            });
           }
-          
-          if (!user) {
-            user = users.find(
-              u => u.building_id === buildingId && 
-              u.apartment_unit === meter.apartment_unit
-            );
-          }
-          
-          if (!user) {
-            user = users.find(u => u.apartment_unit === meter.apartment_unit);
-          }
-
-          console.log(`  Apartment "${meter.apartment_unit}": ${user ? `Found user ${user.first_name} ${user.last_name}` : 'NO USER'}`);
-
-          apartments.push({
-            building_id: buildingId,
-            apartment_unit: meter.apartment_unit,
-            user: user,
-            meter: meter,
-            has_meter: true
-          });
-        }
+        });
       });
 
-      // Sort apartments naturally
+      // Sort apartments
       apartments.sort((a, b) => {
         const aNum = parseInt(a.apartment_unit.replace(/[^0-9]/g, '')) || 0;
         const bNum = parseInt(b.apartment_unit.replace(/[^0-9]/g, '')) || 0;
@@ -198,6 +226,23 @@ export default function AutoBilling() {
   };
 
   const handleBuildingToggle = (buildingId: number) => {
+    const building = buildings.find(b => b.id === buildingId);
+    if (!building) return;
+
+    // Check if trying to mix complex and regular buildings
+    const currentlySelectedBuildings = buildings.filter(b => formData.building_ids.includes(b.id));
+    const hasComplex = currentlySelectedBuildings.some(b => b.is_group);
+    const hasRegular = currentlySelectedBuildings.some(b => !b.is_group);
+
+    // If adding a building
+    if (!formData.building_ids.includes(buildingId)) {
+      // Prevent mixing
+      if ((building.is_group && hasRegular) || (!building.is_group && hasComplex)) {
+        alert('Cannot mix building complexes (vZEV) with regular buildings (ZEV). Please deselect existing buildings first.');
+        return;
+      }
+    }
+
     const newBuildings = formData.building_ids.includes(buildingId)
       ? formData.building_ids.filter(id => id !== buildingId)
       : [...formData.building_ids, buildingId];
@@ -296,7 +341,7 @@ export default function AutoBilling() {
 
   const handleSubmit = async () => {
     if (formData.building_ids.length === 0) {
-      alert(t('autoBilling.selectAtLeastOneBuilding'));
+      alert(isVZEVMode ? 'Please select a building complex' : t('autoBilling.selectAtLeastOneBuilding'));
       return;
     }
 
@@ -308,6 +353,15 @@ export default function AutoBilling() {
     if (!formData.name) {
       alert('Please enter a configuration name');
       return;
+    }
+
+    // Additional vZEV validation
+    if (isVZEVMode) {
+      const selectedBuildings = buildings.filter(b => formData.building_ids.includes(b.id));
+      if (selectedBuildings.some(b => !b.is_group)) {
+        alert('vZEV mode requires all selected buildings to be complexes');
+        return;
+      }
     }
 
     try {
@@ -361,6 +415,7 @@ export default function AutoBilling() {
       generation_day: config.generation_day,
       first_execution_date: config.first_execution_date || '',
       is_active: config.is_active,
+      is_vzev: config.is_vzev || false,
       sender_name: config.sender_name || '',
       sender_address: config.sender_address || '',
       sender_city: config.sender_city || '',
@@ -407,6 +462,7 @@ export default function AutoBilling() {
       generation_day: 1,
       first_execution_date: '',
       is_active: true,
+      is_vzev: false,
       sender_name: '',
       sender_address: '',
       sender_city: '',
@@ -419,6 +475,7 @@ export default function AutoBilling() {
     setSelectedApartments(new Set());
     setEditingConfig(null);
     setStep(1);
+    setIsVZEVMode(false);
   };
 
   const canProceed = () => {
@@ -466,9 +523,51 @@ export default function AutoBilling() {
         {t('billConfig.step1.title')}
       </h3>
 
+      {/* vZEV Mode Indicator */}
+      {isVZEVMode && (
+        <div style={{
+          padding: '16px',
+          backgroundColor: '#e0e7ff',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          border: '2px solid #4338ca'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <span style={{ fontSize: '24px' }}>⚡</span>
+            <h4 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#4338ca' }}>
+              vZEV Mode (Virtual Energy Allocation)
+            </h4>
+          </div>
+          <p style={{ fontSize: '14px', margin: 0, color: '#4338ca' }}>
+            You are billing a building complex with virtual energy allocation.
+            Surplus PV from buildings with solar will be virtually allocated to other buildings in the complex.
+          </p>
+        </div>
+      )}
+
+      {formData.building_ids.length > 0 && !isVZEVMode && (
+        <div style={{
+          padding: '16px',
+          backgroundColor: '#dbeafe',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          border: '2px solid #3b82f6'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <span style={{ fontSize: '24px' }}>🔌</span>
+            <h4 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#1e40af' }}>
+              ZEV Mode (Direct Energy Sharing)
+            </h4>
+          </div>
+          <p style={{ fontSize: '14px', margin: 0, color: '#1e40af' }}>
+            You are billing regular buildings with direct energy sharing.
+          </p>
+        </div>
+      )}
+
       <div style={{ marginBottom: '30px' }}>
         <label style={{ display: 'block', fontWeight: '600', marginBottom: '12px', fontSize: '15px' }}>
-          1. {t('billConfig.step1.selectBuildings')} ({formData.building_ids.length} {t('billConfig.step1.selected')})
+          1. {isVZEVMode ? 'Select Complex (vZEV)' : 'Select Buildings (ZEV)'} ({formData.building_ids.length} {t('billConfig.step1.selected')})
         </label>
         <div style={{ 
           maxHeight: '200px', 
@@ -486,10 +585,11 @@ export default function AutoBilling() {
                 padding: '12px 16px',
                 cursor: 'pointer',
                 borderBottom: '1px solid #f0f0f0',
-                transition: 'background-color 0.2s'
+                transition: 'background-color 0.2s',
+                backgroundColor: building.is_group ? '#f0f9ff' : 'white'
               }}
-              onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-              onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'white'}
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = building.is_group ? '#e0f2fe' : '#f8f9fa'}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = building.is_group ? '#f0f9ff' : 'white'}
             >
               <input
                 type="checkbox"
@@ -497,8 +597,21 @@ export default function AutoBilling() {
                 onChange={() => handleBuildingToggle(building.id)}
                 style={{ marginRight: '12px', cursor: 'pointer', width: '18px', height: '18px' }}
               />
-              <Home size={16} style={{ marginRight: '8px', color: '#667EEA' }} />
+              <Home size={16} style={{ marginRight: '8px', color: building.is_group ? '#0284c7' : '#667EEA' }} />
               <span style={{ fontSize: '15px', fontWeight: '500' }}>{building.name}</span>
+              {building.is_group && (
+                <span style={{
+                  marginLeft: '8px',
+                  padding: '2px 8px',
+                  backgroundColor: '#4338ca',
+                  color: 'white',
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  fontWeight: '600'
+                }}>
+                  vZEV COMPLEX
+                </span>
+              )}
             </label>
           ))}
         </div>
