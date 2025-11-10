@@ -1860,34 +1860,51 @@ func (conn *LoxoneWebSocketConnection) readLoop(db *sql.DB) {
 
 func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, response LoxoneResponse, db *sql.DB, isExport bool) {
 	var reading float64
-
+	
 	// Try to get reading from different response formats
-	if device.LoxoneMode == "meter_block" && !isExport {
-		// Meter block mode - import from output1 (Mrc)
+	if device.LoxoneMode == "meter_block" {
+		// METER BLOCK MODE - Process BOTH import and export from the SAME response
+		// Import from output1 (Mrc), Export from output8 (Mrd)
+		
+		var importReading, exportReading float64
+		
+		// Get import reading from output1
 		if output1, ok := response.LL.Outputs["output1"]; ok {
 			switch v := output1.Value.(type) {
 			case float64:
-				reading = v
+				importReading = v
 			case string:
 				if f, err := strconv.ParseFloat(v, 64); err == nil {
-					reading = f
+					importReading = f
 				}
 			}
 		}
-	} else if device.LoxoneMode == "meter_block" && isExport {
-		// Meter block mode - export from output8 (Mrd)
+		
+		// Get export reading from output8
 		if output8, ok := response.LL.Outputs["output8"]; ok {
 			switch v := output8.Value.(type) {
 			case float64:
-				reading = v
+				exportReading = v
 			case string:
 				if f, err := strconv.ParseFloat(v, 64); err == nil {
-					reading = f
+					exportReading = f
 				}
 			}
 		}
+		
+		// Update device state with BOTH values
+		device.lastReading = importReading
+		device.lastReadingExport = exportReading
+		device.lastUpdate = time.Now()
+		device.readingGaps = 0
+		
+		log.Printf("   📥 Import reading (output1/Mrc): %.3f kWh", importReading)
+		log.Printf("   📤 Export reading (output8/Mrd): %.3f kWh", exportReading)
+		
+		reading = importReading // Set reading for database save below
+		
 	} else {
-		// Virtual output mode - single value
+		// VIRTUAL OUTPUT MODE - Single value per response
 		if output1, ok := response.LL.Outputs["output1"]; ok {
 			switch v := output1.Value.(type) {
 			case float64:
@@ -1903,119 +1920,122 @@ func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, re
 				reading = f
 			}
 		}
+		
+		if reading <= 0 {
+			return
+		}
+		
+		// Update device state
+		if isExport {
+			device.lastReadingExport = reading
+			log.Printf("   📤 Export reading: %.3f kWh", reading)
+			return // Don't save to DB for export in virtual_output mode - wait for import
+		} else {
+			device.lastReading = reading
+			device.lastUpdate = time.Now()
+			device.readingGaps = 0
+			log.Printf("   📥 Import reading: %.3f kWh", reading)
+		}
 	}
 
+	// Save to database (happens for both modes, but only when we have import data)
 	if reading <= 0 {
 		return
 	}
 
-	// Update device state
-	if isExport {
-		device.lastReadingExport = reading
-		log.Printf("   📤 Export reading: %.3f kWh", reading)
-	} else {
-		device.lastReading = reading
-		device.lastUpdate = time.Now()
-		device.readingGaps = 0
-		log.Printf("   📥 Import reading: %.3f kWh", reading)
-	}
+	currentTime := roundToQuarterHour(time.Now())
 
-	// Only save to database if we have import reading
-	if !isExport {
-		currentTime := roundToQuarterHour(time.Now())
+	var lastReading, lastReadingExport float64
+	var lastTime time.Time
+	err := db.QueryRow(`
+		SELECT power_kwh, power_kwh_export, reading_time FROM meter_readings 
+		WHERE meter_id = ? 
+		ORDER BY reading_time DESC LIMIT 1
+	`, device.ID).Scan(&lastReading, &lastReadingExport, &lastTime)
 
-		var lastReading, lastReadingExport float64
-		var lastTime time.Time
-		err := db.QueryRow(`
-			SELECT power_kwh, power_kwh_export, reading_time FROM meter_readings 
-			WHERE meter_id = ? 
-			ORDER BY reading_time DESC LIMIT 1
-		`, device.ID).Scan(&lastReading, &lastReadingExport, &lastTime)
+	var consumption, consumptionExport float64
+	isFirstReading := false
 
-		var consumption, consumptionExport float64
-		isFirstReading := false
+	if err == nil && !lastTime.IsZero() {
+		interpolated := interpolateReadings(lastTime, lastReading, currentTime, reading)
+		interpolatedExport := interpolateReadings(lastTime, lastReadingExport, currentTime, device.lastReadingExport)
 
-		if err == nil && !lastTime.IsZero() {
-			interpolated := interpolateReadings(lastTime, lastReading, currentTime, reading)
-			interpolatedExport := interpolateReadings(lastTime, lastReadingExport, currentTime, device.lastReadingExport)
+		for i, point := range interpolated {
+			intervalConsumption := point.value - lastReading
+			if intervalConsumption < 0 {
+				intervalConsumption = 0
+			}
 
-			for i, point := range interpolated {
-				intervalConsumption := point.value - lastReading
-				if intervalConsumption < 0 {
-					intervalConsumption = 0
-				}
-
-				intervalExport := float64(0)
-				exportValue := lastReadingExport // Default to last known value
-				if i < len(interpolatedExport) {
-					exportValue = interpolatedExport[i].value
-					intervalExport = exportValue - lastReadingExport
-					if intervalExport < 0 {
-						intervalExport = 0
-					}
-				}
-
-				db.Exec(`
-					INSERT INTO meter_readings (meter_id, reading_time, power_kwh, power_kwh_export, consumption_kwh, consumption_export)
-					VALUES (?, ?, ?, ?, ?, ?)
-				`, device.ID, point.time, point.value,
-					exportValue, // ✅ Safe - always has a value
-					intervalConsumption,
-					intervalExport)
-
-				lastReading = point.value
-				if i < len(interpolatedExport) {
-					lastReadingExport = interpolatedExport[i].value
+			intervalExport := float64(0)
+			exportValue := lastReadingExport // Default to last known value
+			if i < len(interpolatedExport) {
+				exportValue = interpolatedExport[i].value
+				intervalExport = exportValue - lastReadingExport
+				if intervalExport < 0 {
+					intervalExport = 0
 				}
 			}
 
-			if len(interpolated) > 0 {
-				device.readingGaps += len(interpolated)
-				log.Printf("   ⚠️  Filled %d reading gaps for meter %s", len(interpolated), device.Name)
-			}
+			db.Exec(`
+				INSERT INTO meter_readings (meter_id, reading_time, power_kwh, power_kwh_export, consumption_kwh, consumption_export)
+				VALUES (?, ?, ?, ?, ?, ?)
+			`, device.ID, point.time, point.value,
+				exportValue, // ✅ Safe - always has a value
+				intervalConsumption,
+				intervalExport)
 
-			consumption = reading - lastReading
-			if consumption < 0 {
-				consumption = 0
+			lastReading = point.value
+			if i < len(interpolatedExport) {
+				lastReadingExport = interpolatedExport[i].value
 			}
-
-			consumptionExport = device.lastReadingExport - lastReadingExport
-			if consumptionExport < 0 {
-				consumptionExport = 0
-			}
-		} else {
-			consumption = 0
-			consumptionExport = 0
-			isFirstReading = true
 		}
 
-		_, err = db.Exec(`
-			INSERT INTO meter_readings (meter_id, reading_time, power_kwh, power_kwh_export, consumption_kwh, consumption_export)
-			VALUES (?, ?, ?, ?, ?, ?)
-		`, device.ID, currentTime, reading, device.lastReadingExport, consumption, consumptionExport)
+		if len(interpolated) > 0 {
+			device.readingGaps += len(interpolated)
+			log.Printf("   ⚠️  Filled %d reading gaps for meter %s", len(interpolated), device.Name)
+		}
 
-		if err != nil {
-			log.Printf("❌ Failed to save reading to database: %v", err)
-			conn.mu.Lock()
-			conn.lastError = fmt.Sprintf("DB save failed: %v", err)
-			conn.mu.Unlock()
+		consumption = reading - lastReading
+		if consumption < 0 {
+			consumption = 0
+		}
+
+		consumptionExport = device.lastReadingExport - lastReadingExport
+		if consumptionExport < 0 {
+			consumptionExport = 0
+		}
+	} else {
+		consumption = 0
+		consumptionExport = 0
+		isFirstReading = true
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO meter_readings (meter_id, reading_time, power_kwh, power_kwh_export, consumption_kwh, consumption_export)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, device.ID, currentTime, reading, device.lastReadingExport, consumption, consumptionExport)
+
+	if err != nil {
+		log.Printf("❌ Failed to save reading to database: %v", err)
+		conn.mu.Lock()
+		conn.lastError = fmt.Sprintf("DB save failed: %v", err)
+		conn.mu.Unlock()
+	} else {
+		db.Exec(`
+			UPDATE meters 
+			SET last_reading = ?, last_reading_export = ?, last_reading_time = ?, 
+			    notes = ?
+			WHERE id = ?
+		`, reading, device.lastReadingExport, currentTime,
+			fmt.Sprintf("🟢 Last update: %s", time.Now().Format("2006-01-02 15:04:05")),
+			device.ID)
+
+		if !isFirstReading {
+			log.Printf("✅ METER [%s]: %.3f kWh import (Δ%.3f), %.3f kWh export (Δ%.3f)",
+				device.Name, reading, consumption, device.lastReadingExport, consumptionExport)
 		} else {
-			db.Exec(`
-				UPDATE meters 
-				SET last_reading = ?, last_reading_export = ?, last_reading_time = ?, 
-				    notes = ?
-				WHERE id = ?
-			`, reading, device.lastReadingExport, currentTime,
-				fmt.Sprintf("🟢 Last update: %s", time.Now().Format("2006-01-02 15:04:05")),
-				device.ID)
-
-			if !isFirstReading {
-				log.Printf("✅ METER [%s]: %.3f kWh import (Δ%.3f), %.3f kWh export (Δ%.3f)",
-					device.Name, reading, consumption, device.lastReadingExport, consumptionExport)
-			} else {
-				log.Printf("✅ METER [%s]: %.3f kWh import, %.3f kWh export (first reading)",
-					device.Name, reading, device.lastReadingExport)
-			}
+			log.Printf("✅ METER [%s]: %.3f kWh import, %.3f kWh export (first reading)",
+				device.Name, reading, device.lastReadingExport)
 		}
 	}
 }
