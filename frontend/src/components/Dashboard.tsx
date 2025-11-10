@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import * as React from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Users, Building, Zap, Car, Activity, TrendingUp, TrendingDown, Sun, Battery, LayoutDashboard, Home, Eye, EyeOff } from 'lucide-react';
 import { api } from '../api/client';
 import type { DashboardStats } from '../types';
@@ -141,6 +141,40 @@ function formatTimeForPeriod(date: Date, period: string): string {
   return `${day}.${month} ${time}`;
 }
 
+// Custom tooltip to show absolute values for solar
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div style={{
+        backgroundColor: 'white',
+        border: '1px solid #e5e7eb',
+        borderRadius: '6px',
+        padding: '10px',
+        fontSize: '12px'
+      }}>
+        <p style={{ fontWeight: 'bold', marginBottom: '5px' }}>{label}</p>
+        {payload.map((entry: any, index: number) => {
+          const value = Math.abs(entry.value);
+          const displayValue = value >= 1000 
+            ? `${(value / 1000).toFixed(2)} kW` 
+            : `${value.toFixed(0)} W`;
+          
+          // Check if this is solar (negative value means export/generation)
+          const isSolar = entry.value < 0;
+          const prefix = isSolar ? '⚡ ' : '';
+          
+          return (
+            <p key={index} style={{ color: entry.color, margin: '3px 0' }}>
+              {prefix}{entry.name}: {displayValue}
+            </p>
+          );
+        })}
+      </div>
+    );
+  }
+  return null;
+};
+
 export default function Dashboard() {
   const { t } = useTranslation();
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -162,12 +196,26 @@ export default function Dashboard() {
       ]);
       setStats(statsData);
       
-      // Log charger data for debugging
+      // Log data for debugging
       if (Array.isArray(buildingConsumption)) {
         buildingConsumption.forEach(building => {
+          const solarMeters = building.meters?.filter(m => m.meter_type === 'solar_meter') || [];
           const chargers = building.meters?.filter(m => m.meter_type === 'charger') || [];
+          
+          if (solarMeters.length > 0) {
+            console.log(`Building ${building.building_name} - Solar meters:`);
+            solarMeters.forEach(s => {
+              console.log(`  - ${s.meter_name}: ${s.data.length} data points`);
+              if (s.data.length > 0) {
+                const avgPower = s.data.reduce((sum, d) => sum + d.power, 0) / s.data.length;
+                const minPower = Math.min(...s.data.map(d => d.power));
+                console.log(`    Avg: ${avgPower.toFixed(0)}W, Min: ${minPower.toFixed(0)}W (negative = export)`);
+              }
+            });
+          }
+          
           if (chargers.length > 0) {
-            console.log(`Building ${building.building_name}:`);
+            console.log(`Building ${building.building_name} - Chargers:`);
             chargers.forEach(c => {
               console.log(`  - ${c.meter_name} (${c.user_name}): ${c.data.length} data points`);
               if (c.data.length > 0) {
@@ -532,15 +580,24 @@ export default function Dashboard() {
             const timeMap = new Map<string, any>();
             const meters = building.meters || [];
             
+            const solarMeters = meters.filter(m => m.meter_type === 'solar_meter');
             const chargerMeters = meters.filter(m => m.meter_type === 'charger');
+            
+            if (solarMeters.length > 0) {
+              console.log(`Building ${building.building_name} - Processing ${solarMeters.length} solar meter(s)`);
+            }
             if (chargerMeters.length > 0) {
               console.log(`Building ${building.building_name} - Processing ${chargerMeters.length} charger(s)`);
             }
             
             meters.forEach(meter => {
               const readings = meter.data || [];
+              const isSolar = meter.meter_type === 'solar_meter';
               const isCharger = meter.meter_type === 'charger';
               
+              if (isSolar && readings.length > 0) {
+                console.log(`  Solar ${meter.meter_name}: ${readings.length} readings`);
+              }
               if (isCharger && readings.length > 0) {
                 console.log(`  Charger ${meter.meter_name} (${meter.user_name}): ${readings.length} readings`);
               }
@@ -561,7 +618,9 @@ export default function Dashboard() {
                 const meterKey = getMeterUniqueKey(meter);
                 const current = timeMap.get(timestampKey);
                 
-                if (isCharger || reading.power > 0) {
+                // For all meter types, use the power value directly
+                // Solar export is already negative from backend
+                if (isCharger || isSolar || reading.power !== 0) {
                   current[meterKey] = reading.power;
                 }
               });
@@ -571,6 +630,13 @@ export default function Dashboard() {
               return a.sortKey - b.sortKey;
             });
             
+            if (solarMeters.length > 0) {
+              const solarKeys = solarMeters.map(sm => getMeterUniqueKey(sm));
+              const pointsWithSolarData = chartData.filter(point => 
+                solarKeys.some(key => point[key] !== undefined)
+              );
+              console.log(`  Chart has ${chartData.length} time points, ${pointsWithSolarData.length} with solar data`);
+            }
             if (chargerMeters.length > 0) {
               const chargerKeys = chargerMeters.map(cm => getMeterUniqueKey(cm));
               const pointsWithChargerData = chartData.filter(point => 
@@ -612,6 +678,7 @@ export default function Dashboard() {
                     {meters.map(meter => {
                       const uniqueKey = getMeterUniqueKey(meter);
                       const isCharger = meter.meter_type === 'charger';
+                      const isSolar = meter.meter_type === 'solar_meter';
                       const { Icon: TypeIcon, label: typeLabel } = getMeterTypeIcon(meter.meter_type);
                       const color = getMeterColor(meter.meter_type, meter.meter_id, meter.user_name);
                       const isVisible = isMeterVisible(building.building_id, uniqueKey);
@@ -628,7 +695,7 @@ export default function Dashboard() {
                             backgroundColor: 'white',
                             borderRadius: '6px',
                             fontSize: '13px',
-                            border: isCharger ? `2px solid ${color}30` : '1px solid #e5e7eb',
+                            border: (isCharger || isSolar) ? `2px solid ${color}30` : '1px solid #e5e7eb',
                             cursor: 'pointer',
                             transition: 'all 0.2s ease',
                             opacity: isVisible ? 1 : 0.5,
@@ -657,12 +724,12 @@ export default function Dashboard() {
                                 borderRadius: '2px',
                                 backgroundColor: isVisible ? color : '#d1d5db',
                                 flexShrink: 0,
-                                border: isCharger ? `2px solid ${isVisible ? color : '#9ca3af'}` : 'none'
+                                border: (isCharger || isSolar) ? `2px solid ${isVisible ? color : '#9ca3af'}` : 'none'
                               }}
                             />
                           </div>
                           <span style={{ 
-                            fontWeight: isCharger ? '600' : '500',
+                            fontWeight: (isCharger || isSolar) ? '600' : '500',
                             color: isVisible ? '#1f2937' : '#9ca3af'
                           }}>
                             {getMeterDisplayName(meter)}
@@ -716,25 +783,15 @@ export default function Dashboard() {
                           style={{ fontSize: '12px' }}
                           stroke="#6b7280"
                         />
-                        <Tooltip 
-                          contentStyle={{
-                            backgroundColor: 'white',
-                            border: '1px solid #e5e7eb',
-                            borderRadius: '6px'
-                          }}
-                          formatter={(value: number, name: string) => {
-                            if (value >= 1000) {
-                              return [`${(value / 1000).toFixed(2)} kW`, name];
-                            }
-                            return [`${value.toFixed(0)} W`, name];
-                          }}
-                        />
+                        <ReferenceLine y={0} stroke="#9ca3af" strokeDasharray="3 3" />
+                        <Tooltip content={<CustomTooltip />} />
                         <Legend 
                           wrapperStyle={{ fontSize: '12px' }}
                         />
                         {meters.map(meter => {
                           const uniqueKey = getMeterUniqueKey(meter);
                           const isCharger = meter.meter_type === 'charger';
+                          const isSolar = meter.meter_type === 'solar_meter';
                           const color = getMeterColor(meter.meter_type, meter.meter_id, meter.user_name);
                           const isVisible = isMeterVisible(building.building_id, uniqueKey);
                           
@@ -747,11 +804,11 @@ export default function Dashboard() {
                               type="monotone"
                               dataKey={uniqueKey}
                               stroke={color}
-                              strokeWidth={isCharger ? 4 : 2}
+                              strokeWidth={(isCharger || isSolar) ? 3 : 2}
                               strokeDasharray={isCharger ? '8 4' : undefined}
                               name={getMeterDisplayName(meter)}
                               dot={false}
-                              activeDot={{ r: isCharger ? 6 : 4 }}
+                              activeDot={{ r: (isCharger || isSolar) ? 6 : 4 }}
                               connectNulls={true}
                             />
                           );

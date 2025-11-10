@@ -113,9 +113,10 @@ func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	stats.TodayConsumption = calculateTotalConsumption(h.db, ctx, consumptionMeterTypes, todayStart, todayEnd)
 	stats.MonthConsumption = calculateTotalConsumption(h.db, ctx, consumptionMeterTypes, startOfMonth, now)
 
+	// For solar, we calculate export (generation) separately
 	solarMeterTypes := []string{"solar_meter"}
-	stats.TodaySolar = calculateTotalConsumption(h.db, ctx, solarMeterTypes, todayStart, todayEnd)
-	stats.MonthSolar = calculateTotalConsumption(h.db, ctx, solarMeterTypes, startOfMonth, now)
+	stats.TodaySolar = calculateTotalSolarExport(h.db, ctx, solarMeterTypes, todayStart, todayEnd)
+	stats.MonthSolar = calculateTotalSolarExport(h.db, ctx, solarMeterTypes, startOfMonth, now)
 
 	stats.TodayCharging = calculateTotalChargingConsumption(h.db, ctx, todayStart, todayEnd)
 	stats.MonthCharging = calculateTotalChargingConsumption(h.db, ctx, startOfMonth, now)
@@ -196,6 +197,85 @@ func calculateTotalConsumption(db *sql.DB, ctx context.Context, meterTypes []str
 	}
 	
 	return totalConsumption
+}
+
+// New function specifically for solar export calculation
+func calculateTotalSolarExport(db *sql.DB, ctx context.Context, meterTypes []string, periodStart, periodEnd time.Time) float64 {
+	if len(meterTypes) == 0 {
+		return 0
+	}
+
+	placeholders := make([]string, len(meterTypes))
+	args := make([]interface{}, len(meterTypes))
+	for i, mt := range meterTypes {
+		placeholders[i] = "?"
+		args[i] = mt
+	}
+	
+	meterTypeFilter := strings.Join(placeholders, ",")
+	
+	meterQuery := fmt.Sprintf(`
+		SELECT id FROM meters 
+		WHERE meter_type IN (%s) 
+		AND COALESCE(is_active, 1) = 1
+	`, meterTypeFilter)
+	
+	meterRows, err := db.QueryContext(ctx, meterQuery, args...)
+	if err != nil {
+		log.Printf("Error querying solar meters: %v", err)
+		return 0
+	}
+	defer meterRows.Close()
+
+	totalExport := 0.0
+	
+	for meterRows.Next() {
+		var meterID int
+		if err := meterRows.Scan(&meterID); err != nil {
+			continue
+		}
+
+		// Get first export reading in period
+		var firstReading sql.NullFloat64
+		db.QueryRowContext(ctx, `
+			SELECT power_kwh_export FROM meter_readings 
+			WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
+			ORDER BY reading_time ASC LIMIT 1
+		`, meterID, periodStart, periodEnd).Scan(&firstReading)
+
+		// Get latest export reading in period
+		var latestReading sql.NullFloat64
+		db.QueryRowContext(ctx, `
+			SELECT power_kwh_export FROM meter_readings 
+			WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
+			ORDER BY reading_time DESC LIMIT 1
+		`, meterID, periodStart, periodEnd).Scan(&latestReading)
+
+		if firstReading.Valid && latestReading.Valid {
+			// Get baseline (reading before period)
+			var baselineReading sql.NullFloat64
+			db.QueryRowContext(ctx, `
+				SELECT power_kwh_export FROM meter_readings 
+				WHERE meter_id = ? AND reading_time < ?
+				ORDER BY reading_time DESC LIMIT 1
+			`, meterID, periodStart).Scan(&baselineReading)
+
+			var baseline float64
+			if baselineReading.Valid {
+				baseline = baselineReading.Float64
+			} else {
+				baseline = firstReading.Float64
+			}
+
+			// Calculate total export for the period
+			exportEnergy := latestReading.Float64 - baseline
+			if exportEnergy > 0 {
+				totalExport += exportEnergy
+			}
+		}
+	}
+	
+	return totalExport
 }
 
 func calculateTotalChargingConsumption(db *sql.DB, ctx context.Context, periodStart, periodEnd time.Time) float64 {
@@ -485,15 +565,29 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			}
 
 			// Get data at 15-minute intervals and convert consumption to power
+			// For solar meters, we use export data (negative values for display)
 			var dataRows *sql.Rows
-			dataRows, err = h.db.QueryContext(ctx, `
-				SELECT reading_time, power_kwh, consumption_kwh
-				FROM meter_readings
-				WHERE meter_id = ? 
-				AND reading_time >= ? 
-				AND reading_time <= ?
-				ORDER BY reading_time ASC
-			`, mi.id, startTime, now)
+			if mi.meterType == "solar_meter" {
+				// For solar, get export consumption (will be displayed as negative)
+				dataRows, err = h.db.QueryContext(ctx, `
+					SELECT reading_time, power_kwh_export, consumption_export
+					FROM meter_readings
+					WHERE meter_id = ? 
+					AND reading_time >= ? 
+					AND reading_time <= ?
+					ORDER BY reading_time ASC
+				`, mi.id, startTime, now)
+			} else {
+				// For other meters, get import consumption
+				dataRows, err = h.db.QueryContext(ctx, `
+					SELECT reading_time, power_kwh, consumption_kwh
+					FROM meter_readings
+					WHERE meter_id = ? 
+					AND reading_time >= ? 
+					AND reading_time <= ?
+					ORDER BY reading_time ASC
+				`, mi.id, startTime, now)
+			}
 
 			meterData := MeterData{
 				MeterID:   mi.id,
@@ -520,6 +614,11 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				// Power (W) = Energy (kWh) / Time (h) * 1000
 				// Time = 15 min = 0.25 h
 				powerW := (consumptionKwh / 0.25) * 1000
+				
+				// For solar meters, make power negative to show as generation/export
+				if mi.meterType == "solar_meter" {
+					powerW = -powerW
+				}
 				
 				meterData.Data = append(meterData.Data, models.ConsumptionData{
 					Timestamp: timestamp,
