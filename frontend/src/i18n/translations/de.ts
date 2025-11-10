@@ -1283,6 +1283,28 @@ export const de: Translations = {
   'billConfig.successMessage': 'Erfolgreich erstellt',
   'billConfig.errorMessage': 'Erstellen der Rechnungen fehlgeschlagen',
 
+  // BillConfiguration.tsx - vZEV Mode Indicators (German)
+  'billConfig.vzevMode.title': 'vZEV-Modus (Virtuelle Energiezuteilung)',
+  'billConfig.vzevMode.description': 'Sie rechnen einen Gebäudekomplex mit virtueller Energiezuteilung ab. Überschüssiger PV-Strom aus Gebäuden mit Solar wird virtuell auf andere Gebäude im Komplex verteilt.',
+  'billConfig.zevMode.title': 'ZEV-Modus (Direkte Energieteilung)',
+  'billConfig.zevMode.description': 'Sie rechnen reguläre Gebäude mit direkter Energieteilung ab.',
+  
+  // BillConfiguration.tsx - Selection Labels (German)
+  'billConfig.step1.selectComplex': 'Komplex auswählen (vZEV)',
+  
+  // BillConfiguration.tsx - Summary Labels (German)
+  'billConfig.step5.mode': 'Modus',
+  'billConfig.step5.modeVzev': 'vZEV (Virtuelle Zuteilung)',
+  'billConfig.step5.modeZev': 'ZEV (Direkte Teilung)',
+  'billConfig.step5.complexes': 'Komplexe',
+  
+  // BillConfiguration.tsx - Warnings (German)
+  'billConfig.warning.mixingTypes': 'Warnung: Gebäudekomplexe (vZEV) können nicht mit regulären Gebäuden (ZEV) gemischt werden. Bitte wählen Sie nur Komplexe ODER nur reguläre Gebäude aus.',
+  'billConfig.error.cannotMix': 'Gebäudekomplexe (vZEV) können nicht mit regulären Gebäuden (ZEV) gemischt werden. Bitte deaktivieren Sie zuerst vorhandene Gebäude.',
+  'billConfig.validation.selectComplex': 'Bitte wählen Sie einen Gebäudekomplex aus',
+  'billConfig.validation.vzevComplexRequired': 'vZEV-Modus erfordert, dass alle ausgewählten Gebäude Komplexe sind',
+  
+
   // ============================================================================
   // SHARED METERS CONFIGURATION
   // ============================================================================
@@ -1501,6 +1523,25 @@ export const de: Translations = {
   'autoBilling.instructions.tip3': 'Bankverbindung in Konfigurationen füllt Rechnungs-QR-Codes automatisch aus',
   'autoBilling.instructions.tip4': 'Sowohl automatische als auch manuelle Rechnungen erscheinen auf derselben Abrechnungsseite',
 
+  // AutoBilling.tsx - vZEV Mode Indicators (German)
+  'autoBilling.vzevMode.title': 'vZEV-Modus (Virtuelle Energiezuteilung)',
+  'autoBilling.vzevMode.description': 'Sie rechnen einen Gebäudekomplex mit virtueller Energiezuteilung ab. Überschüssiger PV-Strom aus Gebäuden mit Solar wird virtuell auf andere Gebäude im Komplex verteilt.',
+  'autoBilling.zevMode.title': 'ZEV-Modus (Direkte Energieteilung)',
+  'autoBilling.zevMode.description': 'Sie rechnen reguläre Gebäude mit direkter Energieteilung ab.',
+  'autoBilling.selectComplex': 'Komplex auswählen (vZEV)',
+  'autoBilling.vzevComplex': 'vZEV KOMPLEX',
+  'autoBilling.vzevMode': 'vZEV MODUS',
+  'autoBilling.mode': 'Modus',
+  'autoBilling.virtualAllocation': 'vZEV (Virtuelle Zuteilung)',
+  'autoBilling.directSharing': 'ZEV (Direkte Teilung)',
+  'autoBilling.complexes': 'Komplexe',
+  
+  // AutoBilling.tsx - Warnings and Validation (German)
+  'autoBilling.warning.mixingTypes': 'Warnung: Gebäudekomplexe (vZEV) können nicht mit regulären Gebäuden (ZEV) gemischt werden. Bitte wählen Sie nur Komplexe ODER nur reguläre Gebäude aus.',
+  'autoBilling.error.cannotMix': 'Gebäudekomplexe (vZEV) können nicht mit regulären Gebäuden (ZEV) gemischt werden. Bitte deaktivieren Sie zuerst vorhandene Gebäude.',
+  'autoBilling.error.selectComplex': 'Bitte wählen Sie einen Gebäudekomplex aus',
+  'autoBilling.validation.vzevComplexRequired': 'vZEV-Modus erfordert, dass alle ausgewählten Gebäude Komplexe sind',
+
   // ============================================================================
   // PRICING
   // ============================================================================
@@ -1562,6 +1603,37 @@ export const de: Translations = {
   'pricing.selectBuilding': 'Bitte wählen Sie ein Gebäude aus',
   'pricing.endDateBeforeStart': 'Enddatum muss nach Startdatum liegen',
   'pricing.dateOverlapError': 'Dieser Datumsbereich überschneidet sich mit einer bestehenden aktiven Preiseinstellung für dieses Gebäude. Bitte passen Sie die Daten an oder deaktivieren Sie die in Konflikt stehende Preiseinstellung.',
+
+  // PricingSettings.tsx - ZEV vs vZEV Section (German)
+  'pricing.zevVsVzev.title': 'ZEV vs vZEV',
+  'pricing.zevVsVzev.zev.title': 'ZEV (Zusammenschluss zum Eigenverbrauch):',
+  'pricing.zevVsVzev.zev.item1': 'Einzelne Gebäude auswählen',
+  'pricing.zevVsVzev.zev.item2': 'Gemeinsame physische Infrastruktur',
+  'pricing.zevVsVzev.zev.item3': 'Direkte Energieverteilung',
+  'pricing.zevVsVzev.zev.item4': 'Standardpreise gelten',
+  'pricing.zevVsVzev.vzev.title': 'vZEV (Virtueller ZEV):',
+  'pricing.zevVsVzev.vzev.item1': 'Gebäudekomplexe auswählen',
+  'pricing.zevVsVzev.vzev.item2': 'Separate Netzanschlüsse',
+  'pricing.zevVsVzev.vzev.item3': 'Virtuelle Energiezuteilung',
+  'pricing.zevVsVzev.vzev.item4': 'Verwendet vZEV-Exportpreis für überschüssigen PV-Strom',
+  
+  // PricingSettings.tsx - vZEV Export Price (German)
+  'pricing.vzevExportPrice': 'vZEV-Exportpreis',
+  'pricing.vzevExportPriceUnit': 'vZEV-Exportpreis (CHF/kWh)',
+  'pricing.vzevExportPriceDescription': 'Preis für virtuelle PV-Zuteilung zwischen Gebäuden im Komplex',
+  'pricing.vzevExportPriceTip': 'vZEV-Tipp: Setzen Sie den vZEV-Exportpreis niedriger als den Netzpreis, aber höher als die Einspeisevergütung',
+  
+  // PricingSettings.tsx - Building Type Labels (German)
+  'pricing.buildingType.vzev': 'vZEV',
+  'pricing.buildingType.zev': 'ZEV',
+  'pricing.buildingType.vzevComplex': 'vZEV-Komplex',
+  'pricing.buildingType.zevBuilding': 'ZEV-Gebäude',
+  'pricing.vzevComplexSelected': 'vZEV-Komplex ausgewählt - Virtuelle Energiezuteilung wird verwendet',
+  
+  // PricingSettings.tsx - Instructions Updates (German)
+  'pricing.instructions.vzevWork': 'vZEV: Virtuelle PV-Exportpreise für überschüssige Energiezuteilung',
+  'pricing.instructions.vzevStep': 'Für vZEV: Wählen Sie einen Komplex aus und legen Sie den vZEV-Exportpreis fest',
+  'pricing.instructions.vzevImportant': 'vZEV: Kann nur Komplexe abrechnen, nicht einzelne Gebäude innerhalb des Komplexes',
 
   // ============================================================================
   // LOGS (System Logs & Monitoring)

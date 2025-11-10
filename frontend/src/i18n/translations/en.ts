@@ -1284,6 +1284,27 @@ export const en: Translations = {
   'billConfig.successMessage': 'Successfully generated',
   'billConfig.errorMessage': 'Failed to generate bills',
 
+  // BillConfiguration.tsx - vZEV Mode Indicators
+  'billConfig.vzevMode.title': 'vZEV Mode (Virtual Energy Allocation)',
+  'billConfig.vzevMode.description': 'You are billing a building complex with virtual energy allocation. Surplus PV from buildings with solar will be virtually allocated to other buildings in the complex.',
+  'billConfig.zevMode.title': 'ZEV Mode (Direct Energy Sharing)',
+  'billConfig.zevMode.description': 'You are billing regular buildings with direct energy sharing.',
+  
+  // BillConfiguration.tsx - Selection Labels
+  'billConfig.step1.selectComplex': 'Select Complex (vZEV)',
+  
+  // BillConfiguration.tsx - Summary Labels
+  'billConfig.step5.mode': 'Mode',
+  'billConfig.step5.modeVzev': 'vZEV (Virtual Allocation)',
+  'billConfig.step5.modeZev': 'ZEV (Direct Sharing)',
+  'billConfig.step5.complexes': 'Complexes',
+  
+  // BillConfiguration.tsx - Warnings
+  'billConfig.warning.mixingTypes': 'Warning: Cannot mix building complexes (vZEV) with regular buildings (ZEV). Please select only complexes OR only regular buildings.',
+  'billConfig.error.cannotMix': 'Cannot mix building complexes (vZEV) with regular buildings (ZEV). Please deselect existing buildings first.',
+  'billConfig.validation.selectComplex': 'Please select a building complex',
+  'billConfig.validation.vzevComplexRequired': 'vZEV mode requires all selected buildings to be complexes',
+
   // ============================================================================
   // SHARED METERS CONFIGURATION
   // ============================================================================
@@ -1502,6 +1523,25 @@ export const en: Translations = {
   'autoBilling.instructions.tip3': 'Banking info in configs will auto-populate invoice QR codes',
   'autoBilling.instructions.tip4': 'Both auto and manual bills appear in the same Billing page',
 
+  // AutoBilling.tsx - vZEV Mode Indicators
+  'autoBilling.vzevMode.title': 'vZEV Mode (Virtual Energy Allocation)',
+  'autoBilling.vzevMode.description': 'You are billing a building complex with virtual energy allocation. Surplus PV from buildings with solar will be virtually allocated to other buildings in the complex.',
+  'autoBilling.zevMode.title': 'ZEV Mode (Direct Energy Sharing)',
+  'autoBilling.zevMode.description': 'You are billing regular buildings with direct energy sharing.',
+  'autoBilling.selectComplex': 'Select Complex (vZEV)',
+  'autoBilling.vzevComplex': 'vZEV COMPLEX',
+  'autoBilling.vzevMode': 'vZEV MODE',
+  'autoBilling.mode': 'Mode',
+  'autoBilling.virtualAllocation': 'vZEV (Virtual Allocation)',
+  'autoBilling.directSharing': 'ZEV (Direct Sharing)',
+  'autoBilling.complexes': 'Complexes',
+  
+  // AutoBilling.tsx - Warnings and Validation
+  'autoBilling.warning.mixingTypes': 'Warning: Cannot mix building complexes (vZEV) with regular buildings (ZEV). Please select only complexes OR only regular buildings.',
+  'autoBilling.error.cannotMix': 'Cannot mix building complexes (vZEV) with regular buildings (ZEV). Please deselect existing buildings first.',
+  'autoBilling.error.selectComplex': 'Please select a building complex',
+  'autoBilling.validation.vzevComplexRequired': 'vZEV mode requires all selected buildings to be complexes',
+
   // ============================================================================
   // PRICING
   // ============================================================================
@@ -1563,6 +1603,37 @@ export const en: Translations = {
   'pricing.selectBuilding': 'Please select a building',
   'pricing.endDateBeforeStart': 'End date must be after start date',
   'pricing.dateOverlapError': 'This date range overlaps with an existing active pricing for this building. Please adjust the dates or deactivate the conflicting pricing.',
+
+  // PricingSettings.tsx - ZEV vs vZEV Section
+  'pricing.zevVsVzev.title': 'ZEV vs vZEV',
+  'pricing.zevVsVzev.zev.title': 'ZEV (Zusammenschluss zum Eigenverbrauch):',
+  'pricing.zevVsVzev.zev.item1': 'Select individual buildings',
+  'pricing.zevVsVzev.zev.item2': 'Shared physical infrastructure',
+  'pricing.zevVsVzev.zev.item3': 'Direct energy distribution',
+  'pricing.zevVsVzev.zev.item4': 'Standard pricing applies',
+  'pricing.zevVsVzev.vzev.title': 'vZEV (Virtueller ZEV):',
+  'pricing.zevVsVzev.vzev.item1': 'Select building complexes',
+  'pricing.zevVsVzev.vzev.item2': 'Separate grid connections',
+  'pricing.zevVsVzev.vzev.item3': 'Virtual energy allocation',
+  'pricing.zevVsVzev.vzev.item4': 'Uses vZEV export price for surplus PV',
+  
+  // PricingSettings.tsx - vZEV Export Price
+  'pricing.vzevExportPrice': 'vZEV Export Price',
+  'pricing.vzevExportPriceUnit': 'vZEV Export Price (CHF/kWh)',
+  'pricing.vzevExportPriceDescription': 'Price for virtual PV allocation between buildings in the complex',
+  'pricing.vzevExportPriceTip': 'vZEV tip: Set vZEV export price lower than grid price but higher than feed-in tariff',
+  
+  // PricingSettings.tsx - Building Type Labels
+  'pricing.buildingType.vzev': 'vZEV',
+  'pricing.buildingType.zev': 'ZEV',
+  'pricing.buildingType.vzevComplex': 'vZEV Complex',
+  'pricing.buildingType.zevBuilding': 'ZEV Building',
+  'pricing.vzevComplexSelected': 'vZEV Complex selected - Virtual energy allocation will be used',
+  
+  // PricingSettings.tsx - Instructions Updates
+  'pricing.instructions.vzevWork': 'vZEV: Virtual PV export pricing for surplus energy allocation',
+  'pricing.instructions.vzevStep': 'For vZEV: Select a complex and set the vZEV export price',
+  'pricing.instructions.vzevImportant': 'vZEV: Can only bill complexes, not individual buildings within the complex',
 
   // ============================================================================
   // LOGS (System Logs & Monitoring)

@@ -66,7 +66,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       
       // Show warning if mixing complexes and buildings
       if (hasComplex && hasRegularBuilding) {
-        alert('Warning: Cannot mix building complexes (vZEV) with regular buildings (ZEV). Please select only complexes OR only regular buildings.');
+        alert(t('billConfig.warning.mixingTypes'));
       }
     } else {
       setIsVZEVMode(false);
@@ -229,7 +229,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     if (!config.building_ids.includes(buildingId)) {
       // Prevent mixing
       if ((building.is_group && hasRegular) || (!building.is_group && hasComplex)) {
-        alert('Cannot mix building complexes (vZEV) with regular buildings (ZEV). Please deselect existing buildings first.');
+        alert(t('billConfig.error.cannotMix'));
         return;
       }
     }
@@ -286,7 +286,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
 
       // Add user if exists and is active (already filtered for regular users in loadData)
       if (apartment?.user?.is_active) {
-        console.log(`  ✓ Adding user ${apartment.user.id}: ${apartment.user.first_name} ${apartment.user.last_name}`);
+        console.log(`  âœ“ Adding user ${apartment.user.id}: ${apartment.user.first_name} ${apartment.user.last_name}`);
         userIds.push(apartment.user.id);
 
         apartmentSelections.push({
@@ -295,14 +295,14 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           user_id: apartment.user.id
         });
       } else if (apartment) {
-        console.log(`  ✗ Apartment found but no active user`);
+        console.log(`  âœ— Apartment found but no active user`);
         apartmentSelections.push({
           building_id: parsedBuildingId,
           apartment_unit: aptUnit,
           user_id: undefined
         });
       } else {
-        console.log(`  ✗ Apartment not found in map!`);
+        console.log(`  âœ— Apartment not found in map!`);
       }
     });
 
@@ -382,7 +382,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     }
   
     if (config.building_ids.length === 0) {
-      alert(isVZEVMode ? 'Please select a building complex' : t('billConfig.validation.selectBuilding'));
+      alert(isVZEVMode ? t('billConfig.validation.selectComplex') : t('billConfig.validation.selectBuilding'));
       return;
     }
   
@@ -395,7 +395,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     if (isVZEVMode) {
       const selectedBuildings = buildings.filter(b => config.building_ids.includes(b.id));
       if (selectedBuildings.some(b => !b.is_group)) {
-        alert('vZEV mode requires all selected buildings to be complexes');
+        alert(t('billConfig.validation.vzevComplexRequired'));
         return;
       }
     }
@@ -512,14 +512,13 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           border: '2px solid #4338ca'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <span style={{ fontSize: '24px' }}>⚡</span>
+            <span style={{ fontSize: '24px' }}>âš¡</span>
             <h4 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#4338ca' }}>
-              vZEV Mode (Virtual Energy Allocation)
+              {t('billConfig.vzevMode.title')}
             </h4>
           </div>
           <p style={{ fontSize: '14px', margin: 0, color: '#4338ca' }}>
-            You are billing a building complex with virtual energy allocation.
-            Surplus PV from buildings with solar will be virtually allocated to other buildings in the complex.
+            {t('billConfig.vzevMode.description')}
           </p>
         </div>
       )}
@@ -533,20 +532,20 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           border: '2px solid #3b82f6'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <span style={{ fontSize: '24px' }}>🔌</span>
+            <span style={{ fontSize: '24px' }}>ðŸ”Œ</span>
             <h4 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#1e40af' }}>
-              ZEV Mode (Direct Energy Sharing)
+              {t('billConfig.zevMode.title')}
             </h4>
           </div>
           <p style={{ fontSize: '14px', margin: 0, color: '#1e40af' }}>
-            You are billing regular buildings with direct energy sharing.
+            {t('billConfig.zevMode.description')}
           </p>
         </div>
       )}
 
       <div style={{ marginBottom: '30px' }}>
         <label style={{ display: 'block', fontWeight: '600', marginBottom: '12px', fontSize: '15px' }}>
-          1. {isVZEVMode ? 'Select Complex (vZEV)' : 'Select Buildings (ZEV)'} ({config.building_ids.length} {t('billConfig.step1.selected')})
+          1. {isVZEVMode ? t('billConfig.step1.selectComplex') : t('billConfig.step1.selectBuildings')} ({config.building_ids.length} {t('billConfig.step1.selected')})
         </label>
         <div style={{
           maxHeight: '200px',
@@ -588,7 +587,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                   fontSize: '11px',
                   fontWeight: '600'
                 }}>
-                  vZEV COMPLEX
+                  {t('autoBilling.vzevComplex')}
                 </span>
               )}
             </label>
@@ -857,7 +856,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                     {meter.meter_name}
                   </div>
                   <div style={{ fontSize: '13px', color: '#6c757d' }}>
-                    {building?.name} • {meter.split_type} {t('billConfig.step3.split')} • CHF {meter.unit_price.toFixed(3)}/kWh
+                    {building?.name} â€¢ {meter.split_type} {t('billConfig.step3.split')} â€¢ CHF {meter.unit_price.toFixed(3)}/kWh
                   </div>
                 </div>
               </label>
@@ -932,7 +931,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                     {item.description}
                   </div>
                   <div style={{ fontSize: '13px', color: '#6c757d' }}>
-                    {building?.name} • CHF {item.amount.toFixed(2)} • {item.frequency} • {item.category}
+                    {building?.name} â€¢ CHF {item.amount.toFixed(2)} â€¢ {item.frequency} â€¢ {item.category}
                   </div>
                 </div>
               </label>
@@ -970,9 +969,9 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           {t('billConfig.step5.summary')}
         </h4>
         <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '14px', lineHeight: '1.8' }}>
-          <li><strong>Mode:</strong> {isVZEVMode ? 'vZEV (Virtual Allocation)' : 'ZEV (Direct Sharing)'}</li>
+          <li><strong>{t('billConfig.step5.mode')}:</strong> {isVZEVMode ? t('billConfig.step5.modeVzev') : t('billConfig.step5.modeZev')}</li>
           <li><strong>{t('billConfig.step5.period')}:</strong> {config.start_date} {t('billConfig.step5.to')} {config.end_date}</li>
-          <li><strong>{isVZEVMode ? 'Complexes' : t('billConfig.step5.buildings')}:</strong> {config.building_ids.length}</li>
+          <li><strong>{isVZEVMode ? t('billConfig.step5.complexes') : t('billConfig.step5.buildings')}:</strong> {config.building_ids.length}</li>
           <li><strong>{t('billConfig.step5.apartments')}:</strong> {selectedApartments.size}</li>
           <li><strong>{t('billConfig.step5.users')}:</strong> {config.user_ids.length}</li>
           <li><strong>{t('billConfig.step5.sharedMeters')}:</strong> {selectedSharedMeters.length}</li>

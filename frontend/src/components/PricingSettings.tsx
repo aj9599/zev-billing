@@ -212,24 +212,24 @@ export default function PricingSettings() {
 
           <div style={{ backgroundColor: '#fef3c7', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '2px solid #f59e0b' }}>
             <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '10px', color: '#1f2937' }}>
-              ZEV vs vZEV
+              {t('pricing.zevVsVzev.title')}
             </h3>
             <div style={{ marginBottom: '12px' }}>
-              <strong>ZEV (Zusammenschluss zum Eigenverbrauch):</strong>
+              <strong>{t('pricing.zevVsVzev.zev.title')}</strong>
               <ul style={{ marginLeft: '20px', marginTop: '8px' }}>
-                <li>Select individual buildings</li>
-                <li>Shared physical infrastructure</li>
-                <li>Direct energy distribution</li>
-                <li>Standard pricing applies</li>
+                <li>{t('pricing.zevVsVzev.zev.item1')}</li>
+                <li>{t('pricing.zevVsVzev.zev.item2')}</li>
+                <li>{t('pricing.zevVsVzev.zev.item3')}</li>
+                <li>{t('pricing.zevVsVzev.zev.item4')}</li>
               </ul>
             </div>
             <div>
-              <strong>vZEV (Virtueller ZEV):</strong>
+              <strong>{t('pricing.zevVsVzev.vzev.title')}</strong>
               <ul style={{ marginLeft: '20px', marginTop: '8px' }}>
-                <li>Select building complexes</li>
-                <li>Separate grid connections</li>
-                <li>Virtual energy allocation</li>
-                <li>Uses vZEV export price for surplus PV</li>
+                <li>{t('pricing.zevVsVzev.vzev.item1')}</li>
+                <li>{t('pricing.zevVsVzev.vzev.item2')}</li>
+                <li>{t('pricing.zevVsVzev.vzev.item3')}</li>
+                <li>{t('pricing.zevVsVzev.vzev.item4')}</li>
               </ul>
             </div>
           </div>
@@ -243,7 +243,7 @@ export default function PricingSettings() {
               <li>{t('pricing.instructions.work2')}</li>
               <li>{t('pricing.instructions.work3')}</li>
               <li>{t('pricing.instructions.work4')}</li>
-              <li><strong>vZEV:</strong> Virtual PV export pricing for surplus energy allocation</li>
+              <li><strong>{t('pricing.instructions.vzevWork')}</strong></li>
             </ul>
           </div>
 
@@ -256,7 +256,7 @@ export default function PricingSettings() {
             <li>{t('pricing.instructions.step3')}</li>
             <li>{t('pricing.instructions.step4')}</li>
             <li>{t('pricing.instructions.step5')}</li>
-            <li><strong>For vZEV:</strong> Select a complex and set the vZEV export price</li>
+            <li><strong>{t('pricing.instructions.vzevStep')}</strong></li>
           </ul>
 
           <div style={{ backgroundColor: '#fee2e2', padding: '16px', borderRadius: '8px', marginTop: '16px', border: '2px solid #ef4444' }}>
@@ -267,7 +267,7 @@ export default function PricingSettings() {
               <li>{t('pricing.instructions.important1')}</li>
               <li>{t('pricing.instructions.important2')}</li>
               <li>{t('pricing.instructions.important3')}</li>
-              <li><strong>vZEV:</strong> Can only bill complexes, not individual buildings within the complex</li>
+              <li><strong>{t('pricing.instructions.vzevImportant')}</strong></li>
             </ul>
           </div>
 
@@ -279,7 +279,7 @@ export default function PricingSettings() {
               <li>{t('pricing.instructions.tip1')}</li>
               <li>{t('pricing.instructions.tip2')}</li>
               <li>{t('pricing.instructions.tip3')}</li>
-              <li><strong>vZEV tip:</strong> Set vZEV export price lower than grid price but higher than feed-in tariff</li>
+              <li><strong>{t('pricing.vzevExportPriceTip')}</strong></li>
             </ul>
           </div>
         </div>
@@ -424,7 +424,7 @@ export default function PricingSettings() {
               </div>
               <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
                 {buildingSettings.length} {t('pricing.pricingSettings')}
-                {building.is_group && <span style={{ marginLeft: '8px', fontSize: '12px' }}>(vZEV)</span>}
+                {building.is_group && <span style={{ marginLeft: '8px', fontSize: '12px' }}>({t('pricing.buildingType.vzev')})</span>}
               </p>
             </div>
           );
@@ -456,14 +456,14 @@ export default function PricingSettings() {
                 <h2 style={{ fontSize: '20px', fontWeight: '600', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {building.is_group ? <Layers size={20} /> : <Building size={20} />}
                   {building.name}
-                  {building.is_group && <span style={{ fontSize: '14px', color: '#667eea', fontWeight: '500' }}>(vZEV Complex)</span>}
+                  {building.is_group && <span style={{ fontSize: '14px', color: '#667eea', fontWeight: '500' }}>({t('pricing.buildingType.vzevComplex')})</span>}
                 </h2>
                 <p style={{ fontSize: '14px', color: '#666', margin: '4px 0 0 0' }}>
                   {buildingSettings.length} {t('pricing.pricingSettings')}
                 </p>
               </div>
               <span style={{ fontSize: '24px', color: '#666' }}>
-                {expandedBuildings.has(building.id) ? '▼' : '▶'}
+                {expandedBuildings.has(building.id) ? 'â–¼' : 'â–¶'}
               </span>
             </div>
 
@@ -473,10 +473,10 @@ export default function PricingSettings() {
                   <table style={{ width: '100%' }}>
                     <thead>
                       <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
-                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>Type</th>
+                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('pricing.form.type')}</th>
                         <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('pricing.normalKwh')}</th>
                         <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('pricing.solarKwh')}</th>
-                        {building.is_group && <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>vZEV Export</th>}
+                        {building.is_group && <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('pricing.vzevExportPrice')}</th>}
                         <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('pricing.chargingNormal')}</th>
                         <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('pricing.chargingPriority')}</th>
                         <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('pricing.validPeriod')}</th>
@@ -496,7 +496,7 @@ export default function PricingSettings() {
                               backgroundColor: setting.is_complex ? '#e0e7ff' : '#f3f4f6',
                               color: setting.is_complex ? '#4338ca' : '#6b7280'
                             }}>
-                              {setting.is_complex ? 'vZEV' : 'ZEV'}
+                              {setting.is_complex ? t('pricing.buildingType.vzev') : t('pricing.buildingType.zev')}
                             </span>
                           </td>
                           <td style={{ padding: '16px' }}>{setting.currency} {setting.normal_power_price.toFixed(2)}</td>
@@ -562,7 +562,7 @@ export default function PricingSettings() {
                             backgroundColor: setting.is_complex ? '#e0e7ff' : '#f3f4f6',
                             color: setting.is_complex ? '#4338ca' : '#6b7280'
                           }}>
-                            {setting.is_complex ? 'vZEV' : 'ZEV'}
+                            {setting.is_complex ? t('pricing.buildingType.vzev') : t('pricing.buildingType.zev')}
                           </span>
                         </div>
                         <div style={{ display: 'flex', gap: '8px' }}>
@@ -590,7 +590,7 @@ export default function PricingSettings() {
                         </div>
                         {building.is_group && (
                           <div>
-                            <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>vZEV Export</div>
+                            <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>{t('pricing.vzevExportPrice')}</div>
                             <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
                               {setting.currency} {(setting.vzev_export_price || 0).toFixed(2)}
                             </div>
@@ -666,7 +666,7 @@ export default function PricingSettings() {
                   <option value={0}>{t('users.selectBuilding')}</option>
                   {buildings.map(b => (
                     <option key={b.id} value={b.id}>
-                      {b.name} {b.is_group ? '(vZEV Complex)' : '(ZEV Building)'}
+                      {b.name} {b.is_group ? `(${t('pricing.buildingType.vzevComplex')})` : `(${t('pricing.buildingType.zevBuilding')})`}
                     </option>
                   ))}
                 </select>
@@ -681,7 +681,7 @@ export default function PricingSettings() {
                   border: '1px solid #4338ca'
                 }}>
                   <p style={{ margin: 0, fontSize: '14px', color: '#4338ca', fontWeight: '500' }}>
-                    ⚡ vZEV Complex selected - Virtual energy allocation will be used
+                    ⚡ {t('pricing.vzevComplexSelected')}
                   </p>
                 </div>
               )}
@@ -708,7 +708,7 @@ export default function PricingSettings() {
               {isComplexSelected && (
                 <div style={{ marginTop: '16px' }}>
                   <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                    vZEV Export Price (CHF/kWh) *
+                    {t('pricing.vzevExportPriceUnit')} *
                   </label>
                   <input 
                     type="number" 
@@ -719,7 +719,7 @@ export default function PricingSettings() {
                     style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} 
                   />
                   <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                    Price for virtual PV allocation between buildings in the complex
+                    {t('pricing.vzevExportPriceDescription')}
                   </p>
                 </div>
               )}

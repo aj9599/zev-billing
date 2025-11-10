@@ -86,7 +86,7 @@ export default function AutoBilling() {
       
       // Show warning if mixing complexes and buildings
       if (hasComplex && hasRegularBuilding) {
-        alert('Warning: Cannot mix building complexes (vZEV) with regular buildings (ZEV). Please select only complexes OR only regular buildings.');
+        alert(t('autoBilling.warning.mixingTypes'));
       }
     } else {
       setIsVZEVMode(false);
@@ -266,7 +266,7 @@ export default function AutoBilling() {
     if (!formData.building_ids.includes(buildingId)) {
       // Prevent mixing
       if ((building.is_group && hasRegular) || (!building.is_group && hasComplex)) {
-        alert('Cannot mix building complexes (vZEV) with regular buildings (ZEV). Please deselect existing buildings first.');
+        alert(t('autoBilling.error.cannotMix'));
         return;
       }
     }
@@ -374,7 +374,7 @@ export default function AutoBilling() {
     console.log('Form data:', formData);
     
     if (formData.building_ids.length === 0) {
-      alert(isVZEVMode ? 'Please select a building complex' : t('autoBilling.selectAtLeastOneBuilding'));
+      alert(isVZEVMode ? t('autoBilling.error.selectComplex') : t('autoBilling.selectAtLeastOneBuilding'));
       return;
     }
 
@@ -392,7 +392,7 @@ export default function AutoBilling() {
     if (isVZEVMode) {
       const selectedBuildings = buildings.filter(b => formData.building_ids.includes(b.id));
       if (selectedBuildings.some(b => !b.is_group)) {
-        alert('vZEV mode requires all selected buildings to be complexes');
+        alert(t('autoBilling.validation.vzevComplexRequired'));
         return;
       }
     }
@@ -571,14 +571,13 @@ export default function AutoBilling() {
           border: '2px solid #4338ca'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <span style={{ fontSize: '24px' }}>⚡</span>
+            <span style={{ fontSize: '24px' }}>âš¡</span>
             <h4 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#4338ca' }}>
-              vZEV Mode (Virtual Energy Allocation)
+              {t('autoBilling.vzevMode.title')}
             </h4>
           </div>
           <p style={{ fontSize: '14px', margin: 0, color: '#4338ca' }}>
-            You are billing a building complex with virtual energy allocation.
-            Surplus PV from buildings with solar will be virtually allocated to other buildings in the complex.
+            {t('autoBilling.vzevMode.description')}
           </p>
         </div>
       )}
@@ -592,20 +591,20 @@ export default function AutoBilling() {
           border: '2px solid #3b82f6'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <span style={{ fontSize: '24px' }}>🔌</span>
+            <span style={{ fontSize: '24px' }}>ðŸ”Œ</span>
             <h4 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#1e40af' }}>
-              ZEV Mode (Direct Energy Sharing)
+              {t('autoBilling.zevMode.title')}
             </h4>
           </div>
           <p style={{ fontSize: '14px', margin: 0, color: '#1e40af' }}>
-            You are billing regular buildings with direct energy sharing.
+            {t('autoBilling.zevMode.description')}
           </p>
         </div>
       )}
 
       <div style={{ marginBottom: '30px' }}>
         <label style={{ display: 'block', fontWeight: '600', marginBottom: '12px', fontSize: '15px' }}>
-          1. {isVZEVMode ? 'Select Complex (vZEV)' : 'Select Buildings (ZEV)'} ({formData.building_ids.length} {t('billConfig.step1.selected')})
+          1. {isVZEVMode ? t('autoBilling.selectComplex') : t('autoBilling.selectBuildings')} ({formData.building_ids.length} {t('billConfig.step1.selected')})
         </label>
         <div style={{ 
           maxHeight: '200px', 
@@ -653,7 +652,7 @@ export default function AutoBilling() {
                     fontSize: '11px',
                     fontWeight: '600'
                   }}>
-                    vZEV COMPLEX
+                    {t('autoBilling.vzevComplex')}
                   </span>
                 )}
               </label>
@@ -837,7 +836,7 @@ export default function AutoBilling() {
       </div>
 
       <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px' }}>
-        Billing Schedule
+        {t('autoBilling.modal.billingSchedule')}
       </h3>
 
       <div style={{ padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
@@ -1042,7 +1041,7 @@ export default function AutoBilling() {
   const renderStep5 = () => (
     <div>
       <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px' }}>
-        Review Configuration
+        {t('autoBilling.modal.reviewConfiguration')}
       </h3>
 
       <div style={{ 
@@ -1052,11 +1051,11 @@ export default function AutoBilling() {
         borderRadius: '8px'
       }}>
         <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px', color: '#667EEA' }}>
-          Configuration Summary
+          {t('autoBilling.modal.configurationSummary')}
         </h4>
         <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '14px', lineHeight: '1.8' }}>
           <li><strong>Name:</strong> {formData.name}</li>
-          <li><strong>Mode:</strong> {isVZEVMode ? 'vZEV (Virtual Allocation)' : 'ZEV (Direct Sharing)'}</li>
+          <li><strong>{t('autoBilling.mode')}:</strong> {isVZEVMode ? t('autoBilling.virtualAllocation') : t('autoBilling.directSharing')}</li>
           <li><strong>{t('billConfig.step5.buildings')}:</strong> {formData.building_ids.length}</li>
           <li><strong>{t('billConfig.step5.apartments')}:</strong> {selectedApartments.size}</li>
           <li><strong>{t('billConfig.step5.users')}:</strong> {formData.apartments.filter(a => a.user_id).length}</li>
@@ -1289,7 +1288,7 @@ export default function AutoBilling() {
                       fontWeight: '600',
                       marginBottom: '8px'
                     }}>
-                      vZEV MODE
+                      {t('autoBilling.vzevMode')}
                     </span>
                   )}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
@@ -1517,11 +1516,11 @@ export default function AutoBilling() {
                       color: step === s ? '#667EEA' : '#6c757d',
                       lineHeight: '1.3'
                     }}>
-                      {s === 1 && 'Selection'}
-                      {s === 2 && 'Schedule'}
-                      {s === 3 && 'Sender'}
-                      {s === 4 && 'Banking'}
-                      {s === 5 && 'Review'}
+                      {s === 1 && t('autoBilling.step.selection')}
+                      {s === 2 && t('autoBilling.step.schedule')}
+                      {s === 3 && t('autoBilling.step.sender')}
+                      {s === 4 && t('autoBilling.step.banking')}
+                      {s === 5 && t('autoBilling.step.review')}
                     </div>
                   </div>
                 ))}
