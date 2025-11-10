@@ -534,7 +534,7 @@ func createDefaultAdmin(db *sql.DB) error {
 	}
 
 	return nil
-}}
+}
 
 // addVZEVColumns adds vZEV support columns to billing_settings and invoices tables
 func addVZEVColumns(db *sql.DB) error {

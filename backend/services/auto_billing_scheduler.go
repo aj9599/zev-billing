@@ -66,7 +66,7 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 
 	rows, err := s.db.Query(`
 		SELECT id, name, building_ids, apartments_json, frequency, generation_day,
-		       next_run, first_execution_date, sender_name, sender_address, 
+		       next_run, first_execution_date, is_vzev, sender_name, sender_address, 
 		       sender_city, sender_zip, sender_country, bank_name, bank_iban, 
 		       bank_account_holder
 		FROM auto_billing_configs
@@ -88,11 +88,12 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 		var generationDay int
 		var nextRun time.Time
 		var firstExecutionDate sql.NullString
+		var isVZEV bool
 		var senderName, senderAddress, senderCity, senderZip, senderCountry sql.NullString
 		var bankName, bankIBAN, bankAccountHolder sql.NullString
 
 		err := rows.Scan(&id, &name, &buildingIDsStr, &apartmentsJSON, &frequency,
-			&generationDay, &nextRun, &firstExecutionDate, &senderName, &senderAddress, 
+			&generationDay, &nextRun, &firstExecutionDate, &isVZEV, &senderName, &senderAddress, 
 			&senderCity, &senderZip, &senderCountry, &bankName, &bankIBAN, &bankAccountHolder)
 
 		if err != nil {
@@ -101,7 +102,7 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 		}
 
 		dueConfigs++
-		log.Printf("Processing auto billing config: %s (ID: %d)", name, id)
+		log.Printf("Processing auto billing config: %s (ID: %d, vZEV: %v)", name, id, isVZEV)
 
 		// Parse building IDs
 		buildingIDs := parseIDList(buildingIDsStr)
@@ -153,11 +154,11 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 			continue
 		}
 
-		log.Printf("Generating bills for period: %s to %s", startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+		log.Printf("Generating bills for period: %s to %s (vZEV mode: %v)", startDate.Format("2006-01-02"), endDate.Format("2006-01-02"), isVZEV)
 
-		// NEW: Generate bills using the billing service (now handles rent periods automatically)
+		// Generate bills using the billing service with vZEV flag
 		invoices, err := s.billingService.GenerateBills(buildingIDs, userIDs,
-			startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+			startDate.Format("2006-01-02"), endDate.Format("2006-01-02"), isVZEV)
 
 		if err != nil {
 			log.Printf("ERROR: Failed to generate bills for config %d: %v", id, err)
@@ -236,6 +237,7 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 			"pdfs_generated": successCount,
 			"period_start":   startDate.Format("2006-01-02"),
 			"period_end":     endDate.Format("2006-01-02"),
+			"is_vzev":        isVZEV,
 		}
 		detailsJSON, _ := json.Marshal(details)
 

@@ -61,7 +61,7 @@ func idListToString(ids []int) string {
 func (h *AutoBillingHandler) List(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Query(`
 		SELECT id, name, building_ids, apartments_json, frequency, generation_day, 
-		       first_execution_date, is_active, last_run, next_run, 
+		       first_execution_date, is_active, is_vzev, last_run, next_run, 
 		       sender_name, sender_address, sender_city, sender_zip, sender_country, 
 		       bank_name, bank_iban, bank_account_holder, created_at, updated_at
 		FROM auto_billing_configs
@@ -80,6 +80,7 @@ func (h *AutoBillingHandler) List(w http.ResponseWriter, r *http.Request) {
 		var buildingIDsStr string
 		var apartmentsJSON sql.NullString
 		var firstExecutionDate sql.NullString
+		var isVZEV bool
 		var lastRun, nextRun sql.NullTime
 		var senderName, senderAddress, senderCity, senderZip, senderCountry sql.NullString
 		var bankName, bankIBAN, bankAccountHolder sql.NullString
@@ -87,7 +88,7 @@ func (h *AutoBillingHandler) List(w http.ResponseWriter, r *http.Request) {
 		err := rows.Scan(
 			&config.ID, &config.Name, &buildingIDsStr, &apartmentsJSON,
 			&config.Frequency, &config.GenerationDay, &firstExecutionDate,
-			&config.IsActive, &lastRun, &nextRun,
+			&config.IsActive, &isVZEV, &lastRun, &nextRun,
 			&senderName, &senderAddress, &senderCity, &senderZip, &senderCountry,
 			&bankName, &bankIBAN, &bankAccountHolder,
 			&config.CreatedAt, &config.UpdatedAt,
@@ -117,6 +118,7 @@ func (h *AutoBillingHandler) List(w http.ResponseWriter, r *http.Request) {
 			"frequency":       config.Frequency,
 			"generation_day":  config.GenerationDay,
 			"is_active":       config.IsActive,
+			"is_vzev":         isVZEV,
 			"created_at":      config.CreatedAt,
 			"updated_at":      config.UpdatedAt,
 		}
@@ -174,20 +176,21 @@ func (h *AutoBillingHandler) Get(w http.ResponseWriter, r *http.Request) {
 	var buildingIDsStr string
 	var apartmentsJSON sql.NullString
 	var firstExecutionDate sql.NullString
+	var isVZEV bool
 	var lastRun, nextRun sql.NullTime
 	var senderName, senderAddress, senderCity, senderZip, senderCountry sql.NullString
 	var bankName, bankIBAN, bankAccountHolder sql.NullString
 
 	err = h.db.QueryRow(`
 		SELECT id, name, building_ids, apartments_json, frequency, generation_day, 
-		       first_execution_date, is_active, last_run, next_run, 
+		       first_execution_date, is_active, is_vzev, last_run, next_run, 
 		       sender_name, sender_address, sender_city, sender_zip, sender_country, 
 		       bank_name, bank_iban, bank_account_holder, created_at, updated_at
 		FROM auto_billing_configs WHERE id = ?
 	`, id).Scan(
 		&config.ID, &config.Name, &buildingIDsStr, &apartmentsJSON,
 		&config.Frequency, &config.GenerationDay, &firstExecutionDate,
-		&config.IsActive, &lastRun, &nextRun,
+		&config.IsActive, &isVZEV, &lastRun, &nextRun,
 		&senderName, &senderAddress, &senderCity, &senderZip, &senderCountry,
 		&bankName, &bankIBAN, &bankAccountHolder,
 		&config.CreatedAt, &config.UpdatedAt,
@@ -222,6 +225,7 @@ func (h *AutoBillingHandler) Get(w http.ResponseWriter, r *http.Request) {
 		"frequency":       config.Frequency,
 		"generation_day":  config.GenerationDay,
 		"is_active":       config.IsActive,
+		"is_vzev":         isVZEV,
 		"created_at":      config.CreatedAt,
 		"updated_at":      config.UpdatedAt,
 	}
@@ -273,6 +277,7 @@ func (h *AutoBillingHandler) Create(w http.ResponseWriter, r *http.Request) {
 		GenerationDay      int                  `json:"generation_day"`
 		FirstExecutionDate string               `json:"first_execution_date"`
 		IsActive           bool                 `json:"is_active"`
+		IsVZEV             bool                 `json:"is_vzev"`
 		SenderName         string               `json:"sender_name"`
 		SenderAddress      string               `json:"sender_address"`
 		SenderCity         string               `json:"sender_city"`
@@ -314,12 +319,12 @@ func (h *AutoBillingHandler) Create(w http.ResponseWriter, r *http.Request) {
 	result, err := h.db.Exec(`
 		INSERT INTO auto_billing_configs (
 			name, building_ids, apartments_json, frequency, generation_day, 
-			first_execution_date, is_active, next_run, 
+			first_execution_date, is_active, is_vzev, next_run, 
 			sender_name, sender_address, sender_city, sender_zip, sender_country, 
 			bank_name, bank_iban, bank_account_holder
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, req.Name, buildingIDsStr, string(apartmentsJSON), req.Frequency, req.GenerationDay,
-		firstExecDateValue, req.IsActive, nextRun,
+		firstExecDateValue, req.IsActive, req.IsVZEV, nextRun,
 		req.SenderName, req.SenderAddress, req.SenderCity,
 		req.SenderZip, req.SenderCountry, req.BankName, req.BankIBAN, req.BankAccountHolder)
 
@@ -330,7 +335,7 @@ func (h *AutoBillingHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id, _ := result.LastInsertId()
-	log.Printf("SUCCESS: Created auto billing config ID %d (%s)", id, req.Name)
+	log.Printf("SUCCESS: Created auto billing config ID %d (%s, vZEV: %v)", id, req.Name, req.IsVZEV)
 
 	response := map[string]interface{}{
 		"id":                      id,
@@ -340,6 +345,7 @@ func (h *AutoBillingHandler) Create(w http.ResponseWriter, r *http.Request) {
 		"frequency":               req.Frequency,
 		"generation_day":          req.GenerationDay,
 		"is_active":               req.IsActive,
+		"is_vzev":                 req.IsVZEV,
 		"next_run":                nextRun.Format(time.RFC3339),
 		"sender_name":             req.SenderName,
 		"sender_address":          req.SenderAddress,
@@ -376,6 +382,7 @@ func (h *AutoBillingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		GenerationDay      int                  `json:"generation_day"`
 		FirstExecutionDate string               `json:"first_execution_date"`
 		IsActive           bool                 `json:"is_active"`
+		IsVZEV             bool                 `json:"is_vzev"`
 		SenderName         string               `json:"sender_name"`
 		SenderAddress      string               `json:"sender_address"`
 		SenderCity         string               `json:"sender_city"`
@@ -417,14 +424,14 @@ func (h *AutoBillingHandler) Update(w http.ResponseWriter, r *http.Request) {
 	_, err = h.db.Exec(`
 		UPDATE auto_billing_configs SET
 			name = ?, building_ids = ?, apartments_json = ?, frequency = ?, 
-			generation_day = ?, first_execution_date = ?, is_active = ?, next_run = ?,
+			generation_day = ?, first_execution_date = ?, is_active = ?, is_vzev = ?, next_run = ?,
 			sender_name = ?, sender_address = ?, sender_city = ?, 
 			sender_zip = ?, sender_country = ?, bank_name = ?, 
 			bank_iban = ?, bank_account_holder = ?,
 			updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`, req.Name, buildingIDsStr, string(apartmentsJSON), req.Frequency, req.GenerationDay,
-		firstExecDateValue, req.IsActive, nextRun,
+		firstExecDateValue, req.IsActive, req.IsVZEV, nextRun,
 		req.SenderName, req.SenderAddress, req.SenderCity,
 		req.SenderZip, req.SenderCountry, req.BankName, req.BankIBAN,
 		req.BankAccountHolder, id)
@@ -435,7 +442,7 @@ func (h *AutoBillingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("SUCCESS: Updated auto billing config ID %d", id)
+	log.Printf("SUCCESS: Updated auto billing config ID %d (vZEV: %v)", id, req.IsVZEV)
 
 	response := map[string]interface{}{
 		"id":                      id,
@@ -445,6 +452,7 @@ func (h *AutoBillingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		"frequency":               req.Frequency,
 		"generation_day":          req.GenerationDay,
 		"is_active":               req.IsActive,
+		"is_vzev":                 req.IsVZEV,
 		"next_run":                nextRun.Format(time.RFC3339),
 		"sender_name":             req.SenderName,
 		"sender_address":          req.SenderAddress,

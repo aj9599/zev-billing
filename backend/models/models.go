@@ -199,6 +199,7 @@ type AutoBillingConfig struct {
 	GenerationDay      int        `json:"generation_day"`
 	FirstExecutionDate *string    `json:"first_execution_date,omitempty"`
 	IsActive           bool       `json:"is_active"`
+	IsVZEV             bool       `json:"is_vzev"`
 	LastRun            *time.Time `json:"last_run,omitempty"`
 	NextRun            *time.Time `json:"next_run,omitempty"`
 	SenderName         string     `json:"sender_name,omitempty"`
