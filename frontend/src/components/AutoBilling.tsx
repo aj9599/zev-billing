@@ -74,7 +74,7 @@ export default function AutoBilling() {
 
   // Detect vZEV mode based on selected buildings
   useEffect(() => {
-    if (formData.building_ids.length > 0) {
+    if (formData.building_ids.length > 0 && buildings.length > 0) {
       const selectedBuildings = buildings.filter(b => formData.building_ids.includes(b.id));
       const hasComplex = selectedBuildings.some(b => b.is_group);
       const hasRegularBuilding = selectedBuildings.some(b => !b.is_group);
@@ -94,15 +94,20 @@ export default function AutoBilling() {
     }
   }, [formData.building_ids, buildings]);
 
-  // Rebuild apartments list when buildings, users, or meters change
+  // Rebuild apartments list when buildings change
   useEffect(() => {
-    if (formData.building_ids.length > 0 && users.length > 0 && meters.length > 0) {
+    if (formData.building_ids.length > 0 && users.length > 0 && meters.length > 0 && buildings.length > 0) {
       console.log('Rebuilding apartments list for auto billing...');
+      console.log('Selected building IDs:', formData.building_ids);
+      console.log('Total buildings available:', buildings.length);
+      console.log('Total users available:', users.length);
+      console.log('Total meters available:', meters.length);
+      
       const newApartmentMap = buildApartmentsListSync();
       setApartmentsWithUsers(newApartmentMap);
       console.log('Apartments map updated:', newApartmentMap);
     }
-  }, [formData.building_ids, users, meters]);
+  }, [formData.building_ids, users, meters, buildings]);
 
   const loadData = async () => {
     try {
@@ -113,16 +118,23 @@ export default function AutoBilling() {
         api.getMeters()
       ]);
       
-      console.log('Loaded configs from API:', configsData);
+      console.log('=== AUTO BILLING DATA LOADED ===');
+      console.log('Configs from API:', configsData);
+      console.log('Buildings:', buildingsData);
+      console.log('Users (before filter):', usersData.length);
+      console.log('Meters:', metersData.length);
+      
       setConfigs(configsData);
       setBuildings(buildingsData);
       
       // Filter out administration users - only show regular users
       const regularUsers = usersData.filter(u => u.user_type === 'regular');
+      console.log('Regular users (after filter):', regularUsers.length);
       setUsers(regularUsers);
       setMeters(metersData);
     } catch (err) {
       console.error('Failed to load data:', err);
+      alert('Failed to load auto billing data: ' + err);
     }
   };
 
@@ -160,16 +172,24 @@ export default function AutoBilling() {
   const buildApartmentsListSync = (): Map<number, ApartmentWithUser[]> => {
     const apartmentMap = new Map<number, ApartmentWithUser[]>();
 
+    console.log('=== BUILDING APARTMENTS LIST ===');
+    console.log('Processing building IDs:', formData.building_ids);
+
     formData.building_ids.forEach(buildingId => {
       const building = buildings.find(b => b.id === buildingId);
-      if (!building) return;
+      if (!building) {
+        console.log(`Building ${buildingId} not found in buildings list`);
+        return;
+      }
+
+      console.log(`Processing building: ${building.name} (ID: ${buildingId}, is_group: ${building.is_group})`);
 
       let buildingsToProcess: number[] = [buildingId];
 
       // If this is a complex (vZEV), process all buildings in the group
       if (building.is_group && building.group_buildings) {
         buildingsToProcess = building.group_buildings;
-        console.log(`vZEV Complex: Processing ${buildingsToProcess.length} buildings in group`);
+        console.log(`vZEV Complex: Processing ${buildingsToProcess.length} buildings in group:`, buildingsToProcess);
       }
 
       const apartments: ApartmentWithUser[] = [];
@@ -184,7 +204,7 @@ export default function AutoBilling() {
             m.is_active
         );
 
-        console.log(`Building ${processBuildingId}: Found ${buildingMeters.length} apartment meters`);
+        console.log(`  Building ${processBuildingId}: Found ${buildingMeters.length} apartment meters`);
 
         buildingMeters.forEach(meter => {
           const key = `${processBuildingId}-${meter.apartment_unit}`;
@@ -202,6 +222,8 @@ export default function AutoBilling() {
                   u.apartment_unit === meter.apartment_unit
               );
             }
+
+            console.log(`    Apartment ${meter.apartment_unit}: User ${user ? user.first_name + ' ' + user.last_name : 'NOT FOUND'}`);
 
             apartments.push({
               building_id: processBuildingId,
@@ -221,15 +243,19 @@ export default function AutoBilling() {
         return aNum - bNum;
       });
 
+      console.log(`Total apartments for building ${buildingId}: ${apartments.length}`);
       apartmentMap.set(buildingId, apartments);
     });
 
+    console.log('=== APARTMENTS LIST COMPLETE ===');
     return apartmentMap;
   };
 
   const handleBuildingToggle = (buildingId: number) => {
     const building = buildings.find(b => b.id === buildingId);
     if (!building) return;
+
+    console.log('Toggling building:', building.name, buildingId);
 
     // Check if trying to mix complex and regular buildings
     const currentlySelectedBuildings = buildings.filter(b => formData.building_ids.includes(b.id));
@@ -248,6 +274,8 @@ export default function AutoBilling() {
     const newBuildings = formData.building_ids.includes(buildingId)
       ? formData.building_ids.filter(id => id !== buildingId)
       : [...formData.building_ids, buildingId];
+    
+    console.log('New building IDs:', newBuildings);
     
     // Clear apartment selections for removed buildings
     if (!newBuildings.includes(buildingId)) {
@@ -342,6 +370,9 @@ export default function AutoBilling() {
   };
 
   const handleSubmit = async () => {
+    console.log('=== SUBMITTING AUTO BILLING CONFIG ===');
+    console.log('Form data:', formData);
+    
     if (formData.building_ids.length === 0) {
       alert(isVZEVMode ? 'Please select a building complex' : t('autoBilling.selectAtLeastOneBuilding'));
       return;
@@ -382,21 +413,26 @@ export default function AutoBilling() {
         holder: formData.bank_account_holder
       }));
 
+      console.log('Sending to API:', formData);
+
       if (editingConfig) {
         await api.updateAutoBillingConfig(editingConfig.id, formData);
       } else {
         await api.createAutoBillingConfig(formData);
       }
+      
       setShowModal(false);
       resetForm();
-      loadData();
+      await loadData();
       alert(editingConfig ? t('autoBilling.updateSuccess') : t('autoBilling.createSuccess'));
     } catch (err: any) {
+      console.error('Submit error:', err);
       alert(t('autoBilling.saveFailed') + '\n' + (err.message || err));
     }
   };
 
   const handleEdit = (config: AutoBillingConfig) => {
+    console.log('Editing config:', config);
     setEditingConfig(config);
     
     // Restore apartment selections if available
@@ -436,7 +472,7 @@ export default function AutoBilling() {
     
     try {
       await api.deleteAutoBillingConfig(id);
-      loadData();
+      await loadData();
       alert(t('autoBilling.deleteSuccess'));
     } catch (err) {
       alert(t('autoBilling.deleteFailed') + ' ' + err);
@@ -449,7 +485,7 @@ export default function AutoBilling() {
         ...config,
         is_active: !config.is_active
       });
-      loadData();
+      await loadData();
     } catch (err) {
       alert(t('autoBilling.toggleFailed') + ' ' + err);
     }
@@ -578,44 +614,51 @@ export default function AutoBilling() {
           borderRadius: '6px',
           backgroundColor: 'white'
         }}>
-          {buildings.map(building => (
-            <label
-              key={building.id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                padding: '12px 16px',
-                cursor: 'pointer',
-                borderBottom: '1px solid #f0f0f0',
-                transition: 'background-color 0.2s',
-                backgroundColor: building.is_group ? '#f0f9ff' : 'white'
-              }}
-              onMouseOver={(e) => e.currentTarget.style.backgroundColor = building.is_group ? '#e0f2fe' : '#f8f9fa'}
-              onMouseOut={(e) => e.currentTarget.style.backgroundColor = building.is_group ? '#f0f9ff' : 'white'}
-            >
-              <input
-                type="checkbox"
-                checked={formData.building_ids.includes(building.id)}
-                onChange={() => handleBuildingToggle(building.id)}
-                style={{ marginRight: '12px', cursor: 'pointer', width: '18px', height: '18px' }}
-              />
-              <Home size={16} style={{ marginRight: '8px', color: building.is_group ? '#0284c7' : '#667EEA' }} />
-              <span style={{ fontSize: '15px', fontWeight: '500' }}>{building.name}</span>
-              {building.is_group && (
-                <span style={{
-                  marginLeft: '8px',
-                  padding: '2px 8px',
-                  backgroundColor: '#4338ca',
-                  color: 'white',
-                  borderRadius: '4px',
-                  fontSize: '11px',
-                  fontWeight: '600'
-                }}>
-                  vZEV COMPLEX
-                </span>
-              )}
-            </label>
-          ))}
+          {buildings.length === 0 ? (
+            <div style={{ padding: '30px', textAlign: 'center', color: '#6c757d' }}>
+              <Building size={48} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
+              <p>No buildings available</p>
+            </div>
+          ) : (
+            buildings.map(building => (
+              <label
+                key={building.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '12px 16px',
+                  cursor: 'pointer',
+                  borderBottom: '1px solid #f0f0f0',
+                  transition: 'background-color 0.2s',
+                  backgroundColor: building.is_group ? '#f0f9ff' : 'white'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.backgroundColor = building.is_group ? '#e0f2fe' : '#f8f9fa'}
+                onMouseOut={(e) => e.currentTarget.style.backgroundColor = building.is_group ? '#f0f9ff' : 'white'}
+              >
+                <input
+                  type="checkbox"
+                  checked={formData.building_ids.includes(building.id)}
+                  onChange={() => handleBuildingToggle(building.id)}
+                  style={{ marginRight: '12px', cursor: 'pointer', width: '18px', height: '18px' }}
+                />
+                <Home size={16} style={{ marginRight: '8px', color: building.is_group ? '#0284c7' : '#667EEA' }} />
+                <span style={{ fontSize: '15px', fontWeight: '500' }}>{building.name}</span>
+                {building.is_group && (
+                  <span style={{
+                    marginLeft: '8px',
+                    padding: '2px 8px',
+                    backgroundColor: '#4338ca',
+                    color: 'white',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontWeight: '600'
+                  }}>
+                    vZEV COMPLEX
+                  </span>
+                )}
+              </label>
+            ))
+          )}
         </div>
       </div>
 
