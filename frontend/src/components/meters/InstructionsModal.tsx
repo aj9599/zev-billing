@@ -140,6 +140,85 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             {t('meters.instructions.loxoneBenefit2')}<br />
                             {t('meters.instructions.loxoneBenefit3')}
                         </div>
+
+                        {/* Loxone Configuration Modes */}
+                        <h4 style={{
+                            fontSize: '15px',
+                            fontWeight: '600',
+                            marginTop: '16px',
+                            marginBottom: '8px'
+                        }}>
+                            {t('meters.instructions.loxoneModeTitle')}
+                        </h4>
+                        <p style={{ marginBottom: '12px', fontSize: '14px' }}>
+                            {t('meters.instructions.loxoneModeIntro')}
+                        </p>
+
+                        <div style={{
+                            backgroundColor: '#fff',
+                            padding: '12px',
+                            borderRadius: '6px',
+                            marginBottom: '12px',
+                            border: '1px solid #22c55e'
+                        }}>
+                            <strong style={{ color: '#15803d' }}>{t('meters.instructions.loxoneModeMeterBlockTitle')}</strong>
+                            <p style={{ marginTop: '8px', marginBottom: '8px', fontSize: '13px' }}>
+                                {t('meters.instructions.loxoneModeMeterBlockDesc')}
+                            </p>
+                            <ul style={{ marginLeft: '20px', fontSize: '13px' }}>
+                                <li>{t('meters.instructions.loxoneModeMeterBlockPoint1')}</li>
+                                <li>{t('meters.instructions.loxoneModeMeterBlockPoint2')}</li>
+                                <li>{t('meters.instructions.loxoneModeMeterBlockPoint3')}</li>
+                                <li>{t('meters.instructions.loxoneModeMeterBlockPoint4')}</li>
+                            </ul>
+                        </div>
+
+                        <div style={{
+                            backgroundColor: '#fff',
+                            padding: '12px',
+                            borderRadius: '6px',
+                            marginBottom: '12px',
+                            border: '1px solid #3b82f6'
+                        }}>
+                            <strong style={{ color: '#1e40af' }}>{t('meters.instructions.loxoneModeVirtualOutputTitle')}</strong>
+                            <p style={{ marginTop: '8px', marginBottom: '8px', fontSize: '13px' }}>
+                                {t('meters.instructions.loxoneModeVirtualOutputDesc')}
+                            </p>
+                            <ul style={{ marginLeft: '20px', fontSize: '13px' }}>
+                                <li>{t('meters.instructions.loxoneModeVirtualOutputPoint1')}</li>
+                                <li>{t('meters.instructions.loxoneModeVirtualOutputPoint2')}</li>
+                                <li>{t('meters.instructions.loxoneModeVirtualOutputPoint3')}</li>
+                                <li>{t('meters.instructions.loxoneModeVirtualOutputPoint4')}</li>
+                            </ul>
+                        </div>
+
+                        <div style={{
+                            backgroundColor: '#fff',
+                            padding: '12px',
+                            borderRadius: '6px',
+                            marginTop: '10px',
+                            fontFamily: 'monospace',
+                            fontSize: '12px',
+                            border: '1px solid #e5e7eb'
+                        }}>
+                            <strong>{t('meters.instructions.loxoneModeExample')}</strong><br /><br />
+                            <strong style={{ color: '#15803d' }}>Meter Block:</strong><br />
+                            {t('meters.instructions.loxoneModeMeterBlockExample')}<br /><br />
+                            <strong style={{ color: '#1e40af' }}>Virtual Output:</strong><br />
+                            {t('meters.instructions.loxoneModeVirtualOutputExample')}
+                        </div>
+
+                        <div style={{
+                            backgroundColor: '#fef3c7',
+                            padding: '10px',
+                            borderRadius: '6px',
+                            marginTop: '10px',
+                            fontSize: '12px',
+                            color: '#92400e',
+                            border: '1px solid #f59e0b'
+                        }}>
+                            ℹ️ <strong>{t('meters.instructions.loxoneModeNote')}</strong>
+                        </div>
                     </div>
 
                     {/* MQTT Protocol Section */}
@@ -516,7 +595,7 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             {t('meters.instructions.modbusFunction')}: FC03<br />
                             {t('meters.instructions.modbusDataType')}: float32<br />
                             {t('meters.instructions.modbusImportRegister')}: 0<br />
-                            {t('meters.instructions.modbusExportRegister')}: ✓ {t('meters.instructions.modbusEnabled')} → 100<br /><br />
+                            {t('meters.instructions.modbusExportRegister')}: âœ“ {t('meters.instructions.modbusEnabled')} â†’ 100<br /><br />
 
                             <strong>{t('meters.instructions.modbusConfig3Title')}</strong><br />
                             IP: 192.168.1.100:502<br />

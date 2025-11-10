@@ -853,6 +853,38 @@ export const en: Translations = {
   'meters.instructions.troubleshootingModbus3': 'Wrong data type? Try float32 first (most common for energy meters)',
   'meters.instructions.troubleshootingModbus4': 'Connection refused? Switch between FC03 and FC04 function codes',
 
+  // Loxone Configuration Mode
+  'meters.loxoneMode': 'Loxone Configuration Mode',
+  'meters.loxoneModeDescription': 'Choose how your Loxone meter reports energy data',
+  'meters.loxoneModeMeterBlock': 'Meter Block (output1=Mrc, output8=Mrd)',
+  'meters.loxoneModeVirtualOutput': 'Virtual Output (2 separate UUIDs)',
+  'meters.loxoneModeHelp': 'Meter Block: Single UUID, import from output1 (Mrc), export from output8 (Mrd). Virtual Output: Two UUIDs, one for import, one for export',
+  'meters.loxoneMeterUuid': 'Loxone Meter UUID (Import + Export)',
+  'meters.loxoneDeviceUuidImport': 'Loxone Device UUID (Import)',
+  'meters.loxoneDeviceUuidExport': 'Loxone Device UUID (Export)',
+  'meters.loxoneMeterUuidDescription': 'UUID of meter block - import from output1 (Mrc), export from output8 (Mrd)',
+  'meters.loxoneExportUuidDescription': 'UUID of virtual output for export/return energy',
+
+  // Instructions - Loxone Configuration Mode Section
+  'meters.instructions.loxoneModeTitle': 'Loxone Configuration Modes',
+  'meters.instructions.loxoneModeIntro': 'WhatWatt supports two ways to read energy data from Loxone:',
+  'meters.instructions.loxoneModeMeterBlockTitle': '1. Meter Block (Recommended for Grid Connections)',
+  'meters.instructions.loxoneModeMeterBlockDesc': 'Use a single Loxone Meter Block that has both import and export counters:',
+  'meters.instructions.loxoneModeMeterBlockPoint1': 'Single UUID for the meter block',
+  'meters.instructions.loxoneModeMeterBlockPoint2': 'Import energy from output1 (Mrc - Counter Import)',
+  'meters.instructions.loxoneModeMeterBlockPoint3': 'Export energy from output8 (Mrd - Counter Export)',
+  'meters.instructions.loxoneModeMeterBlockPoint4': 'Best for total meters with bidirectional energy flow',
+  'meters.instructions.loxoneModeVirtualOutputTitle': '2. Virtual Output (For Separate Devices)',
+  'meters.instructions.loxoneModeVirtualOutputDesc': 'Use two separate virtual outputs when import and export are on different devices:',
+  'meters.instructions.loxoneModeVirtualOutputPoint1': 'Two separate UUIDs - one for import, one for export',
+  'meters.instructions.loxoneModeVirtualOutputPoint2': 'Each virtual output tracks one energy direction',
+  'meters.instructions.loxoneModeVirtualOutputPoint3': 'Useful when using separate meters for import/export',
+  'meters.instructions.loxoneModeVirtualOutputPoint4': 'More flexible for complex configurations',
+  'meters.instructions.loxoneModeExample': 'Example Configuration:',
+  'meters.instructions.loxoneModeMeterBlockExample': 'Meter Block Mode: UUID 1e475b8d-017e-c7b5-ffff336efb88726d reads output1 for import and output8 for export',
+  'meters.instructions.loxoneModeVirtualOutputExample': 'Virtual Output Mode: UUID 1e475b8d-017e-c7b5-ffff336efb88726d for import, UUID 1fa3ef88-035e-7e1b-ffffed57184a04d2 for export',
+  'meters.instructions.loxoneModeNote': 'Note: Only total meters and solar meters support export tracking. Other meter types only record import energy.',
+
   // ============================================================================
   // CHARGERS
   // ============================================================================
