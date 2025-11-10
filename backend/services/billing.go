@@ -954,6 +954,7 @@ func (bs *BillingService) getMeterReadings(userID int, start, end time.Time) (fl
 }
 
 // ZEV calculation using data at fixed 15-minute intervals
+// FIXED: Now uses ConsumptionExport for solar meters (export energy)
 func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start, end time.Time) (normal, solar, total float64) {
 	log.Printf("    [ZEV] Calculating consumption for user %d in building %d", userID, buildingID)
 	log.Printf("    [ZEV] Period: %s to %s", start.Format("2006-01-02 15:04:05"), end.Format("2006-01-02 15:04:05"))
@@ -964,10 +965,12 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 		UserID         sql.NullInt64
 		ReadingTime    time.Time
 		ConsumptionKWh float64
+		ConsumptionExport float64  // NEW: For solar export energy
 	}
 
+	// FIXED: Now also fetch consumption_export for solar meters
 	rows, err := bs.db.Query(`
-		SELECT m.id, m.meter_type, m.user_id, mr.reading_time, mr.consumption_kwh
+		SELECT m.id, m.meter_type, m.user_id, mr.reading_time, mr.consumption_kwh, mr.consumption_export
 		FROM meter_readings mr
 		JOIN meters m ON mr.meter_id = m.id
 		WHERE m.building_id = ?
@@ -986,7 +989,7 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 	solarReadingsFound := 0
 	for rows.Next() {
 		var r ReadingData
-		if err := rows.Scan(&r.MeterID, &r.MeterType, &r.UserID, &r.ReadingTime, &r.ConsumptionKWh); err != nil {
+		if err := rows.Scan(&r.MeterID, &r.MeterType, &r.UserID, &r.ReadingTime, &r.ConsumptionKWh, &r.ConsumptionExport); err != nil {
 			continue
 		}
 		allReadings = append(allReadings, r)
@@ -1005,7 +1008,7 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 	type IntervalData struct {
 		UserConsumption     float64
 		BuildingConsumption float64
-		SolarProduction     float64
+		SolarProduction     float64  // FIXED: Now uses export energy
 	}
 
 	intervalData := make(map[time.Time]*IntervalData)
@@ -1023,7 +1026,8 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 			}
 			intervalData[roundedTime].BuildingConsumption += reading.ConsumptionKWh
 		} else if reading.MeterType == "solar_meter" {
-			intervalData[roundedTime].SolarProduction += reading.ConsumptionKWh
+			// FIXED: Use ConsumptionExport for solar production (export energy)
+			intervalData[roundedTime].SolarProduction += reading.ConsumptionExport
 		}
 	}
 

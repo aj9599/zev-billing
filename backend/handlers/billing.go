@@ -283,7 +283,7 @@ func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 			log.Printf("WARNING: Failed to update PDF path for invoice %d: %v", invoice.ID, err)
 		} else {
 			successCount++
-			log.Printf("✓ Generated PDF %d/%d: %s", i+1, len(invoices), pdfPath)
+			log.Printf("âœ“ Generated PDF %d/%d: %s", i+1, len(invoices), pdfPath)
 		}
 	}
 
