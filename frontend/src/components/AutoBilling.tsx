@@ -112,8 +112,10 @@ export default function AutoBilling() {
         api.getUsers(undefined, true),
         api.getMeters()
       ]);
+      
+      console.log('Loaded configs from API:', configsData);
       setConfigs(configsData);
-      setBuildings(buildingsData); // Load ALL buildings including complexes
+      setBuildings(buildingsData);
       
       // Filter out administration users - only show regular users
       const regularUsers = usersData.filter(u => u.user_type === 'regular');
@@ -1011,6 +1013,7 @@ export default function AutoBilling() {
         </h4>
         <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '14px', lineHeight: '1.8' }}>
           <li><strong>Name:</strong> {formData.name}</li>
+          <li><strong>Mode:</strong> {isVZEVMode ? 'vZEV (Virtual Allocation)' : 'ZEV (Direct Sharing)'}</li>
           <li><strong>{t('billConfig.step5.buildings')}:</strong> {formData.building_ids.length}</li>
           <li><strong>{t('billConfig.step5.apartments')}:</strong> {selectedApartments.size}</li>
           <li><strong>{t('billConfig.step5.users')}:</strong> {formData.apartments.filter(a => a.user_id).length}</li>
@@ -1232,6 +1235,20 @@ export default function AutoBilling() {
                   <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: '#1f2937' }}>
                     {config.name}
                   </h3>
+                  {config.is_vzev && (
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '2px 8px',
+                      backgroundColor: '#4338ca',
+                      color: 'white',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: '600',
+                      marginBottom: '8px'
+                    }}>
+                      vZEV MODE
+                    </span>
+                  )}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                     <Clock size={16} color="#6b7280" />
                     <span style={{ fontSize: '14px', color: '#6b7280' }}>
