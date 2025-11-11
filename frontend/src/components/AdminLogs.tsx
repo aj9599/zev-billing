@@ -266,9 +266,7 @@ export default function AdminLogs() {
     setFactoryResetting(true);
     try {
       const result = await api.factoryReset();
-      alert(t('logs.factoryResetSuccess', { 
-        backupName: result.backup_name 
-      }));
+      alert(`${t('logs.factoryResetSuccess')} ${result.backup_name}`);
       
       setShowFactoryResetModal(false);
       
@@ -388,7 +386,7 @@ export default function AdminLogs() {
                 marginBottom: '12px',
                 fontWeight: '600'
               }}>
-                ⚠️ {t('logs.factoryResetWarning')}
+                âš ï¸ {t('logs.factoryResetWarning')}
               </p>
               <ul style={{
                 fontSize: '13px',
@@ -416,7 +414,7 @@ export default function AdminLogs() {
                 marginBottom: 0,
                 fontWeight: '500'
               }}>
-                ℹ️ {t('logs.factoryResetInfo')}
+                â„¹ï¸ {t('logs.factoryResetInfo')}
               </p>
             </div>
 
@@ -876,7 +874,7 @@ export default function AdminLogs() {
               }}
               title="Dismiss notification"
             >
-              ×
+              Ã—
             </button>
           )}
           
@@ -1021,7 +1019,7 @@ export default function AdminLogs() {
                   <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>{t('logs.cpuTemperature')}</div>
                 </div>
                 <div style={{ fontSize: '28px', fontWeight: '800', color: getTempColor(systemHealth.temperature) }}>
-                  {systemHealth.temperature.toFixed(1)}°C
+                  {systemHealth.temperature.toFixed(1)}Â°C
                 </div>
                 <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
                   {systemHealth.temperature < 70 ? t('logs.tempNormal') : systemHealth.temperature < 80 ? t('logs.tempWarm') : t('logs.tempHot')}
@@ -1078,7 +1076,7 @@ export default function AdminLogs() {
             onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
               <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>{t('logs.dataCollectorStatus')}</div>
               <div style={{ fontSize: '28px', fontWeight: '800', color: '#10b981', marginBottom: '8px' }}>
-              ● {t('logs.running')}
+              â— {t('logs.running')}
               </div>
               <div style={{ fontSize: '12px', color: '#6b7280' }}>
                 {t('logs.collectionInterval')}
