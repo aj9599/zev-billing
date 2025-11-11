@@ -446,6 +446,16 @@ class ApiClient {
   async applyUpdate(): Promise<{ status: string; message: string }> {
     return this.request('/system/update/apply', { method: 'POST' });
   }
+
+  // NEW: Factory Reset method
+  async factoryReset(): Promise<{ 
+    status: string; 
+    message: string; 
+    backup_name: string; 
+    backup_path: string 
+  }> {
+    return this.request('/system/factory-reset', { method: 'POST' });
+  }
 }
 
 export const api = new ApiClient();

@@ -117,12 +117,15 @@ func main() {
 	api.HandleFunc("/debug/status", debugStatusHandler).Methods("GET")
 	api.HandleFunc("/system/reboot", rebootHandler).Methods("POST")
 
-	// NEW: Backup and Update endpoints
+	// Backup and Update endpoints
 	api.HandleFunc("/system/backup", createBackupHandler(cfg.DatabasePath)).Methods("POST")
 	api.HandleFunc("/system/backup/download", downloadBackupHandler).Methods("GET")
 	api.HandleFunc("/system/backup/restore", restoreBackupHandler(cfg.DatabasePath)).Methods("POST")
 	api.HandleFunc("/system/update/check", checkUpdateHandler).Methods("GET")
 	api.HandleFunc("/system/update/apply", applyUpdateHandler).Methods("POST")
+	
+	// NEW: Factory Reset endpoint
+	api.HandleFunc("/system/factory-reset", factoryResetHandler(cfg.DatabasePath)).Methods("POST")
 
 	// User routes
 	api.HandleFunc("/users", userHandler.List).Methods("GET")
@@ -318,7 +321,7 @@ func rebootHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
-// NEW: Backup handler
+// Backup handler
 func createBackupHandler(dbPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Println("Database backup requested")
@@ -373,7 +376,7 @@ func createBackupHandler(dbPath string) http.HandlerFunc {
 	}
 }
 
-// NEW: Download backup handler
+// Download backup handler
 func downloadBackupHandler(w http.ResponseWriter, r *http.Request) {
 	backupName := r.URL.Query().Get("file")
 	if backupName == "" {
@@ -403,7 +406,7 @@ func downloadBackupHandler(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, backupPath)
 }
 
-// NEW: Restore backup handler
+// Restore backup handler
 func restoreBackupHandler(dbPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Println("Database restore requested")
@@ -487,7 +490,7 @@ func restoreBackupHandler(dbPath string) http.HandlerFunc {
 	}
 }
 
-// NEW: Check for updates handler
+// Check for updates handler
 func checkUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Checking for updates...")
 
@@ -561,7 +564,7 @@ func checkUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// NEW: Apply update handler
+// Apply update handler
 func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Applying system update...")
 
@@ -692,6 +695,88 @@ func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(500 * time.Millisecond)
 		os.Exit(0)
 	}()
+}
+
+// NEW: Factory Reset handler
+func factoryResetHandler(dbPath string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		log.Println("âš ï¸  FACTORY RESET REQUESTED âš ï¸ ")
+
+		// Create a pre-reset backup first
+		backupDir := "./backups"
+		if homeDir, err := os.UserHomeDir(); err == nil {
+			backupDir = filepath.Join(homeDir, "zev-billing-backups")
+		}
+
+		if err := os.MkdirAll(backupDir, 0755); err != nil {
+			log.Printf("Failed to create backup directory: %v", err)
+			http.Error(w, "Failed to create backup directory", http.StatusInternalServerError)
+			return
+		}
+
+		// Create backup before reset
+		timestamp := time.Now().Format("2006-01-02_15-04-05")
+		backupName := fmt.Sprintf("zev-billing-before-factory-reset_%s.db", timestamp)
+		backupPath := filepath.Join(backupDir, backupName)
+
+		if err := copyFile(dbPath, backupPath); err != nil {
+			log.Printf("Failed to create pre-reset backup: %v", err)
+			http.Error(w, "Failed to create pre-reset backup", http.StatusInternalServerError)
+			return
+		}
+
+		log.Printf("âœ… Pre-reset backup created: %s", backupName)
+
+		// Delete the current database
+		if err := os.Remove(dbPath); err != nil {
+			log.Printf("Failed to delete database: %v", err)
+			http.Error(w, "Failed to delete database", http.StatusInternalServerError)
+			return
+		}
+
+		log.Println("âœ… Database deleted")
+
+		// Delete all invoices
+		invoicesDir := "./invoices"
+		if _, err := os.Stat("/home/pi/zev-billing/backend/invoices"); err == nil {
+			invoicesDir = "/home/pi/zev-billing/backend/invoices"
+		}
+
+		if err := os.RemoveAll(invoicesDir); err != nil {
+			log.Printf("Warning: Failed to delete invoices directory: %v", err)
+		} else {
+			log.Println("âœ… Invoices deleted")
+		}
+
+		// Recreate invoices directory
+		os.MkdirAll(invoicesDir, 0755)
+
+		log.Println("âœ… Factory reset completed successfully")
+		log.Println("âš ¡ Service will restart with fresh database...")
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":      "success",
+			"message":     "Factory reset completed. Service restarting with fresh database.",
+			"backup_name": backupName,
+			"backup_path": backupPath,
+		})
+
+		// Restart service to initialize fresh database
+		go func() {
+			if dataCollector != nil {
+				dataCollector.Stop()
+			}
+			
+			time.Sleep(1 * time.Second)
+			cmd := exec.Command("systemctl", "restart", "zev-billing.service")
+			if err := cmd.Run(); err != nil {
+				log.Printf("Failed to restart service: %v", err)
+				// If systemctl fails, just exit - systemd will restart us
+				os.Exit(0)
+			}
+		}()
+	}
 }
 
 // Helper function to copy files

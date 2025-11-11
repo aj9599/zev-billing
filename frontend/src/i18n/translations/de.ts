@@ -1723,6 +1723,22 @@ export const de: Translations = {
   'logs.updatingSystem': 'System wird aktualisiert',
   'logs.updateInProgress': 'Bitte warten Sie, während das System aktualisiert wird. Dies dauert ungefähr 40 Sekunden.',
   'logs.doNotCloseWindow': 'Bitte schliessen Sie dieses Fenster nicht oder navigieren Sie nicht weg.',
+  
+  // NEW: Factory Reset translations
+  'logs.factoryReset': 'Factory Reset',
+  'logs.factoryResetTitle': 'Factory Reset',
+  'logs.factoryResetting': 'Resetting...',
+  'logs.factoryResetConfirm': 'Confirm Reset',
+  'logs.factoryResetWarning': 'WARNING: This action cannot be undone!',
+  'logs.factoryResetWarning1': 'All users, buildings, meters, and chargers will be deleted',
+  'logs.factoryResetWarning2': 'All billing settings and invoices will be removed',
+  'logs.factoryResetWarning3': 'All historical consumption data will be deleted',
+  'logs.factoryResetWarning4': 'System will restart with default settings and admin account',
+  'logs.factoryResetInfo': 'A complete backup will be automatically created before resetting the system.',
+  'logs.factoryResetSuccess': 'Factory reset completed successfully! Backup saved as: {backupName}. System restarting...',
+  'logs.factoryResetFailed': 'Factory reset failed',
+  'logs.factoryResetCaptchaRequired': 'Please solve the math problem to continue',
+  'logs.cancel': 'Cancel',
 
   // ============================================================================
   // SETTINGS (User Account Settings)

@@ -1723,6 +1723,22 @@ export const en: Translations = {
   'logs.updatingSystem': 'Updating System',
   'logs.updateInProgress': 'Please wait while the system is being updated. This will take approximately 40 seconds.',
   'logs.doNotCloseWindow': 'Please do not close this window or navigate away.',
+  
+  // NEW: Factory Reset translations
+  'logs.factoryReset': 'Werkseinstellungen',
+  'logs.factoryResetTitle': 'Werkseinstellungen wiederherstellen',
+  'logs.factoryResetting': 'Zurücksetzen...',
+  'logs.factoryResetConfirm': 'Zurücksetzen bestätigen',
+  'logs.factoryResetWarning': 'ACHTUNG: Diese Aktion kann nicht rückgängig gemacht werden!',
+  'logs.factoryResetWarning1': 'Alle Benutzer, Gebäude, Zähler und Ladestationen werden gelöscht',
+  'logs.factoryResetWarning2': 'Alle Abrechnungseinstellungen und Rechnungen werden entfernt',
+  'logs.factoryResetWarning3': 'Alle historischen Verbrauchsdaten werden gelöscht',
+  'logs.factoryResetWarning4': 'Das System wird mit Standardeinstellungen und Admin-Konto neu gestartet',
+  'logs.factoryResetInfo': 'Ein vollständiges Backup wird automatisch erstellt, bevor das System zurückgesetzt wird.',
+  'logs.factoryResetSuccess': 'Werkseinstellungen erfolgreich wiederhergestellt! Backup gespeichert als: {backupName}. System wird neu gestartet...',
+  'logs.factoryResetFailed': 'Zurücksetzen auf Werkseinstellungen fehlgeschlagen',
+  'logs.factoryResetCaptchaRequired': 'Bitte lösen Sie das Rechenrätsel, um fortzufahren',
+  'logs.cancel': 'Abbrechen',
 
   // ============================================================================
   // SETTINGS (User Account Settings)

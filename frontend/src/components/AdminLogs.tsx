@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Activity, AlertCircle, CheckCircle, Info, Power, Cpu, HardDrive, Thermometer, Clock, Database, Upload, RotateCcw, RefreshCw } from 'lucide-react';
+import { Activity, AlertCircle, CheckCircle, Info, Power, Cpu, HardDrive, Thermometer, Clock, Database, Upload, RotateCcw, RefreshCw, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
 import type { AdminLog } from '../types';
 import { useTranslation } from '../i18n';
+import DeleteCaptcha from '../components/DeleteCaptcha';
 
 interface SystemHealth {
   cpu_usage: number;
@@ -35,10 +36,13 @@ export default function AdminLogs() {
   const [restoring, setRestoring] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [factoryResetting, setFactoryResetting] = useState(false);
   const [showUpdateOverlay, setShowUpdateOverlay] = useState(false);
   const [updateProgress, setUpdateProgress] = useState(0);
   const [isLive, setIsLive] = useState(true);
   const [showUpdateCard, setShowUpdateCard] = useState(true);
+  const [showFactoryResetModal, setShowFactoryResetModal] = useState(false);
+  const [factoryCaptchaValid, setFactoryCaptchaValid] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Initial load
@@ -248,6 +252,37 @@ export default function AdminLogs() {
     }
   };
 
+  const handleFactoryResetClick = () => {
+    setShowFactoryResetModal(true);
+    setFactoryCaptchaValid(false);
+  };
+
+  const handleFactoryResetConfirm = async () => {
+    if (!factoryCaptchaValid) {
+      alert(t('logs.factoryResetCaptchaRequired'));
+      return;
+    }
+
+    setFactoryResetting(true);
+    try {
+      const result = await api.factoryReset();
+      alert(t('logs.factoryResetSuccess', { 
+        backupName: result.backup_name 
+      }));
+      
+      setShowFactoryResetModal(false);
+      
+      // Wait for service restart
+      setTimeout(() => {
+        window.location.reload();
+      }, 3000);
+    } catch (err) {
+      alert(t('logs.factoryResetFailed'));
+      console.error('Factory reset failed:', err);
+      setFactoryResetting(false);
+    }
+  };
+
   const formatBytes = (bytes: number): string => {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -288,6 +323,160 @@ export default function AdminLogs() {
 
   return (
     <div className="admin-logs-container" style={{ width: '100%', maxWidth: '100%' }}>
+      {/* Factory Reset Modal */}
+      {showFactoryResetModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.75)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backdropFilter: 'blur(4px)',
+          padding: '20px'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '20px',
+            padding: '32px',
+            maxWidth: '600px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4)'
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              marginBottom: '24px'
+            }}>
+              <div style={{
+                padding: '12px',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Trash2 size={28} color="white" />
+              </div>
+              <h2 style={{
+                fontSize: '24px',
+                fontWeight: '700',
+                margin: 0,
+                color: '#1f2937'
+              }}>
+                {t('logs.factoryResetTitle')}
+              </h2>
+            </div>
+
+            <div style={{
+              padding: '16px',
+              backgroundColor: '#fee2e2',
+              border: '2px solid #dc2626',
+              borderRadius: '12px',
+              marginBottom: '24px'
+            }}>
+              <p style={{
+                fontSize: '14px',
+                color: '#991b1b',
+                marginBottom: '12px',
+                fontWeight: '600'
+              }}>
+                ⚠️ {t('logs.factoryResetWarning')}
+              </p>
+              <ul style={{
+                fontSize: '13px',
+                color: '#7f1d1d',
+                marginLeft: '20px',
+                marginBottom: 0
+              }}>
+                <li>{t('logs.factoryResetWarning1')}</li>
+                <li>{t('logs.factoryResetWarning2')}</li>
+                <li>{t('logs.factoryResetWarning3')}</li>
+                <li>{t('logs.factoryResetWarning4')}</li>
+              </ul>
+            </div>
+
+            <div style={{
+              padding: '16px',
+              backgroundColor: '#dbeafe',
+              border: '2px solid #3b82f6',
+              borderRadius: '12px',
+              marginBottom: '24px'
+            }}>
+              <p style={{
+                fontSize: '13px',
+                color: '#1e40af',
+                marginBottom: 0,
+                fontWeight: '500'
+              }}>
+                ℹ️ {t('logs.factoryResetInfo')}
+              </p>
+            </div>
+
+            <DeleteCaptcha onValidationChange={setFactoryCaptchaValid} />
+
+            <div style={{
+              display: 'flex',
+              gap: '12px',
+              justifyContent: 'flex-end',
+              marginTop: '24px'
+            }}>
+              <button
+                onClick={() => {
+                  setShowFactoryResetModal(false);
+                  setFactoryCaptchaValid(false);
+                }}
+                disabled={factoryResetting}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#f3f4f6',
+                  color: '#4b5563',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: factoryResetting ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {t('logs.cancel')}
+              </button>
+              <button
+                onClick={handleFactoryResetConfirm}
+                disabled={factoryResetting || !factoryCaptchaValid}
+                style={{
+                  padding: '12px 24px',
+                  background: (factoryResetting || !factoryCaptchaValid) 
+                    ? '#9ca3af' 
+                    : 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: (factoryResetting || !factoryCaptchaValid) ? 'not-allowed' : 'pointer',
+                  boxShadow: (factoryResetting || !factoryCaptchaValid) ? 'none' : '0 4px 12px rgba(220, 38, 38, 0.3)',
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <Trash2 size={16} />
+                {factoryResetting ? t('logs.factoryResetting') : t('logs.factoryResetConfirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Update Overlay */}
       {showUpdateOverlay && (
         <div style={{
@@ -574,6 +763,41 @@ export default function AdminLogs() {
               </span>
             </button>
           )}
+
+          <button
+            onClick={handleFactoryResetClick}
+            disabled={factoryResetting}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 20px',
+              background: factoryResetting ? '#9ca3af' : 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '10px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: factoryResetting ? 'not-allowed' : 'pointer',
+              boxShadow: factoryResetting ? 'none' : '0 4px 12px rgba(220, 38, 38, 0.3)',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseEnter={(e) => {
+              if (!factoryResetting) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 6px 16px rgba(220, 38, 38, 0.4)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!factoryResetting) {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.3)';
+              }
+            }}
+          >
+            <Trash2 size={18} />
+            <span className="button-text">{t('logs.factoryReset')}</span>
+          </button>
 
           <button
             onClick={handleReboot}
