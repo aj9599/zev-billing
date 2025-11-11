@@ -450,7 +450,7 @@ export default function Buildings() {
                   height: isMobile ? '80px' : '100px',
                   borderRadius: '50%',
                   backgroundColor: isSolarProducing ? '#fef3c7' : '#fee2e2',
-                  border: `4px solid ${isSolarProducing ? '#f59e0b' : '#f59e0b'}`,
+                  border: `4px solid ${isSolarProducing ? '#f59e0b' : '#fee2e2'}`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
