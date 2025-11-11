@@ -107,12 +107,17 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 
 		u.IsActive = isActive.Valid && isActive.Int64 == 1
 
-		if rentStartDate.Valid {
+		// FIXED: Only set rent dates if they contain actual values, not empty strings
+		if rentStartDate.Valid && rentStartDate.String != "" {
 			u.RentStartDate = &rentStartDate.String
+		} else {
+			u.RentStartDate = nil
 		}
 
-		if rentEndDate.Valid {
+		if rentEndDate.Valid && rentEndDate.String != "" {
 			u.RentEndDate = &rentEndDate.String
+		} else {
+			u.RentEndDate = nil
 		}
 
 		users = append(users, u)
@@ -187,12 +192,21 @@ func (h *UserHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	u.IsActive = isActive.Valid && isActive.Int64 == 1
 
-	if rentStartDate.Valid {
+	// FIXED: Only set rent dates if they contain actual values, not empty strings
+	if rentStartDate.Valid && rentStartDate.String != "" {
 		u.RentStartDate = &rentStartDate.String
+		log.Printf("Get user %d: rent_start_date = %s", id, rentStartDate.String)
+	} else {
+		u.RentStartDate = nil
+		log.Printf("Get user %d: rent_start_date is empty or NULL", id)
 	}
 
-	if rentEndDate.Valid {
+	if rentEndDate.Valid && rentEndDate.String != "" {
 		u.RentEndDate = &rentEndDate.String
+		log.Printf("Get user %d: rent_end_date = %s", id, rentEndDate.String)
+	} else {
+		u.RentEndDate = nil
+		log.Printf("Get user %d: rent_end_date is empty or NULL", id)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
