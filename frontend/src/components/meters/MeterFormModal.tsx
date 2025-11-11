@@ -378,7 +378,7 @@ export default function MeterFormModal({
                                                         color: '#92400e',
                                                         fontSize: '13px'
                                                     }}>
-                                                        âš ï¸ {t('meters.noUserLinked')}
+                                                        ⚠️ {t('meters.noUserLinked')}
                                                     </div>
                                                 )}
                                                 <p style={{ fontSize: '11px', color: '#666', marginTop: '6px' }}>
@@ -396,7 +396,7 @@ export default function MeterFormModal({
                                                 color: '#6b7280',
                                                 fontSize: '13px'
                                             }}>
-                                                â„¹ï¸ {t('meters.apartmentNotSelected')}
+                                                ℹ️ {t('meters.apartmentNotSelected')}
                                             </div>
                                         )}
                                     </>
@@ -645,7 +645,7 @@ export default function MeterFormModal({
                                                 ...connectionConfig,
                                                 loxone_password: e.target.value
                                             })}
-                                            placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                                            placeholder="••••••••"
                                             style={{
                                                 width: '100%',
                                                 padding: '10px',
@@ -899,7 +899,7 @@ export default function MeterFormModal({
                                     color: '#0c4a6e',
                                     border: '1px solid #7dd3fc'
                                 }}>
-                                    â„¹ï¸ <strong>{t('meters.mqttAuthInfo')}</strong> {t('meters.mqttAuthDescription')}
+                                    ℹ️ <strong>{t('meters.mqttAuthInfo')}</strong> {t('meters.mqttAuthDescription')}
                                 </div>
 
                                 <div style={{ marginBottom: '12px' }}>

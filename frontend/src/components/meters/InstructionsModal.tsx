@@ -595,7 +595,7 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             {t('meters.instructions.modbusFunction')}: FC03<br />
                             {t('meters.instructions.modbusDataType')}: float32<br />
                             {t('meters.instructions.modbusImportRegister')}: 0<br />
-                            {t('meters.instructions.modbusExportRegister')}: âœ“ {t('meters.instructions.modbusEnabled')} â†’ 100<br /><br />
+                            {t('meters.instructions.modbusExportRegister')}: ✓ {t('meters.instructions.modbusEnabled')} â†’ 100<br /><br />
 
                             <strong>{t('meters.instructions.modbusConfig3Title')}</strong><br />
                             IP: 192.168.1.100:502<br />

@@ -154,7 +154,7 @@ const DeleteConfirmationModal = memo(({
               borderRadius: '12px', padding: '16px', marginBottom: '16px'
             }}>
               <p style={{ fontSize: '13px', fontWeight: '600', color: '#991b1b', margin: 0 }}>
-                âš ï¸ {t('chargers.dataLossWarning') || 'Warning: All historical data for this charger will be permanently lost. This cannot be recovered.'}
+                ⚠️ {t('chargers.dataLossWarning') || 'Warning: All historical data for this charger will be permanently lost. This cannot be recovered.'}
               </p>
             </div>
 
@@ -1277,7 +1277,7 @@ export default function Chargers() {
                             fontWeight: '600',
                             color: '#22c55e'
                           }}>
-                            âœ“ {t('chargers.supported')}
+                            ✓ {t('chargers.supported')}
                           </span>
                         </div>
                       )}
@@ -1501,7 +1501,7 @@ export default function Chargers() {
                         </label>
                         <input type="password" required value={connectionConfig.loxone_password || ''}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_password: e.target.value })}
-                          placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                          placeholder="••••••••"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
                     </div>
