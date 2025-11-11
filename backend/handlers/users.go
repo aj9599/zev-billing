@@ -311,6 +311,35 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Handle rent dates properly - ensure empty strings don't get saved
+	var rentStartToSave interface{}
+	var rentEndToSave interface{}
+	
+	if u.UserType == "regular" {
+		// For regular users, rent dates should be set
+		if u.RentStartDate != nil && *u.RentStartDate != "" {
+			rentStartToSave = *u.RentStartDate
+			log.Printf("Creating user with rent_start_date: %s", *u.RentStartDate)
+		} else {
+			rentStartToSave = nil
+			log.Printf("WARNING: Creating regular user with empty/nil rent_start_date")
+		}
+		
+		if u.RentEndDate != nil && *u.RentEndDate != "" {
+			rentEndToSave = *u.RentEndDate
+			log.Printf("Creating user with rent_end_date: %s", *u.RentEndDate)
+		} else {
+			// Default end date if not provided
+			defaultEnd := "2099-01-01"
+			rentEndToSave = defaultEnd
+			log.Printf("Using default rent_end_date: %s", defaultEnd)
+		}
+	} else {
+		// Administration users don't need rent dates
+		rentStartToSave = nil
+		rentEndToSave = nil
+	}
+
 	result, err := h.db.Exec(`
 		INSERT INTO users (
 			first_name, last_name, email, phone,
@@ -323,7 +352,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		u.AddressStreet, u.AddressCity, u.AddressZip, u.AddressCountry,
 		u.BankName, u.BankIBAN, u.BankAccountHolder, u.ChargerIDs,
 		u.Notes, u.BuildingID, u.ApartmentUnit, u.UserType, u.ManagedBuildings, 
-		u.Language, isActiveVal, u.RentStartDate, u.RentEndDate)
+		u.Language, isActiveVal, rentStartToSave, rentEndToSave)
 
 	if err != nil {
 		log.Printf("Error creating user: %v", err)
@@ -459,6 +488,35 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Handle rent dates properly - ensure empty strings don't get saved
+	var rentStartToSave interface{}
+	var rentEndToSave interface{}
+	
+	if u.UserType == "regular" {
+		// For regular users, rent dates should be set
+		if u.RentStartDate != nil && *u.RentStartDate != "" {
+			rentStartToSave = *u.RentStartDate
+			log.Printf("Saving rent_start_date for user %d: %s", id, *u.RentStartDate)
+		} else {
+			rentStartToSave = nil
+			log.Printf("WARNING: Regular user %d has empty/nil rent_start_date", id)
+		}
+		
+		if u.RentEndDate != nil && *u.RentEndDate != "" {
+			rentEndToSave = *u.RentEndDate
+			log.Printf("Saving rent_end_date for user %d: %s", id, *u.RentEndDate)
+		} else {
+			// Default end date if not provided
+			defaultEnd := "2099-01-01"
+			rentEndToSave = defaultEnd
+			log.Printf("Using default rent_end_date for user %d: %s", id, defaultEnd)
+		}
+	} else {
+		// Administration users don't need rent dates
+		rentStartToSave = nil
+		rentEndToSave = nil
+	}
+
 	_, err = h.db.Exec(`
 		UPDATE users SET
 			first_name = ?, last_name = ?, email = ?, phone = ?,
@@ -472,7 +530,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 		u.AddressStreet, u.AddressCity, u.AddressZip, u.AddressCountry,
 		u.BankName, u.BankIBAN, u.BankAccountHolder, u.ChargerIDs,
 		u.Notes, u.BuildingID, u.ApartmentUnit, u.UserType, 
-		u.ManagedBuildings, u.Language, isActiveVal, u.RentStartDate, u.RentEndDate, id)
+		u.ManagedBuildings, u.Language, isActiveVal, rentStartToSave, rentEndToSave, id)
 
 	if err != nil {
 		log.Printf("Error updating user ID %d: %v", id, err)
