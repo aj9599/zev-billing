@@ -463,7 +463,7 @@ export default function PricingSettings() {
                 </p>
               </div>
               <span style={{ fontSize: '24px', color: '#666' }}>
-                {expandedBuildings.has(building.id) ? 'â–¼' : 'â–¶'}
+                {expandedBuildings.has(building.id) ? '▼' : '►'}
               </span>
             </div>
 

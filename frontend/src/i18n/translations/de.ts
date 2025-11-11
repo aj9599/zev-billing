@@ -887,6 +887,7 @@ export const de: Translations = {
   'meters.instructions.loxoneModeMeterBlockExample': 'Meter Block Modus: UUID 1e475b8d-017e-c7b5-ffff336efb88726d liest output1 für Import und output8 für Export',
   'meters.instructions.loxoneModeVirtualOutputExample': 'Virtueller Ausgang Modus: UUID 1e475b8d-017e-c7b5-ffff336efb88726d für Import, UUID 1fa3ef88-035e-7e1b-ffffed57184a04d2 für Export',
   'meters.instructions.loxoneModeNote': 'Hinweis: Nur Gesamtzähler und Solarzähler unterstützen Export-Tracking. Andere Zählertypen erfassen nur Import-Energie.',
+  'meters.showArchived': 'Archivierte anzeigen',
 
   // ============================================================================
   // CHARGERS
@@ -1634,6 +1635,7 @@ export const de: Translations = {
   'pricing.instructions.vzevWork': 'vZEV: Virtuelle PV-Exportpreise für überschüssige Energiezuteilung',
   'pricing.instructions.vzevStep': 'Für vZEV: Wählen Sie einen Komplex aus und legen Sie den vZEV-Exportpreis fest',
   'pricing.instructions.vzevImportant': 'vZEV: Kann nur Komplexe abrechnen, nicht einzelne Gebäude innerhalb des Komplexes',
+  'pricing.form.type': 'Typ',
 
   // ============================================================================
   // LOGS (System Logs & Monitoring)

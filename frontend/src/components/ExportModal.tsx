@@ -52,11 +52,11 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
 
   const getSelectedItemDisplay = () => {
     if (!selectedItemId) {
-      const buildingName = selectedBuildingId 
-        ? buildings.find(b => b.id === selectedBuildingId)?.name 
+      const buildingName = selectedBuildingId
+        ? buildings.find(b => b.id === selectedBuildingId)?.name
         : t('dashboard.allBuildings').toLowerCase();
       const typeLabel = type === 'meters' ? t('meters.title') : t('chargers.title');
-      return `${t('export.exportingAll')} ${typeLabel} ${t('common.from')} ${buildingName}`;
+      return `${t('export.exportingAll', { type: typeLabel })} ${t('common.from')} ${buildingName}`;
     }
     const item = items.find(i => i.id === selectedItemId);
     return item ? `${item.building_name} - ${item.name}` : '';
@@ -67,29 +67,29 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', 
+      backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center',
       justifyContent: 'center', zIndex: 2000, padding: '20px'
     }}>
       <div className="modal-content" style={{
-        backgroundColor: 'white', 
-        borderRadius: '16px', 
+        backgroundColor: 'white',
+        borderRadius: '16px',
         padding: '32px',
-        maxWidth: '600px', 
+        maxWidth: '600px',
         width: '100%',
         boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
       }}>
         {/* Header */}
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'flex-start', 
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
           marginBottom: '28px',
           paddingBottom: '20px',
           borderBottom: '2px solid #f3f4f6'
         }}>
           <div>
-            <h2 style={{ 
-              fontSize: '28px', 
+            <h2 style={{
+              fontSize: '28px',
               fontWeight: '700',
               color: '#1f2937',
               marginBottom: '6px',
@@ -101,14 +101,14 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
               {t('export.title')}
             </h2>
             <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
-              {t('export.subtitle')} {typeLabel}
+              {t('export.subtitle', { type: typeLabel })}
             </p>
           </div>
-          <button 
-            onClick={onClose} 
-            style={{ 
-              border: 'none', 
-              background: 'none', 
+          <button
+            onClick={onClose}
+            style={{
+              border: 'none',
+              background: 'none',
               cursor: 'pointer',
               padding: '8px',
               borderRadius: '8px',
@@ -126,12 +126,12 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
 
         {/* Building Filter */}
         <div style={{ marginBottom: '24px' }}>
-          <label style={{ 
+          <label style={{
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            marginBottom: '10px', 
-            fontWeight: '600', 
+            marginBottom: '10px',
+            fontWeight: '600',
             fontSize: '14px',
             color: '#374151'
           }}>
@@ -145,10 +145,10 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
               setSelectedBuildingId(buildingId);
               setSelectedItemId(undefined); // Reset item selection when building changes
             }}
-            style={{ 
-              width: '100%', 
-              padding: '12px 14px', 
-              border: '2px solid #e5e7eb', 
+            style={{
+              width: '100%',
+              padding: '12px 14px',
+              border: '2px solid #e5e7eb',
               borderRadius: '10px',
               fontSize: '14px',
               backgroundColor: '#f9fafb',
@@ -173,16 +173,16 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
             ))}
           </select>
           <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px', marginLeft: '2px' }}>
-            {t('export.filterByBuilding')} {typeLabel}
+            {t('export.filterByBuilding', { type: typeLabel })}
           </p>
         </div>
 
         {/* Item Selection */}
         <div style={{ marginBottom: '24px' }}>
-          <label style={{ 
-            display: 'block', 
-            marginBottom: '10px', 
-            fontWeight: '600', 
+          <label style={{
+            display: 'block',
+            marginBottom: '10px',
+            fontWeight: '600',
             fontSize: '14px',
             color: '#374151'
           }}>
@@ -191,10 +191,10 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
           <select
             value={selectedItemId || ''}
             onChange={(e) => setSelectedItemId(e.target.value ? parseInt(e.target.value) : undefined)}
-            style={{ 
-              width: '100%', 
-              padding: '12px 14px', 
-              border: '2px solid #e5e7eb', 
+            style={{
+              width: '100%',
+              padding: '12px 14px',
+              border: '2px solid #e5e7eb',
               borderRadius: '10px',
               fontSize: '14px',
               backgroundColor: '#f9fafb',
@@ -215,7 +215,7 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
               {t('common.all')} {type === 'meters' ? t('meters.metersCount') : t('chargers.chargersCount')}
               {selectedBuildingId && ` in ${buildings.find(b => b.id === selectedBuildingId)?.name}`}
             </option>
-            
+
             {/* If no building filter, group by building */}
             {!selectedBuildingId ? (
               Object.entries(itemsByBuilding).map(([buildingId, buildingItems]) => {
@@ -239,9 +239,9 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
               ))
             )}
           </select>
-          <div style={{ 
-            fontSize: '12px', 
-            color: '#28a745', 
+          <div style={{
+            fontSize: '12px',
+            color: '#28a745',
             marginTop: '8px',
             padding: '8px 12px',
             backgroundColor: '#f0fdf4',
@@ -253,34 +253,34 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
         </div>
 
         {/* Date Range */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: '1fr 1fr', 
-          gap: '16px', 
-          marginBottom: '28px' 
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '16px',
+          marginBottom: '28px'
         }}>
           <div>
-            <label style={{ 
+            <label style={{
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              marginBottom: '10px', 
-              fontWeight: '600', 
+              marginBottom: '10px',
+              fontWeight: '600',
               fontSize: '14px',
               color: '#374151'
             }}>
               <Calendar size={16} />
               {t('export.startDate')} *
             </label>
-            <input 
-              type="date" 
-              required 
+            <input
+              type="date"
+              required
               value={dateRange.start_date}
               onChange={(e) => setDateRange({ ...dateRange, start_date: e.target.value })}
-              style={{ 
-                width: '100%', 
-                padding: '12px 14px', 
-                border: '2px solid #e5e7eb', 
+              style={{
+                width: '100%',
+                padding: '12px 14px',
+                border: '2px solid #e5e7eb',
                 borderRadius: '10px',
                 fontSize: '14px',
                 backgroundColor: '#f9fafb',
@@ -300,27 +300,27 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
           </div>
 
           <div>
-            <label style={{ 
+            <label style={{
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              marginBottom: '10px', 
-              fontWeight: '600', 
+              marginBottom: '10px',
+              fontWeight: '600',
               fontSize: '14px',
               color: '#374151'
             }}>
               <Calendar size={16} />
               {t('export.endDate')} *
             </label>
-            <input 
-              type="date" 
-              required 
+            <input
+              type="date"
+              required
               value={dateRange.end_date}
               onChange={(e) => setDateRange({ ...dateRange, end_date: e.target.value })}
-              style={{ 
-                width: '100%', 
-                padding: '12px 14px', 
-                border: '2px solid #e5e7eb', 
+              style={{
+                width: '100%',
+                padding: '12px 14px',
+                border: '2px solid #e5e7eb',
                 borderRadius: '10px',
                 fontSize: '14px',
                 backgroundColor: '#f9fafb',
@@ -342,18 +342,18 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: '12px' }}>
-          <button 
-            onClick={handleExport} 
+          <button
+            onClick={handleExport}
             disabled={isExporting}
             style={{
-              flex: 1, 
-              padding: '14px 20px', 
-              backgroundColor: isExporting ? '#9ca3af' : '#28a745', 
+              flex: 1,
+              padding: '14px 20px',
+              backgroundColor: isExporting ? '#9ca3af' : '#28a745',
               color: 'white',
-              border: 'none', 
-              borderRadius: '10px', 
-              fontSize: '15px', 
-              fontWeight: '600', 
+              border: 'none',
+              borderRadius: '10px',
+              fontSize: '15px',
+              fontWeight: '600',
               cursor: isExporting ? 'not-allowed' : 'pointer',
               opacity: isExporting ? 0.7 : 1,
               transition: 'all 0.2s',
@@ -381,17 +381,17 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
             <Download size={18} />
             {isExporting ? t('export.exporting') : t('export.exportData')}
           </button>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             style={{
-              flex: 1, 
-              padding: '14px 20px', 
-              backgroundColor: '#f3f4f6', 
+              flex: 1,
+              padding: '14px 20px',
+              backgroundColor: '#f3f4f6',
               color: '#374151',
-              border: '2px solid #e5e7eb', 
-              borderRadius: '10px', 
-              fontSize: '15px', 
-              fontWeight: '600', 
+              border: '2px solid #e5e7eb',
+              borderRadius: '10px',
+              fontSize: '15px',
+              fontWeight: '600',
               cursor: 'pointer',
               transition: 'all 0.2s'
             }}
