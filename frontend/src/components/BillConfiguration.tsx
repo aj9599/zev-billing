@@ -253,7 +253,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
   };
 
   const handleApartmentToggle = (buildingId: number, apartmentUnit: string) => {
-    const key = `${buildingId}|||${apartmentUnit}`; // Use ||| as separator since apartment names can contain dashes
+    const key = `${buildingId}|||${apartmentUnit}`;
     const newSelected = new Set(selectedApartments);
 
     if (newSelected.has(key)) {
@@ -270,9 +270,17 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     const userIds: number[] = [];
     const apartmentSelections: { building_id: number; apartment_unit: string; user_id?: number }[] = [];
 
+    // Process each selected apartment key
     newSelected.forEach(selectedKey => {
-      const [bId, aptUnit] = selectedKey.split('|||'); // Split by ||| separator
-      const parsedBuildingId = parseInt(bId);
+      const parts = selectedKey.split('|||');
+      if (parts.length < 2) {
+        console.log(`  ⚠️  Invalid key format: ${selectedKey}`);
+        return;
+      }
+
+      const parsedBuildingId = parseInt(parts[0]);
+      const aptUnit = parts.slice(1).join('|||'); // Rejoin in case apartment name contains |||
+      
       const apartments = apartmentsWithUsers.get(parsedBuildingId);
 
       console.log(`Processing key: ${selectedKey}`);
@@ -280,14 +288,22 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       console.log(`  Apartment unit: "${aptUnit}"`);
       console.log(`  Apartments for this building:`, apartments);
 
-      const apartment = apartments?.find(a => a.apartment_unit === aptUnit);
+      // Find the apartment by matching BOTH building_id AND apartment_unit
+      const apartment = apartments?.find(a => 
+        a.building_id === parsedBuildingId && 
+        a.apartment_unit === aptUnit
+      );
 
       console.log(`  Found apartment:`, apartment);
 
-      // Add user if exists and is active (already filtered for regular users in loadData)
+      // Add user if exists and is active
       if (apartment?.user?.is_active) {
-        console.log(`  âœ“ Adding user ${apartment.user.id}: ${apartment.user.first_name} ${apartment.user.last_name}`);
-        userIds.push(apartment.user.id);
+        console.log(`  ✓ Adding user ${apartment.user.id}: ${apartment.user.first_name} ${apartment.user.last_name} from building ${parsedBuildingId}`);
+        
+        // Only add if not already in list (prevent duplicates)
+        if (!userIds.includes(apartment.user.id)) {
+          userIds.push(apartment.user.id);
+        }
 
         apartmentSelections.push({
           building_id: parsedBuildingId,
@@ -295,18 +311,19 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           user_id: apartment.user.id
         });
       } else if (apartment) {
-        console.log(`  âœ— Apartment found but no active user`);
+        console.log(`  ✗ Apartment found but no active user`);
         apartmentSelections.push({
           building_id: parsedBuildingId,
           apartment_unit: aptUnit,
           user_id: undefined
         });
       } else {
-        console.log(`  âœ— Apartment not found in map!`);
+        console.log(`  ✗ Apartment not found in map!`);
       }
     });
 
     console.log('Final user IDs:', userIds);
+    console.log('Final apartment selections:', apartmentSelections);
 
     setConfig(prev => ({
       ...prev,
@@ -346,19 +363,29 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
 
     setSelectedApartments(newSelected);
 
-    // Update config with only active users
+    // Update config with only active users (prevent duplicates)
     const userIds: number[] = [];
     const apartmentSelections: { building_id: number; apartment_unit: string; user_id?: number }[] = [];
 
     newSelected.forEach(key => {
-      const [bId, aptUnit] = key.split('|||');
-      const parsedBuildingId = parseInt(bId);
+      const parts = key.split('|||');
+      if (parts.length < 2) return;
+
+      const parsedBuildingId = parseInt(parts[0]);
+      const aptUnit = parts.slice(1).join('|||');
+      
       const apartments = apartmentsWithUsers.get(parsedBuildingId);
-      const apartment = apartments?.find(a => a.apartment_unit === aptUnit);
+      const apartment = apartments?.find(a => 
+        a.building_id === parsedBuildingId && 
+        a.apartment_unit === aptUnit
+      );
 
       // Only add apartments with active users
       if (apartment?.user?.is_active) {
-        userIds.push(apartment.user.id);
+        // Prevent duplicate user IDs
+        if (!userIds.includes(apartment.user.id)) {
+          userIds.push(apartment.user.id);
+        }
 
         apartmentSelections.push({
           building_id: parsedBuildingId,

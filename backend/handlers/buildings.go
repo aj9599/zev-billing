@@ -24,6 +24,7 @@ func (h *BuildingHandler) List(w http.ResponseWriter, r *http.Request) {
 		SELECT id, name, address_street, address_city, address_zip, 
 		       address_country, notes, COALESCE(is_group, 0), 
 		       COALESCE(has_apartments, 0), COALESCE(floors_config, ''), 
+		       COALESCE(group_buildings, ''), 
 		       created_at, updated_at
 		FROM buildings
 		ORDER BY name
@@ -40,15 +41,35 @@ func (h *BuildingHandler) List(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var b models.Building
 		var floorsConfigStr string
+		var groupBuildingsStr string
 
 		err := rows.Scan(
 			&b.ID, &b.Name, &b.AddressStreet, &b.AddressCity, &b.AddressZip,
 			&b.AddressCountry, &b.Notes, &b.IsGroup, &b.HasApartments, 
-			&floorsConfigStr, &b.CreatedAt, &b.UpdatedAt,
+			&floorsConfigStr, &groupBuildingsStr, &b.CreatedAt, &b.UpdatedAt,
 		)
 		if err != nil {
 			log.Printf("Error scanning building: %v", err)
 			continue
+		}
+
+		// Parse group_buildings from JSON column first (faster)
+		b.GroupBuildings = []int{}
+		if b.IsGroup && groupBuildingsStr != "" {
+			if err := json.Unmarshal([]byte(groupBuildingsStr), &b.GroupBuildings); err != nil {
+				log.Printf("Error parsing group_buildings JSON for building %d: %v", b.ID, err)
+				// Fall back to building_groups table if JSON parse fails
+				groupRows, err := h.db.Query("SELECT building_id FROM building_groups WHERE group_id = ?", b.ID)
+				if err == nil {
+					for groupRows.Next() {
+						var buildingID int
+						if err := groupRows.Scan(&buildingID); err == nil {
+							b.GroupBuildings = append(b.GroupBuildings, buildingID)
+						}
+					}
+					groupRows.Close()
+				}
+			}
 		}
 
 		// Parse floors configuration
@@ -62,23 +83,6 @@ func (h *BuildingHandler) List(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			b.FloorsConfig = []models.FloorConfig{}
-		}
-
-		// Get group buildings if this is a group
-		if b.IsGroup {
-			b.GroupBuildings = []int{}
-			groupRows, err := h.db.Query("SELECT building_id FROM building_groups WHERE group_id = ?", b.ID)
-			if err == nil {
-				for groupRows.Next() {
-					var buildingID int
-					if err := groupRows.Scan(&buildingID); err == nil {
-						b.GroupBuildings = append(b.GroupBuildings, buildingID)
-					}
-				}
-				groupRows.Close()
-			}
-		} else {
-			b.GroupBuildings = []int{}
 		}
 
 		buildings = append(buildings, b)
@@ -98,17 +102,19 @@ func (h *BuildingHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	var b models.Building
 	var floorsConfigStr string
+	var groupBuildingsStr string
 
 	err = h.db.QueryRow(`
 		SELECT id, name, address_street, address_city, address_zip, 
 		       address_country, notes, COALESCE(is_group, 0), 
 		       COALESCE(has_apartments, 0), COALESCE(floors_config, ''), 
+		       COALESCE(group_buildings, ''),
 		       created_at, updated_at
 		FROM buildings WHERE id = ?
 	`, id).Scan(
 		&b.ID, &b.Name, &b.AddressStreet, &b.AddressCity, &b.AddressZip,
 		&b.AddressCountry, &b.Notes, &b.IsGroup, &b.HasApartments,
-		&floorsConfigStr, &b.CreatedAt, &b.UpdatedAt,
+		&floorsConfigStr, &groupBuildingsStr, &b.CreatedAt, &b.UpdatedAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -136,14 +142,19 @@ func (h *BuildingHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	b.GroupBuildings = []int{}
 
-	if b.IsGroup {
-		rows, err := h.db.Query("SELECT building_id FROM building_groups WHERE group_id = ?", b.ID)
-		if err == nil {
-			defer rows.Close()
-			for rows.Next() {
-				var buildingID int
-				if err := rows.Scan(&buildingID); err == nil {
-					b.GroupBuildings = append(b.GroupBuildings, buildingID)
+	// Parse group_buildings from JSON column first (faster)
+	if b.IsGroup && groupBuildingsStr != "" {
+		if err := json.Unmarshal([]byte(groupBuildingsStr), &b.GroupBuildings); err != nil {
+			log.Printf("Error parsing group_buildings JSON: %v", err)
+			// Fall back to building_groups table if JSON parse fails
+			rows, err := h.db.Query("SELECT building_id FROM building_groups WHERE group_id = ?", b.ID)
+			if err == nil {
+				defer rows.Close()
+				for rows.Next() {
+					var buildingID int
+					if err := rows.Scan(&buildingID); err == nil {
+						b.GroupBuildings = append(b.GroupBuildings, buildingID)
+					}
 				}
 			}
 		}
@@ -188,13 +199,23 @@ func (h *BuildingHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var groupBuildingsJSON string
+	if b.IsGroup && len(b.GroupBuildings) > 0 {
+		jsonBytes, err := json.Marshal(b.GroupBuildings)
+		if err != nil {
+			log.Printf("Error marshaling group_buildings: %v", err)
+		} else {
+			groupBuildingsJSON = string(jsonBytes)
+		}
+	}
+
 	result, err := h.db.Exec(`
 		INSERT INTO buildings (
 			name, address_street, address_city, address_zip, 
-			address_country, notes, is_group, has_apartments, floors_config
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			address_country, notes, is_group, has_apartments, floors_config, group_buildings
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, b.Name, b.AddressStreet, b.AddressCity, b.AddressZip,
-		b.AddressCountry, b.Notes, isGroupVal, hasApartmentsVal, floorsConfigStr)
+		b.AddressCountry, b.Notes, isGroupVal, hasApartmentsVal, floorsConfigStr, groupBuildingsJSON)
 
 	if err != nil {
 		log.Printf("Error creating building: %v", err)
@@ -263,15 +284,25 @@ func (h *BuildingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var groupBuildingsJSON string
+	if b.IsGroup && len(b.GroupBuildings) > 0 {
+		jsonBytes, err := json.Marshal(b.GroupBuildings)
+		if err != nil {
+			log.Printf("Error marshaling group_buildings: %v", err)
+		} else {
+			groupBuildingsJSON = string(jsonBytes)
+		}
+	}
+
 	_, err = h.db.Exec(`
 		UPDATE buildings SET
 			name = ?, address_street = ?, address_city = ?, address_zip = ?,
 			address_country = ?, notes = ?, is_group = ?, has_apartments = ?, 
-			floors_config = ?, updated_at = CURRENT_TIMESTAMP
+			floors_config = ?, group_buildings = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`, b.Name, b.AddressStreet, b.AddressCity, b.AddressZip,
 		b.AddressCountry, b.Notes, isGroupVal, hasApartmentsVal, 
-		floorsConfigStr, id)
+		floorsConfigStr, groupBuildingsJSON, id)
 
 	if err != nil {
 		log.Printf("Error updating building: %v", err)

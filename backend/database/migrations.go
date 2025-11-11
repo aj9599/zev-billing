@@ -55,6 +55,7 @@ func RunMigrations(db *sql.DB) error {
 			address_country TEXT DEFAULT 'Switzerland',
 			notes TEXT,
 			is_group INTEGER DEFAULT 0,
+			group_buildings TEXT,
 			has_apartments INTEGER DEFAULT 0,
 			floors_config TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -295,6 +296,10 @@ func RunMigrations(db *sql.DB) error {
 	}
 
 	// Add additional columns that might be missing from older versions
+	if err := addGroupBuildingsColumn(db); err != nil {
+		return err
+	}
+
 	if err := addDeviceTypeColumn(db); err != nil {
 		return err
 	}
@@ -307,7 +312,6 @@ func RunMigrations(db *sql.DB) error {
 		return err
 	}
 
-	// NEW: Add apartments_json and is_vzev to auto_billing_configs
 	if err := addAutoBillingApartmentsColumn(db); err != nil {
 		return err
 	}
@@ -319,7 +323,38 @@ func RunMigrations(db *sql.DB) error {
 	return createDefaultAdmin(db)
 }
 
-// NEW: Add apartments_json and is_vzev columns to auto_billing_configs
+// NEW: Add group_buildings column to buildings table
+func addGroupBuildingsColumn(db *sql.DB) error {
+	var buildingsSql string
+	err := db.QueryRow(`
+		SELECT sql FROM sqlite_master 
+		WHERE type='table' AND name='buildings'
+	`).Scan(&buildingsSql)
+
+	if err != nil {
+		return err
+	}
+
+	if !contains(buildingsSql, "group_buildings") {
+		log.Println("Adding group_buildings column to buildings table...")
+		_, err := db.Exec(`ALTER TABLE buildings ADD COLUMN group_buildings TEXT`)
+		if err != nil {
+			if contains(err.Error(), "duplicate column") {
+				log.Println("✅ group_buildings column already exists")
+			} else {
+				return fmt.Errorf("failed to add group_buildings column: %v", err)
+			}
+		} else {
+			log.Println("✅ group_buildings column added successfully")
+		}
+	} else {
+		log.Println("✅ group_buildings column already exists")
+	}
+
+	return nil
+}
+
+// Add apartments_json and is_vzev columns to auto_billing_configs
 func addAutoBillingApartmentsColumn(db *sql.DB) error {
 	// Check auto_billing_configs table
 	var autoBillingConfigsSql string
@@ -407,7 +442,7 @@ func addDeviceTypeColumn(db *sql.DB) error {
 	return nil
 }
 
-// NEW: Add export energy columns
+// Add export energy columns
 func addExportColumns(db *sql.DB) error {
 	// Check meters table
 	var metersSql string

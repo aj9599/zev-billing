@@ -306,10 +306,19 @@ export default function AutoBilling() {
     const apartmentSelections: ApartmentSelection[] = [];
     
     newSelected.forEach(selectedKey => {
-      const [bId, aptUnit] = selectedKey.split('|||');
-      const parsedBuildingId = parseInt(bId);
+      const parts = selectedKey.split('|||');
+      if (parts.length < 2) return;
+
+      const parsedBuildingId = parseInt(parts[0]);
+      const aptUnit = parts.slice(1).join('|||');
+      
       const apartments = apartmentsWithUsers.get(parsedBuildingId);
-      const apartment = apartments?.find(a => a.apartment_unit === aptUnit);
+      
+      // ✅ FIX: Match by BOTH building_id AND apartment_unit
+      const apartment = apartments?.find(a => 
+        a.building_id === parsedBuildingId && 
+        a.apartment_unit === aptUnit
+      );
       
       if (apartment?.user?.is_active) {
         apartmentSelections.push({
@@ -349,10 +358,19 @@ export default function AutoBilling() {
     const apartmentSelections: ApartmentSelection[] = [];
     
     newSelected.forEach(key => {
-      const [bId, aptUnit] = key.split('|||');
-      const parsedBuildingId = parseInt(bId);
+      const parts = key.split('|||');
+      if (parts.length < 2) return;
+
+      const parsedBuildingId = parseInt(parts[0]);
+      const aptUnit = parts.slice(1).join('|||');
+      
       const apartments = apartmentsWithUsers.get(parsedBuildingId);
-      const apartment = apartments?.find(a => a.apartment_unit === aptUnit);
+      
+      // ✅ FIX: Match by BOTH building_id AND apartment_unit
+      const apartment = apartments?.find(a => 
+        a.building_id === parsedBuildingId && 
+        a.apartment_unit === aptUnit
+      );
       
       if (apartment?.user?.is_active) {
         apartmentSelections.push({
