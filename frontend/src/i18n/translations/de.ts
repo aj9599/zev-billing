@@ -47,6 +47,7 @@ export const de: Translations = {
   'common.recommended': 'Empfohlen',
   'common.unknownBuilding': 'Unbekanntes Gebäude',
   'common.all': 'Alle',
+  'common.from': 'von',
   'common.to': 'bis',
   'common.of': 'von',
   'common.next': 'Weiter',
@@ -97,8 +98,9 @@ export const de: Translations = {
   'export.startDate': 'Startdatum',
   'export.endDate': 'Enddatum',
   'export.subtitle': '{type}-Daten nach CSV exportieren',
-  'export.filterByBuilding': 'Filter {type} by building',
+  'export.filterByBuilding': 'Filter {type} nach Gebäude',
   'export.exportingAllFrom': 'Alle {type} von {building}',
+  'export.exportingAll': 'Alle {type}',
 
   // ============================================================================
   // MATH CAPTCHA
