@@ -153,9 +153,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         console.log(`vZEV Complex: Processing ${buildingsToProcess.length} buildings in group`);
       }
 
-      const apartments: ApartmentWithUser[] = [];
-      const apartmentSet = new Set<string>();
-
       // Process all buildings (either just the one, or all in the complex)
       buildingsToProcess.forEach(processBuildingId => {
         const buildingMeters = meters.filter(
@@ -166,6 +163,9 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
         );
 
         console.log(`Building ${processBuildingId}: Found ${buildingMeters.length} apartment meters`);
+
+        const apartmentSet = new Set<string>();
+        const buildingApartments: ApartmentWithUser[] = [];
 
         buildingMeters.forEach(meter => {
           const key = `${processBuildingId}-${meter.apartment_unit}`;
@@ -184,7 +184,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
               );
             }
 
-            apartments.push({
+            buildingApartments.push({
               building_id: processBuildingId,
               apartment_unit: meter.apartment_unit,
               user: user,
@@ -193,16 +193,17 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
             });
           }
         });
-      });
 
-      // Sort apartments
-      apartments.sort((a, b) => {
-        const aNum = parseInt(a.apartment_unit.replace(/[^0-9]/g, '')) || 0;
-        const bNum = parseInt(b.apartment_unit.replace(/[^0-9]/g, '')) || 0;
-        return aNum - bNum;
-      });
+        // Sort apartments
+        buildingApartments.sort((a, b) => {
+          const aNum = parseInt(a.apartment_unit.replace(/[^0-9]/g, '')) || 0;
+          const bNum = parseInt(b.apartment_unit.replace(/[^0-9]/g, '')) || 0;
+          return aNum - bNum;
+        });
 
-      apartmentMap.set(buildingId, apartments);
+        // Store apartments under their ACTUAL building ID, not the complex ID
+        apartmentMap.set(processBuildingId, buildingApartments);
+      });
     });
 
     return apartmentMap;
@@ -274,7 +275,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     newSelected.forEach(selectedKey => {
       const parts = selectedKey.split('|||');
       if (parts.length < 2) {
-        console.log(`  ⚠️  Invalid key format: ${selectedKey}`);
+        console.log(`  âš ï¸  Invalid key format: ${selectedKey}`);
         return;
       }
 
@@ -298,7 +299,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
 
       // Add user if exists and is active
       if (apartment?.user?.is_active) {
-        console.log(`  ✓ Adding user ${apartment.user.id}: ${apartment.user.first_name} ${apartment.user.last_name} from building ${parsedBuildingId}`);
+        console.log(`  âœ“ Adding user ${apartment.user.id}: ${apartment.user.first_name} ${apartment.user.last_name} from building ${parsedBuildingId}`);
         
         // Only add if not already in list (prevent duplicates)
         if (!userIds.includes(apartment.user.id)) {
@@ -311,14 +312,14 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           user_id: apartment.user.id
         });
       } else if (apartment) {
-        console.log(`  ✗ Apartment found but no active user`);
+        console.log(`  âœ— Apartment found but no active user`);
         apartmentSelections.push({
           building_id: parsedBuildingId,
           apartment_unit: aptUnit,
           user_id: undefined
         });
       } else {
-        console.log(`  ✗ Apartment not found in map!`);
+        console.log(`  âœ— Apartment not found in map!`);
       }
     });
 
@@ -352,12 +353,22 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     const newSelected = new Set(selectedApartments);
 
     config.building_ids.forEach(buildingId => {
-      const apartments = apartmentsWithUsers.get(buildingId) || [];
-      apartments.forEach(apt => {
-        // Only auto-select apartments with active users
-        if (apt.user?.is_active) {
-          newSelected.add(`${buildingId}|||${apt.apartment_unit}`);
-        }
+      const building = buildings.find(b => b.id === buildingId);
+      
+      // For vZEV complexes, get all buildings in the group
+      let buildingsToProcess: number[] = [buildingId];
+      if (building?.is_group && building.group_buildings) {
+        buildingsToProcess = building.group_buildings;
+      }
+
+      buildingsToProcess.forEach(actualBuildingId => {
+        const apartments = apartmentsWithUsers.get(actualBuildingId) || [];
+        apartments.forEach(apt => {
+          // Only auto-select apartments with active users
+          if (apt.user?.is_active) {
+            newSelected.add(`${actualBuildingId}|||${apt.apartment_unit}`);
+          }
+        });
       });
     });
 
@@ -539,7 +550,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           border: '2px solid #4338ca'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <span style={{ fontSize: '24px' }}>âš¡</span>
+            <span style={{ fontSize: '24px' }}>Ã¢Å¡Â¡</span>
             <h4 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#4338ca' }}>
               {t('billConfig.vzevMode.title')}
             </h4>
@@ -559,7 +570,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           border: '2px solid #3b82f6'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <span style={{ fontSize: '24px' }}>ðŸ”Œ</span>
+            <span style={{ fontSize: '24px' }}>Ã°Å¸â€Å’</span>
             <h4 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#1e40af' }}>
               {t('billConfig.zevMode.title')}
             </h4>
@@ -659,99 +670,119 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
               <p>{t('billConfig.step1.selectBuildingFirst')}</p>
             </div>
           ) : (
-            config.building_ids.map(buildingId => {
+            config.building_ids.flatMap(buildingId => {
               const building = buildings.find(b => b.id === buildingId);
-              const apartments = apartmentsWithUsers.get(buildingId) || [];
-
-              if (apartments.length === 0) {
-                return (
-                  <div key={buildingId} style={{ padding: '20px', borderBottom: '2px solid #e9ecef' }}>
-                    <div style={{ fontWeight: '600', marginBottom: '8px', color: '#667EEA' }}>
-                      {building?.name}
-                    </div>
-                    <div style={{ color: '#6c757d', fontSize: '14px', fontStyle: 'italic' }}>
-                      {t('billConfig.step1.noApartmentsFound')}
-                    </div>
-                  </div>
-                );
+              
+              // For vZEV complexes, get all buildings in the group
+              let buildingsToShow: number[] = [buildingId];
+              if (building?.is_group && building.group_buildings) {
+                buildingsToShow = building.group_buildings;
               }
 
-              return (
-                <div key={buildingId} style={{ borderBottom: '2px solid #e9ecef' }}>
-                  <div style={{
-                    padding: '12px 16px',
-                    backgroundColor: '#f8f9fa',
-                    fontWeight: '600',
-                    color: '#667EEA',
-                    fontSize: '14px',
-                    borderBottom: '1px solid #dee2e6'
-                  }}>
-                    {building?.name} ({apartments.length} {apartments.length === 1 ? t('billConfig.step1.apartment') : t('billConfig.step1.apartments')})
-                  </div>
-                  {apartments.map(apartment => {
-                    const key = `${buildingId}|||${apartment.apartment_unit}`;
-                    const isSelected = selectedApartments.has(key);
-                    const hasUser = !!apartment.user;
-                    const isActive = apartment.user?.is_active ?? false;
+              return buildingsToShow.map(actualBuildingId => {
+                const actualBuilding = buildings.find(b => b.id === actualBuildingId);
+                const apartments = apartmentsWithUsers.get(actualBuildingId) || [];
 
-                    return (
-                      <label
-                        key={key}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          padding: '12px 16px',
-                          cursor: hasUser ? 'pointer' : 'not-allowed',
-                          borderBottom: '1px solid #f0f0f0',
-                          transition: 'background-color 0.2s',
-                          opacity: hasUser ? (isActive ? 1 : 0.6) : 0.4,
-                          backgroundColor: isSelected ? '#e7f3ff' : 'white'
-                        }}
-                        onMouseOver={(e) => hasUser && (e.currentTarget.style.backgroundColor = isSelected ? '#d0e7ff' : '#f8f9fa')}
-                        onMouseOut={(e) => hasUser && (e.currentTarget.style.backgroundColor = isSelected ? '#e7f3ff' : 'white')}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => hasUser && handleApartmentToggle(buildingId, apartment.apartment_unit)}
-                          disabled={!hasUser}
+                if (apartments.length === 0) {
+                  return (
+                    <div key={actualBuildingId} style={{ padding: '20px', borderBottom: '2px solid #e9ecef' }}>
+                      <div style={{ fontWeight: '600', marginBottom: '8px', color: '#667EEA' }}>
+                        {actualBuilding?.name}
+                        {building?.is_group && (
+                          <span style={{ marginLeft: '8px', fontSize: '12px', color: '#6c757d' }}>
+                            (in {building.name})
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ color: '#6c757d', fontSize: '14px', fontStyle: 'italic' }}>
+                        {t('billConfig.step1.noApartmentsFound')}
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={actualBuildingId} style={{ borderBottom: '2px solid #e9ecef' }}>
+                    <div style={{
+                      padding: '12px 16px',
+                      backgroundColor: '#f8f9fa',
+                      fontWeight: '600',
+                      color: '#667EEA',
+                      fontSize: '14px',
+                      borderBottom: '1px solid #dee2e6'
+                    }}>
+                      {actualBuilding?.name} ({apartments.length} {apartments.length === 1 ? t('billConfig.step1.apartment') : t('billConfig.step1.apartments')})
+                      {building?.is_group && (
+                        <span style={{ marginLeft: '8px', fontSize: '12px', fontWeight: 'normal', color: '#6c757d' }}>
+                          (in {building.name})
+                        </span>
+                      )}
+                    </div>
+                    {apartments.map(apartment => {
+                      const key = `${actualBuildingId}|||${apartment.apartment_unit}`;
+                      const isSelected = selectedApartments.has(key);
+                      const hasUser = !!apartment.user;
+                      const isActive = apartment.user?.is_active ?? false;
+
+                      return (
+                        <label
+                          key={key}
                           style={{
-                            marginRight: '12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            padding: '12px 16px',
                             cursor: hasUser ? 'pointer' : 'not-allowed',
-                            width: '18px',
-                            height: '18px'
+                            borderBottom: '1px solid #f0f0f0',
+                            transition: 'background-color 0.2s',
+                            opacity: hasUser ? (isActive ? 1 : 0.6) : 0.4,
+                            backgroundColor: isSelected ? '#e7f3ff' : 'white'
                           }}
-                        />
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                            <Home size={14} style={{ color: '#667EEA' }} />
-                            <span style={{ fontSize: '15px', fontWeight: '600' }}>
-                              {t('billConfig.step1.apartmentLabel')} {apartment.apartment_unit}
-                            </span>
-                          </div>
-                          {hasUser ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#6c757d', paddingLeft: '22px' }}>
-                              <UserIcon size={12} />
-                              <span>
-                                {apartment.user?.first_name} {apartment.user?.last_name}
-                                {!isActive && (
-                                  <span style={{ color: '#dc3545', marginLeft: '6px', fontWeight: '500' }}>
-                                    ({t('billConfig.step1.archived')})
-                                  </span>
-                                )}
+                          onMouseOver={(e) => hasUser && (e.currentTarget.style.backgroundColor = isSelected ? '#d0e7ff' : '#f8f9fa')}
+                          onMouseOut={(e) => hasUser && (e.currentTarget.style.backgroundColor = isSelected ? '#e7f3ff' : 'white')}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => hasUser && handleApartmentToggle(actualBuildingId, apartment.apartment_unit)}
+                            disabled={!hasUser}
+                            style={{
+                              marginRight: '12px',
+                              cursor: hasUser ? 'pointer' : 'not-allowed',
+                              width: '18px',
+                              height: '18px'
+                            }}
+                          />
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                              <Home size={14} style={{ color: '#667EEA' }} />
+                              <span style={{ fontSize: '15px', fontWeight: '600' }}>
+                                {t('billConfig.step1.apartmentLabel')} {apartment.apartment_unit}
                               </span>
                             </div>
-                          ) : (
-                            <div style={{ fontSize: '13px', color: '#dc3545', paddingLeft: '22px', fontStyle: 'italic' }}>
-                              {t('billConfig.step1.noUserAssigned')}
-                            </div>
-                          )}
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
-              );
+                            {hasUser ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#6c757d', paddingLeft: '22px' }}>
+                                <UserIcon size={12} />
+                                <span>
+                                  {apartment.user?.first_name} {apartment.user?.last_name}
+                                  {!isActive && (
+                                    <span style={{ color: '#dc3545', marginLeft: '6px', fontWeight: '500' }}>
+                                      ({t('billConfig.step1.archived')})
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: '13px', color: '#dc3545', paddingLeft: '22px', fontStyle: 'italic' }}>
+                                {t('billConfig.step1.noUserAssigned')}
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                );
+              });
             })
           )}
         </div>
@@ -883,7 +914,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                     {meter.meter_name}
                   </div>
                   <div style={{ fontSize: '13px', color: '#6c757d' }}>
-                    {building?.name} â€¢ {meter.split_type} {t('billConfig.step3.split')} â€¢ CHF {meter.unit_price.toFixed(3)}/kWh
+                    {building?.name} Ã¢â‚¬Â¢ {meter.split_type} {t('billConfig.step3.split')} Ã¢â‚¬Â¢ CHF {meter.unit_price.toFixed(3)}/kWh
                   </div>
                 </div>
               </label>
@@ -958,7 +989,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                     {item.description}
                   </div>
                   <div style={{ fontSize: '13px', color: '#6c757d' }}>
-                    {building?.name} â€¢ CHF {item.amount.toFixed(2)} â€¢ {item.frequency} â€¢ {item.category}
+                    {building?.name} Ã¢â‚¬Â¢ CHF {item.amount.toFixed(2)} Ã¢â‚¬Â¢ {item.frequency} Ã¢â‚¬Â¢ {item.category}
                   </div>
                 </div>
               </label>
