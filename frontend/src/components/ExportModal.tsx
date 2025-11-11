@@ -56,7 +56,7 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
         ? buildings.find(b => b.id === selectedBuildingId)?.name
         : t('dashboard.allBuildings').toLowerCase();
       const typeLabel = type === 'meters' ? t('meters.title') : t('chargers.title');
-      return `${t('export.exportingAll', { type: typeLabel })} ${t('common.from')} ${buildingName}`;
+      return `${t('export.exportingAll').replace('{type}', typeLabel)} ${t('common.from')} ${buildingName}`;
     }
     const item = items.find(i => i.id === selectedItemId);
     return item ? `${item.building_name} - ${item.name}` : '';
@@ -101,7 +101,7 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
               {t('export.title')}
             </h2>
             <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
-              {t('export.subtitle', { type: typeLabel })}
+              {t('export.subtitle').replace('{type}', typeLabel)}
             </p>
           </div>
           <button
@@ -173,7 +173,7 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
             ))}
           </select>
           <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px', marginLeft: '2px' }}>
-            {t('export.filterByBuilding', { type: typeLabel })}
+            {t('export.filterByBuilding').replace('{type}', typeLabel)}
           </p>
         </div>
 
