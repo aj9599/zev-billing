@@ -438,15 +438,29 @@ func (h *MeterHandler) ReplaceMeter(w http.ResponseWriter, r *http.Request) {
 
 	// Validate old meter exists and is active
 	var oldMeter models.Meter
+	var apartmentUnit, deviceType sql.NullString
+	var userID sql.NullInt64
+	
 	err := h.db.QueryRow(`
 		SELECT id, name, meter_type, building_id, user_id, apartment_unit,
 		       connection_type, device_type, is_active, is_archived
 		FROM meters WHERE id = ?
 	`, req.OldMeterID).Scan(
 		&oldMeter.ID, &oldMeter.Name, &oldMeter.MeterType, &oldMeter.BuildingID,
-		&oldMeter.UserID, &oldMeter.ApartmentUnit, &oldMeter.ConnectionType,
-		&oldMeter.DeviceType, &oldMeter.IsActive, &oldMeter.IsArchived,
+		&userID, &apartmentUnit, &oldMeter.ConnectionType,
+		&deviceType, &oldMeter.IsActive, &oldMeter.IsArchived,
 	)
+	
+	if userID.Valid {
+		id := int(userID.Int64)
+		oldMeter.UserID = &id
+	}
+	if apartmentUnit.Valid {
+		oldMeter.ApartmentUnit = apartmentUnit.String
+	}
+	if deviceType.Valid {
+		oldMeter.DeviceType = deviceType.String
+	}
 
 	if err == sql.ErrNoRows {
 		http.Error(w, "Old meter not found", http.StatusNotFound)
@@ -496,10 +510,24 @@ func (h *MeterHandler) ReplaceMeter(w http.ResponseWriter, r *http.Request) {
 
 	// Determine meter type, apartment, and device_type from old meter if copying
 	meterType := req.NewMeterType
-	apartmentUnit := oldMeter.ApartmentUnit
-	userID := oldMeter.UserID
+	apartmentUnitValue := oldMeter.ApartmentUnit
 	buildingID := oldMeter.BuildingID
-	deviceType := oldMeter.DeviceType // Copy device type from old meter
+	deviceTypeValue := oldMeter.DeviceType // Copy device type from old meter
+	
+	// Prepare nullable values for insertion
+	var userIDValue interface{}
+	if oldMeter.UserID != nil {
+		userIDValue = *oldMeter.UserID
+	} else {
+		userIDValue = nil
+	}
+	
+	var apartmentUnitInsert interface{}
+	if apartmentUnitValue != "" {
+		apartmentUnitInsert = apartmentUnitValue
+	} else {
+		apartmentUnitInsert = nil
+	}
 
 	result, err := tx.Exec(`
 		INSERT INTO meters (
@@ -507,8 +535,8 @@ func (h *MeterHandler) ReplaceMeter(w http.ResponseWriter, r *http.Request) {
 			connection_type, connection_config, device_type, notes, is_active, is_archived,
 			replaces_meter_id, last_reading
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)
-	`, req.NewMeterName, meterType, buildingID, userID, apartmentUnit,
-		req.NewConnectionType, newMeterConfig, deviceType,
+	`, req.NewMeterName, meterType, buildingID, userIDValue, apartmentUnitInsert,
+		req.NewConnectionType, newMeterConfig, deviceTypeValue,
 		fmt.Sprintf("Replaces meter: %s", oldMeter.Name),
 		req.OldMeterID, req.NewMeterInitialReading)
 
@@ -589,6 +617,9 @@ func (h *MeterHandler) ReplaceMeter(w http.ResponseWriter, r *http.Request) {
 
 	// Get the newly created meter for response
 	var newMeter models.Meter
+	var newApartmentUnit, newDeviceType sql.NullString
+	var newUserID, newReplacesID sql.NullInt64
+	
 	h.db.QueryRow(`
 		SELECT id, name, meter_type, building_id, user_id, apartment_unit,
 		       connection_type, connection_config, device_type, notes, last_reading,
@@ -596,23 +627,55 @@ func (h *MeterHandler) ReplaceMeter(w http.ResponseWriter, r *http.Request) {
 		FROM meters WHERE id = ?
 	`, newMeterID).Scan(
 		&newMeter.ID, &newMeter.Name, &newMeter.MeterType, &newMeter.BuildingID,
-		&newMeter.UserID, &newMeter.ApartmentUnit, &newMeter.ConnectionType,
-		&newMeter.ConnectionConfig, &newMeter.DeviceType, &newMeter.Notes, &newMeter.LastReading,
-		&newMeter.IsActive, &newMeter.IsArchived, &newMeter.ReplacesMetterID,
+		&newUserID, &newApartmentUnit, &newMeter.ConnectionType,
+		&newMeter.ConnectionConfig, &newDeviceType, &newMeter.Notes, &newMeter.LastReading,
+		&newMeter.IsActive, &newMeter.IsArchived, &newReplacesID,
 		&newMeter.CreatedAt, &newMeter.UpdatedAt,
 	)
+	
+	if newUserID.Valid {
+		id := int(newUserID.Int64)
+		newMeter.UserID = &id
+	}
+	if newApartmentUnit.Valid {
+		newMeter.ApartmentUnit = newApartmentUnit.String
+	}
+	if newDeviceType.Valid {
+		newMeter.DeviceType = newDeviceType.String
+	}
+	if newReplacesID.Valid {
+		id := int(newReplacesID.Int64)
+		newMeter.ReplacesMetterID = &id
+	}
 
 	// Get updated old meter
+	var oldReplacedBy sql.NullInt64
+	var oldReplacementDate sql.NullTime
+	var oldReplacementNotes sql.NullString
+	
 	h.db.QueryRow(`
 		SELECT is_active, is_archived, replaced_by_meter_id, replacement_date, replacement_notes
 		FROM meters WHERE id = ?
 	`, req.OldMeterID).Scan(
-		&oldMeter.IsActive, &oldMeter.IsArchived, &oldMeter.ReplacedByMeterID,
-		&oldMeter.ReplacementDate, &oldMeter.ReplacementNotes,
+		&oldMeter.IsActive, &oldMeter.IsArchived, &oldReplacedBy,
+		&oldReplacementDate, &oldReplacementNotes,
 	)
+	
+	if oldReplacedBy.Valid {
+		id := int(oldReplacedBy.Int64)
+		oldMeter.ReplacedByMeterID = &id
+	}
+	if oldReplacementDate.Valid {
+		oldMeter.ReplacementDate = &oldReplacementDate.Time
+	}
+	if oldReplacementNotes.Valid {
+		oldMeter.ReplacementNotes = oldReplacementNotes.String
+	}
 
 	// Get replacement record
 	var replacement models.MeterReplacement
+	var performedBy sql.NullString
+	
 	h.db.QueryRow(`
 		SELECT id, old_meter_id, new_meter_id, replacement_date,
 		       old_meter_final_reading, new_meter_initial_reading,
@@ -622,8 +685,12 @@ func (h *MeterHandler) ReplaceMeter(w http.ResponseWriter, r *http.Request) {
 		&replacement.ID, &replacement.OldMeterID, &replacement.NewMeterID,
 		&replacement.ReplacementDate, &replacement.OldMeterFinalReading,
 		&replacement.NewMeterInitialReading, &replacement.ReadingOffset,
-		&replacement.Notes, &replacement.PerformedBy, &replacement.CreatedAt,
+		&replacement.Notes, &performedBy, &replacement.CreatedAt,
 	)
+	
+	if performedBy.Valid {
+		replacement.PerformedBy = performedBy.String
+	}
 
 	response := map[string]interface{}{
 		"replacement": replacement,
