@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/aj9599/zev-billing/backend/models"
@@ -17,6 +18,7 @@ import (
 type MeterHandler struct {
 	db            *sql.DB
 	dataCollector *services.DataCollector
+	restartMu     sync.Mutex  // Prevent concurrent restarts
 }
 
 func NewMeterHandler(db *sql.DB, dataCollector *services.DataCollector) *MeterHandler {
@@ -24,6 +26,18 @@ func NewMeterHandler(db *sql.DB, dataCollector *services.DataCollector) *MeterHa
 		db:            db,
 		dataCollector: dataCollector,
 	}
+}
+
+// safeRestartCollectors ensures only one restart operation happens at a time
+func (h *MeterHandler) safeRestartCollectors(reason string) {
+	go func() {
+		h.restartMu.Lock()
+		defer h.restartMu.Unlock()
+		
+		log.Printf("%s, restarting collectors...", reason)
+		h.dataCollector.RestartUDPListeners()
+		log.Printf("Collectors restarted successfully")
+	}()
 }
 
 func (h *MeterHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -218,22 +232,9 @@ func (h *MeterHandler) Create(w http.ResponseWriter, r *http.Request) {
 	id, _ := result.LastInsertId()
 	m.ID = int(id)
 
-	// If it's a UDP meter, restart UDP listeners
-	if m.ConnectionType == "udp" {
-		log.Printf("New UDP meter created, restarting UDP listeners...")
-		go h.dataCollector.RestartUDPListeners()
-	}
-	
-	// If it's a Loxone API meter, restart Loxone connections
-	if m.ConnectionType == "loxone_api" {
-		log.Printf("New Loxone API meter created, restarting Loxone connections...")
-		go h.dataCollector.RestartUDPListeners() // This also restarts Loxone connections
-	}
-	
-	// If it's an MQTT meter, restart MQTT connections
-	if m.ConnectionType == "mqtt" {
-		log.Printf("New MQTT meter created (device type: %s), restarting MQTT connections...", m.DeviceType)
-		go h.dataCollector.RestartUDPListeners() // This also restarts MQTT connections
+	// Restart collectors if needed
+	if m.ConnectionType == "udp" || m.ConnectionType == "loxone_api" || m.ConnectionType == "mqtt" {
+		h.safeRestartCollectors(fmt.Sprintf("New %s meter created (device type: %s)", m.ConnectionType, m.DeviceType))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -277,22 +278,9 @@ func (h *MeterHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	m.ID = id
 
-	// If it's a UDP meter, restart UDP listeners
-	if m.ConnectionType == "udp" {
-		log.Printf("UDP meter updated, restarting UDP listeners...")
-		go h.dataCollector.RestartUDPListeners()
-	}
-	
-	// If it's a Loxone API meter, restart Loxone connections
-	if m.ConnectionType == "loxone_api" {
-		log.Printf("Loxone API meter updated, restarting Loxone connections...")
-		go h.dataCollector.RestartUDPListeners() // This also restarts Loxone connections
-	}
-	
-	// If it's an MQTT meter, restart MQTT connections
-	if m.ConnectionType == "mqtt" {
-		log.Printf("MQTT meter updated (device type: %s), restarting MQTT connections...", m.DeviceType)
-		go h.dataCollector.RestartUDPListeners() // This also restarts MQTT connections
+	// Restart collectors if needed
+	if m.ConnectionType == "udp" || m.ConnectionType == "loxone_api" || m.ConnectionType == "mqtt" {
+		h.safeRestartCollectors(fmt.Sprintf("%s meter updated (device type: %s)", m.ConnectionType, m.DeviceType))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -403,22 +391,9 @@ func (h *MeterHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Successfully deleted meter %d (%s) and %d readings", id, meterName, rowsAffected)
 
-	// If it was a UDP meter, restart UDP listeners
-	if connectionType == "udp" {
-		log.Printf("UDP meter deleted, restarting UDP listeners...")
-		go h.dataCollector.RestartUDPListeners()
-	}
-	
-	// If it was a Loxone API meter, restart Loxone connections
-	if connectionType == "loxone_api" {
-		log.Printf("Loxone API meter deleted, restarting Loxone connections...")
-		go h.dataCollector.RestartUDPListeners() // This also restarts Loxone connections
-	}
-	
-	// If it was an MQTT meter, restart MQTT connections
-	if connectionType == "mqtt" {
-		log.Printf("MQTT meter deleted, restarting MQTT connections...")
-		go h.dataCollector.RestartUDPListeners() // This also restarts MQTT connections
+	// Restart collectors if needed
+	if connectionType == "udp" || connectionType == "loxone_api" || connectionType == "mqtt" {
+		h.safeRestartCollectors(fmt.Sprintf("%s meter deleted", connectionType))
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -601,18 +576,11 @@ func (h *MeterHandler) ReplaceMeter(w http.ResponseWriter, r *http.Request) {
 	log.Printf("SUCCESS: Meter %d (%s) replaced by meter %d (%s). Offset: %.3f kWh",
 		req.OldMeterID, oldMeter.Name, newMeterID, req.NewMeterName, readingOffset)
 
-	// Restart data collectors if connection type changed
-	if oldMeter.ConnectionType == "udp" || req.NewConnectionType == "udp" {
-		log.Printf("UDP meter involved in replacement, restarting UDP listeners...")
-		go h.dataCollector.RestartUDPListeners()
-	}
-	if oldMeter.ConnectionType == "loxone_api" || req.NewConnectionType == "loxone_api" {
-		log.Printf("Loxone API meter involved in replacement, restarting Loxone connections...")
-		go h.dataCollector.RestartUDPListeners()
-	}
-	if oldMeter.ConnectionType == "mqtt" || req.NewConnectionType == "mqtt" {
-		log.Printf("MQTT meter involved in replacement, restarting MQTT connections...")
-		go h.dataCollector.RestartUDPListeners()
+	// Restart collectors if connection type is affected
+	if oldMeter.ConnectionType == "udp" || req.NewConnectionType == "udp" ||
+		oldMeter.ConnectionType == "loxone_api" || req.NewConnectionType == "loxone_api" ||
+		oldMeter.ConnectionType == "mqtt" || req.NewConnectionType == "mqtt" {
+		h.safeRestartCollectors("Meter replacement completed")
 	}
 
 	// Get the newly created meter for response

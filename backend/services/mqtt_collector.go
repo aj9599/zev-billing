@@ -17,6 +17,7 @@ type MQTTCollector struct {
 	db             *sql.DB
 	clients        map[string]mqtt.Client    // broker URL -> MQTT client
 	isRunning      bool
+	isStopped      bool                      // track if stopChan has been closed
 	mu             sync.RWMutex
 	meterReadings  map[int]MQTTMeterReading  // meter_id -> last reading
 	chargerData    map[int]MQTTChargerData   // charger_id -> last data
@@ -174,7 +175,12 @@ func (mc *MQTTCollector) Stop() {
 		}
 	}
 	
-	close(mc.stopChan)
+	// Only close the channel if it hasn't been closed already
+	if !mc.isStopped {
+		close(mc.stopChan)
+		mc.isStopped = true
+	}
+	
 	log.Println("MQTT Collector stopped")
 }
 
@@ -271,7 +277,7 @@ func (mc *MQTTCollector) connectToBroker(brokerURL string, config map[string]int
 	mc.clients[brokerURL] = client
 	mc.mu.Unlock()
 
-	log.Printf("✓ Connected to MQTT broker successfully: %s", brokerURL)
+	log.Printf("âœ“ Connected to MQTT broker successfully: %s", brokerURL)
 	return nil
 }
 
@@ -284,7 +290,7 @@ func (mc *MQTTCollector) createOnConnectHandler(brokerURL string) func(mqtt.Clie
 
 func (mc *MQTTCollector) createConnectionLostHandler(brokerURL string) func(mqtt.Client, error) {
 	return func(client mqtt.Client, err error) {
-		log.Printf("⚠️ MQTT connection lost to %s: %v - Will attempt to reconnect", brokerURL, err)
+		log.Printf("âš ï¸ MQTT connection lost to %s: %v - Will attempt to reconnect", brokerURL, err)
 		
 		// Mark all meters using this broker as disconnected
 		mc.mu.Lock()
@@ -344,7 +350,7 @@ func (mc *MQTTCollector) unsubscribeFromAllTopics(brokerURL string) {
 		}
 		// Clear the subscription list for this broker
 		mc.subscriptions[brokerURL] = []string{}
-		log.Printf("✓ Cleared all subscriptions for broker %s", brokerURL)
+		log.Printf("âœ“ Cleared all subscriptions for broker %s", brokerURL)
 	} else {
 		log.Printf("No existing subscriptions found for broker %s", brokerURL)
 	}
@@ -441,14 +447,14 @@ func (mc *MQTTCollector) subscribeToDevices(brokerURL string) {
 			}
 			
 			if alreadySubscribed {
-				log.Printf("⚠️  Already subscribed to topic '%s' in this session, skipping", subTopic)
+				log.Printf("âš ï¸  Already subscribed to topic '%s' in this session, skipping", subTopic)
 				continue
 			}
 			
 			if token := client.Subscribe(subTopic, 1, mc.createMeterHandler(id, name, deviceTypeStr, brokerURL)); token.Wait() && token.Error() != nil {
 				log.Printf("ERROR: Failed to subscribe to topic '%s' for meter '%s': %v", subTopic, name, token.Error())
 			} else {
-				log.Printf("✓ Subscribed to MQTT topic '%s' for meter '%s' (device: %s)", subTopic, name, deviceTypeStr)
+				log.Printf("âœ“ Subscribed to MQTT topic '%s' for meter '%s' (device: %s)", subTopic, name, deviceTypeStr)
 				subscribedTopics = append(subscribedTopics, subTopic)
 				meterCount++
 			}
@@ -512,7 +518,7 @@ func (mc *MQTTCollector) subscribeToDevices(brokerURL string) {
 		}
 		
 		if alreadySubscribed {
-			log.Printf("⚠️  Already subscribed to topic '%s' in this session, skipping", topic)
+			log.Printf("âš ï¸  Already subscribed to topic '%s' in this session, skipping", topic)
 			continue
 		}
 
@@ -520,7 +526,7 @@ func (mc *MQTTCollector) subscribeToDevices(brokerURL string) {
 		if token := client.Subscribe(topic, 1, mc.createChargerHandler(id, name)); token.Wait() && token.Error() != nil {
 			log.Printf("ERROR: Failed to subscribe to topic '%s' for charger '%s': %v", topic, name, token.Error())
 		} else {
-			log.Printf("✓ Subscribed to MQTT topic '%s' for charger '%s'", topic, name)
+			log.Printf("âœ“ Subscribed to MQTT topic '%s' for charger '%s'", topic, name)
 			subscribedTopics = append(subscribedTopics, topic)
 			chargerCount++
 		}
@@ -556,7 +562,7 @@ func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, devic
 				exportValue = 0 // WhatWatt Go doesn't track export
 				timestamp = time.Unix(whatwattMsg.Timestamp/1000, 0)
 				found = true
-				log.Printf("✓ Parsed WhatWatt Go format: import=%.3f kWh", importValue)
+				log.Printf("âœ“ Parsed WhatWatt Go format: import=%.3f kWh", importValue)
 			}
 
 		case "shelly-3em":
@@ -575,7 +581,7 @@ func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, devic
 					}
 					timestamp = time.Now()
 					found = true
-					log.Printf("✓ Parsed Shelly 3EM format: import=%.3f kWh, export=%.3f kWh", importValue, exportValue)
+					log.Printf("âœ“ Parsed Shelly 3EM format: import=%.3f kWh, export=%.3f kWh", importValue, exportValue)
 				}
 			} else {
 				log.Printf("DEBUG: Failed to parse as Shelly 3EM: %v", err)
@@ -590,14 +596,14 @@ func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, devic
 					exportValue = shellyMsg.TotalActRet / 1000.0
 					timestamp = time.Now()
 					found = true
-					log.Printf("✓ Parsed Shelly EM format: import=%.3f kWh, export=%.3f kWh", importValue, exportValue)
+					log.Printf("âœ“ Parsed Shelly EM format: import=%.3f kWh, export=%.3f kWh", importValue, exportValue)
 				} else if shellyMsg.TotalActEnergy > 0 {
 					// Alternative field names
 					importValue = shellyMsg.TotalActEnergy / 1000.0
 					exportValue = shellyMsg.TotalActRetEnergy / 1000.0
 					timestamp = time.Now()
 					found = true
-					log.Printf("✓ Parsed Shelly EM format (alt): import=%.3f kWh, export=%.3f kWh", importValue, exportValue)
+					log.Printf("âœ“ Parsed Shelly EM format (alt): import=%.3f kWh, export=%.3f kWh", importValue, exportValue)
 				}
 			}
 
@@ -618,7 +624,7 @@ func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, devic
 					exportValue = shelly2PMMsg.RetAEnergy.Total / 1000.0
 					timestamp = time.Now()
 					found = true
-					log.Printf("✓ Parsed Shelly 2PM format: import=%.3f kWh (calculated from aenergy-ret_aenergy), export=%.3f kWh, power=%.1f W, voltage=%.1f V", 
+					log.Printf("âœ“ Parsed Shelly 2PM format: import=%.3f kWh (calculated from aenergy-ret_aenergy), export=%.3f kWh, power=%.1f W, voltage=%.1f V", 
 						importValue, exportValue, shelly2PMMsg.APower, shelly2PMMsg.Voltage)
 				} else {
 					log.Printf("DEBUG: Shelly 2PM AEnergy.Total is not valid: %.3f", shelly2PMMsg.AEnergy.Total)
@@ -668,7 +674,7 @@ func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, devic
 						timestamp = time.Unix(genericMsg.Timestamp/1000, 0)
 					}
 					found = true
-					log.Printf("✓ Parsed generic format: import=%.3f kWh, export=%.3f kWh", importValue, exportValue)
+					log.Printf("âœ“ Parsed generic format: import=%.3f kWh, export=%.3f kWh", importValue, exportValue)
 				}
 			}
 
@@ -680,7 +686,7 @@ func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, devic
 					exportValue = 0
 					timestamp = time.Now()
 					found = true
-					log.Printf("✓ Parsed numeric format: import=%.3f kWh", importValue)
+					log.Printf("âœ“ Parsed numeric format: import=%.3f kWh", importValue)
 				}
 			}
 		}
@@ -696,7 +702,7 @@ func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, devic
 			}
 			mc.mu.Unlock()
 			
-			log.Printf("✓ MQTT: Saved reading for meter '%s': import=%.3f kWh, export=%.3f kWh", 
+			log.Printf("âœ“ MQTT: Saved reading for meter '%s': import=%.3f kWh, export=%.3f kWh", 
 				meterName, importValue, exportValue)
 		} else {
 			log.Printf("WARNING: Could not parse MQTT message for meter '%s' (device type: %s): %s", 
@@ -737,7 +743,7 @@ func (mc *MQTTCollector) createChargerHandler(chargerID int, chargerName string)
 			}
 			mc.mu.Unlock()
 			
-			log.Printf("✓ MQTT: Saved charger data for '%s': %.3f kWh (user: %s, mode: %s)", 
+			log.Printf("âœ“ MQTT: Saved charger data for '%s': %.3f kWh (user: %s, mode: %s)", 
 				chargerName, power, userID, mode)
 		}
 	}
@@ -814,6 +820,13 @@ func (mc *MQTTCollector) RestartConnections() {
 	log.Println("=== Restarting MQTT Collector ===")
 	
 	mc.Stop()
+	
+	// Reset the stopped flag and create a new channel
+	mc.mu.Lock()
+	mc.isStopped = false
+	mc.stopChan = make(chan bool)
+	mc.mu.Unlock()
+	
 	time.Sleep(2 * time.Second)
 	mc.Start()
 	
