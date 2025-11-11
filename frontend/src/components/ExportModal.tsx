@@ -53,11 +53,9 @@ export default function ExportModal({ type, items, buildings, onClose, onExport 
   const getSelectedItemDisplay = () => {
     if (!selectedItemId) {
       const buildingName = selectedBuildingId
-        ? buildings.find(b => b.id === selectedBuildingId)?.name
+        ? buildings.find(b => b.id === selectedBuildingId)?.name || t('common.unknownBuilding')
         : t('dashboard.allBuildings');
       const typeLabel = type === 'meters' ? t('meters.title') : t('chargers.title');
-      
-      // Use the combined key for better grammar
       return t('export.exportingAllFrom')
         .replace('{type}', typeLabel)
         .replace('{building}', buildingName);
