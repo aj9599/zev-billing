@@ -107,7 +107,7 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 
 		u.IsActive = isActive.Valid && isActive.Int64 == 1
 
-		// FIXED: Only set rent dates if they contain actual values, not empty strings
+		// Handle rent dates properly - only set if we have actual date values
 		if rentStartDate.Valid && rentStartDate.String != "" {
 			u.RentStartDate = &rentStartDate.String
 		} else {
@@ -192,7 +192,7 @@ func (h *UserHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	u.IsActive = isActive.Valid && isActive.Int64 == 1
 
-	// FIXED: Only set rent dates if they contain actual values, not empty strings
+	// Handle rent dates properly - only set if we have actual date values
 	if rentStartDate.Valid && rentStartDate.String != "" {
 		u.RentStartDate = &rentStartDate.String
 		log.Printf("Get user %d: rent_start_date = %s", id, rentStartDate.String)
@@ -696,7 +696,7 @@ func (h *UserHandler) GetAdminUsersForBuildings(w http.ResponseWriter, r *http.R
 			// Check if any of the managed buildings match our relevant building IDs
 			for _, managedID := range managedBuildingIDs {
 				if allRelevantBuildingIDs[managedID] {
-					log.Printf("✓ Admin user %s %s (ID: %d) manages building/complex %d", 
+					log.Printf("âœ“ Admin user %s %s (ID: %d) manages building/complex %d", 
 						u.FirstName, u.LastName, u.ID, managedID)
 					matchingUsers = append(matchingUsers, u)
 					break
