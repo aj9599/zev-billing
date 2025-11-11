@@ -450,14 +450,14 @@ export default function Buildings() {
                   height: isMobile ? '80px' : '100px',
                   borderRadius: '50%',
                   backgroundColor: isSolarProducing ? '#fef3c7' : '#fee2e2',
-                  border: `4px solid ${isSolarProducing ? '#f59e0b' : '#ef4444'}`,
+                  border: `4px solid ${isSolarProducing ? '#f59e0b' : '#f59e0b'}`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   marginBottom: isMobile ? '0' : '12px',
                   flexShrink: 0
                 }}>
-                  <Sun size={isMobile ? 32 : 40} color={isSolarProducing ? '#f59e0b' : '#ef4444'} />
+                  <Sun size={isMobile ? 32 : 40} color={isSolarProducing ? '#f59e0b' : '#f59e0b'} />
                 </div>
                 <div style={{
                   display: 'flex',
