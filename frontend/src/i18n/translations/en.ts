@@ -100,6 +100,7 @@ export const en: Translations = {
   'export.filterByBuilding': 'Filter {type} by building',
   'export.exportingAll': 'All {type}',
   'export.from': 'from',
+  'export.allBuildings': 'all Buildings',
 
   // ============================================================================
   // MATH CAPTCHA
