@@ -282,11 +282,11 @@ export default function Users() {
     
     // Don't show end date if it's the default far future date
     if (!endDate || endDate === '2099-01-01') {
-      return `${start} â†’`;
+      return `${start} →`;
     }
     
     const end = formatDate(endDate);
-    return `${start} â†’ ${end}`;
+    return `${start} → ${end}`;
   };
 
   const InstructionsModal = () => (
@@ -1090,7 +1090,7 @@ export default function Users() {
                         color: '#15803d',
                         lineHeight: '1.5'
                       }}>
-                        <strong>â„¹ï¸ {t('users.apartmentInfo')}</strong>
+                        <strong>ℹ️ {t('users.apartmentInfo')}</strong>
                         <br />
                         {t('users.apartmentExplanation')}
                       </div>
@@ -1170,7 +1170,7 @@ export default function Users() {
                       color: '#92400e',
                       lineHeight: '1.5'
                     }}>
-                      <strong>â„¹ï¸ {t('users.rentPeriodInfo')}</strong>
+                      <strong>ℹ️ {t('users.rentPeriodInfo')}</strong>
                       <br />
                       {t('users.rentPeriodExplanation')}
                     </div>
@@ -1273,10 +1273,10 @@ export default function Users() {
                   onChange={(e) => setFormData({ ...formData, language: e.target.value })}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
                 >
-                  <option value="de">ðŸ‡¨ðŸ‡­ Deutsch</option>
-                  <option value="fr">ðŸ‡«ðŸ‡· FranÃ§ais</option>
-                  <option value="it">ðŸ‡®ðŸ‡¹ Italiano</option>
-                  <option value="en">ðŸ‡¬ðŸ‡§ English</option>
+                  <option value="de">🇨🇭­ Deutsch</option>
+                  <option value="fr">🇫🇷 Français</option>
+                  <option value="it">🇮🇹 Italiano</option>
+                  <option value="en">🇬🇧 English</option>
                 </select>
               </div>
 

@@ -108,14 +108,22 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 		u.IsActive = isActive.Valid && isActive.Int64 == 1
 
 		// Handle rent dates properly - only set if we have actual date values
-		if rentStartDate.Valid && rentStartDate.String != "" {
-			u.RentStartDate = &rentStartDate.String
+		if rentStartDate.Valid {
+			if rentStartDate.String != "" {
+				u.RentStartDate = &rentStartDate.String
+			} else {
+				u.RentStartDate = nil
+			}
 		} else {
 			u.RentStartDate = nil
 		}
 
-		if rentEndDate.Valid && rentEndDate.String != "" {
-			u.RentEndDate = &rentEndDate.String
+		if rentEndDate.Valid {
+			if rentEndDate.String != "" {
+				u.RentEndDate = &rentEndDate.String
+			} else {
+				u.RentEndDate = nil
+			}
 		} else {
 			u.RentEndDate = nil
 		}
@@ -193,20 +201,30 @@ func (h *UserHandler) Get(w http.ResponseWriter, r *http.Request) {
 	u.IsActive = isActive.Valid && isActive.Int64 == 1
 
 	// Handle rent dates properly - only set if we have actual date values
-	if rentStartDate.Valid && rentStartDate.String != "" {
-		u.RentStartDate = &rentStartDate.String
-		log.Printf("Get user %d: rent_start_date = %s", id, rentStartDate.String)
+	if rentStartDate.Valid {
+		if rentStartDate.String != "" {
+			u.RentStartDate = &rentStartDate.String
+			log.Printf("Get user %d: rent_start_date = %s", id, rentStartDate.String)
+		} else {
+			u.RentStartDate = nil
+			log.Printf("Get user %d: rent_start_date is empty string", id)
+		}
 	} else {
 		u.RentStartDate = nil
-		log.Printf("Get user %d: rent_start_date is empty or NULL", id)
+		log.Printf("Get user %d: rent_start_date is NULL", id)
 	}
 
-	if rentEndDate.Valid && rentEndDate.String != "" {
-		u.RentEndDate = &rentEndDate.String
-		log.Printf("Get user %d: rent_end_date = %s", id, rentEndDate.String)
+	if rentEndDate.Valid {
+		if rentEndDate.String != "" {
+			u.RentEndDate = &rentEndDate.String
+			log.Printf("Get user %d: rent_end_date = %s", id, rentEndDate.String)
+		} else {
+			u.RentEndDate = nil
+			log.Printf("Get user %d: rent_end_date is empty string", id)
+		}
 	} else {
 		u.RentEndDate = nil
-		log.Printf("Get user %d: rent_end_date is empty or NULL", id)
+		log.Printf("Get user %d: rent_end_date is NULL", id)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -696,7 +714,7 @@ func (h *UserHandler) GetAdminUsersForBuildings(w http.ResponseWriter, r *http.R
 			// Check if any of the managed buildings match our relevant building IDs
 			for _, managedID := range managedBuildingIDs {
 				if allRelevantBuildingIDs[managedID] {
-					log.Printf("âœ“ Admin user %s %s (ID: %d) manages building/complex %d", 
+					log.Printf("Ã¢Å“â€œ Admin user %s %s (ID: %d) manages building/complex %d", 
 						u.FirstName, u.LastName, u.ID, managedID)
 					matchingUsers = append(matchingUsers, u)
 					break
