@@ -249,17 +249,17 @@ export default function Buildings() {
         // Producing more than consuming - exporting to grid
         solarToGrid = Math.abs(gridNet);
         solarToHouse = solarProduction - solarToGrid;
-        actualHouseConsumption = solarToHouse + charging;
+        actualHouseConsumption = solarToHouse;
       } else {
         // Producing but still need grid power
         solarToHouse = solarProduction;
         gridToHouse = gridNet;
-        actualHouseConsumption = solarToHouse + gridToHouse + charging;
+        actualHouseConsumption = solarToHouse + gridToHouse;
       }
     } else {
       // Solar not producing or consuming
       gridToHouse = gridNet;
-      actualHouseConsumption = gridToHouse + charging + solarConsumption;
+      actualHouseConsumption = gridToHouse + solarConsumption;
     }
 
     return {
