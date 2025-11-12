@@ -374,6 +374,33 @@ func (h *MeterHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	rowsAffected, _ := result.RowsAffected()
 	log.Printf("Deleted %d meter readings for meter %d (%s)", rowsAffected, id, meterName)
 
+	// Delete meter replacement records (both as old and new meter)
+	replacementResult, err := tx.Exec("DELETE FROM meter_replacements WHERE old_meter_id = ? OR new_meter_id = ?", id, id)
+	if err != nil {
+		log.Printf("Failed to delete meter replacements: %v", err)
+		http.Error(w, "Failed to delete meter replacements", http.StatusInternalServerError)
+		return
+	}
+	replacementRows, _ := replacementResult.RowsAffected()
+	if replacementRows > 0 {
+		log.Printf("Deleted %d meter replacement records for meter %d (%s)", replacementRows, id, meterName)
+	}
+
+	// Update any meters that reference this meter in replaced_by_meter_id or replaces_meter_id
+	_, err = tx.Exec("UPDATE meters SET replaced_by_meter_id = NULL WHERE replaced_by_meter_id = ?", id)
+	if err != nil {
+		log.Printf("Failed to clear replaced_by_meter_id references: %v", err)
+		http.Error(w, "Failed to clear meter references", http.StatusInternalServerError)
+		return
+	}
+	
+	_, err = tx.Exec("UPDATE meters SET replaces_meter_id = NULL WHERE replaces_meter_id = ?", id)
+	if err != nil {
+		log.Printf("Failed to clear replaces_meter_id references: %v", err)
+		http.Error(w, "Failed to clear meter references", http.StatusInternalServerError)
+		return
+	}
+
 	// Delete the meter
 	_, err = tx.Exec("DELETE FROM meters WHERE id = ?", id)
 	if err != nil {
