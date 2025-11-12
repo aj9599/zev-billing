@@ -589,7 +589,7 @@ export default function AutoBilling() {
           border: '2px solid #4338ca'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <span style={{ fontSize: '24px' }}>âš¡</span>
+            <span style={{ fontSize: '24px' }}>⚡</span>
             <h4 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#4338ca' }}>
               {t('autoBilling.vzevMode.title')}
             </h4>
@@ -609,7 +609,7 @@ export default function AutoBilling() {
           border: '2px solid #3b82f6'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <span style={{ fontSize: '24px' }}>ðŸ”Œ</span>
+            <span style={{ fontSize: '24px' }}>🔌</span>
             <h4 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#1e40af' }}>
               {t('autoBilling.zevMode.title')}
             </h4>

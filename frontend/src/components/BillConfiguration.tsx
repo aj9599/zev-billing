@@ -570,7 +570,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           border: '2px solid #3b82f6'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <span style={{ fontSize: '24px' }}>💙</span>
+            <span style={{ fontSize: '24px' }}>🔌</span>
             <h4 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#1e40af' }}>
               {t('billConfig.zevMode.title')}
             </h4>
