@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+    "math"
 	"strings"
 	"time"
 
@@ -50,6 +51,13 @@ type UserPeriod struct {
 	BillingStart    time.Time // Actual billing start for this tenant
 	BillingEnd      time.Time // Actual billing end for this tenant
 	ProrationFactor float64   // For shared costs only (days in period / total days)
+}
+
+type VZEVEnergyResult struct {
+	TotalConsumption   float64
+	SelfConsumedSolar  float64 // Solar produced and consumed in same building
+	VirtualPV          float64 // Solar received from other buildings in vZEV
+	GridEnergy         float64 // Energy from grid
 }
 
 func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, endDate string, isVZEV bool) ([]models.Invoice, error) {
@@ -916,116 +924,298 @@ func (bs *BillingService) generateVZEVBills(complexID int, groupBuildingsJSON st
 
 	log.Printf("Complex contains %d buildings: %v", len(groupBuildings), groupBuildings)
 
-	// Step 1: Calculate total PV export available from all buildings in complex
-	totalPVExport := 0.0
-	for _, buildingID := range groupBuildings {
-		// Get solar meters for this building
-		rows, err := bs.db.Query(`
-			SELECT meter_id FROM meters 
-			WHERE building_id = ? AND meter_type = 'solar_meter' AND is_active = 1
-		`, buildingID)
-
-		if err != nil {
-			continue
-		}
-
-		var solarMeters []int
-		for rows.Next() {
-			var meterID int
-			if err := rows.Scan(&meterID); err == nil {
-				solarMeters = append(solarMeters, meterID)
-			}
-		}
-		rows.Close()
-
-		// Calculate export for this building
-		for _, meterID := range solarMeters {
-			var exportKWh float64
-			err := bs.db.QueryRow(`
-				SELECT COALESCE(SUM(consumption_export), 0)
-				FROM meter_readings
-				WHERE meter_id = ? AND reading_time >= ? AND reading_time <= ?
-			`, meterID, start, end).Scan(&exportKWh)
-
-			if err == nil {
-				totalPVExport += exportKWh
-				log.Printf("  Building %d, Meter %d: %.3f kWh PV export", buildingID, meterID, exportKWh)
-			}
-		}
+	// Get all user periods for all buildings in complex
+	type UserInfo struct {
+		UserID          int
+		BuildingID      int
+		UserPeriod      UserPeriod
 	}
-
-	log.Printf("Total PV export available for virtual allocation: %.3f kWh", totalPVExport)
-
-	// Step 2: Calculate total consumption across all apartments in complex
-	totalComplexConsumption := 0.0
-	apartmentConsumption := make(map[int]float64) // userID -> consumption
-
+	
+	allUsers := []UserInfo{}
 	for _, buildingID := range groupBuildings {
 		userPeriods, err := bs.getUserPeriodsForBilling(buildingID, userIDs, start, end)
 		if err != nil {
 			continue
 		}
-
+		
 		for _, userPeriod := range userPeriods {
-			_, _, consumption := bs.calculateZEVConsumption(userPeriod.UserID, buildingID, userPeriod.BillingStart, userPeriod.BillingEnd)
-			apartmentConsumption[userPeriod.UserID] = consumption
-			totalComplexConsumption += consumption
+			allUsers = append(allUsers, UserInfo{
+				UserID:     userPeriod.UserID,
+				BuildingID: buildingID,
+				UserPeriod: userPeriod,
+			})
 		}
 	}
 
-	log.Printf("Total complex consumption: %.3f kWh across %d apartments", totalComplexConsumption, len(apartmentConsumption))
+	log.Printf("Total users across complex: %d", len(allUsers))
 
-	// Step 3: Calculate virtual allocation ratios
-	// PV is allocated proportionally to consumption
+	// Calculate vZEV energy distribution for each user
+	userEnergyResults := make(map[int]*VZEVEnergyResult)
+	
+	for _, userInfo := range allUsers {
+		result, err := bs.calculateVZEVEnergyForUser(
+			userInfo.UserID,
+			userInfo.BuildingID,
+			groupBuildings,
+			userInfo.UserPeriod.BillingStart,
+			userInfo.UserPeriod.BillingEnd,
+		)
+		
+		if err != nil {
+			log.Printf("ERROR: Failed to calculate vZEV energy for user %d: %v", userInfo.UserID, err)
+			continue
+		}
+		
+		userEnergyResults[userInfo.UserID] = result
+		
+		log.Printf("\n  User %d (%s %s) - Building %d:", 
+			userInfo.UserID, userInfo.UserPeriod.FirstName, userInfo.UserPeriod.LastName, userInfo.BuildingID)
+		log.Printf("    Total Consumption: %.3f kWh", result.TotalConsumption)
+		log.Printf("    Self-Consumed Solar: %.3f kWh (%.1f%%)", result.SelfConsumedSolar, (result.SelfConsumedSolar/result.TotalConsumption)*100)
+		log.Printf("    Virtual PV Share: %.3f kWh (%.1f%%)", result.VirtualPV, (result.VirtualPV/result.TotalConsumption)*100)
+		log.Printf("    Grid Import: %.3f kWh (%.1f%%)", result.GridEnergy, (result.GridEnergy/result.TotalConsumption)*100)
+	}
+
+	// Generate invoices for each user
 	invoices := []models.Invoice{}
-
-	for _, buildingID := range groupBuildings {
-		userPeriods, err := bs.getUserPeriodsForBilling(buildingID, userIDs, start, end)
-		if err != nil {
+	
+	for _, userInfo := range allUsers {
+		energyResult := userEnergyResults[userInfo.UserID]
+		if energyResult == nil {
 			continue
 		}
-
-		for _, userPeriod := range userPeriods {
-			consumption := apartmentConsumption[userPeriod.UserID]
-			if consumption == 0 {
-				continue
-			}
-
-			// Calculate this apartment's share of virtual PV
-			virtualPVShare := 0.0
-			if totalComplexConsumption > 0 {
-				virtualPVShare = totalPVExport * (consumption / totalComplexConsumption)
-			}
-
-			// Rest comes from grid
-			gridEnergy := consumption - virtualPVShare
-			if gridEnergy < 0 {
-				gridEnergy = 0
-				virtualPVShare = consumption
-			}
-
-			log.Printf("\n  User %d (%s %s):", userPeriod.UserID, userPeriod.FirstName, userPeriod.LastName)
-			log.Printf("    Consumption: %.3f kWh", consumption)
-			log.Printf("    Virtual PV: %.3f kWh (%.1f%%)", virtualPVShare, (virtualPVShare/consumption)*100)
-			log.Printf("    Grid: %.3f kWh (%.1f%%)", gridEnergy, (gridEnergy/consumption)*100)
-
-			// Generate invoice with virtual allocation
-			invoice, err := bs.generateVZEVInvoice(userPeriod, buildingID, start, end, settings, consumption, virtualPVShare, gridEnergy)
-			if err != nil {
-				log.Printf("ERROR: Failed to generate vZEV invoice: %v", err)
-				continue
-			}
-
-			invoices = append(invoices, *invoice)
+		
+		invoice, err := bs.generateVZEVInvoice(
+			userInfo.UserPeriod,
+			userInfo.BuildingID,
+			start,
+			end,
+			settings,
+			energyResult,
+		)
+		
+		if err != nil {
+			log.Printf("ERROR: Failed to generate vZEV invoice for user %d: %v", userInfo.UserID, err)
+			continue
 		}
+		
+		invoices = append(invoices, *invoice)
 	}
 
 	log.Printf("\n=== vZEV BILLING COMPLETE: %d invoices ===", len(invoices))
 	return invoices, nil
 }
 
-// generateVZEVInvoice creates an invoice with virtual PV allocation
-func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID int, fullStart, fullEnd time.Time, settings models.BillingSettings, totalConsumption, virtualPV, gridEnergy float64) (*models.Invoice, error) {
+func (bs *BillingService) calculateVZEVEnergyForUser(userID, userBuildingID int, allBuildingsInComplex []int, start, end time.Time) (*VZEVEnergyResult, error) {
+	log.Printf("    [vZEV] Calculating energy for user %d in building %d", userID, userBuildingID)
+	
+	type IntervalReading struct {
+		MeterID           int
+		MeterType         string
+		BuildingID        int
+		UserID            sql.NullInt64
+		ReadingTime       time.Time
+		ConsumptionKWh    float64
+		ConsumptionExport float64
+	}
+	
+	// Fetch ALL readings for ALL meters in the complex
+	rows, err := bs.db.Query(`
+		SELECT m.id, m.meter_type, m.building_id, m.user_id, mr.reading_time, 
+		       mr.consumption_kwh, mr.consumption_export
+		FROM meter_readings mr
+		JOIN meters m ON mr.meter_id = m.id
+		WHERE m.building_id IN (`+buildPlaceholders(len(allBuildingsInComplex))+`)
+		AND m.meter_type IN ('apartment_meter', 'solar_meter')
+		AND mr.reading_time >= ? AND mr.reading_time <= ?
+		ORDER BY mr.reading_time, m.id
+	`, appendBuildingIDs(allBuildingsInComplex, start, end)...)
+	
+	if err != nil {
+		return nil, fmt.Errorf("failed to query readings: %v", err)
+	}
+	defer rows.Close()
+	
+	allReadings := []IntervalReading{}
+	for rows.Next() {
+		var r IntervalReading
+		if err := rows.Scan(&r.MeterID, &r.MeterType, &r.BuildingID, &r.UserID, 
+			&r.ReadingTime, &r.ConsumptionKWh, &r.ConsumptionExport); err != nil {
+			continue
+		}
+		allReadings = append(allReadings, r)
+	}
+	
+	log.Printf("    [vZEV] Fetched %d readings across %d buildings", len(allReadings), len(allBuildingsInComplex))
+	
+	// Organize readings by timestamp and process interval-by-interval
+	type IntervalData struct {
+		Timestamp             time.Time
+		BuildingConsumption   map[int]float64  // buildingID -> consumption
+		BuildingSolarProd     map[int]float64  // buildingID -> solar production
+		UserConsumption       map[int]float64  // userID -> consumption
+		UserBuildingMap       map[int]int      // userID -> buildingID
+	}
+	
+	intervals := make(map[time.Time]*IntervalData)
+	
+	// Process all readings into interval structure
+	for _, reading := range allReadings {
+		if intervals[reading.ReadingTime] == nil {
+			intervals[reading.ReadingTime] = &IntervalData{
+				Timestamp:           reading.ReadingTime,
+				BuildingConsumption: make(map[int]float64),
+				BuildingSolarProd:   make(map[int]float64),
+				UserConsumption:     make(map[int]float64),
+				UserBuildingMap:     make(map[int]int),
+			}
+		}
+		
+		interval := intervals[reading.ReadingTime]
+		
+		if reading.MeterType == "apartment_meter" {
+			if reading.UserID.Valid {
+				uid := int(reading.UserID.Int64)
+				interval.UserConsumption[uid] += reading.ConsumptionKWh
+				interval.UserBuildingMap[uid] = reading.BuildingID
+			}
+			interval.BuildingConsumption[reading.BuildingID] += reading.ConsumptionKWh
+		} else if reading.MeterType == "solar_meter" {
+			// For solar meters, ConsumptionExport represents the export energy (production)
+			interval.BuildingSolarProd[reading.BuildingID] += reading.ConsumptionExport
+		}
+	}
+	
+	// Sort timestamps
+	timestamps := make([]time.Time, 0, len(intervals))
+	for ts := range intervals {
+		timestamps = append(timestamps, ts)
+	}
+	sortTimestamps(timestamps)
+	
+	// Process each interval with correct vZEV logic
+	result := &VZEVEnergyResult{}
+	intervalCount := 0
+	
+	for _, ts := range timestamps {
+		interval := intervals[ts]
+		
+		// Get user's consumption in this interval
+		userConsumption := interval.UserConsumption[userID]
+		if userConsumption <= 0 {
+			continue
+		}
+		
+		intervalCount++
+		result.TotalConsumption += userConsumption
+		
+		// Step 1: Calculate self-consumption for each building
+		buildingSelfConsumed := make(map[int]float64)
+		buildingSurplus := make(map[int]float64)
+		buildingDeficit := make(map[int]float64)
+		
+		for _, buildingID := range allBuildingsInComplex {
+			consumption := interval.BuildingConsumption[buildingID]
+			production := interval.BuildingSolarProd[buildingID]
+			
+			selfConsumed := math.Min(production, consumption)
+			buildingSelfConsumed[buildingID] = selfConsumed
+			
+			if production > consumption {
+				buildingSurplus[buildingID] = production - consumption
+			} else {
+				buildingDeficit[buildingID] = consumption - production
+			}
+		}
+		
+		// Step 2: Calculate total surplus and deficit in vZEV
+		totalSurplus := 0.0
+		totalDeficit := 0.0
+		
+		for _, surplus := range buildingSurplus {
+			totalSurplus += surplus
+		}
+		for _, deficit := range buildingDeficit {
+			totalDeficit += deficit
+		}
+		
+		// Step 3: Allocate user's energy sources
+		// 3a. Self-consumed solar (if user is in a building with solar)
+		userSelfConsumed := 0.0
+		buildingConsumption := interval.BuildingConsumption[userBuildingID]
+		buildingSolarProd := interval.BuildingSolarProd[userBuildingID]
+		
+		if buildingConsumption > 0 && buildingSolarProd > 0 {
+			selfConsumedInBuilding := math.Min(buildingSolarProd, buildingConsumption)
+			userSelfConsumed = selfConsumedInBuilding * (userConsumption / buildingConsumption)
+		}
+		
+		result.SelfConsumedSolar += userSelfConsumed
+		
+		// 3b. Virtual PV from other buildings
+		userVirtualPV := 0.0
+		userDeficit := userConsumption - userSelfConsumed
+		
+		if userDeficit > 0 && totalDeficit > 0 && totalSurplus > 0 {
+			// User gets proportional share of vZEV surplus based on their deficit
+			availableVirtualPV := math.Min(totalSurplus, totalDeficit)
+			userVirtualPV = availableVirtualPV * (userDeficit / totalDeficit)
+		}
+		
+		result.VirtualPV += userVirtualPV
+		
+		// 3c. Grid energy (remainder)
+		userGrid := userConsumption - userSelfConsumed - userVirtualPV
+		if userGrid < 0 {
+			userGrid = 0
+		}
+		
+		result.GridEnergy += userGrid
+		
+		// Log first few intervals for debugging
+		if intervalCount <= 5 {
+			log.Printf("    [vZEV] %s: User consumption: %.3f kWh -> Self: %.3f, Virtual: %.3f, Grid: %.3f",
+				ts.Format("15:04"), userConsumption, userSelfConsumed, userVirtualPV, userGrid)
+		}
+	}
+	
+	log.Printf("    [vZEV] Processed %d intervals", intervalCount)
+	
+	return result, nil
+}
+
+// Helper function to build SQL placeholders
+func buildPlaceholders(count int) string {
+	placeholders := make([]string, count)
+	for i := range placeholders {
+		placeholders[i] = "?"
+	}
+	return strings.Join(placeholders, ",")
+}
+
+// Helper function to append building IDs to query args
+func appendBuildingIDs(buildingIDs []int, start, end time.Time) []interface{} {
+	args := make([]interface{}, 0, len(buildingIDs)+2)
+	for _, id := range buildingIDs {
+		args = append(args, id)
+	}
+	args = append(args, start, end)
+	return args
+}
+
+// Helper function to sort timestamps
+func sortTimestamps(timestamps []time.Time) {
+	for i := 0; i < len(timestamps); i++ {
+		for j := i + 1; j < len(timestamps); j++ {
+			if timestamps[i].After(timestamps[j]) {
+				timestamps[i], timestamps[j] = timestamps[j], timestamps[i]
+			}
+		}
+	}
+}
+
+// generateVZEVInvoice creates an invoice with correct vZEV energy breakdown
+func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID int, fullStart, fullEnd time.Time, settings models.BillingSettings, energyResult *VZEVEnergyResult) (*models.Invoice, error) {
 	tr := GetTranslations(userPeriod.Language)
 
 	invoiceYear := fullStart.Year()
@@ -1040,7 +1230,7 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 
 	// Add vZEV mode notice
 	items = append(items, models.InvoiceItem{
-		Description: "⚡ vZEV Mode: Virtual Energy Allocation",
+		Description: "⚡ vZEV Mode: Virtual Self-Consumption Community",
 		Quantity:    0,
 		UnitPrice:   0,
 		TotalPrice:  0,
@@ -1086,8 +1276,8 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 			tr.Period, start.Format("02.01"), end.Format("02.01"),
 			tr.OldReading, meterReadingFrom,
 			tr.NewReading, meterReadingTo,
-			tr.Consumption, totalConsumption),
-		Quantity:    totalConsumption,
+			tr.Consumption, energyResult.TotalConsumption),
+		Quantity:    energyResult.TotalConsumption,
 		UnitPrice:   0,
 		TotalPrice:  0,
 		ItemType:    "meter_reading_compact",
@@ -1101,35 +1291,64 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 		ItemType:    "separator",
 	})
 
-	// Virtual PV allocation
-	if virtualPV > 0 {
-		virtualPVCost := virtualPV * settings.VZEVExportPrice
+	// Energy breakdown with correct vZEV logic
+	items = append(items, models.InvoiceItem{
+		Description: "🔆 vZEV Energy Breakdown:",
+		Quantity:    0,
+		UnitPrice:   0,
+		TotalPrice:  0,
+		ItemType:    "vzev_breakdown_header",
+	})
+
+	// 1. Self-consumed solar (from own building)
+	if energyResult.SelfConsumedSolar > 0 {
+		selfConsumedCost := energyResult.SelfConsumedSolar * settings.SolarPowerPrice
+		totalAmount += selfConsumedCost
+		items = append(items, models.InvoiceItem{
+			Description: fmt.Sprintf("  └─ Own Building Solar: %.3f kWh × %.3f %s/kWh",
+				energyResult.SelfConsumedSolar, settings.SolarPowerPrice, settings.Currency),
+			Quantity:    energyResult.SelfConsumedSolar,
+			UnitPrice:   settings.SolarPowerPrice,
+			TotalPrice:  selfConsumedCost,
+			ItemType:    "vzev_self_solar",
+		})
+		log.Printf("  Self-Consumed Solar: %.3f kWh × %.3f = %.3f %s", 
+			energyResult.SelfConsumedSolar, settings.SolarPowerPrice, selfConsumedCost, settings.Currency)
+	}
+
+	// 2. Virtual PV (from other buildings in vZEV)
+	if energyResult.VirtualPV > 0 {
+		virtualPVCost := energyResult.VirtualPV * settings.VZEVExportPrice
 		totalAmount += virtualPVCost
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("Virtual PV (allocated from complex): %.3f kWh × %.3f %s/kWh",
-				virtualPV, settings.VZEVExportPrice, settings.Currency),
-			Quantity:    virtualPV,
+			Description: fmt.Sprintf("  └─ Virtual PV (from vZEV): %.3f kWh × %.3f %s/kWh",
+				energyResult.VirtualPV, settings.VZEVExportPrice, settings.Currency),
+			Quantity:    energyResult.VirtualPV,
 			UnitPrice:   settings.VZEVExportPrice,
 			TotalPrice:  virtualPVCost,
 			ItemType:    "vzev_virtual_pv",
 		})
+		log.Printf("  Virtual PV: %.3f kWh × %.3f = %.3f %s", 
+			energyResult.VirtualPV, settings.VZEVExportPrice, virtualPVCost, settings.Currency)
 	}
 
-	// Grid energy
-	if gridEnergy > 0 {
-		gridCost := gridEnergy * settings.NormalPowerPrice
+	// 3. Grid energy
+	if energyResult.GridEnergy > 0 {
+		gridCost := energyResult.GridEnergy * settings.NormalPowerPrice
 		totalAmount += gridCost
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh",
-				tr.NormalPowerGrid, gridEnergy, settings.NormalPowerPrice, settings.Currency),
-			Quantity:    gridEnergy,
+			Description: fmt.Sprintf("  └─ %s: %.3f kWh × %.3f %s/kWh",
+				tr.NormalPowerGrid, energyResult.GridEnergy, settings.NormalPowerPrice, settings.Currency),
+			Quantity:    energyResult.GridEnergy,
 			UnitPrice:   settings.NormalPowerPrice,
 			TotalPrice:  gridCost,
 			ItemType:    "normal_power",
 		})
+		log.Printf("  Grid Energy: %.3f kWh × %.3f = %.3f %s", 
+			energyResult.GridEnergy, settings.NormalPowerPrice, gridCost, settings.Currency)
 	}
 
-	// Car charging (same as ZEV)
+	// Car charging (same logic as ZEV)
 	if userPeriod.ChargerIDs != "" {
 		normalCharging, priorityCharging, firstSession, lastSession := bs.calculateChargingConsumption(buildingID, userPeriod.ChargerIDs, start, end)
 

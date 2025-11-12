@@ -283,10 +283,10 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			userLocation = fmt.Sprintf("%s %s", zip, city)
 		}
 
-		// Format sender info for display        
+		// Format sender info for display
 		senderName := banking.AccountHolder
-        senderStreet := sender.Address
-        senderLocation := fmt.Sprintf("%s %s", sender.Zip, sender.City)
+		senderStreet := sender.Address
+		senderLocation := fmt.Sprintf("%s %s", sender.Zip, sender.City)
 
 		// Build QR sections WITH TRANSLATIONS
 		qrPage = fmt.Sprintf(`
@@ -354,37 +354,37 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 				</div>
 			</div>
 		</div>`,
-			tr.ReceiptSection,       // "Empfangsschein" / "Receipt" / etc.
-			tr.AccountPayableTo,     // "Konto / Zahlbar an"
+			tr.ReceiptSection,   // "Empfangsschein" / "Receipt" / etc.
+			tr.AccountPayableTo, // "Konto / Zahlbar an"
 			banking.IBAN,
 			senderName,
 			senderStreet,
 			senderLocation,
-			tr.PayableBy,            // "Zahlbar durch"
+			tr.PayableBy, // "Zahlbar durch"
 			userName,
 			userStreet,
 			userLocation,
-			tr.Currency,             // "Währung"
-			tr.AmountLabel,          // "Betrag"
+			tr.Currency,    // "Währung"
+			tr.AmountLabel, // "Betrag"
 			currency,
 			totalAmount,
-			tr.AcceptancePoint,      // "Annahmestelle"
-			tr.PaymentPart,          // "Zahlteil"
+			tr.AcceptancePoint, // "Annahmestelle"
+			tr.PaymentPart,     // "Zahlteil"
 			qrCodeContent,
-			tr.AccountPayableTo,     // "Konto / Zahlbar an"
+			tr.AccountPayableTo, // "Konto / Zahlbar an"
 			banking.IBAN,
 			senderName,
 			senderStreet,
 			senderLocation,
-			tr.AdditionalInfo,       // "Zusätzliche Informationen"
-			tr.InvoiceLabel,         // "Invoice" / "Rechnung" / etc.
+			tr.AdditionalInfo, // "Zusätzliche Informationen"
+			tr.InvoiceLabel,   // "Invoice" / "Rechnung" / etc.
 			invoiceNumber,
-			tr.PayableBy,            // "Zahlbar durch"
+			tr.PayableBy, // "Zahlbar durch"
 			userName,
 			userStreet,
 			userLocation,
-			tr.Currency,             // "Währung"
-			tr.AmountLabel,          // "Betrag"
+			tr.Currency,    // "Währung"
+			tr.AmountLabel, // "Betrag"
 			currency,
 			totalAmount,
 		)
@@ -604,6 +604,50 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			margin: 2px 0;
 			line-height: 1.4;
 			font-size: 8pt;
+		}
+
+		.vzev-notice td {
+			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			color: white;
+			padding: 12px 16px;
+			border-radius: 6px;
+			font-weight: 600;
+			text-align: center;
+			margin-bottom: 12px;
+		}
+
+		.proration-notice td {
+			background-color: #fff3cd;
+			color: #856404;
+			padding: 10px 16px;
+			border-left: 4px solid #ffc107;
+			border-radius: 4px;
+			font-size: 13px;
+		}
+
+		.vzev-breakdown-header td {
+			background-color: #f3f4f6;
+			padding: 10px 16px;
+			font-weight: 600;
+			color: #4338ca;
+			border-left: 4px solid #8b5cf6;
+			font-size: 15px;
+		}
+
+		.vzev-self-solar td {
+			background-color: #fef3c7;
+		}
+
+		.vzev-self-solar strong {
+			color: #92400e;
+		}
+
+		.vzev-virtual-pv td {
+			background-color: #ede9fe;
+		}
+
+		.vzev-virtual-pv strong {
+			color: #5b21b6;
 		}
 		
 		.footer-timestamp {
@@ -857,6 +901,8 @@ func (pg *PDFGenerator) generateItemHTML(item map[string]interface{}, currency s
 
 	carIcon := `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>`
 
+	vzevIcon := `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/><circle cx="12" cy="12" r="3" fill="#8b5cf6" opacity="0.2"/></svg>`
+
 	switch itemType {
 	case "meter_info":
 		return fmt.Sprintf(`<tr class="item-header"><td colspan="2"><strong>%s</strong></td></tr>`, description)
@@ -917,6 +963,54 @@ func (pg *PDFGenerator) generateItemHTML(item map[string]interface{}, currency s
 			<td style="padding-left: 8px;"><strong>%s</strong></td>
 			<td class="text-right"><strong>%s %.2f</strong></td>
 		</tr>`, description, currency, totalPrice)
+
+	case "vzev_notice":
+		// Special styling for vZEV mode indicator
+		return fmt.Sprintf(`<tr class="vzev-notice">
+			<td colspan="2" style="background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%); color: white; padding: 12px 16px; border-radius: 6px; font-weight: 600; text-align: center; margin-bottom: 12px;">
+				%s
+			</td>
+		</tr>`, description)
+
+	case "proration_notice":
+		// Notice for partial billing periods
+		return fmt.Sprintf(`<tr class="proration-notice">
+			<td colspan="2" style="background-color: #fff3cd; color: #856404; padding: 10px 16px; border-left: 4px solid #ffc107; border-radius: 4px; font-size: 13px;">
+				%s
+			</td>
+		</tr>`, description)
+
+	case "vzev_breakdown_header":
+		// Header for the vZEV energy breakdown section
+		return fmt.Sprintf(`<tr class="section-separator"><td colspan="2"></td></tr><tr class="vzev-breakdown-header">
+			<td colspan="2" style="background-color: #f3f4f6; padding: 10px 16px; font-weight: 600; color: #4338ca; border-left: 4px solid #8b5cf6; font-size: 15px;">
+				%s
+			</td>
+		</tr>`, description)
+
+	case "vzev_self_solar":
+		// Self-consumed solar (from own building) - bright yellow/orange highlight
+		return fmt.Sprintf(`<tr class="item-cost vzev-self-solar">
+			<td style="padding-left: 24px; background-color: #fef3c7;">
+				<span style="display: inline-flex; align-items: center; gap: 6px;">
+					%s
+					<strong style="color: #92400e;">%s</strong>
+				</span>
+			</td>
+			<td class="text-right" style="background-color: #fef3c7;"><strong style="color: #92400e;">%s %.2f</strong></td>
+		</tr>`, sunIcon, description, currency, totalPrice)
+
+	case "vzev_virtual_pv":
+		// Virtual PV from other buildings in vZEV - purple highlight
+		return fmt.Sprintf(`<tr class="item-cost vzev-virtual-pv">
+			<td style="padding-left: 24px; background-color: #ede9fe;">
+				<span style="display: inline-flex; align-items: center; gap: 6px;">
+					%s
+					<strong style="color: #5b21b6;">%s</strong>
+				</span>
+			</td>
+			<td class="text-right" style="background-color: #ede9fe;"><strong style="color: #5b21b6;">%s %.2f</strong></td>
+		</tr>`, vzevIcon, description, currency, totalPrice)
 
 	default:
 		if totalPrice > 0 {
