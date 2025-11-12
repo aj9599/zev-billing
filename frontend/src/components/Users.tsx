@@ -43,7 +43,7 @@ export default function Users() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validate apartment selection for buildings with apartments
     if (formData.user_type === 'regular' && formData.building_id) {
       const selectedBuilding = buildings.find(b => b.id === formData.building_id);
@@ -52,17 +52,17 @@ export default function Users() {
         return;
       }
     }
-    
+
     // Validate rent period for regular users
     if (formData.user_type === 'regular' && !formData.rent_start_date) {
       alert(t('users.rentStartDateRequired'));
       return;
     }
-    
+
     try {
       const dataToSend = {
         ...formData,
-        managed_buildings: formData.user_type === 'administration' && formData.managed_buildings 
+        managed_buildings: formData.user_type === 'administration' && formData.managed_buildings
           ? JSON.stringify(formData.managed_buildings)
           : undefined
       };
@@ -116,19 +116,37 @@ export default function Users() {
         console.error('Error parsing managed_buildings:', e);
       }
     }
-    
+
     // Handle rent dates properly - convert null/undefined to appropriate values for editing
     // For start date: empty string (required field)
     // For end date: '2099-01-01' as default far-future date
-    const startDate = user.rent_start_date || '';
-    const endDate = user.rent_end_date || '2099-01-01';
-    
+    // Helper function to convert ISO date string to YYYY-MM-DD format
+    const formatDateForInput = (dateStr?: string): string => {
+      if (!dateStr) return '';
+      // If it's already in YYYY-MM-DD format, return as is
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+      // Otherwise, parse the ISO date and extract YYYY-MM-DD
+      try {
+        const date = new Date(dateStr);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      } catch (e) {
+        console.error('Error parsing date:', dateStr, e);
+        return '';
+      }
+    };
+
+    const startDate = formatDateForInput(user.rent_start_date);
+    const endDate = formatDateForInput(user.rent_end_date) || '2099-01-01';
+
     console.log('Editing user:', user.id);
     console.log('Rent start date from DB:', user.rent_start_date);
     console.log('Rent end date from DB:', user.rent_end_date);
     console.log('Setting form start date to:', startDate);
     console.log('Setting form end date to:', endDate);
-    
+
     setFormData({
       ...user,
       managed_buildings: managedBuildingsArray,
@@ -160,7 +178,7 @@ export default function Users() {
   // Helper function to check if user's managed buildings include the selected building
   const userManagesBuilding = (user: UserType, buildingId: number): boolean => {
     if (user.user_type !== 'administration' || !user.managed_buildings) return false;
-    
+
     let managedBuildingIds: number[] = [];
     try {
       if (typeof user.managed_buildings === 'string') {
@@ -171,28 +189,28 @@ export default function Users() {
     } catch (e) {
       return false;
     }
-    
+
     // Check if the building is directly managed
     if (managedBuildingIds.includes(buildingId)) return true;
-    
+
     // Check if the user manages a complex that includes this building
     for (const managedId of managedBuildingIds) {
       const managedBuilding = buildings.find(b => b.id === managedId);
       if (managedBuilding && managedBuilding.is_group && managedBuilding.group_buildings) {
-        const groupBuildingIds = typeof managedBuilding.group_buildings === 'string' 
-          ? JSON.parse(managedBuilding.group_buildings) 
+        const groupBuildingIds = typeof managedBuilding.group_buildings === 'string'
+          ? JSON.parse(managedBuilding.group_buildings)
           : managedBuilding.group_buildings;
         if (groupBuildingIds.includes(buildingId)) return true;
       }
     }
-    
+
     return false;
   };
 
   const filteredUsers = users.filter(user => {
     // Filter by active/inactive status based on showArchive
     const matchesActiveStatus = showArchive ? !user.is_active : user.is_active;
-    
+
     // Filter by building
     let matchesBuilding = false;
     if (selectedBuildingId === 'all') {
@@ -203,14 +221,14 @@ export default function Users() {
       // For admins, check if they manage this building or a complex containing it
       matchesBuilding = userManagesBuilding(user, selectedBuildingId as number);
     }
-    
+
     // Filter by search query
     const searchLower = searchQuery.toLowerCase();
-    const matchesSearch = searchQuery === '' || 
+    const matchesSearch = searchQuery === '' ||
       `${user.first_name} ${user.last_name}`.toLowerCase().includes(searchLower) ||
       user.email.toLowerCase().includes(searchLower) ||
       (user.apartment_unit && user.apartment_unit.toLowerCase().includes(searchLower));
-    
+
     return matchesActiveStatus && matchesBuilding && matchesSearch;
   });
 
@@ -224,9 +242,9 @@ export default function Users() {
 
   const getManagedBuildingsNames = (managedBuildings?: number[] | string) => {
     let buildingIds: number[] = [];
-    
+
     if (!managedBuildings) return '-';
-    
+
     try {
       if (typeof managedBuildings === 'string') {
         buildingIds = JSON.parse(managedBuildings);
@@ -236,7 +254,7 @@ export default function Users() {
     } catch (e) {
       return '-';
     }
-    
+
     if (buildingIds.length === 0) return '-';
     return buildingIds.map(id => buildings.find(b => b.id === id)?.name || `ID ${id}`).join(', ');
   };
@@ -247,29 +265,29 @@ export default function Users() {
 
   const getAvailableApartments = (buildingId?: number): string[] => {
     if (!buildingId) return [];
-    
+
     const building = buildings.find(b => b.id === buildingId);
     if (!building || !building.has_apartments || !building.floors_config) return [];
-    
+
     const allApartments: string[] = [];
     building.floors_config.forEach(floor => {
       floor.apartments.forEach(apt => {
         allApartments.push(`${floor.floor_name} - ${apt}`);
       });
     });
-    
+
     // Filter out occupied apartments (only by active users, excluding current user if editing)
     const occupiedApartments = users
       .filter(u => u.building_id === buildingId && u.is_active && u.apartment_unit && u.id !== editingUser?.id)
       .map(u => u.apartment_unit);
-    
+
     return allApartments.filter(apt => !occupiedApartments.includes(apt));
   };
 
   // Helper function to format rent period display (DD.MM.YYYY format)
   const formatRentPeriod = (startDate?: string, endDate?: string) => {
     if (!startDate) return '-';
-    
+
     const formatDate = (dateStr: string) => {
       const date = new Date(dateStr);
       const day = String(date.getDate()).padStart(2, '0');
@@ -277,14 +295,14 @@ export default function Users() {
       const year = date.getFullYear();
       return `${day}.${month}.${year}`;
     };
-    
+
     const start = formatDate(startDate);
-    
+
     // Don't show end date if it's the default far future date
     if (!endDate || endDate === '2099-01-01') {
       return `${start} →`;
     }
-    
+
     const end = formatDate(endDate);
     return `${start} → ${end}`;
   };
@@ -292,7 +310,7 @@ export default function Users() {
   const InstructionsModal = () => (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', 
+      backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center',
       justifyContent: 'center', zIndex: 2000, padding: '20px'
     }}>
       <div style={{
@@ -301,7 +319,7 @@ export default function Users() {
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>{t('users.instructions.title')}</h2>
-          <button onClick={() => setShowInstructions(false)} 
+          <button onClick={() => setShowInstructions(false)}
             style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
             <X size={24} />
           </button>
@@ -386,9 +404,9 @@ export default function Users() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', gap: '15px', flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ 
-            fontSize: '36px', 
-            fontWeight: '800', 
+          <h1 style={{
+            fontSize: '36px',
+            fontWeight: '800',
             marginBottom: '8px',
             display: 'flex',
             alignItems: 'center',
@@ -410,7 +428,7 @@ export default function Users() {
             onClick={() => setShowArchive(!showArchive)}
             style={{
               display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px',
-              backgroundColor: showArchive ? '#6b7280' : '#8b5cf6', color: 'white', 
+              backgroundColor: showArchive ? '#6b7280' : '#8b5cf6', color: 'white',
               border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer'
             }}
           >
@@ -469,11 +487,11 @@ export default function Users() {
       </div>
 
       {/* Building Filter Cards */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', 
-        gap: '16px', 
-        marginBottom: '30px' 
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+        gap: '16px',
+        marginBottom: '30px'
       }}>
         <div
           onClick={() => setSelectedBuildingId('all')}
@@ -532,10 +550,10 @@ export default function Users() {
 
       {/* Administration Users Section */}
       <div style={{ marginBottom: '30px' }}>
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: '10px', 
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
           marginBottom: '15px',
           padding: '12px 16px',
           backgroundColor: '#f0f9ff',
@@ -583,7 +601,7 @@ export default function Users() {
                   </td>
                   <td style={{ padding: '16px' }}>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <button 
+                      <button
                         onClick={() => handleToggleActive(user)}
                         style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}
                         title={user.is_active ? t('users.deactivate') : t('users.activate')}
@@ -628,7 +646,7 @@ export default function Users() {
                     ) : (
                       <XCircle size={18} color="#ef4444" />
                     )}
-                    <div style={{ 
+                    <div style={{
                       display: 'inline-block',
                       padding: '2px 8px',
                       backgroundColor: '#f0f9ff',
@@ -682,10 +700,10 @@ export default function Users() {
 
       {/* Regular Users Section */}
       <div>
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: '10px', 
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
           marginBottom: '15px',
           padding: '12px 16px',
           backgroundColor: '#f0fdf4',
@@ -733,9 +751,9 @@ export default function Users() {
                   <td style={{ padding: '16px' }}>{user.email}</td>
                   <td style={{ padding: '16px' }}>
                     {user.apartment_unit ? (
-                      <span style={{ 
-                        display: 'inline-flex', 
-                        alignItems: 'center', 
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
                         gap: '4px',
                         padding: '4px 8px',
                         backgroundColor: '#f0fdf4',
@@ -750,9 +768,9 @@ export default function Users() {
                   </td>
                   <td style={{ padding: '16px', fontSize: '13px' }}>
                     {user.rent_start_date ? (
-                      <span style={{ 
-                        display: 'inline-flex', 
-                        alignItems: 'center', 
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
                         gap: '4px',
                         padding: '4px 8px',
                         backgroundColor: '#fef3c7',
@@ -769,9 +787,9 @@ export default function Users() {
                   </td>
                   <td style={{ padding: '16px' }}>
                     {user.charger_ids ? (
-                      <span style={{ 
-                        display: 'inline-flex', 
-                        alignItems: 'center', 
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
                         gap: '4px',
                         padding: '4px 8px',
                         backgroundColor: '#f0f9ff',
@@ -788,7 +806,7 @@ export default function Users() {
                   <td style={{ padding: '16px' }}>{getBuildingName(user.building_id)}</td>
                   <td style={{ padding: '16px' }}>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <button 
+                      <button
                         onClick={() => handleToggleActive(user)}
                         style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}
                         title={user.is_active ? t('users.deactivate') : t('users.activate')}
@@ -833,7 +851,7 @@ export default function Users() {
                     ) : (
                       <XCircle size={18} color="#ef4444" />
                     )}
-                    <div style={{ 
+                    <div style={{
                       display: 'inline-block',
                       padding: '2px 8px',
                       backgroundColor: '#f0fdf4',
@@ -934,18 +952,18 @@ export default function Users() {
                   {t('users.userType')} *
                 </label>
                 <div style={{ display: 'flex', gap: '12px' }}>
-                  <label style={{ 
-                    flex: 1, 
-                    padding: '12px', 
+                  <label style={{
+                    flex: 1,
+                    padding: '12px',
                     border: `2px solid ${formData.user_type === 'regular' ? '#15803d' : '#e5e7eb'}`,
                     backgroundColor: formData.user_type === 'regular' ? '#f0fdf4' : 'white',
                     borderRadius: '6px',
                     cursor: 'pointer',
                     transition: 'all 0.2s'
                   }}>
-                    <input 
-                      type="radio" 
-                      name="user_type" 
+                    <input
+                      type="radio"
+                      name="user_type"
                       value="regular"
                       checked={formData.user_type === 'regular'}
                       onChange={() => setFormData({ ...formData, user_type: 'regular' })}
@@ -955,18 +973,18 @@ export default function Users() {
                       {t('users.regular')}
                     </span>
                   </label>
-                  <label style={{ 
-                    flex: 1, 
-                    padding: '12px', 
+                  <label style={{
+                    flex: 1,
+                    padding: '12px',
                     border: `2px solid ${formData.user_type === 'administration' ? '#0369a1' : '#e5e7eb'}`,
                     backgroundColor: formData.user_type === 'administration' ? '#f0f9ff' : 'white',
                     borderRadius: '6px',
                     cursor: 'pointer',
                     transition: 'all 0.2s'
                   }}>
-                    <input 
-                      type="radio" 
-                      name="user_type" 
+                    <input
+                      type="radio"
+                      name="user_type"
                       value="administration"
                       checked={formData.user_type === 'administration'}
                       onChange={() => setFormData({ ...formData, user_type: 'administration' })}
@@ -982,8 +1000,8 @@ export default function Users() {
               {/* Active Status */}
               <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: '#f9fafb', borderRadius: '6px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     checked={formData.is_active}
                     onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
                   />
@@ -1040,34 +1058,34 @@ export default function Users() {
 
                   {/* Apartment Selection */}
                   {formData.building_id && buildings.find(b => b.id === formData.building_id)?.has_apartments && (
-                    <div style={{ 
-                      marginTop: '16px', 
-                      padding: '20px', 
-                      backgroundColor: '#f0fdf4', 
-                      borderRadius: '8px', 
+                    <div style={{
+                      marginTop: '16px',
+                      padding: '20px',
+                      backgroundColor: '#f0fdf4',
+                      borderRadius: '8px',
                       border: '2px solid #22c55e',
                       boxShadow: '0 2px 8px rgba(34, 197, 94, 0.1)'
                     }}>
-                      <label style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '8px', 
-                        marginBottom: '12px', 
-                        fontWeight: '600', 
-                        fontSize: '15px', 
-                        color: '#15803d' 
+                      <label style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        marginBottom: '12px',
+                        fontWeight: '600',
+                        fontSize: '15px',
+                        color: '#15803d'
                       }}>
                         <Home size={20} />
                         {t('users.apartmentUnit')} *
                       </label>
-                      <select 
-                        value={formData.apartment_unit || ''} 
+                      <select
+                        value={formData.apartment_unit || ''}
                         onChange={(e) => setFormData({ ...formData, apartment_unit: e.target.value })}
                         required
-                        style={{ 
-                          width: '100%', 
-                          padding: '12px', 
-                          border: '2px solid #22c55e', 
+                        style={{
+                          width: '100%',
+                          padding: '12px',
+                          border: '2px solid #22c55e',
                           borderRadius: '6px',
                           fontSize: '14px',
                           backgroundColor: 'white'
@@ -1081,10 +1099,10 @@ export default function Users() {
                           <option value={editingUser.apartment_unit}>{editingUser.apartment_unit} ({t('users.current')})</option>
                         )}
                       </select>
-                      <div style={{ 
-                        marginTop: '10px', 
-                        padding: '10px', 
-                        backgroundColor: '#dcfce7', 
+                      <div style={{
+                        marginTop: '10px',
+                        padding: '10px',
+                        backgroundColor: '#dcfce7',
                         borderRadius: '6px',
                         fontSize: '13px',
                         color: '#15803d',
@@ -1098,61 +1116,61 @@ export default function Users() {
                   )}
 
                   {/* Rent Period Section */}
-                  <div style={{ 
-                    marginTop: '16px', 
-                    padding: '20px', 
-                    backgroundColor: '#fef3c7', 
-                    borderRadius: '8px', 
+                  <div style={{
+                    marginTop: '16px',
+                    padding: '20px',
+                    backgroundColor: '#fef3c7',
+                    borderRadius: '8px',
                     border: '2px solid #f59e0b',
                     boxShadow: '0 2px 8px rgba(245, 158, 11, 0.1)'
                   }}>
-                    <label style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: '8px', 
-                      marginBottom: '12px', 
-                      fontWeight: '600', 
-                      fontSize: '15px', 
-                      color: '#92400e' 
+                    <label style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      marginBottom: '12px',
+                      fontWeight: '600',
+                      fontSize: '15px',
+                      color: '#92400e'
                     }}>
                       <Calendar size={20} />
                       {t('users.rentPeriod')} *
                     </label>
-                    
+
                     <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
                           {t('users.startDate')} *
                         </label>
-                        <input 
-                          type="date" 
+                        <input
+                          type="date"
                           required
-                          value={formData.rent_start_date || ''} 
+                          value={formData.rent_start_date || ''}
                           onChange={(e) => setFormData({ ...formData, rent_start_date: e.target.value })}
-                          style={{ 
-                            width: '100%', 
-                            padding: '10px', 
-                            border: '2px solid #f59e0b', 
+                          style={{
+                            width: '100%',
+                            padding: '10px',
+                            border: '2px solid #f59e0b',
                             borderRadius: '6px',
                             fontSize: '14px',
                             backgroundColor: 'white'
                           }}
                         />
                       </div>
-                      
+
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
                           {t('users.endDate')}
                         </label>
-                        <input 
-                          type="date" 
-                          value={formData.rent_end_date || ''} 
+                        <input
+                          type="date"
+                          value={formData.rent_end_date || ''}
                           onChange={(e) => setFormData({ ...formData, rent_end_date: e.target.value })}
                           placeholder="2099-01-01"
-                          style={{ 
-                            width: '100%', 
-                            padding: '10px', 
-                            border: '2px solid #f59e0b', 
+                          style={{
+                            width: '100%',
+                            padding: '10px',
+                            border: '2px solid #f59e0b',
                             borderRadius: '6px',
                             fontSize: '14px',
                             backgroundColor: 'white'
@@ -1160,11 +1178,11 @@ export default function Users() {
                         />
                       </div>
                     </div>
-                    
-                    <div style={{ 
-                      marginTop: '10px', 
-                      padding: '10px', 
-                      backgroundColor: '#fef3c7', 
+
+                    <div style={{
+                      marginTop: '10px',
+                      padding: '10px',
+                      backgroundColor: '#fef3c7',
                       borderRadius: '6px',
                       fontSize: '13px',
                       color: '#92400e',
@@ -1182,12 +1200,12 @@ export default function Users() {
                       <CreditCard size={18} />
                       {t('users.rfidCardIds')}
                     </label>
-                    <input 
-                      type="text" 
-                      value={formData.charger_ids || ''} 
+                    <input
+                      type="text"
+                      value={formData.charger_ids || ''}
                       onChange={(e) => setFormData({ ...formData, charger_ids: e.target.value })}
                       placeholder="15"
-                      style={{ width: '100%', padding: '10px', border: '1px solid #bae6fd', borderRadius: '6px', fontFamily: 'monospace' }} 
+                      style={{ width: '100%', padding: '10px', border: '1px solid #bae6fd', borderRadius: '6px', fontFamily: 'monospace' }}
                     />
                     <small style={{ display: 'block', marginTop: '6px', color: '#0369a1', fontSize: '12px', lineHeight: '1.4' }}>
                       <strong>{t('users.rfidImportant')}:</strong> {t('users.rfidEnterNumber')}
@@ -1221,7 +1239,7 @@ export default function Users() {
                           onChange={(e) => {
                             const current = formData.managed_buildings || [];
                             const currentArray: number[] = Array.isArray(current) ? current : [];
-                            const updated = e.target.checked 
+                            const updated = e.target.checked
                               ? [...currentArray, building.id]
                               : currentArray.filter((id: number) => id !== building.id);
                             setFormData({ ...formData, managed_buildings: updated });
@@ -1268,8 +1286,8 @@ export default function Users() {
               {/* Invoice Language */}
               <div style={{ marginTop: '16px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('users.invoiceLanguage')}</label>
-                <select 
-                  value={formData.language || 'de'} 
+                <select
+                  value={formData.language || 'de'}
                   onChange={(e) => setFormData({ ...formData, language: e.target.value })}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
                 >
