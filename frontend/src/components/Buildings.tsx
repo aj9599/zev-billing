@@ -431,7 +431,7 @@ export default function Buildings() {
           // Calculate energy sharing
           const buildingsInComplex = buildings.filter(b => buildingComplex.group_buildings?.includes(b.id));
           let totalComplexSolarExport = 0;
-          const sourceBuildings = [];
+          const sourceBuildings: { name: string; solar: number }[] = [];
 
           buildingsInComplex.forEach(b => {
             if (b.id === building.id) return;
