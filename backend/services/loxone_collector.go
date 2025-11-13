@@ -357,8 +357,6 @@ func (lc *LoxoneCollector) initializeConnections() {
 				connKey = fmt.Sprintf("local|%s|%s|%s", host, username, password)
 			}
 
-			connKey := fmt.Sprintf("%s|%s|%s", host, username, password)
-
 			conn, exists := connectionDevices[connKey]
 			if !exists {
 				// Determine the host URL based on connection mode
@@ -385,8 +383,6 @@ func (lc *LoxoneCollector) initializeConnections() {
 					log.Printf("   🌐 Created new REMOTE WebSocket connection via Loxone Cloud DNS")
 				} else {
 					log.Printf("   📡 Created new LOCAL WebSocket connection for %s", host)
-				} else {
-					log.Printf("   ♻️  Reusing existing WebSocket connection for %s", host)
 				}
 			}
 
