@@ -379,17 +379,13 @@ func (lc *LoxoneCollector) initializeConnections() {
 					isShuttingDown:   false,
 				}
 				connectionDevices[connKey] = conn
-				if !exists {
-					// Create new connection
-					conn = &LoxoneWebSocketConnection{...}
-					if connectionMode == "remote" {
-						log.Printf("   🌐 Created new REMOTE WebSocket connection via Loxone Cloud DNS")
-					} else {
-						log.Printf("   📡 Created new LOCAL WebSocket connection for %s", host)
-					}
+				if connectionMode == "remote" {
+					log.Printf("   🌐 Created new REMOTE WebSocket connection via Loxone Cloud DNS")
 				} else {
-					log.Printf("   ♻️  Reusing existing WebSocket connection for %s", host)
+					log.Printf("   📡 Created new LOCAL WebSocket connection for %s", host)
 				}
+			} else {
+				log.Printf("   ♻️  Reusing existing WebSocket connection for %s", host)
 			}
 
 			device := &LoxoneDevice{
