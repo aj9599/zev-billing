@@ -68,9 +68,13 @@ type LoxoneDevice struct {
 	Type     string
 	DeviceID string
 
-	// FOR METERS - add these fields:
-	LoxoneMode     string // "meter_block" or "virtual_output"
-	ExportDeviceID string // For virtual_output mode
+	// FOR METERS - these fields support multiple modes:
+	// - meter_block: For total/solar meters (output1=Mrc import, output8=Mrd export)
+	// - energy_meter_block: For apartment/heating/other (output1=Mr, single value)
+	// - virtual_output_dual: Two UUIDs for import/export (total/solar meters)
+	// - virtual_output_single: One UUID for single value (apartment/heating/other)
+	LoxoneMode     string // "meter_block", "energy_meter_block", "virtual_output_dual", "virtual_output_single"
+	ExportDeviceID string // For virtual_output_dual mode only
 
 	// FOR CHARGERS - existing fields:
 	PowerUUID  string
@@ -291,38 +295,82 @@ func (lc *LoxoneCollector) initializeConnections() {
 			}
 
 			host, _ := config["loxone_host"].(string)
+			macAddress, _ := config["loxone_mac_address"].(string)
+			connectionMode, _ := config["loxone_connection_mode"].(string)
 			username, _ := config["loxone_username"].(string)
 			password, _ := config["loxone_password"].(string)
 			deviceID, _ := config["loxone_device_id"].(string)
 			loxoneMode, _ := config["loxone_mode"].(string)
 			exportDeviceID, _ := config["loxone_export_device_id"].(string)
 
-			// Default to meter_block if not specified
+			// Get meter type from database to set appropriate default mode
+			var meterType string
+			lc.db.QueryRow("SELECT meter_type FROM meters WHERE id = ?", id).Scan(&meterType)
+
+			// Default mode based on meter type
 			if loxoneMode == "" {
-				loxoneMode = "meter_block"
+				if meterType == "total_meter" || meterType == "solar_meter" {
+					loxoneMode = "meter_block"
+				} else {
+					loxoneMode = "energy_meter_block"
+				}
 			}
 
-			log.Printf("   ├─ Host: %s", host)
+			log.Printf("   ├─ Connection Mode: %s", connectionMode)
+			if connectionMode == "remote" {
+				log.Printf("   ├─ MAC Address: %s", macAddress)
+			} else {
+				log.Printf("   ├─ Host: %s", host)
+			}
 			log.Printf("   ├─ Username: %s", username)
+			log.Printf("   ├─ Meter Type: %s", meterType) // ✅ Add this log line
 			log.Printf("   ├─ Mode: %s", loxoneMode)
 			log.Printf("   ├─ Device UUID: %s", deviceID)
-			if loxoneMode == "virtual_output" && exportDeviceID != "" {
+			if (loxoneMode == "virtual_output_dual") && exportDeviceID != "" {
 				log.Printf("   └─ Export UUID: %s", exportDeviceID)
-			} else {
+			} else if loxoneMode == "meter_block" {
 				log.Printf("   └─ (Meter block: output1=Mrc, output8=Mrd)")
+			} else if loxoneMode == "energy_meter_block" {
+				log.Printf("   └─ (Energy meter block: output1=Mr)")
+			} else {
+				log.Printf("   └─ (Virtual output: single value)")
 			}
 
-			if host == "" || deviceID == "" {
-				log.Printf("   ⚠️  WARNING: Incomplete config - skipping")
-				continue
+			// Validate configuration based on connection mode
+			if connectionMode == "remote" {
+				if macAddress == "" || deviceID == "" {
+					log.Printf("   ⚠️  WARNING: Incomplete remote config (missing MAC or device ID) - skipping")
+					continue
+				}
+			} else {
+				if host == "" || deviceID == "" {
+					log.Printf("   ⚠️  WARNING: Incomplete local config (missing host or device ID) - skipping")
+					continue
+				}
+			}
+
+			// Create connection key based on mode
+			var connKey string
+			if connectionMode == "remote" {
+				connKey = fmt.Sprintf("remote|%s|%s|%s", macAddress, username, password)
+			} else {
+				connKey = fmt.Sprintf("local|%s|%s|%s", host, username, password)
 			}
 
 			connKey := fmt.Sprintf("%s|%s|%s", host, username, password)
 
 			conn, exists := connectionDevices[connKey]
 			if !exists {
+				// Determine the host URL based on connection mode
+				var actualHost string
+				if connectionMode == "remote" {
+					actualHost = fmt.Sprintf("dns.loxonecloud.com/%s", macAddress)
+				} else {
+					actualHost = host
+				}
+
 				conn = &LoxoneWebSocketConnection{
-					Host:             host,
+					Host:             actualHost,
 					Username:         username,
 					Password:         password,
 					devices:          []*LoxoneDevice{},
@@ -333,9 +381,13 @@ func (lc *LoxoneCollector) initializeConnections() {
 					isShuttingDown:   false,
 				}
 				connectionDevices[connKey] = conn
-				log.Printf("   📡 Created new WebSocket connection for %s", host)
-			} else {
-				log.Printf("   ♻️  Reusing existing WebSocket connection for %s", host)
+				if connectionMode == "remote" {
+					log.Printf("   🌐 Created new REMOTE WebSocket connection via Loxone Cloud DNS")
+				} else {
+					log.Printf("   📡 Created new LOCAL WebSocket connection for %s", host)
+				} else {
+					log.Printf("   ♻️  Reusing existing WebSocket connection for %s", host)
+				}
 			}
 
 			device := &LoxoneDevice{
@@ -1599,8 +1651,8 @@ func (conn *LoxoneWebSocketConnection) requestData() {
 				conn.mu.Unlock()
 				time.Sleep(100 * time.Millisecond)
 
-				// For virtual_output mode, also request export data
-				if device.LoxoneMode == "virtual_output" && device.ExportDeviceID != "" {
+				// For virtual_output_dual mode, also request export data
+				if device.LoxoneMode == "virtual_output_dual" && device.ExportDeviceID != "" {
 					conn.mu.Lock()
 					if !conn.isConnected || conn.ws == nil {
 						conn.mu.Unlock()
@@ -1620,7 +1672,6 @@ func (conn *LoxoneWebSocketConnection) requestData() {
 					conn.mu.Unlock()
 					time.Sleep(100 * time.Millisecond)
 				}
-
 			} else if device.Type == "charger" {
 				log.Printf("   → CHARGER [%s]: requesting 4 UUIDs", device.Name)
 
@@ -1822,8 +1873,8 @@ func (conn *LoxoneWebSocketConnection) readLoop(db *sql.DB) {
 						break
 					}
 
-					// Check for export reading (export device ID for virtual_output mode)
-					if device.LoxoneMode == "virtual_output" && device.ExportDeviceID != "" {
+					// Check for export reading (export device ID for virtual_output_dual mode only)
+					if device.LoxoneMode == "virtual_output_dual" && device.ExportDeviceID != "" {
 						expectedExportControl := fmt.Sprintf("dev/sps/io/%s/all", device.ExportDeviceID)
 						if strings.Contains(response.LL.Control, expectedExportControl) {
 							conn.processMeterData(device, response, db, true) // true = export
@@ -1860,14 +1911,19 @@ func (conn *LoxoneWebSocketConnection) readLoop(db *sql.DB) {
 
 func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, response LoxoneResponse, db *sql.DB, isExport bool) {
 	var reading float64
-	
-	// Try to get reading from different response formats
+
+	// Determine if this meter type supports export
+	var meterType string
+	db.QueryRow("SELECT meter_type FROM meters WHERE id = ?", device.ID).Scan(&meterType)
+	supportsExport := (meterType == "total_meter" || meterType == "solar_meter")
+
+	// Try to get reading from different response formats based on mode
 	if device.LoxoneMode == "meter_block" {
 		// METER BLOCK MODE - Process BOTH import and export from the SAME response
-		// Import from output1 (Mrc), Export from output8 (Mrd)
-		
+		// For total/solar meters: Import from output1 (Mrc), Export from output8 (Mrd)
+
 		var importReading, exportReading float64
-		
+
 		// Get import reading from output1
 		if output1, ok := response.LL.Outputs["output1"]; ok {
 			switch v := output1.Value.(type) {
@@ -1879,32 +1935,62 @@ func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, re
 				}
 			}
 		}
-		
-		// Get export reading from output8
-		if output8, ok := response.LL.Outputs["output8"]; ok {
-			switch v := output8.Value.(type) {
-			case float64:
-				exportReading = v
-			case string:
-				if f, err := strconv.ParseFloat(v, 64); err == nil {
-					exportReading = f
+
+		// Get export reading from output8 (only for total/solar meters)
+		if supportsExport {
+			if output8, ok := response.LL.Outputs["output8"]; ok {
+				switch v := output8.Value.(type) {
+				case float64:
+					exportReading = v
+				case string:
+					if f, err := strconv.ParseFloat(v, 64); err == nil {
+						exportReading = f
+					}
 				}
 			}
 		}
-		
+
 		// Update device state with BOTH values
 		device.lastReading = importReading
 		device.lastReadingExport = exportReading
 		device.lastUpdate = time.Now()
 		device.readingGaps = 0
-		
+
 		log.Printf("   📥 Import reading (output1/Mrc): %.3f kWh", importReading)
-		log.Printf("   📤 Export reading (output8/Mrd): %.3f kWh", exportReading)
-		
+		if supportsExport {
+			log.Printf("   📤 Export reading (output8/Mrd): %.3f kWh", exportReading)
+		}
+
 		reading = importReading // Set reading for database save below
-		
-	} else {
-		// VIRTUAL OUTPUT MODE - Single value per response
+
+	} else if device.LoxoneMode == "energy_meter_block" {
+		// ENERGY METER BLOCK MODE - Single value from output1 (Mr)
+		// For apartment/heating/other meters
+
+		if output1, ok := response.LL.Outputs["output1"]; ok {
+			switch v := output1.Value.(type) {
+			case float64:
+				reading = v
+			case string:
+				if f, err := strconv.ParseFloat(v, 64); err == nil {
+					reading = f
+				}
+			}
+		}
+
+		if reading <= 0 {
+			return
+		}
+
+		device.lastReading = reading
+		device.lastUpdate = time.Now()
+		device.readingGaps = 0
+		log.Printf("   📊 Reading (output1/Mr): %.3f kWh", reading)
+
+	} else if device.LoxoneMode == "virtual_output_dual" {
+		// VIRTUAL OUTPUT DUAL MODE - Separate UUIDs for import and export
+		// For total/solar meters
+
 		if output1, ok := response.LL.Outputs["output1"]; ok {
 			switch v := output1.Value.(type) {
 			case float64:
@@ -1920,25 +2006,54 @@ func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, re
 				reading = f
 			}
 		}
-		
+
 		if reading <= 0 {
 			return
 		}
-		
+
 		// Update device state
 		if isExport {
 			device.lastReadingExport = reading
 			log.Printf("   📤 Export reading: %.3f kWh", reading)
-			return // Don't save to DB for export in virtual_output mode - wait for import
+			return // Don't save to DB for export in virtual_output_dual mode - wait for import
 		} else {
 			device.lastReading = reading
 			device.lastUpdate = time.Now()
 			device.readingGaps = 0
 			log.Printf("   📥 Import reading: %.3f kWh", reading)
 		}
+
+	} else if device.LoxoneMode == "virtual_output_single" {
+		// VIRTUAL OUTPUT SINGLE MODE - Single UUID, single value
+		// For apartment/heating/other meters
+
+		if output1, ok := response.LL.Outputs["output1"]; ok {
+			switch v := output1.Value.(type) {
+			case float64:
+				reading = v
+			case string:
+				if f, err := strconv.ParseFloat(v, 64); err == nil {
+					reading = f
+				}
+			}
+		} else if response.LL.Value != "" {
+			// Fallback to direct value
+			if f, err := strconv.ParseFloat(response.LL.Value, 64); err == nil {
+				reading = f
+			}
+		}
+
+		if reading <= 0 {
+			return
+		}
+
+		device.lastReading = reading
+		device.lastUpdate = time.Now()
+		device.readingGaps = 0
+		log.Printf("   📊 Reading: %.3f kWh", reading)
 	}
 
-	// Save to database (happens for both modes, but only when we have import data)
+	// Save to database (happens for all modes except virtual_output_dual export)
 	if reading <= 0 {
 		return
 	}
@@ -1948,17 +2063,25 @@ func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, re
 	var lastReading, lastReadingExport float64
 	var lastTime time.Time
 	err := db.QueryRow(`
-		SELECT power_kwh, power_kwh_export, reading_time FROM meter_readings 
-		WHERE meter_id = ? 
-		ORDER BY reading_time DESC LIMIT 1
-	`, device.ID).Scan(&lastReading, &lastReadingExport, &lastTime)
+        SELECT power_kwh, power_kwh_export, reading_time FROM meter_readings 
+        WHERE meter_id = ? 
+        ORDER BY reading_time DESC LIMIT 1
+    `, device.ID).Scan(&lastReading, &lastReadingExport, &lastTime)
 
 	var consumption, consumptionExport float64
 	isFirstReading := false
 
 	if err == nil && !lastTime.IsZero() {
 		interpolated := interpolateReadings(lastTime, lastReading, currentTime, reading)
-		interpolatedExport := interpolateReadings(lastTime, lastReadingExport, currentTime, device.lastReadingExport)
+
+		// Only interpolate export if meter supports it
+		var interpolatedExport []struct {
+			time  time.Time
+			value float64
+		}
+		if supportsExport {
+			interpolatedExport = interpolateReadings(lastTime, lastReadingExport, currentTime, device.lastReadingExport)
+		}
 
 		for i, point := range interpolated {
 			intervalConsumption := point.value - lastReading
@@ -1968,7 +2091,7 @@ func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, re
 
 			intervalExport := float64(0)
 			exportValue := lastReadingExport // Default to last known value
-			if i < len(interpolatedExport) {
+			if supportsExport && i < len(interpolatedExport) {
 				exportValue = interpolatedExport[i].value
 				intervalExport = exportValue - lastReadingExport
 				if intervalExport < 0 {
@@ -1977,15 +2100,15 @@ func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, re
 			}
 
 			db.Exec(`
-				INSERT INTO meter_readings (meter_id, reading_time, power_kwh, power_kwh_export, consumption_kwh, consumption_export)
-				VALUES (?, ?, ?, ?, ?, ?)
-			`, device.ID, point.time, point.value,
-				exportValue, // ✅ Safe - always has a value
+                INSERT INTO meter_readings (meter_id, reading_time, power_kwh, power_kwh_export, consumption_kwh, consumption_export)
+                VALUES (?, ?, ?, ?, ?, ?)
+            `, device.ID, point.time, point.value,
+				exportValue,
 				intervalConsumption,
 				intervalExport)
 
 			lastReading = point.value
-			if i < len(interpolatedExport) {
+			if supportsExport && i < len(interpolatedExport) {
 				lastReadingExport = interpolatedExport[i].value
 			}
 		}
@@ -2000,9 +2123,11 @@ func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, re
 			consumption = 0
 		}
 
-		consumptionExport = device.lastReadingExport - lastReadingExport
-		if consumptionExport < 0 {
-			consumptionExport = 0
+		if supportsExport {
+			consumptionExport = device.lastReadingExport - lastReadingExport
+			if consumptionExport < 0 {
+				consumptionExport = 0
+			}
 		}
 	} else {
 		consumption = 0
@@ -2011,9 +2136,9 @@ func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, re
 	}
 
 	_, err = db.Exec(`
-		INSERT INTO meter_readings (meter_id, reading_time, power_kwh, power_kwh_export, consumption_kwh, consumption_export)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, device.ID, currentTime, reading, device.lastReadingExport, consumption, consumptionExport)
+        INSERT INTO meter_readings (meter_id, reading_time, power_kwh, power_kwh_export, consumption_kwh, consumption_export)
+        VALUES (?, ?, ?, ?, ?, ?)
+    `, device.ID, currentTime, reading, device.lastReadingExport, consumption, consumptionExport)
 
 	if err != nil {
 		log.Printf("❌ Failed to save reading to database: %v", err)
@@ -2022,20 +2147,30 @@ func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, re
 		conn.mu.Unlock()
 	} else {
 		db.Exec(`
-			UPDATE meters 
-			SET last_reading = ?, last_reading_export = ?, last_reading_time = ?, 
-			    notes = ?
-			WHERE id = ?
-		`, reading, device.lastReadingExport, currentTime,
+            UPDATE meters 
+            SET last_reading = ?, last_reading_export = ?, last_reading_time = ?, 
+                notes = ?
+            WHERE id = ?
+        `, reading, device.lastReadingExport, currentTime,
 			fmt.Sprintf("🟢 Last update: %s", time.Now().Format("2006-01-02 15:04:05")),
 			device.ID)
 
 		if !isFirstReading {
-			log.Printf("✅ METER [%s]: %.3f kWh import (Δ%.3f), %.3f kWh export (Δ%.3f)",
-				device.Name, reading, consumption, device.lastReadingExport, consumptionExport)
+			if supportsExport {
+				log.Printf("✅ METER [%s]: %.3f kWh import (Δ%.3f), %.3f kWh export (Δ%.3f)",
+					device.Name, reading, consumption, device.lastReadingExport, consumptionExport)
+			} else {
+				log.Printf("✅ METER [%s]: %.3f kWh (Δ%.3f)",
+					device.Name, reading, consumption)
+			}
 		} else {
-			log.Printf("✅ METER [%s]: %.3f kWh import, %.3f kWh export (first reading)",
-				device.Name, reading, device.lastReadingExport)
+			if supportsExport {
+				log.Printf("✅ METER [%s]: %.3f kWh import, %.3f kWh export (first reading)",
+					device.Name, reading, device.lastReadingExport)
+			} else {
+				log.Printf("✅ METER [%s]: %.3f kWh (first reading)",
+					device.Name, reading)
+			}
 		}
 	}
 }

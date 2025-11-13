@@ -603,7 +603,7 @@ export const de: Translations = {
   // Modal title and navigation
   'meters.replacement.title': 'Zähler ersetzen',
   'meters.replacement.subtitle': 'Schritt',
-  
+
   // Step 1: Overview
   'meters.replacement.step1.title': 'Übersicht Zähleraustausch',
   'meters.replacement.step1.currentMeter': 'Aktueller Zähler',
@@ -862,7 +862,7 @@ export const de: Translations = {
   // Loxone Konfigurationsmodus
   'meters.loxoneMode': 'Loxone Konfigurationsmodus',
   'meters.loxoneModeDescription': 'Wählen Sie, wie Ihr Loxone-Zähler Energiedaten meldet',
-  'meters.loxoneModeMeterBlock': 'Meter Block (output1=Mrc, output8=Mrd)',
+  //'meters.loxoneModeMeterBlock': 'Meter Block (output1=Mrc, output8=Mrd)',
   'meters.loxoneModeVirtualOutput': 'Virtueller Ausgang (2 separate UUIDs)',
   'meters.loxoneModeHelp': 'Meter Block: Eine UUID, Import von output1 (Mrc), Export von output8 (Mrd). Virtueller Ausgang: Zwei UUIDs, eine für Import, eine für Export',
   'meters.loxoneMeterUuid': 'Loxone Meter UUID (Import + Export)',
@@ -870,6 +870,27 @@ export const de: Translations = {
   'meters.loxoneDeviceUuidExport': 'Loxone Geräte-UUID (Export)',
   'meters.loxoneMeterUuidDescription': 'UUID des Meter Blocks - Import von output1 (Mrc), Export von output8 (Mrd)',
   'meters.loxoneExportUuidDescription': 'UUID des virtuellen Ausgangs für Export/Rücklieferung',
+  'meters.loxoneModeMeterBlock': 'Zählerblock (Gesamt/Solar)',
+  'meters.loxoneModeEnergyMeterBlock': 'Energiezählerblock (Wohnung/Heizung/Sonstige)',
+  'meters.loxoneModeVirtualOutputDual': 'Virtueller Ausgang Dual (Import + Export)',
+  'meters.loxoneModeVirtualOutputSingle': 'Virtueller Ausgang Einzel',
+  'meters.loxoneModeMeterBlockHelp': 'Eine UUID. Import von output1 (Mrc), Export von output8 (Mrd). Für Gesamt- und Solarzähler.',
+  'meters.loxoneModeEnergyMeterBlockHelp': 'Eine UUID. Einzelwert von output1 (Mr). Für Wohnungs-, Heizungs- und sonstige Zähler.',
+  'meters.loxoneModeVirtualOutputDualHelp': 'Zwei UUIDs. Getrennte virtuelle Ausgänge für Import und Export. Für Gesamt- und Solarzähler.',
+  'meters.loxoneModeVirtualOutputSingleHelp': 'Eine UUID. Einzelner virtueller Ausgangswert. Für Wohnungs-, Heizungs- und sonstige Zähler.',
+  'meters.loxoneEnergyMeterUuid': 'Energiezählerblock UUID (output1/Mr)',
+  'meters.loxoneVirtualOutputUuid': 'Virtueller Ausgang UUID',
+  'meters.loxoneConnectionMode': 'Verbindungstyp',
+  'meters.loxoneConnectionModeLocal': '🏠 Lokal (IP-Adresse)',
+  'meters.loxoneConnectionModeRemote': '🌐 Remote (Loxone Cloud DNS)',
+  'meters.loxoneConnectionModeLocalHelp': 'Direkte lokale Verbindung über IP-Adresse im Netzwerk',
+  'meters.loxoneConnectionModeRemoteHelp': 'Remote-Verbindung über Loxone Cloud DNS Service (Internet-Zugriff)',
+  'meters.loxoneMacAddress': 'MAC-Adresse des Miniservers',
+  'meters.loxoneMacAddressHelp': 'MAC-Adresse des Miniservers (12 Zeichen ohne Trennzeichen)',
+  'meters.loxoneCloudDnsTitle': 'Loxone Cloud DNS',
+  'meters.loxoneCloudDnsDescription': 'Der Cloud DNS Service ermöglicht Remote-Zugriff über Internet. Die Verbindung wird automatisch zum richtigen Server weitergeleitet.',
+  'meters.loxoneMacAddressLocation': 'Loxone Config → Miniserver → Eigenschaften → Netzwerk → MAC-Adresse',
+  'meters.loxoneMacAddressLocationTitle': 'MAC-Adresse finden',
 
   // Anleitungen - Loxone Konfigurationsmodus Abschnitt
   'meters.instructions.loxoneModeTitle': 'Loxone Konfigurationsmodi',
@@ -1292,22 +1313,22 @@ export const de: Translations = {
   'billConfig.vzevMode.description': 'Sie rechnen einen Gebäudekomplex mit virtueller Energiezuteilung ab. Überschüssiger PV-Strom aus Gebäuden mit Solar wird virtuell auf andere Gebäude im Komplex verteilt.',
   'billConfig.zevMode.title': 'ZEV-Modus (Direkte Energieteilung)',
   'billConfig.zevMode.description': 'Sie rechnen reguläre Gebäude mit direkter Energieteilung ab.',
-  
+
   // BillConfiguration.tsx - Selection Labels (German)
   'billConfig.step1.selectComplex': 'Komplex auswählen (vZEV)',
-  
+
   // BillConfiguration.tsx - Summary Labels (German)
   'billConfig.step5.mode': 'Modus',
   'billConfig.step5.modeVzev': 'vZEV (Virtuelle Zuteilung)',
   'billConfig.step5.modeZev': 'ZEV (Direkte Teilung)',
   'billConfig.step5.complexes': 'Komplexe',
-  
+
   // BillConfiguration.tsx - Warnings (German)
   'billConfig.warning.mixingTypes': 'Warnung: Gebäudekomplexe (vZEV) können nicht mit regulären Gebäuden (ZEV) gemischt werden. Bitte wählen Sie nur Komplexe ODER nur reguläre Gebäude aus.',
   'billConfig.error.cannotMix': 'Gebäudekomplexe (vZEV) können nicht mit regulären Gebäuden (ZEV) gemischt werden. Bitte deaktivieren Sie zuerst vorhandene Gebäude.',
   'billConfig.validation.selectComplex': 'Bitte wählen Sie einen Gebäudekomplex aus',
   'billConfig.validation.vzevComplexRequired': 'vZEV-Modus erfordert, dass alle ausgewählten Gebäude Komplexe sind',
-  
+
 
   // ============================================================================
   // SHARED METERS CONFIGURATION
@@ -1539,7 +1560,7 @@ export const de: Translations = {
   'autoBilling.virtualAllocation': 'vZEV (Virtuelle Zuteilung)',
   'autoBilling.directSharing': 'ZEV (Direkte Teilung)',
   'autoBilling.complexes': 'Komplexe',
-  
+
   // AutoBilling.tsx - Warnings and Validation (German)
   'autoBilling.warning.mixingTypes': 'Warnung: Gebäudekomplexe (vZEV) können nicht mit regulären Gebäuden (ZEV) gemischt werden. Bitte wählen Sie nur Komplexe ODER nur reguläre Gebäude aus.',
   'autoBilling.error.cannotMix': 'Gebäudekomplexe (vZEV) können nicht mit regulären Gebäuden (ZEV) gemischt werden. Bitte deaktivieren Sie zuerst vorhandene Gebäude.',
@@ -1620,20 +1641,20 @@ export const de: Translations = {
   'pricing.zevVsVzev.vzev.item2': 'Separate Netzanschlüsse',
   'pricing.zevVsVzev.vzev.item3': 'Virtuelle Energiezuteilung',
   'pricing.zevVsVzev.vzev.item4': 'Verwendet vZEV-Exportpreis für überschüssigen PV-Strom',
-  
+
   // PricingSettings.tsx - vZEV Export Price (German)
   'pricing.vzevExportPrice': 'vZEV-Exportpreis',
   'pricing.vzevExportPriceUnit': 'vZEV-Exportpreis (CHF/kWh)',
   'pricing.vzevExportPriceDescription': 'Preis für virtuelle PV-Zuteilung zwischen Gebäuden im Komplex',
   'pricing.vzevExportPriceTip': 'vZEV-Tipp: Setzen Sie den vZEV-Exportpreis niedriger als den Netzpreis, aber höher als die Einspeisevergütung',
-  
+
   // PricingSettings.tsx - Building Type Labels (German)
   'pricing.buildingType.vzev': 'vZEV',
   'pricing.buildingType.zev': 'ZEV',
   'pricing.buildingType.vzevComplex': 'vZEV-Komplex',
   'pricing.buildingType.zevBuilding': 'ZEV-Gebäude',
   'pricing.vzevComplexSelected': 'vZEV-Komplex ausgewählt - Virtuelle Energiezuteilung wird verwendet',
-  
+
   // PricingSettings.tsx - Instructions Updates (German)
   'pricing.instructions.vzevWork': 'vZEV: Virtuelle PV-Exportpreise für überschüssige Energiezuteilung',
   'pricing.instructions.vzevStep': 'Für vZEV: Wählen Sie einen Komplex aus und legen Sie den vZEV-Exportpreis fest',
@@ -1728,7 +1749,7 @@ export const de: Translations = {
   'logs.updatingSystem': 'System wird aktualisiert',
   'logs.updateInProgress': 'Bitte warten Sie, während das System aktualisiert wird. Dies dauert ungefähr 40 Sekunden.',
   'logs.doNotCloseWindow': 'Bitte schliessen Sie dieses Fenster nicht oder navigieren Sie nicht weg.',
-  
+
   // NEW: Factory Reset translations
   'logs.factoryReset': 'Werkseinstellungen',
   'logs.factoryResetTitle': 'Werkseinstellungen wiederherstellen',

@@ -602,7 +602,7 @@ export const en: Translations = {
   // Modal title and navigation
   'meters.replacement.title': 'Replace Meter',
   'meters.replacement.subtitle': 'Step',
-  
+
   // Step 1: Overview
   'meters.replacement.step1.title': 'Meter Replacement Overview',
   'meters.replacement.step1.currentMeter': 'Current Meter',
@@ -861,7 +861,7 @@ export const en: Translations = {
   // Loxone Configuration Mode
   'meters.loxoneMode': 'Loxone Configuration Mode',
   'meters.loxoneModeDescription': 'Choose how your Loxone meter reports energy data',
-  'meters.loxoneModeMeterBlock': 'Meter Block (output1=Mrc, output8=Mrd)',
+  //'meters.loxoneModeMeterBlock': 'Meter Block (output1=Mrc, output8=Mrd)',
   'meters.loxoneModeVirtualOutput': 'Virtual Output (2 separate UUIDs)',
   'meters.loxoneModeHelp': 'Meter Block: Single UUID, import from output1 (Mrc), export from output8 (Mrd). Virtual Output: Two UUIDs, one for import, one for export',
   'meters.loxoneMeterUuid': 'Loxone Meter UUID (Import + Export)',
@@ -869,6 +869,27 @@ export const en: Translations = {
   'meters.loxoneDeviceUuidExport': 'Loxone Device UUID (Export)',
   'meters.loxoneMeterUuidDescription': 'UUID of meter block - import from output1 (Mrc), export from output8 (Mrd)',
   'meters.loxoneExportUuidDescription': 'UUID of virtual output for export/return energy',
+  'meters.loxoneModeMeterBlock': 'Meter Block (Total/Solar)',
+  'meters.loxoneModeEnergyMeterBlock': 'Energy Meter Block (Apartment/Heating/Other)',
+  'meters.loxoneModeVirtualOutputDual': 'Virtual Output Dual (Import + Export)',
+  'meters.loxoneModeVirtualOutputSingle': 'Virtual Output Single',
+  'meters.loxoneModeMeterBlockHelp': 'One UUID. Import from output1 (Mrc), Export from output8 (Mrd). For total and solar meters.',
+  'meters.loxoneModeEnergyMeterBlockHelp': 'One UUID. Single value from output1 (Mr). For apartment, heating, and other meters.',
+  'meters.loxoneModeVirtualOutputDualHelp': 'Two UUIDs. Separate virtual outputs for import and export. For total and solar meters.',
+  'meters.loxoneModeVirtualOutputSingleHelp': 'One UUID. Single virtual output value. For apartment, heating, and other meters.',
+  'meters.loxoneEnergyMeterUuid': 'Energy Meter Block UUID (output1/Mr)',
+  'meters.loxoneVirtualOutputUuid': 'Virtual Output UUID',
+  'meters.loxoneConnectionMode': 'Connection Type',
+  'meters.loxoneConnectionModeLocal': '🏠 Local (IP Address)',
+  'meters.loxoneConnectionModeRemote': '🌐 Remote (Loxone Cloud DNS)',
+  'meters.loxoneConnectionModeLocalHelp': 'Direct local connection via IP address in the network',
+  'meters.loxoneConnectionModeRemoteHelp': 'Remote connection via Loxone Cloud DNS Service (Internet access)',
+  'meters.loxoneMacAddress': 'Miniserver MAC Address',
+  'meters.loxoneMacAddressHelp': 'Miniserver MAC address (12 characters without separators)',
+  'meters.loxoneCloudDnsTitle': 'Loxone Cloud DNS',
+  'meters.loxoneCloudDnsDescription': 'The Cloud DNS Service enables remote access via Internet. The connection is automatically forwarded to the correct server.',
+  'meters.loxoneMacAddressLocation': 'Loxone Config → Miniserver → Properties → Network → MAC Address',
+  'meters.loxoneMacAddressLocationTitle': 'Find MAC Address', 
 
   // Instructions - Loxone Configuration Mode Section
   'meters.instructions.loxoneModeTitle': 'Loxone Configuration Modes',
@@ -1291,16 +1312,16 @@ export const en: Translations = {
   'billConfig.vzevMode.description': 'You are billing a building complex with virtual energy allocation. Surplus PV from buildings with solar will be virtually allocated to other buildings in the complex.',
   'billConfig.zevMode.title': 'ZEV Mode (Direct Energy Sharing)',
   'billConfig.zevMode.description': 'You are billing regular buildings with direct energy sharing.',
-  
+
   // BillConfiguration.tsx - Selection Labels
   'billConfig.step1.selectComplex': 'Select Complex (vZEV)',
-  
+
   // BillConfiguration.tsx - Summary Labels
   'billConfig.step5.mode': 'Mode',
   'billConfig.step5.modeVzev': 'vZEV (Virtual Allocation)',
   'billConfig.step5.modeZev': 'ZEV (Direct Sharing)',
   'billConfig.step5.complexes': 'Complexes',
-  
+
   // BillConfiguration.tsx - Warnings
   'billConfig.warning.mixingTypes': 'Warning: Cannot mix building complexes (vZEV) with regular buildings (ZEV). Please select only complexes OR only regular buildings.',
   'billConfig.error.cannotMix': 'Cannot mix building complexes (vZEV) with regular buildings (ZEV). Please deselect existing buildings first.',
@@ -1537,7 +1558,7 @@ export const en: Translations = {
   'autoBilling.virtualAllocation': 'vZEV (Virtual Allocation)',
   'autoBilling.directSharing': 'ZEV (Direct Sharing)',
   'autoBilling.complexes': 'Complexes',
-  
+
   // AutoBilling.tsx - Warnings and Validation
   'autoBilling.warning.mixingTypes': 'Warning: Cannot mix building complexes (vZEV) with regular buildings (ZEV). Please select only complexes OR only regular buildings.',
   'autoBilling.error.cannotMix': 'Cannot mix building complexes (vZEV) with regular buildings (ZEV). Please deselect existing buildings first.',
@@ -1618,20 +1639,20 @@ export const en: Translations = {
   'pricing.zevVsVzev.vzev.item2': 'Separate grid connections',
   'pricing.zevVsVzev.vzev.item3': 'Virtual energy allocation',
   'pricing.zevVsVzev.vzev.item4': 'Uses vZEV export price for surplus PV',
-  
+
   // PricingSettings.tsx - vZEV Export Price
   'pricing.vzevExportPrice': 'vZEV Export Price',
   'pricing.vzevExportPriceUnit': 'vZEV Export Price (CHF/kWh)',
   'pricing.vzevExportPriceDescription': 'Price for virtual PV allocation between buildings in the complex',
   'pricing.vzevExportPriceTip': 'vZEV tip: Set vZEV export price lower than grid price but higher than feed-in tariff',
-  
+
   // PricingSettings.tsx - Building Type Labels
   'pricing.buildingType.vzev': 'vZEV',
   'pricing.buildingType.zev': 'ZEV',
   'pricing.buildingType.vzevComplex': 'vZEV Complex',
   'pricing.buildingType.zevBuilding': 'ZEV Building',
   'pricing.vzevComplexSelected': 'vZEV Complex selected - Virtual energy allocation will be used',
-  
+
   // PricingSettings.tsx - Instructions Updates
   'pricing.instructions.vzevWork': 'vZEV: Virtual PV export pricing for surplus energy allocation',
   'pricing.instructions.vzevStep': 'For vZEV: Select a complex and set the vZEV export price',
@@ -1726,7 +1747,7 @@ export const en: Translations = {
   'logs.updatingSystem': 'Updating System',
   'logs.updateInProgress': 'Please wait while the system is being updated. This will take approximately 40 seconds.',
   'logs.doNotCloseWindow': 'Please do not close this window or navigate away.',
-  
+
   // NEW: Factory Reset translations
   'logs.factoryReset': 'Factory Reset',
   'logs.factoryResetTitle': 'Factory Reset',

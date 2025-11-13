@@ -57,6 +57,7 @@ export interface Meter {
   connection_type: string;
   connection_config: string;
   device_type?: string; // NEW: whatwatt-go, shelly-3em, shelly-em, generic, custom
+  loxone_connection_mode?: 'local' | 'remote';
   notes: string;
   last_reading: number;
   last_reading_time?: string;

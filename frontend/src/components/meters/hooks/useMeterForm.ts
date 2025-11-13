@@ -19,10 +19,12 @@ interface ConnectionConfig {
     listen_port?: number;
     data_key?: string;
     loxone_host?: string;
+    loxone_mac_address?: string;
+    loxone_connection_mode?: 'local' | 'remote';
     loxone_username?: string;
     loxone_password?: string;
     loxone_device_id?: string;
-    loxone_mode?: 'virtual_output' | 'meter_block';
+    loxone_mode?: 'meter_block' | 'energy_meter_block' | 'virtual_output_dual' | 'virtual_output_single';
     loxone_export_device_id?: string;
     mqtt_topic?: string;
     mqtt_broker?: string;
@@ -63,10 +65,12 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
         listen_port: 8888,
         data_key: 'power_kwh',
         loxone_host: '',
+        loxone_mac_address: '', // NEW
+        loxone_connection_mode: 'local', // NEW: Default to local
         loxone_username: '',
         loxone_password: '',
         loxone_device_id: '',
-        loxone_mode: 'meter_block',
+        loxone_mode: 'meter_block', // Will be updated based on meter type
         loxone_export_device_id: '',
         mqtt_topic: '',
         mqtt_broker: 'localhost',
@@ -104,10 +108,12 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
             listen_port: 8888,
             data_key: 'power_kwh',
             loxone_host: '',
+            loxone_mac_address: '',
+            loxone_connection_mode: 'local',
             loxone_username: '',
             loxone_password: '',
             loxone_device_id: '',
-            loxone_mode: 'meter_block',
+            loxone_mode: 'meter_block', // Default for total_meter
             loxone_export_device_id: '',
             mqtt_topic: '',
             mqtt_broker: 'localhost',
@@ -156,6 +162,8 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
                 listen_port: config.listen_port || 8888,
                 data_key: config.data_key || 'power_kwh',
                 loxone_host: config.loxone_host || '',
+                loxone_mac_address: config.loxone_mac_address || '',
+                loxone_connection_mode: config.loxone_connection_mode || 'local',
                 loxone_username: config.loxone_username || '',
                 loxone_password: config.loxone_password || '',
                 loxone_device_id: config.loxone_device_id || '',
@@ -183,6 +191,8 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
         if (formData.connection_type === 'loxone_api') {
             config = {
                 loxone_host: connectionConfig.loxone_host,
+                loxone_mac_address: connectionConfig.loxone_mac_address,
+                loxone_connection_mode: connectionConfig.loxone_connection_mode,
                 loxone_username: connectionConfig.loxone_username,
                 loxone_password: connectionConfig.loxone_password,
                 loxone_device_id: connectionConfig.loxone_device_id,

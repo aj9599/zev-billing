@@ -17,10 +17,12 @@ interface ConnectionConfig {
     listen_port?: number;
     data_key?: string;
     loxone_host?: string;
+    loxone_mac_address?: string;
+    loxone_connection_mode?: 'local' | 'remote';
     loxone_username?: string;
     loxone_password?: string;
     loxone_device_id?: string;
-    loxone_mode?: 'virtual_output' | 'meter_block';
+    loxone_mode?: 'meter_block' | 'energy_meter_block' | 'virtual_output_dual' | 'virtual_output_single';
     loxone_export_device_id?: string;
     mqtt_topic?: string;
     mqtt_broker?: string;
@@ -60,6 +62,24 @@ export default function MeterFormModal({
     onShowInstructions
 }: MeterFormModalProps) {
     const { t } = useTranslation();
+
+    // Helper to check if meter type supports export
+    const supportsExport = formData.meter_type === 'total_meter' || formData.meter_type === 'solar_meter';
+
+    // Helper to get available modes for current meter type
+    const getAvailableModes = () => {
+        if (supportsExport) {
+            return [
+                { value: 'meter_block', label: t('meters.loxoneModeMeterBlock') },
+                { value: 'virtual_output_dual', label: t('meters.loxoneModeVirtualOutputDual') }
+            ];
+        } else {
+            return [
+                { value: 'energy_meter_block', label: t('meters.loxoneModeEnergyMeterBlock') },
+                { value: 'virtual_output_single', label: t('meters.loxoneModeVirtualOutputSingle') }
+            ];
+        }
+    };
 
     const meterTypes = [
         { value: 'total_meter', label: t('meters.totalMeter') },
@@ -463,40 +483,7 @@ export default function MeterFormModal({
                                     </p>
                                 </div>
 
-                                {/* Loxone Mode Selection (only for total_meter and solar_meter) */}
-                                {supportsExport && (
-                                    <div style={{ marginBottom: '12px' }}>
-                                        <label style={{
-                                            display: 'block',
-                                            marginBottom: '8px',
-                                            fontWeight: '500',
-                                            fontSize: '14px'
-                                        }}>
-                                            {t('meters.loxoneMode')} *
-                                        </label>
-                                        <select
-                                            required
-                                            value={connectionConfig.loxone_mode || 'meter_block'}
-                                            onChange={(e) => onConnectionConfigChange({
-                                                ...connectionConfig,
-                                                loxone_mode: e.target.value as 'virtual_output' | 'meter_block'
-                                            })}
-                                            style={{
-                                                width: '100%',
-                                                padding: '10px',
-                                                border: '1px solid #ddd',
-                                                borderRadius: '6px'
-                                            }}
-                                        >
-                                            <option value="meter_block">{t('meters.loxoneModeMeterBlock')}</option>
-                                            <option value="virtual_output">{t('meters.loxoneModeVirtualOutput')}</option>
-                                        </select>
-                                        <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                                            {t('meters.loxoneModeHelp')}
-                                        </p>
-                                    </div>
-                                )}
-
+                                {/* Connection Mode Selection - Local vs Remote */}
                                 <div style={{ marginBottom: '12px' }}>
                                     <label style={{
                                         display: 'block',
@@ -504,26 +491,153 @@ export default function MeterFormModal({
                                         fontWeight: '500',
                                         fontSize: '14px'
                                     }}>
-                                        {t('meters.loxoneHost')} *
+                                        {t('meters.loxoneConnectionMode')} *
                                     </label>
-                                    <input
-                                        type="text"
+                                    <select
                                         required
-                                        value={connectionConfig.loxone_host || ''}
+                                        value={connectionConfig.loxone_connection_mode || 'local'}
                                         onChange={(e) => onConnectionConfigChange({
                                             ...connectionConfig,
-                                            loxone_host: e.target.value
+                                            loxone_connection_mode: e.target.value as 'local' | 'remote'
                                         })}
-                                        placeholder="192.168.1.100"
                                         style={{
                                             width: '100%',
                                             padding: '10px',
                                             border: '1px solid #ddd',
                                             borderRadius: '6px'
                                         }}
-                                    />
+                                    >
+                                        <option value="local">{t('meters.loxoneConnectionModeLocal')}</option>
+                                        <option value="remote">{t('meters.loxoneConnectionModeRemote')}</option>
+                                    </select>
                                     <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                                        {t('meters.loxoneHostDescription')}
+                                        {connectionConfig.loxone_connection_mode === 'remote'
+                                            ? t('meters.loxoneConnectionModeRemoteHelp')
+                                            : t('meters.loxoneConnectionModeLocalHelp')}
+                                    </p>
+                                </div>
+
+                                {/* Conditional: Local IP or Remote MAC Address */}
+                                {connectionConfig.loxone_connection_mode === 'remote' ? (
+                                    // REMOTE MODE - MAC Address
+                                    <div style={{ marginBottom: '12px' }}>
+                                        <label style={{
+                                            display: 'block',
+                                            marginBottom: '8px',
+                                            fontWeight: '500',
+                                            fontSize: '14px'
+                                        }}>
+                                            {t('meters.loxoneMacAddress')} *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={connectionConfig.loxone_mac_address || ''}
+                                            onChange={(e) => {
+                                                // Auto-format: remove non-hex chars and convert to uppercase
+                                                const cleaned = e.target.value.toUpperCase().replace(/[^0-9A-F]/g, '');
+                                                onConnectionConfigChange({
+                                                    ...connectionConfig,
+                                                    loxone_mac_address: cleaned
+                                                });
+                                            }}
+                                            placeholder="504F94XXXXXX"
+                                            maxLength={12}
+                                            style={{
+                                                width: '100%',
+                                                padding: '10px',
+                                                border: '1px solid #ddd',
+                                                borderRadius: '6px',
+                                                fontFamily: 'monospace',
+                                                fontSize: '14px',
+                                                textTransform: 'uppercase'
+                                            }}
+                                        />
+                                        <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                                            {t('meters.loxoneMacAddressHelp')}
+                                        </p>
+                                        <div style={{
+                                            backgroundColor: '#fef3c7',
+                                            padding: '12px',
+                                            borderRadius: '6px',
+                                            marginTop: '8px',
+                                            border: '1px solid #f59e0b'
+                                        }}>
+                                            <p style={{ fontSize: '12px', color: '#92400e', margin: 0 }}>
+                                                <strong>ℹ️ {t('meters.loxoneCloudDnsTitle')}</strong><br />
+                                                {t('meters.loxoneCloudDnsDescription')}
+                                                <br /><br />
+                                                <strong>{t('meters.loxoneMacAddressLocationTitle')}:</strong><br />
+                                                {t('meters.loxoneMacAddressLocation')}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    // LOCAL MODE - IP Address
+                                    <div style={{ marginBottom: '12px' }}>
+                                        <label style={{
+                                            display: 'block',
+                                            marginBottom: '8px',
+                                            fontWeight: '500',
+                                            fontSize: '14px'
+                                        }}>
+                                            {t('meters.loxoneHost')} *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={connectionConfig.loxone_host || ''}
+                                            onChange={(e) => onConnectionConfigChange({
+                                                ...connectionConfig,
+                                                loxone_host: e.target.value
+                                            })}
+                                            placeholder="192.168.1.100"
+                                            style={{
+                                                width: '100%',
+                                                padding: '10px',
+                                                border: '1px solid #ddd',
+                                                borderRadius: '6px'
+                                            }}
+                                        />
+                                        <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                                            {t('meters.loxoneHostDescription')}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {/* Loxone Mode Selection (only for total_meter and solar_meter) */}
+                                <div style={{ marginBottom: '12px' }}>
+                                    <label style={{
+                                        display: 'block',
+                                        marginBottom: '8px',
+                                        fontWeight: '500',
+                                        fontSize: '14px'
+                                    }}>
+                                        {t('meters.loxoneMode')} *
+                                    </label>
+                                    <select
+                                        required
+                                        value={connectionConfig.loxone_mode || (supportsExport ? 'meter_block' : 'energy_meter_block')}
+                                        onChange={(e) => onConnectionConfigChange({
+                                            ...connectionConfig,
+                                            loxone_mode: e.target.value as any
+                                        })}
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px',
+                                            border: '1px solid #ddd',
+                                            borderRadius: '6px'
+                                        }}
+                                    >
+                                        {getAvailableModes().map(mode => (
+                                            <option key={mode.value} value={mode.value}>{mode.label}</option>
+                                        ))}
+                                    </select>
+                                    <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                                        {connectionConfig.loxone_mode === 'meter_block' && t('meters.loxoneModeMeterBlockHelp')}
+                                        {connectionConfig.loxone_mode === 'energy_meter_block' && t('meters.loxoneModeEnergyMeterBlockHelp')}
+                                        {connectionConfig.loxone_mode === 'virtual_output_dual' && t('meters.loxoneModeVirtualOutputDualHelp')}
+                                        {connectionConfig.loxone_mode === 'virtual_output_single' && t('meters.loxoneModeVirtualOutputSingleHelp')}
                                     </p>
                                 </div>
 
@@ -534,9 +648,14 @@ export default function MeterFormModal({
                                         fontWeight: '500',
                                         fontSize: '14px'
                                     }}>
-                                        {supportsExport && connectionConfig.loxone_mode === 'meter_block'
+                                        {connectionConfig.loxone_mode === 'meter_block'
                                             ? t('meters.loxoneMeterUuid')
-                                            : t('meters.loxoneDeviceUuidImport')} *
+                                            : connectionConfig.loxone_mode === 'energy_meter_block'
+                                                ? t('meters.loxoneEnergyMeterUuid')
+                                                : connectionConfig.loxone_mode === 'virtual_output_dual'
+                                                    ? t('meters.loxoneDeviceUuidImport')
+                                                    : t('meters.loxoneVirtualOutputUuid')
+                                        } *
                                     </label>
                                     <input
                                         type="text"
@@ -563,7 +682,7 @@ export default function MeterFormModal({
                                 </div>
 
                                 {/* Export UUID field for virtual_output mode */}
-                                {supportsExport && connectionConfig.loxone_mode === 'virtual_output' && (
+                                {connectionConfig.loxone_mode === 'virtual_output_dual' && (
                                     <div style={{ marginBottom: '12px' }}>
                                         <label style={{
                                             display: 'block',
@@ -684,7 +803,7 @@ export default function MeterFormModal({
                                         {t('meters.loxoneFeature1')}<br />
                                         {t('meters.loxoneFeature2')}<br />
                                         {t('meters.loxoneFeature3')}
-                                        {supportsExport && <><br />âœ“ Import/Export tracking with meter blocks or virtual outputs</>}
+                                        {supportsExport && <><br />✓ Import/Export tracking with meter blocks or virtual outputs</>}
                                     </div>
                                 </div>
                             </>
@@ -1216,9 +1335,9 @@ export default function MeterFormModal({
                                         onChange={(e) => onConnectionConfigChange({
                                             ...connectionConfig,
                                             data_type: e.target.value,
-                                            register_count: e.target.value === 'float32' ? 2 : 
-                                                           e.target.value === 'float64' ? 4 :
-                                                           e.target.value === 'int32' ? 2 : 1
+                                            register_count: e.target.value === 'float32' ? 2 :
+                                                e.target.value === 'float64' ? 4 :
+                                                    e.target.value === 'int32' ? 2 : 1
                                         })}
                                         style={{
                                             width: '100%',
