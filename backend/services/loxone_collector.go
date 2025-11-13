@@ -461,7 +461,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 				continue
 			}
 
-			connKey := fmt.Sprintf("%s|%s|%s", host, username, password)
+			connKey := fmt.Sprintf("local|%s|%s|%s", host, username, password)
 
 			conn, exists := connectionDevices[connKey]
 			if !exists {
