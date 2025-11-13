@@ -117,8 +117,6 @@ export default function MeterFormModal({
         onFormDataChange({ ...formData, device_type: deviceType });
     };
 
-    const supportsExport = formData.meter_type === 'total_meter' || formData.meter_type === 'solar_meter';
-
     return (
         <div style={{
             position: 'fixed',
