@@ -34,6 +34,10 @@ type LoxoneWebSocketConnection struct {
 	Username string
 	Password string
 
+	MacAddress   string // For remote connections
+	IsRemote     bool   // Flag to know if this is a remote connection
+	ResolvedHost string // The actual resolved host:port (changes dynamically)
+
 	ws          *websocket.Conn
 	isConnected bool
 
@@ -374,6 +378,8 @@ func (lc *LoxoneCollector) initializeConnections() {
 					Host:             actualHost,
 					Username:         username,
 					Password:         password,
+					MacAddress:       macAddress,
+					IsRemote:         connectionMode == "remote",
 					devices:          []*LoxoneDevice{},
 					stopChan:         make(chan bool),
 					db:               lc.db,
@@ -866,7 +872,7 @@ func (conn *LoxoneWebSocketConnection) readLoxoneMessage() (messageType byte, js
 			if err != nil {
 				return 0, nil, fmt.Errorf("failed to read JSON payload: %v", err)
 			}
-			log.Printf("   ←“ JSON payload received: %d bytes", len(message))
+			log.Printf("   ↓ JSON payload received: %d bytes", len(message))
 
 			// Show hex dump for very short messages
 			if len(message) < 50 {
@@ -920,6 +926,65 @@ func (conn *LoxoneWebSocketConnection) readLoxoneMessage() (messageType byte, js
 
 func (conn *LoxoneWebSocketConnection) Connect(db *sql.DB) {
 	conn.ConnectWithBackoff(db)
+}
+
+// resolveLoxoneCloudDNS resolves the Loxone Cloud DNS and returns the actual server address
+func (conn *LoxoneWebSocketConnection) resolveLoxoneCloudDNS() (string, error) {
+	if !conn.IsRemote {
+		// For local connections, just return the host as-is
+		return conn.Host, nil
+	}
+
+	log.Printf("🌐 [%s] Resolving Loxone Cloud DNS address", conn.MacAddress)
+
+	// Make HTTP request to get redirect URL
+	testURL := fmt.Sprintf("http://dns.loxonecloud.com/%s/jdev/cfg/api", conn.MacAddress)
+	log.Printf("   Resolving via: %s", testURL)
+
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			// Don't follow redirects, we just want to capture the redirect URL
+			return http.ErrUseLastResponse
+		},
+		Timeout: 20 * time.Second, // Increased timeout
+	}
+
+	resp, err := client.Get(testURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve cloud DNS: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Get the redirect location
+	location := resp.Header.Get("Location")
+	if location == "" {
+		return "", fmt.Errorf("no redirect location from cloud DNS")
+	}
+
+	log.Printf("   ✅ Redirect location: %s", location)
+
+	// Parse the redirect URL to get the actual server address
+	redirectURL, err := url.Parse(location)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse redirect URL: %v", err)
+	}
+
+	actualHost := redirectURL.Host
+	log.Printf("   ✅ Actual server: %s", actualHost)
+
+	// Check if the resolved host has changed
+	conn.mu.Lock()
+	oldHost := conn.ResolvedHost
+	conn.ResolvedHost = actualHost
+	conn.mu.Unlock()
+
+	if oldHost != "" && oldHost != actualHost {
+		log.Printf("   🔄 HOST CHANGED: %s → %s", oldHost, actualHost)
+		conn.logToDatabase("Loxone Cloud Host Changed",
+			fmt.Sprintf("MAC %s: Host changed from %s to %s", conn.MacAddress, oldHost, actualHost))
+	}
+
+	return actualHost, nil
 }
 
 // ConnectWithBackoff - Connect with exponential backoff and jitter, with retry loop
@@ -1031,7 +1096,7 @@ func (conn *LoxoneWebSocketConnection) ConnectWithBackoff(db *sql.DB) {
 					// Don't follow redirects, we just want to capture the redirect URL
 					return http.ErrUseLastResponse
 				},
-				Timeout: 10 * time.Second,
+				Timeout: 20 * time.Second, // Increased from 10s
 			}
 
 			resp, err := client.Get(testURL)
@@ -1079,6 +1144,18 @@ func (conn *LoxoneWebSocketConnection) ConnectWithBackoff(db *sql.DB) {
 			actualHost := redirectURL.Host
 			log.Printf("   ✅ Actual server: %s", actualHost)
 
+			// Check if the resolved host has changed (detect port changes)
+			conn.mu.Lock()
+			oldResolvedHost := conn.ResolvedHost
+			conn.ResolvedHost = actualHost
+			conn.mu.Unlock()
+
+			if oldResolvedHost != "" && oldResolvedHost != actualHost {
+				log.Printf("   🔄 HOST CHANGED: %s → %s", oldResolvedHost, actualHost)
+				conn.logToDatabase("Loxone Cloud Host Changed",
+					fmt.Sprintf("MAC %s: Host changed from %s to %s", macAddress, oldResolvedHost, actualHost))
+			}
+
 			// Use WSS (secure WebSocket) for remote connections
 			wsURL = fmt.Sprintf("wss://%s/ws/rfc6455", actualHost)
 		} else {
@@ -1090,7 +1167,7 @@ func (conn *LoxoneWebSocketConnection) ConnectWithBackoff(db *sql.DB) {
 		log.Printf("   URL: %s", wsURL)
 
 		dialer := websocket.Dialer{
-			HandshakeTimeout: 10 * time.Second,
+			HandshakeTimeout: 20 * time.Second, // Increased from 10s
 		}
 
 		// For remote connections, skip TLS verification (Loxone uses self-signed certs)
@@ -1236,6 +1313,12 @@ func (conn *LoxoneWebSocketConnection) performConnection(ws *websocket.Conn, db 
 	log.Printf("💓 Starting keepalive for %s...", conn.Host)
 	conn.goroutinesWg.Add(1)
 	go conn.keepalive()
+
+	if conn.IsRemote {
+		log.Printf("🌐 Starting DNS change monitor for %s...", conn.Host)
+		conn.goroutinesWg.Add(1)
+		go conn.monitorDNSChanges()
+	}
 
 	return true
 }
@@ -1914,7 +1997,7 @@ func (conn *LoxoneWebSocketConnection) readLoop(db *sql.DB) {
 
 			// If jsonData is nil, it might be an empty response or keepalive ACK - just continue
 			if result.jsonData == nil {
-				log.Printf("   ℹ️  [%s] Empty response received (likely keepalive ACK or status message)", conn.Host)
+				log.Printf("  ℹ️  [%s] Empty response received (likely keepalive ACK or status message)", conn.Host)
 				continue
 			}
 
@@ -2520,4 +2603,65 @@ func (conn *LoxoneWebSocketConnection) Close() {
 
 	conn.logToDatabase("Loxone Connection Closed",
 		fmt.Sprintf("Host '%s' connection closed", conn.Host))
+}
+
+func (conn *LoxoneWebSocketConnection) monitorDNSChanges() {
+	defer conn.goroutinesWg.Done()
+
+	if !conn.IsRemote {
+		// Only for remote connections
+		return
+	}
+
+	log.Printf("🌐 DNS MONITOR STARTED for %s (check every 30 minutes)", conn.MacAddress)
+
+	ticker := time.NewTicker(30 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-conn.stopChan:
+			log.Printf("🛑 [%s] DNS monitor stopping", conn.Host)
+			return
+		case <-ticker.C:
+			conn.mu.Lock()
+			isConnected := conn.isConnected
+			currentResolvedHost := conn.ResolvedHost
+			conn.mu.Unlock()
+
+			if !isConnected {
+				return
+			}
+
+			// Try to resolve DNS
+			newHost, err := conn.resolveLoxoneCloudDNS()
+			if err != nil {
+				log.Printf("⚠️ [%s] DNS re-check failed: %v", conn.MacAddress, err)
+				continue
+			}
+
+			// If host has changed, trigger reconnection
+			if newHost != currentResolvedHost {
+				log.Printf("🔄 [%s] DNS CHANGED DETECTED: %s → %s",
+					conn.MacAddress, currentResolvedHost, newHost)
+				log.Printf("   Triggering proactive reconnection...")
+
+				conn.logToDatabase("Loxone DNS Changed Detected",
+					fmt.Sprintf("MAC %s: Proactive reconnect due to DNS change", conn.MacAddress))
+
+				// Close current connection and trigger reconnect
+				conn.mu.Lock()
+				if conn.ws != nil {
+					conn.ws.Close()
+				}
+				conn.isConnected = false
+				conn.mu.Unlock()
+
+				go conn.ConnectWithBackoff(conn.db)
+				return
+			}
+
+			log.Printf("✅ [%s] DNS unchanged: %s", conn.MacAddress, currentResolvedHost)
+		}
+	}
 }
