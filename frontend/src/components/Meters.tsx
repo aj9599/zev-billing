@@ -37,12 +37,14 @@ export default function Meters() {
         editingMeter,
         formData,
         connectionConfig,
+        isTestingConnection,
         handleAddMeter,
         handleEdit,
         handleSubmit,
         handleCancel,
         handleConnectionTypeChange,
         handleNameChange,
+        handleTestConnection,
         setFormData,
         setConnectionConfig
     } = useMeterForm(loadData, fetchConnectionStatus, meters); // Pass meters array
@@ -257,6 +259,7 @@ export default function Meters() {
                     connectionConfig={connectionConfig}
                     buildings={buildings}
                     users={users}
+                    isTestingConnection={isTestingConnection}
                     onSubmit={handleSubmit}
                     onCancel={handleCancel}
                     onFormDataChange={setFormData}
@@ -264,6 +267,7 @@ export default function Meters() {
                     onConnectionTypeChange={handleConnectionTypeChange}
                     onNameChange={handleNameChange}
                     onShowInstructions={() => setShowInstructions(true)}
+                    onTestConnection={handleTestConnection}
                 />
             )}
 
