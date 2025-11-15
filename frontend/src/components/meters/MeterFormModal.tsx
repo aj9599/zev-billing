@@ -130,6 +130,7 @@ export default function MeterFormModal({
     };
 
     return (
+        <>
         <div style={{
             position: 'fixed',
             top: 0,
@@ -396,7 +397,7 @@ export default function MeterFormModal({
                                                             fontSize: '11px',
                                                             fontWeight: '600'
                                                         }}>
-                                                            Ã¢Å“â€œ {t('common.active')}
+                                                            ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ {t('common.active')}
                                                         </div>
                                                     </div>
                                                 ) : (
@@ -408,7 +409,7 @@ export default function MeterFormModal({
                                                         color: '#92400e',
                                                         fontSize: '13px'
                                                     }}>
-                                                        âš ï¸ {t('meters.noUserLinked')}
+                                                        Ã¢Å¡Â Ã¯Â¸Â {t('meters.noUserLinked')}
                                                     </div>
                                                 )}
                                                 <p style={{ fontSize: '11px', color: '#666', marginTop: '6px' }}>
@@ -426,7 +427,7 @@ export default function MeterFormModal({
                                                 color: '#6b7280',
                                                 fontSize: '13px'
                                             }}>
-                                                â„¹ï¸ {t('meters.apartmentNotSelected')}
+                                                Ã¢â€žÂ¹Ã¯Â¸Â {t('meters.apartmentNotSelected')}
                                             </div>
                                         )}
                                     </>
@@ -575,7 +576,7 @@ export default function MeterFormModal({
                                             border: '1px solid #f59e0b'
                                         }}>
                                             <p style={{ fontSize: '12px', color: '#92400e', margin: 0 }}>
-                                                <strong>â„¹ï¸ {t('meters.loxoneCloudDnsTitle')}</strong><br />
+                                                <strong>Ã¢â€žÂ¹Ã¯Â¸Â {t('meters.loxoneCloudDnsTitle')}</strong><br />
                                                 {t('meters.loxoneCloudDnsDescription')}
                                                 <br /><br />
                                                 <strong>{t('meters.loxoneMacAddressLocationTitle')}:</strong><br />
@@ -775,7 +776,7 @@ export default function MeterFormModal({
                                                 ...connectionConfig,
                                                 loxone_password: e.target.value
                                             })}
-                                            placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                                            placeholder="Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢"
                                             style={{
                                                 width: '100%',
                                                 padding: '10px',
@@ -814,7 +815,7 @@ export default function MeterFormModal({
                                         {t('meters.loxoneFeature1')}<br />
                                         {t('meters.loxoneFeature2')}<br />
                                         {t('meters.loxoneFeature3')}
-                                        {supportsExport && <><br />✓ Import/Export tracking with meter blocks or virtual outputs</>}
+                                        {supportsExport && <><br />âœ“ Import/Export tracking with meter blocks or virtual outputs</>}
                                     </div>
                                 </div>
                             </>
@@ -957,7 +958,7 @@ export default function MeterFormModal({
                                                     ...connectionConfig,
                                                     password: e.target.value
                                                 })}
-                                                placeholder="••••••••"
+                                                placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                                                 style={{
                                                     width: '100%',
                                                     padding: '10px',
@@ -1021,7 +1022,7 @@ export default function MeterFormModal({
                                                     ...connectionConfig,
                                                     client_secret: e.target.value
                                                 })}
-                                                placeholder="••••••••"
+                                                placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                                                 style={{
                                                     width: '100%',
                                                     padding: '10px',
@@ -1354,7 +1355,7 @@ export default function MeterFormModal({
                                     color: '#0c4a6e',
                                     border: '1px solid #7dd3fc'
                                 }}>
-                                    â„¹ï¸ <strong>{t('meters.mqttAuthInfo')}</strong> {t('meters.mqttAuthDescription')}
+                                    Ã¢â€žÂ¹Ã¯Â¸Â <strong>{t('meters.mqttAuthInfo')}</strong> {t('meters.mqttAuthDescription')}
                                 </div>
 
                                 <div style={{ marginBottom: '12px' }}>
@@ -1899,5 +1900,6 @@ export default function MeterFormModal({
                 100% { transform: rotate(360deg); }
             }
         `}</style>
+        </>
     );
 }
