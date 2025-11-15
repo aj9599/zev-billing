@@ -1071,35 +1071,18 @@ func (conn *LoxoneWebSocketConnection) ConnectWithBackoff(db *sql.DB) {
 		log.Printf("│ 💗 CONNECTING: %s (attempt %d/%d)", conn.Host, attempt, maxRetries)
 		log.Println("└───────────────────────────────────────────────────────┘")
 
-		// Check if this is a remote connection (Loxone Cloud DNS)
+		// CRITICAL FIX: Check if this is a remote connection and ALWAYS re-resolve DNS
+		// before each connection attempt to get the current host/port
 		var wsURL string
-		var isRemote bool = strings.Contains(conn.Host, "dns.loxonecloud.com")
+		conn.mu.Lock()
+		isRemote := conn.IsRemote
+		conn.mu.Unlock()
 
 		if isRemote {
-			log.Printf("Step 1a: Resolving Loxone Cloud DNS address")
-			log.Printf("   DNS Host: %s", conn.Host)
-
-			// Extract MAC address from host (format: dns.loxonecloud.com/MACADDRESS)
-			parts := strings.Split(conn.Host, "/")
-			if len(parts) != 2 {
-				log.Printf("❌ Invalid remote host format: %s", conn.Host)
-				continue
-			}
-			macAddress := parts[1]
-
-			// Make HTTP request to get redirect URL
-			testURL := fmt.Sprintf("http://dns.loxonecloud.com/%s/jdev/cfg/api", macAddress)
-			log.Printf("   Resolving via: %s", testURL)
-
-			client := &http.Client{
-				CheckRedirect: func(req *http.Request, via []*http.Request) error {
-					// Don't follow redirects, we just want to capture the redirect URL
-					return http.ErrUseLastResponse
-				},
-				Timeout: 20 * time.Second, // Increased from 10s
-			}
-
-			resp, err := client.Get(testURL)
+			log.Printf("Step 1a: Re-resolving Loxone Cloud DNS address (ALWAYS on reconnect)")
+			
+			// ALWAYS re-resolve DNS for remote connections to get current host/port
+			actualHost, err := conn.resolveLoxoneCloudDNS()
 			if err != nil {
 				log.Printf("❌ Failed to resolve cloud DNS: %v", err)
 				conn.mu.Lock()
@@ -1117,50 +1100,15 @@ func (conn *LoxoneWebSocketConnection) ConnectWithBackoff(db *sql.DB) {
 				conn.mu.Unlock()
 				continue
 			}
-			defer resp.Body.Close()
 
-			// Get the redirect location
-			location := resp.Header.Get("Location")
-			if location == "" {
-				log.Printf("❌ No redirect location found")
-				conn.mu.Lock()
-				conn.isConnected = false
-				conn.lastError = "No redirect location from cloud DNS"
-				conn.consecutiveConnFails++
-				conn.mu.Unlock()
-				continue
-			}
-
-			log.Printf("   ✅ Redirect location: %s", location)
-
-			// Parse the redirect URL to get the actual server address
-			// Format: https://195-201-222-243.504F94D02EAD.dyndns.loxonecloud.com:43809/...
-			redirectURL, err := url.Parse(location)
-			if err != nil {
-				log.Printf("❌ Failed to parse redirect URL: %v", err)
-				continue
-			}
-
-			actualHost := redirectURL.Host
-			log.Printf("   ✅ Actual server: %s", actualHost)
-
-			// Check if the resolved host has changed (detect port changes)
-			conn.mu.Lock()
-			oldResolvedHost := conn.ResolvedHost
-			conn.ResolvedHost = actualHost
-			conn.mu.Unlock()
-
-			if oldResolvedHost != "" && oldResolvedHost != actualHost {
-				log.Printf("   🔄 HOST CHANGED: %s → %s", oldResolvedHost, actualHost)
-				conn.logToDatabase("Loxone Cloud Host Changed",
-					fmt.Sprintf("MAC %s: Host changed from %s to %s", macAddress, oldResolvedHost, actualHost))
-			}
-
-			// Use WSS (secure WebSocket) for remote connections
+			// Use the freshly resolved host
 			wsURL = fmt.Sprintf("wss://%s/ws/rfc6455", actualHost)
+			log.Printf("   ✅ Using resolved host: %s", actualHost)
 		} else {
 			// Local connection - use standard ws://
+			conn.mu.Lock()
 			wsURL = fmt.Sprintf("ws://%s/ws/rfc6455", conn.Host)
+			conn.mu.Unlock()
 		}
 
 		log.Printf("Step 1: Establishing WebSocket connection")
