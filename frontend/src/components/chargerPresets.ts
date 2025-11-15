@@ -60,6 +60,36 @@ export const WEIDMULLER_PRESET: PresetConfig = {
 };
 
 // ============================================================================
+// Zaptec Preset
+// ============================================================================
+export const ZAPTEC_PRESET: PresetConfig = {
+  name: 'zaptec',
+  label: 'Zaptec',
+  description: 'Zaptec Go/Pro chargers via cloud API with automatic state mapping',
+  supportsPriority: false, // Zaptec uses load balancing instead of priority mode
+  defaultStateMappings: {
+    cable_locked: '65',
+    waiting_auth: '66',
+    charging: '67',
+    idle: '50'
+  },
+  defaultModeMappings: {
+    normal: '1',
+    priority: '1' // Same as normal since Zaptec doesn't support priority mode
+  },
+  stateOptions: [
+    { value: 'cable_locked', label: 'Cable Locked' },
+    { value: 'waiting_auth', label: 'Waiting for Authentication' },
+    { value: 'charging', label: 'Charging' },
+    { value: 'idle', label: 'Idle' }
+  ],
+  modeOptions: [
+    { value: 'normal', label: 'Normal Charging' },
+    { value: 'priority', label: 'Priority Charging' }
+  ]
+};
+
+// ============================================================================
 // Add future presets here
 // ============================================================================
 // Example ABB Preset (uncomment and configure when needed):
@@ -98,6 +128,7 @@ export const ABB_PRESET: PresetConfig = {
 // Add new presets to this registry to make them available in the UI
 export const CHARGER_PRESETS: Record<string, PresetConfig> = {
   weidmuller: WEIDMULLER_PRESET,
+  zaptec: ZAPTEC_PRESET,
   // abb: ABB_PRESET,  // Uncomment when implementing
 };
 

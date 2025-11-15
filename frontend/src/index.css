@@ -19,7 +19,10 @@ body {
   position: relative;
 }
 
-input, select, textarea, button {
+input,
+select,
+textarea,
+button {
   font-family: inherit;
 }
 
@@ -40,6 +43,7 @@ table {
 
 /* Mobile responsive utilities */
 @media (max-width: 768px) {
+
   /* Prevent horizontal scroll */
   body {
     overflow-x: hidden;
@@ -100,7 +104,8 @@ table {
   }
 
   /* Touch-friendly buttons */
-  button, a {
+  button,
+  a {
     min-height: 44px;
   }
 }

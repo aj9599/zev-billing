@@ -168,6 +168,21 @@ class ApiClient {
     return this.request(`/meters/${id}`, { method: 'DELETE' });
   }
 
+  async testSmartMeConnection(config: {
+    auth_type: 'basic' | 'apikey' | 'oauth';
+    device_id: string;
+    username?: string;
+    password?: string;
+    api_key?: string;
+    client_id?: string;
+    client_secret?: string;
+  }): Promise<{ success: boolean; message: string }> {
+    return this.request('/meters/test-smartme', {
+      method: 'POST',
+      body: JSON.stringify(config),
+    });
+  }
+
   async getMeterDeletionImpact(id: number): Promise<{
     meter_id: number;
     meter_name: string;

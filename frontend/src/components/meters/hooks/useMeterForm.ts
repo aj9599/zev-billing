@@ -32,12 +32,21 @@ interface ConnectionConfig {
     mqtt_username?: string;
     mqtt_password?: string;
     mqtt_qos?: number;
+    // Smart-me configuration
+    auth_type?: 'basic' | 'apikey' | 'oauth';
+    username?: string;
+    password?: string;
+    api_key?: string;
+    client_id?: string;
+    client_secret?: string;
+    device_id?: string;
 }
 
 export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => void, meters: any[] = []) {
     const { t } = useTranslation();
     const [showModal, setShowModal] = useState(false);
     const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
+    const [isTestingConnection, setIsTestingConnection] = useState(false);
     const [formData, setFormData] = useState<Partial<Meter>>({
         name: '',
         meter_type: 'total_meter',
@@ -46,7 +55,7 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
         apartment_unit: '',
         connection_type: 'loxone_api',
         connection_config: '{}',
-        device_type: 'generic', // Default device type
+        device_type: 'generic',
         notes: '',
         is_active: true
     });
@@ -65,19 +74,27 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
         listen_port: 8888,
         data_key: 'power_kwh',
         loxone_host: '',
-        loxone_mac_address: '', // NEW
-        loxone_connection_mode: 'local', // NEW: Default to local
+        loxone_mac_address: '',
+        loxone_connection_mode: 'local',
         loxone_username: '',
         loxone_password: '',
         loxone_device_id: '',
-        loxone_mode: 'meter_block', // Will be updated based on meter type
+        loxone_mode: 'meter_block',
         loxone_export_device_id: '',
         mqtt_topic: '',
         mqtt_broker: 'localhost',
         mqtt_port: 1883,
         mqtt_username: '',
         mqtt_password: '',
-        mqtt_qos: 1
+        mqtt_qos: 1,
+        // Smart-me defaults
+        auth_type: 'apikey',
+        username: '',
+        password: '',
+        api_key: '',
+        client_id: '',
+        client_secret: '',
+        device_id: ''
     });
 
     const resetForm = () => {
@@ -113,14 +130,22 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
             loxone_username: '',
             loxone_password: '',
             loxone_device_id: '',
-            loxone_mode: 'meter_block', // Default for total_meter
+            loxone_mode: 'meter_block',
             loxone_export_device_id: '',
             mqtt_topic: '',
             mqtt_broker: 'localhost',
             mqtt_port: 1883,
             mqtt_username: '',
             mqtt_password: '',
-            mqtt_qos: 1
+            mqtt_qos: 1,
+            // Smart-me defaults
+            auth_type: 'apikey',
+            username: '',
+            password: '',
+            api_key: '',
+            client_id: '',
+            client_secret: '',
+            device_id: ''
         });
     };
 
@@ -174,7 +199,15 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
                 mqtt_port: config.mqtt_port || 1883,
                 mqtt_username: config.mqtt_username || '',
                 mqtt_password: config.mqtt_password || '',
-                mqtt_qos: config.mqtt_qos || 1
+                mqtt_qos: config.mqtt_qos || 1,
+                // Smart-me config
+                auth_type: config.auth_type || 'apikey',
+                username: config.username || '',
+                password: config.password || '',
+                api_key: config.api_key || '',
+                client_id: config.client_id || '',
+                client_secret: config.client_secret || '',
+                device_id: config.device_id || ''
             });
         } catch (e) {
             console.error('Failed to parse config:', e);
@@ -183,8 +216,99 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
         setShowModal(true);
     };
 
+    const validateSmartMeConfig = (): string | null => {
+        if (!connectionConfig.device_id || connectionConfig.device_id.trim() === '') {
+            return t('meters.errorDeviceIdRequired');
+        }
+
+        // Validate UUID format
+        const uuidRegex = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+        if (!uuidRegex.test(connectionConfig.device_id)) {
+            return t('meters.errorInvalidDeviceIdFormat');
+        }
+
+        switch (connectionConfig.auth_type) {
+            case 'apikey':
+                if (!connectionConfig.api_key || connectionConfig.api_key.trim() === '') {
+                    return t('meters.errorApiKeyRequired');
+                }
+                break;
+            case 'basic':
+                if (!connectionConfig.username || connectionConfig.username.trim() === '') {
+                    return t('meters.errorUsernameRequired');
+                }
+                if (!connectionConfig.password || connectionConfig.password.trim() === '') {
+                    return t('meters.errorPasswordRequired');
+                }
+                break;
+            case 'oauth':
+                if (!connectionConfig.client_id || connectionConfig.client_id.trim() === '') {
+                    return t('meters.errorClientIdRequired');
+                }
+                if (!connectionConfig.client_secret || connectionConfig.client_secret.trim() === '') {
+                    return t('meters.errorClientSecretRequired');
+                }
+                break;
+        }
+
+        return null;
+    };
+
+    const handleTestConnection = async () => {
+        if (formData.connection_type !== 'smartme') {
+            alert(t('meters.testConnectionOnlySmartme'));
+            return;
+        }
+
+        // Validate configuration first
+        const validationError = validateSmartMeConfig();
+        if (validationError) {
+            alert(validationError);
+            return;
+        }
+
+        setIsTestingConnection(true);
+
+        try {
+            // Build config object for testing
+            const testConfig: any = {
+                auth_type: connectionConfig.auth_type,
+                device_id: connectionConfig.device_id
+            };
+
+            // Add auth-specific fields
+            if (connectionConfig.auth_type === 'apikey') {
+                testConfig.api_key = connectionConfig.api_key;
+            } else if (connectionConfig.auth_type === 'basic') {
+                testConfig.username = connectionConfig.username;
+                testConfig.password = connectionConfig.password;
+            } else if (connectionConfig.auth_type === 'oauth') {
+                testConfig.client_id = connectionConfig.client_id;
+                testConfig.client_secret = connectionConfig.client_secret;
+            }
+
+            await api.testSmartMeConnection(testConfig);
+            alert(t('meters.testConnectionSuccess'));
+        } catch (err: any) {
+            console.error('Connection test failed:', err);
+            const errorMsg = err?.response?.data?.error || err?.message || t('meters.testConnectionFailed');
+            alert(`${t('meters.testConnectionFailed')}:\n\n${errorMsg}`);
+        } finally {
+            setIsTestingConnection(false);
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        // Extra validation for Smart-me
+        if (formData.connection_type === 'smartme') {
+            const validationError = validateSmartMeConfig();
+            if (validationError) {
+                alert(validationError);
+                return;
+            }
+        }
 
         let config: ConnectionConfig = {};
 
@@ -225,6 +349,23 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
                 mqtt_password: connectionConfig.mqtt_password,
                 mqtt_qos: connectionConfig.mqtt_qos
             };
+        } else if (formData.connection_type === 'smartme') {
+            // Smart-me configuration
+            config = {
+                auth_type: connectionConfig.auth_type,
+                device_id: connectionConfig.device_id?.trim()
+            };
+
+            // Add auth-specific fields
+            if (connectionConfig.auth_type === 'apikey') {
+                config.api_key = connectionConfig.api_key?.trim();
+            } else if (connectionConfig.auth_type === 'basic') {
+                config.username = connectionConfig.username?.trim();
+                config.password = connectionConfig.password;
+            } else if (connectionConfig.auth_type === 'oauth') {
+                config.client_id = connectionConfig.client_id?.trim();
+                config.client_secret = connectionConfig.client_secret?.trim();
+            }
         }
 
         // Ensure device_type is set, with default fallback
@@ -249,9 +390,30 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
             resetForm();
             loadData();
             setTimeout(fetchConnectionStatus, 2000);
-        } catch (err) {
+        } catch (err: any) {
             console.error('Failed to save meter:', err);
-            alert(t('meters.saveFailed'));
+            
+            // Extract detailed error message
+            let errorMessage = t('meters.saveFailed');
+            
+            if (err?.response?.data?.error) {
+                errorMessage += `:\n\n${err.response.data.error}`;
+            } else if (err?.response?.data?.message) {
+                errorMessage += `:\n\n${err.response.data.message}`;
+            } else if (err?.message) {
+                errorMessage += `:\n\n${err.message}`;
+            }
+            
+            // Add specific guidance for Smart-me errors
+            if (formData.connection_type === 'smartme') {
+                if (err?.response?.status === 401 || err?.response?.status === 403) {
+                    errorMessage += `\n\n${t('meters.errorCheckCredentials')}`;
+                } else if (err?.response?.status === 404) {
+                    errorMessage += `\n\n${t('meters.errorDeviceNotFound')}`;
+                }
+            }
+            
+            alert(errorMessage);
         }
     };
 
@@ -294,12 +456,14 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
         editingMeter,
         formData,
         connectionConfig,
+        isTestingConnection,
         handleAddMeter,
         handleEdit,
         handleSubmit,
         handleCancel,
         handleConnectionTypeChange,
         handleNameChange,
+        handleTestConnection,
         setFormData,
         setConnectionConfig
     };

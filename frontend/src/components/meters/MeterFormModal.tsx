@@ -1,4 +1,4 @@
-import { X, Info, AlertCircle, Wifi, Rss } from 'lucide-react';
+import { X, Info, AlertCircle, Wifi, Rss, Cloud } from 'lucide-react';
 import { useTranslation } from '../../i18n';
 import type { Meter, Building, User } from '../../types';
 
@@ -30,6 +30,14 @@ interface ConnectionConfig {
     mqtt_username?: string;
     mqtt_password?: string;
     mqtt_qos?: number;
+    // Smart-me configuration
+    auth_type?: 'basic' | 'apikey' | 'oauth';
+    username?: string;
+    password?: string;
+    api_key?: string;
+    client_id?: string;
+    client_secret?: string;
+    device_id?: string;
 }
 
 interface MeterFormModalProps {
@@ -38,6 +46,7 @@ interface MeterFormModalProps {
     connectionConfig: ConnectionConfig;
     buildings: Building[];
     users: User[];
+    isTestingConnection: boolean;
     onSubmit: (e: React.FormEvent) => Promise<void>;
     onCancel: () => void;
     onFormDataChange: (data: Partial<Meter>) => void;
@@ -45,6 +54,7 @@ interface MeterFormModalProps {
     onConnectionTypeChange: (connectionType: string, meterName: string, buildingName?: string, apartmentUnit?: string) => void;
     onNameChange: (name: string, connectionType: string, buildingName?: string, apartmentUnit?: string) => void;
     onShowInstructions: () => void;
+    onTestConnection: () => Promise<void>;
 }
 
 export default function MeterFormModal({
@@ -53,13 +63,15 @@ export default function MeterFormModal({
     connectionConfig,
     buildings,
     users,
+    isTestingConnection,
     onSubmit,
     onCancel,
     onFormDataChange,
     onConnectionConfigChange,
     onConnectionTypeChange,
     onNameChange,
-    onShowInstructions
+    onShowInstructions,
+    onTestConnection
 }: MeterFormModalProps) {
     const { t } = useTranslation();
 
@@ -384,7 +396,7 @@ export default function MeterFormModal({
                                                             fontSize: '11px',
                                                             fontWeight: '600'
                                                         }}>
-                                                            âœ“ {t('common.active')}
+                                                            Ã¢Å“â€œ {t('common.active')}
                                                         </div>
                                                     </div>
                                                 ) : (
@@ -396,7 +408,7 @@ export default function MeterFormModal({
                                                         color: '#92400e',
                                                         fontSize: '13px'
                                                     }}>
-                                                        ⚠️ {t('meters.noUserLinked')}
+                                                        âš ï¸ {t('meters.noUserLinked')}
                                                     </div>
                                                 )}
                                                 <p style={{ fontSize: '11px', color: '#666', marginTop: '6px' }}>
@@ -414,7 +426,7 @@ export default function MeterFormModal({
                                                 color: '#6b7280',
                                                 fontSize: '13px'
                                             }}>
-                                                ℹ️ {t('meters.apartmentNotSelected')}
+                                                â„¹ï¸ {t('meters.apartmentNotSelected')}
                                             </div>
                                         )}
                                     </>
@@ -445,6 +457,7 @@ export default function MeterFormModal({
                             }}
                         >
                             <option value="loxone_api">{t('meters.loxoneApiRecommended')}</option>
+                            <option value="smartme">{t('meters.smartmeApi')}</option>
                             <option value="mqtt">{t('meters.mqttProtocol')}</option>
                             <option value="udp">{t('meters.udpAlternative')}</option>
                             <option value="modbus_tcp">{t('meters.modbusTcp')}</option>
@@ -562,7 +575,7 @@ export default function MeterFormModal({
                                             border: '1px solid #f59e0b'
                                         }}>
                                             <p style={{ fontSize: '12px', color: '#92400e', margin: 0 }}>
-                                                <strong>ℹ️ {t('meters.loxoneCloudDnsTitle')}</strong><br />
+                                                <strong>â„¹ï¸ {t('meters.loxoneCloudDnsTitle')}</strong><br />
                                                 {t('meters.loxoneCloudDnsDescription')}
                                                 <br /><br />
                                                 <strong>{t('meters.loxoneMacAddressLocationTitle')}:</strong><br />
@@ -762,7 +775,7 @@ export default function MeterFormModal({
                                                 ...connectionConfig,
                                                 loxone_password: e.target.value
                                             })}
-                                            placeholder="••••••••"
+                                            placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                                             style={{
                                                 width: '100%',
                                                 padding: '10px',
@@ -802,6 +815,331 @@ export default function MeterFormModal({
                                         {t('meters.loxoneFeature2')}<br />
                                         {t('meters.loxoneFeature3')}
                                         {supportsExport && <><br />✓ Import/Export tracking with meter blocks or virtual outputs</>}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        {/* Smart-me API Configuration */}
+                        {formData.connection_type === 'smartme' && (
+                            <>
+                                <div style={{
+                                    backgroundColor: '#e0f2fe',
+                                    padding: '12px',
+                                    borderRadius: '6px',
+                                    marginBottom: '12px',
+                                    border: '1px solid #0ea5e9',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px'
+                                }}>
+                                    <Cloud size={16} color="#0ea5e9" />
+                                    <p style={{ fontSize: '13px', color: '#075985', margin: 0 }}>
+                                        <strong>{t('meters.smartmeApiDescription')}</strong>
+                                    </p>
+                                </div>
+
+                                {/* Authentication Type Selection */}
+                                <div style={{ marginBottom: '12px' }}>
+                                    <label style={{
+                                        display: 'block',
+                                        marginBottom: '8px',
+                                        fontWeight: '500',
+                                        fontSize: '14px'
+                                    }}>
+                                        {t('meters.smartmeAuthType')} *
+                                    </label>
+                                    <select
+                                        required
+                                        value={connectionConfig.auth_type || 'apikey'}
+                                        onChange={(e) => onConnectionConfigChange({
+                                            ...connectionConfig,
+                                            auth_type: e.target.value as 'basic' | 'apikey' | 'oauth'
+                                        })}
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px',
+                                            border: '1px solid #ddd',
+                                            borderRadius: '6px'
+                                        }}
+                                    >
+                                        <option value="apikey">{t('meters.smartmeAuthApiKey')}</option>
+                                        <option value="basic">{t('meters.smartmeAuthBasic')}</option>
+                                        <option value="oauth">{t('meters.smartmeAuthOAuth')}</option>
+                                    </select>
+                                    <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                                        {t('meters.smartmeAuthTypeHelp')}
+                                    </p>
+                                </div>
+
+                                {/* API Key Authentication */}
+                                {connectionConfig.auth_type === 'apikey' && (
+                                    <div style={{ marginBottom: '12px' }}>
+                                        <label style={{
+                                            display: 'block',
+                                            marginBottom: '8px',
+                                            fontWeight: '500',
+                                            fontSize: '14px'
+                                        }}>
+                                            {t('meters.smartmeApiKey')} *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={connectionConfig.api_key || ''}
+                                            onChange={(e) => onConnectionConfigChange({
+                                                ...connectionConfig,
+                                                api_key: e.target.value
+                                            })}
+                                            placeholder="MTRH5eUjFXV8U4i1viZF2jHNoUNsnDTx"
+                                            style={{
+                                                width: '100%',
+                                                padding: '10px',
+                                                border: '1px solid #ddd',
+                                                borderRadius: '6px',
+                                                fontFamily: 'monospace'
+                                            }}
+                                        />
+                                        <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                                            {t('meters.smartmeApiKeyHelp')}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {/* Basic Authentication */}
+                                {connectionConfig.auth_type === 'basic' && (
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: '1fr 1fr',
+                                        gap: '12px',
+                                        marginBottom: '12px'
+                                    }}>
+                                        <div>
+                                            <label style={{
+                                                display: 'block',
+                                                marginBottom: '8px',
+                                                fontWeight: '500',
+                                                fontSize: '14px'
+                                            }}>
+                                                {t('meters.smartmeUsername')} *
+                                            </label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={connectionConfig.username || ''}
+                                                onChange={(e) => onConnectionConfigChange({
+                                                    ...connectionConfig,
+                                                    username: e.target.value
+                                                })}
+                                                placeholder="user@example.com"
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '10px',
+                                                    border: '1px solid #ddd',
+                                                    borderRadius: '6px'
+                                                }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{
+                                                display: 'block',
+                                                marginBottom: '8px',
+                                                fontWeight: '500',
+                                                fontSize: '14px'
+                                            }}>
+                                                {t('meters.smartmePassword')} *
+                                            </label>
+                                            <input
+                                                type="password"
+                                                required
+                                                value={connectionConfig.password || ''}
+                                                onChange={(e) => onConnectionConfigChange({
+                                                    ...connectionConfig,
+                                                    password: e.target.value
+                                                })}
+                                                placeholder="••••••••"
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '10px',
+                                                    border: '1px solid #ddd',
+                                                    borderRadius: '6px'
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* OAuth Authentication */}
+                                {connectionConfig.auth_type === 'oauth' && (
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: '1fr 1fr',
+                                        gap: '12px',
+                                        marginBottom: '12px'
+                                    }}>
+                                        <div>
+                                            <label style={{
+                                                display: 'block',
+                                                marginBottom: '8px',
+                                                fontWeight: '500',
+                                                fontSize: '14px'
+                                            }}>
+                                                {t('meters.smartmeClientId')} *
+                                            </label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={connectionConfig.client_id || ''}
+                                                onChange={(e) => onConnectionConfigChange({
+                                                    ...connectionConfig,
+                                                    client_id: e.target.value
+                                                })}
+                                                placeholder="client_id_1234567890"
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '10px',
+                                                    border: '1px solid #ddd',
+                                                    borderRadius: '6px',
+                                                    fontFamily: 'monospace'
+                                                }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{
+                                                display: 'block',
+                                                marginBottom: '8px',
+                                                fontWeight: '500',
+                                                fontSize: '14px'
+                                            }}>
+                                                {t('meters.smartmeClientSecret')} *
+                                            </label>
+                                            <input
+                                                type="password"
+                                                required
+                                                value={connectionConfig.client_secret || ''}
+                                                onChange={(e) => onConnectionConfigChange({
+                                                    ...connectionConfig,
+                                                    client_secret: e.target.value
+                                                })}
+                                                placeholder="••••••••"
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '10px',
+                                                    border: '1px solid #ddd',
+                                                    borderRadius: '6px',
+                                                    fontFamily: 'monospace'
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Device ID (common for all auth types) */}
+                                <div style={{ marginBottom: '12px' }}>
+                                    <label style={{
+                                        display: 'block',
+                                        marginBottom: '8px',
+                                        fontWeight: '500',
+                                        fontSize: '14px'
+                                    }}>
+                                        {t('meters.smartmeDeviceId')} *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={connectionConfig.device_id || ''}
+                                        onChange={(e) => onConnectionConfigChange({
+                                            ...connectionConfig,
+                                            device_id: e.target.value
+                                        })}
+                                        placeholder="6a7fae30-c598-4778-8f1f-a14620550274"
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px',
+                                            border: '1px solid #ddd',
+                                            borderRadius: '6px',
+                                            fontFamily: 'monospace'
+                                        }}
+                                    />
+                                    <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                                        {t('meters.smartmeDeviceIdHelp')}
+                                    </p>
+                                </div>
+
+                                {/* Test Connection Button for Smart-me */}
+                                {formData.connection_type === 'smartme' && (
+                                    <div style={{ marginTop: '16px' }}>
+                                        <button
+                                            type="button"
+                                            onClick={onTestConnection}
+                                            disabled={isTestingConnection || !connectionConfig.device_id}
+                                            style={{
+                                                width: '100%',
+                                                padding: '12px',
+                                                backgroundColor: isTestingConnection ? '#6b7280' : '#10b981',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '6px',
+                                                fontSize: '14px',
+                                                fontWeight: '500',
+                                                cursor: isTestingConnection || !connectionConfig.device_id ? 'not-allowed' : 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '8px',
+                                                opacity: isTestingConnection || !connectionConfig.device_id ? 0.6 : 1
+                                            }}
+                                        >
+                                            {isTestingConnection ? (
+                                                <>
+                                                    <div style={{
+                                                        width: '16px',
+                                                        height: '16px',
+                                                        border: '2px solid white',
+                                                        borderTopColor: 'transparent',
+                                                        borderRadius: '50%',
+                                                        animation: 'spin 1s linear infinite'
+                                                    }} />
+                                                    {t('meters.testingConnection')}
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Wifi size={16} />
+                                                    {t('meters.testConnection')}
+                                                </>
+                                            )}
+                                        </button>
+                                        <p style={{ fontSize: '11px', color: '#666', marginTop: '4px', textAlign: 'center' }}>
+                                            {t('meters.testConnectionHelp')}
+                                        </p>
+                                    </div>
+                                )}
+
+                                <div style={{
+                                    backgroundColor: '#fff',
+                                    padding: '12px',
+                                    borderRadius: '6px',
+                                    marginTop: '12px',
+                                    fontFamily: 'monospace',
+                                    fontSize: '12px',
+                                    border: '1px solid #e5e7eb'
+                                }}>
+                                    <strong>{t('meters.smartmeSetupGuide')}</strong><br />
+                                    {t('meters.smartmeSetupStep1')}<br />
+                                    {t('meters.smartmeSetupStep2')}<br />
+                                    {t('meters.smartmeSetupStep3')}<br />
+                                    {t('meters.smartmeSetupStep4')}<br /><br />
+                                    <div style={{
+                                        backgroundColor: '#e0f2fe',
+                                        padding: '8px',
+                                        borderRadius: '4px',
+                                        fontSize: '11px',
+                                        color: '#075985'
+                                    }}>
+                                        <strong>{t('meters.smartmeFeatures')}</strong><br />
+                                        {t('meters.smartmeFeature1')}<br />
+                                        {t('meters.smartmeFeature2')}<br />
+                                        {t('meters.smartmeFeature3')}
                                     </div>
                                 </div>
                             </>
@@ -1016,7 +1354,7 @@ export default function MeterFormModal({
                                     color: '#0c4a6e',
                                     border: '1px solid #7dd3fc'
                                 }}>
-                                    ℹ️ <strong>{t('meters.mqttAuthInfo')}</strong> {t('meters.mqttAuthDescription')}
+                                    â„¹ï¸ <strong>{t('meters.mqttAuthInfo')}</strong> {t('meters.mqttAuthDescription')}
                                 </div>
 
                                 <div style={{ marginBottom: '12px' }}>
@@ -1555,5 +1893,11 @@ export default function MeterFormModal({
                 </form>
             </div>
         </div>
+        <style>{`
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        `}</style>
     );
 }

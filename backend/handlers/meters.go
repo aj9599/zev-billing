@@ -933,3 +933,105 @@ func (h *MeterHandler) GetArchivedMeters(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(meters)
 }
+// TestSmartMeConnectionRequest represents the request for testing Smart-me connection
+type TestSmartMeConnectionRequest struct {
+	AuthType     string `json:"auth_type"`
+	DeviceID     string `json:"device_id"`
+	Username     string `json:"username,omitempty"`
+	Password     string `json:"password,omitempty"`
+	APIKey       string `json:"api_key,omitempty"`
+	ClientID     string `json:"client_id,omitempty"`
+	ClientSecret string `json:"client_secret,omitempty"`
+}
+
+// TestSmartMeConnection tests a Smart-me configuration without saving it
+func (h *MeterHandler) TestSmartMeConnection(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req TestSmartMeConnectionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Validate required fields
+	if req.DeviceID == "" {
+		respondWithError(w, http.StatusBadRequest, "device_id is required")
+		return
+	}
+
+	if req.AuthType == "" {
+		req.AuthType = "apikey" // Default to API key
+	}
+
+	// Build config map
+	config := map[string]interface{}{
+		"auth_type": req.AuthType,
+		"device_id": req.DeviceID,
+	}
+
+	// Add auth-specific fields
+	switch req.AuthType {
+	case "basic":
+		if req.Username == "" || req.Password == "" {
+			respondWithError(w, http.StatusBadRequest, "username and password are required for basic authentication")
+			return
+		}
+		config["username"] = req.Username
+		config["password"] = req.Password
+		
+	case "apikey":
+		if req.APIKey == "" {
+			respondWithError(w, http.StatusBadRequest, "api_key is required for API key authentication")
+			return
+		}
+		config["api_key"] = req.APIKey
+		
+	case "oauth":
+		if req.ClientID == "" || req.ClientSecret == "" {
+			respondWithError(w, http.StatusBadRequest, "client_id and client_secret are required for OAuth authentication")
+			return
+		}
+		config["client_id"] = req.ClientID
+		config["client_secret"] = req.ClientSecret
+		
+	default:
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("invalid auth_type: %s (must be 'basic', 'apikey', or 'oauth')", req.AuthType))
+		return
+	}
+
+	// Get Smart-me collector
+	smartmeCollector := h.dataCollector.GetSmartMeCollector()
+	if smartmeCollector == nil {
+		respondWithError(w, http.StatusInternalServerError, "Smart-me collector not available")
+		return
+	}
+
+	// Test the connection
+	if err := smartmeCollector.TestConnection(config); err != nil {
+		log.Printf("Smart-me connection test failed: %v", err)
+		respondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Success response
+	respondWithJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Connection successful",
+	})
+}
+
+// Helper functions for JSON responses
+func respondWithError(w http.ResponseWriter, code int, message string) {
+	respondWithJSON(w, code, map[string]string{"error": message})
+}
+
+func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
+	response, _ := json.Marshal(payload)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(response)
+}

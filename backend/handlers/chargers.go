@@ -135,6 +135,12 @@ func (h *ChargerHandler) Create(w http.ResponseWriter, r *http.Request) {
 		log.Printf("New Loxone API charger created, restarting Loxone connections...")
 		go h.dataCollector.RestartUDPListeners() // This also restarts Loxone connections
 	}
+	
+	// If it's a Zaptec API charger, restart Zaptec connections
+	if c.ConnectionType == "zaptec_api" {
+		log.Printf("New Zaptec API charger created, restarting Zaptec connections...")
+		go h.dataCollector.RestartUDPListeners() // This also restarts Zaptec connections
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -182,6 +188,12 @@ func (h *ChargerHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if c.ConnectionType == "loxone_api" {
 		log.Printf("Loxone API charger updated, restarting Loxone connections...")
 		go h.dataCollector.RestartUDPListeners() // This also restarts Loxone connections
+	}
+	
+	// If it's a Zaptec API charger, restart Zaptec connections
+	if c.ConnectionType == "zaptec_api" {
+		log.Printf("Zaptec API charger updated, restarting Zaptec connections...")
+		go h.dataCollector.RestartUDPListeners() // This also restarts Zaptec connections
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -245,7 +257,7 @@ func (h *ChargerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if it's a UDP or Loxone API charger before deletion
+	// Check if it's a UDP, Loxone API, or Zaptec API charger before deletion
 	var connectionType, chargerName string
 	err = h.db.QueryRow("SELECT connection_type, name FROM chargers WHERE id = ?", id).Scan(&connectionType, &chargerName)
 	if err == sql.ErrNoRows {
@@ -303,6 +315,12 @@ func (h *ChargerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if connectionType == "loxone_api" {
 		log.Printf("Loxone API charger deleted, restarting Loxone connections...")
 		go h.dataCollector.RestartUDPListeners() // This also restarts Loxone connections
+	}
+	
+	// If it was a Zaptec API charger, restart Zaptec connections
+	if connectionType == "zaptec_api" {
+		log.Printf("Zaptec API charger deleted, restarting Zaptec connections...")
+		go h.dataCollector.RestartUDPListeners() // This also restarts Zaptec connections
 	}
 
 	w.WriteHeader(http.StatusNoContent)

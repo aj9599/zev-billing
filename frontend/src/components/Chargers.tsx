@@ -38,6 +38,11 @@ interface ChargerConnectionConfig {
   loxone_state_uuid?: string;
   loxone_user_id_uuid?: string;
   loxone_mode_uuid?: string;
+  // Zaptec API fields
+  zaptec_username?: string;
+  zaptec_password?: string;
+  zaptec_charger_id?: string;
+  zaptec_installation_id?: string;
 }
 
 interface ChargerSession {
@@ -55,6 +60,17 @@ interface LoxoneConnectionStatus {
     last_reading: number;
     last_update: string;
     last_error?: string;
+  };
+}
+
+interface ZaptecConnectionStatus {
+  [chargerId: number]: {
+    charger_name: string;
+    charger_id: string;
+    is_connected: boolean;
+    last_reading: number;
+    last_update: string;
+    token_expires?: string;
   };
 }
 
@@ -154,7 +170,7 @@ const DeleteConfirmationModal = memo(({
               borderRadius: '12px', padding: '16px', marginBottom: '16px'
             }}>
               <p style={{ fontSize: '13px', fontWeight: '600', color: '#991b1b', margin: 0 }}>
-                ⚠️ {t('chargers.dataLossWarning') || 'Warning: All historical data for this charger will be permanently lost. This cannot be recovered.'}
+                âš ï¸ {t('chargers.dataLossWarning') || 'Warning: All historical data for this charger will be permanently lost. This cannot be recovered.'}
               </p>
             </div>
 
@@ -241,6 +257,7 @@ export default function Chargers() {
   const [buildings, setBuildings] = useState<BuildingType[]>([]);
   const [chargerSessions, setChargerSessions] = useState<Record<number, ChargerSession>>({});
   const [loxoneStatus, setLoxoneStatus] = useState<LoxoneConnectionStatus>({});
+  const [zaptecStatus, setZaptecStatus] = useState<ZaptecConnectionStatus>({});
   const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -287,7 +304,11 @@ export default function Chargers() {
     loxone_power_uuid: '',
     loxone_state_uuid: '',
     loxone_user_id_uuid: '',
-    loxone_mode_uuid: ''
+    loxone_mode_uuid: '',
+    zaptec_username: '',
+    zaptec_password: '',
+    zaptec_charger_id: '',
+    zaptec_installation_id: ''
   });
 
   // Memoize the cancel handler
@@ -329,8 +350,11 @@ export default function Chargers() {
       if (debugData.loxone_charger_connections) {
         setLoxoneStatus(debugData.loxone_charger_connections);
       }
+      if (debugData.zaptec_charger_connections) {
+        setZaptecStatus(debugData.zaptec_charger_connections);
+      }
     } catch (error) {
-      console.error('Failed to fetch Loxone charger status:', error);
+      console.error('Failed to fetch charger status:', error);
     }
   };
 
@@ -436,6 +460,19 @@ export default function Chargers() {
         loxone_state_uuid: connectionConfig.loxone_state_uuid,
         loxone_user_id_uuid: connectionConfig.loxone_user_id_uuid,
         loxone_mode_uuid: connectionConfig.loxone_mode_uuid,
+        state_cable_locked: connectionConfig.state_cable_locked,
+        state_waiting_auth: connectionConfig.state_waiting_auth,
+        state_charging: connectionConfig.state_charging,
+        state_idle: connectionConfig.state_idle,
+        mode_normal: connectionConfig.mode_normal,
+        mode_priority: connectionConfig.mode_priority
+      };
+    } else if (formData.connection_type === 'zaptec_api') {
+      config = {
+        username: connectionConfig.zaptec_username,
+        password: connectionConfig.zaptec_password,
+        charger_id: connectionConfig.zaptec_charger_id,
+        installation_id: connectionConfig.zaptec_installation_id,
         state_cable_locked: connectionConfig.state_cable_locked,
         state_waiting_auth: connectionConfig.state_waiting_auth,
         state_charging: connectionConfig.state_charging,
@@ -625,7 +662,11 @@ export default function Chargers() {
         loxone_power_uuid: config.loxone_power_uuid || '',
         loxone_state_uuid: config.loxone_state_uuid || '',
         loxone_user_id_uuid: config.loxone_user_id_uuid || '',
-        loxone_mode_uuid: config.loxone_mode_uuid || ''
+        loxone_mode_uuid: config.loxone_mode_uuid || '',
+        zaptec_username: config.username || '',
+        zaptec_password: config.password || '',
+        zaptec_charger_id: config.charger_id || '',
+        zaptec_installation_id: config.installation_id || ''
       });
     } catch (e) {
       console.error('Failed to parse config:', e);
@@ -712,7 +753,11 @@ export default function Chargers() {
       loxone_power_uuid: '',
       loxone_state_uuid: '',
       loxone_user_id_uuid: '',
-      loxone_mode_uuid: ''
+      loxone_mode_uuid: '',
+      zaptec_username: '',
+      zaptec_password: '',
+      zaptec_charger_id: '',
+      zaptec_installation_id: ''
     });
   };
 
@@ -809,6 +854,63 @@ export default function Chargers() {
         </div>
       );
     }
+    
+    if (charger.connection_type === 'zaptec_api') {
+      const status = zaptecStatus[charger.id];
+      if (status) {
+        return (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 12px',
+            backgroundColor: status.is_connected ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+            borderRadius: '8px',
+            marginTop: '12px'
+          }}>
+            {status.is_connected ? (
+              <>
+                <Wifi size={16} style={{ color: '#22c55e' }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#22c55e' }}>
+                    Zaptec Connected
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
+                    {t('chargers.lastUpdate')}: {new Date(status.last_update).toLocaleTimeString(undefined, { hour12: false })}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <WifiOff size={16} style={{ color: '#ef4444' }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#ef4444' }}>
+                    Zaptec Disconnected
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        );
+      }
+      return (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '8px 12px',
+          backgroundColor: 'rgba(156, 163, 175, 0.1)',
+          borderRadius: '8px',
+          marginTop: '12px'
+        }}>
+          <Wifi size={16} style={{ color: '#9ca3af' }} />
+          <div style={{ fontSize: '12px', color: '#6b7280' }}>
+            Zaptec Connecting...
+          </div>
+        </div>
+      );
+    }
+    
     return null;
   };
 
@@ -1277,7 +1379,7 @@ export default function Chargers() {
                             fontWeight: '600',
                             color: '#22c55e'
                           }}>
-                            ✓ {t('chargers.supported')}
+                            âœ“ {t('chargers.supported')}
                           </span>
                         </div>
                       )}
@@ -1406,6 +1508,7 @@ export default function Chargers() {
                 <select required value={formData.connection_type} onChange={(e) => setFormData({ ...formData, connection_type: e.target.value })}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
                   <option value="loxone_api">{t('chargers.loxoneApiRecommended')}</option>
+                  <option value="zaptec_api">Zaptec Cloud API (Recommended)</option>
                   <option value="udp">{t('chargers.udpAlternative')}</option>
                   <option value="http">{t('meters.http')}</option>
                   <option value="modbus_tcp">{t('meters.modbusTcp')}</option>
@@ -1501,7 +1604,7 @@ export default function Chargers() {
                         </label>
                         <input type="password" required value={connectionConfig.loxone_password || ''}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_password: e.target.value })}
-                          placeholder="••••••••"
+                          placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
                     </div>
@@ -1590,6 +1693,84 @@ export default function Chargers() {
                       &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.user_id_key || 'UUID_user'}</span>": "USER_001",<br />
                       &nbsp;&nbsp;"<span style={{ color: '#3b82f6' }}>{connectionConfig.mode_key || 'UUID_mode'}</span>": 2<br />
                       {"}"}
+                    </div>
+                  </>
+                )}
+
+                {formData.connection_type === 'zaptec_api' && (
+                  <>
+                    <div style={{ backgroundColor: '#d1fae5', padding: '12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #10b981', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Wifi size={16} color="#10b981" />
+                      <p style={{ fontSize: '13px', color: '#065f46', margin: 0 }}>
+                        <strong>Zaptec Cloud API - Real-time cloud-based charger monitoring</strong>
+                      </p>
+                    </div>
+
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                        Zaptec Username (Email) *
+                      </label>
+                      <input type="email" required value={connectionConfig.zaptec_username || ''}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, zaptec_username: e.target.value })}
+                        placeholder="your.email@example.com"
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                        Your Zaptec Portal account email address
+                      </p>
+                    </div>
+
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                        Zaptec Password *
+                      </label>
+                      <input type="password" required value={connectionConfig.zaptec_password || ''}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, zaptec_password: e.target.value })}
+                        placeholder="••••••••"
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                      <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                        Your Zaptec Portal password
+                      </p>
+                    </div>
+
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                        Charger ID *
+                      </label>
+                      <input type="text" required value={connectionConfig.zaptec_charger_id || ''}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, zaptec_charger_id: e.target.value })}
+                        placeholder="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} />
+                      <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                        The unique ID of your Zaptec charger (found in Zaptec Portal)
+                      </p>
+                    </div>
+
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                        Installation ID (Optional)
+                      </label>
+                      <input type="text" value={connectionConfig.zaptec_installation_id || ''}
+                        onChange={(e) => setConnectionConfig({ ...connectionConfig, zaptec_installation_id: e.target.value })}
+                        placeholder="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} />
+                      <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                        Optional: Installation ID if you need to filter by specific installation
+                      </p>
+                    </div>
+
+                    <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '12px', fontFamily: 'monospace', fontSize: '12px', border: '1px solid #e5e7eb' }}>
+                      <strong>How to find your Charger ID:</strong><br />
+                      1. Log into <a href="https://portal.zaptec.com" target="_blank" rel="noopener noreferrer" style={{ color: '#10b981' }}>Zaptec Portal</a><br />
+                      2. Navigate to your charger<br />
+                      3. Click on Settings → Advanced<br />
+                      4. Copy the Charger ID (GUID format)<br /><br />
+                      <div style={{ backgroundColor: '#d1fae5', padding: '8px', borderRadius: '4px', fontSize: '11px', color: '#065f46' }}>
+                        <strong>✓ Zaptec API Features:</strong><br />
+                        • Real-time charging data from Zaptec Cloud<br />
+                        • Automatic state mapping (charging, idle, etc.)<br />
+                        • No local network configuration needed<br />
+                        • Works with Zaptec Go and Pro models
+                      </div>
                     </div>
                   </>
                 )}

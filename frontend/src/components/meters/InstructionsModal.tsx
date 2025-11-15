@@ -1,4 +1,4 @@
-import { X, Wifi, Radio, Zap, Settings, AlertCircle, Star, Rss } from 'lucide-react';
+import { X, Wifi, Radio, Zap, Settings, AlertCircle, Star, Rss, Cloud } from 'lucide-react';
 import { useTranslation } from '../../i18n';
 
 interface InstructionsModalProps {
@@ -218,6 +218,257 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             border: '1px solid #f59e0b'
                         }}>
                             ℹ️ <strong>{t('meters.instructions.loxoneModeNote')}</strong>
+                        </div>
+                    </div>
+
+                    {/* Smart-me API Section */}
+                    <h3 style={{
+                        fontSize: '18px',
+                        fontWeight: '600',
+                        marginTop: '20px',
+                        marginBottom: '10px',
+                        color: '#1f2937',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                    }}>
+                        <Cloud size={20} color="#0ea5e9" />
+                        {t('meters.instructions.smartmeTitle')}
+                    </h3>
+                    <div style={{
+                        backgroundColor: '#e0f2fe',
+                        padding: '16px',
+                        borderRadius: '8px',
+                        marginBottom: '16px',
+                        border: '2px solid #0ea5e9'
+                    }}>
+                        <p style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            marginBottom: '12px'
+                        }}>
+                            <Star size={16} fill="#0ea5e9" color="#0ea5e9" />
+                            <strong>{t('meters.instructions.smartmeDescription')}</strong>
+                        </p>
+
+                        <h4 style={{
+                            fontSize: '15px',
+                            fontWeight: '600',
+                            marginTop: '16px',
+                            marginBottom: '8px'
+                        }}>
+                            {t('meters.instructions.smartmeWhatIsIt')}
+                        </h4>
+                        <p style={{ marginBottom: '12px', fontSize: '14px' }}>
+                            {t('meters.instructions.smartmeWhatIsItDesc')}
+                        </p>
+
+                        <h4 style={{
+                            fontSize: '15px',
+                            fontWeight: '600',
+                            marginTop: '16px',
+                            marginBottom: '8px'
+                        }}>
+                            {t('meters.instructions.smartmeAuthMethods')}
+                        </h4>
+                        <div style={{
+                            backgroundColor: '#fff',
+                            padding: '12px',
+                            borderRadius: '6px',
+                            marginBottom: '12px'
+                        }}>
+                            <div style={{ marginBottom: '12px' }}>
+                                <strong style={{ color: '#0ea5e9' }}>1. API Key Authentication (Recommended)</strong>
+                                <p style={{ marginTop: '4px', fontSize: '13px' }}>
+                                    {t('meters.instructions.smartmeApiKeyDesc')}
+                                </p>
+                                <ul style={{ marginLeft: '20px', marginTop: '6px', fontSize: '13px' }}>
+                                    <li>{t('meters.instructions.smartmeApiKeyPoint1')}</li>
+                                    <li>{t('meters.instructions.smartmeApiKeyPoint2')}</li>
+                                    <li>{t('meters.instructions.smartmeApiKeyPoint3')}</li>
+                                </ul>
+                            </div>
+
+                            <div style={{ marginBottom: '12px' }}>
+                                <strong style={{ color: '#0ea5e9' }}>2. Basic Authentication</strong>
+                                <p style={{ marginTop: '4px', fontSize: '13px' }}>
+                                    {t('meters.instructions.smartmeBasicDesc')}
+                                </p>
+                                <ul style={{ marginLeft: '20px', marginTop: '6px', fontSize: '13px' }}>
+                                    <li>{t('meters.instructions.smartmeBasicPoint1')}</li>
+                                    <li>{t('meters.instructions.smartmeBasicPoint2')}</li>
+                                </ul>
+                            </div>
+
+                            <div>
+                                <strong style={{ color: '#0ea5e9' }}>3. OAuth 2.0 Authentication</strong>
+                                <p style={{ marginTop: '4px', fontSize: '13px' }}>
+                                    {t('meters.instructions.smartmeOAuthDesc')}
+                                </p>
+                                <ul style={{ marginLeft: '20px', marginTop: '6px', fontSize: '13px' }}>
+                                    <li>{t('meters.instructions.smartmeOAuthPoint1')}</li>
+                                    <li>{t('meters.instructions.smartmeOAuthPoint2')}</li>
+                                    <li>{t('meters.instructions.smartmeOAuthPoint3')}</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <h4 style={{
+                            fontSize: '15px',
+                            fontWeight: '600',
+                            marginTop: '16px',
+                            marginBottom: '8px'
+                        }}>
+                            {t('meters.instructions.smartmeSetupSteps')}
+                        </h4>
+                        <ol style={{ marginLeft: '20px', marginBottom: '12px' }}>
+                            <li>
+                                <strong>{t('meters.instructions.smartmeStep1Title')}</strong>
+                                <ul style={{ marginLeft: '20px', marginTop: '4px', fontSize: '14px' }}>
+                                    <li>{t('meters.instructions.smartmeStep1a')}</li>
+                                    <li>{t('meters.instructions.smartmeStep1b')}</li>
+                                    <li>{t('meters.instructions.smartmeStep1c')}</li>
+                                </ul>
+                            </li>
+                            <li style={{ marginTop: '8px' }}>
+                                <strong>{t('meters.instructions.smartmeStep2Title')}</strong>
+                                <p style={{ marginTop: '4px', fontSize: '14px' }}>
+                                    {t('meters.instructions.smartmeStep2Desc')}
+                                </p>
+                            </li>
+                            <li style={{ marginTop: '8px' }}>
+                                <strong>{t('meters.instructions.smartmeStep3Title')}</strong>
+                                <p style={{ marginTop: '4px', fontSize: '14px' }}>
+                                    {t('meters.instructions.smartmeStep3Desc')}
+                                </p>
+                                <div style={{
+                                    backgroundColor: '#f0f9ff',
+                                    padding: '10px',
+                                    borderRadius: '6px',
+                                    marginTop: '6px',
+                                    fontFamily: 'monospace',
+                                    fontSize: '12px'
+                                }}>
+                                    <strong>{t('meters.instructions.smartmeDeviceIdExample')}</strong><br />
+                                    6a7fae30-c598-4778-8f1f-a14620550274
+                                </div>
+                            </li>
+                            <li style={{ marginTop: '8px' }}>
+                                <strong>{t('meters.instructions.smartmeStep4Title')}</strong>
+                                <p style={{ marginTop: '4px', fontSize: '14px' }}>
+                                    {t('meters.instructions.smartmeStep4Desc')}
+                                </p>
+                            </li>
+                            <li style={{ marginTop: '8px' }}>
+                                <strong>{t('meters.instructions.smartmeStep5Title')}</strong>
+                                <p style={{ marginTop: '4px', fontSize: '14px' }}>
+                                    {t('meters.instructions.smartmeStep5Desc')}
+                                </p>
+                            </li>
+                        </ol>
+
+                        <h4 style={{
+                            fontSize: '15px',
+                            fontWeight: '600',
+                            marginTop: '16px',
+                            marginBottom: '8px'
+                        }}>
+                            {t('meters.instructions.smartmeApiKeySetup')}
+                        </h4>
+                        <div style={{
+                            backgroundColor: '#fff',
+                            padding: '12px',
+                            borderRadius: '6px',
+                            marginBottom: '12px',
+                            fontSize: '13px'
+                        }}>
+                            <ol style={{ marginLeft: '20px', marginTop: '8px' }}>
+                                <li>{t('meters.instructions.smartmeApiKeySetup1')}</li>
+                                <li>{t('meters.instructions.smartmeApiKeySetup2')}</li>
+                                <li>{t('meters.instructions.smartmeApiKeySetup3')}</li>
+                                <li>{t('meters.instructions.smartmeApiKeySetup4')}</li>
+                                <li>{t('meters.instructions.smartmeApiKeySetup5')}</li>
+                            </ol>
+                            <div style={{
+                                backgroundColor: '#f0f9ff',
+                                padding: '10px',
+                                borderRadius: '6px',
+                                marginTop: '10px',
+                                fontFamily: 'monospace',
+                                fontSize: '12px'
+                            }}>
+                                <strong>{t('meters.instructions.smartmeApiKeyExample')}</strong><br />
+                                MTRH5eUjFXV8U4i1viZF2jHNoUNsnDTx
+                            </div>
+                        </div>
+
+                        <h4 style={{
+                            fontSize: '15px',
+                            fontWeight: '600',
+                            marginTop: '16px',
+                            marginBottom: '8px'
+                        }}>
+                            {t('meters.instructions.smartmeConfigExample')}
+                        </h4>
+                        <div style={{
+                            backgroundColor: '#fff',
+                            padding: '12px',
+                            borderRadius: '6px',
+                            marginBottom: '12px',
+                            fontFamily: 'monospace',
+                            fontSize: '12px'
+                        }}>
+                            <strong>{t('meters.instructions.smartmeExampleTitle')}</strong><br />
+                            {t('meters.instructions.smartmeAuthType')}: API Key<br />
+                            {t('meters.instructions.smartmeApiKeyField')}: MTRH5eUjFXV8U4i1viZF2jHNoUNsnDTx<br />
+                            {t('meters.instructions.smartmeDeviceIdField')}: 6a7fae30-c598-4778-8f1f-a14620550274<br /><br />
+                            <strong>{t('meters.instructions.smartmeFeatures')}</strong><br />
+                            ✓ {t('meters.instructions.smartmeFeature1')}<br />
+                            ✓ {t('meters.instructions.smartmeFeature2')}<br />
+                            ✓ {t('meters.instructions.smartmeFeature3')}<br />
+                            ✓ {t('meters.instructions.smartmeFeature4')}
+                        </div>
+
+                        <div style={{
+                            backgroundColor: '#fef3c7',
+                            padding: '12px',
+                            borderRadius: '6px',
+                            marginTop: '12px',
+                            fontSize: '13px',
+                            border: '1px solid #f59e0b'
+                        }}>
+                            <strong>⚠️ {t('meters.instructions.smartmeImportantNotes')}</strong>
+                            <ul style={{ marginLeft: '20px', marginTop: '8px', marginBottom: '0' }}>
+                                <li>{t('meters.instructions.smartmeNote1')}</li>
+                                <li>{t('meters.instructions.smartmeNote2')}</li>
+                                <li>{t('meters.instructions.smartmeNote3')}</li>
+                                <li>{t('meters.instructions.smartmeNote4')}</li>
+                                <li>{t('meters.instructions.smartmeNote5')}</li>
+                            </ul>
+                        </div>
+
+                        <h4 style={{
+                            fontSize: '15px',
+                            fontWeight: '600',
+                            marginTop: '16px',
+                            marginBottom: '8px'
+                        }}>
+                            {t('meters.instructions.smartmeDataCollection')}
+                        </h4>
+                        <div style={{
+                            backgroundColor: '#fff',
+                            padding: '12px',
+                            borderRadius: '6px',
+                            fontSize: '13px'
+                        }}>
+                            <p>{t('meters.instructions.smartmeDataCollectionDesc')}</p>
+                            <ul style={{ marginLeft: '20px', marginTop: '8px' }}>
+                                <li><strong>{t('meters.instructions.smartmeCollectionFreq')}</strong> {t('meters.instructions.smartmeCollectionFreqDesc')}</li>
+                                <li><strong>{t('meters.instructions.smartmeDataPoints')}</strong> {t('meters.instructions.smartmeDataPointsDesc')}</li>
+                                <li><strong>{t('meters.instructions.smartmeUnits')}</strong> {t('meters.instructions.smartmeUnitsDesc')}</li>
+                                <li><strong>{t('meters.instructions.smartmeTimestamps')}</strong> {t('meters.instructions.smartmeTimestampsDesc')}</li>
+                            </ul>
                         </div>
                     </div>
 
@@ -595,7 +846,7 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             {t('meters.instructions.modbusFunction')}: FC03<br />
                             {t('meters.instructions.modbusDataType')}: float32<br />
                             {t('meters.instructions.modbusImportRegister')}: 0<br />
-                            {t('meters.instructions.modbusExportRegister')}: ✓ {t('meters.instructions.modbusEnabled')} â†’ 100<br /><br />
+                            {t('meters.instructions.modbusExportRegister')}: ✓ {t('meters.instructions.modbusEnabled')} → 100<br /><br />
 
                             <strong>{t('meters.instructions.modbusConfig3Title')}</strong><br />
                             IP: 192.168.1.100:502<br />
@@ -686,6 +937,18 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
                             <li>
                                 <strong>{t('meters.instructions.troubleshootingLoxoneLabel')}</strong>{' '}
                                 {t('meters.instructions.troubleshootingLoxoneDevice')}
+                            </li>
+                            <li>
+                                <strong>{t('meters.instructions.troubleshootingSmartmeLabel')}</strong>{' '}
+                                {t('meters.instructions.troubleshootingSmartmeApi')}
+                            </li>
+                            <li>
+                                <strong>{t('meters.instructions.troubleshootingSmartmeLabel')}</strong>{' '}
+                                {t('meters.instructions.troubleshootingSmartmeAuth')}
+                            </li>
+                            <li>
+                                <strong>{t('meters.instructions.troubleshootingSmartmeLabel')}</strong>{' '}
+                                {t('meters.instructions.troubleshootingSmartmeDevice')}
                             </li>
                             <li>
                                 <strong>{t('meters.instructions.troubleshootingModbusLabel')}</strong> {t('meters.instructions.troubleshootingModbus1')}{' '}

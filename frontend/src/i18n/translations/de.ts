@@ -913,6 +913,116 @@ export const de: Translations = {
   'meters.instructions.loxoneModeNote': 'Hinweis: Nur Gesamtzähler und Solarzähler unterstützen Export-Tracking. Andere Zählertypen erfassen nur Import-Energie.',
   'meters.showArchived': 'Archivierte anzeigen',
 
+  'meters.smartmeApi': 'Smart-me API (Cloud)',
+  'meters.smartmeApiDescription': 'Verbindung zur Smart-me Cloud-Plattform für erweitertes Energie-Monitoring',
+
+  'meters.smartmeAuthType': 'Authentifizierungstyp',
+  'meters.smartmeAuthTypeHelp': 'Wählen Sie die Authentifizierungsmethode für die Smart-me API',
+  'meters.smartmeAuthApiKey': 'API-Schlüssel (Empfohlen)',
+  'meters.smartmeAuthBasic': 'Basis-Authentifizierung',
+  'meters.smartmeAuthOAuth': 'OAuth 2.0',
+
+  'meters.smartmeApiKey': 'API-Schlüssel',
+  'meters.smartmeApiKeyHelp': 'Holen Sie sich Ihren API-Schlüssel aus dem Smart-me Dashboard',
+  'meters.smartmeUsername': 'Benutzername',
+  'meters.smartmePassword': 'Passwort',
+  'meters.smartmeClientId': 'Client-ID',
+  'meters.smartmeClientSecret': 'Client-Secret',
+
+  'meters.smartmeDeviceId': 'Geräte-ID',
+  'meters.smartmeDeviceIdHelp': 'Diese finden Sie in Ihren Smart-me Geräteeinstellungen (UUID-Format)',
+
+  'meters.smartmeSetupGuide': 'Smart-me Einrichtungsanleitung:',
+  'meters.smartmeSetupStep1': '1. Melden Sie sich im Smart-me Portal an (https://smart-me.com)',
+  'meters.smartmeSetupStep2': '2. Navigieren Sie zu Ihrem Gerät und kopieren Sie die Geräte-ID (UUID)',
+  'meters.smartmeSetupStep3': '3. Generieren Sie einen API-Schlüssel oder bereiten Sie OAuth-Zugangsdaten vor',
+  'meters.smartmeSetupStep4': '4. Fügen Sie die Zugangsdaten hier ein, um mit der Datenerfassung zu beginnen',
+
+  'meters.smartmeFeatures': 'Smart-me Funktionen:',
+  'meters.smartmeFeature1': '✓ Cloud-basierte Datenerfassung (kein lokales Netzwerk erforderlich)',
+  'meters.smartmeFeature2': '✓ Import/Export Energie-Tracking',
+  'meters.smartmeFeature3': '✓ Echtzeit-Leistungsüberwachung und historische Daten',
+  'meters.instructions.smartmeTitle': 'Smart-me Cloud API',
+  'meters.instructions.smartmeDescription': 'Cloud-basierte Energieüberwachung mit Smart-me Geräten',
+  'meters.instructions.smartmeWhatIsIt': 'Was ist Smart-me?',
+  'meters.instructions.smartmeWhatIsItDesc': 'Smart-me ist eine cloud-basierte Energieüberwachungsplattform, die Echtzeit-Zugriff auf Energiezählerdaten über API bietet. Perfekt für Remote-Installationen oder verteilte Energiesysteme.',
+  
+  'meters.instructions.smartmeAuthMethods': 'Authentifizierungsmethoden',
+  'meters.instructions.smartmeApiKeyDesc': 'Die einfachste und empfohlene Methode für die meisten Anwendungsfälle.',
+  'meters.instructions.smartmeApiKeyPoint1': 'Einfach einzurichten und zu verwalten',
+  'meters.instructions.smartmeApiKeyPoint2': 'Kann jederzeit widerrufen und neu generiert werden',
+  'meters.instructions.smartmeApiKeyPoint3': 'Ideal für einzelne Anwendungszugriffe',
+  
+  'meters.instructions.smartmeBasicDesc': 'Verwenden Sie Ihre Smart-me Kontoanmeldedaten direkt.',
+  'meters.instructions.smartmeBasicPoint1': 'Einfacher Benutzername und Passwort',
+  'meters.instructions.smartmeBasicPoint2': 'Weniger sicher als API-Schlüssel - nicht für Produktion empfohlen',
+  
+  'meters.instructions.smartmeOAuthDesc': 'Authentifizierung auf Unternehmensniveau für erweiterte Integrationen.',
+  'meters.instructions.smartmeOAuthPoint1': 'Sicherste Methode mit automatischer Token-Aktualisierung',
+  'meters.instructions.smartmeOAuthPoint2': 'Erforderlich für Mehrbenutzer-Anwendungen',
+  'meters.instructions.smartmeOAuthPoint3': 'Benötigt Client-Anmeldedaten vom Smart-me Support',
+  
+  'meters.instructions.smartmeSetupSteps': 'Einrichtungsschritte',
+  'meters.instructions.smartmeStep1Title': 'Smart-me Konto erstellen',
+  'meters.instructions.smartmeStep1a': 'Besuchen Sie https://smart-me.com und erstellen Sie ein Konto',
+  'meters.instructions.smartmeStep1b': 'Registrieren Sie Ihre Smart-me Gerät(e)',
+  'meters.instructions.smartmeStep1c': 'Überprüfen Sie, dass Ihre Geräte online sind und Daten melden',
+  
+  'meters.instructions.smartmeStep2Title': 'API-Schlüssel generieren',
+  'meters.instructions.smartmeStep2Desc': 'Navigieren Sie in Ihren Smart-me Kontoeinstellungen zu "API-Zugriff" und generieren Sie einen neuen API-Schlüssel. Bewahren Sie ihn sicher auf - Sie können ihn nicht erneut sehen!',
+  
+  'meters.instructions.smartmeStep3Title': 'Geräte-ID finden',
+  'meters.instructions.smartmeStep3Desc': 'Jedes Smart-me Gerät hat eine eindeutige ID (UUID-Format). Sie finden diese im Smart-me Webportal unter Gerätedetails oder in der mobilen App.',
+  'meters.instructions.smartmeDeviceIdExample': 'Beispiel Geräte-ID:',
+  
+  'meters.instructions.smartmeStep4Title': 'Im System konfigurieren',
+  'meters.instructions.smartmeStep4Desc': 'Wählen Sie "Smart-me API" als Verbindungstyp, wählen Sie Ihre Authentifizierungsmethode und geben Sie Ihre Anmeldedaten und Geräte-ID ein.',
+  
+  'meters.instructions.smartmeStep5Title': 'Verbindung testen',
+  'meters.instructions.smartmeStep5Desc': 'Speichern Sie die Zählerkonfiguration und überprüfen Sie den Verbindungsstatus. Daten sollten innerhalb von 5 Minuten erscheinen.',
+  
+  'meters.instructions.smartmeApiKeySetup': 'So generieren Sie einen API-Schlüssel',
+  'meters.instructions.smartmeApiKeySetup1': 'Melden Sie sich bei Ihrem Smart-me Konto unter https://smart-me.com an',
+  'meters.instructions.smartmeApiKeySetup2': 'Gehen Sie zu Einstellungen → API-Zugriff',
+  'meters.instructions.smartmeApiKeySetup3': 'Klicken Sie auf "Neuen API-Schlüssel generieren"',
+  'meters.instructions.smartmeApiKeySetup4': 'Geben Sie Ihrem Schlüssel einen beschreibenden Namen (z.B. "ZEV Abrechnungssystem")',
+  'meters.instructions.smartmeApiKeySetup5': 'Kopieren Sie den generierten Schlüssel sofort - er wird nur einmal angezeigt!',
+  'meters.instructions.smartmeApiKeyExample': 'Beispiel API-Schlüssel:',
+  
+  'meters.instructions.smartmeConfigExample': 'Konfigurationsbeispiel',
+  'meters.instructions.smartmeExampleTitle': 'Beispiel Smart-me Konfiguration:',
+  'meters.instructions.smartmeAuthType': 'Authentifizierungstyp',
+  'meters.instructions.smartmeApiKeyField': 'API-Schlüssel',
+  'meters.instructions.smartmeDeviceIdField': 'Geräte-ID',
+  'meters.instructions.smartmeFeatures': 'Smart-me Funktionen:',
+  'meters.instructions.smartmeFeature1': 'Cloud-basierte Datenerfassung - kein lokales Netzwerk erforderlich',
+  'meters.instructions.smartmeFeature2': 'Automatische Import/Export-Energieverfolgung',
+  'meters.instructions.smartmeFeature3': 'Echtzeit-Leistungsüberwachung und historische Daten',
+  'meters.instructions.smartmeFeature4': 'Abfrageintervall: 5 Minuten (optimal für Cloud-API)',
+  
+  'meters.instructions.smartmeImportantNotes': 'Wichtige Hinweise',
+  'meters.instructions.smartmeNote1': 'Smart-me Geräte müssen online und mit der Smart-me Cloud verbunden sein',
+  'meters.instructions.smartmeNote2': 'Daten werden alle 5 Minuten über API-Abfrage erfasst',
+  'meters.instructions.smartmeNote3': 'Energiewerte werden automatisch von Wh in kWh umgerechnet',
+  'meters.instructions.smartmeNote4': 'API-Ratenlimits gelten - vermeiden Sie mehrere Zähler für dasselbe Gerät',
+  'meters.instructions.smartmeNote5': 'Erfordert aktive Internetverbindung auf dem Server',
+  
+  'meters.instructions.smartmeDataCollection': 'Datenerfassungsdetails',
+  'meters.instructions.smartmeDataCollectionDesc': 'Das System fragt die Smart-me API mit folgenden Merkmalen ab:',
+  'meters.instructions.smartmeCollectionFreq': 'Erfassungshäufigkeit:',
+  'meters.instructions.smartmeCollectionFreqDesc': 'Alle 5 Minuten (häufiger als der Standard-15-Minuten-Zyklus)',
+  'meters.instructions.smartmeDataPoints': 'Erfasste Datenpunkte:',
+  'meters.instructions.smartmeDataPointsDesc': 'CounterReading (Import), CounterReadingExport, ActivePower, DeviceEnergyType',
+  'meters.instructions.smartmeUnits': 'Einheitenumrechnung:',
+  'meters.instructions.smartmeUnitsDesc': 'Smart-me gibt Werte in Wh zurück, automatisch in kWh für Speicherung umgerechnet',
+  'meters.instructions.smartmeTimestamps': 'Zeitstempel:',
+  'meters.instructions.smartmeTimestampsDesc': 'Verwendet Smart-me\'s ValueDate für genaue Zeitausrichtung',
+  
+  'meters.instructions.troubleshootingSmartmeLabel': 'Smart-me:',
+  'meters.instructions.troubleshootingSmartmeApi': 'API-Konnektivität prüfen: https://api.smart-me.com/api/Devices/{device-id}',
+  'meters.instructions.troubleshootingSmartmeAuth': 'Überprüfen Sie, dass der API-Schlüssel gültig und nicht abgelaufen ist',
+  'meters.instructions.troubleshootingSmartmeDevice': 'Bestätigen Sie, dass die Geräte-ID korrekt ist und das Gerät im Smart-me Portal online ist',
+
   // ============================================================================
   // CHARGERS
   // ============================================================================
