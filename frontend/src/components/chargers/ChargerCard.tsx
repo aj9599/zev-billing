@@ -45,10 +45,6 @@ export default function ChargerCard({
     ? (zaptecStatus?.is_online ?? liveData?.is_online ?? true)
     : (liveData?.is_online ?? true);
     
-  const stateDescription = charger.connection_type === 'zaptec_api'
-    ? (zaptecStatus?.state_description ?? liveData?.state_description)
-    : liveData?.state_description;
-    
   const liveSession = charger.connection_type === 'zaptec_api'
     ? (zaptecStatus?.live_session ?? liveData?.live_session)
     : liveData?.live_session;
