@@ -49,6 +49,7 @@ export interface ZaptecConnectionStatus {
     last_reading: number;
     last_update: string;
     current_power_kw?: number;
+    session_energy?: number;
     state_description?: string;
     token_expires?: string;
     live_session?: LiveSessionData;
