@@ -360,20 +360,29 @@ func (zc *ZaptecCollector) getChargerInfo(token, chargerID string) (*ZaptecCharg
 		return nil, fmt.Errorf("failed to decode chargers response: %v", err)
 	}
 	
+	log.Printf("DEBUG: Zaptec API returned %d chargers, looking for ID: %s", len(apiResp.Data), chargerID)
+	
 	// Find our specific charger in the response
+	var foundChargers []string
 	for _, dataItem := range apiResp.Data {
 		var charger ZaptecChargerInfo
 		if err := json.Unmarshal(dataItem, &charger); err != nil {
+			log.Printf("DEBUG: Failed to unmarshal charger: %v", err)
 			continue
 		}
 		
-		// Match by charger ID
-		if charger.ID == chargerID {
+		// Log all charger IDs we find for debugging
+		foundChargers = append(foundChargers, fmt.Sprintf("Id:%s DeviceId:%s Name:%s", charger.ID, charger.DeviceId, charger.Name))
+		
+		// Match by charger ID (try both Id and DeviceId fields)
+		if charger.ID == chargerID || charger.DeviceID == chargerID {
+			log.Printf("DEBUG: Found matching charger - Id:%s DeviceId:%s Name:%s", charger.ID, charger.DeviceID, charger.Name)
 			return &charger, nil
 		}
 	}
 	
-	return nil, fmt.Errorf("charger %s not found in API response", chargerID)
+	log.Printf("DEBUG: Available chargers: %v", foundChargers)
+	return nil, fmt.Errorf("charger %s not found in API response (checked %d chargers)", chargerID, len(apiResp.Data))
 }
 
 // getRecentChargeHistory fetches recent charging sessions
@@ -530,4 +539,78 @@ func (zc *ZaptecCollector) GetConnectionStatus() map[string]interface{} {
 	return map[string]interface{}{
 		"zaptec_charger_connections": chargerStatuses,
 	}
+}
+
+// GetAllAvailableChargers returns a list of all chargers available in the Zaptec account
+// This is useful for debugging configuration issues
+func (zc *ZaptecCollector) GetAllAvailableChargers() ([]map[string]interface{}, error) {
+	// Get the first configured charger to use its credentials
+	var configJSON string
+	err := zc.db.QueryRow(`
+		SELECT connection_config
+		FROM chargers 
+		WHERE is_active = 1 AND connection_type = 'zaptec_api'
+		LIMIT 1
+	`).Scan(&configJSON)
+	
+	if err != nil {
+		return nil, fmt.Errorf("no Zaptec chargers configured")
+	}
+	
+	var config ZaptecConnectionConfig
+	if err := json.Unmarshal([]byte(configJSON), &config); err != nil {
+		return nil, fmt.Errorf("invalid config: %v", err)
+	}
+	
+	// Get access token (use charger ID 0 as a placeholder)
+	token, err := zc.getAccessToken(0, config)
+	if err != nil {
+		return nil, fmt.Errorf("authentication failed: %v", err)
+	}
+	
+	// Get all chargers
+	chargersURL := fmt.Sprintf("%s/api/chargers", zc.apiBaseURL)
+	req, err := http.NewRequest("GET", chargersURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	req.Header.Set("Accept", "application/json")
+	
+	resp, err := zc.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+	}
+	
+	var apiResp ZaptecAPIResponse
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+		return nil, err
+	}
+	
+	var chargers []map[string]interface{}
+	for _, dataItem := range apiResp.Data {
+		var charger ZaptecChargerInfo
+		if err := json.Unmarshal(dataItem, &charger); err != nil {
+			continue
+		}
+		
+		chargers = append(chargers, map[string]interface{}{
+			"id":               charger.ID,
+			"device_id":        charger.DeviceID,
+			"name":             charger.Name,
+			"installation_id":  charger.InstallationID,
+			"installation_name": charger.InstallationName,
+			"is_online":        charger.IsOnline,
+			"operating_mode":   charger.OperatingMode,
+		})
+	}
+	
+	return chargers, nil
 }
