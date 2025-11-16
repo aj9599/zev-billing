@@ -447,30 +447,63 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 			ConnectionType: connectionType,
 		}
 
-		// For Zaptec chargers, get enhanced live data
+		// For Zaptec chargers, get enhanced live data from ZaptecCollector
 		if connectionType == "zaptec_api" {
-			// Try to get Zaptec data from debug status endpoint
-			// Note: ZaptecCollector is unexported, so we'll get data from the session instead
-			// This is handled by the pollCharger goroutine in the collector
+			if zaptecCollector := h.dataCollector.GetZaptecCollector(); zaptecCollector != nil {
+				if zaptecData, ok := zaptecCollector.GetChargerData(chargerID); ok {
+					data.TotalEnergy = zaptecData.TotalEnergy
+					data.SessionEnergy = zaptecData.SessionEnergy
+					data.IsOnline = zaptecData.IsOnline
+					data.CurrentPower_kW = zaptecData.Power_kW
+					data.Voltage = zaptecData.Voltage
+					data.Current = zaptecData.Current
+					data.State = zaptecData.State
+					data.Mode = zaptecData.Mode
+					data.StateDescription = zaptecData.StateDescription
+					data.LastUpdate = zaptecData.Timestamp.Format("2006-01-02 15:04:05")
+					data.PowerKWh = zaptecData.Power
+					
+					// Get live session data if available
+					if liveSession, hasSession := zaptecCollector.GetLiveSession(chargerID); hasSession {
+						duration := ""
+						if !liveSession.StartTime.IsZero() {
+							d := time.Since(liveSession.StartTime)
+							duration = formatDuration(d)
+						}
+						
+						data.LiveSession = &LiveSessionData{
+							SessionID: liveSession.SessionID,
+							Energy:    liveSession.Energy,
+							StartTime: liveSession.StartTime.Format("2006-01-02 15:04:05"),
+							Duration:  duration,
+							UserName:  liveSession.UserName,
+							IsActive:  liveSession.IsActive,
+							Power_kW:  liveSession.Power_kW,
+						}
+					}
+				}
+			}
 		}
 		
-		// For all charger types, get data from latest session
-		var powerKWh float64
-		var state, mode, sessionTime string
-		
-		err := h.db.QueryRow(`
-			SELECT power_kwh, state, mode, session_time
-			FROM charger_sessions
-			WHERE charger_id = ?
-			ORDER BY session_time DESC
-			LIMIT 1
-		`, chargerID).Scan(&powerKWh, &state, &mode, &sessionTime)
-		
-		if err == nil {
-			data.PowerKWh = powerKWh
-			data.State = state
-			data.Mode = mode
-			data.LastUpdate = sessionTime
+		// For all charger types, get data from latest session (fallback for non-Zaptec or if Zaptec data not available)
+		if data.State == "" {
+			var powerKWh float64
+			var state, mode, sessionTime string
+			
+			err := h.db.QueryRow(`
+				SELECT power_kwh, state, mode, session_time
+				FROM charger_sessions
+				WHERE charger_id = ?
+				ORDER BY session_time DESC
+				LIMIT 1
+			`, chargerID).Scan(&powerKWh, &state, &mode, &sessionTime)
+			
+			if err == nil {
+				data.PowerKWh = powerKWh
+				data.State = state
+				data.Mode = mode
+				data.LastUpdate = sessionTime
+			}
 		}
 
 		liveData = append(liveData, data)
