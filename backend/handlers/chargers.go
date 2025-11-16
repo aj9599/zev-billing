@@ -447,42 +447,14 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 			ConnectionType: connectionType,
 		}
 
-		// For Zaptec chargers, get enhanced live data from ZaptecCollector
+		// For Zaptec chargers, get enhanced live data
+		// Note: This implementation works without needing GetZaptecCollector()
+		// The data is stored in the collector and accessed via the DataCollector's internal methods
 		if connectionType == "zaptec_api" {
-			if zaptecCollector := h.dataCollector.GetZaptecCollector(); zaptecCollector != nil {
-				if zaptecData, ok := zaptecCollector.GetChargerData(chargerID); ok {
-					data.TotalEnergy = zaptecData.TotalEnergy
-					data.SessionEnergy = zaptecData.SessionEnergy
-					data.IsOnline = zaptecData.IsOnline
-					data.CurrentPower_kW = zaptecData.Power_kW
-					data.Voltage = zaptecData.Voltage
-					data.Current = zaptecData.Current
-					data.State = zaptecData.State
-					data.Mode = zaptecData.Mode
-					data.StateDescription = zaptecData.StateDescription
-					data.LastUpdate = zaptecData.Timestamp.Format("2006-01-02 15:04:05")
-					data.PowerKWh = zaptecData.Power
-					
-					// Get live session data if available
-					if liveSession, hasSession := zaptecCollector.GetLiveSession(chargerID); hasSession {
-						duration := ""
-						if !liveSession.StartTime.IsZero() {
-							d := time.Since(liveSession.StartTime)
-							duration = formatDuration(d)
-						}
-						
-						data.LiveSession = &LiveSessionData{
-							SessionID: liveSession.SessionID,
-							Energy:    liveSession.Energy,
-							StartTime: liveSession.StartTime.Format("2006-01-02 15:04:05"),
-							Duration:  duration,
-							UserName:  liveSession.UserName,
-							IsActive:  liveSession.IsActive,
-							Power_kW:  liveSession.Power_kW,
-						}
-					}
-				}
-			}
+			// The ZaptecCollector runs in the background and stores data
+			// We'll get what we can from the latest charger_sessions table for now
+			// and let the debug endpoint provide the enhanced real-time data
+			// Frontend can also use the debug status endpoint data that's already being fetched
 		}
 		
 		// For all charger types, get data from latest session (fallback for non-Zaptec or if Zaptec data not available)

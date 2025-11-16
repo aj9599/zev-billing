@@ -1,4 +1,4 @@
-import { Edit2, Trash2, Zap, Wifi, WifiOff, Activity, Battery, TrendingUp, Power, Gauge, Clock, User } from 'lucide-react';
+import { Edit2, Trash2, Wifi, WifiOff, Activity, Battery, TrendingUp, Power, Gauge, Clock, User } from 'lucide-react';
 import type { Charger } from '../../types';
 import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus } from './hooks/useChargerStatus';
 import { getPreset } from '../chargerPresets';
@@ -26,7 +26,32 @@ export default function ChargerCard({
 }: ChargerCardProps) {
   const chargerPreset = getPreset(charger.preset);
   const isCharging = liveData?.state === '67';
-  const hasLiveSession = liveData?.live_session?.is_active;
+  const hasLiveSession = liveData?.live_session?.is_active || zaptecStatus?.live_session?.is_active;
+  
+  // For Zaptec chargers, prefer zaptecStatus data over liveData
+  const totalEnergy = charger.connection_type === 'zaptec_api' 
+    ? (zaptecStatus?.last_reading ?? liveData?.total_energy)
+    : liveData?.total_energy;
+    
+  const sessionEnergy = charger.connection_type === 'zaptec_api'
+    ? (zaptecStatus?.live_session?.energy ?? liveData?.session_energy)
+    : liveData?.session_energy;
+    
+  const currentPowerKW = charger.connection_type === 'zaptec_api'
+    ? (zaptecStatus?.current_power_kw ?? liveData?.current_power_kw)
+    : liveData?.current_power_kw;
+    
+  const isOnline = charger.connection_type === 'zaptec_api'
+    ? (zaptecStatus?.is_online ?? liveData?.is_online ?? true)
+    : (liveData?.is_online ?? true);
+    
+  const stateDescription = charger.connection_type === 'zaptec_api'
+    ? (zaptecStatus?.state_description ?? liveData?.state_description)
+    : liveData?.state_description;
+    
+  const liveSession = charger.connection_type === 'zaptec_api'
+    ? (zaptecStatus?.live_session ?? liveData?.live_session)
+    : liveData?.live_session;
 
   return (
     <div
@@ -145,11 +170,11 @@ export default function ChargerCard({
             alignItems: 'center',
             gap: '6px',
             padding: '4px 12px',
-            backgroundColor: (liveData?.is_online ?? true) ? '#dcfce7' : '#fee2e2',
-            border: `1px solid ${(liveData?.is_online ?? true) ? '#22c55e' : '#ef4444'}`,
+            backgroundColor: isOnline ? '#dcfce7' : '#fee2e2',
+            border: `1px solid ${isOnline ? '#22c55e' : '#ef4444'}`,
             borderRadius: '12px'
           }}>
-            {(liveData?.is_online ?? true) ? (
+            {isOnline ? (
               <>
                 <Wifi size={14} color="#22c55e" />
                 <span style={{ fontSize: '12px', fontWeight: '600', color: '#22c55e' }}>
@@ -223,15 +248,15 @@ export default function ChargerCard({
         </div>
 
         {/* Energy Readings Grid - Total & Session Energy */}
-        {(liveData?.total_energy !== undefined || liveData?.session_energy !== undefined) && (
+        {(totalEnergy !== undefined || sessionEnergy !== undefined) && (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: liveData?.total_energy !== undefined && liveData?.session_energy !== undefined ? '1fr 1fr' : '1fr',
+            gridTemplateColumns: totalEnergy !== undefined && sessionEnergy !== undefined ? '1fr 1fr' : '1fr',
             gap: '12px',
             marginBottom: '12px'
           }}>
             {/* Total Energy */}
-            {liveData?.total_energy !== undefined && (
+            {totalEnergy !== undefined && (
               <div style={{
                 padding: '10px',
                 backgroundColor: '#f0f9ff',
@@ -250,13 +275,13 @@ export default function ChargerCard({
                   </span>
                 </div>
                 <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
-                  {liveData.total_energy.toFixed(1)} kWh
+                  {totalEnergy.toFixed(1)} kWh
                 </div>
               </div>
             )}
 
             {/* Session Energy */}
-            {liveData?.session_energy !== undefined && liveData.session_energy > 0 && (
+            {sessionEnergy !== undefined && sessionEnergy > 0 && (
               <div style={{
                 padding: '10px',
                 backgroundColor: '#f0fdf4',
@@ -275,7 +300,7 @@ export default function ChargerCard({
                   </span>
                 </div>
                 <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
-                  {liveData.session_energy.toFixed(1)} kWh
+                  {sessionEnergy.toFixed(1)} kWh
                 </div>
               </div>
             )}
@@ -283,7 +308,7 @@ export default function ChargerCard({
         )}
 
         {/* Current Power */}
-        {liveData?.current_power_kw !== undefined && liveData.current_power_kw > 0 && (
+        {currentPowerKW !== undefined && currentPowerKW > 0 && (
           <div style={{
             padding: '12px',
             backgroundColor: '#fef3c7',
@@ -307,7 +332,7 @@ export default function ChargerCard({
                 </span>
               </div>
               <div style={{ fontSize: '18px', fontWeight: '700', color: '#92400e' }}>
-                {liveData.current_power_kw.toFixed(2)} kW
+                {currentPowerKW.toFixed(2)} kW
               </div>
             </div>
           </div>
@@ -371,7 +396,7 @@ export default function ChargerCard({
         )}
 
         {/* Live Session Info */}
-        {hasLiveSession && liveData.live_session && (
+        {hasLiveSession && liveSession && (
           <div style={{
             padding: '12px',
             backgroundColor: '#ede9fe',
@@ -390,7 +415,7 @@ export default function ChargerCard({
                 Active Charging Session
               </span>
             </div>
-            {liveData.live_session.user_name && (
+            {liveSession.user_name && (
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -399,11 +424,11 @@ export default function ChargerCard({
               }}>
                 <User size={12} style={{ color: '#7c3aed' }} />
                 <span style={{ fontSize: '12px', color: '#6b21a8', fontWeight: '500' }}>
-                  {liveData.live_session.user_name}
+                  {liveSession.user_name}
                 </span>
               </div>
             )}
-            {liveData.live_session.duration && (
+            {liveSession.duration && (
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -411,7 +436,7 @@ export default function ChargerCard({
               }}>
                 <Clock size={12} style={{ color: '#7c3aed' }} />
                 <span style={{ fontSize: '12px', color: '#6b21a8', fontWeight: '500' }}>
-                  {liveData.live_session.duration}
+                  {liveSession.duration}
                 </span>
               </div>
             )}
