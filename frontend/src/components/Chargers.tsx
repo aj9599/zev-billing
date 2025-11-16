@@ -1,5 +1,5 @@
 import { useState, useEffect, memo, useCallback } from 'react';
-import { Plus, Edit2, Trash2, X, HelpCircle, Info, Car, Download, Search, Building, Radio, Settings, Star, Wifi, WifiOff, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, HelpCircle, Info, Car, Download, Search, Building, Radio, Settings, Star, Wifi, WifiOff, AlertCircle, AlertTriangle, Zap, Battery, Clock, User, TrendingUp, Activity } from 'lucide-react';
 import { api } from '../api/client';
 import type { Charger, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
@@ -30,7 +30,6 @@ interface ChargerConnectionConfig {
   state_idle?: string;
   mode_normal?: string;
   mode_priority?: string;
-  // Loxone API fields
   loxone_host?: string;
   loxone_username?: string;
   loxone_password?: string;
@@ -38,7 +37,6 @@ interface ChargerConnectionConfig {
   loxone_state_uuid?: string;
   loxone_user_id_uuid?: string;
   loxone_mode_uuid?: string;
-  // Zaptec API fields
   zaptec_username?: string;
   zaptec_password?: string;
   zaptec_charger_id?: string;
@@ -50,6 +48,35 @@ interface ChargerSession {
   power_kwh: number;
   state: string;
   mode: string;
+}
+
+interface LiveChargerData {
+  charger_id: number;
+  charger_name: string;
+  connection_type: string;
+  power_kwh: number;
+  state: string;
+  mode: string;
+  last_update: string;
+  // Zaptec-specific enhanced data
+  total_energy?: number;
+  session_energy?: number;
+  is_online?: boolean;
+  current_power_kw?: number;
+  voltage?: number;
+  current?: number;
+  state_description?: string;
+  live_session?: LiveSessionData;
+}
+
+interface LiveSessionData {
+  session_id: string;
+  energy: number;
+  start_time: string;
+  duration: string;
+  user_name: string;
+  is_active: boolean;
+  power_kw: number;
 }
 
 interface LoxoneConnectionStatus {
@@ -68,9 +95,13 @@ interface ZaptecConnectionStatus {
     charger_name: string;
     charger_id: string;
     is_connected: boolean;
+    is_online: boolean;
     last_reading: number;
     last_update: string;
+    current_power_kw?: number;
+    state_description?: string;
     token_expires?: string;
+    live_session?: LiveSessionData;
   };
 }
 
@@ -82,7 +113,6 @@ interface DeletionImpact {
   newest_session: string;
   has_data: boolean;
 }
-
 
 // Modal component props interface
 interface DeleteConfirmationModalProps {
@@ -170,7 +200,7 @@ const DeleteConfirmationModal = memo(({
               borderRadius: '12px', padding: '16px', marginBottom: '16px'
             }}>
               <p style={{ fontSize: '13px', fontWeight: '600', color: '#991b1b', margin: 0 }}>
-                ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â {t('chargers.dataLossWarning') || 'Warning: All historical data for this charger will be permanently lost. This cannot be recovered.'}
+                ⚠️ {t('chargers.dataLossWarning') || 'Warning: All historical data for this charger will be permanently lost. This cannot be recovered.'}
               </p>
             </div>
 
@@ -250,12 +280,11 @@ const DeleteConfirmationModal = memo(({
 
 DeleteConfirmationModal.displayName = 'DeleteConfirmationModal';
 
-
 export default function Chargers() {
   const { t } = useTranslation();
   const [chargers, setChargers] = useState<Charger[]>([]);
   const [buildings, setBuildings] = useState<BuildingType[]>([]);
-  const [chargerSessions, setChargerSessions] = useState<Record<number, ChargerSession>>({});
+  const [liveData, setLiveData] = useState<Record<number, LiveChargerData>>({});
   const [loxoneStatus, setLoxoneStatus] = useState<LoxoneConnectionStatus>({});
   const [zaptecStatus, setZaptecStatus] = useState<ZaptecConnectionStatus>({});
   const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(null);
@@ -321,16 +350,15 @@ export default function Chargers() {
     setCaptchaValid(false);
   }, []);
 
-
   useEffect(() => {
     loadData();
-    fetchLoxoneStatus();
+    fetchStatusData();
 
-    // Poll for Loxone status and sessions every 30 seconds
+    // Poll for live data every 5 seconds for real-time updates
     const interval = setInterval(() => {
-      fetchLoxoneStatus();
-      loadChargerSessions();
-    }, 30000);
+      fetchStatusData();
+      loadLiveData();
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -341,10 +369,10 @@ export default function Chargers() {
     ]);
     setChargers(chargersData);
     setBuildings(buildingsData.filter(b => !b.is_group));
-    loadChargerSessions();
+    loadLiveData();
   };
 
-  const fetchLoxoneStatus = async () => {
+  const fetchStatusData = async () => {
     try {
       const debugData = await api.getDebugStatus();
       if (debugData.loxone_charger_connections) {
@@ -358,23 +386,23 @@ export default function Chargers() {
     }
   };
 
-  const loadChargerSessions = async () => {
+  const loadLiveData = async () => {
     try {
-      const response = await fetch('/api/chargers/sessions/latest', {
+      const response = await fetch('/api/chargers/live-data', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       if (response.ok) {
-        const sessions = await response.json();
-        const sessionsMap: Record<number, ChargerSession> = {};
-        sessions.forEach((session: ChargerSession) => {
-          sessionsMap[session.charger_id] = session;
+        const data = await response.json();
+        const dataMap: Record<number, LiveChargerData> = {};
+        data.forEach((item: LiveChargerData) => {
+          dataMap[item.charger_id] = item;
         });
-        setChargerSessions(sessionsMap);
+        setLiveData(dataMap);
       }
     } catch (err) {
-      console.error('Failed to load charger sessions:', err);
+      console.error('Failed to load live data:', err);
     }
   };
 
@@ -405,15 +433,11 @@ export default function Chargers() {
 
     try {
       const config = JSON.parse(charger.connection_config);
-      // Convert both values to strings for comparison to handle number/string mismatches
       const stateStr = String(stateValue).trim();
       if (stateStr === String(config.state_cable_locked).trim()) return t('chargers.state.cableLocked');
       if (stateStr === String(config.state_waiting_auth).trim()) return t('chargers.state.waitingAuth');
       if (stateStr === String(config.state_charging).trim()) return t('chargers.state.charging');
       if (stateStr === String(config.state_idle).trim()) return t('chargers.state.idle');
-
-      // Log for debugging if no match found
-      console.log(`State value '${stateStr}' did not match any configured states for charger ${charger.name}`);
     } catch (e) {
       console.error('Failed to parse charger config:', e);
     }
@@ -426,19 +450,9 @@ export default function Chargers() {
   
     try {
       const config = JSON.parse(charger.connection_config);
-      // Convert both values to strings for comparison to handle number/string mismatches
       const modeStr = String(modeValue).trim();
       if (modeStr === String(config.mode_normal).trim()) return t('chargers.mode.normal');
       if (modeStr === String(config.mode_priority).trim()) return t('chargers.mode.priority');
-      
-      // Log for debugging if no match found
-      console.log(`Mode value '${modeStr}' did not match any configured modes for charger ${charger.name}`, {
-        received: modeStr,
-        configured: {
-          normal: String(config.mode_normal).trim(),
-          priority: String(config.mode_priority).trim()
-        }
-      });
     } catch (e) {
       console.error('Failed to parse charger config:', e);
     }
@@ -468,7 +482,6 @@ export default function Chargers() {
         mode_priority: connectionConfig.mode_priority
       };
     } else if (formData.connection_type === 'zaptec_api') {
-      // Zaptec API doesn't need state/mode mappings - they're handled automatically
       config = {
         zaptec_username: connectionConfig.zaptec_username,
         zaptec_password: connectionConfig.zaptec_password,
@@ -535,8 +548,7 @@ export default function Chargers() {
       setEditingCharger(null);
       resetForm();
       loadData();
-      // Refresh Loxone status after creating/updating
-      setTimeout(fetchLoxoneStatus, 2000);
+      setTimeout(fetchStatusData, 2000);
     } catch (err) {
       alert(t('chargers.saveFailed'));
     }
@@ -549,7 +561,6 @@ export default function Chargers() {
     setCaptchaValid(false);
     
     try {
-      // Use the fetch API directly since the method might not be in the API client yet
       const response = await fetch(`/api/chargers/${charger.id}/deletion-impact`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -560,7 +571,6 @@ export default function Chargers() {
         const impact = await response.json();
         setDeletionImpact(impact);
       } else {
-        // If endpoint doesn't exist, create basic impact
         setDeletionImpact({
           charger_id: charger.id,
           charger_name: charger.name,
@@ -573,7 +583,6 @@ export default function Chargers() {
       setShowDeleteConfirmation(true);
     } catch (err) {
       console.error('Failed to get deletion impact:', err);
-      // If we can't get the impact, still allow deletion but without the details
       setDeletionImpact({
         charger_id: charger.id,
         charger_name: charger.name,
@@ -589,7 +598,6 @@ export default function Chargers() {
   const handleDeleteConfirm = async () => {
     if (!chargerToDelete || !deletionImpact) return;
     
-    // Validate confirmation
     if (deleteConfirmationText !== deletionImpact.charger_name) {
       alert(t('chargers.deleteNameMismatch') || 'The charger name does not match. Please type it exactly as shown.');
       return;
@@ -614,7 +622,7 @@ export default function Chargers() {
       setDeleteUnderstandChecked(false);
       setCaptchaValid(false);
       loadData();
-      fetchLoxoneStatus();
+      fetchStatusData();
     } catch (err) {
       alert(t('chargers.deleteFailed'));
     }
@@ -789,6 +797,10 @@ export default function Chargers() {
     return loxoneStatus[chargerId];
   };
 
+  const getZaptecConnectionStatus = (chargerId: number) => {
+    return zaptecStatus[chargerId];
+  };
+
   const renderConnectionStatus = (charger: Charger) => {
     if (charger.connection_type === 'loxone_api') {
       const status = getLoxoneConnectionStatus(charger.id);
@@ -852,43 +864,223 @@ export default function Chargers() {
     }
     
     if (charger.connection_type === 'zaptec_api') {
-      const status = zaptecStatus[charger.id];
-      if (status) {
+      const status = getZaptecConnectionStatus(charger.id);
+      const live = liveData[charger.id];
+      
+      if (status || live) {
+        const isConnected = status?.is_connected || false;
+        const isOnline = live?.is_online || status?.is_online || false;
+        
         return (
           <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '8px 12px',
-            backgroundColor: status.is_connected ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-            borderRadius: '8px',
-            marginTop: '12px'
+            backgroundColor: isConnected ? 'rgba(34, 197, 94, 0.05)' : 'rgba(239, 68, 68, 0.05)',
+            borderRadius: '12px',
+            marginTop: '16px',
+            overflow: 'hidden',
+            border: `2px solid ${isConnected ? '#22c55e' : '#ef4444'}`
           }}>
-            {status.is_connected ? (
-              <>
-                <Wifi size={16} style={{ color: '#22c55e' }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#22c55e' }}>
-                    Zaptec Connected
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px',
+              backgroundColor: isConnected ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+            }}>
+              {isConnected ? (
+                <>
+                  <Wifi size={16} style={{ color: '#22c55e' }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '12px', fontWeight: '600', color: '#22c55e' }}>
+                      Zaptec Connected {isOnline && '• Online'}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
+                      {status?.last_update && `Last update: ${new Date(status.last_update).toLocaleTimeString(undefined, { hour12: false })}`}
+                    </div>
                   </div>
-                  <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
-                    {t('chargers.lastUpdate')}: {new Date(status.last_update).toLocaleTimeString(undefined, { hour12: false })}
+                </>
+              ) : (
+                <>
+                  <WifiOff size={16} style={{ color: '#ef4444' }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '12px', fontWeight: '600', color: '#ef4444' }}>
+                      Zaptec Disconnected
+                    </div>
                   </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <WifiOff size={16} style={{ color: '#ef4444' }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#ef4444' }}>
-                    Zaptec Disconnected
+                </>
+              )}
+            </div>
+            
+            {live && isConnected && (
+              <div style={{ padding: '12px', display: 'grid', gap: '8px' }}>
+                {/* Total Energy Meter */}
+                {live.total_energy !== undefined && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 12px',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderRadius: '8px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Battery size={16} style={{ color: '#3b82f6' }} />
+                      <span style={{ fontSize: '12px', fontWeight: '600', color: '#1f2937' }}>
+                        Total Energy
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '14px', fontWeight: '700', color: '#3b82f6' }}>
+                      {live.total_energy.toFixed(3)} kWh
+                    </span>
                   </div>
-                </div>
-              </>
+                )}
+
+                {/* Current Power */}
+                {live.current_power_kw !== undefined && live.current_power_kw > 0 && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 12px',
+                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                    borderRadius: '8px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Zap size={16} style={{ color: '#22c55e' }} />
+                      <span style={{ fontSize: '12px', fontWeight: '600', color: '#1f2937' }}>
+                        Current Power
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '14px', fontWeight: '700', color: '#22c55e' }}>
+                      {live.current_power_kw.toFixed(2)} kW
+                    </span>
+                  </div>
+                )}
+
+                {/* Voltage & Current */}
+                {(live.voltage || live.current) && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    {live.voltage && (
+                      <div style={{
+                        padding: '8px 12px',
+                        backgroundColor: 'rgba(107, 114, 128, 0.1)',
+                        borderRadius: '8px'
+                      }}>
+                        <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '4px' }}>
+                          Voltage
+                        </div>
+                        <div style={{ fontSize: '13px', fontWeight: '600', color: '#1f2937' }}>
+                          {live.voltage.toFixed(0)} V
+                        </div>
+                      </div>
+                    )}
+                    {live.current && (
+                      <div style={{
+                        padding: '8px 12px',
+                        backgroundColor: 'rgba(107, 114, 128, 0.1)',
+                        borderRadius: '8px'
+                      }}>
+                        <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '4px' }}>
+                          Current
+                        </div>
+                        <div style={{ fontSize: '13px', fontWeight: '600', color: '#1f2937' }}>
+                          {live.current.toFixed(1)} A
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Live Session */}
+                {live.live_session && (
+                  <div style={{
+                    padding: '12px',
+                    backgroundColor: 'linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(34, 197, 94, 0.1))',
+                    borderRadius: '8px',
+                    border: '2px solid #f59e0b'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      marginBottom: '12px'
+                    }}>
+                      <Activity size={16} style={{ color: '#f59e0b' }} />
+                      <span style={{ fontSize: '13px', fontWeight: '700', color: '#1f2937' }}>
+                        🔴 LIVE CHARGING SESSION
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'grid', gap: '8px' }}>
+                      {live.live_session.user_name && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <User size={14} style={{ color: '#6b7280' }} />
+                          <span style={{ fontSize: '12px', color: '#1f2937' }}>
+                            {live.live_session.user_name}
+                          </span>
+                        </div>
+                      )}
+
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: '8px'
+                      }}>
+                        <div>
+                          <div style={{ fontSize: '11px', color: '#6b7280' }}>
+                            Session Energy
+                          </div>
+                          <div style={{ fontSize: '16px', fontWeight: '700', color: '#22c55e' }}>
+                            {live.live_session.energy.toFixed(3)} kWh
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '11px', color: '#6b7280' }}>
+                            Duration
+                          </div>
+                          <div style={{ fontSize: '14px', fontWeight: '600', color: '#1f2937' }}>
+                            {live.live_session.duration}
+                          </div>
+                        </div>
+                      </div>
+
+                      {live.live_session.power_kw > 0 && (
+                        <div style={{
+                          padding: '8px',
+                          backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                          borderRadius: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between'
+                        }}>
+                          <span style={{ fontSize: '12px', fontWeight: '600', color: '#1f2937' }}>
+                            Charging at
+                          </span>
+                          <span style={{ fontSize: '16px', fontWeight: '700', color: '#22c55e' }}>
+                            {live.live_session.power_kw.toFixed(2)} kW
+                          </span>
+                        </div>
+                      )}
+
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '11px',
+                        color: '#6b7280',
+                        marginTop: '4px'
+                      }}>
+                        <Clock size={12} />
+                        Started: {new Date(live.live_session.start_time).toLocaleTimeString()}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         );
       }
+      
       return (
         <div style={{
           display: 'flex',
@@ -935,7 +1127,6 @@ export default function Chargers() {
       building_name: building?.name || 'Unknown Building'
     };
   });
-
 
   const InstructionsModal = () => (
     <div style={{
@@ -1190,7 +1381,7 @@ export default function Chargers() {
                   {building.name}
                 </h3>
               </div>
-              <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
+              <p style={{ fontSize: '14px', margin: 0, opacity: 0.9' }}>
                 {buildingChargers.length} {t('chargers.chargersCount')}
               </p>
             </div>
@@ -1207,12 +1398,12 @@ export default function Chargers() {
             </h2>
             <div className="chargers-grid" style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
               gap: '20px'
             }}>
               {buildingChargers.map(charger => {
                 const chargerPreset = getPreset(charger.preset);
-                const session = chargerSessions[charger.id];
+                const live = liveData[charger.id];
                 return (
                   <div key={charger.id} className="charger-card" style={{
                     backgroundColor: 'white',
@@ -1324,18 +1515,29 @@ export default function Chargers() {
                           textTransform: 'uppercase',
                           letterSpacing: '0.5px'
                         }}>
-                          {charger.connection_type === 'loxone_api' ? 'Loxone WebSocket' : charger.connection_type}
+                          {charger.connection_type === 'loxone_api' ? 'Loxone WebSocket' : charger.connection_type === 'zaptec_api' ? 'Zaptec API' : charger.connection_type}
                         </span>
                       </div>
 
-                      {session && (
+                      {live && (
                         <>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                            <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>{t('chargers.lastReading')}</span>
-                            <span style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
-                              {session.power_kwh ? `${session.power_kwh.toFixed(3)} kWh` : '-'}
-                            </span>
-                          </div>
+                          {live.total_energy !== undefined && charger.connection_type === 'zaptec_api' && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                              <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>Total Energy</span>
+                              <span style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
+                                {live.total_energy.toFixed(3)} kWh
+                              </span>
+                            </div>
+                          )}
+
+                          {live.session_energy !== undefined && live.session_energy > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                              <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>Session Energy</span>
+                              <span style={{ fontSize: '15px', fontWeight: '600', color: '#22c55e' }}>
+                                {live.session_energy.toFixed(3)} kWh
+                              </span>
+                            </div>
+                          )}
 
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                             <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>{t('chargers.currentState')}</span>
@@ -1344,10 +1546,10 @@ export default function Chargers() {
                               borderRadius: '20px',
                               fontSize: '12px',
                               fontWeight: '600',
-                              backgroundColor: session.state === 'charging' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(59, 130, 246, 0.1)',
-                              color: session.state === 'charging' ? '#22c55e' : '#3b82f6'
+                              backgroundColor: live.state === '67' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(59, 130, 246, 0.1)',
+                              color: live.state === '67' ? '#22c55e' : '#3b82f6'
                             }}>
-                              {getStateDisplay(charger, session.state)}
+                              {getStateDisplay(charger, live.state)}
                             </span>
                           </div>
 
@@ -1358,10 +1560,10 @@ export default function Chargers() {
                               borderRadius: '20px',
                               fontSize: '12px',
                               fontWeight: '600',
-                              backgroundColor: session.mode === 'priority' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(107, 114, 128, 0.1)',
-                              color: session.mode === 'priority' ? '#f59e0b' : '#6b7280'
+                              backgroundColor: live.mode === '2' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(107, 114, 128, 0.1)',
+                              color: live.mode === '2' ? '#f59e0b' : '#6b7280'
                             }}>
-                              {getModeDisplay(charger, session.mode)}
+                              {getModeDisplay(charger, live.mode)}
                             </span>
                           </div>
                         </>
@@ -1375,7 +1577,7 @@ export default function Chargers() {
                             fontWeight: '600',
                             color: '#22c55e'
                           }}>
-                            ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ {t('chargers.supported')}
+                            ✓ {t('chargers.supported')}
                           </span>
                         </div>
                       )}
@@ -1601,7 +1803,7 @@ export default function Chargers() {
                         </label>
                         <input type="password" required value={connectionConfig.loxone_password || ''}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_password: e.target.value })}
-                          placeholder="ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢"
+                          placeholder="••••••••"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
                     </div>
@@ -1722,7 +1924,7 @@ export default function Chargers() {
                       </label>
                       <input type="password" required value={connectionConfig.zaptec_password || ''}
                         onChange={(e) => setConnectionConfig({ ...connectionConfig, zaptec_password: e.target.value })}
-                        placeholder="ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢"
+                        placeholder="••••••••"
                         style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
                         Your Zaptec Portal password
@@ -1759,14 +1961,14 @@ export default function Chargers() {
                       <strong>How to find your Charger ID:</strong><br />
                       1. Log into <a href="https://portal.zaptec.com" target="_blank" rel="noopener noreferrer" style={{ color: '#10b981' }}>Zaptec Portal</a><br />
                       2. Navigate to your charger<br />
-                      3. Click on Settings ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Advanced<br />
+                      3. Click on Settings → Advanced<br />
                       4. Copy the Charger ID (GUID format)<br /><br />
                       <div style={{ backgroundColor: '#d1fae5', padding: '8px', borderRadius: '4px', fontSize: '11px', color: '#065f46' }}>
-                        <strong>ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Zaptec API Features:</strong><br />
-                        ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ Real-time charging data from Zaptec Cloud<br />
-                        ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ Automatic state mapping (charging, idle, etc.)<br />
-                        ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ No local network configuration needed<br />
-                        ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ Works with Zaptec Go and Pro models
+                        <strong>✓ Zaptec API Features:</strong><br />
+                        • Real-time charging data from Zaptec Cloud<br />
+                        • Automatic state mapping (charging, idle, etc.)<br />
+                        • No local network configuration needed<br />
+                        • Works with Zaptec Go and Pro models
                       </div>
                     </div>
                   </>
@@ -2001,11 +2203,24 @@ export default function Chargers() {
           </div>
         </div>
       )}
-
+      
       <style>{`
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.5;
+          }
+        }
+
+        .live-indicator {
+          animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
         @media (max-width: 768px) {
           .chargers-container .chargers-header h1 {
-            font-size: 24px !important;
+            fontSize: '24px !important';
           }
 
           .chargers-container .chargers-header h1 svg {
@@ -2014,7 +2229,7 @@ export default function Chargers() {
           }
 
           .chargers-container .chargers-header p {
-            font-size: 14px !important;
+            fontSize: '14px !important';
           }
 
           .button-group-header {
@@ -2042,11 +2257,11 @@ export default function Chargers() {
           }
 
           .charger-card h3 {
-            font-size: 18px !important;
+            fontSize: '18px !important';
           }
 
           .modal-content h2 {
-            font-size: 20px !important;
+            fontSize: '20px !important';
           }
 
           .instructions-modal {
@@ -2054,11 +2269,11 @@ export default function Chargers() {
           }
 
           .instructions-modal h2 {
-            font-size: 20px !important;
+            fontSize: '20px !important';
           }
 
           .instructions-modal h3 {
-            font-size: 16px !important;
+            fontSize: '16px !important';
           }
 
           .form-row {
@@ -2068,7 +2283,7 @@ export default function Chargers() {
 
         @media (max-width: 480px) {
           .chargers-container .chargers-header h1 {
-            font-size: 20px !important;
+            fontSize: '20px !important';
             gap: 8px !important;
           }
 
@@ -2090,7 +2305,7 @@ export default function Chargers() {
           }
 
           .building-cards-grid h3 {
-            font-size: 16px !important;
+            fontSize: '16px !important';
           }
 
           .charger-card {
@@ -2098,7 +2313,7 @@ export default function Chargers() {
           }
 
           .charger-card h3 {
-            font-size: 16px !important;
+            fontSize: '16px !important';
           }
 
           .modal-content {
@@ -2110,15 +2325,15 @@ export default function Chargers() {
           }
 
           .instructions-modal h2 {
-            font-size: 18px !important;
+            fontSize: '18px !important';
           }
 
           .instructions-modal h3 {
-            font-size: 15px !important;
+            fontSize: '15px !important';
           }
 
           .instructions-modal div {
-            font-size: 13px !important;
+            fontSize: '13px !important';
           }
         }
       `}</style>

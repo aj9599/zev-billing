@@ -19,6 +19,7 @@ type ZaptecCollector struct {
 	client           *http.Client
 	mu               sync.RWMutex
 	chargerData      map[int]*ZaptecChargerData
+	liveSessionData  map[int]*ZaptecSessionData
 	accessTokens     map[int]string // charger_id -> access_token
 	tokenExpiries    map[int]time.Time
 	stopChan         chan bool
@@ -26,11 +27,34 @@ type ZaptecCollector struct {
 }
 
 type ZaptecChargerData struct {
-	Power     float64
-	UserID    string
-	Mode      string
-	State     string
-	Timestamp time.Time
+	Power            float64
+	TotalEnergy      float64 // SignedMeterValueKwh - total energy through the charger
+	SessionEnergy    float64 // Energy for current/last session
+	UserID           string
+	UserName         string
+	Mode             string
+	State            string
+	StateDescription string
+	IsOnline         bool
+	CurrentSession   string // Current session ID if charging
+	Timestamp        time.Time
+	// Additional detailed info
+	ChargerName      string
+	DeviceName       string
+	Voltage          float64
+	Current          float64
+	Power_kW         float64 // Current power draw in kW
+}
+
+type ZaptecSessionData struct {
+	SessionID        string
+	Energy           float64
+	StartTime        time.Time
+	UserID           string
+	UserName         string
+	IsActive         bool
+	Power_kW         float64
+	Timestamp        time.Time
 }
 
 type ZaptecAuthResponse struct {
@@ -39,7 +63,25 @@ type ZaptecAuthResponse struct {
 	TokenType   string `json:"token_type"`
 }
 
-// ZaptecChargerInfo represents the charger information from /api/chargers endpoint
+// ZaptecChargerDetails represents the detailed charger information from /api/chargers/{id} endpoint
+type ZaptecChargerDetails struct {
+	ID                   string  `json:"Id"`
+	DeviceID             string  `json:"DeviceId"`
+	Name                 string  `json:"Name"`
+	DeviceName           string  `json:"DeviceName"`
+	Active               bool    `json:"Active"`
+	IsOnline             bool    `json:"IsOnline"`
+	OperatingMode        int     `json:"OperatingMode"`
+	SignedMeterValueKwh  float64 `json:"SignedMeterValueKwh"`
+	TotalChargePower     float64 `json:"TotalChargePower"` // Current power in watts
+	Voltage              float64 `json:"Voltage"`
+	Current              float64 `json:"Current"`
+	InstallationID       string  `json:"InstallationId"`
+	InstallationName     string  `json:"InstallationName"`
+	SessionID            string  `json:"SessionId,omitempty"` // Current session if active
+}
+
+// ZaptecChargerInfo represents the charger information from /api/chargers endpoint (list)
 type ZaptecChargerInfo struct {
 	ID                   string  `json:"Id"`
 	DeviceID             string  `json:"DeviceId"`
@@ -50,6 +92,22 @@ type ZaptecChargerInfo struct {
 	SignedMeterValueKwh  float64 `json:"SignedMeterValueKwh"`
 	InstallationID       string  `json:"InstallationId"`
 	InstallationName     string  `json:"InstallationName"`
+}
+
+// ZaptecSession represents a charging session from /api/session/{id} endpoint
+type ZaptecSession struct {
+	ID              string    `json:"Id"`
+	DeviceID        string    `json:"DeviceId"`
+	StartDateTime   string    `json:"StartDateTime"`
+	EndDateTime     string    `json:"EndDateTime"`
+	Energy          float64   `json:"Energy"` // in kWh
+	UserFullName    string    `json:"UserFullName"`
+	ChargerID       string    `json:"ChargerId"`
+	DeviceName      string    `json:"DeviceName"`
+	UserEmail       string    `json:"UserEmail"`
+	UserID          string    `json:"UserId"`
+	SignedSession   bool      `json:"SignedSession"`
+	ExternalID      string    `json:"ExternalId"`
 }
 
 // ZaptecChargeHistory represents a charging session from /api/chargehistory endpoint
@@ -84,13 +142,14 @@ type ZaptecConnectionConfig struct {
 
 func NewZaptecCollector(db *sql.DB) *ZaptecCollector {
 	return &ZaptecCollector{
-		db:            db,
-		client:        &http.Client{Timeout: 30 * time.Second},
-		chargerData:   make(map[int]*ZaptecChargerData),
-		accessTokens:  make(map[int]string),
-		tokenExpiries: make(map[int]time.Time),
-		stopChan:      make(chan bool),
-		apiBaseURL:    "https://api.zaptec.com",
+		db:              db,
+		client:          &http.Client{Timeout: 30 * time.Second},
+		chargerData:     make(map[int]*ZaptecChargerData),
+		liveSessionData: make(map[int]*ZaptecSessionData),
+		accessTokens:    make(map[int]string),
+		tokenExpiries:   make(map[int]time.Time),
+		stopChan:        make(chan bool),
+		apiBaseURL:      "https://api.zaptec.com",
 	}
 }
 
@@ -100,8 +159,8 @@ func (zc *ZaptecCollector) Start() {
 	// Initial load of chargers
 	zc.loadChargers()
 	
-	// Poll every 30 seconds for real-time data
-	ticker := time.NewTicker(30 * time.Second)
+	// Poll every 10 seconds for real-time data (faster for live updates)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	
 	for {
@@ -124,6 +183,7 @@ func (zc *ZaptecCollector) RestartConnections() {
 	log.Println("Restarting Zaptec connections...")
 	zc.mu.Lock()
 	zc.chargerData = make(map[int]*ZaptecChargerData)
+	zc.liveSessionData = make(map[int]*ZaptecSessionData)
 	zc.accessTokens = make(map[int]string)
 	zc.tokenExpiries = make(map[int]time.Time)
 	zc.mu.Unlock()
@@ -152,23 +212,15 @@ func (zc *ZaptecCollector) loadChargers() {
 			continue
 		}
 		
-		log.Printf("DEBUG: Loading Zaptec charger '%s' (ID: %d) with config: %s", name, id, configJSON)
-		
 		var config ZaptecConnectionConfig
 		if err := json.Unmarshal([]byte(configJSON), &config); err != nil {
 			log.Printf("ERROR: Invalid Zaptec config for charger %s: %v", name, err)
-			log.Printf("DEBUG: Config JSON was: %s", configJSON)
 			continue
 		}
 		
 		// Validate config
 		if config.Username == "" || config.Password == "" || config.ChargerID == "" {
 			log.Printf("WARNING: Incomplete Zaptec config for charger %s", name)
-			log.Printf("DEBUG: Username: '%s', Password: '%s' (length: %d), ChargerID: '%s'", 
-				config.Username, 
-				"***",
-				len(config.Password),
-				config.ChargerID)
 			continue
 		}
 		
@@ -193,16 +245,10 @@ func (zc *ZaptecCollector) getAccessToken(chargerID int, config ZaptecConnection
 	// Authenticate to get new token
 	authURL := fmt.Sprintf("%s/oauth/token", zc.apiBaseURL)
 	
-	log.Printf("DEBUG: Authenticating Zaptec charger %d with username: %s", chargerID, config.Username)
-	
-	// Zaptec API requires application/x-www-form-urlencoded, not JSON
-	// URL encode the values to handle special characters
 	formData := url.Values{}
 	formData.Set("grant_type", "password")
 	formData.Set("username", config.Username)
 	formData.Set("password", config.Password)
-	
-	log.Printf("DEBUG: Zaptec auth request to %s with form data (password hidden)", authURL)
 	
 	req, err := http.NewRequest("POST", authURL, bytes.NewBufferString(formData.Encode()))
 	if err != nil {
@@ -211,7 +257,6 @@ func (zc *ZaptecCollector) getAccessToken(chargerID int, config ZaptecConnection
 	
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
-
 	
 	resp, err := zc.client.Do(req)
 	if err != nil {
@@ -286,40 +331,73 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 		return
 	}
 	
-	// Get charger information (for real-time state and power)
-	chargerInfo, err := zc.getChargerInfo(token, config.ChargerID)
+	// Get detailed charger information using individual charger endpoint
+	chargerDetails, err := zc.getChargerDetails(token, config.ChargerID)
 	if err != nil {
-		log.Printf("ERROR: Failed to get charger info for %s: %v", chargerName, err)
+		log.Printf("ERROR: Failed to get charger details for %s: %v", chargerName, err)
 		return
 	}
 	
-	// Get recent charging history to determine user ID and actual energy consumption
-	var userID string
-	power := chargerInfo.SignedMeterValueKwh
-	
-	// If charger is currently charging, try to get the active session user
-	if chargerInfo.OperatingMode == 3 { // Connected_Charging
-		recentHistory, err := zc.getRecentChargeHistory(token, config.ChargerID, 1)
-		if err == nil && len(recentHistory) > 0 {
-			// Check if the most recent session is still ongoing (no EndDateTime)
-			lastSession := recentHistory[0]
-			if lastSession.EndDateTime == "" || lastSession.EndDateTime == "0001-01-01T00:00:00" {
-				userID = lastSession.UserID
-				// Use the session energy if available
-				if lastSession.Energy > 0 {
-					power = lastSession.Energy
-				}
-			}
-		}
+	// Initialize charger data
+	chargerData := &ZaptecChargerData{
+		TotalEnergy:      chargerDetails.SignedMeterValueKwh,
+		IsOnline:         chargerDetails.IsOnline,
+		ChargerName:      chargerDetails.Name,
+		DeviceName:       chargerDetails.DeviceName,
+		Voltage:          chargerDetails.Voltage,
+		Current:          chargerDetails.Current,
+		Power_kW:         chargerDetails.TotalChargePower / 1000.0, // Convert W to kW
+		StateDescription: zc.getStateDescription(chargerDetails.OperatingMode),
+		Timestamp:        time.Now(),
 	}
 	
-	// Map Zaptec state to our format
-	chargerData := &ZaptecChargerData{
-		Power:     power,
-		UserID:    userID,
-		Mode:      zc.mapOperationMode(chargerInfo.OperatingMode),
-		State:     zc.mapOperatingModeToState(chargerInfo.OperatingMode, chargerInfo.IsOnline),
-		Timestamp: time.Now(),
+	// Map operating mode to state and mode
+	chargerData.State = zc.mapOperatingModeToState(chargerDetails.OperatingMode, chargerDetails.IsOnline)
+	chargerData.Mode = zc.mapOperationMode(chargerDetails.OperatingMode)
+	
+	// If charger is actively charging, get live session data
+	if chargerDetails.OperatingMode == 3 && chargerDetails.SessionID != "" {
+		chargerData.CurrentSession = chargerDetails.SessionID
+		
+		// Get live session details
+		session, err := zc.getSessionDetails(token, chargerDetails.SessionID)
+		if err == nil {
+			chargerData.UserID = session.UserID
+			chargerData.UserName = session.UserFullName
+			chargerData.SessionEnergy = session.Energy
+			chargerData.Power = session.Energy // Use session energy for power reading
+			
+			// Store live session data
+			zc.mu.Lock()
+			zc.liveSessionData[chargerID] = &ZaptecSessionData{
+				SessionID: session.ID,
+				Energy:    session.Energy,
+				StartTime: zc.parseZaptecTime(session.StartDateTime),
+				UserID:    session.UserID,
+				UserName:  session.UserFullName,
+				IsActive:  session.EndDateTime == "" || session.EndDateTime == "0001-01-01T00:00:00",
+				Power_kW:  chargerDetails.TotalChargePower / 1000.0,
+				Timestamp: time.Now(),
+			}
+			zc.mu.Unlock()
+		}
+	} else {
+		// Not charging - get most recent session from history
+		recentHistory, err := zc.getRecentChargeHistory(token, config.ChargerID, 1)
+		if err == nil && len(recentHistory) > 0 {
+			lastSession := recentHistory[0]
+			chargerData.UserID = lastSession.UserID
+			chargerData.UserName = lastSession.UserFullName
+			chargerData.SessionEnergy = lastSession.Energy
+			chargerData.Power = chargerDetails.SignedMeterValueKwh
+		} else {
+			chargerData.Power = chargerDetails.SignedMeterValueKwh
+		}
+		
+		// Clear live session data
+		zc.mu.Lock()
+		delete(zc.liveSessionData, chargerID)
+		zc.mu.Unlock()
 	}
 	
 	// Store the data
@@ -327,80 +405,78 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 	zc.chargerData[chargerID] = chargerData
 	zc.mu.Unlock()
 	
-	log.Printf("Zaptec: Polled charger %s - Power: %.3f kWh, Mode: %s, State: %s, User: %s, Online: %t", 
-		chargerName, chargerData.Power, chargerData.Mode, chargerData.State, userID, chargerInfo.IsOnline)
+	log.Printf("Zaptec: [%s] Total: %.3f kWh, Session: %.3f kWh, Power: %.2f kW, Mode: %s, State: %s (%s), User: %s, Online: %t", 
+		chargerName, 
+		chargerData.TotalEnergy,
+		chargerData.SessionEnergy,
+		chargerData.Power_kW,
+		chargerData.Mode, 
+		chargerData.State, 
+		chargerData.StateDescription,
+		chargerData.UserName,
+		chargerData.IsOnline)
 }
 
-// getChargerInfo fetches charger information from /api/chargers endpoint
-func (zc *ZaptecCollector) getChargerInfo(token, chargerID string) (*ZaptecChargerInfo, error) {
-	// The chargers endpoint returns paginated results, we need to fetch all pages
-	var allChargers []ZaptecChargerInfo
-	pageIndex := 0
+// getChargerDetails fetches detailed charger information from /api/chargers/{id} endpoint
+func (zc *ZaptecCollector) getChargerDetails(token, chargerID string) (*ZaptecChargerDetails, error) {
+	chargerURL := fmt.Sprintf("%s/api/chargers/%s", zc.apiBaseURL, chargerID)
 	
-	for {
-		chargersURL := fmt.Sprintf("%s/api/chargers?PageIndex=%d&PageSize=100", zc.apiBaseURL, pageIndex)
-		
-		req, err := http.NewRequest("GET", chargersURL, nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create chargers request: %v", err)
-		}
-		
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-		req.Header.Set("Accept", "application/json")
-		
-		resp, err := zc.client.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("chargers request failed: %v", err)
-		}
-		defer resp.Body.Close()
-		
-		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
-			return nil, fmt.Errorf("chargers request failed with status %d: %s", resp.StatusCode, string(body))
-		}
-		
-		var apiResp ZaptecAPIResponse
-		if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
-			return nil, fmt.Errorf("failed to decode chargers response: %v", err)
-		}
-		
-		// Parse chargers from this page
-		for _, dataItem := range apiResp.Data {
-			var charger ZaptecChargerInfo
-			if err := json.Unmarshal(dataItem, &charger); err != nil {
-				log.Printf("DEBUG: Failed to unmarshal charger: %v", err)
-				continue
-			}
-			allChargers = append(allChargers, charger)
-		}
-		
-		// Check if we have more pages
-		pageIndex++
-		if pageIndex >= apiResp.Pages {
-			break
-		}
+	req, err := http.NewRequest("GET", chargerURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create charger details request: %v", err)
 	}
 	
-	log.Printf("DEBUG: Zaptec API returned %d chargers across %d pages, looking for ID: %s", len(allChargers), pageIndex, chargerID)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	req.Header.Set("Accept", "application/json")
 	
-	// Find our specific charger in all the collected chargers
-	var foundChargers []string
-	for _, charger := range allChargers {
-		// Log first 10 chargers for debugging (to avoid spam)
-		if len(foundChargers) < 10 {
-			foundChargers = append(foundChargers, fmt.Sprintf("Id:%s DeviceId:%s Name:%s", charger.ID, charger.DeviceID, charger.Name))
-		}
-		
-		// Match by charger ID (try both Id and DeviceId fields)
-		if charger.ID == chargerID || charger.DeviceID == chargerID {
-			log.Printf("DEBUG: Found matching charger - Id:%s DeviceId:%s Name:%s", charger.ID, charger.DeviceID, charger.Name)
-			return &charger, nil
-		}
+	resp, err := zc.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("charger details request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("charger details request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 	
-	log.Printf("DEBUG: First 10 available chargers: %v", foundChargers)
-	log.Printf("DEBUG: Total chargers checked: %d", len(allChargers))
-	return nil, fmt.Errorf("charger %s not found in API response (checked %d chargers across %d pages)", chargerID, len(allChargers), pageIndex)
+	var chargerDetails ZaptecChargerDetails
+	if err := json.NewDecoder(resp.Body).Decode(&chargerDetails); err != nil {
+		return nil, fmt.Errorf("failed to decode charger details: %v", err)
+	}
+	
+	return &chargerDetails, nil
+}
+
+// getSessionDetails fetches live session details from /api/session/{id} endpoint
+func (zc *ZaptecCollector) getSessionDetails(token, sessionID string) (*ZaptecSession, error) {
+	sessionURL := fmt.Sprintf("%s/api/session/%s", zc.apiBaseURL, sessionID)
+	
+	req, err := http.NewRequest("GET", sessionURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create session request: %v", err)
+	}
+	
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	req.Header.Set("Accept", "application/json")
+	
+	resp, err := zc.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("session request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("session request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+	
+	var session ZaptecSession
+	if err := json.NewDecoder(resp.Body).Decode(&session); err != nil {
+		return nil, fmt.Errorf("failed to decode session: %v", err)
+	}
+	
+	return &session, nil
 }
 
 // getRecentChargeHistory fetches recent charging sessions
@@ -446,23 +522,11 @@ func (zc *ZaptecCollector) getRecentChargeHistory(token, chargerID string, pageS
 
 // mapOperationMode maps Zaptec operation modes to our internal modes
 func (zc *ZaptecCollector) mapOperationMode(mode int) string {
-	// Zaptec OperatingMode values:
-	// 0 = Unknown, 1 = Disconnected, 2 = Connected_Requesting, 3 = Connected_Charging, 
-	// 5 = Connected_Finished
-	switch mode {
-	case 3: // Connected_Charging
-		return "1" // Normal mode
-	case 2, 5: // Connected_Requesting or Connected_Finished
-		return "1" // Normal mode
-	default:
-		return "1" // Default to normal
-	}
+	// For now, Zaptec doesn't have priority mode concept
+	return "1" // Normal mode
 }
 
 // mapOperatingModeToState maps Zaptec operating mode to our internal state values
-// OperatingMode enum:
-// 0 = Unknown, 1 = Disconnected, 2 = Connected_Requesting, 
-// 3 = Connected_Charging, 5 = Connected_Finished
 func (zc *ZaptecCollector) mapOperatingModeToState(mode int, isOnline bool) string {
 	if !isOnline {
 		return "50" // Idle/Offline
@@ -484,6 +548,41 @@ func (zc *ZaptecCollector) mapOperatingModeToState(mode int, isOnline bool) stri
 	}
 }
 
+// getStateDescription returns human-readable state description
+func (zc *ZaptecCollector) getStateDescription(mode int) string {
+	switch mode {
+	case 0:
+		return "Unknown"
+	case 1:
+		return "Disconnected"
+	case 2:
+		return "Waiting for Authorization"
+	case 3:
+		return "Charging"
+	case 5:
+		return "Finished Charging"
+	default:
+		return "Unknown"
+	}
+}
+
+// parseZaptecTime parses Zaptec datetime format
+func (zc *ZaptecCollector) parseZaptecTime(timeStr string) time.Time {
+	if timeStr == "" || timeStr == "0001-01-01T00:00:00" {
+		return time.Time{}
+	}
+	
+	t, err := time.Parse(time.RFC3339, timeStr)
+	if err != nil {
+		// Try alternative format
+		t, err = time.Parse("2006-01-02T15:04:05", timeStr)
+		if err != nil {
+			return time.Time{}
+		}
+	}
+	return t
+}
+
 func (zc *ZaptecCollector) GetChargerData(chargerID int) (*ZaptecChargerData, bool) {
 	zc.mu.RLock()
 	defer zc.mu.RUnlock()
@@ -493,12 +592,29 @@ func (zc *ZaptecCollector) GetChargerData(chargerID int) (*ZaptecChargerData, bo
 		return nil, false
 	}
 	
-	// Return nil if data is too old (more than 2 minutes)
-	if time.Since(data.Timestamp) > 2*time.Minute {
+	// Return nil if data is too old (more than 30 seconds for real-time monitoring)
+	if time.Since(data.Timestamp) > 30*time.Second {
 		return nil, false
 	}
 	
 	return data, true
+}
+
+func (zc *ZaptecCollector) GetLiveSession(chargerID int) (*ZaptecSessionData, bool) {
+	zc.mu.RLock()
+	defer zc.mu.RUnlock()
+	
+	session, exists := zc.liveSessionData[chargerID]
+	if !exists {
+		return nil, false
+	}
+	
+	// Return nil if session data is too old
+	if time.Since(session.Timestamp) > 30*time.Second {
+		return nil, false
+	}
+	
+	return session, true
 }
 
 func (zc *ZaptecCollector) GetConnectionStatus() map[string]interface{} {
@@ -531,18 +647,34 @@ func (zc *ZaptecCollector) GetConnectionStatus() map[string]interface{} {
 		json.Unmarshal([]byte(configJSON), &config)
 		
 		data, exists := zc.chargerData[id]
-		isConnected := exists && time.Since(data.Timestamp) < 2*time.Minute
+		isConnected := exists && time.Since(data.Timestamp) < 30*time.Second
 		
 		status := map[string]interface{}{
 			"charger_name":   name,
 			"charger_id":     config.ChargerID,
 			"is_connected":   isConnected,
 			"last_update":    "",
+			"is_online":      false,
 		}
 		
 		if exists {
 			status["last_update"] = data.Timestamp.Format("2006-01-02 15:04:05")
-			status["last_reading"] = data.Power
+			status["last_reading"] = data.TotalEnergy
+			status["is_online"] = data.IsOnline
+			status["current_power_kw"] = data.Power_kW
+			status["state_description"] = data.StateDescription
+			
+			// Add live session info if available
+			if session, hasSession := zc.liveSessionData[id]; hasSession {
+				status["live_session"] = map[string]interface{}{
+					"session_id":   session.SessionID,
+					"energy":       session.Energy,
+					"start_time":   session.StartTime.Format("2006-01-02 15:04:05"),
+					"user_name":    session.UserName,
+					"is_active":    session.IsActive,
+					"power_kw":     session.Power_kW,
+				}
+			}
 		}
 		
 		_, hasToken := zc.accessTokens[id]
@@ -560,7 +692,6 @@ func (zc *ZaptecCollector) GetConnectionStatus() map[string]interface{} {
 }
 
 // GetAllAvailableChargers returns a list of all chargers available in the Zaptec account
-// This is useful for debugging configuration issues
 func (zc *ZaptecCollector) GetAllAvailableChargers() ([]map[string]interface{}, error) {
 	// Get the first configured charger to use its credentials
 	var configJSON string
@@ -633,8 +764,6 @@ func (zc *ZaptecCollector) GetAllAvailableChargers() ([]map[string]interface{}, 
 		}
 	}
 	
-	log.Printf("DEBUG: GetAllAvailableChargers fetched %d chargers across %d pages", len(allChargers), pageIndex)
-	
 	// Convert to output format
 	var chargers []map[string]interface{}
 	for _, charger := range allChargers {
@@ -646,6 +775,7 @@ func (zc *ZaptecCollector) GetAllAvailableChargers() ([]map[string]interface{}, 
 			"installation_name": charger.InstallationName,
 			"is_online":         charger.IsOnline,
 			"operating_mode":    charger.OperatingMode,
+			"total_energy_kwh":  charger.SignedMeterValueKwh,
 		})
 	}
 	
