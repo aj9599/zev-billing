@@ -170,7 +170,7 @@ const DeleteConfirmationModal = memo(({
               borderRadius: '12px', padding: '16px', marginBottom: '16px'
             }}>
               <p style={{ fontSize: '13px', fontWeight: '600', color: '#991b1b', margin: 0 }}>
-                Ã¢Å¡Â Ã¯Â¸Â {t('chargers.dataLossWarning') || 'Warning: All historical data for this charger will be permanently lost. This cannot be recovered.'}
+                ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â {t('chargers.dataLossWarning') || 'Warning: All historical data for this charger will be permanently lost. This cannot be recovered.'}
               </p>
             </div>
 
@@ -663,10 +663,10 @@ export default function Chargers() {
         loxone_state_uuid: config.loxone_state_uuid || '',
         loxone_user_id_uuid: config.loxone_user_id_uuid || '',
         loxone_mode_uuid: config.loxone_mode_uuid || '',
-        zaptec_username: config.username || '',
-        zaptec_password: config.password || '',
-        zaptec_charger_id: config.charger_id || '',
-        zaptec_installation_id: config.installation_id || ''
+        zaptec_username: config.zaptec_username || '',
+        zaptec_password: config.zaptec_password || '',
+        zaptec_charger_id: config.zaptec_charger_id || '',
+        zaptec_installation_id: config.zaptec_installation_id || ''
       });
     } catch (e) {
       console.error('Failed to parse config:', e);
@@ -1379,7 +1379,7 @@ export default function Chargers() {
                             fontWeight: '600',
                             color: '#22c55e'
                           }}>
-                            Ã¢Å“â€œ {t('chargers.supported')}
+                            ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ {t('chargers.supported')}
                           </span>
                         </div>
                       )}
@@ -1604,7 +1604,7 @@ export default function Chargers() {
                         </label>
                         <input type="password" required value={connectionConfig.loxone_password || ''}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_password: e.target.value })}
-                          placeholder="Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢"
+                          placeholder="ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
                     </div>
@@ -1725,7 +1725,7 @@ export default function Chargers() {
                       </label>
                       <input type="password" required value={connectionConfig.zaptec_password || ''}
                         onChange={(e) => setConnectionConfig({ ...connectionConfig, zaptec_password: e.target.value })}
-                        placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                        placeholder="Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢"
                         style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
                         Your Zaptec Portal password
@@ -1762,14 +1762,14 @@ export default function Chargers() {
                       <strong>How to find your Charger ID:</strong><br />
                       1. Log into <a href="https://portal.zaptec.com" target="_blank" rel="noopener noreferrer" style={{ color: '#10b981' }}>Zaptec Portal</a><br />
                       2. Navigate to your charger<br />
-                      3. Click on Settings â†’ Advanced<br />
+                      3. Click on Settings Ã¢â€ â€™ Advanced<br />
                       4. Copy the Charger ID (GUID format)<br /><br />
                       <div style={{ backgroundColor: '#d1fae5', padding: '8px', borderRadius: '4px', fontSize: '11px', color: '#065f46' }}>
-                        <strong>âœ“ Zaptec API Features:</strong><br />
-                        â€¢ Real-time charging data from Zaptec Cloud<br />
-                        â€¢ Automatic state mapping (charging, idle, etc.)<br />
-                        â€¢ No local network configuration needed<br />
-                        â€¢ Works with Zaptec Go and Pro models
+                        <strong>Ã¢Å“â€œ Zaptec API Features:</strong><br />
+                        Ã¢â‚¬Â¢ Real-time charging data from Zaptec Cloud<br />
+                        Ã¢â‚¬Â¢ Automatic state mapping (charging, idle, etc.)<br />
+                        Ã¢â‚¬Â¢ No local network configuration needed<br />
+                        Ã¢â‚¬Â¢ Works with Zaptec Go and Pro models
                       </div>
                     </div>
                   </>

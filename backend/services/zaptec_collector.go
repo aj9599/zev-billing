@@ -287,11 +287,21 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 		return
 	}
 	
-	var state ZaptecChargerState
-	if err := json.NewDecoder(resp.Body).Decode(&state); err != nil {
+	// Zaptec API returns an array of state objects
+	var states []ZaptecChargerState
+	if err := json.NewDecoder(resp.Body).Decode(&states); err != nil {
 		log.Printf("ERROR: Failed to decode state for charger %s: %v", chargerName, err)
 		return
 	}
+	
+	// Check if we got any states
+	if len(states) == 0 {
+		log.Printf("WARNING: No state data returned for charger %s", chargerName)
+		return
+	}
+	
+	// Use the first state object
+	state := states[0]
 	
 	// Map Zaptec state to our format
 	chargerData := &ZaptecChargerData{
