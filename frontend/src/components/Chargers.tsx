@@ -170,7 +170,7 @@ const DeleteConfirmationModal = memo(({
               borderRadius: '12px', padding: '16px', marginBottom: '16px'
             }}>
               <p style={{ fontSize: '13px', fontWeight: '600', color: '#991b1b', margin: 0 }}>
-                ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â {t('chargers.dataLossWarning') || 'Warning: All historical data for this charger will be permanently lost. This cannot be recovered.'}
+                ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â {t('chargers.dataLossWarning') || 'Warning: All historical data for this charger will be permanently lost. This cannot be recovered.'}
               </p>
             </div>
 
@@ -468,17 +468,12 @@ export default function Chargers() {
         mode_priority: connectionConfig.mode_priority
       };
     } else if (formData.connection_type === 'zaptec_api') {
+      // Zaptec API doesn't need state/mode mappings - they're handled automatically
       config = {
         zaptec_username: connectionConfig.zaptec_username,
         zaptec_password: connectionConfig.zaptec_password,
         zaptec_charger_id: connectionConfig.zaptec_charger_id,
-        zaptec_installation_id: connectionConfig.zaptec_installation_id,
-        state_cable_locked: connectionConfig.state_cable_locked,
-        state_waiting_auth: connectionConfig.state_waiting_auth,
-        state_charging: connectionConfig.state_charging,
-        state_idle: connectionConfig.state_idle,
-        mode_normal: connectionConfig.mode_normal,
-        mode_priority: connectionConfig.mode_priority
+        zaptec_installation_id: connectionConfig.zaptec_installation_id
       };
     } else if (formData.connection_type === 'http') {
       config = {
@@ -776,7 +771,8 @@ export default function Chargers() {
     setFormData({
       ...formData,
       brand: presetName,
-      preset: presetName
+      preset: presetName,
+      connection_type: presetName === 'zaptec' ? 'zaptec_api' : formData.connection_type
     });
     setConnectionConfig({
       ...connectionConfig,
@@ -1379,7 +1375,7 @@ export default function Chargers() {
                             fontWeight: '600',
                             color: '#22c55e'
                           }}>
-                            ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ {t('chargers.supported')}
+                            ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ {t('chargers.supported')}
                           </span>
                         </div>
                       )}
@@ -1503,17 +1499,18 @@ export default function Chargers() {
                 </select>
               </div>
 
-              <div style={{ marginTop: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('meters.connectionType')} *</label>
-                <select required value={formData.connection_type} onChange={(e) => setFormData({ ...formData, connection_type: e.target.value })}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
-                  <option value="loxone_api">{t('chargers.loxoneApiRecommended')}</option>
-                  <option value="zaptec_api">Zaptec Cloud API (Recommended)</option>
-                  <option value="udp">{t('chargers.udpAlternative')}</option>
-                  <option value="http">{t('meters.http')}</option>
-                  <option value="modbus_tcp">{t('meters.modbusTcp')}</option>
-                </select>
-              </div>
+              {formData.preset !== 'zaptec' && (
+                <div style={{ marginTop: '16px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('meters.connectionType')} *</label>
+                  <select required value={formData.connection_type} onChange={(e) => setFormData({ ...formData, connection_type: e.target.value })}
+                    style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}>
+                    <option value="loxone_api">{t('chargers.loxoneApiRecommended')}</option>
+                    <option value="udp">{t('chargers.udpAlternative')}</option>
+                    <option value="http">{t('meters.http')}</option>
+                    <option value="modbus_tcp">{t('meters.modbusTcp')}</option>
+                  </select>
+                </div>
+              )}
 
               <div style={{ marginTop: '20px', padding: '20px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
                 <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>
@@ -1604,7 +1601,7 @@ export default function Chargers() {
                         </label>
                         <input type="password" required value={connectionConfig.loxone_password || ''}
                           onChange={(e) => setConnectionConfig({ ...connectionConfig, loxone_password: e.target.value })}
-                          placeholder="ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢"
+                          placeholder="ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢"
                           style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       </div>
                     </div>
@@ -1725,7 +1722,7 @@ export default function Chargers() {
                       </label>
                       <input type="password" required value={connectionConfig.zaptec_password || ''}
                         onChange={(e) => setConnectionConfig({ ...connectionConfig, zaptec_password: e.target.value })}
-                        placeholder="Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢"
+                        placeholder="ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢"
                         style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
                       <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
                         Your Zaptec Portal password
@@ -1762,14 +1759,14 @@ export default function Chargers() {
                       <strong>How to find your Charger ID:</strong><br />
                       1. Log into <a href="https://portal.zaptec.com" target="_blank" rel="noopener noreferrer" style={{ color: '#10b981' }}>Zaptec Portal</a><br />
                       2. Navigate to your charger<br />
-                      3. Click on Settings Ã¢â€ â€™ Advanced<br />
+                      3. Click on Settings ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Advanced<br />
                       4. Copy the Charger ID (GUID format)<br /><br />
                       <div style={{ backgroundColor: '#d1fae5', padding: '8px', borderRadius: '4px', fontSize: '11px', color: '#065f46' }}>
-                        <strong>Ã¢Å“â€œ Zaptec API Features:</strong><br />
-                        Ã¢â‚¬Â¢ Real-time charging data from Zaptec Cloud<br />
-                        Ã¢â‚¬Â¢ Automatic state mapping (charging, idle, etc.)<br />
-                        Ã¢â‚¬Â¢ No local network configuration needed<br />
-                        Ã¢â‚¬Â¢ Works with Zaptec Go and Pro models
+                        <strong>ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Zaptec API Features:</strong><br />
+                        ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ Real-time charging data from Zaptec Cloud<br />
+                        ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ Automatic state mapping (charging, idle, etc.)<br />
+                        ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ No local network configuration needed<br />
+                        ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ Works with Zaptec Go and Pro models
                       </div>
                     </div>
                   </>
@@ -1892,81 +1889,85 @@ export default function Chargers() {
                   </>
                 )}
 
-                <div style={{ marginTop: '20px', padding: '16px', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-                  <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>
-                    {t('chargers.stateValueMappings')}
-                  </h4>
-                  <p style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>
-                    {t('chargers.configureStateValues')}
-                  </p>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
-                        {t('chargers.stateCableLocked')}
-                      </label>
-                      <input type="text" required value={connectionConfig.state_cable_locked}
-                        onChange={(e) => setConnectionConfig({ ...connectionConfig, state_cable_locked: e.target.value })}
-                        placeholder="65"
-                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px' }} />
+                {formData.preset !== 'zaptec' && (
+                  <>
+                    <div style={{ marginTop: '20px', padding: '16px', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                      <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>
+                        {t('chargers.stateValueMappings')}
+                      </h4>
+                      <p style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>
+                        {t('chargers.configureStateValues')}
+                      </p>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
+                            {t('chargers.stateCableLocked')}
+                          </label>
+                          <input type="text" required value={connectionConfig.state_cable_locked}
+                            onChange={(e) => setConnectionConfig({ ...connectionConfig, state_cable_locked: e.target.value })}
+                            placeholder="65"
+                            style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px' }} />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
+                            {t('chargers.stateWaitingAuth')}
+                          </label>
+                          <input type="text" required value={connectionConfig.state_waiting_auth}
+                            onChange={(e) => setConnectionConfig({ ...connectionConfig, state_waiting_auth: e.target.value })}
+                            placeholder="66"
+                            style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px' }} />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
+                            {t('chargers.stateCharging')}
+                          </label>
+                          <input type="text" required value={connectionConfig.state_charging}
+                            onChange={(e) => setConnectionConfig({ ...connectionConfig, state_charging: e.target.value })}
+                            placeholder="67"
+                            style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px' }} />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
+                            {t('chargers.stateIdle')}
+                          </label>
+                          <input type="text" required value={connectionConfig.state_idle}
+                            onChange={(e) => setConnectionConfig({ ...connectionConfig, state_idle: e.target.value })}
+                            placeholder="50"
+                            style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px' }} />
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
-                        {t('chargers.stateWaitingAuth')}
-                      </label>
-                      <input type="text" required value={connectionConfig.state_waiting_auth}
-                        onChange={(e) => setConnectionConfig({ ...connectionConfig, state_waiting_auth: e.target.value })}
-                        placeholder="66"
-                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px' }} />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
-                        {t('chargers.stateCharging')}
-                      </label>
-                      <input type="text" required value={connectionConfig.state_charging}
-                        onChange={(e) => setConnectionConfig({ ...connectionConfig, state_charging: e.target.value })}
-                        placeholder="67"
-                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px' }} />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
-                        {t('chargers.stateIdle')}
-                      </label>
-                      <input type="text" required value={connectionConfig.state_idle}
-                        onChange={(e) => setConnectionConfig({ ...connectionConfig, state_idle: e.target.value })}
-                        placeholder="50"
-                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px' }} />
-                    </div>
-                  </div>
-                </div>
 
-                <div style={{ marginTop: '12px', padding: '16px', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-                  <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>
-                    {t('chargers.modeValueMappings')}
-                  </h4>
-                  <p style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>
-                    {t('chargers.configureModeValues')}
-                  </p>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
-                        {t('chargers.modeNormal')}
-                      </label>
-                      <input type="text" required value={connectionConfig.mode_normal}
-                        onChange={(e) => setConnectionConfig({ ...connectionConfig, mode_normal: e.target.value })}
-                        placeholder="1"
-                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px' }} />
+                    <div style={{ marginTop: '12px', padding: '16px', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                      <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>
+                        {t('chargers.modeValueMappings')}
+                      </h4>
+                      <p style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>
+                        {t('chargers.configureModeValues')}
+                      </p>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
+                            {t('chargers.modeNormal')}
+                          </label>
+                          <input type="text" required value={connectionConfig.mode_normal}
+                            onChange={(e) => setConnectionConfig({ ...connectionConfig, mode_normal: e.target.value })}
+                            placeholder="1"
+                            style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px' }} />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
+                            {t('chargers.modePriority')}
+                          </label>
+                          <input type="text" required value={connectionConfig.mode_priority}
+                            onChange={(e) => setConnectionConfig({ ...connectionConfig, mode_priority: e.target.value })}
+                            placeholder="2"
+                            style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px' }} />
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '500' }}>
-                        {t('chargers.modePriority')}
-                      </label>
-                      <input type="text" required value={connectionConfig.mode_priority}
-                        onChange={(e) => setConnectionConfig({ ...connectionConfig, mode_priority: e.target.value })}
-                        placeholder="2"
-                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px' }} />
-                    </div>
-                  </div>
-                </div>
+                  </>
+                )}
               </div>
 
               <div style={{ marginTop: '16px' }}>
