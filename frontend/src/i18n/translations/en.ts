@@ -1207,6 +1207,8 @@ export const en: Translations = {
   'chargers.status.online': 'Online',
   'chargers.status.offline': 'Offline',
   'chargers.status.charging': 'CHARGING',
+  'chargers.state.connected': 'Connected',
+  'chargers.state.finished': 'Finished',
   
   // Energy Related
   'chargers.energy.total': 'Total Energy',

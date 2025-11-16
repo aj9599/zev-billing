@@ -25,7 +25,9 @@ export default function ChargerCard({
   t
 }: ChargerCardProps) {
   const chargerPreset = getPreset(charger.preset);
-  const isCharging = liveData?.state === '67';
+  const isCharging = charger.connection_type === 'zaptec_api' 
+    ? liveData?.state === '3'  // Zaptec: state 3 = Charging
+    : liveData?.state === '67'; // Weidmüller: state 67 = Charging
   const hasLiveSession = liveData?.live_session?.is_active || zaptecStatus?.live_session?.is_active;
   
   // For Zaptec chargers, prefer zaptecStatus data over liveData
@@ -34,7 +36,7 @@ export default function ChargerCard({
     : liveData?.total_energy;
     
   const sessionEnergy = charger.connection_type === 'zaptec_api'
-    ? (zaptecStatus?.live_session?.energy ?? liveData?.session_energy)
+    ? (zaptecStatus?.session_energy ?? zaptecStatus?.live_session?.energy ?? liveData?.session_energy)
     : liveData?.session_energy;
     
   const currentPowerKW = charger.connection_type === 'zaptec_api'

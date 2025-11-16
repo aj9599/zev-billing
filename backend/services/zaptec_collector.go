@@ -526,26 +526,15 @@ func (zc *ZaptecCollector) mapOperationMode(mode int) string {
 	return "1" // Normal mode
 }
 
-// mapOperatingModeToState maps Zaptec operating mode to our internal state values
+// mapOperatingModeToState maps Zaptec operating mode to state values
+// For Zaptec, we return the native operating mode directly (0, 1, 2, 3, 5)
 func (zc *ZaptecCollector) mapOperatingModeToState(mode int, isOnline bool) string {
 	if !isOnline {
-		return "50" // Idle/Offline
+		return "0" // Unknown/Offline
 	}
 	
-	switch mode {
-	case 0: // Unknown
-		return "50" // Idle
-	case 1: // Disconnected
-		return "50" // Idle
-	case 2: // Connected_Requesting (waiting for authorization)
-		return "66" // Waiting for authorization
-	case 3: // Connected_Charging
-		return "67" // Charging
-	case 5: // Connected_Finished
-		return "65" // Cable locked (finished charging)
-	default:
-		return "50" // Idle
-	}
+	// Return Zaptec's native operating mode as string
+	return fmt.Sprintf("%d", mode)
 }
 
 // getStateDescription returns human-readable state description
@@ -664,7 +653,12 @@ func (zc *ZaptecCollector) GetConnectionStatus() map[string]interface{} {
 			status["current_power_kw"] = data.Power_kW
 			status["state_description"] = data.StateDescription
 			
-			// Add live session info if available
+			// Add session energy (from last session or current session)
+			if data.SessionEnergy > 0 {
+				status["session_energy"] = data.SessionEnergy
+			}
+			
+			// Add live session info if actively charging
 			if session, hasSession := zc.liveSessionData[id]; hasSession {
 				status["live_session"] = map[string]interface{}{
 					"session_id":   session.SessionID,
