@@ -1,4 +1,4 @@
-import { Edit2, Trash2, Zap, Wifi, WifiOff, Activity, Battery, TrendingUp, Power, Gauge, User, Clock } from 'lucide-react';
+import { Edit2, Trash2, Zap, Wifi, WifiOff, Activity, Battery, TrendingUp, Power, Gauge } from 'lucide-react';
 import type { Charger } from '../../types';
 import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus } from './hooks/useChargerStatus';
 import { getPreset } from '../chargerPresets';

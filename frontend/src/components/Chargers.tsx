@@ -28,7 +28,6 @@ export default function Chargers() {
   
   const {
     showDeleteConfirmation,
-    chargerToDelete,
     deletionImpact,
     deleteConfirmationText,
     deleteUnderstandChecked,
