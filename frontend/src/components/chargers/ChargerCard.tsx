@@ -1,4 +1,4 @@
-import { Edit2, Trash2, Wifi, WifiOff, Activity, Battery, TrendingUp, Power, Gauge, Clock, User } from 'lucide-react';
+import { Edit2, Trash2, Zap, Wifi, WifiOff, Activity, Battery, TrendingUp, Power, Gauge, Clock, User } from 'lucide-react';
 import type { Charger } from '../../types';
 import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus } from './hooks/useChargerStatus';
 import { getPreset } from '../chargerPresets';
@@ -174,14 +174,14 @@ export default function ChargerCard({
               <>
                 <Wifi size={14} color="#22c55e" />
                 <span style={{ fontSize: '12px', fontWeight: '600', color: '#22c55e' }}>
-                  Online
+                  {t('chargers.status.online')}
                 </span>
               </>
             ) : (
               <>
                 <WifiOff size={14} color="#ef4444" />
                 <span style={{ fontSize: '12px', fontWeight: '600', color: '#ef4444' }}>
-                  Offline
+                  {t('chargers.status.offline')}
                 </span>
               </>
             )}
@@ -201,7 +201,7 @@ export default function ChargerCard({
             }}>
               <Activity size={14} color="#10b981" />
               <span style={{ fontSize: '12px', fontWeight: '700', color: '#10b981' }}>
-                CHARGING
+                {t('chargers.status.charging')}
               </span>
             </div>
           )}
@@ -243,59 +243,56 @@ export default function ChargerCard({
           </span>
         </div>
 
-        {/* Energy Readings Grid - Total & Session Energy */}
-        {(totalEnergy !== undefined || sessionEnergy !== undefined) && (
+        {/* Energy Readings - Combined Total & Session Display */}
+        {totalEnergy !== undefined && (
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: totalEnergy !== undefined && sessionEnergy !== undefined ? '1fr 1fr' : '1fr',
-            gap: '12px',
+            padding: '12px',
+            backgroundColor: '#f0f9ff',
+            borderRadius: '8px',
+            border: '1px solid #e0f2fe',
             marginBottom: '12px'
           }}>
-            {/* Total Energy */}
-            {totalEnergy !== undefined && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: sessionEnergy !== undefined && sessionEnergy > 0 ? '8px' : '0'
+            }}>
               <div style={{
-                padding: '10px',
-                backgroundColor: '#f0f9ff',
-                borderRadius: '8px',
-                border: '1px solid #e0f2fe'
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
               }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  marginBottom: '4px'
-                }}>
-                  <Battery size={14} style={{ color: '#0284c7' }} />
-                  <span style={{ fontSize: '11px', color: '#0369a1', fontWeight: '600' }}>
-                    Total Energy
-                  </span>
-                </div>
-                <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
-                  {totalEnergy.toFixed(1)} kWh
-                </div>
+                <Battery size={14} style={{ color: '#0284c7' }} />
+                <span style={{ fontSize: '11px', color: '#0369a1', fontWeight: '600' }}>
+                  {t('chargers.energy.total')}
+                </span>
               </div>
-            )}
-
-            {/* Session Energy */}
+              <div style={{ fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>
+                {totalEnergy.toFixed(1)} kWh
+              </div>
+            </div>
+            
+            {/* Show session energy inside the same box */}
             {sessionEnergy !== undefined && sessionEnergy > 0 && (
               <div style={{
-                padding: '10px',
-                backgroundColor: '#f0fdf4',
-                borderRadius: '8px',
-                border: '1px solid #dcfce7'
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                paddingTop: '8px',
+                borderTop: '1px solid #e0f2fe'
               }}>
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
-                  marginBottom: '4px'
+                  gap: '6px'
                 }}>
-                  <TrendingUp size={14} style={{ color: '#16a34a' }} />
+                  <TrendingUp size={12} style={{ color: '#16a34a' }} />
                   <span style={{ fontSize: '11px', color: '#15803d', fontWeight: '600' }}>
-                    Session Energy
+                    {hasLiveSession ? t('chargers.energy.liveSession') : t('chargers.energy.lastSession')}
                   </span>
                 </div>
-                <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
+                <div style={{ fontSize: '15px', fontWeight: '600', color: '#16a34a' }}>
                   {sessionEnergy.toFixed(1)} kWh
                 </div>
               </div>
@@ -324,7 +321,7 @@ export default function ChargerCard({
               }}>
                 <Power size={16} style={{ color: '#f59e0b' }} />
                 <span style={{ fontSize: '12px', color: '#92400e', fontWeight: '600' }}>
-                  Current Power
+                  {t('chargers.energy.currentPower')}
                 </span>
               </div>
               <div style={{ fontSize: '18px', fontWeight: '700', color: '#92400e' }}>
@@ -357,7 +354,7 @@ export default function ChargerCard({
                 }}>
                   <Gauge size={14} color="#6b7280" />
                   <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600' }}>
-                    Voltage
+                    {t('chargers.electrical.voltage')}
                   </span>
                 </div>
                 <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
@@ -380,7 +377,7 @@ export default function ChargerCard({
                 }}>
                   <Activity size={14} color="#6b7280" />
                   <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600' }}>
-                    Current
+                    {t('chargers.electrical.current')}
                   </span>
                 </div>
                 <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
@@ -408,7 +405,7 @@ export default function ChargerCard({
             }}>
               <Activity size={14} style={{ color: '#7c3aed' }} />
               <span style={{ fontSize: '12px', color: '#5b21b6', fontWeight: '700' }}>
-                Active Charging Session
+                {t('chargers.session.activeSession')}
               </span>
             </div>
             {liveSession.user_name && (
@@ -447,7 +444,7 @@ export default function ChargerCard({
           marginBottom: '12px'
         }}>
           <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>
-            Charging Mode
+            {t('chargers.chargingMode')}
           </span>
           <span style={{
             padding: '4px 12px',

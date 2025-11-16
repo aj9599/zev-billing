@@ -1202,6 +1202,27 @@ export const en: Translations = {
   'chargers.instructions.troubleshootingLogs': 'View real-time logs:',
   'chargers.instructions.troubleshootingNetwork': 'Test network connectivity:',
   'chargers.instructions.troubleshootingMonitor': 'Monitor the connection status indicators on each charger card',
+  
+  // Charger Status
+  'chargers.status.online': 'Online',
+  'chargers.status.offline': 'Offline',
+  'chargers.status.charging': 'CHARGING',
+  
+  // Energy Related
+  'chargers.energy.total': 'Total Energy',
+  'chargers.energy.liveSession': 'Live Session',
+  'chargers.energy.lastSession': 'Last Session',
+  'chargers.energy.currentPower': 'Current Power',
+  
+  // Electrical Measurements
+  'chargers.electrical.voltage': 'Voltage',
+  'chargers.electrical.current': 'Current',
+  
+  // Session
+  'chargers.session.activeSession': 'Active Charging Session',
+  
+  // Charging Mode
+  'chargers.chargingMode': 'Charging Mode',
 
   // ============================================================================
   // BILLING
