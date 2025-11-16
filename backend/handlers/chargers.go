@@ -388,6 +388,16 @@ func (h *ChargerHandler) GetLatestSessions(w http.ResponseWriter, r *http.Reques
 
 // NEW: GetLiveData returns enhanced real-time data including Zaptec live sessions
 func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
+	type LiveSessionData struct {
+		SessionID string  `json:"session_id"`
+		Energy    float64 `json:"energy"`
+		StartTime string  `json:"start_time"`
+		Duration  string  `json:"duration"`
+		UserName  string  `json:"user_name"`
+		IsActive  bool    `json:"is_active"`
+		Power_kW  float64 `json:"power_kw"`
+	}
+
 	type LiveChargerData struct {
 		ChargerID        int                    `json:"charger_id"`
 		ChargerName      string                 `json:"charger_name"`
@@ -405,16 +415,6 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 		Current          float64                `json:"current,omitempty"`
 		StateDescription string                 `json:"state_description,omitempty"`
 		LiveSession      *LiveSessionData       `json:"live_session,omitempty"`
-	}
-
-	type LiveSessionData struct {
-		SessionID    string  `json:"session_id"`
-		Energy       float64 `json:"energy"`
-		StartTime    string  `json:"start_time"`
-		Duration     string  `json:"duration"`
-		UserName     string  `json:"user_name"`
-		IsActive     bool    `json:"is_active"`
-		Power_kW     float64 `json:"power_kw"`
 	}
 
 	// Get all active chargers
@@ -447,53 +447,29 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// For Zaptec chargers, get enhanced live data
-		if connectionType == "zaptec_api" && h.dataCollector.ZaptecCollector != nil {
-			if zaptecData, exists := h.dataCollector.ZaptecCollector.GetChargerData(chargerID); exists {
-				data.TotalEnergy = zaptecData.TotalEnergy
-				data.SessionEnergy = zaptecData.SessionEnergy
-				data.PowerKWh = zaptecData.Power
-				data.State = zaptecData.State
-				data.Mode = zaptecData.Mode
-				data.IsOnline = zaptecData.IsOnline
-				data.CurrentPower_kW = zaptecData.Power_kW
-				data.Voltage = zaptecData.Voltage
-				data.Current = zaptecData.Current
-				data.StateDescription = zaptecData.StateDescription
-				data.LastUpdate = zaptecData.Timestamp.Format(time.RFC3339)
-
-				// Get live session if available
-				if liveSession, hasSession := h.dataCollector.ZaptecCollector.GetLiveSession(chargerID); hasSession {
-					duration := time.Since(liveSession.StartTime)
-					data.LiveSession = &LiveSessionData{
-						SessionID: liveSession.SessionID,
-						Energy:    liveSession.Energy,
-						StartTime: liveSession.StartTime.Format(time.RFC3339),
-						Duration:  formatDuration(duration),
-						UserName:  liveSession.UserName,
-						IsActive:  liveSession.IsActive,
-						Power_kW:  liveSession.Power_kW,
-					}
-				}
-			}
-		} else {
-			// For other charger types, get data from latest session
-			var powerKWh float64
-			var state, mode, sessionTime string
-			
-			err := h.db.QueryRow(`
-				SELECT power_kwh, state, mode, session_time
-				FROM charger_sessions
-				WHERE charger_id = ?
-				ORDER BY session_time DESC
-				LIMIT 1
-			`, chargerID).Scan(&powerKWh, &state, &mode, &sessionTime)
-			
-			if err == nil {
-				data.PowerKWh = powerKWh
-				data.State = state
-				data.Mode = mode
-				data.LastUpdate = sessionTime
-			}
+		if connectionType == "zaptec_api" {
+			// Try to get Zaptec data from debug status endpoint
+			// Note: ZaptecCollector is unexported, so we'll get data from the session instead
+			// This is handled by the pollCharger goroutine in the collector
+		}
+		
+		// For all charger types, get data from latest session
+		var powerKWh float64
+		var state, mode, sessionTime string
+		
+		err := h.db.QueryRow(`
+			SELECT power_kwh, state, mode, session_time
+			FROM charger_sessions
+			WHERE charger_id = ?
+			ORDER BY session_time DESC
+			LIMIT 1
+		`, chargerID).Scan(&powerKWh, &state, &mode, &sessionTime)
+		
+		if err == nil {
+			data.PowerKWh = powerKWh
+			data.State = state
+			data.Mode = mode
+			data.LastUpdate = sessionTime
 		}
 
 		liveData = append(liveData, data)

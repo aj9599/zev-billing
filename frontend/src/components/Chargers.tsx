@@ -1381,7 +1381,7 @@ export default function Chargers() {
                   {building.name}
                 </h3>
               </div>
-              <p style={{ fontSize: '14px', margin: 0, opacity: 0.9' }}>
+              <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
                 {buildingChargers.length} {t('chargers.chargersCount')}
               </p>
             </div>
