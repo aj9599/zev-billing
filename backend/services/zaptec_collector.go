@@ -372,7 +372,7 @@ func (zc *ZaptecCollector) getChargerInfo(token, chargerID string) (*ZaptecCharg
 		}
 		
 		// Log all charger IDs we find for debugging
-		foundChargers = append(foundChargers, fmt.Sprintf("Id:%s DeviceId:%s Name:%s", charger.ID, charger.DeviceId, charger.Name))
+		foundChargers = append(foundChargers, fmt.Sprintf("Id:%s DeviceId:%s Name:%s", charger.ID, charger.DeviceID, charger.Name))
 		
 		// Match by charger ID (try both Id and DeviceId fields)
 		if charger.ID == chargerID || charger.DeviceID == chargerID {
