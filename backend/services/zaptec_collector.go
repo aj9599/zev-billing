@@ -333,46 +333,63 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 
 // getChargerInfo fetches charger information from /api/chargers endpoint
 func (zc *ZaptecCollector) getChargerInfo(token, chargerID string) (*ZaptecChargerInfo, error) {
-	// The chargers endpoint returns a list, we need to filter by ID
-	chargersURL := fmt.Sprintf("%s/api/chargers", zc.apiBaseURL)
+	// The chargers endpoint returns paginated results, we need to fetch all pages
+	var allChargers []ZaptecChargerInfo
+	pageIndex := 0
 	
-	req, err := http.NewRequest("GET", chargersURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create chargers request: %v", err)
-	}
-	
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-	req.Header.Set("Accept", "application/json")
-	
-	resp, err := zc.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("chargers request failed: %v", err)
-	}
-	defer resp.Body.Close()
-	
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("chargers request failed with status %d: %s", resp.StatusCode, string(body))
-	}
-	
-	var apiResp ZaptecAPIResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
-		return nil, fmt.Errorf("failed to decode chargers response: %v", err)
-	}
-	
-	log.Printf("DEBUG: Zaptec API returned %d chargers, looking for ID: %s", len(apiResp.Data), chargerID)
-	
-	// Find our specific charger in the response
-	var foundChargers []string
-	for _, dataItem := range apiResp.Data {
-		var charger ZaptecChargerInfo
-		if err := json.Unmarshal(dataItem, &charger); err != nil {
-			log.Printf("DEBUG: Failed to unmarshal charger: %v", err)
-			continue
+	for {
+		chargersURL := fmt.Sprintf("%s/api/chargers?PageIndex=%d&PageSize=100", zc.apiBaseURL, pageIndex)
+		
+		req, err := http.NewRequest("GET", chargersURL, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create chargers request: %v", err)
 		}
 		
-		// Log all charger IDs we find for debugging
-		foundChargers = append(foundChargers, fmt.Sprintf("Id:%s DeviceId:%s Name:%s", charger.ID, charger.DeviceID, charger.Name))
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+		req.Header.Set("Accept", "application/json")
+		
+		resp, err := zc.client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("chargers request failed: %v", err)
+		}
+		defer resp.Body.Close()
+		
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			return nil, fmt.Errorf("chargers request failed with status %d: %s", resp.StatusCode, string(body))
+		}
+		
+		var apiResp ZaptecAPIResponse
+		if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+			return nil, fmt.Errorf("failed to decode chargers response: %v", err)
+		}
+		
+		// Parse chargers from this page
+		for _, dataItem := range apiResp.Data {
+			var charger ZaptecChargerInfo
+			if err := json.Unmarshal(dataItem, &charger); err != nil {
+				log.Printf("DEBUG: Failed to unmarshal charger: %v", err)
+				continue
+			}
+			allChargers = append(allChargers, charger)
+		}
+		
+		// Check if we have more pages
+		pageIndex++
+		if pageIndex >= apiResp.Pages {
+			break
+		}
+	}
+	
+	log.Printf("DEBUG: Zaptec API returned %d chargers across %d pages, looking for ID: %s", len(allChargers), pageIndex, chargerID)
+	
+	// Find our specific charger in all the collected chargers
+	var foundChargers []string
+	for _, charger := range allChargers {
+		// Log first 10 chargers for debugging (to avoid spam)
+		if len(foundChargers) < 10 {
+			foundChargers = append(foundChargers, fmt.Sprintf("Id:%s DeviceId:%s Name:%s", charger.ID, charger.DeviceID, charger.Name))
+		}
 		
 		// Match by charger ID (try both Id and DeviceId fields)
 		if charger.ID == chargerID || charger.DeviceID == chargerID {
@@ -381,8 +398,9 @@ func (zc *ZaptecCollector) getChargerInfo(token, chargerID string) (*ZaptecCharg
 		}
 	}
 	
-	log.Printf("DEBUG: Available chargers: %v", foundChargers)
-	return nil, fmt.Errorf("charger %s not found in API response (checked %d chargers)", chargerID, len(apiResp.Data))
+	log.Printf("DEBUG: First 10 available chargers: %v", foundChargers)
+	log.Printf("DEBUG: Total chargers checked: %d", len(allChargers))
+	return nil, fmt.Errorf("charger %s not found in API response (checked %d chargers across %d pages)", chargerID, len(allChargers), pageIndex)
 }
 
 // getRecentChargeHistory fetches recent charging sessions
@@ -568,47 +586,66 @@ func (zc *ZaptecCollector) GetAllAvailableChargers() ([]map[string]interface{}, 
 		return nil, fmt.Errorf("authentication failed: %v", err)
 	}
 	
-	// Get all chargers
-	chargersURL := fmt.Sprintf("%s/api/chargers", zc.apiBaseURL)
-	req, err := http.NewRequest("GET", chargersURL, nil)
-	if err != nil {
-		return nil, err
-	}
+	// Fetch all pages of chargers
+	var allChargers []ZaptecChargerInfo
+	pageIndex := 0
 	
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-	req.Header.Set("Accept", "application/json")
-	
-	resp, err := zc.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
-	}
-	
-	var apiResp ZaptecAPIResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
-		return nil, err
-	}
-	
-	var chargers []map[string]interface{}
-	for _, dataItem := range apiResp.Data {
-		var charger ZaptecChargerInfo
-		if err := json.Unmarshal(dataItem, &charger); err != nil {
-			continue
+	for {
+		chargersURL := fmt.Sprintf("%s/api/chargers?PageIndex=%d&PageSize=100", zc.apiBaseURL, pageIndex)
+		
+		req, err := http.NewRequest("GET", chargersURL, nil)
+		if err != nil {
+			return nil, err
 		}
 		
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+		req.Header.Set("Accept", "application/json")
+		
+		resp, err := zc.client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+		
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+		}
+		
+		var apiResp ZaptecAPIResponse
+		if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+			return nil, err
+		}
+		
+		// Parse chargers from this page
+		for _, dataItem := range apiResp.Data {
+			var charger ZaptecChargerInfo
+			if err := json.Unmarshal(dataItem, &charger); err != nil {
+				continue
+			}
+			allChargers = append(allChargers, charger)
+		}
+		
+		// Check if we have more pages
+		pageIndex++
+		if pageIndex >= apiResp.Pages {
+			break
+		}
+	}
+	
+	log.Printf("DEBUG: GetAllAvailableChargers fetched %d chargers across %d pages", len(allChargers), pageIndex)
+	
+	// Convert to output format
+	var chargers []map[string]interface{}
+	for _, charger := range allChargers {
 		chargers = append(chargers, map[string]interface{}{
-			"id":               charger.ID,
-			"device_id":        charger.DeviceID,
-			"name":             charger.Name,
-			"installation_id":  charger.InstallationID,
+			"id":                charger.ID,
+			"device_id":         charger.DeviceID,
+			"name":              charger.Name,
+			"installation_id":   charger.InstallationID,
 			"installation_name": charger.InstallationName,
-			"is_online":        charger.IsOnline,
-			"operating_mode":   charger.OperatingMode,
+			"is_online":         charger.IsOnline,
+			"operating_mode":    charger.OperatingMode,
 		})
 	}
 	
