@@ -1,5 +1,5 @@
 import { useState, useEffect, memo, useCallback } from 'react';
-import { Plus, Edit2, Trash2, X, HelpCircle, Info, Car, Download, Search, Building, Radio, Settings, Star, Wifi, WifiOff, AlertCircle, AlertTriangle, Zap, Battery, Clock, User, Activity } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, HelpCircle, Info, Car, Download, Search, Building, Radio, Settings, Star, Wifi, WifiOff, AlertCircle, AlertTriangle, Zap, Battery, Clock, User, Activity, TrendingUp, Power, Gauge } from 'lucide-react';
 import { api } from '../api/client';
 import type { Charger, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
