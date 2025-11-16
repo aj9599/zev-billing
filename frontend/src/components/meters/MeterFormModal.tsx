@@ -958,7 +958,7 @@ export default function MeterFormModal({
                                                     ...connectionConfig,
                                                     password: e.target.value
                                                 })}
-                                                placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                                                placeholder="••••••••"
                                                 style={{
                                                     width: '100%',
                                                     padding: '10px',
