@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 )
@@ -51,10 +52,10 @@ type ZaptecChargerState struct {
 }
 
 type ZaptecConnectionConfig struct {
-	Username   string `json:"username"`
-	Password   string `json:"password"`
-	ChargerID  string `json:"charger_id"`
-	InstallationID string `json:"installation_id,omitempty"`
+	Username       string `json:"zaptec_username"`
+	Password       string `json:"zaptec_password"`
+	ChargerID      string `json:"zaptec_charger_id"`
+	InstallationID string `json:"zaptec_installation_id,omitempty"`
 }
 
 func NewZaptecCollector(db *sql.DB) *ZaptecCollector {
@@ -127,15 +128,23 @@ func (zc *ZaptecCollector) loadChargers() {
 			continue
 		}
 		
+		log.Printf("DEBUG: Loading Zaptec charger '%s' (ID: %d) with config: %s", name, id, configJSON)
+		
 		var config ZaptecConnectionConfig
 		if err := json.Unmarshal([]byte(configJSON), &config); err != nil {
 			log.Printf("ERROR: Invalid Zaptec config for charger %s: %v", name, err)
+			log.Printf("DEBUG: Config JSON was: %s", configJSON)
 			continue
 		}
 		
 		// Validate config
 		if config.Username == "" || config.Password == "" || config.ChargerID == "" {
 			log.Printf("WARNING: Incomplete Zaptec config for charger %s", name)
+			log.Printf("DEBUG: Username: '%s', Password: '%s' (length: %d), ChargerID: '%s'", 
+				config.Username, 
+				"***",
+				len(config.Password),
+				config.ChargerID)
 			continue
 		}
 		
@@ -160,24 +169,25 @@ func (zc *ZaptecCollector) getAccessToken(chargerID int, config ZaptecConnection
 	// Authenticate to get new token
 	authURL := fmt.Sprintf("%s/oauth/token", zc.apiBaseURL)
 	
-	authData := map[string]string{
-		"grant_type": "password",
-		"username":   config.Username,
-		"password":   config.Password,
-	}
+	log.Printf("DEBUG: Authenticating Zaptec charger %d with username: %s", chargerID, config.Username)
 	
-	jsonData, err := json.Marshal(authData)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal auth data: %v", err)
-	}
+	// Zaptec API requires application/x-www-form-urlencoded, not JSON
+	// URL encode the values to handle special characters
+	formData := url.Values{}
+	formData.Set("grant_type", "password")
+	formData.Set("username", config.Username)
+	formData.Set("password", config.Password)
 	
-	req, err := http.NewRequest("POST", authURL, bytes.NewBuffer(jsonData))
+	log.Printf("DEBUG: Zaptec auth request to %s with form data (password hidden)", authURL)
+	
+	req, err := http.NewRequest("POST", authURL, bytes.NewBufferString(formData.Encode()))
 	if err != nil {
 		return "", fmt.Errorf("failed to create auth request: %v", err)
 	}
 	
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
+
 	
 	resp, err := zc.client.Do(req)
 	if err != nil {
