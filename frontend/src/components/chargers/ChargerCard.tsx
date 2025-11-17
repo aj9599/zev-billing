@@ -237,18 +237,7 @@ export default function ChargerCard({
         }
       `}} />
 
-            {/* Animated glow effect for charging state */}
-            {isCharging && (
-                <div style={{
-                    position: 'absolute',
-                    inset: '-2px',
-                    borderRadius: '24px',
-                    background: 'linear-gradient(45deg, transparent, rgba(16,185,129,0.2), transparent)',
-                    animation: 'flowRight 3s linear infinite',
-                    pointerEvents: 'none',
-                    zIndex: 0
-                }} />
-            )}
+
 
             {/* Action Buttons */}
             <div style={{
@@ -421,17 +410,7 @@ export default function ChargerCard({
                 animation: isCharging ? 'gaugePulse 2s ease-in-out infinite' : 'none',
                 transition: 'all 0.3s ease'
             }}>
-                {/* Animated glow effect - only when charging */}
-                {isCharging && (
-                    <div style={{
-                        position: 'absolute',
-                        inset: '-2px',
-                        borderRadius: '20px',
-                        background: 'linear-gradient(45deg, transparent, rgba(16,185,129,0.15), transparent)',
-                        animation: 'flowRight 3s linear infinite',
-                        pointerEvents: 'none'
-                    }} />
-                )}
+
 
                 {/* Main content with gauge and data */}
                 <div style={{
