@@ -393,7 +393,6 @@ export default function ChargerCard({
                 position: 'relative',
                 overflow: 'hidden',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                animation: isCharging ? 'gaugePulse 2s ease-in-out infinite' : 'none',
                 transition: 'all 0.3s ease'
             }}>
 
@@ -415,7 +414,8 @@ export default function ChargerCard({
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        flexShrink: 0
+                        flexShrink: 0,
+                        animation: isCharging ? 'gaugePulse 2s ease-in-out infinite' : 'none'
                     }}>
                         {/* Pulsing ring when charging */}
                         {isCharging && (
