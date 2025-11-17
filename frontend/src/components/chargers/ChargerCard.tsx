@@ -51,27 +51,64 @@ export default function ChargerCard({
     ? (zaptecStatus?.live_session ?? liveData?.live_session)
     : liveData?.live_session;
 
+  // Determine charger state for styling
+  const stateDisplay = getStateDisplay(charger, liveData?.state, t);
+  const isCompleted = charger.connection_type === 'zaptec_api' 
+    ? liveData?.state === '5'  // Zaptec: state 5 = Completed
+    : false;
+  const isDisconnected = charger.connection_type === 'zaptec_api'
+    ? liveData?.state === '1'  // Zaptec: state 1 = Disconnected
+    : liveData?.state === '50'; // Weidmüller: state 50 = Idle
+  const isAwaitingStart = charger.connection_type === 'zaptec_api'
+    ? liveData?.state === '2'  // Zaptec: state 2 = Awaiting Start
+    : liveData?.state === '66'; // Weidmüller: state 66 = Waiting Auth
+
+  // Calculate power percentage for gauge (max 22kW)
+  const powerPercentage = currentPowerKW ? Math.min((currentPowerKW / 22) * 100, 100) : 0;
+  const circleSize = 120;
+  const strokeWidth = 10;
+  const radius = (circleSize - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (powerPercentage / 100) * circumference;
+
   return (
     <div
       style={{
-        backgroundColor: 'white',
-        borderRadius: '16px',
+        backgroundColor: isCharging 
+          ? 'radial-gradient(circle at top left, rgba(34,197,94,0.08), transparent 55%), radial-gradient(circle at bottom right, rgba(16,185,129,0.12), rgba(255,255,255,0.98))'
+          : isCompleted
+          ? 'radial-gradient(circle at top left, rgba(56,189,248,0.08), transparent 55%), rgba(255,255,255,0.98)'
+          : 'white',
+        backgroundImage: isCharging 
+          ? 'radial-gradient(circle at top left, rgba(34,197,94,0.08), transparent 55%), radial-gradient(circle at bottom right, rgba(16,185,129,0.12), transparent)'
+          : isCompleted
+          ? 'radial-gradient(circle at top left, rgba(56,189,248,0.08), transparent 55%), transparent'
+          : 'none',
+        borderRadius: '24px',
         padding: '24px',
-        boxShadow: '0 4px 6px rgba(0,0,0,0.07)',
-        border: '1px solid #f0f0f0',
+        boxShadow: isCharging 
+          ? '0 0 30px rgba(34,197,94,0.2), 0 8px 16px rgba(0,0,0,0.1)'
+          : '0 4px 6px rgba(0,0,0,0.07)',
+        border: isCharging 
+          ? '2px solid rgba(16,185,129,0.3)'
+          : '1px solid #f0f0f0',
         position: 'relative',
-        transition: 'all 0.2s ease',
+        transition: 'all 0.3s ease',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = '0 8px 12px rgba(0,0,0,0.12)';
-        e.currentTarget.style.transform = 'translateY(-2px)';
+        if (!isCharging) {
+          e.currentTarget.style.boxShadow = '0 8px 12px rgba(0,0,0,0.12)';
+          e.currentTarget.style.transform = 'translateY(-2px)';
+        }
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.07)';
-        e.currentTarget.style.transform = 'translateY(0)';
+        if (!isCharging) {
+          e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.07)';
+          e.currentTarget.style.transform = 'translateY(0)';
+        }
       }}
     >
-      {/* CSS Animations */}
+      {/* Global CSS Animations */}
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes flowRight {
           0% { left: -100%; }
@@ -100,9 +137,22 @@ export default function ChargerCard({
         }
         @keyframes chargingPulse {
           0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.8; transform: scale(1.05); }
+          50% { opacity: 0.85; transform: scale(1.02); }
         }
       `}} />
+
+      {/* Animated glow effect for charging state */}
+      {isCharging && (
+        <div style={{
+          position: 'absolute',
+          inset: '-2px',
+          borderRadius: '24px',
+          background: 'linear-gradient(45deg, transparent, rgba(16,185,129,0.15), transparent)',
+          animation: 'flowRight 3s linear infinite',
+          pointerEvents: 'none',
+          zIndex: 0
+        }} />
+      )}
 
       {/* Action Buttons */}
       <div style={{
@@ -110,7 +160,8 @@ export default function ChargerCard({
         top: '16px',
         right: '16px',
         display: 'flex',
-        gap: '8px'
+        gap: '8px',
+        zIndex: 10
       }}>
         <button
           onClick={onEdit}
@@ -170,7 +221,7 @@ export default function ChargerCard({
       </div>
 
       {/* Charger Info */}
-      <div style={{ paddingRight: '100px' }}>
+      <div style={{ paddingRight: '100px', position: 'relative', zIndex: 1 }}>
         <h3 style={{
           fontSize: '20px',
           fontWeight: '600',
@@ -246,19 +297,23 @@ export default function ChargerCard({
             display: 'inline-flex',
             alignItems: 'center',
             padding: '4px 12px',
-            backgroundColor: '#f3f4f6',
-            border: '1px solid #d1d5db',
+            backgroundColor: isCompleted ? '#dbeafe' : isAwaitingStart ? '#fef3c7' : '#f3f4f6',
+            border: `1px solid ${isCompleted ? '#3b82f6' : isAwaitingStart ? '#fbbf24' : '#d1d5db'}`,
             borderRadius: '12px'
           }}>
-            <span style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280' }}>
-              {getStateDisplay(charger, liveData?.state, t)}
+            <span style={{ 
+              fontSize: '12px', 
+              fontWeight: '600', 
+              color: isCompleted ? '#3b82f6' : isAwaitingStart ? '#f59e0b' : '#6b7280' 
+            }}>
+              {stateDisplay}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Premium Charging Animation - Inspired by the reference design */}
-      {isCharging && (
+      {/* Premium Charging Animation with Power Gauge */}
+      {isCharging && currentPowerKW !== undefined && currentPowerKW > 0 && (
         <div style={{
           marginTop: '20px',
           padding: '20px',
@@ -279,7 +334,7 @@ export default function ChargerCard({
             pointerEvents: 'none'
           }} />
 
-          {/* Main content with flow visualization */}
+          {/* Main content with gauge and flow */}
           <div style={{
             position: 'relative',
             zIndex: 1,
@@ -287,6 +342,102 @@ export default function ChargerCard({
             flexDirection: 'column',
             gap: '16px'
           }}>
+            {/* Power Gauge */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '24px'
+            }}>
+              {/* Circular Gauge */}
+              <div style={{
+                position: 'relative',
+                width: circleSize,
+                height: circleSize,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                {/* Pulsing ring */}
+                <div style={{
+                  position: 'absolute',
+                  inset: -10,
+                  borderRadius: '999px',
+                  border: '1px solid #22c55e',
+                  animation: 'ringPulse 1.6s ease-out infinite'
+                }} />
+
+                {/* SVG Gauge */}
+                <svg width={circleSize} height={circleSize} style={{ transform: 'rotate(-90deg)' }}>
+                  {/* Background circle */}
+                  <circle
+                    cx={circleSize / 2}
+                    cy={circleSize / 2}
+                    r={radius}
+                    stroke="rgba(148,163,184,0.3)"
+                    strokeWidth={strokeWidth}
+                    fill="transparent"
+                  />
+                  {/* Progress circle */}
+                  <circle
+                    cx={circleSize / 2}
+                    cy={circleSize / 2}
+                    r={radius}
+                    stroke="#22c55e"
+                    strokeWidth={strokeWidth}
+                    fill="transparent"
+                    strokeDasharray={circumference}
+                    strokeDashoffset={strokeDashoffset}
+                    strokeLinecap="round"
+                    style={{
+                      transition: 'stroke-dashoffset 0.4s ease',
+                      filter: 'drop-shadow(0 0 8px rgba(34,197,94,0.6))'
+                    }}
+                  />
+                </svg>
+
+                {/* Center text */}
+                <div style={{
+                  position: 'absolute',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 2,
+                  animation: 'floatPulse 2s ease-in-out infinite'
+                }}>
+                  <span style={{ fontSize: '24px', fontWeight: '700', color: '#059669' }}>
+                    {currentPowerKW.toFixed(1)}
+                  </span>
+                  <span style={{ fontSize: '12px', color: '#059669', fontWeight: '600' }}>
+                    kW
+                  </span>
+                </div>
+              </div>
+
+              {/* Energy Info */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {sessionEnergy !== undefined && sessionEnergy > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <span style={{ fontSize: '11px', color: '#059669', fontWeight: '600' }}>
+                      {t('chargers.energy.liveSession')}
+                    </span>
+                    <span style={{ fontSize: '18px', fontWeight: '700', color: '#16a34a' }}>
+                      {sessionEnergy.toFixed(1)} kWh
+                    </span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span style={{ fontSize: '11px', color: '#059669', fontWeight: '600' }}>
+                    {t('chargers.energy.total')}
+                  </span>
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#059669' }}>
+                    {totalEnergy?.toFixed(1) ?? '0.0'} kWh
+                  </span>
+                </div>
+              </div>
+            </div>
+
             {/* Power Flow Bar */}
             <div style={{
               display: 'flex',
@@ -294,7 +445,8 @@ export default function ChargerCard({
               alignItems: 'center',
               fontSize: '11px',
               color: '#059669',
-              fontWeight: '600'
+              fontWeight: '600',
+              marginBottom: '8px'
             }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{ fontSize: '16px' }}>⚡</span>
@@ -359,14 +511,14 @@ export default function ChargerCard({
               fontWeight: '600'
             }}>
               <Zap size={14} style={{ animation: 'floatPulse 1.5s ease-in-out infinite' }} />
-              <span>Power flowing • {currentPowerKW ? `${currentPowerKW.toFixed(2)} kW` : 'Active'}</span>
+              <span>Power flowing • {currentPowerKW.toFixed(2)} kW</span>
             </div>
           </div>
         </div>
       )}
 
       {/* Charger Details */}
-      <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #f3f4f6' }}>
+      <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #f3f4f6', position: 'relative', zIndex: 1 }}>
         {/* Connection Type */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
           <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>
@@ -386,8 +538,8 @@ export default function ChargerCard({
           </span>
         </div>
 
-        {/* Energy Readings - Combined Total & Session Display */}
-        {totalEnergy !== undefined && (
+        {/* Energy Readings - Only show if not actively charging (to avoid duplication) */}
+        {!isCharging && totalEnergy !== undefined && (
           <div style={{
             padding: '12px',
             backgroundColor: '#f0f9ff',
@@ -440,37 +592,6 @@ export default function ChargerCard({
                 </div>
               </div>
             )}
-          </div>
-        )}
-
-        {/* Current Power */}
-        {currentPowerKW !== undefined && currentPowerKW > 0 && (
-          <div style={{
-            padding: '12px',
-            backgroundColor: '#fef3c7',
-            borderRadius: '8px',
-            border: '1px solid #fbbf24',
-            marginBottom: '12px'
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}>
-                <Power size={16} style={{ color: '#f59e0b' }} />
-                <span style={{ fontSize: '12px', color: '#92400e', fontWeight: '600' }}>
-                  {t('chargers.energy.currentPower')}
-                </span>
-              </div>
-              <div style={{ fontSize: '18px', fontWeight: '700', color: '#92400e' }}>
-                {currentPowerKW.toFixed(2)} kW
-              </div>
-            </div>
           </div>
         )}
 
