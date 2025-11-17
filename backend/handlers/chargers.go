@@ -447,86 +447,30 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 			ConnectionType: connectionType,
 		}
 
-		// For Zaptec chargers, get data from the Zaptec collector
+		// Get data from latest session (works for all charger types)
+		var powerKWh float64
+		var state, mode, sessionTime string
+
+		err := h.db.QueryRow(`
+			SELECT power_kwh, state, mode, session_time
+			FROM charger_sessions
+			WHERE charger_id = ?
+			ORDER BY session_time DESC
+			LIMIT 1
+		`, chargerID).Scan(&powerKWh, &state, &mode, &sessionTime)
+
+		if err == nil {
+			data.PowerKWh = powerKWh
+			data.State = state
+			data.Mode = mode
+			data.LastUpdate = sessionTime
+			data.TotalEnergy = powerKWh
+		}
+
+		// For Zaptec chargers, note that full real-time data is in /api/debug/status
 		if connectionType == "zaptec_api" {
-			// Try to get data from latest database entry first
-			var powerKWh float64
-			var state, mode, sessionTime string
-			
-			err := h.db.QueryRow(`
-				SELECT power_kwh, state, mode, session_time
-				FROM charger_sessions
-				WHERE charger_id = ?
-				ORDER BY session_time DESC
-				LIMIT 1
-			`, chargerID).Scan(&powerKWh, &state, &mode, &sessionTime)
-			
-			if err == nil {
-				data.PowerKWh = powerKWh
-				data.State = state
-				data.Mode = mode
-				data.LastUpdate = sessionTime
-				data.TotalEnergy = powerKWh
-			}
-			
-			// Note: For full Zaptec data, the frontend should use /api/debug/status
-			log.Printf("GetLiveData: Zaptec charger %s - using database data (use /api/debug/status for live data)", chargerName)
-				if exists {
-					data.TotalEnergy = chargerData.TotalEnergy
-					data.SessionEnergy = chargerData.SessionEnergy
-					data.IsOnline = chargerData.IsOnline
-					data.CurrentPowerKW = chargerData.Power_kW
-					data.Voltage = chargerData.Voltage
-					data.Current = chargerData.Current
-					data.LastUpdate = chargerData.Timestamp.Format("2006-01-02 15:04:05")
-
-					// Map Zaptec state to string
-					data.State = chargerData.State
-					data.Mode = chargerData.Mode
-					data.PowerKWh = chargerData.TotalEnergy
-
-					// Get live session data if available
-					liveSession, hasSession := zaptecCollector.GetLiveSession(chargerID)
-					if hasSession && liveSession.IsActive {
-						data.LiveSession = &LiveSessionData{
-							SessionID: liveSession.SessionID,
-							Energy:    liveSession.Energy,
-							StartTime: liveSession.StartTime.Format(time.RFC3339),
-							Duration:  formatDuration(time.Since(liveSession.StartTime)),
-							UserName:  liveSession.UserName,
-							IsActive:  liveSession.IsActive,
-							PowerKW:   liveSession.Power_kW,
-						}
-					}
-
-					log.Printf("GetLiveData: Zaptec charger %s - State: %s, Power: %.2f kW, Total: %.2f kWh",
-						chargerName, data.State, data.CurrentPowerKW, data.TotalEnergy)
-				} else {
-					log.Printf("GetLiveData: No data from Zaptec collector for charger %s (ID: %d)", chargerName, chargerID)
-				}
-			} else {
-				log.Printf("GetLiveData: Zaptec collector not available")
-			}
-		} else {
-			// For non-Zaptec chargers, get data from database
-			var powerKWh float64
-			var state, mode, sessionTime string
-
-			err := h.db.QueryRow(`
-				SELECT power_kwh, state, mode, session_time
-				FROM charger_sessions
-				WHERE charger_id = ?
-				ORDER BY session_time DESC
-				LIMIT 1
-			`, chargerID).Scan(&powerKWh, &state, &mode, &sessionTime)
-
-			if err == nil {
-				data.PowerKWh = powerKWh
-				data.State = state
-				data.Mode = mode
-				data.LastUpdate = sessionTime
-				data.TotalEnergy = powerKWh
-			}
+			log.Printf("GetLiveData: Zaptec charger %s - State: %s (full live data via /api/debug/status)", 
+				chargerName, state)
 		}
 
 		liveData = append(liveData, data)
