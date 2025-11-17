@@ -388,8 +388,7 @@ func (h *ChargerHandler) GetLatestSessions(w http.ResponseWriter, r *http.Reques
 }
 
 // GetLiveData returns enhanced real-time data
-// For Zaptec chargers, the live session data comes from the debug status endpoint
-// which the frontend already fetches and uses
+// FIXED: Removed invalid ID parameter handling that was causing 400 errors
 func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 	type LiveSessionData struct {
 		SessionID string  `json:"session_id"`
@@ -418,7 +417,7 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 		LiveSession    *LiveSessionData `json:"live_session,omitempty"`
 	}
 
-	// Get all active chargers
+	// Get all active chargers - NO ID parameter validation needed
 	rows, err := h.db.Query(`
 		SELECT id, name, connection_type
 		FROM chargers

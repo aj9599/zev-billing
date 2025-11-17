@@ -49,8 +49,21 @@ export default function ChargerCard({
         ? (zaptecStatus?.last_reading ?? liveData?.total_energy ?? 0)
         : (liveData?.total_energy ?? 0);
 
+    // FIXED: Session energy logic based on state
+    // - For Unknown (0) or Disconnected (1): show last session energy from liveData
+    // - For Waiting for Authorization (2): show 0 (no session yet)
+    // - For Charging (3) or Completed (5): show current/live session energy
+    const isUnknownOrDisconnected = stateValue === '0' || stateValue === '1';
+    const isAwaitingStart = charger.connection_type === 'zaptec_api'
+        ? stateValue === '2'
+        : stateValue === '66';
+    
     const sessionEnergy = charger.connection_type === 'zaptec_api'
-        ? (zaptecStatus?.session_energy ?? zaptecStatus?.live_session?.energy ?? liveData?.session_energy ?? 0)
+        ? (isUnknownOrDisconnected 
+            ? (liveData?.session_energy ?? 0) // Show last session for disconnected/unknown
+            : isAwaitingStart
+                ? 0 // No session yet when waiting for auth
+                : (zaptecStatus?.session_energy ?? zaptecStatus?.live_session?.energy ?? liveData?.session_energy ?? 0))
         : (liveData?.session_energy ?? 0);
 
     const currentPowerKW = charger.connection_type === 'zaptec_api'
@@ -69,7 +82,11 @@ export default function ChargerCard({
         name: charger.name,
         state: stateValue,
         isCharging,
+        isUnknownOrDisconnected,
+        isAwaitingStart,
         power: currentPowerKW,
+        sessionEnergy,
+        hasLiveSession,
         zaptecStatus: zaptecStatus,
         liveData: liveData
     });
@@ -81,9 +98,6 @@ export default function ChargerCard({
     const isCompleted = charger.connection_type === 'zaptec_api'
         ? stateValue === '5'  // Zaptec: state 5 = Completed
         : false;
-    const isAwaitingStart = charger.connection_type === 'zaptec_api'
-        ? stateValue === '2'  // Zaptec: state 2 = Awaiting Start
-        : stateValue === '66'; // Weidmüller: state 66 = Waiting Auth
     const isDisconnected = charger.connection_type === 'zaptec_api'
         ? stateValue === '1'  // Zaptec: state 1 = Disconnected
         : stateValue === '50'; // Weidmüller: state 50 = Idle
@@ -129,8 +143,8 @@ export default function ChargerCard({
         }
     };
 
-    // Get duration from live session - FIXED
-    const sessionDuration = liveSession?.start_time
+    // Get duration from live session - FIXED: Only show for active sessions
+    const sessionDuration = (hasLiveSession && liveSession?.start_time)
         ? calculateDuration(liveSession.start_time)
         : liveSession?.duration || '';
 
@@ -538,7 +552,7 @@ export default function ChargerCard({
                                     fontWeight: '600',
                                     color: '#d97706'
                                 }}>
-                                    🔓 {t('chargers.state.awaitingStart')}
+                                    🔒 {t('chargers.state.awaitingStart')}
                                 </div>
                             )}
                             {isDisconnected && (
@@ -594,7 +608,7 @@ export default function ChargerCard({
                             </div>
                         )}
 
-                        {/* Session Energy */}
+                        {/* Session Energy - FIXED LOGIC */}
                         {sessionEnergy > 0 && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                 <div style={{
@@ -623,6 +637,39 @@ export default function ChargerCard({
                                 }}>
                                     {sessionEnergy.toFixed(3)} <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280' }}>kWh</span>
                                 </span>
+                            </div>
+                        )}
+
+                        {/* Waiting for Auth Banner - FIXED */}
+                        {isAwaitingStart && sessionEnergy === 0 && (
+                            <div style={{
+                                padding: '12px',
+                                backgroundColor: 'rgba(251,191,36,0.1)',
+                                borderRadius: '8px',
+                                border: '1px solid rgba(251,191,36,0.3)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                            }}>
+                                <span style={{ fontSize: '16px' }}>🔒</span>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{
+                                        fontSize: '11px',
+                                        fontWeight: '700',
+                                        color: '#d97706',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px',
+                                        marginBottom: '2px'
+                                    }}>
+                                        {t('chargers.state.awaitingStart') || 'Awaiting Start'}
+                                    </div>
+                                    <div style={{
+                                        fontSize: '10px',
+                                        color: '#92400e'
+                                    }}>
+                                        {t('chargers.status.scanRFID') || 'Please scan your RFID card on the charger'}
+                                    </div>
+                                </div>
                             </div>
                         )}
 
@@ -825,8 +872,8 @@ export default function ChargerCard({
                     </div>
                 )}
 
-                {/* Live Session Info - Compact - FIXED DURATION */}
-                {hasLiveSession && liveSession && (
+                {/* Live Session Info - Compact - FIXED DURATION - Only show for active sessions */}
+                {hasLiveSession && liveSession && (isCharging || isCompleted) && (
                     <div style={{
                         padding: '10px',
                         backgroundColor: '#faf5ff',
@@ -847,7 +894,9 @@ export default function ChargerCard({
                             }}>
                                 <Activity size={12} style={{ color: '#7c3aed' }} />
                                 <span style={{ fontSize: '11px', color: '#5b21b6', fontWeight: '700' }}>
-                                    {t('chargers.session.activeSession')}
+                                    {isCharging 
+                                        ? (t('chargers.session.activeSession') || 'Active Session')
+                                        : (t('chargers.session.lastSession') || 'Last Session')}
                                 </span>
                             </div>
                         </div>
