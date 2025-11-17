@@ -387,7 +387,7 @@ func (h *ChargerHandler) GetLatestSessions(w http.ResponseWriter, r *http.Reques
 	json.NewEncoder(w).Encode(sessions)
 }
 
-// NEW: GetLiveData returns enhanced real-time data including Zaptec live sessions
+// GetLiveData returns enhanced real-time data including Zaptec live sessions
 func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 	type LiveSessionData struct {
 		SessionID string  `json:"session_id"`
@@ -396,26 +396,26 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 		Duration  string  `json:"duration"`
 		UserName  string  `json:"user_name"`
 		IsActive  bool    `json:"is_active"`
-		Power_kW  float64 `json:"power_kw"`
+		PowerKW   float64 `json:"power_kw"`
 	}
 
 	type LiveChargerData struct {
-		ChargerID        int                    `json:"charger_id"`
-		ChargerName      string                 `json:"charger_name"`
-		ConnectionType   string                 `json:"connection_type"`
-		PowerKWh         float64                `json:"power_kwh"`
-		State            string                 `json:"state"`
-		Mode             string                 `json:"mode"`
-		LastUpdate       string                 `json:"last_update"`
+		ChargerID        int              `json:"charger_id"`
+		ChargerName      string           `json:"charger_name"`
+		ConnectionType   string           `json:"connection_type"`
+		PowerKWh         float64          `json:"power_kwh"`
+		State            string           `json:"state"`
+		Mode             string           `json:"mode"`
+		LastUpdate       string           `json:"last_update"`
 		// Zaptec-specific enhanced data
-		TotalEnergy      float64                `json:"total_energy,omitempty"`      // SignedMeterValueKwh
-		SessionEnergy    float64                `json:"session_energy,omitempty"`    // Current session energy
-		IsOnline         bool                   `json:"is_online,omitempty"`
-		CurrentPower_kW  float64                `json:"current_power_kw,omitempty"`  // Real-time power draw
-		Voltage          float64                `json:"voltage,omitempty"`
-		Current          float64                `json:"current,omitempty"`
-		StateDescription string                 `json:"state_description,omitempty"`
-		LiveSession      *LiveSessionData       `json:"live_session,omitempty"`
+		TotalEnergy      float64          `json:"total_energy,omitempty"`
+		SessionEnergy    float64          `json:"session_energy,omitempty"`
+		IsOnline         bool             `json:"is_online,omitempty"`
+		CurrentPowerKW   float64          `json:"current_power_kw,omitempty"`
+		Voltage          float64          `json:"voltage,omitempty"`
+		Current          float64          `json:"current,omitempty"`
+		StateDescription string           `json:"state_description,omitempty"`
+		LiveSession      *LiveSessionData `json:"live_session,omitempty"`
 	}
 
 	// Get all active chargers
@@ -447,17 +447,42 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 			ConnectionType: connectionType,
 		}
 
-		// For Zaptec chargers, get enhanced live data
-		// Note: This implementation works without needing GetZaptecCollector()
-		// The data is stored in the collector and accessed via the DataCollector's internal methods
-		if connectionType == "zaptec_api" {
-			// The ZaptecCollector runs in the background and stores data
-			// We'll get what we can from the latest charger_sessions table for now
-			// and let the debug endpoint provide the enhanced real-time data
-			// Frontend can also use the debug status endpoint data that's already being fetched
+		// For Zaptec chargers, get enhanced live data from the collector
+		if connectionType == "zaptec_api" && h.dataCollector != nil {
+			zaptecCollector := h.dataCollector.GetZaptecCollector()
+			if zaptecCollector != nil {
+				// Get charger data
+				if chargerData, exists := zaptecCollector.GetChargerData(chargerID); exists {
+					data.TotalEnergy = chargerData.TotalEnergy
+					data.SessionEnergy = chargerData.SessionEnergy
+					data.IsOnline = chargerData.IsOnline
+					data.CurrentPowerKW = chargerData.Power_kW
+					data.Voltage = chargerData.Voltage
+					data.Current = chargerData.Current
+					data.StateDescription = chargerData.StateDescription
+					data.State = chargerData.State
+					data.Mode = chargerData.Mode
+					data.PowerKWh = chargerData.Power
+					data.LastUpdate = chargerData.Timestamp.Format("2006-01-02 15:04:05")
+				}
+				
+				// Get live session data if available
+				if liveSession, hasSession := zaptecCollector.GetLiveSession(chargerID); hasSession {
+					duration := time.Since(liveSession.StartTime)
+					data.LiveSession = &LiveSessionData{
+						SessionID: liveSession.SessionID,
+						Energy:    liveSession.Energy,
+						StartTime: liveSession.StartTime.Format("2006-01-02 15:04:05"),
+						Duration:  formatDuration(duration),
+						UserName:  liveSession.UserName,
+						IsActive:  liveSession.IsActive,
+						PowerKW:   liveSession.Power_kW,
+					}
+				}
+			}
 		}
 		
-		// For all charger types, get data from latest session (fallback for non-Zaptec or if Zaptec data not available)
+		// For all charger types, get data from latest session (fallback)
 		if data.State == "" {
 			var powerKWh float64
 			var state, mode, sessionTime string
@@ -492,7 +517,7 @@ func formatDuration(d time.Duration) string {
 	seconds := int(d.Seconds()) % 60
 	
 	if hours > 0 {
-		return fmt.Sprintf("%dh %dm %ds", hours, minutes, seconds)
+		return fmt.Sprintf("%dh %dm", hours, minutes)
 	} else if minutes > 0 {
 		return fmt.Sprintf("%dm %ds", minutes, seconds)
 	}
