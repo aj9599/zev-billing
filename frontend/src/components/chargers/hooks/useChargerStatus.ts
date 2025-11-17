@@ -115,25 +115,24 @@ export const useChargerStatus = () => {
             setError('Invalid live data format');
           }
         } else if (liveResponse.status === 400) {
-          // 400 Bad Request - likely an invalid parameter or endpoint issue
+          // 400 Bad Request - log but don't show error to user
           const errorText = await liveResponse.text();
           console.error('[useChargerStatus] Live data request error (400):', errorText);
-          
-          // Don't set error state for 400 - just log it and continue
-          // This prevents the error from being displayed to the user
           console.warn('[useChargerStatus] Skipping live data due to 400 error');
+          // Don't set error state - just continue
         } else {
+          // Other HTTP errors
           const errorText = await liveResponse.text();
           console.error('[useChargerStatus] Live data failed:', liveResponse.status, errorText);
-          // Only set error for non-400 errors
-          if (liveResponse.status !== 400) {
-            setError(`Live data fetch failed: ${liveResponse.status} ${errorText}`);
+          // Only set error for non-400 errors that are significant
+          if (liveResponse.status >= 500) {
+            setError(`Live data fetch failed: ${liveResponse.status}`);
           }
         }
       } catch (liveError) {
         console.error('[useChargerStatus] Live data request failed:', liveError);
-        // Don't set error state - just log it
         console.warn('[useChargerStatus] Continuing without live data');
+        // Don't set error state - just log it
       }
     } catch (error) {
       console.error('[useChargerStatus] Failed to fetch charger status:', error);
