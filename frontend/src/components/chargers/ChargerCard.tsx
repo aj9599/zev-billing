@@ -164,19 +164,13 @@ export default function ChargerCard({
         <div
             style={{
                 backgroundColor: 'white',
-                backgroundImage: isCharging
-                    ? 'radial-gradient(circle at top left, rgba(34,197,94,0.08), transparent 55%), radial-gradient(circle at bottom right, rgba(16,185,129,0.12), transparent)'
-                    : isCompleted
-                        ? 'radial-gradient(circle at top left, rgba(56,189,248,0.08), transparent 55%), transparent'
-                        : 'none',
+                backgroundImage: isCompleted
+                    ? 'radial-gradient(circle at top left, rgba(56,189,248,0.08), transparent 55%), transparent'
+                    : 'none',
                 borderRadius: '24px',
                 padding: '24px',
-                boxShadow: isCharging
-                    ? '0 0 30px rgba(34,197,94,0.2), 0 8px 16px rgba(0,0,0,0.1)'
-                    : '0 4px 6px rgba(0,0,0,0.07)',
-                border: isCharging
-                    ? '2px solid rgba(16,185,129,0.3)'
-                    : '1px solid #f0f0f0',
+                boxShadow: '0 4px 6px rgba(0,0,0,0.07)',
+                border: '1px solid #f0f0f0',
                 position: 'relative',
                 transition: 'all 0.3s ease',
             }}
@@ -214,11 +208,9 @@ export default function ChargerCard({
         }
         @keyframes gaugePulse {
           0%, 100% {
-            box-shadow: 0 0 25px rgba(34,197,94,0.3), 0 0 90px rgba(34,197,94,0.25);
             transform: scale(1);
           }
           50% {
-            box-shadow: 0 0 40px rgba(52,211,153,0.45), 0 0 110px rgba(52,211,153,0.35);
             transform: scale(1.01);
           }
         }
@@ -387,26 +379,20 @@ export default function ChargerCard({
             <div style={{
                 marginTop: '8px',
                 padding: '24px',
-                background: isCharging
-                    ? 'radial-gradient(circle at top left, rgba(34,197,94,0.18), transparent 55%), radial-gradient(circle at bottom right, rgba(16,185,129,0.22), rgba(240,253,244,0.98))'
-                    : isCompleted
-                        ? 'radial-gradient(circle at top left, rgba(56,189,248,0.12), transparent 55%), rgba(240,249,255,0.98)'
-                        : isAwaitingStart
-                            ? 'radial-gradient(circle at top left, rgba(251,191,36,0.12), transparent 55%), rgba(254,252,232,0.98)'
-                            : 'rgba(249,250,251,0.8)',
+                background: isCompleted
+                    ? 'radial-gradient(circle at top left, rgba(56,189,248,0.12), transparent 55%), rgba(240,249,255,0.98)'
+                    : isAwaitingStart
+                        ? 'radial-gradient(circle at top left, rgba(251,191,36,0.12), transparent 55%), rgba(254,252,232,0.98)'
+                        : 'rgba(249,250,251,0.8)',
                 borderRadius: '20px',
-                border: isCharging
-                    ? '2px solid rgba(16,185,129,0.4)'
-                    : isCompleted
-                        ? '2px solid rgba(59,130,246,0.3)'
-                        : isAwaitingStart
-                            ? '2px solid rgba(251,191,36,0.3)'
-                            : '2px solid rgba(229,231,235,0.8)',
+                border: isCompleted
+                    ? '2px solid rgba(59,130,246,0.3)'
+                    : isAwaitingStart
+                        ? '2px solid rgba(251,191,36,0.3)'
+                        : '2px solid rgba(229,231,235,0.8)',
                 position: 'relative',
                 overflow: 'hidden',
-                boxShadow: isCharging
-                    ? '0 0 25px rgba(34,197,94,0.3), 0 0 90px rgba(34,197,94,0.25)'
-                    : '0 1px 3px rgba(0,0,0,0.05)',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
                 animation: isCharging ? 'gaugePulse 2s ease-in-out infinite' : 'none',
                 transition: 'all 0.3s ease'
             }}>
