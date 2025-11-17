@@ -449,9 +449,28 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 
 		// For Zaptec chargers, get data from the Zaptec collector
 		if connectionType == "zaptec_api" {
-			zaptecCollector := h.dataCollector.GetZaptecCollector()
-			if zaptecCollector != nil {
-				chargerData, exists := zaptecCollector.GetChargerData(chargerID)
+			// Try to get data from latest database entry first
+			var powerKWh float64
+			var state, mode, sessionTime string
+			
+			err := h.db.QueryRow(`
+				SELECT power_kwh, state, mode, session_time
+				FROM charger_sessions
+				WHERE charger_id = ?
+				ORDER BY session_time DESC
+				LIMIT 1
+			`, chargerID).Scan(&powerKWh, &state, &mode, &sessionTime)
+			
+			if err == nil {
+				data.PowerKWh = powerKWh
+				data.State = state
+				data.Mode = mode
+				data.LastUpdate = sessionTime
+				data.TotalEnergy = powerKWh
+			}
+			
+			// Note: For full Zaptec data, the frontend should use /api/debug/status
+			log.Printf("GetLiveData: Zaptec charger %s - using database data (use /api/debug/status for live data)", chargerName)
 				if exists {
 					data.TotalEnergy = chargerData.TotalEnergy
 					data.SessionEnergy = chargerData.SessionEnergy
