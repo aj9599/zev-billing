@@ -1,4 +1,4 @@
-import { Wifi, WifiOff, Battery, Zap, User, Clock, Activity } from 'lucide-react';
+import { Wifi, WifiOff, Zap, User, Clock, Activity } from 'lucide-react';
 import type { Charger } from '../../types';
 import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus } from './hooks/useChargerStatus';
 
