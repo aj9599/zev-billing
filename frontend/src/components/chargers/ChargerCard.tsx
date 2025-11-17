@@ -3,7 +3,6 @@ import type { Charger } from '../../types';
 import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus } from './hooks/useChargerStatus';
 import { getPreset } from '../chargerPresets';
 import { getStateDisplay, getModeDisplay } from './utils/chargerUtils';
-import ChargerConnectionStatus from './ChargerConnectionStatus';
 
 interface ChargerCardProps {
     charger: Charger;
@@ -947,14 +946,6 @@ export default function ChargerCard({
                 </div>
             </div>
 
-            {/* Connection Status */}
-            <ChargerConnectionStatus
-                charger={charger}
-                liveData={liveData}
-                loxoneStatus={loxoneStatus}
-                zaptecStatus={zaptecStatus}
-                t={t}
-            />
         </div>
     );
 }
