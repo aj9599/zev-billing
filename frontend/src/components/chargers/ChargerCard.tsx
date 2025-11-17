@@ -163,11 +163,7 @@ export default function ChargerCard({
     return (
         <div
             style={{
-                backgroundColor: isCharging
-                    ? 'radial-gradient(circle at top left, rgba(34,197,94,0.08), transparent 55%), radial-gradient(circle at bottom right, rgba(16,185,129,0.12), rgba(255,255,255,0.98))'
-                    : isCompleted
-                        ? 'radial-gradient(circle at top left, rgba(56,189,248,0.08), transparent 55%), rgba(255,255,255,0.98)'
-                        : 'white',
+                backgroundColor: 'white',
                 backgroundImage: isCharging
                     ? 'radial-gradient(circle at top left, rgba(34,197,94,0.08), transparent 55%), radial-gradient(circle at bottom right, rgba(16,185,129,0.12), transparent)'
                     : isCompleted
@@ -216,6 +212,16 @@ export default function ChargerCard({
             box-shadow: 0 0 40px rgba(52, 211, 153, 0.45), 0 0 110px rgba(52, 211, 153, 0.25);
           }
         }
+        @keyframes gaugePulse {
+          0%, 100% {
+            box-shadow: 0 0 25px rgba(34,197,94,0.3), 0 0 90px rgba(34,197,94,0.25);
+            transform: scale(1);
+          }
+          50% {
+            box-shadow: 0 0 40px rgba(52,211,153,0.45), 0 0 110px rgba(52,211,153,0.35);
+            transform: scale(1.01);
+          }
+        }
         @keyframes ringPulse {
           0% { transform: scale(0.9); opacity: 0.25; }
           70% { transform: scale(1.15); opacity: 0; }
@@ -237,7 +243,7 @@ export default function ChargerCard({
                     position: 'absolute',
                     inset: '-2px',
                     borderRadius: '24px',
-                    background: 'linear-gradient(45deg, transparent, rgba(16,185,129,0.15), transparent)',
+                    background: 'linear-gradient(45deg, transparent, rgba(16,185,129,0.2), transparent)',
                     animation: 'flowRight 3s linear infinite',
                     pointerEvents: 'none',
                     zIndex: 0
@@ -352,7 +358,7 @@ export default function ChargerCard({
                     <span style={{
                         fontSize: '12px',
                         fontWeight: '700',
-                        color: isCharging ? '#10b981' : isCompleted ? '#3b82f6' : isAwaitingStart ? '#f59e0b' : '#6b7280',
+                        color: isCharging ? '#22c55e' : isCompleted ? '#3b82f6' : isAwaitingStart ? '#f59e0b' : '#6b7280',
                         textTransform: 'uppercase',
                         letterSpacing: '0.5px'
                     }}>
@@ -410,9 +416,10 @@ export default function ChargerCard({
                 position: 'relative',
                 overflow: 'hidden',
                 boxShadow: isCharging
-                    ? '0 0 40px rgba(34,197,94,0.25), inset 0 1px 0 rgba(255,255,255,0.5)'
+                    ? '0 0 25px rgba(34,197,94,0.3), 0 0 90px rgba(34,197,94,0.25)'
                     : '0 1px 3px rgba(0,0,0,0.05)',
-                animation: isCharging ? 'softGlow 3s ease-in-out infinite' : 'none'
+                animation: isCharging ? 'gaugePulse 2s ease-in-out infinite' : 'none',
+                transition: 'all 0.3s ease'
             }}>
                 {/* Animated glow effect - only when charging */}
                 {isCharging && (
@@ -420,7 +427,7 @@ export default function ChargerCard({
                         position: 'absolute',
                         inset: '-2px',
                         borderRadius: '20px',
-                        background: 'linear-gradient(45deg, transparent, rgba(16,185,129,0.1), transparent)',
+                        background: 'linear-gradient(45deg, transparent, rgba(16,185,129,0.15), transparent)',
                         animation: 'flowRight 3s linear infinite',
                         pointerEvents: 'none'
                     }} />
@@ -519,11 +526,11 @@ export default function ChargerCard({
                                 <div style={{
                                     marginTop: '4px',
                                     padding: '2px 8px',
-                                    backgroundColor: 'rgba(34,197,94,0.2)',
+                                    backgroundColor: 'rgba(34,197,94,0.25)',
                                     borderRadius: '8px',
                                     fontSize: '10px',
                                     fontWeight: '700',
-                                    color: '#059669',
+                                    color: '#22c55e',
                                     animation: 'chargingPulse 2s ease-in-out infinite'
                                 }}>
                                     ⚡ {t('chargers.state.charging')}
@@ -745,7 +752,7 @@ export default function ChargerCard({
                             <div style={{
                                 position: 'absolute',
                                 inset: 0,
-                                background: 'linear-gradient(90deg, rgba(34,197,94,0.9), rgba(250,204,21,0.85), rgba(16,185,129,0.9))',
+                                background: 'linear-gradient(90deg, rgba(34,197,94,0.95), rgba(250,204,21,0.9), rgba(59,130,246,0.95))',
                                 opacity: 0.9
                             }} />
 
