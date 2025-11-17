@@ -124,28 +124,6 @@ export default function ChargerConnectionStatus({
 
           {liveData && isConnected && (
             <div style={{ padding: '12px', display: 'grid', gap: '8px' }}>
-              {/* Total Energy Meter */}
-              {liveData.total_energy !== undefined && (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '8px 12px',
-                  backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                  borderRadius: '8px'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Battery size={16} style={{ color: '#3b82f6' }} />
-                    <span style={{ fontSize: '12px', fontWeight: '600', color: '#1f2937' }}>
-                      Total Energy
-                    </span>
-                  </div>
-                  <span style={{ fontSize: '14px', fontWeight: '700', color: '#3b82f6' }}>
-                    {liveData.total_energy.toFixed(3)} kWh
-                  </span>
-                </div>
-              )}
-
               {/* Current Power */}
               {liveData.current_power_kw !== undefined && liveData.current_power_kw > 0 && (
                 <div style={{
