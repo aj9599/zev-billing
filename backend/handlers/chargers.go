@@ -131,13 +131,13 @@ func (h *ChargerHandler) Create(w http.ResponseWriter, r *http.Request) {
 		log.Printf("New UDP charger created, restarting UDP listeners...")
 		go h.dataCollector.RestartUDPListeners()
 	}
-	
+
 	// If it's a Loxone API charger, restart Loxone connections
 	if c.ConnectionType == "loxone_api" {
 		log.Printf("New Loxone API charger created, restarting Loxone connections...")
 		go h.dataCollector.RestartUDPListeners() // This also restarts Loxone connections
 	}
-	
+
 	// If it's a Zaptec API charger, restart Zaptec connections
 	if c.ConnectionType == "zaptec_api" {
 		log.Printf("New Zaptec API charger created, restarting Zaptec connections...")
@@ -185,13 +185,13 @@ func (h *ChargerHandler) Update(w http.ResponseWriter, r *http.Request) {
 		log.Printf("UDP charger updated, restarting UDP listeners...")
 		go h.dataCollector.RestartUDPListeners()
 	}
-	
+
 	// If it's a Loxone API charger, restart Loxone connections
 	if c.ConnectionType == "loxone_api" {
 		log.Printf("Loxone API charger updated, restarting Loxone connections...")
 		go h.dataCollector.RestartUDPListeners() // This also restarts Loxone connections
 	}
-	
+
 	// If it's a Zaptec API charger, restart Zaptec connections
 	if c.ConnectionType == "zaptec_api" {
 		log.Printf("Zaptec API charger updated, restarting Zaptec connections...")
@@ -239,12 +239,12 @@ func (h *ChargerHandler) GetDeletionImpact(w http.ResponseWriter, r *http.Reques
 	`, id).Scan(&oldestSession, &newestSession)
 
 	impact := map[string]interface{}{
-		"charger_id":      id,
-		"charger_name":    chargerName,
-		"sessions_count":  sessionsCount,
-		"oldest_session":  oldestSession.String,
-		"newest_session":  newestSession.String,
-		"has_data":        sessionsCount > 0,
+		"charger_id":     id,
+		"charger_name":   chargerName,
+		"sessions_count": sessionsCount,
+		"oldest_session": oldestSession.String,
+		"newest_session": newestSession.String,
+		"has_data":       sessionsCount > 0,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -312,13 +312,13 @@ func (h *ChargerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		log.Printf("UDP charger deleted, restarting UDP listeners...")
 		go h.dataCollector.RestartUDPListeners()
 	}
-	
+
 	// If it was a Loxone API charger, restart Loxone connections
 	if connectionType == "loxone_api" {
 		log.Printf("Loxone API charger deleted, restarting Loxone connections...")
 		go h.dataCollector.RestartUDPListeners() // This also restarts Loxone connections
 	}
-	
+
 	// If it was a Zaptec API charger, restart Zaptec connections
 	if connectionType == "zaptec_api" {
 		log.Printf("Zaptec API charger deleted, restarting Zaptec connections...")
@@ -391,14 +391,31 @@ func (h *ChargerHandler) GetLatestSessions(w http.ResponseWriter, r *http.Reques
 // For Zaptec chargers, the live session data comes from the debug status endpoint
 // which the frontend already fetches and uses
 func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
+	type LiveSessionData struct {
+		SessionID string  `json:"session_id"`
+		Energy    float64 `json:"energy"`
+		StartTime string  `json:"start_time"`
+		Duration  string  `json:"duration"`
+		UserName  string  `json:"user_name"`
+		IsActive  bool    `json:"is_active"`
+		PowerKW   float64 `json:"power_kw"`
+	}
+
 	type LiveChargerData struct {
-		ChargerID      int     `json:"charger_id"`
-		ChargerName    string  `json:"charger_name"`
-		ConnectionType string  `json:"connection_type"`
-		PowerKWh       float64 `json:"power_kwh"`
-		State          string  `json:"state"`
-		Mode           string  `json:"mode"`
-		LastUpdate     string  `json:"last_update"`
+		ChargerID      int              `json:"charger_id"`
+		ChargerName    string           `json:"charger_name"`
+		ConnectionType string           `json:"connection_type"`
+		PowerKWh       float64          `json:"power_kwh"`
+		State          string           `json:"state"`
+		Mode           string           `json:"mode"`
+		LastUpdate     string           `json:"last_update"`
+		TotalEnergy    float64          `json:"total_energy,omitempty"`
+		SessionEnergy  float64          `json:"session_energy,omitempty"`
+		IsOnline       bool             `json:"is_online,omitempty"`
+		CurrentPowerKW float64          `json:"current_power_kw,omitempty"`
+		Voltage        float64          `json:"voltage,omitempty"`
+		Current        float64          `json:"current,omitempty"`
+		LiveSession    *LiveSessionData `json:"live_session,omitempty"`
 	}
 
 	// Get all active chargers
@@ -419,7 +436,7 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var chargerID int
 		var chargerName, connectionType string
-		
+
 		if err := rows.Scan(&chargerID, &chargerName, &connectionType); err != nil {
 			continue
 		}
@@ -430,23 +447,67 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 			ConnectionType: connectionType,
 		}
 
-		// Get data from latest session (works for all charger types)
-		var powerKWh float64
-		var state, mode, sessionTime string
-		
-		err := h.db.QueryRow(`
-			SELECT power_kwh, state, mode, session_time
-			FROM charger_sessions
-			WHERE charger_id = ?
-			ORDER BY session_time DESC
-			LIMIT 1
-		`, chargerID).Scan(&powerKWh, &state, &mode, &sessionTime)
-		
-		if err == nil {
-			data.PowerKWh = powerKWh
-			data.State = state
-			data.Mode = mode
-			data.LastUpdate = sessionTime
+		// For Zaptec chargers, get data from the Zaptec collector
+		if connectionType == "zaptec_api" {
+			zaptecCollector := h.dataCollector.GetZaptecCollector()
+			if zaptecCollector != nil {
+				chargerData, exists := zaptecCollector.GetChargerData(chargerID)
+				if exists {
+					data.TotalEnergy = chargerData.TotalEnergy
+					data.SessionEnergy = chargerData.SessionEnergy
+					data.IsOnline = chargerData.IsOnline
+					data.CurrentPowerKW = chargerData.Power_kW
+					data.Voltage = chargerData.Voltage
+					data.Current = chargerData.Current
+					data.LastUpdate = chargerData.Timestamp.Format("2006-01-02 15:04:05")
+
+					// Map Zaptec state to string
+					data.State = chargerData.State
+					data.Mode = chargerData.Mode
+					data.PowerKWh = chargerData.TotalEnergy
+
+					// Get live session data if available
+					liveSession, hasSession := zaptecCollector.GetLiveSession(chargerID)
+					if hasSession && liveSession.IsActive {
+						data.LiveSession = &LiveSessionData{
+							SessionID: liveSession.SessionID,
+							Energy:    liveSession.Energy,
+							StartTime: liveSession.StartTime.Format(time.RFC3339),
+							Duration:  formatDuration(time.Since(liveSession.StartTime)),
+							UserName:  liveSession.UserName,
+							IsActive:  liveSession.IsActive,
+							PowerKW:   liveSession.Power_kW,
+						}
+					}
+
+					log.Printf("GetLiveData: Zaptec charger %s - State: %s, Power: %.2f kW, Total: %.2f kWh",
+						chargerName, data.State, data.CurrentPowerKW, data.TotalEnergy)
+				} else {
+					log.Printf("GetLiveData: No data from Zaptec collector for charger %s (ID: %d)", chargerName, chargerID)
+				}
+			} else {
+				log.Printf("GetLiveData: Zaptec collector not available")
+			}
+		} else {
+			// For non-Zaptec chargers, get data from database
+			var powerKWh float64
+			var state, mode, sessionTime string
+
+			err := h.db.QueryRow(`
+				SELECT power_kwh, state, mode, session_time
+				FROM charger_sessions
+				WHERE charger_id = ?
+				ORDER BY session_time DESC
+				LIMIT 1
+			`, chargerID).Scan(&powerKWh, &state, &mode, &sessionTime)
+
+			if err == nil {
+				data.PowerKWh = powerKWh
+				data.State = state
+				data.Mode = mode
+				data.LastUpdate = sessionTime
+				data.TotalEnergy = powerKWh
+			}
 		}
 
 		liveData = append(liveData, data)
@@ -461,7 +522,7 @@ func formatDuration(d time.Duration) string {
 	hours := int(d.Hours())
 	minutes := int(d.Minutes()) % 60
 	seconds := int(d.Seconds()) % 60
-	
+
 	if hours > 0 {
 		return fmt.Sprintf("%dh %dm", hours, minutes)
 	} else if minutes > 0 {
