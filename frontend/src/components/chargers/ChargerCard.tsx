@@ -1,4 +1,4 @@
-import { Edit2, Trash2, Wifi, WifiOff, Activity, Battery, TrendingUp, Gauge, Clock, User, Zap } from 'lucide-react';
+import { Edit2, Trash2, Wifi, WifiOff, Activity, Battery, TrendingUp, Power, Gauge, Clock, User, Zap } from 'lucide-react';
 import type { Charger } from '../../types';
 import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus } from './hooks/useChargerStatus';
 import { getPreset } from '../chargerPresets';
@@ -217,224 +217,335 @@ export default function ChargerCard({
         </button>
       </div>
 
-      {/* Charger Info */}
-      <div style={{ paddingRight: '100px', position: 'relative', zIndex: 1 }}>
-        <h3 style={{
-          fontSize: '20px',
-          fontWeight: '600',
-          marginBottom: '6px',
-          color: '#1f2937',
-          lineHeight: '1.3'
-        }}>
-          {charger.name}
-        </h3>
-        <p style={{
-          fontSize: '14px',
-          color: '#6b7280',
-          margin: 0
-        }}>
-          {chargerPreset.label}
-        </p>
+      {/* Header with Charger Info and Badge */}
+      <div style={{ 
+        paddingRight: '100px', 
+        position: 'relative', 
+        zIndex: 1,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: '16px'
+      }}>
+        <div>
+          <h3 style={{
+            fontSize: '20px',
+            fontWeight: '600',
+            marginBottom: '4px',
+            color: '#1f2937',
+            lineHeight: '1.3'
+          }}>
+            {charger.name}
+          </h3>
+          <p style={{
+            fontSize: '13px',
+            color: '#6b7280',
+            margin: 0
+          }}>
+            {chargerPreset.label}
+          </p>
+        </div>
 
-        {/* Status Badges */}
+        {/* Main State Badge */}
         <div style={{
-          display: 'flex',
-          gap: '8px',
-          flexWrap: 'wrap',
-          marginTop: '12px'
+          display: 'inline-flex',
+          alignItems: 'center',
+          padding: '6px 14px',
+          backgroundColor: isCharging ? '#d1fae5' : isCompleted ? '#dbeafe' : isAwaitingStart ? '#fef3c7' : '#f3f4f6',
+          border: `2px solid ${isCharging ? '#10b981' : isCompleted ? '#3b82f6' : isAwaitingStart ? '#fbbf24' : '#d1d5db'}`,
+          borderRadius: '12px',
+          animation: isCharging ? 'chargingPulse 2s ease-in-out infinite' : 'none'
         }}>
-          {/* Online/Offline Badge */}
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '4px 12px',
-            backgroundColor: isOnline ? '#dcfce7' : '#fee2e2',
-            border: `1px solid ${isOnline ? '#22c55e' : '#ef4444'}`,
-            borderRadius: '12px'
+          <span style={{ 
+            fontSize: '12px', 
+            fontWeight: '700', 
+            color: isCharging ? '#10b981' : isCompleted ? '#3b82f6' : isAwaitingStart ? '#f59e0b' : '#6b7280',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px'
           }}>
-            {isOnline ? (
-              <>
-                <Wifi size={14} color="#22c55e" />
-                <span style={{ fontSize: '12px', fontWeight: '600', color: '#22c55e' }}>
-                  {t('chargers.status.online')}
-                </span>
-              </>
-            ) : (
-              <>
-                <WifiOff size={14} color="#ef4444" />
-                <span style={{ fontSize: '12px', fontWeight: '600', color: '#ef4444' }}>
-                  {t('chargers.status.offline')}
-                </span>
-              </>
-            )}
-          </div>
-
-          {/* Charging Badge with Animation */}
-          {isCharging && (
-            <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '4px 12px',
-              backgroundColor: '#d1fae5',
-              border: '1px solid #10b981',
-              borderRadius: '12px',
-              animation: 'chargingPulse 2s ease-in-out infinite'
-            }}>
-              <Activity size={14} color="#10b981" />
-              <span style={{ fontSize: '12px', fontWeight: '700', color: '#10b981' }}>
-                {t('chargers.status.charging')}
-              </span>
-            </div>
-          )}
-
-          {/* State Badge */}
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            padding: '4px 12px',
-            backgroundColor: isCompleted ? '#dbeafe' : isAwaitingStart ? '#fef3c7' : '#f3f4f6',
-            border: `1px solid ${isCompleted ? '#3b82f6' : isAwaitingStart ? '#fbbf24' : '#d1d5db'}`,
-            borderRadius: '12px'
-          }}>
-            <span style={{ 
-              fontSize: '12px', 
-              fontWeight: '600', 
-              color: isCompleted ? '#3b82f6' : isAwaitingStart ? '#f59e0b' : '#6b7280' 
-            }}>
-              {stateDisplay}
-            </span>
-          </div>
+            {stateDisplay}
+          </span>
         </div>
       </div>
 
-      {/* Premium Charging Animation with Power Gauge */}
-      {isCharging && currentPowerKW !== undefined && currentPowerKW > 0 && (
-        <div style={{
-          marginTop: '20px',
-          padding: '20px',
-          background: 'radial-gradient(circle at top left, rgba(34,197,94,0.15), transparent 55%), radial-gradient(circle at bottom right, rgba(16,185,129,0.2), rgba(240,253,244,0.98))',
-          borderRadius: '16px',
-          border: '2px solid rgba(16,185,129,0.3)',
-          position: 'relative',
-          overflow: 'hidden',
-          boxShadow: '0 0 30px rgba(34,197,94,0.15), inset 0 1px 0 rgba(255,255,255,0.5)'
+      {/* Status description */}
+      <div style={{ marginBottom: '20px', position: 'relative', zIndex: 1 }}>
+        <p style={{
+          fontSize: '14px',
+          fontWeight: '600',
+          color: '#1f2937',
+          margin: '0 0 4px 0'
         }}>
-          {/* Animated glow effect */}
+          {isCharging ? t('chargers.status.chargingInProgress') || 'Charging in progress' :
+           isCompleted ? t('chargers.status.chargingFinished') || 'Charging finished' :
+           isAwaitingStart ? t('chargers.status.waitingForAuth') || 'Waiting for authentication' :
+           t('chargers.status.ready') || 'Ready to charge'}
+        </p>
+        <p style={{
+          fontSize: '12px',
+          color: '#9ca3af',
+          margin: 0
+        }}>
+          {isCharging ? t('chargers.status.chargingDesc') || 'Vehicle is charging with optimized power flow' :
+           isCompleted ? t('chargers.status.finishedDesc') || 'Charging session completed. You can unplug.' :
+           isAwaitingStart ? t('chargers.status.waitingDesc') || 'Waiting for authorization to start charging' :
+           t('chargers.status.readyDesc') || 'Connect vehicle to start charging'}
+        </p>
+      </div>
+
+      {/* Main Gauge Display - Always visible */}
+      <div style={{
+        marginTop: '8px',
+        padding: '24px',
+        background: isCharging 
+          ? 'radial-gradient(circle at top left, rgba(34,197,94,0.12), transparent 55%), radial-gradient(circle at bottom right, rgba(16,185,129,0.15), rgba(240,253,244,0.98))'
+          : isCompleted
+          ? 'radial-gradient(circle at top left, rgba(56,189,248,0.12), transparent 55%), rgba(240,249,255,0.98)'
+          : 'rgba(249,250,251,0.8)',
+        borderRadius: '20px',
+        border: isCharging 
+          ? '2px solid rgba(16,185,129,0.3)' 
+          : isCompleted
+          ? '2px solid rgba(59,130,246,0.3)'
+          : '2px solid rgba(229,231,235,0.8)',
+        position: 'relative',
+        overflow: 'hidden',
+        boxShadow: isCharging 
+          ? '0 0 30px rgba(34,197,94,0.15), inset 0 1px 0 rgba(255,255,255,0.5)'
+          : '0 1px 3px rgba(0,0,0,0.05)'
+      }}>
+        {/* Animated glow effect - only when charging */}
+        {isCharging && (
           <div style={{
             position: 'absolute',
             inset: '-2px',
-            borderRadius: '16px',
+            borderRadius: '20px',
             background: 'linear-gradient(45deg, transparent, rgba(16,185,129,0.1), transparent)',
             animation: 'flowRight 3s linear infinite',
             pointerEvents: 'none'
           }} />
+        )}
 
-          {/* Main content with gauge and flow */}
+        {/* Main content with gauge and data */}
+        <div style={{
+          position: 'relative',
+          zIndex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '24px'
+        }}>
+          {/* Circular Power Gauge */}
           <div style={{
             position: 'relative',
-            zIndex: 1,
+            width: circleSize,
+            height: circleSize,
             display: 'flex',
-            flexDirection: 'column',
-            gap: '16px'
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
           }}>
-            {/* Power Gauge */}
+            {/* Pulsing ring when charging */}
+            {isCharging && (
+              <div style={{
+                position: 'absolute',
+                inset: -10,
+                borderRadius: '999px',
+                border: '1px solid #22c55e',
+                animation: 'ringPulse 1.6s ease-out infinite'
+              }} />
+            )}
+
+            {/* SVG Gauge */}
+            <svg width={circleSize} height={circleSize} style={{ transform: 'rotate(-90deg)' }}>
+              {/* Background circle */}
+              <circle
+                cx={circleSize / 2}
+                cy={circleSize / 2}
+                r={radius}
+                stroke="rgba(209,213,219,0.4)"
+                strokeWidth={strokeWidth}
+                fill="transparent"
+              />
+              {/* Progress circle */}
+              <circle
+                cx={circleSize / 2}
+                cy={circleSize / 2}
+                r={radius}
+                stroke={isCharging ? '#22c55e' : isCompleted ? '#3b82f6' : '#9ca3af'}
+                strokeWidth={strokeWidth}
+                fill="transparent"
+                strokeDasharray={circumference}
+                strokeDashoffset={strokeDashoffset}
+                strokeLinecap="round"
+                style={{
+                  transition: 'stroke-dashoffset 0.5s ease, stroke 0.3s ease',
+                  filter: isCharging 
+                    ? 'drop-shadow(0 0 8px rgba(34,197,94,0.6))' 
+                    : isCompleted
+                    ? 'drop-shadow(0 0 6px rgba(59,130,246,0.4))'
+                    : 'none'
+                }}
+              />
+            </svg>
+
+            {/* Center text */}
             <div style={{
+              position: 'absolute',
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '24px'
+              gap: 2,
+              animation: isCharging ? 'floatPulse 2s ease-in-out infinite' : 'none'
             }}>
-              {/* Circular Gauge */}
-              <div style={{
-                position: 'relative',
-                width: circleSize,
-                height: circleSize,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
+              <span style={{ 
+                fontSize: '28px', 
+                fontWeight: '700', 
+                color: isCharging ? '#059669' : isCompleted ? '#2563eb' : '#6b7280'
               }}>
-                {/* Pulsing ring */}
+                {(currentPowerKW ?? 0).toFixed(1)}
+              </span>
+              <span style={{ 
+                fontSize: '13px', 
+                color: isCharging ? '#059669' : isCompleted ? '#2563eb' : '#9ca3af', 
+                fontWeight: '600' 
+              }}>
+                kW
+              </span>
+              {isCharging && (
                 <div style={{
-                  position: 'absolute',
-                  inset: -10,
-                  borderRadius: '999px',
-                  border: '1px solid #22c55e',
-                  animation: 'ringPulse 1.6s ease-out infinite'
-                }} />
-
-                {/* SVG Gauge */}
-                <svg width={circleSize} height={circleSize} style={{ transform: 'rotate(-90deg)' }}>
-                  {/* Background circle */}
-                  <circle
-                    cx={circleSize / 2}
-                    cy={circleSize / 2}
-                    r={radius}
-                    stroke="rgba(148,163,184,0.3)"
-                    strokeWidth={strokeWidth}
-                    fill="transparent"
-                  />
-                  {/* Progress circle */}
-                  <circle
-                    cx={circleSize / 2}
-                    cy={circleSize / 2}
-                    r={radius}
-                    stroke="#22c55e"
-                    strokeWidth={strokeWidth}
-                    fill="transparent"
-                    strokeDasharray={circumference}
-                    strokeDashoffset={strokeDashoffset}
-                    strokeLinecap="round"
-                    style={{
-                      transition: 'stroke-dashoffset 0.4s ease',
-                      filter: 'drop-shadow(0 0 8px rgba(34,197,94,0.6))'
-                    }}
-                  />
-                </svg>
-
-                {/* Center text */}
-                <div style={{
-                  position: 'absolute',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 2,
-                  animation: 'floatPulse 2s ease-in-out infinite'
+                  marginTop: '4px',
+                  padding: '2px 8px',
+                  backgroundColor: 'rgba(34,197,94,0.15)',
+                  borderRadius: '8px',
+                  fontSize: '10px',
+                  fontWeight: '600',
+                  color: '#059669'
                 }}>
-                  <span style={{ fontSize: '24px', fontWeight: '700', color: '#059669' }}>
-                    {currentPowerKW.toFixed(1)}
-                  </span>
-                  <span style={{ fontSize: '12px', color: '#059669', fontWeight: '600' }}>
-                    kW
-                  </span>
+                  ✓ {t('chargers.status.active') || 'Active'}
                 </div>
-              </div>
-
-              {/* Energy Info */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {sessionEnergy !== undefined && sessionEnergy > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <span style={{ fontSize: '11px', color: '#059669', fontWeight: '600' }}>
-                      {t('chargers.energy.liveSession')}
-                    </span>
-                    <span style={{ fontSize: '18px', fontWeight: '700', color: '#16a34a' }}>
-                      {sessionEnergy.toFixed(1)} kWh
-                    </span>
-                  </div>
-                )}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <span style={{ fontSize: '11px', color: '#059669', fontWeight: '600' }}>
-                    {t('chargers.energy.total')}
-                  </span>
-                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#059669' }}>
-                    {totalEnergy?.toFixed(1) ?? '0.0'} kWh
-                  </span>
+              )}
+              {isCompleted && (
+                <div style={{
+                  marginTop: '4px',
+                  padding: '2px 8px',
+                  backgroundColor: 'rgba(59,130,246,0.15)',
+                  borderRadius: '8px',
+                  fontSize: '10px',
+                  fontWeight: '600',
+                  color: '#2563eb'
+                }}>
+                  ✓ {t('chargers.status.complete') || 'Complete'}
                 </div>
-              </div>
+              )}
             </div>
+          </div>
 
+          {/* Energy Data */}
+          <div style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: '16px',
+            flex: 1
+          }}>
+            {/* Total Energy */}
+            {totalEnergy !== undefined && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <Battery size={16} style={{ color: '#0284c7' }} />
+                  <span style={{ 
+                    fontSize: '12px', 
+                    color: '#0369a1', 
+                    fontWeight: '600',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}>
+                    {t('chargers.energy.total') || 'Total Energy'}
+                  </span>
+                </div>
+                <span style={{ 
+                  fontSize: '24px', 
+                  fontWeight: '700', 
+                  color: '#1f2937',
+                  marginLeft: '22px'
+                }}>
+                  {totalEnergy.toFixed(1)} <span style={{ fontSize: '16px', fontWeight: '600', color: '#6b7280' }}>kWh</span>
+                </span>
+              </div>
+            )}
+
+            {/* Session Energy */}
+            {sessionEnergy !== undefined && sessionEnergy > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <TrendingUp size={16} style={{ color: isCharging ? '#16a34a' : '#0284c7' }} />
+                  <span style={{ 
+                    fontSize: '12px', 
+                    color: isCharging ? '#15803d' : '#0369a1', 
+                    fontWeight: '600',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}>
+                    {hasLiveSession || isCharging 
+                      ? (t('chargers.energy.currentSession') || 'Current Session')
+                      : (t('chargers.energy.lastSession') || 'Last Session')}
+                  </span>
+                </div>
+                <span style={{ 
+                  fontSize: '20px', 
+                  fontWeight: '700', 
+                  color: isCharging ? '#16a34a' : '#1f2937',
+                  marginLeft: '22px'
+                }}>
+                  {sessionEnergy.toFixed(1)} <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280' }}>kWh</span>
+                </span>
+              </div>
+            )}
+
+            {/* Status indicator with icon */}
+            <div style={{ 
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginTop: '8px',
+              paddingTop: '12px',
+              borderTop: '1px solid rgba(229,231,235,0.6)'
+            }}>
+              {isOnline ? (
+                <>
+                  <Wifi size={16} color="#22c55e" />
+                  <span style={{ fontSize: '12px', fontWeight: '600', color: '#22c55e' }}>
+                    {t('chargers.status.connected') || 'Connected'} • {t('chargers.status.online')}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <WifiOff size={16} color="#ef4444" />
+                  <span style={{ fontSize: '12px', fontWeight: '600', color: '#ef4444' }}>
+                    {t('chargers.status.offline')}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Power Flow Visualization - Only when actively charging */}
+        {isCharging && currentPowerKW !== undefined && currentPowerKW > 0 && (
+          <div style={{
+            marginTop: '20px',
+            paddingTop: '20px',
+            borderTop: '2px solid rgba(229,231,235,0.5)'
+          }}>
             {/* Power Flow Bar */}
             <div style={{
               display: 'flex',
@@ -443,7 +554,7 @@ export default function ChargerCard({
               fontSize: '11px',
               color: '#059669',
               fontWeight: '600',
-              marginBottom: '8px'
+              marginBottom: '10px'
             }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{ fontSize: '16px' }}>⚡</span>
@@ -464,9 +575,9 @@ export default function ChargerCard({
               position: 'relative',
               height: '12px',
               borderRadius: '999px',
-              background: 'linear-gradient(90deg, rgba(15,23,42,0.15) 0%, rgba(15,23,42,0.1) 100%)',
+              background: 'linear-gradient(90deg, rgba(15,23,42,0.12) 0%, rgba(15,23,42,0.08) 100%)',
               overflow: 'hidden',
-              boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)'
+              boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.08)'
             }}>
               {/* Gradient fill */}
               <div style={{
@@ -505,24 +616,31 @@ export default function ChargerCard({
               gap: '8px',
               fontSize: '12px',
               color: '#059669',
-              fontWeight: '600'
+              fontWeight: '600',
+              marginTop: '10px'
             }}>
               <Zap size={14} style={{ animation: 'floatPulse 1.5s ease-in-out infinite' }} />
-              <span>Power flowing • {currentPowerKW.toFixed(2)} kW</span>
+              <span>{t('chargers.status.powerFlowing') || 'Power flowing'} • {currentPowerKW.toFixed(2)} kW</span>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Charger Details */}
-      <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #f3f4f6', position: 'relative', zIndex: 1 }}>
+      {/* Additional Details Section */}
+      <div style={{ 
+        marginTop: '16px', 
+        paddingTop: '16px', 
+        borderTop: '1px solid #f3f4f6', 
+        position: 'relative', 
+        zIndex: 1 
+      }}>
         {/* Connection Type */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+          <span style={{ fontSize: '12px', color: '#9ca3af', fontWeight: '500' }}>
             {t('chargers.connection') || 'Connection'}
           </span>
           <span style={{
-            fontSize: '13px',
+            fontSize: '12px',
             fontWeight: '600',
             color: '#667eea',
             textTransform: 'uppercase',
@@ -535,113 +653,56 @@ export default function ChargerCard({
           </span>
         </div>
 
-        {/* Energy Readings - Only show if not actively charging (to avoid duplication) */}
-        {!isCharging && totalEnergy !== undefined && (
-          <div style={{
-            padding: '12px',
-            backgroundColor: '#f0f9ff',
-            borderRadius: '8px',
-            border: '1px solid #e0f2fe',
-            marginBottom: '12px'
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: sessionEnergy !== undefined && sessionEnergy > 0 ? '8px' : '0'
-            }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}>
-                <Battery size={14} style={{ color: '#0284c7' }} />
-                <span style={{ fontSize: '11px', color: '#0369a1', fontWeight: '600' }}>
-                  {t('chargers.energy.total')}
-                </span>
-              </div>
-              <div style={{ fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>
-                {totalEnergy.toFixed(1)} kWh
-              </div>
-            </div>
-            
-            {/* Show session energy inside the same box */}
-            {sessionEnergy !== undefined && sessionEnergy > 0 && (
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                paddingTop: '8px',
-                borderTop: '1px solid #e0f2fe'
-              }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}>
-                  <TrendingUp size={12} style={{ color: '#16a34a' }} />
-                  <span style={{ fontSize: '11px', color: '#15803d', fontWeight: '600' }}>
-                    {hasLiveSession ? t('chargers.energy.liveSession') : t('chargers.energy.lastSession')}
-                  </span>
-                </div>
-                <div style={{ fontSize: '15px', fontWeight: '600', color: '#16a34a' }}>
-                  {sessionEnergy.toFixed(1)} kWh
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Voltage & Current Grid */}
+        {/* Voltage & Current Grid - Compact */}
         {(liveData?.voltage || liveData?.current) && (
           <div style={{
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
-            gap: '12px',
-            marginBottom: '12px'
+            gap: '10px',
+            marginBottom: '10px'
           }}>
             {liveData.voltage && (
               <div style={{
-                padding: '10px',
-                backgroundColor: '#f3f4f6',
+                padding: '8px',
+                backgroundColor: '#f9fafb',
                 borderRadius: '8px',
-                border: '1px solid #d1d5db'
+                border: '1px solid #e5e7eb'
               }}>
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
-                  marginBottom: '4px'
+                  gap: '4px',
+                  marginBottom: '2px'
                 }}>
-                  <Gauge size={14} color="#6b7280" />
-                  <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600' }}>
+                  <Gauge size={12} color="#6b7280" />
+                  <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '600' }}>
                     {t('chargers.electrical.voltage')}
                   </span>
                 </div>
-                <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
+                <div style={{ fontSize: '14px', fontWeight: '600', color: '#1f2937' }}>
                   {liveData.voltage.toFixed(0)} V
                 </div>
               </div>
             )}
             {liveData.current && (
               <div style={{
-                padding: '10px',
-                backgroundColor: '#f3f4f6',
+                padding: '8px',
+                backgroundColor: '#f9fafb',
                 borderRadius: '8px',
-                border: '1px solid #d1d5db'
+                border: '1px solid #e5e7eb'
               }}>
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
-                  marginBottom: '4px'
+                  gap: '4px',
+                  marginBottom: '2px'
                 }}>
-                  <Activity size={14} color="#6b7280" />
-                  <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600' }}>
+                  <Activity size={12} color="#6b7280" />
+                  <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '600' }}>
                     {t('chargers.electrical.current')}
                   </span>
                 </div>
-                <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
+                <div style={{ fontSize: '14px', fontWeight: '600', color: '#1f2937' }}>
                   {liveData.current.toFixed(1)} A
                 </div>
               </div>
@@ -649,35 +710,41 @@ export default function ChargerCard({
           </div>
         )}
 
-        {/* Live Session Info */}
+        {/* Live Session Info - Compact */}
         {hasLiveSession && liveSession && (
           <div style={{
-            padding: '12px',
-            backgroundColor: '#ede9fe',
+            padding: '10px',
+            backgroundColor: '#faf5ff',
             borderRadius: '8px',
-            border: '1px solid #a78bfa',
-            marginBottom: '12px'
+            border: '1px solid #e9d5ff',
+            marginBottom: '10px'
           }}>
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              marginBottom: '8px'
+              justifyContent: 'space-between',
+              marginBottom: '6px'
             }}>
-              <Activity size={14} style={{ color: '#7c3aed' }} />
-              <span style={{ fontSize: '12px', color: '#5b21b6', fontWeight: '700' }}>
-                {t('chargers.session.activeSession')}
-              </span>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                <Activity size={12} style={{ color: '#7c3aed' }} />
+                <span style={{ fontSize: '11px', color: '#5b21b6', fontWeight: '700' }}>
+                  {t('chargers.session.activeSession')}
+                </span>
+              </div>
             </div>
             {liveSession.user_name && (
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                marginBottom: '4px'
+                marginBottom: '3px'
               }}>
-                <User size={12} style={{ color: '#7c3aed' }} />
-                <span style={{ fontSize: '12px', color: '#6b21a8', fontWeight: '500' }}>
+                <User size={11} style={{ color: '#7c3aed' }} />
+                <span style={{ fontSize: '11px', color: '#6b21a8', fontWeight: '500' }}>
                   {liveSession.user_name}
                 </span>
               </div>
@@ -688,8 +755,8 @@ export default function ChargerCard({
                 alignItems: 'center',
                 gap: '6px'
               }}>
-                <Clock size={12} style={{ color: '#7c3aed' }} />
-                <span style={{ fontSize: '12px', color: '#6b21a8', fontWeight: '500' }}>
+                <Clock size={11} style={{ color: '#7c3aed' }} />
+                <span style={{ fontSize: '11px', color: '#6b21a8', fontWeight: '500' }}>
                   {liveSession.duration}
                 </span>
               </div>
@@ -697,43 +764,50 @@ export default function ChargerCard({
           </div>
         )}
 
-        {/* Charging Mode */}
+        {/* Charging Mode & Active Status - Inline */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: '12px'
+          gap: '12px'
         }}>
-          <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>
-            {t('chargers.chargingMode')}
-          </span>
-          <span style={{
-            padding: '4px 12px',
-            borderRadius: '8px',
-            fontSize: '12px',
-            fontWeight: '600',
-            backgroundColor: liveData?.mode === '2' ? 'rgba(251, 191, 36, 0.1)' : 'rgba(156, 163, 175, 0.1)',
-            color: liveData?.mode === '2' ? '#f59e0b' : '#6b7280'
-          }}>
-            {getModeDisplay(charger, liveData?.mode, t)}
-          </span>
-        </div>
+          {/* Charging Mode */}
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '12px', color: '#9ca3af', fontWeight: '500' }}>
+                {t('chargers.chargingMode')}
+              </span>
+              <span style={{
+                padding: '3px 10px',
+                borderRadius: '6px',
+                fontSize: '11px',
+                fontWeight: '600',
+                backgroundColor: liveData?.mode === '2' ? 'rgba(251, 191, 36, 0.1)' : 'rgba(156, 163, 175, 0.1)',
+                color: liveData?.mode === '2' ? '#f59e0b' : '#6b7280'
+              }}>
+                {getModeDisplay(charger, liveData?.mode, t)}
+              </span>
+            </div>
+          </div>
 
-        {/* Active Status */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>
-            {t('common.status')}
-          </span>
-          <span style={{
-            padding: '4px 12px',
-            borderRadius: '20px',
-            fontSize: '12px',
-            fontWeight: '600',
-            backgroundColor: charger.is_active ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-            color: charger.is_active ? '#22c55e' : '#ef4444'
-          }}>
-            {charger.is_active ? t('common.active') : t('common.inactive')}
-          </span>
+          {/* Active Status */}
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '12px', color: '#9ca3af', fontWeight: '500' }}>
+                {t('common.status')}
+              </span>
+              <span style={{
+                padding: '3px 10px',
+                borderRadius: '12px',
+                fontSize: '11px',
+                fontWeight: '600',
+                backgroundColor: charger.is_active ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                color: charger.is_active ? '#22c55e' : '#ef4444'
+              }}>
+                {charger.is_active ? t('common.active') : t('common.inactive')}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
