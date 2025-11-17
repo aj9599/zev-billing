@@ -56,9 +56,6 @@ export default function ChargerCard({
   const isCompleted = charger.connection_type === 'zaptec_api' 
     ? liveData?.state === '5'  // Zaptec: state 5 = Completed
     : false;
-  const isDisconnected = charger.connection_type === 'zaptec_api'
-    ? liveData?.state === '1'  // Zaptec: state 1 = Disconnected
-    : liveData?.state === '50'; // Weidmüller: state 50 = Idle
   const isAwaitingStart = charger.connection_type === 'zaptec_api'
     ? liveData?.state === '2'  // Zaptec: state 2 = Awaiting Start
     : liveData?.state === '66'; // Weidmüller: state 66 = Waiting Auth
