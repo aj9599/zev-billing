@@ -154,13 +154,15 @@ func main() {
 	api.HandleFunc("/meters/{id}", meterHandler.Update).Methods("PUT")
 	api.HandleFunc("/meters/{id}", meterHandler.Delete).Methods("DELETE")
 
-	// Charger routes
+	// Charger routes - IMPORTANT: Specific routes MUST come before {id} routes
+	api.HandleFunc("/chargers/live-data", chargerHandler.GetLiveData).Methods("GET")          // ✅ ADDED - Must be before {id}
+	api.HandleFunc("/chargers/sessions/latest", chargerHandler.GetLatestSessions).Methods("GET")
+	api.HandleFunc("/chargers/{id}/deletion-impact", chargerHandler.GetDeletionImpact).Methods("GET")
 	api.HandleFunc("/chargers", chargerHandler.List).Methods("GET")
 	api.HandleFunc("/chargers", chargerHandler.Create).Methods("POST")
 	api.HandleFunc("/chargers/{id}", chargerHandler.Get).Methods("GET")
 	api.HandleFunc("/chargers/{id}", chargerHandler.Update).Methods("PUT")
 	api.HandleFunc("/chargers/{id}", chargerHandler.Delete).Methods("DELETE")
-	api.HandleFunc("/chargers/sessions/latest", chargerHandler.GetLatestSessions).Methods("GET")
 
 	// Billing routes
 	api.HandleFunc("/billing/settings", billingHandler.GetSettings).Methods("GET")
