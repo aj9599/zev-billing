@@ -199,6 +199,22 @@ func (dc *DataCollector) RestartUDPListeners() {
 	dc.logToDatabase("Collectors Restarted", "All collectors (Loxone, Modbus, UDP, MQTT, Smart-me, Zaptec) have been reinitialized")
 }
 
+// GetZaptecChargerData returns Zaptec charger data for a specific charger
+func (dc *DataCollector) GetZaptecChargerData(chargerID int) (*ZaptecChargerData, bool) {
+	if dc.zaptecCollector == nil {
+		return nil, false
+	}
+	return dc.zaptecCollector.GetChargerData(chargerID)
+}
+
+// GetZaptecLiveSession returns Zaptec live session data for a specific charger
+func (dc *DataCollector) GetZaptecLiveSession(chargerID int) (*ZaptecSessionData, bool) {
+	if dc.zaptecCollector == nil {
+		return nil, false
+	}
+	return dc.zaptecCollector.GetLiveSession(chargerID)
+}
+
 func (dc *DataCollector) logSystemStatus() {
 	var activeMeters, totalMeters, activeChargers, totalChargers int
 	dc.db.QueryRow("SELECT COUNT(*) FROM meters WHERE is_active = 1").Scan(&activeMeters)
@@ -540,7 +556,7 @@ func (dc *DataCollector) saveMeterReading(meterID int, meterName string, current
 		log.Printf("SUCCESS: First reading for meter '%s' = %.3f kWh import, %.3f kWh export (consumption: 0 kWh)", 
 			meterName, reading, readingExport)
 	} else {
-		log.Printf("SUCCESS: Saved meter data: '%s' = %.3f kWh import (Î”%.3f), %.3f kWh export (Î”%.3f)", 
+		log.Printf("SUCCESS: Saved meter data: '%s' = %.3f kWh import (Δ%.3f), %.3f kWh export (Δ%.3f)", 
 			meterName, reading, consumption, readingExport, consumptionExport)
 	}
 

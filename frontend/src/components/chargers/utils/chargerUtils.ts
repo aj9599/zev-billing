@@ -47,7 +47,7 @@ export const getStateDisplay = (charger: Charger, stateValue?: string, t?: (key:
 };
 
 export const getModeDisplay = (charger: Charger, modeValue?: string, t?: (key: string) => string): string => {
-  if (!modeValue) return t?.('chargers.mode.unknown') || 'Unknown';
+  if (!modeValue) return t?.('chargers.mode.normal') || 'Normal';
 
   try {
     const config = JSON.parse(charger.connection_config);
@@ -63,7 +63,8 @@ export const getModeDisplay = (charger: Charger, modeValue?: string, t?: (key: s
     console.error('Failed to parse charger config:', e);
   }
 
-  return t?.('chargers.mode.unknown') || 'Unknown';
+  // Default to Normal mode if parsing fails
+  return t?.('chargers.mode.normal') || 'Normal';
 };
 
 export const groupChargersByBuilding = (chargers: Charger[]): Record<number, Charger[]> => {

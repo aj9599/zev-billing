@@ -60,21 +60,31 @@ export const useChargerStatus = () => {
   const [liveData, setLiveData] = useState<Record<number, LiveChargerData>>({});
   const [loxoneStatus, setLoxoneStatus] = useState<LoxoneConnectionStatus>({});
   const [zaptecStatus, setZaptecStatus] = useState<ZaptecConnectionStatus>({});
+  const [error, setError] = useState<string | null>(null);
 
   const fetchStatusData = async () => {
     try {
-      // Fetch debug status
-      const debugData = await fetch('/api/debug/status', {
+      setError(null);
+
+      // Fetch debug status first (contains Zaptec and Loxone status)
+      const debugResponse = await fetch('/api/debug/status', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
-      }).then(res => res.json());
+      });
 
-      if (debugData.loxone_charger_connections) {
-        setLoxoneStatus(debugData.loxone_charger_connections);
-      }
-      if (debugData.zaptec_charger_connections) {
-        setZaptecStatus(debugData.zaptec_charger_connections);
+      if (debugResponse.ok) {
+        const debugData = await debugResponse.json();
+
+        if (debugData.loxone_charger_connections) {
+          setLoxoneStatus(debugData.loxone_charger_connections);
+        }
+        if (debugData.zaptec_charger_connections) {
+          setZaptecStatus(debugData.zaptec_charger_connections);
+          console.log('[useChargerStatus] Zaptec status:', debugData.zaptec_charger_connections);
+        }
+      } else {
+        console.warn('[useChargerStatus] Debug status failed:', debugResponse.status);
       }
 
       // Fetch live data
@@ -87,13 +97,25 @@ export const useChargerStatus = () => {
       if (liveResponse.ok) {
         const data = await liveResponse.json();
         const dataMap: Record<number, LiveChargerData> = {};
-        data.forEach((item: LiveChargerData) => {
-          dataMap[item.charger_id] = item;
-        });
-        setLiveData(dataMap);
+        
+        if (Array.isArray(data)) {
+          data.forEach((item: LiveChargerData) => {
+            dataMap[item.charger_id] = item;
+            console.log('[useChargerStatus] Live data for charger', item.charger_id, ':', item);
+          });
+          setLiveData(dataMap);
+        } else {
+          console.error('[useChargerStatus] Live data is not an array:', data);
+          setError('Invalid live data format');
+        }
+      } else {
+        const errorText = await liveResponse.text();
+        console.error('[useChargerStatus] Live data failed:', liveResponse.status, errorText);
+        setError(`Live data fetch failed: ${liveResponse.status} ${errorText}`);
       }
     } catch (error) {
-      console.error('Failed to fetch charger status:', error);
+      console.error('[useChargerStatus] Failed to fetch charger status:', error);
+      setError(error instanceof Error ? error.message : 'Unknown error');
     }
   };
 
@@ -101,6 +123,7 @@ export const useChargerStatus = () => {
     liveData,
     loxoneStatus,
     zaptecStatus,
+    error,
     fetchStatusData
   };
 };

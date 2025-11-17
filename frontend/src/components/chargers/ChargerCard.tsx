@@ -25,24 +25,37 @@ export default function ChargerCard({
     t
 }: ChargerCardProps) {
     const chargerPreset = getPreset(charger.preset);
+    
+    // Determine state value - prioritize zaptecStatus for Zaptec chargers
+    const stateValue = charger.connection_type === 'zaptec_api'
+        ? (zaptecStatus?.state_description ? 
+            // Map state description to state number
+            (zaptecStatus.state_description === 'Unknown' ? '0' :
+             zaptecStatus.state_description === 'Disconnected' ? '1' :
+             zaptecStatus.state_description === 'Waiting for Authorization' ? '2' :
+             zaptecStatus.state_description === 'Charging' ? '3' :
+             zaptecStatus.state_description === 'Finished Charging' ? '5' : '0')
+            : liveData?.state ?? '0')
+        : liveData?.state ?? '0';
+
     const isCharging = charger.connection_type === 'zaptec_api'
-        ? liveData?.state === '3'  // Zaptec: state 3 = Charging
-        : liveData?.state === '67'; // Weidmüller: state 67 = Charging
+        ? stateValue === '3'  // Zaptec: state 3 = Charging
+        : stateValue === '67'; // Weidmüller: state 67 = Charging
 
     const hasLiveSession = liveData?.live_session?.is_active || zaptecStatus?.live_session?.is_active;
 
     // For Zaptec chargers, prefer zaptecStatus data over liveData
     const totalEnergy = charger.connection_type === 'zaptec_api'
-        ? (zaptecStatus?.last_reading ?? liveData?.total_energy)
-        : liveData?.total_energy;
+        ? (zaptecStatus?.last_reading ?? liveData?.total_energy ?? 0)
+        : (liveData?.total_energy ?? 0);
 
     const sessionEnergy = charger.connection_type === 'zaptec_api'
-        ? (zaptecStatus?.session_energy ?? zaptecStatus?.live_session?.energy ?? liveData?.session_energy)
-        : liveData?.session_energy;
+        ? (zaptecStatus?.session_energy ?? zaptecStatus?.live_session?.energy ?? liveData?.session_energy ?? 0)
+        : (liveData?.session_energy ?? 0);
 
     const currentPowerKW = charger.connection_type === 'zaptec_api'
-        ? (zaptecStatus?.current_power_kw ?? liveData?.current_power_kw)
-        : liveData?.current_power_kw;
+        ? (zaptecStatus?.current_power_kw ?? liveData?.current_power_kw ?? 0)
+        : (liveData?.current_power_kw ?? 0);
 
     const isOnline = charger.connection_type === 'zaptec_api'
         ? (zaptecStatus?.is_online ?? liveData?.is_online ?? true)
@@ -54,13 +67,14 @@ export default function ChargerCard({
 
     console.log('[ChargerCard] Charging state:', {
         name: charger.name,
-        state: liveData?.state,
+        state: stateValue,
         isCharging,
-        power: currentPowerKW
+        power: currentPowerKW,
+        zaptecStatus: zaptecStatus,
+        liveData: liveData
     });
 
     // Determine charger state for styling - use native Zaptec states
-    const stateValue = liveData?.state;
     const stateDisplay = getStateDisplay(charger, stateValue, t);
 
     // Zaptec states: 0=Unknown, 1=Disconnected, 2=Awaiting Start, 3=Charging, 5=Completed
@@ -129,7 +143,7 @@ export default function ChargerCard({
     const strokeDashoffset = circumference - (powerPercentage / 100) * circumference;
 
     // Get the actual mode value for display - FIXED
-    const modeValue = liveData?.mode;
+    const modeValue = liveData?.mode ?? '1';
     const modeDisplay = getModeDisplay(charger, modeValue, t);
 
     return (
@@ -478,7 +492,7 @@ export default function ChargerCard({
                                 fontWeight: '700',
                                 color: isCharging ? '#059669' : isCompleted ? '#2563eb' : isAwaitingStart ? '#d97706' : '#6b7280'
                             }}>
-                                {(currentPowerKW ?? 0).toFixed(1)}
+                                {currentPowerKW.toFixed(1)}
                             </span>
                             <span style={{
                                 fontSize: '13px',
@@ -524,7 +538,7 @@ export default function ChargerCard({
                                     fontWeight: '600',
                                     color: '#d97706'
                                 }}>
-                                    🔐 {t('chargers.state.awaitingStart')}
+                                    🔓 {t('chargers.state.awaitingStart')}
                                 </div>
                             )}
                             {isDisconnected && (
@@ -551,7 +565,7 @@ export default function ChargerCard({
                         flex: 1
                     }}>
                         {/* Total Energy */}
-                        {totalEnergy !== undefined && (
+                        {totalEnergy > 0 && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                 <div style={{
                                     display: 'flex',
@@ -581,7 +595,7 @@ export default function ChargerCard({
                         )}
 
                         {/* Session Energy */}
-                        {sessionEnergy !== undefined && sessionEnergy > 0 && (
+                        {sessionEnergy > 0 && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                 <div style={{
                                     display: 'flex',
@@ -641,7 +655,7 @@ export default function ChargerCard({
                 </div>
 
                 {/* Power Flow Visualization - Only when actively charging */}
-                {isCharging && currentPowerKW !== undefined && currentPowerKW > 0 && (
+                {isCharging && currentPowerKW > 0 && (
                     <div style={{
                         marginTop: '20px',
                         paddingTop: '20px',
