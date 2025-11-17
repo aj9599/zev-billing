@@ -84,6 +84,9 @@ export const useChargerStatus = () => {
             setZaptecStatus(debugData.zaptec_charger_connections);
             console.log('[useChargerStatus] Zaptec status:', debugData.zaptec_charger_connections);
           }
+        } else if (debugResponse.status === 401) {
+          // Token expired or invalid - ignore silently as the auth layer will handle it
+          console.warn('[useChargerStatus] Debug status failed: 401 (token will be refreshed)');
         } else {
           console.warn('[useChargerStatus] Debug status failed:', debugResponse.status);
         }
@@ -114,6 +117,9 @@ export const useChargerStatus = () => {
             console.error('[useChargerStatus] Live data is not an array:', data);
             setError('Invalid live data format');
           }
+        } else if (liveResponse.status === 401) {
+          // Token expired or invalid - ignore silently
+          console.warn('[useChargerStatus] Live data failed: 401 (token will be refreshed)');
         } else if (liveResponse.status === 400) {
           // 400 Bad Request - log but don't show error to user
           const errorText = await liveResponse.text();

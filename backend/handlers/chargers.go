@@ -388,7 +388,6 @@ func (h *ChargerHandler) GetLatestSessions(w http.ResponseWriter, r *http.Reques
 }
 
 // GetLiveData returns enhanced real-time data
-// FIXED: Removed invalid ID parameter handling that was causing 400 errors
 func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 	type LiveSessionData struct {
 		SessionID string  `json:"session_id"`

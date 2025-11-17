@@ -50,20 +50,20 @@ export default function ChargerCard({
         : (liveData?.total_energy ?? 0);
 
     // FIXED: Session energy logic based on state
-    // - For Unknown (0) or Disconnected (1): show last session energy from liveData
-    // - For Waiting for Authorization (2): show 0 (no session yet)
-    // - For Charging (3) or Completed (5): show current/live session energy
+    // For Unknown (0) or Disconnected (1): ALWAYS show last session energy
+    // For Waiting for Authorization (2): show 0 (no session yet)
+    // For Charging (3): show current live session energy
+    // For Completed (5): show completed session energy
     const isUnknownOrDisconnected = stateValue === '0' || stateValue === '1';
     const isAwaitingStart = charger.connection_type === 'zaptec_api'
         ? stateValue === '2'
         : stateValue === '66';
     
+    // CRITICAL FIX: Always get session energy from zaptecStatus for Zaptec chargers
     const sessionEnergy = charger.connection_type === 'zaptec_api'
-        ? (isUnknownOrDisconnected 
-            ? (liveData?.session_energy ?? 0) // Show last session for disconnected/unknown
-            : isAwaitingStart
-                ? 0 // No session yet when waiting for auth
-                : (zaptecStatus?.session_energy ?? zaptecStatus?.live_session?.energy ?? liveData?.session_energy ?? 0))
+        ? (isAwaitingStart 
+            ? 0 // No session yet when waiting for auth
+            : (zaptecStatus?.session_energy ?? zaptecStatus?.live_session?.energy ?? liveData?.session_energy ?? 0))
         : (liveData?.session_energy ?? 0);
 
     const currentPowerKW = charger.connection_type === 'zaptec_api'
@@ -143,8 +143,8 @@ export default function ChargerCard({
         }
     };
 
-    // Get duration from live session - FIXED: Only show for active sessions
-    const sessionDuration = (hasLiveSession && liveSession?.start_time)
+    // Get duration from live session - FIXED: Show for active OR completed sessions
+    const sessionDuration = liveSession?.start_time
         ? calculateDuration(liveSession.start_time)
         : liveSession?.duration || '';
 
@@ -608,7 +608,7 @@ export default function ChargerCard({
                             </div>
                         )}
 
-                        {/* Session Energy - FIXED LOGIC */}
+                        {/* Session Energy - CRITICAL FIX: Always show if > 0, regardless of state */}
                         {sessionEnergy > 0 && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                 <div style={{
@@ -624,7 +624,7 @@ export default function ChargerCard({
                                         textTransform: 'uppercase',
                                         letterSpacing: '0.5px'
                                     }}>
-                                        {hasLiveSession || isCharging
+                                        {isCharging
                                             ? (t('chargers.energy.currentSession') || 'Current Session')
                                             : (t('chargers.energy.lastSession') || 'Last Session')}
                                     </span>
@@ -872,8 +872,8 @@ export default function ChargerCard({
                     </div>
                 )}
 
-                {/* Live Session Info - Compact - FIXED DURATION - Only show for active sessions */}
-                {hasLiveSession && liveSession && (isCharging || isCompleted) && (
+                {/* Live Session Info - CRITICAL FIX: Show for ALL states if liveSession exists */}
+                {liveSession && sessionEnergy > 0 && (
                     <div style={{
                         padding: '10px',
                         backgroundColor: '#faf5ff',
