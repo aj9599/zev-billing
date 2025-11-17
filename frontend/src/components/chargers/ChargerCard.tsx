@@ -1,4 +1,4 @@
-import { Edit2, Trash2, Wifi, WifiOff, Activity, Battery, TrendingUp, Power, Gauge, Clock, User, Zap, Car } from 'lucide-react';
+import { Edit2, Trash2, Wifi, WifiOff, Activity, Battery, TrendingUp, Power, Gauge, Clock, User, Zap } from 'lucide-react';
 import type { Charger } from '../../types';
 import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus } from './hooks/useChargerStatus';
 import { getPreset } from '../chargerPresets';
@@ -71,6 +71,39 @@ export default function ChargerCard({
         e.currentTarget.style.transform = 'translateY(0)';
       }}
     >
+      {/* CSS Animations */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes flowRight {
+          0% { left: -100%; }
+          100% { left: 100%; }
+        }
+        @keyframes energyFlow {
+          0% { transform: translateX(-120%); opacity: 0.6; }
+          100% { transform: translateX(220%); opacity: 0; }
+        }
+        @keyframes softGlow {
+          0%, 100% {
+            box-shadow: 0 0 30px rgba(34, 197, 94, 0.25), 0 0 80px rgba(34, 197, 94, 0.15);
+          }
+          50% {
+            box-shadow: 0 0 40px rgba(52, 211, 153, 0.45), 0 0 110px rgba(52, 211, 153, 0.25);
+          }
+        }
+        @keyframes ringPulse {
+          0% { transform: scale(0.9); opacity: 0.25; }
+          70% { transform: scale(1.15); opacity: 0; }
+          100% { opacity: 0; }
+        }
+        @keyframes floatPulse {
+          0%, 100% { transform: translateY(0); opacity: 0.6; }
+          50% { transform: translateY(-4px); opacity: 1; }
+        }
+        @keyframes chargingPulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.8; transform: scale(1.05); }
+        }
+      `}} />
+
       {/* Action Buttons */}
       <div style={{
         position: 'absolute',
@@ -199,7 +232,7 @@ export default function ChargerCard({
               backgroundColor: '#d1fae5',
               border: '1px solid #10b981',
               borderRadius: '12px',
-              animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+              animation: 'chargingPulse 2s ease-in-out infinite'
             }}>
               <Activity size={14} color="#10b981" />
               <span style={{ fontSize: '12px', fontWeight: '700', color: '#10b981' }}>
@@ -224,66 +257,111 @@ export default function ChargerCard({
         </div>
       </div>
 
-      {/* Charging Animation */}
+      {/* Premium Charging Animation - Inspired by the reference design */}
       {isCharging && (
         <div style={{
           marginTop: '20px',
-          padding: '16px',
-          backgroundColor: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)',
-          borderRadius: '12px',
-          border: '2px solid #10b981',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '16px',
+          padding: '20px',
+          background: 'radial-gradient(circle at top left, rgba(34,197,94,0.15), transparent 55%), radial-gradient(circle at bottom right, rgba(16,185,129,0.2), rgba(240,253,244,0.98))',
+          borderRadius: '16px',
+          border: '2px solid rgba(16,185,129,0.3)',
           position: 'relative',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          boxShadow: '0 0 30px rgba(34,197,94,0.15), inset 0 1px 0 rgba(255,255,255,0.5)'
         }}>
-          {/* Animated background flow */}
+          {/* Animated glow effect */}
           <div style={{
             position: 'absolute',
-            top: 0,
-            left: '-100%',
-            width: '200%',
-            height: '100%',
-            background: 'linear-gradient(90deg, transparent, rgba(16, 185, 129, 0.2), transparent)',
-            animation: 'flowRight 2s ease-in-out infinite'
+            inset: '-2px',
+            borderRadius: '16px',
+            background: 'linear-gradient(45deg, transparent, rgba(16,185,129,0.1), transparent)',
+            animation: 'flowRight 3s linear infinite',
+            pointerEvents: 'none'
           }} />
-          
+
+          {/* Main content with flow visualization */}
           <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
             position: 'relative',
-            zIndex: 1
+            zIndex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px'
           }}>
-            <Car size={32} color="#10b981" style={{ animation: 'bounce 1s ease-in-out infinite' }} />
+            {/* Power Flow Bar */}
             <div style={{
               display: 'flex',
-              gap: '4px',
-              alignItems: 'center'
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              fontSize: '11px',
+              color: '#059669',
+              fontWeight: '600'
             }}>
-              <Zap size={20} color="#10b981" style={{ animation: 'flash 1s ease-in-out infinite' }} />
-              <Zap size={20} color="#10b981" style={{ animation: 'flash 1s ease-in-out infinite 0.2s' }} />
-              <Zap size={20} color="#10b981" style={{ animation: 'flash 1s ease-in-out infinite 0.4s' }} />
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '16px' }}>⚡</span>
+                <span>Grid</span>
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '16px' }}>🔌</span>
+                <span>Charger</span>
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '16px' }}>🚗</span>
+                <span>Car</span>
+              </span>
             </div>
-            <Battery size={32} color="#10b981" style={{ animation: 'pulse 2s ease-in-out infinite' }} />
+
+            {/* Animated Energy Flow Track */}
+            <div style={{
+              position: 'relative',
+              height: '12px',
+              borderRadius: '999px',
+              background: 'linear-gradient(90deg, rgba(15,23,42,0.15) 0%, rgba(15,23,42,0.1) 100%)',
+              overflow: 'hidden',
+              boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)'
+            }}>
+              {/* Gradient fill */}
+              <div style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'linear-gradient(90deg, rgba(34,197,94,0.9), rgba(250,204,21,0.85), rgba(16,185,129,0.9))',
+                opacity: 0.9
+              }} />
+
+              {/* Moving energy particles */}
+              {Array.from({ length: 6 }).map((_, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    position: 'absolute',
+                    top: '2px',
+                    left: '-30px',
+                    width: '20px',
+                    height: '8px',
+                    borderRadius: '999px',
+                    background: 'radial-gradient(circle at 30%, rgba(255,255,255,0.95), rgba(255,255,255,0.3) 70%)',
+                    filter: 'blur(1px)',
+                    animation: `energyFlow 1.3s linear infinite`,
+                    animationDelay: `${idx * 0.2}s`,
+                    boxShadow: '0 0 8px rgba(255,255,255,0.6)'
+                  }}
+                />
+              ))}
+            </div>
+
+            {/* Status Text */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '12px',
+              color: '#059669',
+              fontWeight: '600'
+            }}>
+              <Zap size={14} style={{ animation: 'floatPulse 1.5s ease-in-out infinite' }} />
+              <span>Power flowing • {currentPowerKW ? `${currentPowerKW.toFixed(2)} kW` : 'Active'}</span>
+            </div>
           </div>
-          
-          <style dangerouslySetInnerHTML={{__html: `
-            @keyframes flowRight {
-              0% { left: -100%; }
-              100% { left: 100%; }
-            }
-            @keyframes flash {
-              0%, 100% { opacity: 0.3; transform: scale(0.8); }
-              50% { opacity: 1; transform: scale(1.2); }
-            }
-            @keyframes bounce {
-              0%, 100% { transform: translateY(0); }
-              50% { transform: translateY(-8px); }
-            }
-          `}} />
         </div>
       )}
 

@@ -385,6 +385,7 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 	// Get active session info from state
 	activeSessionID := ""
 	sessionEnergy := 0.0
+	currentPowerW := 0.0
 	
 	if chargerDetails.OperatingMode == 3 { // Charging
 		// StateId 721: SessionIdentifier - contains the current session ID
@@ -401,6 +402,15 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 			}
 		}
 		
+		// StateId 513: TotalChargePower - contains current power in Watts
+		if powerStr, ok := stateData[513]; ok {
+			if powerVal, err := zc.parseStateValue(powerStr); err == nil {
+				currentPowerW = powerVal
+				chargerData.Power_kW = powerVal / 1000.0 // Convert W to kW
+				log.Printf("Zaptec: [%s] Current power from StateId 513: %.2f kW", chargerName, chargerData.Power_kW)
+			}
+		}
+		
 		// Try to get session details if we have a session ID
 		if activeSessionID != "" {
 			session, err := zc.getSessionDetails(token, activeSessionID)
@@ -411,10 +421,10 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 				chargerData.CurrentSession = activeSessionID
 				chargerData.Power = session.Energy
 				
-				// Store live session data
+				// Parse session start time properly
 				startTime := zc.parseZaptecTime(session.StartDateTime)
-				duration := time.Since(startTime)
 				
+				// Store live session data with correct power from StateId 513
 				zc.mu.Lock()
 				zc.liveSessionData[chargerID] = &ZaptecSessionData{
 					SessionID: session.ID,
@@ -423,13 +433,14 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 					UserID:    session.UserID,
 					UserName:  session.UserFullName,
 					IsActive:  true,
-					Power_kW:  chargerDetails.TotalChargePower / 1000.0,
+					Power_kW:  currentPowerW / 1000.0, // Use power from StateId 513
 					Timestamp: time.Now(),
 				}
 				zc.mu.Unlock()
 				
-				log.Printf("Zaptec: [%s] Active session details: ID=%s, Energy=%.3f kWh, User=%s, Duration=%v", 
-					chargerName, session.ID, session.Energy, session.UserFullName, duration)
+				duration := time.Since(startTime)
+				log.Printf("Zaptec: [%s] Active session details: ID=%s, Energy=%.3f kWh, User=%s, Duration=%v, StartTime=%v", 
+					chargerName, session.ID, session.Energy, session.UserFullName, duration, startTime.Format("2006-01-02 15:04:05"))
 			} else {
 				log.Printf("WARNING: Failed to get session details for %s (session %s): %v", chargerName, activeSessionID, err)
 				
@@ -443,9 +454,9 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 					zc.liveSessionData[chargerID] = &ZaptecSessionData{
 						SessionID: activeSessionID,
 						Energy:    sessionEnergy,
-						StartTime: time.Now(), // Unknown start time
+						StartTime: time.Now(), // Unknown start time - will show as just started
 						IsActive:  true,
-						Power_kW:  chargerDetails.TotalChargePower / 1000.0,
+						Power_kW:  currentPowerW / 1000.0,
 						Timestamp: time.Now(),
 					}
 					zc.mu.Unlock()
@@ -462,7 +473,7 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 				Energy:    sessionEnergy,
 				StartTime: time.Now(),
 				IsActive:  true,
-				Power_kW:  chargerDetails.TotalChargePower / 1000.0,
+				Power_kW:  currentPowerW / 1000.0,
 				Timestamp: time.Now(),
 			}
 			zc.mu.Unlock()
@@ -785,19 +796,36 @@ func (zc *ZaptecCollector) getStateDescription(mode int) string {
 
 // parseZaptecTime parses Zaptec datetime format
 func (zc *ZaptecCollector) parseZaptecTime(timeStr string) time.Time {
-	if timeStr == "" || timeStr == "0001-01-01T00:00:00" {
+	if timeStr == "" || timeStr == "0001-01-01T00:00:00" || timeStr == "0001-01-01T00:00:00Z" {
 		return time.Time{}
 	}
 	
+	// Try RFC3339 format with timezone (e.g., "2025-11-17T09:33:23.790Z")
 	t, err := time.Parse(time.RFC3339, timeStr)
-	if err != nil {
-		// Try alternative format
-		t, err = time.Parse("2006-01-02T15:04:05", timeStr)
-		if err != nil {
-			return time.Time{}
-		}
+	if err == nil {
+		return t
 	}
-	return t
+	
+	// Try RFC3339 with nanoseconds
+	t, err = time.Parse(time.RFC3339Nano, timeStr)
+	if err == nil {
+		return t
+	}
+	
+	// Try alternative format without timezone
+	t, err = time.Parse("2006-01-02T15:04:05", timeStr)
+	if err == nil {
+		return t
+	}
+	
+	// Try with milliseconds
+	t, err = time.Parse("2006-01-02T15:04:05.000", timeStr)
+	if err == nil {
+		return t
+	}
+	
+	log.Printf("WARNING: Failed to parse time string: %s", timeStr)
+	return time.Time{}
 }
 
 func (zc *ZaptecCollector) GetChargerData(chargerID int) (*ZaptecChargerData, bool) {
