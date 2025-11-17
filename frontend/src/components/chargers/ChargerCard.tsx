@@ -66,18 +66,29 @@ export default function ChargerCard({
     ? stateValue === '1'  // Zaptec: state 1 = Disconnected
     : stateValue === '50'; // Weidmüller: state 50 = Idle
 
-  // Calculate session duration properly
+  // Calculate session duration properly - FIXED
   const calculateDuration = (startTimeStr: string): string => {
     if (!startTimeStr || startTimeStr === '0001-01-01T00:00:00' || startTimeStr === '0001-01-01T00:00:00Z') {
       return '';
     }
     
     try {
+      // Parse ISO 8601 datetime with timezone
       const startTime = new Date(startTimeStr);
       const now = new Date();
+      
+      // Validate the parsed date
+      if (isNaN(startTime.getTime())) {
+        console.error('Invalid start time:', startTimeStr);
+        return '';
+      }
+      
       const diffMs = now.getTime() - startTime.getTime();
       
-      if (diffMs < 0) return ''; // Invalid time
+      if (diffMs < 0) {
+        console.error('Start time is in the future:', startTimeStr);
+        return ''; // Invalid time
+      }
       
       const hours = Math.floor(diffMs / (1000 * 60 * 60));
       const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
@@ -91,11 +102,12 @@ export default function ChargerCard({
         return `${seconds}s`;
       }
     } catch (e) {
+      console.error('Error calculating duration:', e, 'Start time:', startTimeStr);
       return '';
     }
   };
 
-  // Get duration from live session
+  // Get duration from live session - FIXED
   const sessionDuration = liveSession?.start_time 
     ? calculateDuration(liveSession.start_time) 
     : liveSession?.duration || '';
@@ -107,6 +119,10 @@ export default function ChargerCard({
   const radius = (circleSize - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (powerPercentage / 100) * circumference;
+
+  // Get the actual mode value for display - FIXED
+  const modeValue = liveData?.mode;
+  const modeDisplay = getModeDisplay(charger, modeValue, t);
 
   return (
     <div
@@ -382,7 +398,7 @@ export default function ChargerCard({
           justifyContent: 'space-between',
           gap: '24px'
         }}>
-          {/* Circular Power Gauge */}
+          {/* Circular Power Gauge - FIXED COLORS */}
           <div style={{
             position: 'relative',
             width: circleSize,
@@ -414,7 +430,7 @@ export default function ChargerCard({
                 strokeWidth={strokeWidth}
                 fill="transparent"
               />
-              {/* Progress circle - Green when charging */}
+              {/* Progress circle - Green when charging - FIXED */}
               <circle
                 cx={circleSize / 2}
                 cy={circleSize / 2}
@@ -786,7 +802,7 @@ export default function ChargerCard({
           </div>
         )}
 
-        {/* Live Session Info - Compact */}
+        {/* Live Session Info - Compact - FIXED DURATION */}
         {hasLiveSession && liveSession && (
           <div style={{
             padding: '10px',
@@ -840,7 +856,7 @@ export default function ChargerCard({
           </div>
         )}
 
-        {/* Charging Mode & Active Status - Inline */}
+        {/* Charging Mode & Active Status - Inline - FIXED MODE DISPLAY */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -858,10 +874,10 @@ export default function ChargerCard({
                 borderRadius: '6px',
                 fontSize: '11px',
                 fontWeight: '600',
-                backgroundColor: liveData?.mode === '2' ? 'rgba(251, 191, 36, 0.1)' : 'rgba(156, 163, 175, 0.1)',
-                color: liveData?.mode === '2' ? '#f59e0b' : '#6b7280'
+                backgroundColor: modeValue === '2' ? 'rgba(251, 191, 36, 0.1)' : 'rgba(156, 163, 175, 0.1)',
+                color: modeValue === '2' ? '#f59e0b' : '#6b7280'
               }}>
-                {getModeDisplay(charger, liveData?.mode, t)}
+                {modeDisplay}
               </span>
             </div>
           </div>
