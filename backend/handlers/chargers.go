@@ -387,35 +387,18 @@ func (h *ChargerHandler) GetLatestSessions(w http.ResponseWriter, r *http.Reques
 	json.NewEncoder(w).Encode(sessions)
 }
 
-// GetLiveData returns enhanced real-time data including Zaptec live sessions
+// GetLiveData returns enhanced real-time data
+// For Zaptec chargers, the live session data comes from the debug status endpoint
+// which the frontend already fetches and uses
 func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
-	type LiveSessionData struct {
-		SessionID string  `json:"session_id"`
-		Energy    float64 `json:"energy"`
-		StartTime string  `json:"start_time"`
-		Duration  string  `json:"duration"`
-		UserName  string  `json:"user_name"`
-		IsActive  bool    `json:"is_active"`
-		PowerKW   float64 `json:"power_kw"`
-	}
-
 	type LiveChargerData struct {
-		ChargerID        int              `json:"charger_id"`
-		ChargerName      string           `json:"charger_name"`
-		ConnectionType   string           `json:"connection_type"`
-		PowerKWh         float64          `json:"power_kwh"`
-		State            string           `json:"state"`
-		Mode             string           `json:"mode"`
-		LastUpdate       string           `json:"last_update"`
-		// Zaptec-specific enhanced data
-		TotalEnergy      float64          `json:"total_energy,omitempty"`
-		SessionEnergy    float64          `json:"session_energy,omitempty"`
-		IsOnline         bool             `json:"is_online,omitempty"`
-		CurrentPowerKW   float64          `json:"current_power_kw,omitempty"`
-		Voltage          float64          `json:"voltage,omitempty"`
-		Current          float64          `json:"current,omitempty"`
-		StateDescription string           `json:"state_description,omitempty"`
-		LiveSession      *LiveSessionData `json:"live_session,omitempty"`
+		ChargerID      int     `json:"charger_id"`
+		ChargerName    string  `json:"charger_name"`
+		ConnectionType string  `json:"connection_type"`
+		PowerKWh       float64 `json:"power_kwh"`
+		State          string  `json:"state"`
+		Mode           string  `json:"mode"`
+		LastUpdate     string  `json:"last_update"`
 	}
 
 	// Get all active chargers
@@ -447,60 +430,23 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 			ConnectionType: connectionType,
 		}
 
-		// For Zaptec chargers, get enhanced live data from the collector
-		if connectionType == "zaptec_api" && h.dataCollector != nil {
-			zaptecCollector := h.dataCollector.GetZaptecCollector()
-			if zaptecCollector != nil {
-				// Get charger data
-				if chargerData, exists := zaptecCollector.GetChargerData(chargerID); exists {
-					data.TotalEnergy = chargerData.TotalEnergy
-					data.SessionEnergy = chargerData.SessionEnergy
-					data.IsOnline = chargerData.IsOnline
-					data.CurrentPowerKW = chargerData.Power_kW
-					data.Voltage = chargerData.Voltage
-					data.Current = chargerData.Current
-					data.StateDescription = chargerData.StateDescription
-					data.State = chargerData.State
-					data.Mode = chargerData.Mode
-					data.PowerKWh = chargerData.Power
-					data.LastUpdate = chargerData.Timestamp.Format("2006-01-02 15:04:05")
-				}
-				
-				// Get live session data if available
-				if liveSession, hasSession := zaptecCollector.GetLiveSession(chargerID); hasSession {
-					duration := time.Since(liveSession.StartTime)
-					data.LiveSession = &LiveSessionData{
-						SessionID: liveSession.SessionID,
-						Energy:    liveSession.Energy,
-						StartTime: liveSession.StartTime.Format("2006-01-02 15:04:05"),
-						Duration:  formatDuration(duration),
-						UserName:  liveSession.UserName,
-						IsActive:  liveSession.IsActive,
-						PowerKW:   liveSession.Power_kW,
-					}
-				}
-			}
-		}
+		// Get data from latest session (works for all charger types)
+		var powerKWh float64
+		var state, mode, sessionTime string
 		
-		// For all charger types, get data from latest session (fallback)
-		if data.State == "" {
-			var powerKWh float64
-			var state, mode, sessionTime string
-			
-			err := h.db.QueryRow(`
-				SELECT power_kwh, state, mode, session_time
-				FROM charger_sessions
-				WHERE charger_id = ?
-				ORDER BY session_time DESC
-				LIMIT 1
-			`, chargerID).Scan(&powerKWh, &state, &mode, &sessionTime)
-			
-			if err == nil {
-				data.PowerKWh = powerKWh
-				data.State = state
-				data.Mode = mode
-				data.LastUpdate = sessionTime
-			}
+		err := h.db.QueryRow(`
+			SELECT power_kwh, state, mode, session_time
+			FROM charger_sessions
+			WHERE charger_id = ?
+			ORDER BY session_time DESC
+			LIMIT 1
+		`, chargerID).Scan(&powerKWh, &state, &mode, &sessionTime)
+		
+		if err == nil {
+			data.PowerKWh = powerKWh
+			data.State = state
+			data.Mode = mode
+			data.LastUpdate = sessionTime
 		}
 
 		liveData = append(liveData, data)
