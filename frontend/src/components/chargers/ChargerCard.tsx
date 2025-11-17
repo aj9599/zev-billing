@@ -492,7 +492,7 @@ export default function ChargerCard({
                                 fontWeight: '700',
                                 color: isCharging ? '#059669' : isCompleted ? '#2563eb' : isAwaitingStart ? '#d97706' : '#6b7280'
                             }}>
-                                {currentPowerKW.toFixed(1)}
+                                {currentPowerKW.toFixed(3)}
                             </span>
                             <span style={{
                                 fontSize: '13px',
@@ -589,7 +589,7 @@ export default function ChargerCard({
                                     color: '#1f2937',
                                     marginLeft: '22px'
                                 }}>
-                                    {totalEnergy.toFixed(1)} <span style={{ fontSize: '16px', fontWeight: '600', color: '#6b7280' }}>kWh</span>
+                                    {totalEnergy.toFixed(3)} <span style={{ fontSize: '16px', fontWeight: '600', color: '#6b7280' }}>kWh</span>
                                 </span>
                             </div>
                         )}
@@ -621,7 +621,7 @@ export default function ChargerCard({
                                     color: isCharging ? '#16a34a' : '#1f2937',
                                     marginLeft: '22px'
                                 }}>
-                                    {sessionEnergy.toFixed(1)} <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280' }}>kWh</span>
+                                    {sessionEnergy.toFixed(3)} <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280' }}>kWh</span>
                                 </span>
                             </div>
                         )}
@@ -735,7 +735,7 @@ export default function ChargerCard({
                             marginTop: '10px'
                         }}>
                             <Zap size={14} style={{ animation: 'floatPulse 1.5s ease-in-out infinite' }} />
-                            <span>{t('chargers.status.powerFlowing') || 'Power flowing'} • {currentPowerKW.toFixed(2)} kW</span>
+                            <span>{t('chargers.status.powerFlowing') || 'Power flowing'} • {currentPowerKW.toFixed(3)} kW</span>
                         </div>
                     </div>
                 )}
@@ -818,7 +818,7 @@ export default function ChargerCard({
                                     </span>
                                 </div>
                                 <div style={{ fontSize: '14px', fontWeight: '600', color: '#1f2937' }}>
-                                    {liveData.current.toFixed(1)} A
+                                    {liveData.current.toFixed(3)} A
                                 </div>
                             </div>
                         )}
