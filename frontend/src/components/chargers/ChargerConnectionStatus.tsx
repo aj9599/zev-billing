@@ -1,4 +1,4 @@
-import { Wifi, WifiOff, Zap, User, Clock, Activity } from 'lucide-react';
+import { Wifi, WifiOff, Battery, Zap, User, Clock, Activity } from 'lucide-react';
 import type { Charger } from '../../types';
 import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus } from './hooks/useChargerStatus';
 
@@ -85,18 +85,15 @@ export default function ChargerConnectionStatus({
 
       return (
         <div style={{
-          backgroundColor: isConnected ? 'rgba(34, 197, 94, 0.05)' : 'rgba(239, 68, 68, 0.05)',
-          borderRadius: '12px',
-          marginTop: '16px',
-          overflow: 'hidden',
-          border: `2px solid ${isConnected ? '#22c55e' : '#ef4444'}`
+          marginTop: '12px'
         }}>
           <div style={{
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            padding: '12px',
+            padding: '8px 12px',
             backgroundColor: isConnected ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+            borderRadius: '8px'
           }}>
             {isConnected ? (
               <>
@@ -123,7 +120,7 @@ export default function ChargerConnectionStatus({
           </div>
 
           {liveData && isConnected && (
-            <div style={{ padding: '12px', display: 'grid', gap: '8px' }}>
+            <div style={{ marginTop: '8px', display: 'grid', gap: '8px' }}>
               {/* Current Power */}
               {liveData.current_power_kw !== undefined && liveData.current_power_kw > 0 && (
                 <div style={{
