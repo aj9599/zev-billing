@@ -51,14 +51,54 @@ export default function ChargerCard({
     ? (zaptecStatus?.live_session ?? liveData?.live_session)
     : liveData?.live_session;
 
-  // Determine charger state for styling
-  const stateDisplay = getStateDisplay(charger, liveData?.state, t);
+  // Determine charger state for styling - use native Zaptec states
+  const stateValue = liveData?.state;
+  const stateDisplay = getStateDisplay(charger, stateValue, t);
+  
+  // Zaptec states: 0=Unknown, 1=Disconnected, 2=Awaiting Start, 3=Charging, 5=Completed
   const isCompleted = charger.connection_type === 'zaptec_api' 
-    ? liveData?.state === '5'  // Zaptec: state 5 = Completed
+    ? stateValue === '5'  // Zaptec: state 5 = Completed
     : false;
   const isAwaitingStart = charger.connection_type === 'zaptec_api'
-    ? liveData?.state === '2'  // Zaptec: state 2 = Awaiting Start
-    : liveData?.state === '66'; // Weidmüller: state 66 = Waiting Auth
+    ? stateValue === '2'  // Zaptec: state 2 = Awaiting Start
+    : stateValue === '66'; // Weidmüller: state 66 = Waiting Auth
+  const isDisconnected = charger.connection_type === 'zaptec_api'
+    ? stateValue === '1'  // Zaptec: state 1 = Disconnected
+    : stateValue === '50'; // Weidmüller: state 50 = Idle
+
+  // Calculate session duration properly
+  const calculateDuration = (startTimeStr: string): string => {
+    if (!startTimeStr || startTimeStr === '0001-01-01T00:00:00' || startTimeStr === '0001-01-01T00:00:00Z') {
+      return '';
+    }
+    
+    try {
+      const startTime = new Date(startTimeStr);
+      const now = new Date();
+      const diffMs = now.getTime() - startTime.getTime();
+      
+      if (diffMs < 0) return ''; // Invalid time
+      
+      const hours = Math.floor(diffMs / (1000 * 60 * 60));
+      const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      
+      if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+      } else if (minutes > 0) {
+        return `${minutes}m`;
+      } else {
+        const seconds = Math.floor(diffMs / 1000);
+        return `${seconds}s`;
+      }
+    } catch (e) {
+      return '';
+    }
+  };
+
+  // Get duration from live session
+  const sessionDuration = liveSession?.start_time 
+    ? calculateDuration(liveSession.start_time) 
+    : liveSession?.duration || '';
 
   // Calculate power percentage for gauge (max 22kW)
   const powerPercentage = currentPowerKW ? Math.min((currentPowerKW / 22) * 100, 100) : 0;
@@ -279,6 +319,7 @@ export default function ChargerCard({
           {isCharging ? t('chargers.status.chargingInProgress') || 'Charging in progress' :
            isCompleted ? t('chargers.status.chargingFinished') || 'Charging finished' :
            isAwaitingStart ? t('chargers.status.waitingForAuth') || 'Waiting for authentication' :
+           isDisconnected ? t('chargers.status.noCarConnected') || 'No car connected' :
            t('chargers.status.ready') || 'Ready to charge'}
         </p>
         <p style={{
@@ -289,6 +330,7 @@ export default function ChargerCard({
           {isCharging ? t('chargers.status.chargingDesc') || 'Vehicle is charging with optimized power flow' :
            isCompleted ? t('chargers.status.finishedDesc') || 'Charging session completed. You can unplug.' :
            isAwaitingStart ? t('chargers.status.waitingDesc') || 'Waiting for authorization to start charging' :
+           isDisconnected ? t('chargers.status.disconnectedDesc') || 'Plug in a vehicle to start charging' :
            t('chargers.status.readyDesc') || 'Connect vehicle to start charging'}
         </p>
       </div>
@@ -298,21 +340,26 @@ export default function ChargerCard({
         marginTop: '8px',
         padding: '24px',
         background: isCharging 
-          ? 'radial-gradient(circle at top left, rgba(34,197,94,0.12), transparent 55%), radial-gradient(circle at bottom right, rgba(16,185,129,0.15), rgba(240,253,244,0.98))'
+          ? 'radial-gradient(circle at top left, rgba(34,197,94,0.18), transparent 55%), radial-gradient(circle at bottom right, rgba(16,185,129,0.22), rgba(240,253,244,0.98))'
           : isCompleted
           ? 'radial-gradient(circle at top left, rgba(56,189,248,0.12), transparent 55%), rgba(240,249,255,0.98)'
+          : isAwaitingStart
+          ? 'radial-gradient(circle at top left, rgba(251,191,36,0.12), transparent 55%), rgba(254,252,232,0.98)'
           : 'rgba(249,250,251,0.8)',
         borderRadius: '20px',
         border: isCharging 
-          ? '2px solid rgba(16,185,129,0.3)' 
+          ? '2px solid rgba(16,185,129,0.4)' 
           : isCompleted
           ? '2px solid rgba(59,130,246,0.3)'
+          : isAwaitingStart
+          ? '2px solid rgba(251,191,36,0.3)'
           : '2px solid rgba(229,231,235,0.8)',
         position: 'relative',
         overflow: 'hidden',
         boxShadow: isCharging 
-          ? '0 0 30px rgba(34,197,94,0.15), inset 0 1px 0 rgba(255,255,255,0.5)'
-          : '0 1px 3px rgba(0,0,0,0.05)'
+          ? '0 0 40px rgba(34,197,94,0.25), inset 0 1px 0 rgba(255,255,255,0.5)'
+          : '0 1px 3px rgba(0,0,0,0.05)',
+        animation: isCharging ? 'softGlow 3s ease-in-out infinite' : 'none'
       }}>
         {/* Animated glow effect - only when charging */}
         {isCharging && (
@@ -367,12 +414,12 @@ export default function ChargerCard({
                 strokeWidth={strokeWidth}
                 fill="transparent"
               />
-              {/* Progress circle */}
+              {/* Progress circle - Green when charging */}
               <circle
                 cx={circleSize / 2}
                 cy={circleSize / 2}
                 r={radius}
-                stroke={isCharging ? '#22c55e' : isCompleted ? '#3b82f6' : '#9ca3af'}
+                stroke={isCharging ? '#22c55e' : isCompleted ? '#3b82f6' : isAwaitingStart ? '#fbbf24' : '#9ca3af'}
                 strokeWidth={strokeWidth}
                 fill="transparent"
                 strokeDasharray={circumference}
@@ -381,9 +428,11 @@ export default function ChargerCard({
                 style={{
                   transition: 'stroke-dashoffset 0.5s ease, stroke 0.3s ease',
                   filter: isCharging 
-                    ? 'drop-shadow(0 0 8px rgba(34,197,94,0.6))' 
+                    ? 'drop-shadow(0 0 12px rgba(34,197,94,0.8))' 
                     : isCompleted
                     ? 'drop-shadow(0 0 6px rgba(59,130,246,0.4))'
+                    : isAwaitingStart
+                    ? 'drop-shadow(0 0 6px rgba(251,191,36,0.4))'
                     : 'none'
                 }}
               />
@@ -402,13 +451,13 @@ export default function ChargerCard({
               <span style={{ 
                 fontSize: '28px', 
                 fontWeight: '700', 
-                color: isCharging ? '#059669' : isCompleted ? '#2563eb' : '#6b7280'
+                color: isCharging ? '#059669' : isCompleted ? '#2563eb' : isAwaitingStart ? '#d97706' : '#6b7280'
               }}>
                 {(currentPowerKW ?? 0).toFixed(1)}
               </span>
               <span style={{ 
                 fontSize: '13px', 
-                color: isCharging ? '#059669' : isCompleted ? '#2563eb' : '#9ca3af', 
+                color: isCharging ? '#059669' : isCompleted ? '#2563eb' : isAwaitingStart ? '#d97706' : '#9ca3af', 
                 fontWeight: '600' 
               }}>
                 kW
@@ -417,13 +466,14 @@ export default function ChargerCard({
                 <div style={{
                   marginTop: '4px',
                   padding: '2px 8px',
-                  backgroundColor: 'rgba(34,197,94,0.15)',
+                  backgroundColor: 'rgba(34,197,94,0.2)',
                   borderRadius: '8px',
                   fontSize: '10px',
-                  fontWeight: '600',
-                  color: '#059669'
+                  fontWeight: '700',
+                  color: '#059669',
+                  animation: 'chargingPulse 2s ease-in-out infinite'
                 }}>
-                  ✓ {t('chargers.status.active') || 'Active'}
+                  ⚡ {t('chargers.state.charging')}
                 </div>
               )}
               {isCompleted && (
@@ -436,7 +486,33 @@ export default function ChargerCard({
                   fontWeight: '600',
                   color: '#2563eb'
                 }}>
-                  ✓ {t('chargers.status.complete') || 'Complete'}
+                  ✓ {t('chargers.state.completed')}
+                </div>
+              )}
+              {isAwaitingStart && (
+                <div style={{
+                  marginTop: '4px',
+                  padding: '2px 8px',
+                  backgroundColor: 'rgba(251,191,36,0.15)',
+                  borderRadius: '8px',
+                  fontSize: '10px',
+                  fontWeight: '600',
+                  color: '#d97706'
+                }}>
+                  🔐 {t('chargers.state.awaitingStart')}
+                </div>
+              )}
+              {isDisconnected && (
+                <div style={{
+                  marginTop: '4px',
+                  padding: '2px 8px',
+                  backgroundColor: 'rgba(156,163,175,0.15)',
+                  borderRadius: '8px',
+                  fontSize: '10px',
+                  fontWeight: '600',
+                  color: '#6b7280'
+                }}>
+                  {t('chargers.state.disconnected')}
                 </div>
               )}
             </div>
@@ -749,7 +825,7 @@ export default function ChargerCard({
                 </span>
               </div>
             )}
-            {liveSession.duration && (
+            {sessionDuration && (
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -757,7 +833,7 @@ export default function ChargerCard({
               }}>
                 <Clock size={11} style={{ color: '#7c3aed' }} />
                 <span style={{ fontSize: '11px', color: '#6b21a8', fontWeight: '500' }}>
-                  {liveSession.duration}
+                  {sessionDuration}
                 </span>
               </div>
             )}

@@ -1225,6 +1225,24 @@ export const en: Translations = {
   
   // Charging Mode
   'chargers.chargingMode': 'Charging Mode',
+  'chargers.state.disconnected': 'Disconnected',
+  'chargers.state.awaitingStart': 'Awaiting Start',
+  'chargers.state.completed': 'Completed',
+  'chargers.status.connected': 'Connected',
+  'chargers.status.active': 'Active',
+  'chargers.status.complete': 'Complete',
+  'chargers.status.chargingInProgress': 'Charging in progress',
+  'chargers.status.chargingFinished': 'Charging finished',
+  'chargers.status.waitingForAuth': 'Waiting for authentication',
+  'chargers.status.noCarConnected': 'No car connected',
+  'chargers.status.ready': 'Ready to charge',
+  'chargers.status.chargingDesc': 'Vehicle is charging with optimized power flow',
+  'chargers.status.finishedDesc': 'Charging session completed. You can unplug.',
+  'chargers.status.waitingDesc': 'Waiting for authorization to start charging',
+  'chargers.status.disconnectedDesc': 'Plug in a vehicle to start charging',
+  'chargers.status.readyDesc': 'Connect vehicle to start charging',
+  'chargers.status.powerFlowing': 'Power flowing',
+  'chargers.energy.currentSession': 'Current Session',
 
   // ============================================================================
   // BILLING

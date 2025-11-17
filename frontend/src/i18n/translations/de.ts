@@ -1225,6 +1225,24 @@ export const de: Translations = {
 
   // Charging Mode
   'chargers.chargingMode': 'Lademodus',
+  'chargers.state.disconnected': 'Nicht verbunden',
+  'chargers.state.awaitingStart': 'Wartet auf Start',
+  'chargers.state.completed': 'Abgeschlossen',
+  'chargers.status.connected': 'Verbunden',
+  'chargers.status.active': 'Aktiv',
+  'chargers.status.complete': 'Abgeschlossen',
+  'chargers.status.chargingInProgress': 'Ladevorgang läuft',
+  'chargers.status.chargingFinished': 'Ladevorgang abgeschlossen',
+  'chargers.status.waitingForAuth': 'Warte auf Autorisierung',
+  'chargers.status.noCarConnected': 'Kein Fahrzeug angeschlossen',
+  'chargers.status.ready': 'Bereit zum Laden',
+  'chargers.status.chargingDesc': 'Fahrzeug wird mit optimiertem Stromfluss geladen',
+  'chargers.status.finishedDesc': 'Ladevorgang abgeschlossen. Sie können das Kabel entfernen.',
+  'chargers.status.waitingDesc': 'Wartet auf Autorisierung zum Starten des Ladevorgangs',
+  'chargers.status.disconnectedDesc': 'Schließen Sie ein Fahrzeug an, um den Ladevorgang zu starten',
+  'chargers.status.readyDesc': 'Fahrzeug anschließen, um Ladevorgang zu starten',
+  'chargers.status.powerFlowing': 'Stromfluss aktiv',
+  'chargers.energy.currentSession': 'Aktuelle Sitzung',
 
   // ============================================================================
   // BILLING
