@@ -1,4 +1,4 @@
-import { Edit2, Trash2, Wifi, WifiOff, Activity, Battery, TrendingUp, Power, Gauge, Clock, User } from 'lucide-react';
+import { Edit2, Trash2, Wifi, WifiOff, Activity, Battery, TrendingUp, Power, Gauge, Clock, User, Zap, Car } from 'lucide-react';
 import type { Charger } from '../../types';
 import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus } from './hooks/useChargerStatus';
 import { getPreset } from '../chargerPresets';
@@ -189,7 +189,7 @@ export default function ChargerCard({
             )}
           </div>
 
-          {/* Charging Badge */}
+          {/* Charging Badge with Animation */}
           {isCharging && (
             <div style={{
               display: 'inline-flex',
@@ -223,6 +223,69 @@ export default function ChargerCard({
           </div>
         </div>
       </div>
+
+      {/* Charging Animation */}
+      {isCharging && (
+        <div style={{
+          marginTop: '20px',
+          padding: '16px',
+          backgroundColor: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)',
+          borderRadius: '12px',
+          border: '2px solid #10b981',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '16px',
+          position: 'relative',
+          overflow: 'hidden'
+        }}>
+          {/* Animated background flow */}
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: '-100%',
+            width: '200%',
+            height: '100%',
+            background: 'linear-gradient(90deg, transparent, rgba(16, 185, 129, 0.2), transparent)',
+            animation: 'flowRight 2s ease-in-out infinite'
+          }} />
+          
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            position: 'relative',
+            zIndex: 1
+          }}>
+            <Car size={32} color="#10b981" style={{ animation: 'bounce 1s ease-in-out infinite' }} />
+            <div style={{
+              display: 'flex',
+              gap: '4px',
+              alignItems: 'center'
+            }}>
+              <Zap size={20} color="#10b981" style={{ animation: 'flash 1s ease-in-out infinite' }} />
+              <Zap size={20} color="#10b981" style={{ animation: 'flash 1s ease-in-out infinite 0.2s' }} />
+              <Zap size={20} color="#10b981" style={{ animation: 'flash 1s ease-in-out infinite 0.4s' }} />
+            </div>
+            <Battery size={32} color="#10b981" style={{ animation: 'pulse 2s ease-in-out infinite' }} />
+          </div>
+          
+          <style dangerouslySetInnerHTML={{__html: `
+            @keyframes flowRight {
+              0% { left: -100%; }
+              100% { left: 100%; }
+            }
+            @keyframes flash {
+              0%, 100% { opacity: 0.3; transform: scale(0.8); }
+              50% { opacity: 1; transform: scale(1.2); }
+            }
+            @keyframes bounce {
+              0%, 100% { transform: translateY(0); }
+              50% { transform: translateY(-8px); }
+            }
+          `}} />
+        </div>
+      )}
 
       {/* Charger Details */}
       <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #f3f4f6' }}>

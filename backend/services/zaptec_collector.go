@@ -376,67 +376,98 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 	chargerData.State = zc.mapOperatingModeToState(chargerDetails.OperatingMode, chargerDetails.IsOnline)
 	chargerData.Mode = zc.mapOperationMode(chargerDetails.OperatingMode)
 	
-	// Get active session from charger state
+	// Get state information to extract session data
+	stateData, err := zc.getChargerStateValues(token, config.ChargerID)
+	if err != nil {
+		log.Printf("WARNING: Failed to get state values for %s: %v", chargerName, err)
+	}
+	
+	// Get active session info from state
 	activeSessionID := ""
+	sessionEnergy := 0.0
+	
 	if chargerDetails.OperatingMode == 3 { // Charging
-		state, err := zc.getChargerState(token, config.ChargerID)
-		if err == nil && len(state.Sessions) > 0 {
-			// Find the active session (one without EndDateTime)
-			for _, session := range state.Sessions {
-				if session.EndDateTime == "" || session.EndDateTime == "0001-01-01T00:00:00" {
-					activeSessionID = session.Id
-					
-					// Store live session data from state
-					chargerData.UserID = session.UserId
-					chargerData.UserName = session.UserFullName
-					chargerData.SessionEnergy = session.Energy
+		// StateId 721: SessionIdentifier - contains the current session ID
+		if sessionID, ok := stateData[721]; ok && sessionID != "" {
+			activeSessionID = sessionID
+			log.Printf("Zaptec: [%s] Found active session ID from StateId 721: %s", chargerName, activeSessionID)
+		}
+		
+		// StateId 553: TotalChargePowerSession - contains session energy
+		if sessionEnergyStr, ok := stateData[553]; ok {
+			if energyVal, err := zc.parseStateValue(sessionEnergyStr); err == nil {
+				sessionEnergy = energyVal / 1000.0 // Convert Wh to kWh
+				log.Printf("Zaptec: [%s] Session energy from StateId 553: %.3f kWh", chargerName, sessionEnergy)
+			}
+		}
+		
+		// Try to get session details if we have a session ID
+		if activeSessionID != "" {
+			session, err := zc.getSessionDetails(token, activeSessionID)
+			if err == nil {
+				chargerData.UserID = session.UserID
+				chargerData.UserName = session.UserFullName
+				chargerData.SessionEnergy = session.Energy
+				chargerData.CurrentSession = activeSessionID
+				chargerData.Power = session.Energy
+				
+				// Store live session data
+				startTime := zc.parseZaptecTime(session.StartDateTime)
+				duration := time.Since(startTime)
+				
+				zc.mu.Lock()
+				zc.liveSessionData[chargerID] = &ZaptecSessionData{
+					SessionID: session.ID,
+					Energy:    session.Energy,
+					StartTime: startTime,
+					UserID:    session.UserID,
+					UserName:  session.UserFullName,
+					IsActive:  true,
+					Power_kW:  chargerDetails.TotalChargePower / 1000.0,
+					Timestamp: time.Now(),
+				}
+				zc.mu.Unlock()
+				
+				log.Printf("Zaptec: [%s] Active session details: ID=%s, Energy=%.3f kWh, User=%s, Duration=%v", 
+					chargerName, session.ID, session.Energy, session.UserFullName, duration)
+			} else {
+				log.Printf("WARNING: Failed to get session details for %s (session %s): %v", chargerName, activeSessionID, err)
+				
+				// Fall back to state energy value if we couldn't get session details
+				if sessionEnergy > 0 {
+					chargerData.SessionEnergy = sessionEnergy
 					chargerData.CurrentSession = activeSessionID
 					
-					// Store live session data
-					startTime := zc.parseZaptecTime(session.StartDateTime)
-					duration := time.Since(startTime)
-					
+					// Create minimal live session data
 					zc.mu.Lock()
 					zc.liveSessionData[chargerID] = &ZaptecSessionData{
-						SessionID: session.Id,
-						Energy:    session.Energy,
-						StartTime: startTime,
-						UserID:    session.UserId,
-						UserName:  session.UserFullName,
+						SessionID: activeSessionID,
+						Energy:    sessionEnergy,
+						StartTime: time.Now(), // Unknown start time
 						IsActive:  true,
 						Power_kW:  chargerDetails.TotalChargePower / 1000.0,
 						Timestamp: time.Now(),
 					}
 					zc.mu.Unlock()
-					
-					log.Printf("Zaptec: [%s] Active session found: %s, Energy: %.3f kWh, User: %s, Duration: %v", 
-						chargerName, session.Id, session.Energy, session.UserFullName, duration)
-					break
 				}
 			}
-		}
-	}
-	
-	// If we have an active session ID, try to get more details
-	if activeSessionID != "" {
-		session, err := zc.getSessionDetails(token, activeSessionID)
-		if err == nil {
-			// Update with more detailed session info if available
-			chargerData.UserID = session.UserID
-			chargerData.UserName = session.UserFullName
-			chargerData.SessionEnergy = session.Energy
-			chargerData.Power = session.Energy
+		} else if sessionEnergy > 0 {
+			// We have session energy but no session ID - store it anyway
+			chargerData.SessionEnergy = sessionEnergy
 			
-			// Update live session data with detailed info
+			// Create minimal live session data
 			zc.mu.Lock()
-			if liveSession, exists := zc.liveSessionData[chargerID]; exists {
-				liveSession.Energy = session.Energy
-				liveSession.UserID = session.UserID
-				liveSession.UserName = session.UserFullName
+			zc.liveSessionData[chargerID] = &ZaptecSessionData{
+				SessionID: "unknown",
+				Energy:    sessionEnergy,
+				StartTime: time.Now(),
+				IsActive:  true,
+				Power_kW:  chargerDetails.TotalChargePower / 1000.0,
+				Timestamp: time.Now(),
 			}
 			zc.mu.Unlock()
 		}
-	} else if chargerDetails.OperatingMode != 3 {
+	} else {
 		// Not charging - get most recent session from history
 		recentHistory, err := zc.getRecentChargeHistory(token, config.ChargerID, 1)
 		if err == nil && len(recentHistory) > 0 {
@@ -445,11 +476,14 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 			chargerData.UserName = lastSession.UserFullName
 			chargerData.SessionEnergy = lastSession.Energy
 			chargerData.Power = chargerDetails.SignedMeterValueKwh
+			
+			log.Printf("Zaptec: [%s] Last completed session: Energy=%.3f kWh, User=%s", 
+				chargerName, lastSession.Energy, lastSession.UserFullName)
 		} else {
 			chargerData.Power = chargerDetails.SignedMeterValueKwh
 		}
 		
-		// Clear live session data
+		// Clear live session data when not charging
 		zc.mu.Lock()
 		delete(zc.liveSessionData, chargerID)
 		zc.mu.Unlock()
@@ -462,7 +496,9 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 	
 	sessionStatus := "No active session"
 	if activeSessionID != "" {
-		sessionStatus = fmt.Sprintf("Active session: %s", activeSessionID)
+		sessionStatus = fmt.Sprintf("Active session: %s (%.3f kWh)", activeSessionID, chargerData.SessionEnergy)
+	} else if chargerData.SessionEnergy > 0 && chargerDetails.OperatingMode != 3 {
+		sessionStatus = fmt.Sprintf("Last session: %.3f kWh", chargerData.SessionEnergy)
 	}
 	
 	log.Printf("Zaptec: [%s] Total: %.3f kWh, Session: %.3f kWh, Power: %.2f kW, Mode: %s, State: %s (%s), User: %s, Online: %t, %s", 
@@ -574,6 +610,70 @@ func (zc *ZaptecCollector) getChargerState(token, chargerID string) (*ZaptecChar
 		ChargerId: chargerID,
 		Sessions:  []ZaptecSessionListItem{},
 	}, nil
+}
+
+// getChargerStateValues fetches all state values and returns them as a map[stateId]value
+func (zc *ZaptecCollector) getChargerStateValues(token, chargerID string) (map[int]string, error) {
+	stateURL := fmt.Sprintf("%s/api/chargers/%s/state", zc.apiBaseURL, chargerID)
+	
+	req, err := http.NewRequest("GET", stateURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create state request: %v", err)
+	}
+	
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	req.Header.Set("Accept", "application/json")
+	
+	resp, err := zc.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("state request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("state request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+	
+	// The state endpoint returns an array of state objects
+	var states []map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&states); err != nil {
+		return nil, fmt.Errorf("failed to decode state: %v", err)
+	}
+	
+	// Extract state values into a map
+	stateValues := make(map[int]string)
+	for _, stateObj := range states {
+		stateID, ok := stateObj["StateId"].(float64)
+		if !ok {
+			continue
+		}
+		
+		valueAsString, ok := stateObj["ValueAsString"].(string)
+		if !ok {
+			continue
+		}
+		
+		stateValues[int(stateID)] = valueAsString
+	}
+	
+	return stateValues, nil
+}
+
+// parseStateValue converts a state value string to float64
+func (zc *ZaptecCollector) parseStateValue(valueStr string) (float64, error) {
+	if valueStr == "" {
+		return 0, fmt.Errorf("empty value")
+	}
+	
+	// Try to parse as float
+	var value float64
+	_, err := fmt.Sscanf(valueStr, "%f", &value)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse value: %v", err)
+	}
+	
+	return value, nil
 }
 
 // getSessionDetails fetches live session details from /api/session/{id} endpoint
