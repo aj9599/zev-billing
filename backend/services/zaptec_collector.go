@@ -118,9 +118,12 @@ type ZaptecChargerInfo struct {
 // ZaptecSession represents a charging session from /api/session/{id} endpoint
 type ZaptecSession struct {
 	ID              string    `json:"Id"`
+	SessionID       string    `json:"SessionId"`        // Alternative ID field
 	DeviceID        string    `json:"DeviceId"`
-	StartDateTime   string    `json:"StartDateTime"`
+	StartDateTime   string    `json:"StartDateTime"`    // Used by some endpoints
+	SessionStart    string    `json:"SessionStart"`     // Used by /api/session/{id}
 	EndDateTime     string    `json:"EndDateTime"`
+	SessionEnd      string    `json:"SessionEnd"`       // Alternative end time field
 	Energy          float64   `json:"Energy"` // in kWh
 	UserFullName    string    `json:"UserFullName"`
 	ChargerID       string    `json:"ChargerId"`
@@ -421,13 +424,23 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 				chargerData.CurrentSession = activeSessionID
 				chargerData.Power = session.Energy
 				
-				// Parse session start time properly
-				startTime := zc.parseZaptecTime(session.StartDateTime)
+				// Parse session start time - try both field names (SessionStart is used by /api/session/{id})
+				startTimeStr := session.SessionStart
+				if startTimeStr == "" || startTimeStr == "0001-01-01T00:00:00" {
+					startTimeStr = session.StartDateTime
+				}
+				startTime := zc.parseZaptecTime(startTimeStr)
+				
+				// Use SessionId field if Id is empty
+				sessionID := session.ID
+				if sessionID == "" {
+					sessionID = session.SessionID
+				}
 				
 				// Store live session data with correct power from StateId 513
 				zc.mu.Lock()
 				zc.liveSessionData[chargerID] = &ZaptecSessionData{
-					SessionID: session.ID,
+					SessionID: sessionID,
 					Energy:    session.Energy,
 					StartTime: startTime,
 					UserID:    session.UserID,
@@ -440,7 +453,7 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 				
 				duration := time.Since(startTime)
 				log.Printf("Zaptec: [%s] Active session details: ID=%s, Energy=%.3f kWh, User=%s, Duration=%v, StartTime=%v", 
-					chargerName, session.ID, session.Energy, session.UserFullName, duration, startTime.Format("2006-01-02 15:04:05"))
+					chargerName, sessionID, session.Energy, session.UserFullName, duration, startTime.Format("2006-01-02 15:04:05"))
 			} else {
 				log.Printf("WARNING: Failed to get session details for %s (session %s): %v", chargerName, activeSessionID, err)
 				
@@ -797,34 +810,46 @@ func (zc *ZaptecCollector) getStateDescription(mode int) string {
 // parseZaptecTime parses Zaptec datetime format
 func (zc *ZaptecCollector) parseZaptecTime(timeStr string) time.Time {
 	if timeStr == "" || timeStr == "0001-01-01T00:00:00" || timeStr == "0001-01-01T00:00:00Z" {
+		log.Printf("Zaptec: Invalid/empty time string: '%s'", timeStr)
 		return time.Time{}
 	}
 	
 	// Try RFC3339 format with timezone (e.g., "2025-11-17T09:33:23.790Z")
 	t, err := time.Parse(time.RFC3339, timeStr)
 	if err == nil {
+		log.Printf("Zaptec: Successfully parsed time (RFC3339): %s -> %v", timeStr, t)
 		return t
 	}
 	
 	// Try RFC3339 with nanoseconds
 	t, err = time.Parse(time.RFC3339Nano, timeStr)
 	if err == nil {
+		log.Printf("Zaptec: Successfully parsed time (RFC3339Nano): %s -> %v", timeStr, t)
 		return t
 	}
 	
-	// Try alternative format without timezone
+	// Try format with milliseconds but no timezone: "2025-11-18T08:43:32.847"
+	t, err = time.Parse("2006-01-02T15:04:05.999", timeStr)
+	if err == nil {
+		log.Printf("Zaptec: Successfully parsed time (milliseconds no TZ): %s -> %v", timeStr, t)
+		return t
+	}
+	
+	// Try alternative format without timezone or milliseconds
 	t, err = time.Parse("2006-01-02T15:04:05", timeStr)
 	if err == nil {
+		log.Printf("Zaptec: Successfully parsed time (no TZ): %s -> %v", timeStr, t)
 		return t
 	}
 	
-	// Try with milliseconds
+	// Try with milliseconds (3 digits)
 	t, err = time.Parse("2006-01-02T15:04:05.000", timeStr)
 	if err == nil {
+		log.Printf("Zaptec: Successfully parsed time (3 digit ms): %s -> %v", timeStr, t)
 		return t
 	}
 	
-	log.Printf("WARNING: Failed to parse time string: %s", timeStr)
+	log.Printf("WARNING: Failed to parse Zaptec time string with all formats: '%s'", timeStr)
 	return time.Time{}
 }
 
