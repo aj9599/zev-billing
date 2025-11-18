@@ -12,7 +12,6 @@ interface ChargerConnectionStatusProps {
 
 export default function ChargerConnectionStatus({
   charger,
-  liveData,
   loxoneStatus,
   zaptecStatus,
   t
@@ -79,9 +78,9 @@ export default function ChargerConnectionStatus({
   }
 
   if (charger.connection_type === 'zaptec_api') {
-    if (zaptecStatus || liveData) {
+    if (zaptecStatus) {
       const isConnected = zaptecStatus?.is_connected || false;
-      const isOnline = liveData?.is_online || zaptecStatus?.is_online || false;
+      const isOnline = zaptecStatus?.is_online || false;
 
       return (
         <div style={{
@@ -118,152 +117,6 @@ export default function ChargerConnectionStatus({
               </>
             )}
           </div>
-
-          {liveData && isConnected && (
-            <div style={{ marginTop: '8px', display: 'grid', gap: '8px' }}>
-              {/* Current Power */}
-              {liveData.current_power_kw !== undefined && liveData.current_power_kw > 0 && (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '8px 12px',
-                  backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                  borderRadius: '8px'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Zap size={16} style={{ color: '#22c55e' }} />
-                    <span style={{ fontSize: '12px', fontWeight: '600', color: '#1f2937' }}>
-                      Current Power
-                    </span>
-                  </div>
-                  <span style={{ fontSize: '14px', fontWeight: '700', color: '#22c55e' }}>
-                    {liveData.current_power_kw.toFixed(2)} kW
-                  </span>
-                </div>
-              )}
-
-              {/* Voltage & Current */}
-              {(liveData.voltage || liveData.current) && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  {liveData.voltage && (
-                    <div style={{
-                      padding: '8px 12px',
-                      backgroundColor: 'rgba(107, 114, 128, 0.1)',
-                      borderRadius: '8px'
-                    }}>
-                      <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '4px' }}>
-                        Voltage
-                      </div>
-                      <div style={{ fontSize: '13px', fontWeight: '600', color: '#1f2937' }}>
-                        {liveData.voltage.toFixed(0)} V
-                      </div>
-                    </div>
-                  )}
-                  {liveData.current && (
-                    <div style={{
-                      padding: '8px 12px',
-                      backgroundColor: 'rgba(107, 114, 128, 0.1)',
-                      borderRadius: '8px'
-                    }}>
-                      <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '4px' }}>
-                        Current
-                      </div>
-                      <div style={{ fontSize: '13px', fontWeight: '600', color: '#1f2937' }}>
-                        {liveData.current.toFixed(1)} A
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Live Session */}
-              {liveData.live_session && (
-                <div style={{
-                  padding: '12px',
-                  background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(34, 197, 94, 0.1))',
-                  borderRadius: '8px',
-                  border: '2px solid #f59e0b'
-                }}>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    marginBottom: '12px'
-                  }}>
-                    <Activity size={16} style={{ color: '#f59e0b' }} />
-                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#1f2937' }}>
-                      🔴 LIVE CHARGING SESSION
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'grid', gap: '8px' }}>
-                    {liveData.live_session.user_name && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <User size={14} style={{ color: '#6b7280' }} />
-                        <span style={{ fontSize: '12px', color: '#1f2937' }}>
-                          {liveData.live_session.user_name}
-                        </span>
-                      </div>
-                    )}
-
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 1fr',
-                      gap: '8px'
-                    }}>
-                      <div>
-                        <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                          Session Energy
-                        </div>
-                        <div style={{ fontSize: '16px', fontWeight: '700', color: '#22c55e' }}>
-                          {liveData.live_session.energy.toFixed(3)} kWh
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                          Duration
-                        </div>
-                        <div style={{ fontSize: '14px', fontWeight: '600', color: '#1f2937' }}>
-                          {liveData.live_session.duration}
-                        </div>
-                      </div>
-                    </div>
-
-                    {liveData.live_session.power_kw > 0 && (
-                      <div style={{
-                        padding: '8px',
-                        backgroundColor: 'rgba(34, 197, 94, 0.15)',
-                        borderRadius: '6px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                      }}>
-                        <span style={{ fontSize: '12px', fontWeight: '600', color: '#1f2937' }}>
-                          Charging at
-                        </span>
-                        <span style={{ fontSize: '16px', fontWeight: '700', color: '#22c55e' }}>
-                          {liveData.live_session.power_kw.toFixed(2)} kW
-                        </span>
-                      </div>
-                    )}
-
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      fontSize: '11px',
-                      color: '#6b7280',
-                      marginTop: '4px'
-                    }}>
-                      <Clock size={12} />
-                      Started: {new Date(liveData.live_session.start_time).toLocaleTimeString()}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       );
     }
