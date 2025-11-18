@@ -498,18 +498,23 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 
 				// Get live session if available
 				if liveSession, hasSession := h.dataCollector.GetZaptecLiveSession(chargerID); hasSession {
-					duration := time.Since(liveSession.StartTime)
-					data.LiveSession = &LiveSessionData{
-						SessionID: liveSession.SessionID,
-						Energy:    liveSession.Energy,
-						StartTime: liveSession.StartTime.Format(time.RFC3339),
-						Duration:  formatDuration(duration),
-						UserName:  liveSession.UserName,
-						IsActive:  liveSession.IsActive,
-						PowerKW:   liveSession.Power_kW,
+					// Validate the start time - don't send invalid timestamps
+					if !liveSession.StartTime.IsZero() {
+						duration := time.Since(liveSession.StartTime)
+						data.LiveSession = &LiveSessionData{
+							SessionID: liveSession.SessionID,
+							Energy:    liveSession.Energy,
+							StartTime: liveSession.StartTime.Format(time.RFC3339),
+							Duration:  formatDuration(duration),
+							UserName:  liveSession.UserName,
+							IsActive:  liveSession.IsActive,
+							PowerKW:   liveSession.Power_kW,
+						}
+						log.Printf("GetLiveData: Zaptec charger %s - Live session: %s, Energy: %.3f kWh, Duration: %s, StartTime: %s", 
+							chargerName, liveSession.SessionID, liveSession.Energy, formatDuration(duration), liveSession.StartTime.Format(time.RFC3339))
+					} else {
+						log.Printf("GetLiveData: Zaptec charger %s - Live session has zero/invalid start time, skipping", chargerName)
 					}
-					log.Printf("GetLiveData: Zaptec charger %s - Live session: %s, Energy: %.3f kWh, Duration: %s", 
-						chargerName, liveSession.SessionID, liveSession.Energy, formatDuration(duration))
 				}
 			} else {
 				log.Printf("GetLiveData: No Zaptec data available for charger %s", chargerName)

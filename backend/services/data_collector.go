@@ -556,7 +556,7 @@ func (dc *DataCollector) saveMeterReading(meterID int, meterName string, current
 		log.Printf("SUCCESS: First reading for meter '%s' = %.3f kWh import, %.3f kWh export (consumption: 0 kWh)", 
 			meterName, reading, readingExport)
 	} else {
-		log.Printf("SUCCESS: Saved meter data: '%s' = %.3f kWh import (Δ%.3f), %.3f kWh export (Δ%.3f)", 
+		log.Printf("SUCCESS: Saved meter data: '%s' = %.3f kWh import (Î”%.3f), %.3f kWh export (Î”%.3f)", 
 			meterName, reading, consumption, readingExport, consumptionExport)
 	}
 
@@ -632,11 +632,19 @@ func (dc *DataCollector) collectAndSaveChargers() {
 				log.Printf("[%d/%d] WARNING: No Zaptec data for charger '%s'", totalCount, totalCount, name)
 				continue
 			}
-			power = data.Power
+			// FIXED: Use TotalEnergy for power (cumulative energy reading)
+			power = data.TotalEnergy
+			// FIXED: Use UserID from Zaptec data (may be empty for no active session)
 			userID = data.UserID
+			if userID == "" {
+				userID = "unknown" // Use "unknown" if no user is associated
+			}
 			mode = data.Mode
 			state = data.State
 			hasData = true
+			
+			log.Printf("[%d/%d] Charger '%s': Zaptec data - Power: %.3f kWh, User: %s, State: %s, Mode: %s", 
+				totalCount, totalCount, name, power, userID, state, mode)
 			
 		default:
 			log.Printf("[%d/%d] WARNING: Unknown connection type '%s' for charger '%s'", 
@@ -644,7 +652,8 @@ func (dc *DataCollector) collectAndSaveChargers() {
 			continue
 		}
 
-		if hasData && userID != "" && mode != "" && state != "" {
+		// FIXED: Save data even if userID is "unknown" to maintain energy history
+		if hasData && mode != "" && state != "" {
 			// Save to database with interpolation
 			if err := dc.saveChargerSession(id, name, currentTime, power, userID, mode, state); err != nil {
 				log.Printf("ERROR: Failed to save charger session for '%s': %v", name, err)
