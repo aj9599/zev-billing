@@ -1004,28 +1004,25 @@ func (h *MeterHandler) TestSmartMeConnection(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Get Smart-me collector
-	// TODO: Implement GetSmartMeCollector method in DataCollector
-	// smartmeCollector := h.dataCollector.GetSmartMeCollector()
-	// if smartmeCollector == nil {
-	// 	respondWithError(w, http.StatusInternalServerError, "Smart-me collector not available")
-	// 	return
-	// }
+	smartmeCollector := h.dataCollector.GetSmartMeCollector()
+	if smartmeCollector == nil {
+		respondWithError(w, http.StatusInternalServerError, "Smart-me collector not available")
+		return
+	}
 
 	// Test the connection
-	// TODO: Implement connection testing
-	// if err := smartmeCollector.TestConnection(config); err != nil {
-	// 	log.Printf("Smart-me connection test failed: %v", err)
-	// 	respondWithError(w, http.StatusBadRequest, err.Error())
-	// 	return
-	// }
-
-	// For now, return a success response (connection testing not yet implemented)
-	log.Printf("Smart-me connection test requested for device: %s (testing not yet implemented)", req.DeviceID)
+	log.Printf("Testing Smart-me connection for device: %s (auth type: %s)", req.DeviceID, req.AuthType)
+	if err := smartmeCollector.TestConnection(config); err != nil {
+		log.Printf("Smart-me connection test failed: %v", err)
+		respondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	// Success response
+	log.Printf("Smart-me connection test successful for device: %s", req.DeviceID)
 	respondWithJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
-		"message": "Connection testing not yet implemented - configuration saved",
+		"message": "Connection test successful - device is reachable and authentication works",
 	})
 }
 

@@ -48,15 +48,17 @@ type SmartMeAuth struct {
 }
 
 // SmartMeDevice represents a Smart-me device response
+// FIXED: DeviceEnergyType is int, not string
 type SmartMeDevice struct {
 	ID                   string    `json:"Id"`
 	Name                 string    `json:"Name"`
 	Serial               int64     `json:"Serial"`
 	CounterReading       float64   `json:"CounterReading"`
 	CounterReadingUnit   string    `json:"CounterReadingUnit"`
+	CounterReadingImport float64   `json:"CounterReadingImport"`
 	CounterReadingExport float64   `json:"CounterReadingExport,omitempty"`
 	ValueDate            time.Time `json:"ValueDate"`
-	DeviceEnergyType     string    `json:"DeviceEnergyType"`
+	DeviceEnergyType     int       `json:"DeviceEnergyType"` // FIXED: Changed from string to int
 	ActivePower          float64   `json:"ActivePower"`
 	ActivePowerUnit      string    `json:"ActivePowerUnit"`
 }
@@ -65,6 +67,7 @@ type SmartMeDevice struct {
 type SmartMeValues struct {
 	CounterReading       float64 `json:"CounterReading"`
 	CounterReadingExport float64 `json:"CounterReadingExport"`
+	CounterReadingImport float64 `json:"CounterReadingImport"`
 	CounterReadingT1     float64 `json:"CounterReadingT1"`
 	CounterReadingT2     float64 `json:"CounterReadingT2"`
 }
@@ -280,14 +283,17 @@ func (smc *SmartMeCollector) collectMeter(meterID int, meterName, configJSON str
 		return
 	}
 
-	// Validate response data
-	if device.CounterReading < 0 {
-		log.Printf("[Smart-me Collector] WARNING: Negative counter reading for meter '%s': %.3f", meterName, device.CounterReading)
+	// Use CounterReadingImport if available, otherwise use CounterReading
+	importKWh := device.CounterReadingImport
+	if importKWh == 0 && device.CounterReading > 0 {
+		importKWh = device.CounterReading
 	}
+	exportKWh := device.CounterReadingExport
 
-	// Convert counter reading to kWh (Smart-me returns Wh)
-	importKWh := device.CounterReading / 1000.0
-	exportKWh := device.CounterReadingExport / 1000.0
+	// Validate response data
+	if importKWh < 0 {
+		log.Printf("[Smart-me Collector] WARNING: Negative counter reading for meter '%s': %.3f", meterName, importKWh)
+	}
 
 	// Store in cache
 	smc.mu.Lock()
@@ -481,7 +487,7 @@ func (smc *SmartMeCollector) fetchDeviceWithRetry(deviceID string, auth *SmartMe
 }
 
 func (smc *SmartMeCollector) fetchDevice(deviceID string, auth *SmartMeAuth) (*SmartMeDevice, error) {
-	url := fmt.Sprintf("https://api.smart-me.com/api/Devices/%s", deviceID)
+	url := fmt.Sprintf("https://api.smart-me.com/Devices/%s", deviceID)
 	
 	client := &http.Client{Timeout: 15 * time.Second}
 	req, err := http.NewRequest("GET", url, nil)
@@ -533,7 +539,7 @@ func (smc *SmartMeCollector) fetchDevice(deviceID string, auth *SmartMeAuth) (*S
 
 	var device SmartMeDevice
 	if err := json.Unmarshal(body, &device); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %v", err)
+		return nil, fmt.Errorf("failed to decode response: %v (body: %s)", err, string(body))
 	}
 
 	return &device, nil
@@ -624,12 +630,17 @@ func (smc *SmartMeCollector) TestConnection(config map[string]interface{}) error
 		return fmt.Errorf("failed to fetch device: %v", err)
 	}
 
-	if device.CounterReading < 0 {
-		return fmt.Errorf("device returned invalid counter reading: %.3f", device.CounterReading)
+	importReading := device.CounterReadingImport
+	if importReading == 0 && device.CounterReading > 0 {
+		importReading = device.CounterReading
 	}
 
-	log.Printf("[Smart-me Collector] Test connection successful for device %s: %.3f Wh", 
-		deviceID, device.CounterReading)
+	if importReading < 0 {
+		return fmt.Errorf("device returned invalid counter reading: %.3f", importReading)
+	}
+
+	log.Printf("[Smart-me Collector] Test connection successful for device %s: Import=%.3f kWh, Export=%.3f kWh", 
+		deviceID, importReading, device.CounterReadingExport)
 	
 	return nil
 }

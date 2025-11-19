@@ -199,6 +199,11 @@ func (dc *DataCollector) RestartUDPListeners() {
 	dc.logToDatabase("Collectors Restarted", "All collectors (Loxone, Modbus, UDP, MQTT, Smart-me, Zaptec) have been reinitialized")
 }
 
+// GetSmartMeCollector returns the Smart-me collector instance
+func (dc *DataCollector) GetSmartMeCollector() *SmartMeCollector {
+	return dc.smartmeCollector
+}
+
 // GetZaptecChargerData returns Zaptec charger data for a specific charger
 func (dc *DataCollector) GetZaptecChargerData(chargerID int) (*ZaptecChargerData, bool) {
 	if dc.zaptecCollector == nil {
@@ -556,7 +561,7 @@ func (dc *DataCollector) saveMeterReading(meterID int, meterName string, current
 		log.Printf("SUCCESS: First reading for meter '%s' = %.3f kWh import, %.3f kWh export (consumption: 0 kWh)", 
 			meterName, reading, readingExport)
 	} else {
-		log.Printf("SUCCESS: Saved meter data: '%s' = %.3f kWh import (Î”%.3f), %.3f kWh export (Î”%.3f)", 
+		log.Printf("SUCCESS: Saved meter data: '%s' = %.3f kWh import (Δ%.3f), %.3f kWh export (Δ%.3f)", 
 			meterName, reading, consumption, readingExport, consumptionExport)
 	}
 
@@ -632,9 +637,9 @@ func (dc *DataCollector) collectAndSaveChargers() {
 				log.Printf("[%d/%d] WARNING: No Zaptec data for charger '%s'", totalCount, totalCount, name)
 				continue
 			}
-			// FIXED: Use TotalEnergy for power (cumulative energy reading)
+			// Use TotalEnergy for power (cumulative energy reading)
 			power = data.TotalEnergy
-			// FIXED: Use UserID from Zaptec data (may be empty for no active session)
+			// Use UserID from Zaptec data (may be empty for no active session)
 			userID = data.UserID
 			if userID == "" {
 				userID = "unknown" // Use "unknown" if no user is associated
@@ -652,7 +657,7 @@ func (dc *DataCollector) collectAndSaveChargers() {
 			continue
 		}
 
-		// FIXED: Save data even if userID is "unknown" to maintain energy history
+		// Save data even if userID is "unknown" to maintain energy history
 		if hasData && mode != "" && state != "" {
 			// Save to database with interpolation
 			if err := dc.saveChargerSession(id, name, currentTime, power, userID, mode, state); err != nil {
