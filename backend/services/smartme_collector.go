@@ -13,6 +13,8 @@ import (
 )
 
 // SmartMeCollector handles Smart-me API integration with proper authentication
+// UPDATED ARCHITECTURE: Polls at exact 15-minute intervals (:00, :15, :30, :45)
+// No more cache - data is fetched and saved directly during coordinated collection
 type SmartMeCollector struct {
 	db               *sql.DB
 	mu               sync.RWMutex
@@ -48,7 +50,6 @@ type SmartMeAuth struct {
 }
 
 // SmartMeDevice represents a Smart-me device response
-// FIXED: DeviceEnergyType is int, not string
 type SmartMeDevice struct {
 	ID                   string    `json:"Id"`
 	Name                 string    `json:"Name"`
@@ -58,18 +59,9 @@ type SmartMeDevice struct {
 	CounterReadingImport float64   `json:"CounterReadingImport"`
 	CounterReadingExport float64   `json:"CounterReadingExport,omitempty"`
 	ValueDate            time.Time `json:"ValueDate"`
-	DeviceEnergyType     int       `json:"DeviceEnergyType"` // FIXED: Changed from string to int
+	DeviceEnergyType     int       `json:"DeviceEnergyType"`
 	ActivePower          float64   `json:"ActivePower"`
 	ActivePowerUnit      string    `json:"ActivePowerUnit"`
-}
-
-// SmartMeValues represents detailed device values
-type SmartMeValues struct {
-	CounterReading       float64 `json:"CounterReading"`
-	CounterReadingExport float64 `json:"CounterReadingExport"`
-	CounterReadingImport float64 `json:"CounterReadingImport"`
-	CounterReadingT1     float64 `json:"CounterReadingT1"`
-	CounterReadingT2     float64 `json:"CounterReadingT2"`
 }
 
 // OAuthTokenResponse represents OAuth token response
@@ -83,7 +75,7 @@ type OAuthTokenResponse struct {
 const (
 	maxConsecutiveFailures = 5
 	failureResetDuration   = 1 * time.Hour
-	minAPICallInterval     = 10 * time.Second
+	minAPICallInterval     = 5 * time.Second  // Reduced for coordinated collection
 	maxRetries             = 3
 	baseRetryDelay         = 1 * time.Second
 )
@@ -108,26 +100,17 @@ func (smc *SmartMeCollector) Start() {
 	smc.isRunning = true
 	smc.mu.Unlock()
 
+	log.Println("[Smart-me Collector] ========================================")
 	log.Println("[Smart-me Collector] Starting Smart-me API collector...")
+	log.Println("[Smart-me Collector] UPDATED ARCHITECTURE:")
+	log.Println("[Smart-me Collector]   - Polling: At exact 15-min intervals (:00, :15, :30, :45)")
+	log.Println("[Smart-me Collector]   - No cache needed - direct fetch during collection")
+	log.Println("[Smart-me Collector]   - Real timestamps (no rounding required)")
+	log.Println("[Smart-me Collector]   - Fully aligned with other collectors")
+	log.Println("[Smart-me Collector] ========================================")
 	
-	// Initial data fetch
-	go smc.collectAllMeters()
-
-	// Start periodic collection (every 5 minutes for Smart-me)
-	ticker := time.NewTicker(5 * time.Minute)
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				smc.collectAllMeters()
-			case <-smc.stopChan:
-				ticker.Stop()
-				return
-			}
-		}
-	}()
-
 	log.Println("[Smart-me Collector] Smart-me collector started successfully")
+	log.Println("[Smart-me Collector] Ready for coordinated collection at 15-minute intervals")
 }
 
 func (smc *SmartMeCollector) Stop() {
@@ -139,7 +122,6 @@ func (smc *SmartMeCollector) Stop() {
 	}
 
 	log.Println("[Smart-me Collector] Stopping Smart-me collector...")
-	close(smc.stopChan)
 	smc.isRunning = false
 	log.Println("[Smart-me Collector] Smart-me collector stopped")
 }
@@ -157,45 +139,69 @@ func (smc *SmartMeCollector) RestartConnections() {
 	smc.failureCount = make(map[int]int)
 	smc.failureCountMu.Unlock()
 	
-	// Trigger immediate collection
-	go smc.collectAllMeters()
-	
 	log.Println("[Smart-me Collector] Smart-me connections restarted")
 }
 
-func (smc *SmartMeCollector) collectAllMeters() {
-	rows, err := smc.db.Query(`
-		SELECT id, name, connection_config 
-		FROM meters 
-		WHERE is_active = 1 AND connection_type = 'smartme'
-	`)
+// CollectMeterNow fetches data for a specific meter immediately (called during 15-min cycle)
+func (smc *SmartMeCollector) CollectMeterNow(meterID int, meterName, configJSON string) (float64, float64, error) {
+	var config map[string]interface{}
+	if err := json.Unmarshal([]byte(configJSON), &config); err != nil {
+		return 0, 0, fmt.Errorf("failed to parse config: %v", err)
+	}
+
+	deviceID, ok := config["device_id"].(string)
+	if !ok || deviceID == "" {
+		return 0, 0, fmt.Errorf("no device_id configured")
+	}
+
+	// Validate device_id format
+	if !isValidUUID(deviceID) {
+		return 0, 0, fmt.Errorf("invalid device_id format: %s", deviceID)
+	}
+
+	// Get or create authentication
+	auth, err := smc.getAuth(config)
 	if err != nil {
-		log.Printf("[Smart-me Collector] ERROR: Failed to query Smart-me meters: %v", err)
-		return
+		smc.recordFailure(meterID)
+		return 0, 0, fmt.Errorf("authentication failed: %v", err)
 	}
-	defer rows.Close()
 
-	for rows.Next() {
-		var meterID int
-		var meterName string
-		var configJSON string
-
-		if err := rows.Scan(&meterID, &meterName, &configJSON); err != nil {
-			log.Printf("[Smart-me Collector] ERROR: Failed to scan meter: %v", err)
-			continue
-		}
-
-		// Check if meter has too many consecutive failures
-		if smc.shouldSkipMeter(meterID) {
-			log.Printf("[Smart-me Collector] WARNING: Skipping meter '%s' (ID: %d) due to consecutive failures", meterName, meterID)
-			continue
-		}
-
-		go smc.collectMeter(meterID, meterName, configJSON)
+	// Validate auth configuration
+	if err := smc.validateAuth(auth); err != nil {
+		smc.recordFailure(meterID)
+		return 0, 0, fmt.Errorf("invalid auth configuration: %v", err)
 	}
+
+	// Fetch device data with retry
+	device, err := smc.fetchDeviceWithRetry(deviceID, auth, maxRetries)
+	if err != nil {
+		smc.recordFailure(meterID)
+		return 0, 0, fmt.Errorf("failed to fetch device data: %v", err)
+	}
+
+	// Use CounterReadingImport if available, otherwise use CounterReading
+	importKWh := device.CounterReadingImport
+	if importKWh == 0 && device.CounterReading > 0 {
+		importKWh = device.CounterReading
+	}
+	exportKWh := device.CounterReadingExport
+
+	// Validate response data
+	if importKWh < 0 {
+		log.Printf("[Smart-me Collector] WARNING: Negative counter reading for meter '%s': %.3f", meterName, importKWh)
+	}
+
+	// Record success
+	smc.recordSuccess(meterID)
+
+	log.Printf("[Smart-me Collector] ✓ FETCHED: Meter '%s' - Import: %.3f kWh, Export: %.3f kWh (Power: %.2f %s)",
+		meterName, importKWh, exportKWh, device.ActivePower, device.ActivePowerUnit)
+
+	return importKWh, exportKWh, nil
 }
 
-func (smc *SmartMeCollector) shouldSkipMeter(meterID int) bool {
+// ShouldSkipMeter checks if a meter should be skipped due to consecutive failures (exported)
+func (smc *SmartMeCollector) ShouldSkipMeter(meterID int) bool {
 	smc.failureCountMu.Lock()
 	defer smc.failureCountMu.Unlock()
 	
@@ -229,98 +235,6 @@ func (smc *SmartMeCollector) recordSuccess(meterID int) {
 	defer smc.failureCountMu.Unlock()
 	
 	delete(smc.failureCount, meterID)
-}
-
-func (smc *SmartMeCollector) collectMeter(meterID int, meterName, configJSON string) {
-	var config map[string]interface{}
-	if err := json.Unmarshal([]byte(configJSON), &config); err != nil {
-		log.Printf("[Smart-me Collector] ERROR: Failed to parse config for meter '%s': %v", meterName, err)
-		smc.recordFailure(meterID)
-		return
-	}
-
-	deviceID, ok := config["device_id"].(string)
-	if !ok || deviceID == "" {
-		log.Printf("[Smart-me Collector] ERROR: No device_id configured for meter '%s'", meterName)
-		smc.recordFailure(meterID)
-		return
-	}
-
-	// Validate device_id format (should be a UUID)
-	if !isValidUUID(deviceID) {
-		log.Printf("[Smart-me Collector] ERROR: Invalid device_id format for meter '%s': %s", meterName, deviceID)
-		smc.recordFailure(meterID)
-		return
-	}
-
-	// Rate limiting check
-	if smc.shouldThrottle(deviceID) {
-		log.Printf("[Smart-me Collector] INFO: Throttling API call for device %s", deviceID)
-		return
-	}
-
-	// Get or create authentication
-	auth, err := smc.getAuth(config)
-	if err != nil {
-		log.Printf("[Smart-me Collector] ERROR: Failed to authenticate for meter '%s': %v", meterName, err)
-		smc.recordFailure(meterID)
-		return
-	}
-
-	// Validate auth configuration
-	if err := smc.validateAuth(auth); err != nil {
-		log.Printf("[Smart-me Collector] ERROR: Invalid auth configuration for meter '%s': %v", meterName, err)
-		smc.recordFailure(meterID)
-		return
-	}
-
-	// Fetch device data with retry
-	device, err := smc.fetchDeviceWithRetry(deviceID, auth, maxRetries)
-	if err != nil {
-		log.Printf("[Smart-me Collector] ERROR: Failed to fetch data for meter '%s' (device: %s): %v", 
-			meterName, deviceID, err)
-		smc.recordFailure(meterID)
-		return
-	}
-
-	// Use CounterReadingImport if available, otherwise use CounterReading
-	importKWh := device.CounterReadingImport
-	if importKWh == 0 && device.CounterReading > 0 {
-		importKWh = device.CounterReading
-	}
-	exportKWh := device.CounterReadingExport
-
-	// Validate response data
-	if importKWh < 0 {
-		log.Printf("[Smart-me Collector] WARNING: Negative counter reading for meter '%s': %.3f", meterName, importKWh)
-	}
-
-	// Store in cache
-	smc.mu.Lock()
-	smc.meterReadings[meterID] = SmartMeReading{
-		Import:      importKWh,
-		Export:      exportKWh,
-		LastUpdated: time.Now(),
-	}
-	smc.mu.Unlock()
-
-	// Record success
-	smc.recordSuccess(meterID)
-
-	log.Printf("[Smart-me Collector] SUCCESS: Collected data for meter '%s': %.3f kWh import, %.3f kWh export (Active Power: %.2f %s)",
-		meterName, importKWh, exportKWh, device.ActivePower, device.ActivePowerUnit)
-}
-
-func (smc *SmartMeCollector) shouldThrottle(deviceID string) bool {
-	smc.apiCallMu.Lock()
-	defer smc.apiCallMu.Unlock()
-	
-	lastCall, exists := smc.lastAPICall[deviceID]
-	if !exists || time.Since(lastCall) >= minAPICallInterval {
-		smc.lastAPICall[deviceID] = time.Now()
-		return false
-	}
-	return true
 }
 
 func (smc *SmartMeCollector) validateAuth(auth *SmartMeAuth) error {
@@ -406,7 +320,7 @@ func (smc *SmartMeCollector) refreshOAuthToken(auth *SmartMeAuth) error {
 		return nil
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second} // Longer timeout for OAuth
+	client := &http.Client{Timeout: 30 * time.Second}
 	
 	req, err := http.NewRequest("POST", "https://api.smart-me.com/api/oauth/token", nil)
 	if err != nil {
@@ -545,63 +459,30 @@ func (smc *SmartMeCollector) fetchDevice(deviceID string, auth *SmartMeAuth) (*S
 	return &device, nil
 }
 
+// GetMeterReading - DEPRECATED in aligned architecture
+// Data is fetched directly during collection, no cache needed
 func (smc *SmartMeCollector) GetMeterReading(meterID int) (float64, float64, bool) {
-	smc.mu.RLock()
-	defer smc.mu.RUnlock()
-
-	reading, exists := smc.meterReadings[meterID]
-	if !exists {
-		return 0, 0, false
-	}
-
-	// Check if reading is fresh (less than 15 minutes old)
-	if time.Since(reading.LastUpdated) > 15*time.Minute {
-		return 0, 0, false
-	}
-
-	return reading.Import, reading.Export, true
+	// This method is kept for backward compatibility but not used
+	// In the aligned architecture, CollectMeterNow() is called directly
+	return 0, 0, false
 }
 
+// ReadAllMeters - DEPRECATED in aligned architecture  
+// Use CollectMeterNow() for each meter during coordinated collection
 func (smc *SmartMeCollector) ReadAllMeters() map[int]struct{ Import, Export float64 } {
-	smc.mu.RLock()
-	defer smc.mu.RUnlock()
-
-	result := make(map[int]struct{ Import, Export float64 })
-	
-	for meterID, reading := range smc.meterReadings {
-		// Only include fresh readings
-		if time.Since(reading.LastUpdated) <= 15*time.Minute {
-			result[meterID] = struct{ Import, Export float64 }{
-				Import: reading.Import,
-				Export: reading.Export,
-			}
-		}
-	}
-
-	return result
+	// This method is kept for backward compatibility but not used
+	return make(map[int]struct{ Import, Export float64 })
 }
 
 func (smc *SmartMeCollector) GetConnectionStatus() map[string]interface{} {
-	smc.mu.RLock()
-	activeCount := len(smc.meterReadings)
-	smc.mu.RUnlock()
-
-	var freshCount int
-	for _, reading := range smc.meterReadings {
-		if time.Since(reading.LastUpdated) <= 15*time.Minute {
-			freshCount++
-		}
-	}
-
 	smc.failureCountMu.Lock()
 	failedCount := len(smc.failureCount)
 	smc.failureCountMu.Unlock()
 
 	return map[string]interface{}{
-		"smartme_meters_configured": activeCount,
-		"smartme_meters_fresh":      freshCount,
-		"smartme_meters_failed":     failedCount,
 		"smartme_collector_running": smc.isRunning,
+		"smartme_meters_failed":     failedCount,
+		"smartme_collection_mode":   "aligned_15min",
 	}
 }
 

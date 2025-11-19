@@ -458,17 +458,40 @@ func (dc *DataCollector) collectAndSaveMeters() {
 	// Smart-me meters: Get API readings with import/export
 	for _, meterID := range smartmeMeters {
 		info := meterInfo[meterID]
-		readingImport, readingExport, hasReading := dc.smartmeCollector.GetMeterReading(meterID)
 		
-		if !hasReading || readingImport == 0 {
-			log.Printf("WARNING: No Smart-me data for meter '%s'", info.name)
+		// Check if meter has too many consecutive failures
+		if dc.smartmeCollector.ShouldSkipMeter(meterID) {
+			log.Printf("WARNING: Skipping Smart-me meter '%s' due to consecutive failures", info.name)
 			continue
 		}
 		
+		// Get meter config to pass to collector
+		var configJSON string
+		err := dc.db.QueryRow("SELECT connection_config FROM meters WHERE id = ?", meterID).Scan(&configJSON)
+		if err != nil {
+			log.Printf("ERROR: Failed to get config for Smart-me meter '%s': %v", info.name, err)
+			continue
+		}
+		
+		// Fetch data directly from Smart-me API NOW (at exact collection time)
+		readingImport, readingExport, err := dc.smartmeCollector.CollectMeterNow(meterID, info.name, configJSON)
+		if err != nil {
+			log.Printf("ERROR: Failed to fetch Smart-me data for meter '%s': %v", info.name, err)
+			continue
+		}
+		
+		if readingImport == 0 {
+			log.Printf("WARNING: Zero reading from Smart-me meter '%s'", info.name)
+			continue
+		}
+		
+		// Save with REAL timestamp (no rounding needed - data just fetched!)
 		if err := dc.saveMeterReading(meterID, info.name, currentTime, readingImport, readingExport); err != nil {
 			log.Printf("ERROR: Failed to save Smart-me meter '%s': %v", info.name, err)
 		} else {
 			successCount++
+			log.Printf("[Smart-me] ✓ Saved meter '%s' at EXACT time %s: %.3f kWh import, %.3f kWh export",
+				info.name, currentTime.Format("15:04:05"), readingImport, readingExport)
 		}
 	}
 
