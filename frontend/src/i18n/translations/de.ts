@@ -1022,6 +1022,11 @@ export const de: Translations = {
   'meters.instructions.troubleshootingSmartmeApi': 'API-Konnektivität prüfen: https://api.smart-me.com/api/Devices/{device-id}',
   'meters.instructions.troubleshootingSmartmeAuth': 'Überprüfen Sie, dass der API-Schlüssel gültig und nicht abgelaufen ist',
   'meters.instructions.troubleshootingSmartmeDevice': 'Bestätigen Sie, dass die Geräte-ID korrekt ist und das Gerät im Smart-me Portal online ist',
+  'meters.testConnection': 'Verbindung testen',
+  'meters.testingConnection': 'Teste Verbindung...',
+  'meters.testConnectionHelp': 'Testen Sie die Konfiguration vor dem Speichern, um zu überprüfen, ob sie korrekt funktioniert',
+  'meters.testConnectionSuccess': 'Verbindungstest erfolgreich! Gerätedaten abgerufen.',
+  'meters.testConnectionFailed': 'Verbindungstest fehlgeschlagen. Bitte überprüfen Sie Ihre Konfiguration.',
 
   // ============================================================================
   // CHARGERS
