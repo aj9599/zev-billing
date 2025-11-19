@@ -109,45 +109,27 @@ export default function ChargerCard({
         }
     
         try {
-            // Parse ISO 8601 datetime - handle various formats
-            let startTime: Date;
+            // Add 'Z' if no timezone indicator to force UTC interpretation
+            const timestamp = startTimeStr.endsWith('Z') ? startTimeStr : startTimeStr + 'Z';
+            const startTime = new Date(timestamp);
             
-            // Try parsing as ISO string first
-            startTime = new Date(startTimeStr);
-            
-            // Validate parsed date
             if (isNaN(startTime.getTime())) {
-                console.error('[ChargerCard] Invalid start time:', startTimeStr);
                 return '';
             }
     
-            const now = new Date();
-            const diffMs = now.getTime() - startTime.getTime();
-    
-            if (diffMs < 0) {
-                console.error('[ChargerCard] Start time in future:', startTimeStr);
-                return '';
-            }
-    
-            // If duration is more than 7 days, something is wrong
-            if (diffMs > 7 * 24 * 60 * 60 * 1000) {
-                console.error('[ChargerCard] Duration too long (>7 days), likely invalid timestamp:', startTimeStr);
-                return '';
-            }
+            const diffMs = Date.now() - startTime.getTime();
+            
+            if (diffMs < 0) return ''; // Safety check
     
             const hours = Math.floor(diffMs / (1000 * 60 * 60));
             const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
     
-            if (hours > 0) {
-                return `${hours}h ${minutes}m`;
-            } else if (minutes > 0) {
-                return `${minutes}m`;
-            } else {
-                const seconds = Math.floor(diffMs / 1000);
-                return `${seconds}s`;
-            }
-        } catch (e) {
-            console.error('[ChargerCard] Duration calculation error:', e, 'for timestamp:', startTimeStr);
+            if (hours > 0) return `${hours}h ${minutes}m`;
+            if (minutes > 0) return `${minutes}m`;
+            
+            const seconds = Math.floor(diffMs / 1000);
+            return `${seconds}s`;
+        } catch {
             return '';
         }
     };
