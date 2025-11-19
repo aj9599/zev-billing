@@ -234,7 +234,7 @@ Contributions welcome! Please:
 
 ## 📝 License
 
-[MIT License](LICENSE)
+[CC BY-NC 4.0 License](LICENSE)
 
 ## 🔒 Security
 
