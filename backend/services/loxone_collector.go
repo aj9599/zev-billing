@@ -603,20 +603,10 @@ func (lc *LoxoneCollector) initializeConnections() {
 					isShuttingDown:   false,
 					reconnectAttempt: 0,
 					
-					// Chargers are always local connections
-					reconnectBackoff: func() time.Duration {
-					if connectionMode == "remote" {
-						return 10 * time.Second // Remote: start slower
-					}
-					return 2 * time.Second // Local: fast
-				}(),
-					maxBackoff: func() time.Duration {
-					if connectionMode == "remote" {
-						return 300 * time.Second // Remote: max 5min
-					}
-					return 30 * time.Second // Local: max 30s
-				}(),
-					dnsCache:         nil, // No DNS cache for local
+					// Chargers are always local connections (not remote)
+					reconnectBackoff: 2 * time.Second,   // Local: fast reconnect
+					maxBackoff:       30 * time.Second,  // Local: max 30 seconds
+					dnsCache:         nil,               // No DNS cache for local
 				}
 				connectionDevices[connKey] = conn
 				log.Printf("   ðŸ“¡ Created new WebSocket connection for %s", host)
