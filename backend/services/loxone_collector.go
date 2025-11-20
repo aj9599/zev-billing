@@ -1300,6 +1300,7 @@ func (conn *LoxoneWebSocketConnection) ConnectWithBackoff(db *sql.DB) {
 			conn.mu.Lock()
 			wasPortChange := conn.portChangeInProgress
 			conn.portChangeInProgress = false
+			deviceCount := len(conn.devices)
 			conn.mu.Unlock()
 
 			if wasPortChange {
