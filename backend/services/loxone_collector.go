@@ -1069,16 +1069,17 @@ func (conn *LoxoneWebSocketConnection) readLoxoneMessage() (messageType byte, js
 }
 
 // safeWriteMessage writes a message to WebSocket with mutex protection
+// Note: We only check if ws != nil, not isConnected, because this function
+// is also called during authentication BEFORE isConnected is set to true
 func (conn *LoxoneWebSocketConnection) safeWriteMessage(messageType int, data []byte) error {
     conn.writeMu.Lock()
     defer conn.writeMu.Unlock()
 
     conn.mu.Lock()
     ws := conn.ws
-    isConnected := conn.isConnected
     conn.mu.Unlock()
 
-    if ws == nil || !isConnected {
+    if ws == nil {
         return fmt.Errorf("not connected")
     }
 
