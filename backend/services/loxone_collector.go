@@ -82,15 +82,15 @@ func classifyError(err error) ErrorType {
 
 // isProtocolError checks if an error is a WebSocket protocol error (recoverable)
 func isProtocolError(err error) bool {
-    if err == nil {
-        return false
-    }
-    errStr := err.Error()
-    return strings.Contains(errStr, "continuation after FIN") ||
-        strings.Contains(errStr, "RSV1 set") ||
-        strings.Contains(errStr, "RSV2 set") ||
-        strings.Contains(errStr, "RSV3 set") ||
-        strings.Contains(errStr, "FIN not set")
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "continuation after FIN") ||
+		strings.Contains(errStr, "RSV1 set") ||
+		strings.Contains(errStr, "RSV2 set") ||
+		strings.Contains(errStr, "RSV3 set") ||
+		strings.Contains(errStr, "FIN not set")
 }
 
 // DNSCache stores DNS resolution results to avoid excessive lookups
@@ -164,8 +164,8 @@ type LoxoneWebSocketConnection struct {
 	lastDisconnectReason string
 	lastDisconnectTime   time.Time
 	portChangeInProgress bool
-    writeMu sync.Mutex
-    collectionInProgress bool 
+	writeMu              sync.Mutex
+	collectionInProgress bool
 
 	// Backoff for reconnection
 	reconnectBackoff time.Duration
@@ -200,10 +200,11 @@ type LoxoneDevice struct {
 	ExportDeviceID string // For virtual_output_dual mode only
 
 	// FOR CHARGERS - existing fields:
-	PowerUUID  string
-	StateUUID  string
-	UserIDUUID string
-	ModeUUID   string
+	PowerUUID        string
+	StateUUID        string
+	UserIDUUID       string
+	ModeUUID         string
+	ChargerBlockUUID string
 
 	lastReading       float64
 	lastReadingExport float64 // ADD THIS
@@ -574,7 +575,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 			}
 
 			chargerCount++
-			log.Println("──────────────────────────────────────────────────────────────")
+			log.Println("────────────────────────────────────────────────────────────────")
 			log.Printf("🔌 FOUND LOXONE CHARGER #%d", chargerCount)
 			log.Printf("   Name: '%s'", name)
 			log.Printf("   ID: %d", id)
@@ -590,6 +591,11 @@ func (lc *LoxoneCollector) initializeConnections() {
 			host, _ := config["loxone_host"].(string)
 			username, _ := config["loxone_username"].(string)
 			password, _ := config["loxone_password"].(string)
+
+			// Check if this is single-block mode (Weidmüller single UUID)
+			chargerBlockUUID, _ := config["loxone_charger_block_uuid"].(string)
+
+			// For backward compatibility, also check for multi-UUID mode
 			powerUUID, _ := config["loxone_power_uuid"].(string)
 			stateUUID, _ := config["loxone_state_uuid"].(string)
 			userIDUUID, _ := config["loxone_user_id_uuid"].(string)
@@ -597,14 +603,27 @@ func (lc *LoxoneCollector) initializeConnections() {
 
 			log.Printf("   ├─ Host: %s", host)
 			log.Printf("   ├─ Username: %s", username)
-			log.Printf("   ├─ Power UUID: %s", powerUUID)
-			log.Printf("   ├─ State UUID: %s", stateUUID)
-			log.Printf("   ├─ User ID UUID: %s", userIDUUID)
-			log.Printf("   └─ Mode UUID: %s", modeUUID)
 
-			if host == "" || powerUUID == "" || stateUUID == "" || userIDUUID == "" || modeUUID == "" {
-				log.Printf("   ⚠️  WARNING: Incomplete config - missing host or UUIDs - skipping")
-				continue
+			// Determine which mode we're using
+			if chargerBlockUUID != "" {
+				log.Printf("   ├─ Mode: Single-block (Weidmüller)")
+				log.Printf("   └─ Charger Block UUID: %s", chargerBlockUUID)
+
+				if host == "" || chargerBlockUUID == "" {
+					log.Printf("   ⚠️  WARNING: Incomplete config - missing host or block UUID - skipping")
+					continue
+				}
+			} else {
+				log.Printf("   ├─ Mode: Multi-UUID (traditional)")
+				log.Printf("   ├─ Power UUID: %s", powerUUID)
+				log.Printf("   ├─ State UUID: %s", stateUUID)
+				log.Printf("   ├─ User ID UUID: %s", userIDUUID)
+				log.Printf("   └─ Mode UUID: %s", modeUUID)
+
+				if host == "" || powerUUID == "" || stateUUID == "" || userIDUUID == "" || modeUUID == "" {
+					log.Printf("   ⚠️  WARNING: Incomplete config - missing host or UUIDs - skipping")
+					continue
+				}
 			}
 
 			connKey := fmt.Sprintf("local|%s|%s|%s", host, username, password)
@@ -620,31 +639,30 @@ func (lc *LoxoneCollector) initializeConnections() {
 					db:               lc.db,
 					isShuttingDown:   false,
 					reconnectAttempt: 0,
-
-					// Chargers are always local connections (not remote)
-					reconnectBackoff: 1 * time.Second,  // Local: fast reconnect
-					maxBackoff:       15 * time.Second, // Local: max 30 seconds
-					dnsCache:         nil,              // No DNS cache for local
+					reconnectBackoff: 1 * time.Second,
+					maxBackoff:       15 * time.Second,
+					dnsCache:         nil,
 				}
 				connectionDevices[connKey] = conn
-				log.Printf("   📉 Created new WebSocket connection for %s", host)
+				log.Printf("   🔉 Created new WebSocket connection for %s", host)
 			} else {
-				log.Printf("   ☻️  Reusing existing WebSocket connection for %s", host)
+				log.Printf("   ♻️  Reusing existing WebSocket connection for %s", host)
 			}
 
 			device := &LoxoneDevice{
-				ID:         id,
-				Name:       name,
-				Type:       "charger",
-				PowerUUID:  powerUUID,
-				StateUUID:  stateUUID,
-				UserIDUUID: userIDUUID,
-				ModeUUID:   modeUUID,
+				ID:               id,
+				Name:             name,
+				Type:             "charger",
+				ChargerBlockUUID: chargerBlockUUID, // NEW: Store single-block UUID
+				PowerUUID:        powerUUID,
+				StateUUID:        stateUUID,
+				UserIDUUID:       userIDUUID,
+				ModeUUID:         modeUUID,
 			}
 			conn.devices = append(conn.devices, device)
 		}
 
-		log.Printf("✔️ Loaded %d Loxone chargers", chargerCount)
+		log.Printf("✅ Loaded %d Loxone chargers", chargerCount)
 	}
 
 	// Start all connections
@@ -1072,18 +1090,18 @@ func (conn *LoxoneWebSocketConnection) readLoxoneMessage() (messageType byte, js
 // Note: We only check if ws != nil, not isConnected, because this function
 // is also called during authentication BEFORE isConnected is set to true
 func (conn *LoxoneWebSocketConnection) safeWriteMessage(messageType int, data []byte) error {
-    conn.writeMu.Lock()
-    defer conn.writeMu.Unlock()
+	conn.writeMu.Lock()
+	defer conn.writeMu.Unlock()
 
-    conn.mu.Lock()
-    ws := conn.ws
-    conn.mu.Unlock()
+	conn.mu.Lock()
+	ws := conn.ws
+	conn.mu.Unlock()
 
-    if ws == nil {
-        return fmt.Errorf("not connected")
-    }
+	if ws == nil {
+		return fmt.Errorf("not connected")
+	}
 
-    return ws.WriteMessage(messageType, data)
+	return ws.WriteMessage(messageType, data)
 }
 
 func (conn *LoxoneWebSocketConnection) Connect(db *sql.DB) {
@@ -1740,143 +1758,143 @@ func (conn *LoxoneWebSocketConnection) extractJSON(message []byte) []byte {
 // keepalive sends periodic keepalive messages to prevent connection timeout
 // According to Loxone documentation, keepalive should be sent every 5 minutes
 func (conn *LoxoneWebSocketConnection) keepalive() {
-    defer conn.goroutinesWg.Done()
+	defer conn.goroutinesWg.Done()
 
-    log.Printf("💓 KEEPALIVE STARTED for %s (interval: 4 minutes)", conn.Host)
+	log.Printf("💓 KEEPALIVE STARTED for %s (interval: 4 minutes)", conn.Host)
 
-    ticker := time.NewTicker(4 * time.Minute)
-    defer ticker.Stop()
+	ticker := time.NewTicker(4 * time.Minute)
+	defer ticker.Stop()
 
-    for {
-        select {
-        case <-conn.stopChan:
-            log.Printf("🗑️ [%s] Keepalive stopping", conn.Host)
-            return
-        case <-ticker.C:
-            conn.mu.Lock()
-            if !conn.isConnected || conn.ws == nil {
-                log.Printf("⚠️  [%s] Not connected, keepalive stopping", conn.Host)
-                conn.mu.Unlock()
-                return
-            }
+	for {
+		select {
+		case <-conn.stopChan:
+			log.Printf("🗑️ [%s] Keepalive stopping", conn.Host)
+			return
+		case <-ticker.C:
+			conn.mu.Lock()
+			if !conn.isConnected || conn.ws == nil {
+				log.Printf("⚠️  [%s] Not connected, keepalive stopping", conn.Host)
+				conn.mu.Unlock()
+				return
+			}
 
-            // NEW: Skip keepalive if collection is in progress
-            if conn.collectionInProgress {
-                log.Printf("⏳ [%s] Collection in progress, skipping keepalive", conn.Host)
-                conn.mu.Unlock()
-                continue
-            }
-            conn.mu.Unlock()
+			// NEW: Skip keepalive if collection is in progress
+			if conn.collectionInProgress {
+				log.Printf("⏳ [%s] Collection in progress, skipping keepalive", conn.Host)
+				conn.mu.Unlock()
+				continue
+			}
+			conn.mu.Unlock()
 
-            keepaliveCmd := "keepalive"
-            log.Printf("💓 [%s] Sending keepalive...", conn.Host)
+			keepaliveCmd := "keepalive"
+			log.Printf("💓 [%s] Sending keepalive...", conn.Host)
 
-            // NEW: Use safe write instead of direct write
-            if err := conn.safeWriteMessage(websocket.TextMessage, []byte(keepaliveCmd)); err != nil {
-                log.Printf("❌ [%s] Failed to send keepalive: %v", conn.Host, err)
-                conn.mu.Lock()
-                conn.isConnected = false
-                conn.tokenValid = false
-                conn.lastError = fmt.Sprintf("Keepalive failed: %v", err)
-                conn.mu.Unlock()
+			// NEW: Use safe write instead of direct write
+			if err := conn.safeWriteMessage(websocket.TextMessage, []byte(keepaliveCmd)); err != nil {
+				log.Printf("❌ [%s] Failed to send keepalive: %v", conn.Host, err)
+				conn.mu.Lock()
+				conn.isConnected = false
+				conn.tokenValid = false
+				conn.lastError = fmt.Sprintf("Keepalive failed: %v", err)
+				conn.mu.Unlock()
 
-                conn.logToDatabase("Loxone Keepalive Failed",
-                    fmt.Sprintf("Host '%s': %v - triggering reconnect", conn.Host, err))
+				conn.logToDatabase("Loxone Keepalive Failed",
+					fmt.Sprintf("Host '%s': %v - triggering reconnect", conn.Host, err))
 
-                go conn.ConnectWithBackoff(conn.db)
-                return
-            }
+				go conn.ConnectWithBackoff(conn.db)
+				return
+			}
 
-            log.Printf("✔️ [%s] Keepalive sent successfully", conn.Host)
-        }
-    }
+			log.Printf("✔️ [%s] Keepalive sent successfully", conn.Host)
+		}
+	}
 }
 
 func (conn *LoxoneWebSocketConnection) monitorTokenExpiry(db *sql.DB) {
-    defer conn.goroutinesWg.Done()
+	defer conn.goroutinesWg.Done()
 
-    log.Printf("🔑 TOKEN MONITOR STARTED for %s (collection-window aware)", conn.Host)
+	log.Printf("🔑 TOKEN MONITOR STARTED for %s (collection-window aware)", conn.Host)
 
-    // Check every 3 minutes instead of 5
-    ticker := time.NewTicker(3 * time.Minute)
-    defer ticker.Stop()
+	// Check every 3 minutes instead of 5
+	ticker := time.NewTicker(3 * time.Minute)
+	defer ticker.Stop()
 
-    for {
-        select {
-        case <-conn.stopChan:
-            log.Printf("🗑️ [%s] Token monitor stopping", conn.Host)
-            return
-        case <-ticker.C:
-            conn.mu.Lock()
-            isConnected := conn.isConnected
-            tokenValid := conn.tokenValid
-            tokenExpiry := conn.tokenExpiry
-            collectionInProgress := conn.collectionInProgress
-            conn.mu.Unlock()
+	for {
+		select {
+		case <-conn.stopChan:
+			log.Printf("🗑️ [%s] Token monitor stopping", conn.Host)
+			return
+		case <-ticker.C:
+			conn.mu.Lock()
+			isConnected := conn.isConnected
+			tokenValid := conn.tokenValid
+			tokenExpiry := conn.tokenExpiry
+			collectionInProgress := conn.collectionInProgress
+			conn.mu.Unlock()
 
-            if !isConnected {
-                log.Printf("⚠️  [%s] Not connected, token monitor stopping", conn.Host)
-                return
-            }
+			if !isConnected {
+				log.Printf("⚠️  [%s] Not connected, token monitor stopping", conn.Host)
+				return
+			}
 
-            // NEW: Skip token operations during collection
-            if collectionInProgress {
-                log.Printf("⏳ [%s] Collection in progress, skipping token check", conn.Host)
-                continue
-            }
+			// NEW: Skip token operations during collection
+			if collectionInProgress {
+				log.Printf("⏳ [%s] Collection in progress, skipping token check", conn.Host)
+				continue
+			}
 
-            // NEW: Skip if we're within 2 minutes of a collection window (:00, :15, :30, :45)
-            minute := time.Now().Minute()
-            nearCollection := (minute >= 58 || minute <= 2) || 
-                             (minute >= 13 && minute <= 17) ||
-                             (minute >= 28 && minute <= 32) ||
-                             (minute >= 43 && minute <= 47)
-            if nearCollection {
-                log.Printf("⏳ [%s] Near collection window (minute=%d), deferring token check", conn.Host, minute)
-                continue
-            }
+			// NEW: Skip if we're within 2 minutes of a collection window (:00, :15, :30, :45)
+			minute := time.Now().Minute()
+			nearCollection := (minute >= 58 || minute <= 2) ||
+				(minute >= 13 && minute <= 17) ||
+				(minute >= 28 && minute <= 32) ||
+				(minute >= 43 && minute <= 47)
+			if nearCollection {
+				log.Printf("⏳ [%s] Near collection window (minute=%d), deferring token check", conn.Host, minute)
+				continue
+			}
 
-            // Check token with 2-minute safety margin
-            if !tokenValid || time.Now().After(tokenExpiry.Add(-2*time.Minute)) {
-                timeUntilExpiry := time.Until(tokenExpiry)
-                log.Printf("⚠️  [%s] Token invalid or expiring soon (%.1f min), refreshing...",
-                    conn.Host, timeUntilExpiry.Minutes())
+			// Check token with 2-minute safety margin
+			if !tokenValid || time.Now().After(tokenExpiry.Add(-2*time.Minute)) {
+				timeUntilExpiry := time.Until(tokenExpiry)
+				log.Printf("⚠️  [%s] Token invalid or expiring soon (%.1f min), refreshing...",
+					conn.Host, timeUntilExpiry.Minutes())
 
-                conn.logToDatabase("Loxone Token Expiring",
-                    fmt.Sprintf("Host '%s' token expiring, refreshing...", conn.Host))
+				conn.logToDatabase("Loxone Token Expiring",
+					fmt.Sprintf("Host '%s' token expiring, refreshing...", conn.Host))
 
-                if err := conn.ensureAuth(); err != nil {
-                    log.Printf("❌ [%s] Failed to ensure auth: %v", conn.Host, err)
-                    log.Printf("   Triggering full reconnect...")
-                    conn.logToDatabase("Loxone Auth Check Failed",
-                        fmt.Sprintf("Host '%s': %v - reconnecting", conn.Host, err))
+				if err := conn.ensureAuth(); err != nil {
+					log.Printf("❌ [%s] Failed to ensure auth: %v", conn.Host, err)
+					log.Printf("   Triggering full reconnect...")
+					conn.logToDatabase("Loxone Auth Check Failed",
+						fmt.Sprintf("Host '%s': %v - reconnecting", conn.Host, err))
 
-                    conn.mu.Lock()
-                    conn.isConnected = false
-                    conn.tokenValid = false
-                    if conn.ws != nil {
-                        conn.ws.Close()
-                    }
-                    isShuttingDown := conn.isShuttingDown
-                    conn.mu.Unlock()
+					conn.mu.Lock()
+					conn.isConnected = false
+					conn.tokenValid = false
+					if conn.ws != nil {
+						conn.ws.Close()
+					}
+					isShuttingDown := conn.isShuttingDown
+					conn.mu.Unlock()
 
-                    conn.updateDeviceStatus(db, "🔄 Auth failed, reconnecting...")
+					conn.updateDeviceStatus(db, "🔄 Auth failed, reconnecting...")
 
-                    if !isShuttingDown {
-                        log.Printf("🔄 [%s] Triggering automatic reconnect", conn.Host)
-                        go conn.ConnectWithBackoff(db)
-                    }
-                    return
-                }
+					if !isShuttingDown {
+						log.Printf("🔄 [%s] Triggering automatic reconnect", conn.Host)
+						go conn.ConnectWithBackoff(db)
+					}
+					return
+				}
 
-                conn.updateDeviceStatus(db,
-                    fmt.Sprintf("🟢 Token refreshed at %s", time.Now().Format("2006-01-02 15:04:05")))
-            } else {
-                timeUntilExpiry := time.Until(tokenExpiry)
-                log.Printf("✔️ [%s] Token valid for %.1f hours", conn.Host, timeUntilExpiry.Hours())
-            }
-        }
-    }
+				conn.updateDeviceStatus(db,
+					fmt.Sprintf("🟢 Token refreshed at %s", time.Now().Format("2006-01-02 15:04:05")))
+			} else {
+				timeUntilExpiry := time.Until(tokenExpiry)
+				log.Printf("✔️ [%s] Token valid for %.1f hours", conn.Host, timeUntilExpiry.Hours())
+			}
+		}
+	}
 }
 
 func min(a, b int) int {
@@ -1887,159 +1905,184 @@ func min(a, b int) int {
 }
 
 func (conn *LoxoneWebSocketConnection) requestData() {
-    defer conn.goroutinesWg.Done()
+	defer conn.goroutinesWg.Done()
 
-    log.Printf("⏰ DATA REQUEST SCHEDULER STARTED for %s", conn.Host)
-    log.Printf("   Collection interval: 15 minutes (at :00, :15, :30, :45)")
+	log.Printf("⏰ DATA REQUEST SCHEDULER STARTED for %s", conn.Host)
+	log.Printf("   Collection interval: 15 minutes (at :00, :15, :30, :45)")
 
-    for {
-        now := time.Now()
-        next := getNextQuarterHour(now)
-        waitDuration := next.Sub(now)
+	for {
+		now := time.Now()
+		next := getNextQuarterHour(now)
+		waitDuration := next.Sub(now)
 
-        log.Printf("📅 [%s] Next data request scheduled for %s (in %.0f seconds)",
-            conn.Host, next.Format("15:04:05"), waitDuration.Seconds())
+		log.Printf("📅 [%s] Next data request scheduled for %s (in %.0f seconds)",
+			conn.Host, next.Format("15:04:05"), waitDuration.Seconds())
 
-        select {
-        case <-conn.stopChan:
-            log.Printf("🗑️ [%s] Data request scheduler stopping", conn.Host)
-            return
-        case <-time.After(waitDuration):
-            // Continue to data request
-        }
+		select {
+		case <-conn.stopChan:
+			log.Printf("🗑️ [%s] Data request scheduler stopping", conn.Host)
+			return
+		case <-time.After(waitDuration):
+			// Continue to data request
+		}
 
-        // NEW: Mark collection as in progress BEFORE any operations
-        conn.mu.Lock()
-        conn.collectionInProgress = true
-        conn.mu.Unlock()
+		// NEW: Mark collection as in progress BEFORE any operations
+		conn.mu.Lock()
+		conn.collectionInProgress = true
+		conn.mu.Unlock()
 
-        // CRITICAL: Ensure auth before sending requests
-        if err := conn.ensureAuth(); err != nil {
-            log.Printf("❌ [%s] Auth check failed before data request: %v", conn.Host, err)
-            log.Printf("   Skipping this collection cycle, will trigger reconnect")
+		// CRITICAL: Ensure auth before sending requests
+		if err := conn.ensureAuth(); err != nil {
+			log.Printf("❌ [%s] Auth check failed before data request: %v", conn.Host, err)
+			log.Printf("   Skipping this collection cycle, will trigger reconnect")
 
-            conn.mu.Lock()
-            conn.isConnected = false
-            conn.tokenValid = false
-            conn.collectionInProgress = false  // Clear flag on error
-            conn.mu.Unlock()
+			conn.mu.Lock()
+			conn.isConnected = false
+			conn.tokenValid = false
+			conn.collectionInProgress = false // Clear flag on error
+			conn.mu.Unlock()
 
-            go conn.ConnectWithBackoff(conn.db)
-            return
-        }
+			go conn.ConnectWithBackoff(conn.db)
+			return
+		}
 
-        conn.mu.Lock()
-        if !conn.isConnected || conn.ws == nil {
-            log.Printf("⚠️  [%s] Not connected after auth check, stopping scheduler", conn.Host)
-            conn.collectionInProgress = false  // Clear flag
-            conn.mu.Unlock()
-            return
-        }
+		conn.mu.Lock()
+		if !conn.isConnected || conn.ws == nil {
+			log.Printf("⚠️  [%s] Not connected after auth check, stopping scheduler", conn.Host)
+			conn.collectionInProgress = false // Clear flag
+			conn.mu.Unlock()
+			return
+		}
 
-        devices := conn.devices
-        conn.mu.Unlock()
+		devices := conn.devices
+		conn.mu.Unlock()
 
-        log.Println("──────────────────────────────────────────────────────────────")
-        log.Printf("📉 [%s] REQUESTING DATA FOR %d DEVICES", conn.Host, len(devices))
-        log.Printf("   Time: %s", time.Now().Format("15:04:05"))
+		log.Println("──────────────────────────────────────────────────────────────")
+		log.Printf("📉 [%s] REQUESTING DATA FOR %d DEVICES", conn.Host, len(devices))
+		log.Printf("   Time: %s", time.Now().Format("15:04:05"))
 
-        requestFailed := false
-        for _, device := range devices {
-            select {
-            case <-conn.stopChan:
-                log.Printf("🗑️ [%s] Data request scheduler stopping during collection", conn.Host)
-                conn.mu.Lock()
-                conn.collectionInProgress = false
-                conn.mu.Unlock()
-                return
-            default:
-            }
+		requestFailed := false
+		for _, device := range devices {
+			select {
+			case <-conn.stopChan:
+				log.Printf("🗑️ [%s] Data request scheduler stopping during collection", conn.Host)
+				conn.mu.Lock()
+				conn.collectionInProgress = false
+				conn.mu.Unlock()
+				return
+			default:
+			}
 
-            // REMOVED: Per-device auth check - this was causing race conditions!
-            // Auth was already verified above, don't check again during collection
+			// REMOVED: Per-device auth check - this was causing race conditions!
+			// Auth was already verified above, don't check again during collection
 
-            if device.Type == "meter" {
-                cmd := fmt.Sprintf("jdev/sps/io/%s/all", device.DeviceID)
-                log.Printf("   → METER [%s]: %s (mode: %s)", device.Name, device.DeviceID, device.LoxoneMode)
+			if device.Type == "meter" {
+				cmd := fmt.Sprintf("jdev/sps/io/%s/all", device.DeviceID)
+				log.Printf("   → METER [%s]: %s (mode: %s)", device.Name, device.DeviceID, device.LoxoneMode)
 
-                // NEW: Use safe write
-                if err := conn.safeWriteMessage(websocket.TextMessage, []byte(cmd)); err != nil {
-                    log.Printf("❌ Failed to request data for meter %s: %v", device.Name, err)
-                    conn.mu.Lock()
-                    conn.isConnected = false
-                    conn.tokenValid = false
-                    conn.lastError = fmt.Sprintf("Data request failed: %v", err)
-                    conn.mu.Unlock()
-                    conn.logToDatabase("Loxone Data Request Failed",
-                        fmt.Sprintf("Meter '%s': %v", device.Name, err))
-                    requestFailed = true
-                    break
-                }
-                time.Sleep(100 * time.Millisecond)
+				// NEW: Use safe write
+				if err := conn.safeWriteMessage(websocket.TextMessage, []byte(cmd)); err != nil {
+					log.Printf("❌ Failed to request data for meter %s: %v", device.Name, err)
+					conn.mu.Lock()
+					conn.isConnected = false
+					conn.tokenValid = false
+					conn.lastError = fmt.Sprintf("Data request failed: %v", err)
+					conn.mu.Unlock()
+					conn.logToDatabase("Loxone Data Request Failed",
+						fmt.Sprintf("Meter '%s': %v", device.Name, err))
+					requestFailed = true
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
 
-                if device.LoxoneMode == "virtual_output_dual" && device.ExportDeviceID != "" {
-                    cmdExport := fmt.Sprintf("jdev/sps/io/%s/all", device.ExportDeviceID)
-                    log.Printf("      ├─ Export UUID: %s", device.ExportDeviceID)
+				if device.LoxoneMode == "virtual_output_dual" && device.ExportDeviceID != "" {
+					cmdExport := fmt.Sprintf("jdev/sps/io/%s/all", device.ExportDeviceID)
+					log.Printf("      ├─ Export UUID: %s", device.ExportDeviceID)
 
-                    // NEW: Use safe write
-                    if err := conn.safeWriteMessage(websocket.TextMessage, []byte(cmdExport)); err != nil {
-                        log.Printf("❌ Failed to request export data for meter %s: %v", device.Name, err)
-                        requestFailed = true
-                        break
-                    }
-                    time.Sleep(100 * time.Millisecond)
-                }
-            } else if device.Type == "charger" {
-                log.Printf("   → CHARGER [%s]: requesting 4 UUIDs", device.Name)
+					// NEW: Use safe write
+					if err := conn.safeWriteMessage(websocket.TextMessage, []byte(cmdExport)); err != nil {
+						log.Printf("❌ Failed to request export data for meter %s: %v", device.Name, err)
+						requestFailed = true
+						break
+					}
+					time.Sleep(100 * time.Millisecond)
+				}
+			} else if device.Type == "charger" {
+				// Check if using single-block mode
+				if device.ChargerBlockUUID != "" {
+					// SINGLE-BLOCK MODE: Request one UUID that contains all outputs
+					log.Printf("   → CHARGER [%s]: single-block mode", device.Name)
+					log.Printf("      └─ Block UUID: %s", device.ChargerBlockUUID)
 
-                uuids := []struct {
-                    name string
-                    uuid string
-                }{
-                    {"power", device.PowerUUID},
-                    {"state", device.StateUUID},
-                    {"user_id", device.UserIDUUID},
-                    {"mode", device.ModeUUID},
-                }
+					cmd := fmt.Sprintf("jdev/sps/io/%s/all", device.ChargerBlockUUID)
 
-                for _, u := range uuids {
-                    cmd := fmt.Sprintf("jdev/sps/io/%s/all", u.uuid)
-                    log.Printf("      ├─ %s UUID: %s", u.name, u.uuid)
+					// NEW: Use safe write
+					if err := conn.safeWriteMessage(websocket.TextMessage, []byte(cmd)); err != nil {
+						log.Printf("❌ Failed to request data for charger %s: %v", device.Name, err)
+						conn.mu.Lock()
+						conn.isConnected = false
+						conn.tokenValid = false
+						conn.lastError = fmt.Sprintf("Data request failed: %v", err)
+						conn.mu.Unlock()
+						conn.logToDatabase("Loxone Data Request Failed",
+							fmt.Sprintf("Charger '%s': %v", device.Name, err))
+						requestFailed = true
+						break
+					}
+					time.Sleep(100 * time.Millisecond)
+				} else {
+					// MULTI-UUID MODE: Request 4 separate UUIDs (existing behavior)
+					log.Printf("   → CHARGER [%s]: requesting 4 UUIDs", device.Name)
 
-                    // NEW: Use safe write
-                    if err := conn.safeWriteMessage(websocket.TextMessage, []byte(cmd)); err != nil {
-                        log.Printf("❌ Failed to request %s for charger %s: %v", u.name, device.Name, err)
-                        conn.mu.Lock()
-                        conn.isConnected = false
-                        conn.tokenValid = false
-                        conn.lastError = fmt.Sprintf("Data request failed: %v", err)
-                        conn.mu.Unlock()
-                        conn.logToDatabase("Loxone Data Request Failed",
-                            fmt.Sprintf("Charger '%s' %s: %v", device.Name, u.name, err))
-                        requestFailed = true
-                        break
-                    }
-                    time.Sleep(100 * time.Millisecond)
-                }
+					uuids := []struct {
+						name string
+						uuid string
+					}{
+						{"power", device.PowerUUID},
+						{"state", device.StateUUID},
+						{"user_id", device.UserIDUUID},
+						{"mode", device.ModeUUID},
+					}
 
-                if requestFailed {
-                    break
-                }
-            }
-        }
+					for _, u := range uuids {
+						cmd := fmt.Sprintf("jdev/sps/io/%s/all", u.uuid)
+						log.Printf("      ├─ %s UUID: %s", u.name, u.uuid)
 
-        // NEW: Clear collection flag
-        conn.mu.Lock()
-        conn.collectionInProgress = false
-        conn.mu.Unlock()
+						// NEW: Use safe write
+						if err := conn.safeWriteMessage(websocket.TextMessage, []byte(cmd)); err != nil {
+							log.Printf("❌ Failed to request %s for charger %s: %v", u.name, device.Name, err)
+							conn.mu.Lock()
+							conn.isConnected = false
+							conn.tokenValid = false
+							conn.lastError = fmt.Sprintf("Data request failed: %v", err)
+							conn.mu.Unlock()
+							conn.logToDatabase("Loxone Data Request Failed",
+								fmt.Sprintf("Charger '%s' %s: %v", device.Name, u.name, err))
+							requestFailed = true
+							break
+						}
+						time.Sleep(100 * time.Millisecond)
+					}
 
-        if requestFailed {
-            log.Printf("   ❌ Data request failed, scheduler stopping")
-            return
-        }
+					if requestFailed {
+						break
+					}
+				}
+			}
+		}
 
-        log.Printf("   ✔️ All data requests sent successfully")
-    }
+		// NEW: Clear collection flag
+		conn.mu.Lock()
+		conn.collectionInProgress = false
+		conn.mu.Unlock()
+
+		if requestFailed {
+			log.Printf("   ❌ Data request failed, scheduler stopping")
+			return
+		}
+
+		log.Printf("   ✔️ All data requests sent successfully")
+	}
 }
 
 func (conn *LoxoneWebSocketConnection) readLoop(db *sql.DB) {
@@ -2212,25 +2255,37 @@ func (conn *LoxoneWebSocketConnection) readLoop(db *sql.DB) {
 						}
 					}
 				} else if device.Type == "charger" {
-					uuidMap := map[string]string{
-						device.PowerUUID:  "power",
-						device.StateUUID:  "state",
-						device.UserIDUUID: "user_id",
-						device.ModeUUID:   "mode",
-					}
-
-					for uuid, fieldName := range uuidMap {
-						expectedControl := fmt.Sprintf("dev/sps/io/%s/all", uuid)
+					// Check if this is single-block mode
+					if device.ChargerBlockUUID != "" {
+						// SINGLE-BLOCK MODE: Match the block UUID
+						expectedControl := fmt.Sprintf("dev/sps/io/%s/all", device.ChargerBlockUUID)
 						if strings.Contains(response.LL.Control, expectedControl) {
-							log.Printf("   🎯 [%s] Matched UUID for field '%s': %s", device.Name, fieldName, uuid)
-
-							if chargerData[device.ID] == nil {
-								chargerData[device.ID] = &ChargerDataCollection{}
-								log.Printf("   📋 [%s] Created new data collection for charger", device.Name)
-							}
-
-							conn.processChargerField(device, response, fieldName, chargerData[device.ID], db)
+							log.Printf("   🎯 [%s] Matched single-block UUID: %s", device.Name, device.ChargerBlockUUID)
+							conn.processChargerSingleBlock(device, response, db)
 							break
+						}
+					} else {
+						// MULTI-UUID MODE: Match individual UUIDs (existing logic)
+						uuidMap := map[string]string{
+							device.PowerUUID:  "power",
+							device.StateUUID:  "state",
+							device.UserIDUUID: "user_id",
+							device.ModeUUID:   "mode",
+						}
+
+						for uuid, fieldName := range uuidMap {
+							expectedControl := fmt.Sprintf("dev/sps/io/%s/all", uuid)
+							if strings.Contains(response.LL.Control, expectedControl) {
+								log.Printf("   🎯 [%s] Matched UUID for field '%s': %s", device.Name, fieldName, uuid)
+
+								if chargerData[device.ID] == nil {
+									chargerData[device.ID] = &ChargerDataCollection{}
+									log.Printf("   📋 [%s] Created new data collection for charger", device.Name)
+								}
+
+								conn.processChargerField(device, response, fieldName, chargerData[device.ID], db)
+								break
+							}
 						}
 					}
 				}
@@ -2738,6 +2793,155 @@ func (conn *LoxoneWebSocketConnection) processChargerField(device *LoxoneDevice,
 			log.Printf("   ❌ [%s] No data found for field '%s' in response", device.Name, fieldName)
 		}
 	}
+}
+
+// processChargerSingleBlock processes all charger data from a single Loxone response
+// This is for Weidmüller chargers configured with single-block UUID mode
+func (conn *LoxoneWebSocketConnection) processChargerSingleBlock(device *LoxoneDevice, response LoxoneResponse, db *sql.DB) {
+	log.Printf("   🔍 [%s] Processing single-block response", device.Name)
+	log.Printf("   📦 Number of outputs: %d", len(response.LL.Outputs))
+
+	// Extract values from the response outputs
+	var totalEnergyKWh float64  // output7 (Mr) - Total energy meter
+	var chargingPowerKW float64 // output3 (Cp) - Current charging power
+	var modeValue string        // output4 (M) - Charge mode (1-5=solar, 99=priority, 2=normal)
+	var userID string           // output21 (Uid) - User ID
+	var vehicleConnected int    // output1 (Vc) - 0=disconnected, 1=connected
+	var chargingActive int      // output2 (Cac) - 1=charging active
+	var lastSessionEnergyKWh float64  // output9 (Clc) - Last session energy
+
+	// Extract output1 (Vc) - Vehicle Connected
+	if output1, ok := response.LL.Outputs["output1"]; ok {
+		switch v := output1.Value.(type) {
+		case float64:
+			vehicleConnected = int(v)
+		case string:
+			if f, err := strconv.ParseFloat(v, 64); err == nil {
+				vehicleConnected = int(f)
+			}
+		}
+		log.Printf("      ├─ output1 (Vc - Vehicle Connected): %d", vehicleConnected)
+	}
+
+	// Extract output2 (Cac) - Charging Active
+	if output2, ok := response.LL.Outputs["output2"]; ok {
+		switch v := output2.Value.(type) {
+		case float64:
+			chargingActive = int(v)
+		case string:
+			if f, err := strconv.ParseFloat(v, 64); err == nil {
+				chargingActive = int(f)
+			}
+		}
+		log.Printf("      ├─ output2 (Cac - Charging Active): %d", chargingActive)
+	}
+
+	// Extract output3 (Cp) - Charging Power
+	if output3, ok := response.LL.Outputs["output3"]; ok {
+		switch v := output3.Value.(type) {
+		case float64:
+			chargingPowerKW = v
+		case string:
+			cleanValue := stripUnitSuffix(v)
+			if f, err := strconv.ParseFloat(cleanValue, 64); err == nil {
+				chargingPowerKW = f
+			}
+		}
+		log.Printf("      ├─ output3 (Cp - Charging Power): %.3f kW", chargingPowerKW)
+	}
+
+	// Extract output4 (M) - Mode
+	if output4, ok := response.LL.Outputs["output4"]; ok {
+		switch v := output4.Value.(type) {
+		case string:
+			modeValue = v
+		case float64:
+			modeValue = fmt.Sprintf("%.0f", v)
+		}
+		log.Printf("      ├─ output4 (M - Mode): %s", modeValue)
+	}
+
+	// Extract output7 (Mr) - Total Energy Meter
+	if output7, ok := response.LL.Outputs["output7"]; ok {
+		switch v := output7.Value.(type) {
+		case float64:
+			totalEnergyKWh = v
+		case string:
+			cleanValue := stripUnitSuffix(v)
+			if f, err := strconv.ParseFloat(cleanValue, 64); err == nil {
+				totalEnergyKWh = f
+			}
+		}
+		log.Printf("      ├─ output7 (Mr - Total Energy): %.3f kWh", totalEnergyKWh)
+	}
+
+	// Extract output9 (Clc) - Last Charging Session Energy
+	if output9, ok := response.LL.Outputs["output9"]; ok {
+		switch v := output9.Value.(type) {
+		case float64:
+			lastSessionEnergyKWh = v
+		case string:
+			cleanValue := stripUnitSuffix(v)
+			if f, err := strconv.ParseFloat(cleanValue, 64); err == nil {
+				lastSessionEnergyKWh = v
+			}
+		}
+		log.Printf("      ├─ output9 (Clc - Last Session Energy): %.3f kWh", lastSessionEnergyKWh)
+	}
+
+	// Extract output21 (Uid) - User ID
+	if output21, ok := response.LL.Outputs["output21"]; ok {
+		switch v := output21.Value.(type) {
+		case string:
+			userID = v
+		case float64:
+			if v > 0 {
+				userID = fmt.Sprintf("%.0f", v)
+			}
+		}
+		log.Printf("      └─ output21 (Uid - User ID): '%s'", userID)
+	}
+
+	// Determine state based on vehicle connection and charging status
+	// State logic:
+	// - If Vc=0 (no vehicle): state = "0" (Idle/Disconnected)
+	// - If Vc=1 and Cac=0 (vehicle connected, not charging): state = "0" (Cable Locked)
+	// - If Vc=1 and Cac=1 (vehicle connected, charging): state = "1" (Charging)
+	var stateValue string
+	if vehicleConnected == 0 {
+		stateValue = "0" // Disconnected/Idle
+	} else if chargingActive == 1 {
+		stateValue = "1" // Charging
+	} else {
+		stateValue = "0" // Connected but not charging
+	}
+
+	// Use "unknown" for empty user ID
+	if userID == "" {
+		userID = "unknown"
+	}
+
+	// Validate we have minimum required data
+	if modeValue == "" {
+		log.Printf("   ⚠️  [%s] Missing mode value in single-block response", device.Name)
+		return
+	}
+
+	// Update device state
+	device.lastReading = totalEnergyKWh
+	device.lastUpdate = time.Now()
+	device.readingGaps = 0
+
+	// Save to database
+	conn.saveChargerData(device, &ChargerDataCollection{
+		Power:  &totalEnergyKWh,
+		State:  &stateValue,
+		UserID: &userID,
+		Mode:   &modeValue,
+	}, db)
+
+	log.Printf("   ✅ [%s] Single-block processing complete: %.3f kWh, User: %s, Mode: %s, State: %s",
+		device.Name, totalEnergyKWh, userID, modeValue, stateValue)
 }
 
 func (conn *LoxoneWebSocketConnection) saveChargerData(device *LoxoneDevice, collection *ChargerDataCollection, db *sql.DB) {

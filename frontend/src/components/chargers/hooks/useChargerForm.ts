@@ -33,6 +33,7 @@ export interface ChargerConnectionConfig {
   loxone_state_uuid?: string;
   loxone_user_id_uuid?: string;
   loxone_mode_uuid?: string;
+  loxone_charger_block_uuid?: string;
   zaptec_username?: string;
   zaptec_password?: string;
   zaptec_charger_id?: string;
@@ -82,6 +83,7 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
     loxone_state_uuid: '',
     loxone_user_id_uuid: '',
     loxone_mode_uuid: '',
+    loxone_charger_block_uuid: '',
     zaptec_username: '',
     zaptec_password: '',
     zaptec_charger_id: '',

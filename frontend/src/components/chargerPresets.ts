@@ -60,6 +60,36 @@ export const WEIDMULLER_PRESET: PresetConfig = {
 };
 
 // ============================================================================
+// WeidmÃ¼ller Single-Block Preset (NEW)
+// ============================================================================
+export const WEIDMULLER_SINGLE_PRESET: PresetConfig = {
+  name: 'weidmuller_single',
+  label: 'WeidmÃ¼ller (Single UUID)',
+  description: 'WeidmÃ¼ller AC Smart chargers with Loxone single virtual output block (all data in one response)',
+  supportsPriority: true,
+  defaultStateMappings: {
+    cable_locked: '0',    // Not used in single-block mode
+    waiting_auth: '0',    // Not used in single-block mode
+    charging: '1',        // Cac = 1 (charging active)
+    idle: '0'            // Vc = 0 or Cac = 0 (disconnected/idle)
+  },
+  defaultModeMappings: {
+    normal: '2',         // M = 2 (normal mode)
+    priority: '99'       // M = 99 (priority mode)
+    // Solar modes: M = 1-5 (handled separately in display logic)
+  },
+  stateOptions: [
+    { value: 'idle', label: 'Idle/Disconnected' },
+    { value: 'charging', label: 'Charging' }
+  ],
+  modeOptions: [
+    { value: 'normal', label: 'Normal Charging' },
+    { value: 'solar', label: 'Solar Charging (1-5)' },
+    { value: 'priority', label: 'Priority Charging' }
+  ]
+};
+
+// ============================================================================
 // Zaptec Preset
 // ============================================================================
 export const ZAPTEC_PRESET: PresetConfig = {
@@ -128,6 +158,7 @@ export const ABB_PRESET: PresetConfig = {
 // Add new presets to this registry to make them available in the UI
 export const CHARGER_PRESETS: Record<string, PresetConfig> = {
   weidmuller: WEIDMULLER_PRESET,
+  weidmuller_single: WEIDMULLER_SINGLE_PRESET,  // NEW: Single-block mode
   zaptec: ZAPTEC_PRESET,
   // abb: ABB_PRESET,  // Uncomment when implementing
 };

@@ -34,6 +34,10 @@ export default function ChargerFormModal({
     return getPreset(formData.preset || 'weidmuller');
   };
 
+  // Determine if we're using single-block mode
+  const isSingleBlockMode = formData.preset === 'weidmuller_single';
+  const isMultiUuidMode = !isSingleBlockMode && formData.connection_type === 'loxone_api';
+
   return (
     <div style={{
       position: 'fixed', 
@@ -167,7 +171,7 @@ export default function ChargerFormModal({
                 }}>
                   <Wifi size={16} color="#10b981" />
                   <p style={{ fontSize: '13px', color: '#065f46', margin: 0 }}>
-                    <strong>{t('chargers.loxoneApiDescription')}</strong>
+                    <strong>{isSingleBlockMode ? 'Single UUID Mode - All data from one virtual output' : t('chargers.loxoneApiDescription')}</strong>
                   </p>
                 </div>
 
@@ -188,67 +192,92 @@ export default function ChargerFormModal({
                   </p>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                      {t('chargers.loxonePowerUuid')} *
-                    </label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={connectionConfig.loxone_power_uuid || ''}
-                      onChange={(e) => onConnectionConfigChange({ ...connectionConfig, loxone_power_uuid: e.target.value })}
-                      placeholder="1a2b3c4d-..."
-                      style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} 
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                      {t('chargers.loxoneStateUuid')} *
-                    </label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={connectionConfig.loxone_state_uuid || ''}
-                      onChange={(e) => onConnectionConfigChange({ ...connectionConfig, loxone_state_uuid: e.target.value })}
-                      placeholder="2b3c4d5e-..."
-                      style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} 
-                    />
-                  </div>
-                </div>
+                {isSingleBlockMode ? (
+                  // SINGLE-BLOCK MODE: Only one UUID needed
+                  <>
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                        Charger Block UUID *
+                      </label>
+                      <input 
+                        type="text" 
+                        required 
+                        value={connectionConfig.loxone_charger_block_uuid || ''}
+                        onChange={(e) => onConnectionConfigChange({ ...connectionConfig, loxone_charger_block_uuid: e.target.value })}
+                        placeholder="1ea26192-03d0-8c9b-ffff..."
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} 
+                      />
+                      <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                        The UUID of the Weidmüller virtual output block (contains all outputs)
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  // MULTI-UUID MODE: Original 4 UUIDs
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('chargers.loxonePowerUuid')} *
+                        </label>
+                        <input 
+                          type="text" 
+                          required 
+                          value={connectionConfig.loxone_power_uuid || ''}
+                          onChange={(e) => onConnectionConfigChange({ ...connectionConfig, loxone_power_uuid: e.target.value })}
+                          placeholder="1a2b3c4d-..."
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} 
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('chargers.loxoneStateUuid')} *
+                        </label>
+                        <input 
+                          type="text" 
+                          required 
+                          value={connectionConfig.loxone_state_uuid || ''}
+                          onChange={(e) => onConnectionConfigChange({ ...connectionConfig, loxone_state_uuid: e.target.value })}
+                          placeholder="2b3c4d5e-..."
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} 
+                        />
+                      </div>
+                    </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                      {t('chargers.loxoneUserIdUuid')} *
-                    </label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={connectionConfig.loxone_user_id_uuid || ''}
-                      onChange={(e) => onConnectionConfigChange({ ...connectionConfig, loxone_user_id_uuid: e.target.value })}
-                      placeholder="3c4d5e6f-..."
-                      style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} 
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                      {t('chargers.loxoneModeUuid')} *
-                    </label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={connectionConfig.loxone_mode_uuid || ''}
-                      onChange={(e) => onConnectionConfigChange({ ...connectionConfig, loxone_mode_uuid: e.target.value })}
-                      placeholder="4d5e6f7g-..."
-                      style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} 
-                    />
-                  </div>
-                </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('chargers.loxoneUserIdUuid')} *
+                        </label>
+                        <input 
+                          type="text" 
+                          required 
+                          value={connectionConfig.loxone_user_id_uuid || ''}
+                          onChange={(e) => onConnectionConfigChange({ ...connectionConfig, loxone_user_id_uuid: e.target.value })}
+                          placeholder="3c4d5e6f-..."
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} 
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
+                          {t('chargers.loxoneModeUuid')} *
+                        </label>
+                        <input 
+                          type="text" 
+                          required 
+                          value={connectionConfig.loxone_mode_uuid || ''}
+                          onChange={(e) => onConnectionConfigChange({ ...connectionConfig, loxone_mode_uuid: e.target.value })}
+                          placeholder="4d5e6f7g-..."
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} 
+                        />
+                      </div>
+                    </div>
 
-                <p style={{ fontSize: '11px', color: '#666', marginBottom: '12px' }}>
-                  {t('chargers.loxoneUuidsDescription')}
-                </p>
+                    <p style={{ fontSize: '11px', color: '#666', marginBottom: '12px' }}>
+                      {t('chargers.loxoneUuidsDescription')}
+                    </p>
+                  </>
+                )}
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                   <div>
@@ -582,8 +611,8 @@ export default function ChargerFormModal({
               </>
             )}
 
-            {/* State and Mode Mappings */}
-            {formData.preset !== 'zaptec' && (
+            {/* State and Mode Mappings - Hide for single-block mode */}
+            {formData.preset !== 'zaptec' && !isSingleBlockMode && (
               <>
                 <div style={{ marginTop: '20px', padding: '16px', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
                   <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>
