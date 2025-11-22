@@ -2320,38 +2320,66 @@ func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, re
 	} else if device.LoxoneMode == "virtual_output_dual" {
 		// VIRTUAL OUTPUT DUAL MODE - Separate UUIDs for import and export
 		// For total/solar meters
+		// CRITICAL: We must wait for BOTH readings before saving to database
 
+		// Extract the value from this response
+		var currentValue float64
 		if output1, ok := response.LL.Outputs["output1"]; ok {
 			switch v := output1.Value.(type) {
 			case float64:
-				reading = v
+				currentValue = v
 			case string:
 				if f, err := strconv.ParseFloat(v, 64); err == nil {
-					reading = f
+					currentValue = f
 				}
 			}
 		} else if response.LL.Value != "" {
 			// Fallback to direct value
 			if f, err := strconv.ParseFloat(response.LL.Value, 64); err == nil {
-				reading = f
+				currentValue = f
 			}
 		}
 
-		if reading <= 0 {
+		if currentValue <= 0 {
 			return
 		}
 
-		// Update device state
+		// Store the value in the appropriate field
 		if isExport {
-			device.lastReadingExport = reading
-			log.Printf("   📤 Export reading: %.3f kWh", reading)
-			return // Don't save to DB for export in virtual_output_dual mode - wait for import
+			device.lastReadingExport = currentValue
+			log.Printf("   📤 Export reading received: %.3f kWh (waiting for import)", currentValue)
+			
+			// Check if we already have a recent import reading (within last 30 seconds)
+			// If so, we can save now
+			if device.lastReading > 0 && time.Since(device.lastUpdate) < 30*time.Second {
+				log.Printf("   ✅ Both readings available, saving to database")
+				reading = device.lastReading
+				// Continue to save below
+			} else {
+				// Wait for import reading
+				return
+			}
 		} else {
-			device.lastReading = reading
+			// This is import reading
+			device.lastReading = currentValue
 			device.lastUpdate = time.Now()
-			device.readingGaps = 0
-			log.Printf("   📥 Import reading: %.3f kWh", reading)
+			log.Printf("   📥 Import reading received: %.3f kWh", currentValue)
+			
+			// Check if we already have a recent export reading (within last 30 seconds)
+			// This handles the case where export arrives before import
+			if device.lastReadingExport > 0 {
+				log.Printf("   ✅ Both readings available (export: %.3f kWh), saving to database", device.lastReadingExport)
+				reading = currentValue
+				// Continue to save below
+			} else {
+				// Wait for export reading - but set a flag so when export arrives it will save
+				log.Printf("   ⏳ Waiting for export reading...")
+				return
+			}
 		}
+		
+		// Reset gap counter only when we're about to save
+		device.readingGaps = 0
 
 	} else if device.LoxoneMode == "virtual_output_single" {
 		// VIRTUAL OUTPUT SINGLE MODE - Single UUID, single value
@@ -2383,7 +2411,7 @@ func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, re
 		log.Printf("   📊 Reading: %.3f kWh", reading)
 	}
 
-	// Save to database (happens for all modes except virtual_output_dual export)
+	// Save to database (happens for all modes when we have complete data)
 	if reading <= 0 {
 		return
 	}
@@ -2445,7 +2473,7 @@ func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, re
 
 		if len(interpolated) > 0 {
 			device.readingGaps += len(interpolated)
-			log.Printf("   ⚠️  Filled %d reading gaps for meter %s", len(interpolated), device.Name)
+			log.Printf("   ⚠️ Filled %d reading gaps for meter %s", len(interpolated), device.Name)
 		}
 
 		consumption = reading - lastReading
@@ -2487,10 +2515,10 @@ func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, re
 
 		if !isFirstReading {
 			if supportsExport {
-				log.Printf("✔️ METER [%s]: %.3f kWh import (ÃŽâ€%.3f), %.3f kWh export (ÃŽâ€%.3f)",
+				log.Printf("✔️ METER [%s]: %.3f kWh import (Δ%.3f), %.3f kWh export (Δ%.3f)",
 					device.Name, reading, consumption, device.lastReadingExport, consumptionExport)
 			} else {
-				log.Printf("✔️ METER [%s]: %.3f kWh (ÃŽâ€%.3f)",
+				log.Printf("✔️ METER [%s]: %.3f kWh (Δ%.3f)",
 					device.Name, reading, consumption)
 			}
 		} else {

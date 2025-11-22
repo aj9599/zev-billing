@@ -13,7 +13,7 @@ type Config struct {
 func Load() *Config {
 	return &Config{
 		DatabasePath:  getEnv("DATABASE_PATH", "./zev-billing.db"),
-		ServerAddress: getEnv("SERVER_ADDRESS", ":8080"),
+		ServerAddress: getEnv("SERVER_ADDRESS", ":8081"),//8081
 		JWTSecret:     getEnv("JWT_SECRET", "zev-billing-secret-change-in-production"),
 	}
 }
