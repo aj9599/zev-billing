@@ -356,18 +356,96 @@ MQTT_EOF
     fi
 fi
 
-# Check if Go is already installed
+# Check if Go is already installed with correct version
+GO_VERSION="1.25.0"
+GO_REQUIRED_MAJOR=1
+GO_REQUIRED_MINOR=25
+
+install_go() {
+    echo "Installing Go $GO_VERSION..."
+    
+    # Detect architecture
+    ARCH=$(uname -m)
+    case $ARCH in
+        x86_64)
+            GO_ARCH="amd64"
+            ;;
+        aarch64|arm64)
+            GO_ARCH="arm64"
+            ;;
+        armv7l|armv6l)
+            GO_ARCH="armv6l"
+            ;;
+        *)
+            echo -e "${RED}Unsupported architecture: $ARCH${NC}"
+            exit 1
+            ;;
+    esac
+    
+    echo "Detected architecture: $ARCH -> Go arch: $GO_ARCH"
+    
+    # Remove old Go installations
+    apt-get remove -y golang-go 2>/dev/null || true
+    rm -rf /usr/local/go
+    rm -rf /usr/lib/go*
+    
+    # Download and install Go
+    GO_TAR="go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
+    echo "Downloading $GO_TAR..."
+    wget -q "https://go.dev/dl/${GO_TAR}" -O /tmp/go.tar.gz
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Failed to download Go $GO_VERSION${NC}"
+        echo -e "${YELLOW}Trying latest stable version...${NC}"
+        # Fallback to a known working version
+        GO_VERSION="1.23.0"
+        GO_TAR="go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
+        wget -q "https://go.dev/dl/${GO_TAR}" -O /tmp/go.tar.gz || {
+            echo -e "${RED}Failed to download Go${NC}"
+            exit 1
+        }
+    fi
+    
+    tar -C /usr/local -xzf /tmp/go.tar.gz
+    rm /tmp/go.tar.gz
+    
+    # Update PATH
+    export PATH=/usr/local/go/bin:$PATH
+    
+    # Make PATH persistent
+    if ! grep -q "/usr/local/go/bin" /etc/profile; then
+        echo 'export PATH=/usr/local/go/bin:$PATH' >> /etc/profile
+    fi
+    
+    # Create symlink for convenience
+    ln -sf /usr/local/go/bin/go /usr/bin/go
+    
+    echo -e "${GREEN}Go $GO_VERSION installed successfully${NC}"
+}
+
 if command -v go &> /dev/null; then
-    echo -e "${GREEN}Go is already installed: $(go version)${NC}"
+    CURRENT_GO_VERSION=$(go version | grep -oP 'go\K[0-9]+\.[0-9]+' | head -1)
+    CURRENT_MAJOR=$(echo $CURRENT_GO_VERSION | cut -d. -f1)
+    CURRENT_MINOR=$(echo $CURRENT_GO_VERSION | cut -d. -f2)
+    
+    echo "Found Go version: $CURRENT_GO_VERSION"
+    
+    if [ "$CURRENT_MAJOR" -lt "$GO_REQUIRED_MAJOR" ] || \
+       ([ "$CURRENT_MAJOR" -eq "$GO_REQUIRED_MAJOR" ] && [ "$CURRENT_MINOR" -lt "$GO_REQUIRED_MINOR" ]); then
+        echo -e "${YELLOW}Go version $CURRENT_GO_VERSION is too old, need $GO_VERSION${NC}"
+        install_go
+    else
+        echo -e "${GREEN}Go is already installed: $(go version)${NC}"
+    fi
 else
-    echo "Installing Go..."
-    apt-get install -y golang-go || {
-        echo -e "${YELLOW}Warning: Could not install golang-go from apt, will try alternative method${NC}"
-        wget -q https://go.dev/dl/go1.21.5.linux-arm64.tar.gz -O /tmp/go.tar.gz
-        tar -C /usr/local -xzf /tmp/go.tar.gz
-        ln -sf /usr/local/go/bin/go /usr/bin/go
-        rm /tmp/go.tar.gz
-    }
+    install_go
+fi
+
+# Verify Go installation
+go version
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Go installation failed${NC}"
+    exit 1
 fi
 
 # Check if Node.js and npm are already installed
