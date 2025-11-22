@@ -150,6 +150,7 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
       loxone_state_uuid: '',
       loxone_user_id_uuid: '',
       loxone_mode_uuid: '',
+      loxone_charger_block_uuid: '',
       zaptec_username: '',
       zaptec_password: '',
       zaptec_charger_id: '',
@@ -205,6 +206,7 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
         loxone_state_uuid: config.loxone_state_uuid || '',
         loxone_user_id_uuid: config.loxone_user_id_uuid || '',
         loxone_mode_uuid: config.loxone_mode_uuid || '',
+        loxone_charger_block_uuid: config.loxone_charger_block_uuid || '',
         zaptec_username: config.zaptec_username || '',
         zaptec_password: config.zaptec_password || '',
         zaptec_charger_id: config.zaptec_charger_id || '',
@@ -238,18 +240,29 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+  
     let config: ChargerConnectionConfig = {};
-
+  
     if (formData.connection_type === 'loxone_api') {
+      // Check if this is single-block mode (weidmuller_single preset)
+      const isSingleBlock = formData.preset === 'weidmuller_single';
+      
       config = {
         loxone_host: connectionConfig.loxone_host,
         loxone_username: connectionConfig.loxone_username,
         loxone_password: connectionConfig.loxone_password,
-        loxone_power_uuid: connectionConfig.loxone_power_uuid,
-        loxone_state_uuid: connectionConfig.loxone_state_uuid,
-        loxone_user_id_uuid: connectionConfig.loxone_user_id_uuid,
-        loxone_mode_uuid: connectionConfig.loxone_mode_uuid,
+        // 👇 Conditionally save UUIDs based on mode
+        ...(isSingleBlock ? {
+          // Single-block mode: only save the charger block UUID
+          loxone_charger_block_uuid: connectionConfig.loxone_charger_block_uuid,
+        } : {
+          // Original mode: save all four separate UUIDs
+          loxone_power_uuid: connectionConfig.loxone_power_uuid,
+          loxone_state_uuid: connectionConfig.loxone_state_uuid,
+          loxone_user_id_uuid: connectionConfig.loxone_user_id_uuid,
+          loxone_mode_uuid: connectionConfig.loxone_mode_uuid,
+        }),
+        // Always save state and mode mappings
         state_cable_locked: connectionConfig.state_cable_locked,
         state_waiting_auth: connectionConfig.state_waiting_auth,
         state_charging: connectionConfig.state_charging,
@@ -308,12 +321,12 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
         mode_priority: connectionConfig.mode_priority
       };
     }
-
+  
     const dataToSend = {
       ...formData,
       connection_config: JSON.stringify(config)
     };
-
+  
     try {
       if (editingCharger) {
         await api.updateCharger(editingCharger.id, dataToSend);
