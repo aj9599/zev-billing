@@ -1,7 +1,6 @@
 module github.com/aj9599/zev-billing/backend
 
-go 1.19
-//go 1.25
+go 1.25
 
 require (
 	github.com/eclipse/paho.mqtt.golang v1.5.1
