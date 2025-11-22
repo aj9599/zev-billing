@@ -176,6 +176,19 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
       const config = JSON.parse(charger.connection_config);
       const preset = getPreset(charger.preset);
 
+      // 🔍 DEBUG: Log what we're loading
+      console.log('📝 EDIT CHARGER DEBUG:');
+      console.log('  Charger ID:', charger.id);
+      console.log('  Charger Name:', charger.name);
+      console.log('  Preset:', charger.preset);
+      console.log('  Connection Type:', charger.connection_type);
+      console.log('  Raw connection_config:', charger.connection_config);
+      console.log('  Parsed config:', config);
+      console.log('  Has loxone_charger_block_uuid:', 'loxone_charger_block_uuid' in config);
+      console.log('  Block UUID value:', config.loxone_charger_block_uuid);
+      console.log('  Block UUID type:', typeof config.loxone_charger_block_uuid);
+      console.log('  All config keys:', Object.keys(config));
+
       setConnectionConfig({
         power_endpoint: config.power_endpoint || '',
         state_endpoint: config.state_endpoint || '',
@@ -247,11 +260,19 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
       // Check if this is single-block mode (weidmuller_single preset)
       const isSingleBlock = formData.preset === 'weidmuller_single';
       
+      // 🔍 DEBUG: Log what we're about to save
+      console.log('💾 SAVE CHARGER DEBUG:');
+      console.log('  Preset:', formData.preset);
+      console.log('  Is Single Block:', isSingleBlock);
+      console.log('  Connection Type:', formData.connection_type);
+      console.log('  Block UUID from form:', connectionConfig.loxone_charger_block_uuid);
+      console.log('  Block UUID length:', connectionConfig.loxone_charger_block_uuid?.length);
+      
       config = {
         loxone_host: connectionConfig.loxone_host,
         loxone_username: connectionConfig.loxone_username,
         loxone_password: connectionConfig.loxone_password,
-        // 👇 Conditionally save UUIDs based on mode
+        // ðŸ‘‡ Conditionally save UUIDs based on mode
         ...(isSingleBlock ? {
           // Single-block mode: only save the charger block UUID
           loxone_charger_block_uuid: connectionConfig.loxone_charger_block_uuid,
@@ -270,6 +291,11 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
         mode_normal: connectionConfig.mode_normal,
         mode_priority: connectionConfig.mode_priority
       };
+      
+      // 🔍 DEBUG: Log the final config being saved
+      console.log('  Final config object:', config);
+      console.log('  Config has block UUID:', 'loxone_charger_block_uuid' in config);
+      console.log('  Config block UUID value:', config.loxone_charger_block_uuid);
     } else if (formData.connection_type === 'zaptec_api') {
       config = {
         zaptec_username: connectionConfig.zaptec_username,
@@ -326,6 +352,12 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
       ...formData,
       connection_config: JSON.stringify(config)
     };
+    
+    // 🔍 DEBUG: Log the final payload
+    console.log('📤 FINAL PAYLOAD TO API:');
+    console.log('  Full data:', dataToSend);
+    console.log('  connection_config (stringified):', dataToSend.connection_config);
+    console.log('  Re-parsed config:', JSON.parse(dataToSend.connection_config));
   
     try {
       if (editingCharger) {

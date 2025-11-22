@@ -1,3 +1,4 @@
+import React from 'react';
 import { X, Info, Wifi, AlertCircle } from 'lucide-react';
 import type { Charger, Building as BuildingType } from '../../types';
 import type { ChargerConnectionConfig } from './hooks/useChargerForm';
@@ -37,6 +38,17 @@ export default function ChargerFormModal({
   // Determine if we're using single-block mode
   const isSingleBlockMode = formData.preset === 'weidmuller_single';
   const isMultiUuidMode = !isSingleBlockMode && formData.connection_type === 'loxone_api';
+
+  // 🔍 DEBUG: Log form state on render
+  React.useEffect(() => {
+    console.log('🎨 MODAL RENDER STATE:');
+    console.log('  Preset:', formData.preset);
+    console.log('  Is Single Block Mode:', isSingleBlockMode);
+    console.log('  Is Multi UUID Mode:', isMultiUuidMode);
+    console.log('  Connection Type:', formData.connection_type);
+    console.log('  Block UUID from connectionConfig:', connectionConfig.loxone_charger_block_uuid);
+    console.log('  Has block UUID:', !!connectionConfig.loxone_charger_block_uuid);
+  }, [formData.preset, isSingleBlockMode, isMultiUuidMode, formData.connection_type, connectionConfig.loxone_charger_block_uuid]);
 
   return (
     <div style={{
@@ -208,7 +220,7 @@ export default function ChargerFormModal({
                         style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} 
                       />
                       <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                        The UUID of the Weidmüller virtual output block (contains all outputs)
+                        The UUID of the WeidmÃ¼ller virtual output block (contains all outputs)
                       </p>
                     </div>
                   </>
@@ -302,7 +314,7 @@ export default function ChargerFormModal({
                       required 
                       value={connectionConfig.loxone_password || ''}
                       onChange={(e) => onConnectionConfigChange({ ...connectionConfig, loxone_password: e.target.value })}
-                      placeholder="••••••••"
+                      placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                       style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} 
                     />
                   </div>
@@ -414,7 +426,7 @@ export default function ChargerFormModal({
                     required 
                     value={connectionConfig.zaptec_password || ''}
                     onChange={(e) => onConnectionConfigChange({ ...connectionConfig, zaptec_password: e.target.value })}
-                    placeholder="••••••••"
+                    placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                     style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} 
                   />
                 </div>
