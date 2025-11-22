@@ -2883,7 +2883,7 @@ func (conn *LoxoneWebSocketConnection) processChargerSingleBlock(device *LoxoneD
 		case string:
 			cleanValue := stripUnitSuffix(v)
 			if f, err := strconv.ParseFloat(cleanValue, 64); err == nil {
-				lastSessionEnergyKWh = v
+				lastSessionEnergyKWh = f
 			}
 		}
 		log.Printf("      ├─ output9 (Clc - Last Session Energy): %.3f kWh", lastSessionEnergyKWh)
