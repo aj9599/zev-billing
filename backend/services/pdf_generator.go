@@ -607,7 +607,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		}
 
 		.vzev-notice td {
-			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);
 			color: white;
 			padding: 12px 16px;
 			border-radius: 6px;
