@@ -157,7 +157,7 @@ export default function ChargerFormModal({
             </h3>
 
             {/* Loxone API Configuration */}
-            {formData.connection_type === 'loxone_api' && (
+            {(isSingleBlockMode || isMultiUuidMode) && (
               <>
                 <div style={{ 
                   backgroundColor: '#d1fae5', 
