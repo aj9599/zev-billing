@@ -2294,11 +2294,6 @@ func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, re
 
 		reading = importReading // Set reading for database save below
 
-		// For solar meters, export is the primary value - allow save even if import is 0
-		if isSolarMeter && importReading == 0 && exportReading > 0 {
-			reading = 0 // Keep import as 0, but we'll still save
-		}
-
 	} else if device.LoxoneMode == "energy_meter_block" {
 		// ENERGY METER BLOCK MODE - Single value from output1 (Mr)
 		// For apartment/heating/other meters
@@ -2327,7 +2322,7 @@ func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, re
 		// VIRTUAL OUTPUT DUAL MODE - Separate UUIDs for import and export
 		// For total/solar meters
 		// CRITICAL: We must wait for BOTH readings before saving to database
-		// EXCEPTION: For solar meters, export is primary - import might be 0
+		// EXCEPTION: For solar meters, if import is missing, use last known value or 0
 
 		// Extract the value from this response
 		var currentValue float64
@@ -2354,39 +2349,74 @@ func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, re
 				log.Printf("   ⚠️ Export reading is 0 or negative, skipping")
 				return
 			}
-			
+
 			device.lastReadingExport = currentValue
 			log.Printf("   📤 Export reading received: %.3f kWh", currentValue)
-			
+
 			// Check if we already have a recent import reading (within last 30 seconds)
-			if time.Since(device.lastUpdate) < 30*time.Second {
+			if time.Since(device.lastUpdate) < 30*time.Second && device.lastReading > 0 {
 				log.Printf("   ✅ Both readings available (import: %.3f kWh), saving to database", device.lastReading)
 				reading = device.lastReading
 				// Continue to save below
 			} else if isSolarMeter {
 				// For solar meters, export is the primary value
-				// If we don't have a recent import, use 0 for import and save anyway
-				log.Printf("   ☀️ Solar meter: No recent import reading, using 0 for import")
-				device.lastReading = 0
+				// If we don't have a recent import, get the last value from database or use 0
+				var lastImportFromDB float64
+				err := db.QueryRow(`
+					SELECT power_kwh FROM meter_readings 
+					WHERE meter_id = ? 
+					ORDER BY reading_time DESC LIMIT 1
+				`, device.ID).Scan(&lastImportFromDB)
+
+				if err == nil && lastImportFromDB > 0 {
+					log.Printf("   ☀️ Solar meter: No recent import, using last DB value: %.3f kWh", lastImportFromDB)
+					device.lastReading = lastImportFromDB
+					reading = lastImportFromDB
+				} else {
+					log.Printf("   ☀️ Solar meter: No import value available, using 0")
+					device.lastReading = 0
+					reading = 0
+				}
 				device.lastUpdate = time.Now()
-				reading = 0
 				// Continue to save below
 			} else {
-				// Wait for import reading
+				// For total meters, wait for import reading
 				log.Printf("   ⏳ Waiting for import reading...")
 				return
 			}
 		} else {
 			// This is import reading
-			device.lastReading = currentValue
+			if currentValue > 0 {
+				device.lastReading = currentValue
+				log.Printf("   📥 Import reading received: %.3f kWh", currentValue)
+			} else if isSolarMeter {
+				// For solar meters with 0 or missing import, get last value from DB
+				var lastImportFromDB float64
+				err := db.QueryRow(`
+					SELECT power_kwh FROM meter_readings 
+					WHERE meter_id = ? 
+					ORDER BY reading_time DESC LIMIT 1
+				`, device.ID).Scan(&lastImportFromDB)
+
+				if err == nil && lastImportFromDB > 0 {
+					log.Printf("   ☀️ Solar meter: Import is 0, using last DB value: %.3f kWh", lastImportFromDB)
+					device.lastReading = lastImportFromDB
+				} else {
+					log.Printf("   ☀️ Solar meter: Import is 0, no previous value, using 0")
+					device.lastReading = 0
+				}
+			} else {
+				// For total meters, 0 import is invalid
+				log.Printf("   ⚠️ Import reading is 0 or negative, skipping")
+				return
+			}
+
 			device.lastUpdate = time.Now()
-			log.Printf("   📥 Import reading received: %.3f kWh", currentValue)
-			
+
 			// Check if we already have a recent export reading (within last 30 seconds)
-			// For virtual_output_dual, export reading comes from a different UUID response
 			if device.lastReadingExport > 0 {
 				log.Printf("   ✅ Both readings available (export: %.3f kWh), saving to database", device.lastReadingExport)
-				reading = currentValue
+				reading = device.lastReading
 				// Continue to save below
 			} else {
 				// Wait for export reading
@@ -2394,7 +2424,7 @@ func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, re
 				return
 			}
 		}
-		
+
 		// Reset gap counter only when we're about to save
 		device.readingGaps = 0
 
@@ -2430,7 +2460,13 @@ func (conn *LoxoneWebSocketConnection) processMeterData(device *LoxoneDevice, re
 
 	// Save to database (happens for all modes when we have complete data)
 	// For solar meters, we allow import to be 0 as long as we have export
-	if reading <= 0 && !(isSolarMeter && device.lastReadingExport > 0) {
+	if reading < 0 {
+		return
+	}
+	if reading == 0 && !isSolarMeter {
+		return
+	}
+	if reading == 0 && isSolarMeter && device.lastReadingExport <= 0 {
 		return
 	}
 
