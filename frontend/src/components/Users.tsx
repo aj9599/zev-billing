@@ -31,7 +31,7 @@ export default function Users() {
     handleEdit,
     resetForm,
     handleSubmit: submitForm
-  } = useUserForm(buildings, loadData);
+  } = useUserForm(loadData);
 
   const { handleDelete } = useUserDeletion(loadData);
   const { handleToggleActive } = useUserStatus(loadData);

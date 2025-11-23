@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import type { User as UserType, Building as BuildingType } from '../../../types';
+import type { User as UserType } from '../../../types';
 import { api } from '../../../api/client';
 import { formatDateForInput } from '../utils/dateUtils';
 
-export function useUserForm(buildings: BuildingType[], loadData: () => Promise<void>) {
+export function useUserForm(loadData: () => Promise<void>) {
   const [editingUser, setEditingUser] = useState<UserType | null>(null);
   const [formData, setFormData] = useState<Partial<UserType>>({
     first_name: '',
