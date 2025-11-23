@@ -26,7 +26,7 @@ export const getStateDisplay = (charger: Charger, stateValue?: string, t?: (key:
     }
   }
 
-  // For multi-UUID mode (original WeidmÃ¼ller), use config-based mapping
+  // For multi-UUID mode (original Weidmüller), use config-based mapping
   try {
     const config = JSON.parse(charger.connection_config);
     

@@ -60,12 +60,12 @@ export const WEIDMULLER_PRESET: PresetConfig = {
 };
 
 // ============================================================================
-// WeidmÃ¼ller Single-Block Preset (NEW)
+// Weidmüller Single-Block Preset (NEW)
 // ============================================================================
 export const WEIDMULLER_SINGLE_PRESET: PresetConfig = {
   name: 'weidmuller_single',
-  label: 'WeidmÃ¼ller (Single UUID)',
-  description: 'WeidmÃ¼ller AC Smart chargers with Loxone single virtual output block (all data in one response)',
+  label: 'Weidmüller (Single UUID)',
+  description: 'Weidmüller AC Smart chargers with Loxone single virtual output block (all data in one response)',
   supportsPriority: true,
   defaultStateMappings: {
     cable_locked: '0',    // Not used in single-block mode

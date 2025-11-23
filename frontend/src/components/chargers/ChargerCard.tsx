@@ -40,7 +40,7 @@ export default function ChargerCard({
 
     const isCharging = charger.connection_type === 'zaptec_api'
         ? stateValue === '3'  // Zaptec: state 3 = Charging
-        : stateValue === '67'; // WeidmÃ¼ller: state 67 = Charging
+        : stateValue === '67'; // Weidmüller: state 67 = Charging
 
     const hasLiveSession = liveData?.live_session?.is_active || zaptecStatus?.live_session?.is_active;
 
@@ -100,7 +100,7 @@ export default function ChargerCard({
         : false;
     const isDisconnected = charger.connection_type === 'zaptec_api'
         ? stateValue === '1'  // Zaptec: state 1 = Disconnected
-        : stateValue === '50'; // WeidmÃ¼ller: state 50 = Idle
+        : stateValue === '50'; // Weidmüller: state 50 = Idle
 
     // Calculate session duration properly - FIXED
     const calculateDuration = (startTimeStr: string): string => {
