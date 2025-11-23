@@ -214,6 +214,11 @@ export default function Billing() {
               width: 100% !important;
               justify-content: center !important;
             }
+            .mobile-cards {
+              width: 100%;
+              display: flex;
+              flex-direction: column;
+            }
           }
         `}</style>
       </div>
