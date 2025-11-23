@@ -104,12 +104,55 @@ export default function BillConfigModal({
 
   const loadAdministratorInfo = async () => {
     try {
-      const firstBuildingId = config.building_ids[0];
       const allUsers = await api.getUsers(undefined, true);
 
-      const adminUser = allUsers.find(
-        u => u.building_id === firstBuildingId && u.user_type === 'administration'
-      );
+      // Find an active administration user who manages any of the selected buildings
+      const adminUser = allUsers.find(u => {
+        if (u.user_type !== 'administration' || !u.is_active) return false;
+        
+        // Parse managed_buildings
+        let managedBuildingIds: number[] = [];
+        try {
+          if (typeof u.managed_buildings === 'string') {
+            managedBuildingIds = JSON.parse(u.managed_buildings);
+          } else if (Array.isArray(u.managed_buildings)) {
+            managedBuildingIds = u.managed_buildings;
+          }
+        } catch (e) {
+          return false;
+        }
+
+        // Check if this admin manages any of the selected buildings
+        // This includes both direct buildings and buildings within complexes
+        for (const buildingId of config.building_ids) {
+          if (managedBuildingIds.includes(buildingId)) return true;
+
+          // Check if the admin manages a complex that includes this building
+          const building = buildings.find(b => b.id === buildingId);
+          if (building?.is_group && building.group_buildings) {
+            const groupBuildingIds = typeof building.group_buildings === 'string'
+              ? JSON.parse(building.group_buildings)
+              : building.group_buildings;
+            
+            for (const groupBuildingId of groupBuildingIds) {
+              if (managedBuildingIds.includes(groupBuildingId)) return true;
+            }
+          }
+
+          // Check if any managed building is a complex that contains the selected building
+          for (const managedId of managedBuildingIds) {
+            const managedBuilding = buildings.find(b => b.id === managedId);
+            if (managedBuilding?.is_group && managedBuilding.group_buildings) {
+              const groupBuildingIds = typeof managedBuilding.group_buildings === 'string'
+                ? JSON.parse(managedBuilding.group_buildings)
+                : managedBuilding.group_buildings;
+              if (groupBuildingIds.includes(buildingId)) return true;
+            }
+          }
+        }
+
+        return false;
+      });
 
       if (adminUser) {
         updateConfig({
