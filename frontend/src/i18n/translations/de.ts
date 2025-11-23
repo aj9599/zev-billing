@@ -1161,7 +1161,7 @@ export const de: Translations = {
   'chargers.state.charging': 'Lädt',
   'chargers.state.idle': 'Inaktiv',
   'chargers.state.unknown': 'Unbekannt',
-  'chargers.mode.normal': 'Solar',
+  'chargers.mode.solar': 'Solar',
   'chargers.mode.priority': 'Priorität',
   'chargers.mode.unknown': 'Unbekannt',
 
@@ -1248,6 +1248,30 @@ export const de: Translations = {
   'chargers.status.readyDesc': 'Fahrzeug anschließen, um Ladevorgang zu starten',
   'chargers.status.powerFlowing': 'Stromfluss aktiv',
   'chargers.energy.currentSession': 'Aktuelle Sitzung',
+
+  // Single Block Mode (Weidmüller)
+  'chargers.singleBlockMode': 'Einzelner UUID-Modus - Alle Daten von einem virtuellen Ausgang',
+  'chargers.chargerBlockUuid': 'Ladestation Block UUID',
+  'chargers.chargerBlockUuidDescription': 'Die UUID des Weidmüller virtuellen Ausgangsblocks (enthält alle Ausgänge)',
+
+  // Zaptec API Konfiguration
+  'chargers.zaptecCloudApi': 'Zaptec Cloud API - Echtzeit-cloudbasierte Ladestationsüberwachung',
+  'chargers.zaptecUsernameEmail': 'Zaptec Benutzername (E-Mail)',
+  'chargers.zaptecPassword': 'Zaptec Passwort',
+  'chargers.zaptecChargerId': 'Ladestations-ID',
+  'chargers.zaptecInstallationId': 'Installations-ID (Optional)',
+
+  // Zaptec Verbindungsstatus
+  'chargers.zaptecConnected': 'Zaptec Verbunden',
+  'chargers.zaptecOnline': 'Online',
+  'chargers.zaptecDisconnected': 'Zaptec Getrennt',
+  'chargers.zaptecConnecting': 'Zaptec Verbindung wird hergestellt...',
+
+  // Statusmeldungen
+  'chargers.status.scanRFID': 'Bitte scannen Sie Ihre RFID-Karte an der Ladestation',
+
+  // Sitzungsinformationen
+  'chargers.session.lastSession': 'Letzte Sitzung',
 
   // ============================================================================
   // BILLING

@@ -39,9 +39,9 @@ export default function ChargerFormModal({
   const isSingleBlockMode = formData.preset === 'weidmuller_single';
   const isMultiUuidMode = !isSingleBlockMode && formData.connection_type === 'loxone_api';
 
-  // 🔍 DEBUG: Log form state on render
+  // ðŸ” DEBUG: Log form state on render
   React.useEffect(() => {
-    console.log('🎨 MODAL RENDER STATE:');
+    console.log('ðŸŽ¨ MODAL RENDER STATE:');
     console.log('  Preset:', formData.preset);
     console.log('  Is Single Block Mode:', isSingleBlockMode);
     console.log('  Is Multi UUID Mode:', isMultiUuidMode);
@@ -183,7 +183,7 @@ export default function ChargerFormModal({
                 }}>
                   <Wifi size={16} color="#10b981" />
                   <p style={{ fontSize: '13px', color: '#065f46', margin: 0 }}>
-                    <strong>{isSingleBlockMode ? 'Single UUID Mode - All data from one virtual output' : t('chargers.loxoneApiDescription')}</strong>
+                    <strong>{isSingleBlockMode ? t('chargers.singleBlockMode') : t('chargers.loxoneApiDescription')}</strong>
                   </p>
                 </div>
 
@@ -209,7 +209,7 @@ export default function ChargerFormModal({
                   <>
                     <div style={{ marginBottom: '12px' }}>
                       <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                        Charger Block UUID *
+                        {t('chargers.chargerBlockUuid')} *
                       </label>
                       <input 
                         type="text" 
@@ -220,7 +220,7 @@ export default function ChargerFormModal({
                         style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} 
                       />
                       <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                        The UUID of the WeidmÃ¼ller virtual output block (contains all outputs)
+                        {t('chargers.chargerBlockUuidDescription')}
                       </p>
                     </div>
                   </>
@@ -314,7 +314,7 @@ export default function ChargerFormModal({
                       required 
                       value={connectionConfig.loxone_password || ''}
                       onChange={(e) => onConnectionConfigChange({ ...connectionConfig, loxone_password: e.target.value })}
-                      placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                      placeholder="••••••••"
                       style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} 
                     />
                   </div>
@@ -399,13 +399,13 @@ export default function ChargerFormModal({
                 }}>
                   <Wifi size={16} color="#10b981" />
                   <p style={{ fontSize: '13px', color: '#065f46', margin: 0 }}>
-                    <strong>Zaptec Cloud API - Real-time cloud-based charger monitoring</strong>
+                    <strong>{t('chargers.zaptecCloudApi')}</strong>
                   </p>
                 </div>
 
                 <div style={{ marginBottom: '12px' }}>
                   <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                    Zaptec Username (Email) *
+                    {t('chargers.zaptecUsernameEmail')} *
                   </label>
                   <input 
                     type="email" 
@@ -419,21 +419,21 @@ export default function ChargerFormModal({
 
                 <div style={{ marginBottom: '12px' }}>
                   <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                    Zaptec Password *
+                    {t('chargers.zaptecPassword')} *
                   </label>
                   <input 
                     type="password" 
                     required 
                     value={connectionConfig.zaptec_password || ''}
                     onChange={(e) => onConnectionConfigChange({ ...connectionConfig, zaptec_password: e.target.value })}
-                    placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                    placeholder="••••••••"
                     style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} 
                   />
                 </div>
 
                 <div style={{ marginBottom: '12px' }}>
                   <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                    Charger ID *
+                    {t('chargers.zaptecChargerId')} *
                   </label>
                   <input 
                     type="text" 
@@ -447,7 +447,7 @@ export default function ChargerFormModal({
 
                 <div style={{ marginBottom: '12px' }}>
                   <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                    Installation ID (Optional)
+                    {t('chargers.zaptecInstallationId')}
                   </label>
                   <input 
                     type="text" 

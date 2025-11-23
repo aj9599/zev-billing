@@ -40,7 +40,7 @@ export default function ChargerCard({
 
     const isCharging = charger.connection_type === 'zaptec_api'
         ? stateValue === '3'  // Zaptec: state 3 = Charging
-        : stateValue === '67'; // Weidmüller: state 67 = Charging
+        : stateValue === '67'; // WeidmÃ¼ller: state 67 = Charging
 
     const hasLiveSession = liveData?.live_session?.is_active || zaptecStatus?.live_session?.is_active;
 
@@ -100,7 +100,7 @@ export default function ChargerCard({
         : false;
     const isDisconnected = charger.connection_type === 'zaptec_api'
         ? stateValue === '1'  // Zaptec: state 1 = Disconnected
-        : stateValue === '50'; // Weidmüller: state 50 = Idle
+        : stateValue === '50'; // WeidmÃ¼ller: state 50 = Idle
 
     // Calculate session duration properly - FIXED
     const calculateDuration = (startTimeStr: string): string => {
@@ -489,7 +489,7 @@ export default function ChargerCard({
                                     color: '#22c55e',
                                     animation: 'chargingPulse 2s ease-in-out infinite'
                                 }}>
-                                    ⚡ {t('chargers.state.charging')}
+                                    âš¡ {t('chargers.state.charging')}
                                 </div>
                             )}
                             {isCompleted && (
@@ -502,7 +502,7 @@ export default function ChargerCard({
                                     fontWeight: '600',
                                     color: '#2563eb'
                                 }}>
-                                    ✓ {t('chargers.state.completed')}
+                                    âœ“ {t('chargers.state.completed')}
                                 </div>
                             )}
                             {isAwaitingStart && (
@@ -515,7 +515,7 @@ export default function ChargerCard({
                                     fontWeight: '600',
                                     color: '#d97706'
                                 }}>
-                                    🔒 {t('chargers.state.awaitingStart')}
+                                    ðŸ”’ {t('chargers.state.awaitingStart')}
                                 </div>
                             )}
                             {isDisconnected && (
@@ -614,7 +614,7 @@ export default function ChargerCard({
                                 alignItems: 'center',
                                 gap: '8px'
                             }}>
-                                <span style={{ fontSize: '16px' }}>🔒</span>
+                                <span style={{ fontSize: '16px' }}>ðŸ”’</span>
                                 <div style={{ flex: 1 }}>
                                     <div style={{
                                         fontSize: '11px',
@@ -649,7 +649,7 @@ export default function ChargerCard({
                                 <>
                                     <Wifi size={16} color="#22c55e" />
                                     <span style={{ fontSize: '12px', fontWeight: '600', color: '#22c55e' }}>
-                                        {t('chargers.status.connected') || 'Connected'} • {t('chargers.status.online')}
+                                        {t('chargers.status.connected') || 'Connected'} â€¢ {t('chargers.status.online')}
                                     </span>
                                 </>
                             ) : (

@@ -99,10 +99,10 @@ export default function ChargerConnectionStatus({
                 <Wifi size={16} style={{ color: '#22c55e' }} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '12px', fontWeight: '600', color: '#22c55e' }}>
-                    Zaptec Connected {isOnline && '• Online'}
+                    {isOnline ? t('chargers.zaptecConnectedOnline') : t('chargers.zaptecConnected')}
                   </div>
                   <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
-                    {zaptecStatus?.last_update && `Last update: ${new Date(zaptecStatus.last_update).toLocaleTimeString(undefined, { hour12: false })}`}
+                    {zaptecStatus?.last_update && `${t('chargers.lastUpdate')}: ${new Date(zaptecStatus.last_update).toLocaleTimeString(undefined, { hour12: false })}`}
                   </div>
                 </div>
               </>
@@ -111,7 +111,7 @@ export default function ChargerConnectionStatus({
                 <WifiOff size={16} style={{ color: '#ef4444' }} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '12px', fontWeight: '600', color: '#ef4444' }}>
-                    Zaptec Disconnected
+                    {t('chargers.zaptecDisconnected')}
                   </div>
                 </div>
               </>
@@ -133,7 +133,7 @@ export default function ChargerConnectionStatus({
       }}>
         <Wifi size={16} style={{ color: '#9ca3af' }} />
         <div style={{ fontSize: '12px', color: '#6b7280' }}>
-          Zaptec Connecting...
+          {t('chargers.zaptecConnecting')}
         </div>
       </div>
     );
