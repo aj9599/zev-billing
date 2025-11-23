@@ -64,13 +64,13 @@ export const DebugInfoCards = ({ debugInfo }: DebugInfoCardsProps) => {
           padding: '24px', 
           borderRadius: '16px',
           boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-          border: '2px solid #764ba2',
+          border: '2px solid #8b5cf6',
           transition: 'all 0.3s ease'
         }}
         onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
         onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
           <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: '500' }}>{t('logs.activeChargers')}</div>
-          <div style={{ fontSize: '28px', fontWeight: '800', color: '#764ba2' }}>
+          <div style={{ fontSize: '28px', fontWeight: '800', color: '#8b5cf6' }}>
             {debugInfo.active_chargers || 0} / {debugInfo.total_chargers || 0}
           </div>
           <div style={{ fontSize: '12px', color: '#6b7280' }}>

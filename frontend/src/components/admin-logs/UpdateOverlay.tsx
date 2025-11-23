@@ -71,7 +71,7 @@ export const UpdateOverlay = ({ show, progress }: UpdateOverlayProps) => {
           <div style={{
             width: `${progress}%`,
             height: '100%',
-            background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
+            backgroundColor: '#667eea',
             transition: 'width 0.2s ease',
             borderRadius: '6px'
           }}></div>

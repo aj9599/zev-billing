@@ -42,8 +42,8 @@ export const AdminLogsHeader = ({
   const { t } = useTranslation();
 
   return (
-    <div className="logs-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', gap: '15px', flexWrap: 'wrap' }}>
-      <div>
+    <div className="logs-header" style={{ marginBottom: '30px' }}>
+      <div className="logs-header-title" style={{ marginBottom: '20px' }}>
         <h1 className="logs-title" style={{ 
           fontSize: '36px', 
           fontWeight: '800', 
@@ -51,12 +51,9 @@ export const AdminLogsHeader = ({
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text'
+          color: '#667eea'
         }}>
-          <Activity size={36} style={{ color: '#667eea' }} />
+          <Activity size={36} />
           {t('logs.title')}
         </h1>
         <p className="logs-subtitle" style={{ 
@@ -64,7 +61,8 @@ export const AdminLogsHeader = ({
           fontSize: '16px',
           display: 'flex',
           alignItems: 'center',
-          gap: '8px'
+          gap: '8px',
+          margin: 0
         }}>
           {t('logs.subtitle')}
           <span style={{
@@ -90,35 +88,41 @@ export const AdminLogsHeader = ({
         </p>
       </div>
       
-      <div className="logs-actions" style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="logs-actions" style={{ 
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+        gap: '12px',
+        width: '100%'
+      }}>
         <button
           onClick={onBackup}
           disabled={backing}
           style={{
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: '8px',
             padding: '12px 20px',
-            background: backing ? '#9ca3af' : '#667eea',
+            backgroundColor: backing ? '#9ca3af' : '#667eea',
             color: 'white',
             border: 'none',
             borderRadius: '10px',
             fontSize: '14px',
             fontWeight: '600',
             cursor: backing ? 'not-allowed' : 'pointer',
-            boxShadow: backing ? 'none' : '0 4px 12px rgba(102, 126, 234, 0.3)',
-            transition: 'all 0.3s ease'
+            boxShadow: backing ? 'none' : '0 2px 8px rgba(102, 126, 234, 0.2)',
+            transition: 'all 0.2s ease'
           }}
           onMouseEnter={(e) => {
             if (!backing) {
               e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 6px 16px rgba(102, 126, 234, 0.4)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
             }
           }}
           onMouseLeave={(e) => {
             if (!backing) {
               e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.2)';
             }
           }}
         >
@@ -132,28 +136,29 @@ export const AdminLogsHeader = ({
           style={{
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: '8px',
             padding: '12px 20px',
-            background: restoring ? '#9ca3af' : '#f59e0b',
+            backgroundColor: restoring ? '#9ca3af' : '#f59e0b',
             color: 'white',
             border: 'none',
             borderRadius: '10px',
             fontSize: '14px',
             fontWeight: '600',
             cursor: restoring ? 'not-allowed' : 'pointer',
-            boxShadow: restoring ? 'none' : '0 4px 12px rgba(245, 158, 11, 0.3)',
-            transition: 'all 0.3s ease'
+            boxShadow: restoring ? 'none' : '0 2px 8px rgba(245, 158, 11, 0.2)',
+            transition: 'all 0.2s ease'
           }}
           onMouseEnter={(e) => {
             if (!restoring) {
               e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 6px 16px rgba(245, 158, 11, 0.4)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(245, 158, 11, 0.3)';
             }
           }}
           onMouseLeave={(e) => {
             if (!restoring) {
               e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(245, 158, 11, 0.3)';
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(245, 158, 11, 0.2)';
             }
           }}
         >
@@ -174,28 +179,29 @@ export const AdminLogsHeader = ({
           style={{
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: '8px',
             padding: '12px 20px',
-            background: checkingUpdates ? '#9ca3af' : '#10b981',
+            backgroundColor: checkingUpdates ? '#9ca3af' : '#10b981',
             color: 'white',
             border: 'none',
             borderRadius: '10px',
             fontSize: '14px',
             fontWeight: '600',
             cursor: checkingUpdates ? 'not-allowed' : 'pointer',
-            boxShadow: checkingUpdates ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.3)',
-            transition: 'all 0.3s ease'
+            boxShadow: checkingUpdates ? 'none' : '0 2px 8px rgba(16, 185, 129, 0.2)',
+            transition: 'all 0.2s ease'
           }}
           onMouseEnter={(e) => {
             if (!checkingUpdates) {
               e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 6px 16px rgba(16, 185, 129, 0.4)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
             }
           }}
           onMouseLeave={(e) => {
             if (!checkingUpdates) {
               e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.2)';
             }
           }}
         >
@@ -203,45 +209,44 @@ export const AdminLogsHeader = ({
           <span className="button-text">{checkingUpdates ? t('logs.checkingUpdates') : t('logs.checkUpdates')}</span>
         </button>
 
-        {updateInfo && (
-          <button
-            onClick={onUpdate}
-            disabled={updating || !updateInfo.updates_available}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '12px 20px',
-              background: updating ? '#9ca3af' : !updateInfo.updates_available ? '#6b7280' : '#ec4899',
-              color: 'white',
-              border: 'none',
-              borderRadius: '10px',
-              fontSize: '14px',
-              fontWeight: '600',
-              cursor: (updating || !updateInfo.updates_available) ? 'not-allowed' : 'pointer',
-              boxShadow: (updating || !updateInfo.updates_available) ? 'none' : '0 4px 12px rgba(236, 72, 153, 0.3)',
-              transition: 'all 0.3s ease'
-            }}
-            onMouseEnter={(e) => {
-              if (!updating && updateInfo.updates_available) {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 6px 16px rgba(236, 72, 153, 0.4)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!updating && updateInfo.updates_available) {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(236, 72, 153, 0.3)';
-              }
-            }}
-          >
-            <RotateCcw size={18} />
-            <span className="button-text">
-              {updating ? t('logs.updating') : 
-               updateInfo.updates_available ? t('logs.applyUpdate') : t('logs.upToDate')}
-            </span>
-          </button>
-        )}
+        <button
+          onClick={onUpdate}
+          disabled={updating || !updateInfo || !updateInfo.updates_available}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            padding: '12px 20px',
+            backgroundColor: updating ? '#9ca3af' : (!updateInfo || !updateInfo.updates_available) ? '#6b7280' : '#ec4899',
+            color: 'white',
+            border: 'none',
+            borderRadius: '10px',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: (updating || !updateInfo || !updateInfo.updates_available) ? 'not-allowed' : 'pointer',
+            boxShadow: (updating || !updateInfo || !updateInfo.updates_available) ? 'none' : '0 2px 8px rgba(236, 72, 153, 0.2)',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            if (!updating && updateInfo && updateInfo.updates_available) {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(236, 72, 153, 0.3)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!updating && updateInfo && updateInfo.updates_available) {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(236, 72, 153, 0.2)';
+            }
+          }}
+        >
+          <RotateCcw size={18} />
+          <span className="button-text">
+            {updating ? t('logs.updating') : 
+             (!updateInfo || !updateInfo.updates_available) ? t('logs.upToDate') : t('logs.applyUpdate')}
+          </span>
+        </button>
 
         <button
           onClick={onFactoryReset}
@@ -249,28 +254,29 @@ export const AdminLogsHeader = ({
           style={{
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: '8px',
             padding: '12px 20px',
-            background: factoryResetting ? '#9ca3af' : 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+            backgroundColor: factoryResetting ? '#9ca3af' : '#dc2626',
             color: 'white',
             border: 'none',
             borderRadius: '10px',
             fontSize: '14px',
             fontWeight: '600',
             cursor: factoryResetting ? 'not-allowed' : 'pointer',
-            boxShadow: factoryResetting ? 'none' : '0 4px 12px rgba(220, 38, 38, 0.3)',
-            transition: 'all 0.3s ease'
+            boxShadow: factoryResetting ? 'none' : '0 2px 8px rgba(220, 38, 38, 0.2)',
+            transition: 'all 0.2s ease'
           }}
           onMouseEnter={(e) => {
             if (!factoryResetting) {
               e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 6px 16px rgba(220, 38, 38, 0.4)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.3)';
             }
           }}
           onMouseLeave={(e) => {
             if (!factoryResetting) {
               e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.3)';
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(220, 38, 38, 0.2)';
             }
           }}
         >
@@ -283,30 +289,31 @@ export const AdminLogsHeader = ({
           disabled={rebooting}
           className="reboot-button"
           style={{
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '8px', 
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
             padding: '12px 20px',
-            background: rebooting ? '#9ca3af' : '#ef4444',
-            color: 'white', 
+            backgroundColor: rebooting ? '#9ca3af' : '#ef4444',
+            color: 'white',
             border: 'none',
-            borderRadius: '10px', 
+            borderRadius: '10px',
             fontSize: '14px',
             fontWeight: '600',
             cursor: rebooting ? 'not-allowed' : 'pointer',
-            boxShadow: rebooting ? 'none' : '0 4px 12px rgba(239, 68, 68, 0.3)',
-            transition: 'all 0.3s ease'
+            boxShadow: rebooting ? 'none' : '0 2px 8px rgba(239, 68, 68, 0.2)',
+            transition: 'all 0.2s ease'
           }}
           onMouseEnter={(e) => {
             if (!rebooting) {
               e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 6px 16px rgba(239, 68, 68, 0.4)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.3)';
             }
           }}
           onMouseLeave={(e) => {
             if (!rebooting) {
               e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.3)';
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(239, 68, 68, 0.2)';
             }
           }}
         >

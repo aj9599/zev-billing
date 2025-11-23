@@ -6,6 +6,8 @@ import { AdminLogsHeader } from './admin-logs/AdminLogsHeader';
 import { UpdateInfoCard } from './admin-logs/UpdateInfoCard';
 import { SystemHealthCards } from './admin-logs/SystemHealthCards';
 import { DebugInfoCards } from './admin-logs/DebugInfoCards';
+import { StatisticsCards } from './admin-logs/StatisticsCards';
+import { SystemHealthCharts } from './admin-logs/SystemHealthCharts';
 import { LogsTable } from './admin-logs/LogsTable';
 import { LogsTableMobile } from './admin-logs/LogsTableMobile';
 import { UpdateOverlay } from './admin-logs/UpdateOverlay';
@@ -19,8 +21,10 @@ export default function AdminLogs() {
   const [logs, setLogs] = useState<AdminLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [isLive, setIsLive] = useState(true);
+  const [logLimit, setLogLimit] = useState(200);
+  const [showAllLogs, setShowAllLogs] = useState(false);
 
-  const { systemHealth, debugInfo, loadDebugInfo } = useSystemHealth();
+  const { systemHealth, debugInfo, healthHistory, loadDebugInfo } = useSystemHealth();
   const { updateInfo, showUpdateCard, setShowUpdateCard, checkingUpdates, checkForUpdates } = useUpdateInfo();
   const {
     rebooting,
@@ -59,12 +63,12 @@ export default function AdminLogs() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [logLimit]);
 
   const loadLogs = async () => {
     setLoading(true);
     try {
-      const data = await api.getLogs(200);
+      const data = await api.getLogs(logLimit);
       setLogs(data);
       setIsLive(true);
     } catch (err) {
@@ -72,6 +76,16 @@ export default function AdminLogs() {
       setIsLive(false);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleAllLogs = () => {
+    if (showAllLogs) {
+      setLogLimit(200);
+      setShowAllLogs(false);
+    } else {
+      setLogLimit(10000); // Load up to 10000 logs (approximately 24h)
+      setShowAllLogs(true);
     }
   };
 
@@ -119,9 +133,43 @@ export default function AdminLogs() {
         onClose={() => setShowUpdateCard(false)}
       />
 
+      <StatisticsCards />
+
       <SystemHealthCards systemHealth={systemHealth} />
 
+      <SystemHealthCharts healthHistory={healthHistory} />
+
       <DebugInfoCards debugInfo={debugInfo} />
+
+      <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1f2937', margin: 0 }}>
+          {t('logs.activityLog')}
+        </h2>
+        <button
+          onClick={handleToggleAllLogs}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: showAllLogs ? '#ef4444' : '#3b82f6',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = 'none';
+          }}
+        >
+          {showAllLogs ? t('logs.showLess') : t('logs.showAll24h')}
+        </button>
+      </div>
 
       <LogsTable logs={logs} loading={loading} />
 
@@ -167,8 +215,6 @@ export default function AdminLogs() {
 
           .admin-logs-container .logs-subtitle {
             font-size: 14px !important;
-            flex-direction: column;
-            align-items: flex-start !important;
           }
 
           .logs-header {
@@ -176,9 +222,15 @@ export default function AdminLogs() {
             align-items: stretch !important;
           }
 
+          .logs-header-title {
+            width: 100% !important;
+          }
+
           .logs-actions {
             width: 100%;
-            flex-direction: column !important;
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 12px !important;
           }
 
           .logs-actions button {
@@ -218,6 +270,10 @@ export default function AdminLogs() {
           .button-text {
             display: inline !important;
           }
+
+          .chart-container {
+            height: 250px !important;
+          }
         }
 
         @media (min-width: 769px) {
@@ -243,6 +299,10 @@ export default function AdminLogs() {
 
           .logs-subtitle {
             font-size: 13px !important;
+          }
+
+          .logs-actions {
+            grid-template-columns: 1fr !important;
           }
 
           .logs-actions button {

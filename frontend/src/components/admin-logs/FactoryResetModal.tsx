@@ -57,7 +57,7 @@ export const FactoryResetModal = ({
           <div style={{
             padding: '12px',
             borderRadius: '12px',
-            background: 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+            backgroundColor: '#dc2626',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
@@ -149,9 +149,7 @@ export const FactoryResetModal = ({
             disabled={factoryResetting || !factoryCaptchaValid}
             style={{
               padding: '12px 24px',
-              background: (factoryResetting || !factoryCaptchaValid) 
-                ? '#9ca3af' 
-                : 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+              backgroundColor: (factoryResetting || !factoryCaptchaValid) ? '#9ca3af' : '#dc2626',
               color: 'white',
               border: 'none',
               borderRadius: '10px',
