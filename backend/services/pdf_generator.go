@@ -204,8 +204,8 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 	if isArchived {
 		archivedBanner = `
 		<div class="archived-banner">
-			ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ARCHIVED USER - This invoice is for an archived user
-		</div>`
+    		⚠️ ARCHIVED USER - This invoice is for an archived user
+		</div>
 	}
 
 	// Sender info section
@@ -1169,7 +1169,7 @@ func (pg *PDFGenerator) generateSwissQRData(inv map[string]interface{}, sender S
 		return ""
 	}
 
-	log.Println("Ã¢Å“â€¦ Generated valid Swiss QR data with 31 elements")
+	log.Println("✔ Generated valid Swiss QR data with 31 elements")
 	return qrData
 }
 

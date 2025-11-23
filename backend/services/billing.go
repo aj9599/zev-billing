@@ -404,7 +404,7 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 
 		log.Printf("  [SHARED METERS]   Readings: %.3f â†’ %.3f kWh (consumption: %.3f kWh)",
 			readingFrom, readingTo, consumption)
-		log.Printf("  [SHARED METERS]   Total meter cost: %.3f Ã— %.3f = %.3f",
+		log.Printf("  [SHARED METERS]   Total meter cost: %.3f × %.3f = %.3f",
 			consumption, unitPrice, totalMeterCost)
 
 		var userShare float64
@@ -483,7 +483,7 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 		// Apply proration factor for shared costs
 		userShare = userShare * prorationFactor
 		if prorationFactor < 1.0 {
-			splitDescription += fmt.Sprintf(" Ã— %.1f%% of period", prorationFactor*100)
+			splitDescription += fmt.Sprintf(" × %.1f%% of period", prorationFactor*100)
 		}
 
 		log.Printf("  [SHARED METERS]   User share: %.3f (%s)", userShare, splitDescription)
@@ -497,7 +497,7 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 		})
 
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  %s: %.3f kWh Ã— %.3f %s/kWh = %.3f %s", tr.TotalConsumption, consumption, unitPrice, currency, totalMeterCost, currency),
+			Description: fmt.Sprintf("  %s: %.3f kWh × %.3f %s/kWh = %.3f %s", tr.TotalConsumption, consumption, unitPrice, currency, totalMeterCost, currency),
 			Quantity:    0,
 			UnitPrice:   0,
 			TotalPrice:  0,
@@ -732,26 +732,26 @@ func (bs *BillingService) generateUserInvoiceForPeriod(userPeriod UserPeriod, bu
 		solarCost := solarPower * settings.SolarPowerPrice
 		totalAmount += solarCost
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("%s: %.3f kWh Ã— %.3f %s/kWh", tr.SolarPower, solarPower, settings.SolarPowerPrice, settings.Currency),
+			Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh", tr.SolarPower, solarPower, settings.SolarPowerPrice, settings.Currency),
 			Quantity:    solarPower,
 			UnitPrice:   settings.SolarPowerPrice,
 			TotalPrice:  solarCost,
 			ItemType:    "solar_power",
 		})
-		log.Printf("  Solar Cost: %.3f kWh Ã— %.3f = %.3f %s", solarPower, settings.SolarPowerPrice, solarCost, settings.Currency)
+		log.Printf("  Solar Cost: %.3f kWh × %.3f = %.3f %s", solarPower, settings.SolarPowerPrice, solarCost, settings.Currency)
 	}
 
 	if normalPower > 0 {
 		normalCost := normalPower * settings.NormalPowerPrice
 		totalAmount += normalCost
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("%s: %.3f kWh Ã— %.3f %s/kWh", tr.NormalPowerGrid, normalPower, settings.NormalPowerPrice, settings.Currency),
+			Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh", tr.NormalPowerGrid, normalPower, settings.NormalPowerPrice, settings.Currency),
 			Quantity:    normalPower,
 			UnitPrice:   settings.NormalPowerPrice,
 			TotalPrice:  normalCost,
 			ItemType:    "normal_power",
 		})
-		log.Printf("  Normal Cost: %.3f kWh Ã— %.3f = %.3f %s", normalPower, settings.NormalPowerPrice, normalCost, settings.Currency)
+		log.Printf("  Normal Cost: %.3f kWh × %.3f = %.3f %s", normalPower, settings.NormalPowerPrice, normalCost, settings.Currency)
 	}
 
 	// CRITICAL: Car charging for THIS USER'S ACTUAL PERIOD
@@ -806,26 +806,26 @@ func (bs *BillingService) generateUserInvoiceForPeriod(userPeriod UserPeriod, bu
 				normalChargingCost := normalCharging * settings.CarChargingNormalPrice
 				totalAmount += normalChargingCost
 				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("%s: %.3f kWh Ã— %.3f %s/kWh", tr.SolarMode, normalCharging, settings.CarChargingNormalPrice, settings.Currency),
+					Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh", tr.SolarMode, normalCharging, settings.CarChargingNormalPrice, settings.Currency),
 					Quantity:    normalCharging,
 					UnitPrice:   settings.CarChargingNormalPrice,
 					TotalPrice:  normalChargingCost,
 					ItemType:    "car_charging_normal",
 				})
-				log.Printf("  Solar Charging: %.3f kWh Ã— %.3f = %.3f %s", normalCharging, settings.CarChargingNormalPrice, normalChargingCost, settings.Currency)
+				log.Printf("  Solar Charging: %.3f kWh × %.3f = %.3f %s", normalCharging, settings.CarChargingNormalPrice, normalChargingCost, settings.Currency)
 			}
 
 			if priorityCharging > 0 {
 				priorityChargingCost := priorityCharging * settings.CarChargingPriorityPrice
 				totalAmount += priorityChargingCost
 				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("%s: %.3f kWh Ã— %.3f %s/kWh", tr.PriorityMode, priorityCharging, settings.CarChargingPriorityPrice, settings.Currency),
+					Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh", tr.PriorityMode, priorityCharging, settings.CarChargingPriorityPrice, settings.Currency),
 					Quantity:    priorityCharging,
 					UnitPrice:   settings.CarChargingPriorityPrice,
 					TotalPrice:  priorityChargingCost,
 					ItemType:    "car_charging_priority",
 				})
-				log.Printf("  Priority Charging: %.3f kWh Ã— %.3f = %.3f %s", priorityCharging, settings.CarChargingPriorityPrice, priorityChargingCost, settings.Currency)
+				log.Printf("  Priority Charging: %.3f kWh × %.3f = %.3f %s", priorityCharging, settings.CarChargingPriorityPrice, priorityChargingCost, settings.Currency)
 			}
 		}
 	}
@@ -1305,14 +1305,14 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 		selfConsumedCost := energyResult.SelfConsumedSolar * settings.SolarPowerPrice
 		totalAmount += selfConsumedCost
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  â””â”€ Own Building Solar: %.3f kWh Ã— %.3f %s/kWh",
+			Description: fmt.Sprintf("  â””â”€ Own Building Solar: %.3f kWh × %.3f %s/kWh",
 				energyResult.SelfConsumedSolar, settings.SolarPowerPrice, settings.Currency),
 			Quantity:    energyResult.SelfConsumedSolar,
 			UnitPrice:   settings.SolarPowerPrice,
 			TotalPrice:  selfConsumedCost,
 			ItemType:    "vzev_self_solar",
 		})
-		log.Printf("  Self-Consumed Solar: %.3f kWh Ã— %.3f = %.3f %s", 
+		log.Printf("  Self-Consumed Solar: %.3f kWh × %.3f = %.3f %s", 
 			energyResult.SelfConsumedSolar, settings.SolarPowerPrice, selfConsumedCost, settings.Currency)
 	}
 
@@ -1321,14 +1321,14 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 		virtualPVCost := energyResult.VirtualPV * settings.VZEVExportPrice
 		totalAmount += virtualPVCost
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  â””â”€ Virtual PV (from vZEV): %.3f kWh Ã— %.3f %s/kWh",
+			Description: fmt.Sprintf("  â””â”€ Virtual PV (from vZEV): %.3f kWh × %.3f %s/kWh",
 				energyResult.VirtualPV, settings.VZEVExportPrice, settings.Currency),
 			Quantity:    energyResult.VirtualPV,
 			UnitPrice:   settings.VZEVExportPrice,
 			TotalPrice:  virtualPVCost,
 			ItemType:    "vzev_virtual_pv",
 		})
-		log.Printf("  Virtual PV: %.3f kWh Ã— %.3f = %.3f %s", 
+		log.Printf("  Virtual PV: %.3f kWh × %.3f = %.3f %s", 
 			energyResult.VirtualPV, settings.VZEVExportPrice, virtualPVCost, settings.Currency)
 	}
 
@@ -1337,14 +1337,14 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 		gridCost := energyResult.GridEnergy * settings.NormalPowerPrice
 		totalAmount += gridCost
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  â””â”€ %s: %.3f kWh Ã— %.3f %s/kWh",
+			Description: fmt.Sprintf("  â””â”€ %s: %.3f kWh × %.3f %s/kWh",
 				tr.NormalPowerGrid, energyResult.GridEnergy, settings.NormalPowerPrice, settings.Currency),
 			Quantity:    energyResult.GridEnergy,
 			UnitPrice:   settings.NormalPowerPrice,
 			TotalPrice:  gridCost,
 			ItemType:    "normal_power",
 		})
-		log.Printf("  Grid Energy: %.3f kWh Ã— %.3f = %.3f %s", 
+		log.Printf("  Grid Energy: %.3f kWh × %.3f = %.3f %s", 
 			energyResult.GridEnergy, settings.NormalPowerPrice, gridCost, settings.Currency)
 	}
 
@@ -1397,7 +1397,7 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 				normalChargingCost := normalCharging * settings.CarChargingNormalPrice
 				totalAmount += normalChargingCost
 				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("%s: %.3f kWh Ã— %.3f %s/kWh",
+					Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh",
 						tr.SolarMode, normalCharging, settings.CarChargingNormalPrice, settings.Currency),
 					Quantity:    normalCharging,
 					UnitPrice:   settings.CarChargingNormalPrice,
@@ -1410,7 +1410,7 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 				priorityChargingCost := priorityCharging * settings.CarChargingPriorityPrice
 				totalAmount += priorityChargingCost
 				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("%s: %.3f kWh Ã— %.3f %s/kWh",
+					Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh",
 						tr.PriorityMode, priorityCharging, settings.CarChargingPriorityPrice, settings.Currency),
 					Quantity:    priorityCharging,
 					UnitPrice:   settings.CarChargingPriorityPrice,
