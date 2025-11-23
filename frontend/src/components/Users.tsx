@@ -3,26 +3,7 @@ import { Plus, Edit2, Trash2, X, Users as UsersIcon, Mail, Phone, MapPin, Credit
 import { api } from '../api/client';
 import type { User as UserType, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
-import Flagpack from 'flagpack-core';
-
-// Flag component using Flagpack - locally installed, no external dependencies
-const Flag = ({ code, size = 16 }: { code: string; size?: number }) => {
-  const flagpack = new Flagpack();
-  const svgContent = flagpack.getFlag(code.toUpperCase());
-  
-  return (
-    <span 
-      style={{ 
-        display: 'inline-block', 
-        verticalAlign: 'middle', 
-        marginRight: '6px',
-        width: `${size}px`,
-        height: `${size}px`
-      }}
-      dangerouslySetInnerHTML={{ __html: svgContent }}
-    />
-  );
-};
+import { Flag } from 'react-flagpack';
 
 export default function Users() {
   const { t } = useTranslation();
@@ -1314,29 +1295,26 @@ export default function Users() {
                     onChange={(e) => setFormData({ ...formData, language: e.target.value })}
                     style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
                   >
-                    <option value="de">Deutsch (German)</option>
-                    <option value="fr">Français (French)</option>
-                    <option value="it">Italiano (Italian)</option>
+                    <option value="de">Deutsch</option>
+                    <option value="fr">Français</option>
+                    <option value="it">Italiano</option>
                     <option value="en">English</option>
                   </select>
                   <div style={{ marginTop: '8px', fontSize: '13px', color: '#6b7280', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                    <span style={{ display: 'flex', alignItems: 'center' }}>
-                      <Flag code="ch" size={16} />
-                      <Flag code="de" size={16} />
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Flag code="CH" gradient="real-linear" size="S" />
                       DE
                     </span>
-                    <span style={{ display: 'flex', alignItems: 'center' }}>
-                      <Flag code="ch" size={16} />
-                      <Flag code="fr" size={16} />
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Flag code="FR" gradient="real-linear" size="S" />
                       FR
                     </span>
-                    <span style={{ display: 'flex', alignItems: 'center' }}>
-                      <Flag code="ch" size={16} />
-                      <Flag code="it" size={16} />
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Flag code="IT" gradient="real-linear" size="S" />
                       IT
                     </span>
-                    <span style={{ display: 'flex', alignItems: 'center' }}>
-                      <Flag code="gb" size={16} />
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Flag code="GB" gradient="real-linear" size="S" />
                       EN
                     </span>
                   </div>
