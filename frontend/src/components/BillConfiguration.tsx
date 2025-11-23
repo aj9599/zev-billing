@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, ChevronLeft, ChevronRight, Check, FileText, Zap, DollarSign, Home, User as UserIcon, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Check, FileText, Zap, DollarSign, Home, User as UserIcon } from 'lucide-react';
 import { api } from '../api/client';
 import type { Building, User, Meter, SharedMeterConfig, CustomLineItem, GenerateBillsRequest, ApartmentWithUser } from '../types';
 import { useTranslation } from '../i18n';
