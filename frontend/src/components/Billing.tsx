@@ -194,7 +194,21 @@ export default function Billing() {
 
         {/* Responsive Styles */}
         <style>{`
+          .billing-container {
+            width: 100%;
+            box-sizing: border-box;
+          }
+  
+          .desktop-table,
+          .mobile-cards {
+            width: 100%;
+            box-sizing: border-box;
+          }
+  
           @media (max-width: 768px) {
+            .desktop-table {
+              display: none;
+            }
             .billing-container h1 {
               font-size: 24px !important;
             }
@@ -218,6 +232,12 @@ export default function Billing() {
               width: 100%;
               display: flex;
               flex-direction: column;
+            }
+          }
+  
+          @media (min-width: 769px) {
+            .mobile-cards {
+              display: none;
             }
           }
         `}</style>
