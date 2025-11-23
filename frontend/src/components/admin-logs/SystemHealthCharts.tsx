@@ -21,16 +21,29 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
   const tempCanvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    if (healthHistory.length === 0) return;
+    // Validate healthHistory exists and is an array
+    if (!healthHistory || !Array.isArray(healthHistory) || healthHistory.length === 0) return;
 
-    drawChart(cpuCanvasRef.current, healthHistory, 'cpu_usage', '#667eea');
-    drawChart(memoryCanvasRef.current, healthHistory, 'memory_percent', '#10b981');
-    drawChart(diskCanvasRef.current, healthHistory, 'disk_percent', '#f59e0b');
+    // Filter out any invalid data points
+    const validHistory = healthHistory.filter(d => 
+      d && 
+      typeof d === 'object' && 
+      typeof d.timestamp === 'number' &&
+      typeof d.cpu_usage === 'number' &&
+      typeof d.memory_percent === 'number' &&
+      typeof d.disk_percent === 'number'
+    );
+
+    if (validHistory.length === 0) return;
+
+    drawChart(cpuCanvasRef.current, validHistory, 'cpu_usage', '#667eea');
+    drawChart(memoryCanvasRef.current, validHistory, 'memory_percent', '#10b981');
+    drawChart(diskCanvasRef.current, validHistory, 'disk_percent', '#f59e0b');
     
     // Only draw temperature if we have temperature data
-    const hasTempData = healthHistory.some(d => d.temperature > 0);
+    const hasTempData = validHistory.some(d => d.temperature > 0);
     if (hasTempData) {
-      drawChart(tempCanvasRef.current, healthHistory, 'temperature', '#ef4444');
+      drawChart(tempCanvasRef.current, validHistory, 'temperature', '#ef4444');
     }
   }, [healthHistory, t]);
 
@@ -62,8 +75,13 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
 
-    // Get values
-    const values = data.map(d => typeof d[key] === 'number' ? d[key] : 0);
+    // Get values - filter to remove invalid data
+    const values = data
+      .filter(d => d && typeof d === 'object' && typeof d[key] === 'number')
+      .map(d => d[key] as number);
+    
+    if (values.length === 0) return; // Exit if no valid data
+    
     const maxValue = key === 'temperature' ? 100 : 100; // Max percentage or temp
 
     // Draw grid lines
@@ -117,25 +135,35 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       ctx.fill();
     }
 
-    // Draw x-axis time labels
+    // Draw x-axis time labels - with safety checks
     ctx.fillStyle = '#9ca3af';
     ctx.font = '12px sans-serif';
     ctx.textAlign = 'center';
     
-    const timeSteps = Math.min(6, data.length);
-    for (let i = 0; i < timeSteps; i++) {
-      const index = Math.floor((data.length - 1) * (i / (timeSteps - 1)));
-      const point = data[index];
-      const x = padding + (chartWidth / (timeSteps - 1)) * i;
-      
-      const date = new Date(point.timestamp);
-      const timeStr = date.getHours().toString().padStart(2, '0') + ':' + 
-                      date.getMinutes().toString().padStart(2, '0');
-      ctx.fillText(timeStr, x, height - padding + 20);
+    // Filter valid data points for time labels
+    const validData = data.filter(d => d && typeof d === 'object' && d.timestamp);
+    
+    if (validData.length > 0) {
+      const timeSteps = Math.min(6, validData.length);
+      for (let i = 0; i < timeSteps; i++) {
+        const index = Math.floor((validData.length - 1) * (i / (timeSteps - 1)));
+        const point = validData[index];
+        
+        if (point && point.timestamp) { // Safety check
+          const x = padding + (chartWidth / (timeSteps - 1)) * i;
+          
+          const date = new Date(point.timestamp);
+          const timeStr = date.getHours().toString().padStart(2, '0') + ':' + 
+                          date.getMinutes().toString().padStart(2, '0');
+          ctx.fillText(timeStr, x, height - padding + 20);
+        }
+      }
     }
   };
 
-  const hasTempData = healthHistory.some(d => d.temperature > 0);
+  // Validate healthHistory before checking for temperature data
+  const hasTempData = healthHistory && Array.isArray(healthHistory) && 
+                      healthHistory.some(d => d && d.temperature > 0);
   const gridCols = hasTempData ? 'repeat(auto-fit, minmax(500px, 1fr))' : 'repeat(auto-fit, minmax(500px, 1fr))';
 
   return (
