@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { User as UserType } from '../../../types';
+import type { User as UserType, Building as BuildingType } from '../../../types';
 import { api } from '../../../api/client';
 import { formatDateForInput } from '../utils/dateUtils';
 
