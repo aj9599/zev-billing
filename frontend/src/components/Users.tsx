@@ -3,6 +3,26 @@ import { Plus, Edit2, Trash2, X, Users as UsersIcon, Mail, Phone, MapPin, Credit
 import { api } from '../api/client';
 import type { User as UserType, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
+import Flagpack from 'flagpack-core';
+
+// Flag component using Flagpack - locally installed, no external dependencies
+const Flag = ({ code, size = 16 }: { code: string; size?: number }) => {
+  const flagpack = new Flagpack();
+  const svgContent = flagpack.getFlag(code.toUpperCase());
+  
+  return (
+    <span 
+      style={{ 
+        display: 'inline-block', 
+        verticalAlign: 'middle', 
+        marginRight: '6px',
+        width: `${size}px`,
+        height: `${size}px`
+      }}
+      dangerouslySetInnerHTML={{ __html: svgContent }}
+    />
+  );
+};
 
 export default function Users() {
   const { t } = useTranslation();
@@ -300,11 +320,11 @@ export default function Users() {
 
     // Don't show end date if it's the default far future date
     if (!endDate || endDate === '2099-01-01') {
-      return `${start} →`;
+      return `${start} â†’`;
     }
 
     const end = formatDate(endDate);
-    return `${start} → ${end}`;
+    return `${start} â†’ ${end}`;
   };
 
   const InstructionsModal = () => (
@@ -782,7 +802,7 @@ export default function Users() {
                         {formatRentPeriod(user.rent_start_date, user.rent_end_date)}
                       </span>
                     ) : (
-                      <span style={{ color: '#ef4444', fontSize: '12px' }}>âš ï¸ {t('users.notSet')}</span>
+                      <span style={{ color: '#ef4444', fontSize: '12px' }}>Ã¢Å¡Â Ã¯Â¸Â {t('users.notSet')}</span>
                     )}
                   </td>
                   <td style={{ padding: '16px' }}>
@@ -1108,7 +1128,7 @@ export default function Users() {
                         color: '#15803d',
                         lineHeight: '1.5'
                       }}>
-                        <strong>ℹ️ {t('users.apartmentInfo')}</strong>
+                        <strong>â„¹ï¸ {t('users.apartmentInfo')}</strong>
                         <br />
                         {t('users.apartmentExplanation')}
                       </div>
@@ -1188,7 +1208,7 @@ export default function Users() {
                       color: '#92400e',
                       lineHeight: '1.5'
                     }}>
-                      <strong>ℹ️ {t('users.rentPeriodInfo')}</strong>
+                      <strong>â„¹ï¸ {t('users.rentPeriodInfo')}</strong>
                       <br />
                       {t('users.rentPeriodExplanation')}
                     </div>
@@ -1272,31 +1292,56 @@ export default function Users() {
                 </div>
               </div>
 
-              {/* Bank Details */}
-              <div style={{ marginTop: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('users.bankDetails')}</label>
-                <input type="text" value={formData.bank_name} onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
-                  placeholder={t('users.bankName')} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', marginBottom: '8px' }} />
-                <input type="text" value={formData.bank_iban} onChange={(e) => setFormData({ ...formData, bank_iban: e.target.value })}
-                  placeholder={t('users.iban')} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', marginBottom: '8px' }} />
-                <input type="text" value={formData.bank_account_holder} onChange={(e) => setFormData({ ...formData, bank_account_holder: e.target.value })}
-                  placeholder={t('users.accountHolder')} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
-              </div>
+              {/* Bank Details - Only for Regular Users */}
+              {formData.user_type === 'regular' && (
+                <div style={{ marginTop: '16px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('users.bankDetails')}</label>
+                  <input type="text" value={formData.bank_name} onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
+                    placeholder={t('users.bankName')} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', marginBottom: '8px' }} />
+                  <input type="text" value={formData.bank_iban} onChange={(e) => setFormData({ ...formData, bank_iban: e.target.value })}
+                    placeholder={t('users.iban')} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', marginBottom: '8px' }} />
+                  <input type="text" value={formData.bank_account_holder} onChange={(e) => setFormData({ ...formData, bank_account_holder: e.target.value })}
+                    placeholder={t('users.accountHolder')} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                </div>
+              )}
 
-              {/* Invoice Language */}
-              <div style={{ marginTop: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('users.invoiceLanguage')}</label>
-                <select
-                  value={formData.language || 'de'}
-                  onChange={(e) => setFormData({ ...formData, language: e.target.value })}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
-                >
-                  <option value="de">🇨🇭­ Deutsch</option>
-                  <option value="fr">🇫🇷 Français</option>
-                  <option value="it">🇮🇹 Italiano</option>
-                  <option value="en">🇬🇧 English</option>
-                </select>
-              </div>
+              {/* Invoice Language - Only for Regular Users */}
+              {formData.user_type === 'regular' && (
+                <div style={{ marginTop: '16px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>{t('users.invoiceLanguage')}</label>
+                  <select
+                    value={formData.language || 'de'}
+                    onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+                    style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
+                  >
+                    <option value="de">Deutsch (German)</option>
+                    <option value="fr">Français (French)</option>
+                    <option value="it">Italiano (Italian)</option>
+                    <option value="en">English</option>
+                  </select>
+                  <div style={{ marginTop: '8px', fontSize: '13px', color: '#6b7280', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                    <span style={{ display: 'flex', alignItems: 'center' }}>
+                      <Flag code="ch" size={16} />
+                      <Flag code="de" size={16} />
+                      DE
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center' }}>
+                      <Flag code="ch" size={16} />
+                      <Flag code="fr" size={16} />
+                      FR
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center' }}>
+                      <Flag code="ch" size={16} />
+                      <Flag code="it" size={16} />
+                      IT
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center' }}>
+                      <Flag code="gb" size={16} />
+                      EN
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Notes */}
               <div style={{ marginTop: '16px' }}>
