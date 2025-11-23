@@ -205,7 +205,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		archivedBanner = `
 		<div class="archived-banner">
     		⚠️ ARCHIVED USER - This invoice is for an archived user
-		</div>
+		</div>`
 	}
 
 	// Sender info section
