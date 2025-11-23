@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Users as UsersIcon, Mail, Phone, MapPin, CreditCard, Search, Building, User, HelpCircle, Archive, CheckCircle, XCircle, Home, Calendar } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Users as UsersIcon, Mail, Phone, MapPin, CreditCard, Search, Building, User, HelpCircle, Archive, CheckCircle, XCircle, Home, Calendar, Info, MoveRight } from 'lucide-react';
 import { api } from '../api/client';
 import type { User as UserType, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
-import Flag from 'react-flagpack';
-import 'react-flagpack/dist/style.css';
 
 export default function Users() {
   const { t } = useTranslation();
@@ -302,11 +300,22 @@ export default function Users() {
 
     // Don't show end date if it's the default far future date
     if (!endDate || endDate === '2099-01-01') {
-      return `${start} â†’`;
+      return (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+          {start}
+          <MoveRight size={14} />
+        </span>
+      );
     }
 
     const end = formatDate(endDate);
-    return `${start} â†’ ${end}`;
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+        {start}
+        <MoveRight size={14} />
+        {end}
+      </span>
+    );
   };
 
   const InstructionsModal = () => (
@@ -1110,7 +1119,10 @@ export default function Users() {
                         color: '#15803d',
                         lineHeight: '1.5'
                       }}>
-                        <strong>â„¹ï¸ {t('users.apartmentInfo')}</strong>
+                        <strong style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Info size={16} />
+                        {t('users.apartmentInfo')}
+                      </strong>
                         <br />
                         {t('users.apartmentExplanation')}
                       </div>
@@ -1190,7 +1202,10 @@ export default function Users() {
                       color: '#92400e',
                       lineHeight: '1.5'
                     }}>
-                      <strong>â„¹ï¸ {t('users.rentPeriodInfo')}</strong>
+                      <strong style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Info size={16} />
+                        {t('users.rentPeriodInfo')}
+                      </strong>
                       <br />
                       {t('users.rentPeriodExplanation')}
                     </div>
@@ -1296,29 +1311,11 @@ export default function Users() {
                     onChange={(e) => setFormData({ ...formData, language: e.target.value })}
                     style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
                   >
-                    <option value="de">Deutsch</option>
-                    <option value="fr">Français</option>
-                    <option value="it">Italiano</option>
-                    <option value="en">English</option>
+                    <option value="de">🇨🇭 Deutsch (German)</option>
+                    <option value="fr">🇨🇭 Français (French)</option>
+                    <option value="it">🇨🇭 Italiano (Italian)</option>
+                    <option value="en">🇬🇧 English</option>
                   </select>
-                  <div style={{ marginTop: '8px', fontSize: '13px', color: '#6b7280', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Flag code="CH" gradient="real-linear" size="S" />
-                      DE
-                    </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Flag code="FR" gradient="real-linear" size="S" />
-                      FR
-                    </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Flag code="IT" gradient="real-linear" size="S" />
-                      IT
-                    </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Flag code="GB" gradient="real-linear" size="S" />
-                      EN
-                    </span>
-                  </div>
                 </div>
               )}
 
