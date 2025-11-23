@@ -23,14 +23,14 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
   useEffect(() => {
     if (healthHistory.length === 0) return;
 
-    drawChart(cpuCanvasRef.current, healthHistory, 'cpu_usage', '#667eea', t('logs.cpuUsage'));
-    drawChart(memoryCanvasRef.current, healthHistory, 'memory_percent', '#10b981', t('logs.memoryUsage'));
-    drawChart(diskCanvasRef.current, healthHistory, 'disk_percent', '#f59e0b', t('logs.diskUsage'));
+    drawChart(cpuCanvasRef.current, healthHistory, 'cpu_usage', '#667eea');
+    drawChart(memoryCanvasRef.current, healthHistory, 'memory_percent', '#10b981');
+    drawChart(diskCanvasRef.current, healthHistory, 'disk_percent', '#f59e0b');
     
     // Only draw temperature if we have temperature data
     const hasTempData = healthHistory.some(d => d.temperature > 0);
     if (hasTempData) {
-      drawChart(tempCanvasRef.current, healthHistory, 'temperature', '#ef4444', t('logs.cpuTemperature'));
+      drawChart(tempCanvasRef.current, healthHistory, 'temperature', '#ef4444');
     }
   }, [healthHistory, t]);
 
@@ -38,8 +38,7 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
     canvas: HTMLCanvasElement | null,
     data: HealthDataPoint[],
     key: keyof HealthDataPoint,
-    color: string,
-    label: string
+    color: string
   ) => {
     if (!canvas || data.length === 0) return;
 
@@ -66,7 +65,6 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
     // Get values
     const values = data.map(d => typeof d[key] === 'number' ? d[key] : 0);
     const maxValue = key === 'temperature' ? 100 : 100; // Max percentage or temp
-    const minValue = 0;
 
     // Draw grid lines
     ctx.strokeStyle = '#e5e7eb';

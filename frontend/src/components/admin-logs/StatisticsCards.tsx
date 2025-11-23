@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Users, Building2, Zap, FileText, UserCircle, Building } from 'lucide-react';
+import { Users, Building2, Zap, FileText } from 'lucide-react';
 import { useTranslation } from '../../i18n';
 import { api } from '../../api/client';
 
