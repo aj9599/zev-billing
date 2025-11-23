@@ -649,7 +649,7 @@ export default function ChargerCard({
                                 <>
                                     <Wifi size={16} color="#22c55e" />
                                     <span style={{ fontSize: '12px', fontWeight: '600', color: '#22c55e' }}>
-                                        {t('chargers.status.connected') || 'Connected'} â€¢ {t('chargers.status.online')}
+                                        {t('chargers.status.connected') || 'Connected'} • {t('chargers.status.online')}
                                     </span>
                                 </>
                             ) : (
