@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Building, Folder, Home } from 'lucide-react';
+import { Folder, Home } from 'lucide-react';
 import { useTranslation } from '../i18n';
 import { useBuildingData } from './buildings/hooks/useBuildingData';
 import { useBuildingForm } from './buildings/hooks/useBuildingForm';

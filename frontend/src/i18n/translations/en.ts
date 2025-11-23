@@ -283,6 +283,11 @@ export const en: Translations = {
   'buildings.energyFlow.selling': 'Selling',
   'buildings.energyFlow.noProduction': 'No Production',
   'buildings.energyFlow.offline': 'Offline',
+  'buildings.energySharing.title': 'Complex Energy Sharing',
+  'buildings.energySharing.description': 'This building\'s grid import could include:',
+  'buildings.energySharing.solarFromComplex': 'Solar from Complex',
+  'buildings.energySharing.fromGrid': 'From Grid',
+  'buildings.energySharing.solarSources': 'Solar sources',
 
   // Apartment Configuration
   'buildings.apartmentConfig.title': 'Visual Apartment Configuration',

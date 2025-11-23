@@ -1,4 +1,5 @@
 import { Sun } from 'lucide-react';
+import { useTranslation } from '../../../../i18n';
 import type { Building } from '../../../../types';
 
 interface EnergySharingInfoProps {
@@ -19,6 +20,7 @@ export default function EnergySharingInfo({
   getBuildingConsumption,
   isMobile
 }: EnergySharingInfoProps) {
+  const { t } = useTranslation();
   // Find if this building is in a complex
   const complexes = buildings.filter(b => b.is_group);
   const buildingComplex = complexes.find(c => c.group_buildings?.includes(building.id));
@@ -73,7 +75,7 @@ export default function EnergySharingInfo({
           fontWeight: '700',
           color: '#15803d'
         }}>
-          Complex Energy Sharing
+          {t('buildings.energySharing.title')}
         </span>
       </div>
       <div style={{
@@ -81,7 +83,7 @@ export default function EnergySharingInfo({
         color: '#166534',
         marginBottom: '8px'
       }}>
-        This building's grid import could include:
+        {t('buildings.energySharing.description')}
       </div>
       <div style={{
         display: 'flex',
@@ -101,7 +103,7 @@ export default function EnergySharingInfo({
             color: '#166534',
             marginBottom: '4px'
           }}>
-            Solar from Complex
+            {t('buildings.energySharing.solarFromComplex')}
           </div>
           <div style={{
             fontSize: isMobile ? '16px' : '18px',
@@ -130,7 +132,7 @@ export default function EnergySharingInfo({
             color: '#991b1b',
             marginBottom: '4px'
           }}>
-            From Grid
+            {t('buildings.energySharing.fromGrid')}
           </div>
           <div style={{
             fontSize: isMobile ? '16px' : '18px',
@@ -153,7 +155,7 @@ export default function EnergySharingInfo({
           fontSize: isMobile ? '11px' : '12px',
           color: '#166534'
         }}>
-          <strong>Solar sources:</strong>{' '}
+          <strong>{t('buildings.energySharing.solarSources')}:</strong>{' '}
           {sourceBuildings.map(s => `${s.name} (${s.solar.toFixed(2)} kW)`).join(', ')}
         </div>
       )}

@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { Building } from 'lucide-react';
 import { useTranslation } from '../../../../i18n';
 import ApartmentPalette from './ApartmentPalette';
 import BuildingLayout from './BuildingLayout';
-import type { Building as BuildingType, FloorConfig } from '../../../../types';
+import type { Building as BuildingType } from '../../../../types';
 
 interface LegoApartmentBuilderProps {
   formData: Partial<BuildingType>;

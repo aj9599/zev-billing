@@ -112,7 +112,7 @@ export default function EnergyFlowDiagram({
                     color: '#ef4444',
                     fontWeight: '600'
                   }}>
-                    Consuming from Grid
+                    {t('buildings.energyFlow.productiontogrid')}
                   </span>
                 )}
               </div>

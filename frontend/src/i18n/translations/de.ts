@@ -284,6 +284,11 @@ export const de: Translations = {
   'buildings.energyFlow.selling': 'Verkauf',
   'buildings.energyFlow.noProduction': 'Keine Produktion',
   'buildings.energyFlow.offline': 'Offline',
+  'buildings.energySharing.title': 'Komplex-Energie-Austausch',
+  'buildings.energySharing.description': 'Der Netzbezug dieses Gebäudes könnte beinhalten:',
+  'buildings.energySharing.solarFromComplex': 'Solar aus dem Komplex',
+  'buildings.energySharing.fromGrid': 'Aus dem Netz',
+  'buildings.energySharing.solarSources': 'Solarquellen',
 
   // Apartment Configuration
   'buildings.apartmentConfig.title': 'Visuelle Wohnungskonfiguration',
