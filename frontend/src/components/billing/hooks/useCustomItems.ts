@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../api/client';
-import type { CustomLineItem, Building } from '../../types';
+import type { CustomLineItem, Building } from '../../../types';
 import { useTranslation } from '../../i18n';
 import { validateCustomItemForm } from '../utils/validationUtils';
 

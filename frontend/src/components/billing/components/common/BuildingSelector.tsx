@@ -1,6 +1,6 @@
 import { Building as BuildingIcon } from 'lucide-react';
-import type { Building } from '../../../types';
-import { useTranslation } from '../../../i18n';
+import type { Building } from '../../../../types';
+import { useTranslation } from '../../../../i18n';
 
 interface BuildingSelectorProps {
   buildings: Building[];

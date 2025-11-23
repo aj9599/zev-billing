@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, Archive } from 'lucide-react';
-import type { Building, Invoice, User } from '../../../types';
-import { useTranslation } from '../../../i18n';
+import type { Building, Invoice, User } from '../../../../types';
+import { useTranslation } from '../../../../i18n';
 import { organizeInvoicesByYear, organizeInvoicesByUser } from '../../utils/billingUtils';
 import InvoiceTable from './InvoiceTable';
 import InvoiceCard from './InvoiceCard';

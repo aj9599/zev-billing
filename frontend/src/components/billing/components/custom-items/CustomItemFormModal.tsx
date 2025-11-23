@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Loader, AlertCircle } from 'lucide-react';
-import type { CustomLineItem, Building } from '../../../types';
-import { useTranslation } from '../../../i18n';
+import type { CustomLineItem, Building } from '../../../../types';
+import { useTranslation } from '../../../../i18n';
 
 interface CustomItemFormModalProps {
   buildings: Building[];

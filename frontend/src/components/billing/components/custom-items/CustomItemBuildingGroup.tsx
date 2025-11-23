@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
-import type { Building, CustomLineItem } from '../../../types';
-import { useTranslation } from '../../../i18n';
+import type { Building, CustomLineItem } from '../../../../types';
+import { useTranslation } from '../../../../i18n';
 import CustomItemCard from './CustomItemCard';
 
 interface CustomItemBuildingGroupProps {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api } from '../../api/client';
-import type { GenerateBillsRequest, Building, User, Meter, SharedMeterConfig, CustomLineItem, ApartmentWithUser } from '../../types';
+import type { GenerateBillsRequest, Building, User, Meter, SharedMeterConfig, CustomLineItem, ApartmentWithUser } from '../../../types';
 import { useTranslation } from '../../i18n';
 
 export function useBillGeneration(onSuccess: () => void) {

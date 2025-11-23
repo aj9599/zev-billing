@@ -1,5 +1,5 @@
-import type { Invoice, User } from '../../../types';
-import { useTranslation } from '../../../i18n';
+import type { Invoice, User } from '../../../../types';
+import { useTranslation } from '../../../../i18n';
 import InvoiceTable from './InvoiceTable';
 import InvoiceCard from './InvoiceCard';
 

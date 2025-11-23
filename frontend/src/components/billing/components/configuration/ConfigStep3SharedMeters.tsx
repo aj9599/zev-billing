@@ -1,6 +1,6 @@
 import { Zap } from 'lucide-react';
-import type { Building, SharedMeterConfig } from '../../../types';
-import { useTranslation } from '../../../i18n';
+import type { Building, SharedMeterConfig } from '../../../../types';
+import { useTranslation } from '../../../../i18n';
 
 interface ConfigStep3SharedMetersProps {
   buildings: Building[];

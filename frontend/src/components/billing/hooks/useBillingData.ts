@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../api/client';
-import type { Building, User } from '../../types';
+import type { Building, User } from '../../../types';
 
 export function useBillingData() {
   const [buildings, setBuildings] = useState<Building[]>([]);

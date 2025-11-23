@@ -1,6 +1,6 @@
 import { Edit2, Trash2, Zap } from 'lucide-react';
-import type { SharedMeterConfig } from '../../../types';
-import { useTranslation } from '../../../i18n';
+import type { SharedMeterConfig } from '../../../../types';
+import { useTranslation } from '../../../../i18n';
 
 interface SharedMeterCardProps {
   config: SharedMeterConfig;

@@ -4,8 +4,8 @@ import { useSharedMeters } from './billing/hooks/useSharedMeters';
 import SharedMeterBuildingGroup from './billing/components/shared-meters/SharedMeterBuildingGroup';
 import SharedMeterFormModal from './billing/components/shared-meters/SharedMeterFormModal';
 import Toast from './billing/components/common/Toast';
-import type { SharedMeterConfig as SharedMeterConfigType } from './types';
-import { useTranslation } from './i18n';
+import type { SharedMeterConfig as SharedMeterConfigType } from '../types';
+import { useTranslation } from '../i18n';
 
 interface SharedMeterConfigProps {
   selectedBuildingId: number | null;

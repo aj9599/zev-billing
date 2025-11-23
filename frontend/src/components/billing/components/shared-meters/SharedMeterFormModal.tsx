@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Loader, AlertCircle } from 'lucide-react';
 import type { SharedMeterConfig, Building, Meter, User } from '../../../types';
-import { useTranslation } from '../../../i18n';
+import { useTranslation } from '../../../../i18n';
 import CustomSplitsEditor from './CustomSplitsEditor';
 
 interface SharedMeterFormModalProps {

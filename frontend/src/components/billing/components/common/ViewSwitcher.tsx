@@ -1,5 +1,5 @@
 import { FileText, Settings, DollarSign } from 'lucide-react';
-import { useTranslation } from '../../../i18n';
+import { useTranslation } from '../../../../i18n';
 
 interface ViewSwitcherProps {
   currentView: 'invoices' | 'shared-meters' | 'custom-items';

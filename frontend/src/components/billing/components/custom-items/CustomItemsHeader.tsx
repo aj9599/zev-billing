@@ -1,5 +1,5 @@
 import { Plus, DollarSign } from 'lucide-react';
-import { useTranslation } from '../../../i18n';
+import { useTranslation } from '../../../../i18n';
 
 interface CustomItemsHeaderProps {
   onAddNew: () => void;

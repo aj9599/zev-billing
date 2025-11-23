@@ -1,4 +1,4 @@
-import type { Invoice, User } from '../../types';
+import type { Invoice, User } from '../../../types';
 
 export const formatDate = (dateStr: string | Date): string => {
   const date = new Date(dateStr);

@@ -4,8 +4,8 @@ import { useCustomItems } from './billing/hooks/useCustomItems';
 import CustomItemBuildingGroup from './billing/components/custom-items/CustomItemBuildingGroup';
 import CustomItemFormModal from './billing/components/custom-items/CustomItemFormModal';
 import Toast from './billing/components/common/Toast';
-import type { CustomLineItem } from './types';
-import { useTranslation } from './i18n';
+import type { CustomLineItem } from '../types';
+import { useTranslation } from '../i18n';
 
 interface CustomItemsProps {
   onSave: () => void;

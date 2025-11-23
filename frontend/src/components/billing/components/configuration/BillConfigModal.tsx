@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { X, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
-import { api } from '../../../api/client';
-import type { Building, User, Meter, SharedMeterConfig, CustomLineItem } from '../../../types';
-import { useTranslation } from '../../../i18n';
+import { api } from '../../../../api/client';
+import type { Building, User, Meter, SharedMeterConfig, CustomLineItem } from '../../../../types';
+import { useTranslation } from '../../../../i18n';
 import { useConfigurationState, useBillGeneration } from '../../hooks/useBillGeneration';
 import ConfigStepper from './ConfigStepper';
 import ConfigStep1Selection from './ConfigStep1Selection';

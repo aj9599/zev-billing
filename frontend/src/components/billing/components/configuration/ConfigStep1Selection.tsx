@@ -1,6 +1,6 @@
 import { Home, User as UserIcon, Zap } from 'lucide-react';
-import type { Building, ApartmentWithUser } from '../../../types';
-import { useTranslation } from '../../../i18n';
+import type { Building, ApartmentWithUser } from '../../../../types';
+import { useTranslation } from '../../../../i18n';
 
 interface ConfigStep1SelectionProps {
   buildings: Building[];

@@ -1,5 +1,5 @@
-import type { User } from '../../../types';
-import { useTranslation } from '../../../i18n';
+import type { User } from '../../../../types';
+import { useTranslation } from '../../../../i18n';
 
 interface CustomSplitsEditorProps {
   users: User[];

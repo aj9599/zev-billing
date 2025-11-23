@@ -1,6 +1,6 @@
 import { X, FileText } from 'lucide-react';
 import { useEffect, useRef } from 'react';
-import { useTranslation } from '../../../i18n';
+import { useTranslation } from '../../../../i18n';
 
 interface InstructionsModalProps {
   onClose: () => void;

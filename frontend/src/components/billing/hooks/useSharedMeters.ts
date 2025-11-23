@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../api/client';
-import type { SharedMeterConfig, Building, Meter, User } from '../../types';
+import type { SharedMeterConfig, Building, Meter, User } from '../../../types';
 import { useTranslation } from '../../i18n';
 import { validateSharedMeterForm } from '../utils/validationUtils';
 

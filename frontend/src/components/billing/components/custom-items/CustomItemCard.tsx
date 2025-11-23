@@ -1,6 +1,6 @@
 import { Edit2, Trash2 } from 'lucide-react';
-import type { CustomLineItem } from '../../../types';
-import { useTranslation } from '../../../i18n';
+import type { CustomLineItem } from '../../../../types';
+import { useTranslation } from '../../../../i18n';
 import { getCategoryColor } from '../../utils/billingUtils';
 
 interface CustomItemCardProps {

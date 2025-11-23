@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { ExternalLink, X } from 'lucide-react';
-import type { Invoice } from '../../../types';
-import { useTranslation } from '../../../i18n';
+import type { Invoice } from '../../../../types';
+import { useTranslation } from '../../../../i18n';
 import { formatDate, getStatusColor } from '../../utils/billingUtils';
 
 interface InvoiceDetailModalProps {
