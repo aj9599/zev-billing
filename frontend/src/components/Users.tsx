@@ -3,7 +3,7 @@ import { Plus, Edit2, Trash2, X, Users as UsersIcon, Mail, Phone, MapPin, Credit
 import { api } from '../api/client';
 import type { User as UserType, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
-import { Flag } from 'react-flagpack';
+import Flag from 'react-flagpack';
 import 'react-flagpack/dist/style.css';
 
 export default function Users() {
