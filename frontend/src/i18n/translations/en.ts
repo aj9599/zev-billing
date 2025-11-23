@@ -1950,6 +1950,26 @@ export const en: Translations = {
   'logs.factoryResetCaptchaRequired': 'Please solve the math problem to continue',
   'logs.cancel': 'Cancel',
 
+  // System Overview Statistics
+  'logs.systemOverview': 'System Overview',
+  'logs.totalUsers': 'Total Users',
+  'logs.regular': 'Regular',
+  'logs.admins': 'Admins',
+  'logs.totalBuildings': 'Total Buildings',
+  'logs.complexes': 'Complexes',
+  'logs.metersAndChargers': 'Meters & Chargers',
+  'logs.meters': 'Meters',
+  'logs.chargers': 'Chargers',
+  'logs.totalInvoices': 'Total Invoices',
+  'logs.invoicesGenerated': 'Invoices Generated',
+
+  // Performance Charts
+  'logs.performance24h': '24-Hour Performance History',
+
+  // Activity Log Toggle
+  'logs.showLess': 'Show Less',
+  'logs.showAll24h': 'Show All (24h)',
+
   // ============================================================================
   // SETTINGS (User Account Settings)
   // ============================================================================

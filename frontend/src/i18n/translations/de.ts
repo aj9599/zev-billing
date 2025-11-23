@@ -1951,6 +1951,26 @@ export const de: Translations = {
   'logs.factoryResetCaptchaRequired': 'Bitte lösen Sie das Rechenrätsel, um fortzufahren',
   'logs.cancel': 'Abbrechen',
 
+  // System Overview Statistics
+  'logs.systemOverview': 'Systemübersicht',
+  'logs.totalUsers': 'Benutzer Gesamt',
+  'logs.regular': 'Regulär',
+  'logs.admins': 'Admins',
+  'logs.totalBuildings': 'Gebäude Gesamt',
+  'logs.complexes': 'Komplexe',
+  'logs.metersAndChargers': 'Zähler & Ladestationen',
+  'logs.meters': 'Zähler',
+  'logs.chargers': 'Ladestationen',
+  'logs.totalInvoices': 'Rechnungen Gesamt',
+  'logs.invoicesGenerated': 'Rechnungen erstellt',
+
+  // Performance Charts
+  'logs.performance24h': '24-Stunden Leistungsverlauf',
+
+  // Activity Log Toggle
+  'logs.showLess': 'Weniger anzeigen',
+  'logs.showAll24h': 'Alle anzeigen (24h)',
+
   // ============================================================================
   // SETTINGS (User Account Settings)
   // ============================================================================
