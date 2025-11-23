@@ -3,7 +3,6 @@ import { Plus, Edit2, Trash2, X, Users as UsersIcon, Mail, Phone, MapPin, Credit
 import { api } from '../api/client';
 import type { User as UserType, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
-import 'flag-icons/css/flag-icons.min.css';
 
 export default function Users() {
   const { t } = useTranslation();
@@ -1312,27 +1311,11 @@ export default function Users() {
                     onChange={(e) => setFormData({ ...formData, language: e.target.value })}
                     style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
                   >
-                    <option value="de">Deutsch</option>
-                    <option value="fr">Français</option>
-                    <option value="it">Italiano</option>
-                    <option value="en">English</option>
+                    <option value="de">🇨🇭 Deutsch</option>
+                    <option value="fr">🇫🇷 Français</option>
+                    <option value="it">🇮🇹 Italiano</option>
+                    <option value="en">🇬🇧 English</option>
                   </select>
-                  <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#6b7280' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                      {(formData.language === 'de' || formData.language === 'fr' || formData.language === 'it') && (
-                        <span className="fi fi-ch fis" style={{ fontSize: '18px' }}></span>
-                      )}
-                      {formData.language === 'en' && (
-                        <span className="fi fi-gb fis" style={{ fontSize: '18px' }}></span>
-                      )}
-                      <span style={{ fontWeight: '500' }}>
-                        {formData.language === 'de' && 'Deutsch'}
-                        {formData.language === 'fr' && 'Français'}
-                        {formData.language === 'it' && 'Italiano'}
-                        {formData.language === 'en' && 'English'}
-                      </span>
-                    </span>
-                  </div>
                 </div>
               )}
 
