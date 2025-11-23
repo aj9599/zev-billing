@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Archive } from 'lucide-react';
+import { Archive } from 'lucide-react';
 import type { Building, Invoice, User } from '../../../../types';
 import { useTranslation } from '../../../../i18n';
 import { organizeInvoicesByYear, organizeInvoicesByUser } from '../../utils/billingUtils';
@@ -83,7 +83,7 @@ export default function BuildingGroup({
           </p>
         </div>
         <span style={{ fontSize: '24px', color: '#666' }}>
-          {isExpanded ? '▼' : '▶'}
+          {isExpanded ? 'â–¼' : 'â–¶'}
         </span>
       </div>
 
@@ -119,7 +119,7 @@ export default function BuildingGroup({
                   </h3>
                 </div>
                 <span style={{ fontSize: '18px', color: '#856404' }}>
-                  {expandedYears.has('archive-' + building.id) ? '▼' : '▶'}
+                  {expandedYears.has('archive-' + building.id) ? 'â–¼' : 'â–¶'}
                 </span>
               </div>
 

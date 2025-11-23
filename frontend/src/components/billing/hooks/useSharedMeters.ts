@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { api } from '../../api/client';
+import { api } from '../../../api/client';
 import type { SharedMeterConfig, Building, Meter, User } from '../../../types';
-import { useTranslation } from '../../i18n';
+import { useTranslation } from '../../../i18n';
 import { validateSharedMeterForm } from '../utils/validationUtils';
 
 interface SharedMeterFormData {
@@ -38,16 +38,16 @@ export function useSharedMeters() {
       ]);
       
       setConfigs(configsData);
-      setBuildings(buildingsData.filter(b => !b.is_group));
+      setBuildings(buildingsData.filter((b: Building) => !b.is_group));
       
       // Only show Heating and Other meters (exclude Apartment, Solar, Total)
-      const filteredMeters = metersData.filter(m => {
+      const filteredMeters = metersData.filter((m: Meter) => {
         if (m.user_id) return false; // Exclude user-specific meters
         const meterType = m.meter_type?.toLowerCase() || '';
         return meterType === 'heating' || meterType === 'other';
       });
       setMeters(filteredMeters);
-      setUsers(usersData.filter(u => u.is_active));
+      setUsers(usersData.filter((u: User) => u.is_active));
     } catch (err) {
       console.error('Failed to load shared meters:', err);
       setError(err instanceof Error ? err.message : 'Failed to load data');

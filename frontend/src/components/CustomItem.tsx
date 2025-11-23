@@ -27,13 +27,6 @@ export default function CustomItems({ onSave, selectedBuildingId }: CustomItemsP
   const [editingItem, setEditingItem] = useState<CustomLineItem | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-  const [expandedBuildings, setExpandedBuildings] = useState<Set<number>>(new Set());
-
-  useEffect(() => {
-    // Expand all buildings by default
-    const buildingIds = new Set(buildings.map(b => b.id));
-    setExpandedBuildings(buildingIds);
-  }, [buildings]);
 
   useEffect(() => {
     if (toast) {

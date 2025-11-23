@@ -448,13 +448,13 @@ export default function BillConfigModal({
               userCount={config.user_ids.length}
               sharedMeterCount={selectedSharedMeters.length}
               customItemCount={selectedCustomItems.length}
-              senderName={config.sender_name}
-              senderAddress={config.sender_address}
-              senderCity={config.sender_city}
-              senderZip={config.sender_zip}
-              bankName={config.bank_name}
-              bankIban={config.bank_iban}
-              bankAccountHolder={config.bank_account_holder}
+              senderName={config.sender_name || ''}
+              senderAddress={config.sender_address || ''}
+              senderCity={config.sender_city || ''}
+              senderZip={config.sender_zip || ''}
+              bankName={config.bank_name || ''}
+              bankIban={config.bank_iban || ''}
+              bankAccountHolder={config.bank_account_holder || ''}
               onSenderNameChange={(value) => updateConfig({ sender_name: value })}
               onSenderAddressChange={(value) => updateConfig({ sender_address: value })}
               onSenderCityChange={(value) => updateConfig({ sender_city: value })}

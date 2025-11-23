@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api } from '../../api/client';
+import { api } from '../../../api/client';
 import type { Building, User } from '../../../types';
 
 export function useBillingData() {
@@ -16,7 +16,7 @@ export function useBillingData() {
         api.getBuildings(),
         api.getUsers(undefined, true)
       ]);
-      setBuildings(buildingsData.filter(b => !b.is_group));
+      setBuildings(buildingsData.filter((b: Building) => !b.is_group));
       setUsers(usersData);
     } catch (err) {
       console.error('Failed to load billing data:', err);

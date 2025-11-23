@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { api } from '../../api/client';
+import { api } from '../../../api/client';
 import type { CustomLineItem, Building } from '../../../types';
-import { useTranslation } from '../../i18n';
+import { useTranslation } from '../../../i18n';
 import { validateCustomItemForm } from '../utils/validationUtils';
 
 interface CustomItemFormData {
@@ -33,7 +33,7 @@ export function useCustomItems() {
         api.getBuildings()
       ]);
       setItems(itemsData);
-      setBuildings(buildingsData.filter(b => !b.is_group));
+      setBuildings(buildingsData.filter((b: Building) => !b.is_group));
     } catch (err) {
       console.error('Failed to load custom items:', err);
       setError(err instanceof Error ? err.message : 'Failed to load data');

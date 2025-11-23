@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Loader, AlertCircle } from 'lucide-react';
-import type { SharedMeterConfig, Building, Meter, User } from '../../../types';
+import type { SharedMeterConfig, Building, Meter, User } from '../../../../types';
 import { useTranslation } from '../../../../i18n';
 import CustomSplitsEditor from './CustomSplitsEditor';
 
@@ -19,7 +19,6 @@ interface SharedMeterFormModalProps {
 export default function SharedMeterFormModal({
   buildings,
   meters,
-  users,
   editingConfig,
   onSave,
   onClose,

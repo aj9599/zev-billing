@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { api } from '../../api/client';
+import { api } from '../../../api/client';
 import type { Invoice } from '../../../types';
-import { useTranslation } from '../../i18n';
+import { useTranslation } from '../../../i18n';
 
 export function useInvoiceOperations(onRefresh: () => void) {
   const { t } = useTranslation();
