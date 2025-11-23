@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, DollarSign, AlertCircle, CheckCircle, Loader } from 'lucide-react';
+import { Plus, Edit2, Trash2, DollarSign, AlertCircle, CheckCircle, Loader, ChevronDown, ChevronRight } from 'lucide-react';
 import { api } from '../api/client';
 import type { CustomLineItem, Building } from '../types';
 import { useTranslation } from '../i18n';
@@ -372,9 +372,11 @@ export default function CustomItems({ onSave, selectedBuildingId }: CustomItemsP
                       <Plus size={16} />
                       {t('common.add')}
                     </button>
-                    <span style={{ fontSize: '24px', color: '#666' }}>
-                      {expandedBuildings.has(building.id) ? '▼' : '▶'}
-                    </span>
+                    {expandedBuildings.has(building.id) ? (
+                      <ChevronDown size={24} color="#666" />
+                    ) : (
+                      <ChevronRight size={24} color="#666" />
+                    )}
                   </div>
                 </div>
 

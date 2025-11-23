@@ -402,9 +402,9 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 		consumption := readingTo - readingFrom
 		totalMeterCost := consumption * unitPrice
 
-		log.Printf("  [SHARED METERS]   Readings: %.3f → %.3f kWh (consumption: %.3f kWh)",
+		log.Printf("  [SHARED METERS]   Readings: %.3f â†’ %.3f kWh (consumption: %.3f kWh)",
 			readingFrom, readingTo, consumption)
-		log.Printf("  [SHARED METERS]   Total meter cost: %.3f × %.3f = %.3f",
+		log.Printf("  [SHARED METERS]   Total meter cost: %.3f Ã— %.3f = %.3f",
 			consumption, unitPrice, totalMeterCost)
 
 		var userShare float64
@@ -426,7 +426,7 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 
 			if err == nil && totalArea > 0 && userArea > 0 {
 				userShare = totalMeterCost * (userArea / totalArea)
-				splitDescription = fmt.Sprintf("Split by area: %.1fm² %s %.1fm² total", userArea, tr.Of, totalArea)
+				splitDescription = fmt.Sprintf("Split by area: %.1fmÂ² %s %.1fmÂ² total", userArea, tr.Of, totalArea)
 			} else {
 				if totalActiveUsers > 0 {
 					userShare = totalMeterCost / float64(totalActiveUsers)
@@ -483,7 +483,7 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 		// Apply proration factor for shared costs
 		userShare = userShare * prorationFactor
 		if prorationFactor < 1.0 {
-			splitDescription += fmt.Sprintf(" × %.1f%% of period", prorationFactor*100)
+			splitDescription += fmt.Sprintf(" Ã— %.1f%% of period", prorationFactor*100)
 		}
 
 		log.Printf("  [SHARED METERS]   User share: %.3f (%s)", userShare, splitDescription)
@@ -497,7 +497,7 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 		})
 
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  %s: %.3f kWh × %.3f %s/kWh = %.3f %s", tr.TotalConsumption, consumption, unitPrice, currency, totalMeterCost, currency),
+			Description: fmt.Sprintf("  %s: %.3f kWh Ã— %.3f %s/kWh = %.3f %s", tr.TotalConsumption, consumption, unitPrice, currency, totalMeterCost, currency),
 			Quantity:    0,
 			UnitPrice:   0,
 			TotalPrice:  0,
@@ -668,7 +668,7 @@ func (bs *BillingService) generateUserInvoiceForPeriod(userPeriod UserPeriod, bu
 	// Add proration notice if not full period
 	if userPeriod.ProrationFactor < 1.0 {
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("⚠️ %s: %s to %s (%.1f%% of billing period)", 
+			Description: fmt.Sprintf("âš ï¸ %s: %s to %s (%.1f%% of billing period)", 
 				tr.PartialPeriod,
 				start.Format("02.01.2006"),
 				end.Format("02.01.2006"),
@@ -732,26 +732,26 @@ func (bs *BillingService) generateUserInvoiceForPeriod(userPeriod UserPeriod, bu
 		solarCost := solarPower * settings.SolarPowerPrice
 		totalAmount += solarCost
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh", tr.SolarPower, solarPower, settings.SolarPowerPrice, settings.Currency),
+			Description: fmt.Sprintf("%s: %.3f kWh Ã— %.3f %s/kWh", tr.SolarPower, solarPower, settings.SolarPowerPrice, settings.Currency),
 			Quantity:    solarPower,
 			UnitPrice:   settings.SolarPowerPrice,
 			TotalPrice:  solarCost,
 			ItemType:    "solar_power",
 		})
-		log.Printf("  Solar Cost: %.3f kWh × %.3f = %.3f %s", solarPower, settings.SolarPowerPrice, solarCost, settings.Currency)
+		log.Printf("  Solar Cost: %.3f kWh Ã— %.3f = %.3f %s", solarPower, settings.SolarPowerPrice, solarCost, settings.Currency)
 	}
 
 	if normalPower > 0 {
 		normalCost := normalPower * settings.NormalPowerPrice
 		totalAmount += normalCost
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh", tr.NormalPowerGrid, normalPower, settings.NormalPowerPrice, settings.Currency),
+			Description: fmt.Sprintf("%s: %.3f kWh Ã— %.3f %s/kWh", tr.NormalPowerGrid, normalPower, settings.NormalPowerPrice, settings.Currency),
 			Quantity:    normalPower,
 			UnitPrice:   settings.NormalPowerPrice,
 			TotalPrice:  normalCost,
 			ItemType:    "normal_power",
 		})
-		log.Printf("  Normal Cost: %.3f kWh × %.3f = %.3f %s", normalPower, settings.NormalPowerPrice, normalCost, settings.Currency)
+		log.Printf("  Normal Cost: %.3f kWh Ã— %.3f = %.3f %s", normalPower, settings.NormalPowerPrice, normalCost, settings.Currency)
 	}
 
 	// CRITICAL: Car charging for THIS USER'S ACTUAL PERIOD
@@ -806,26 +806,26 @@ func (bs *BillingService) generateUserInvoiceForPeriod(userPeriod UserPeriod, bu
 				normalChargingCost := normalCharging * settings.CarChargingNormalPrice
 				totalAmount += normalChargingCost
 				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh", tr.SolarMode, normalCharging, settings.CarChargingNormalPrice, settings.Currency),
+					Description: fmt.Sprintf("%s: %.3f kWh Ã— %.3f %s/kWh", tr.SolarMode, normalCharging, settings.CarChargingNormalPrice, settings.Currency),
 					Quantity:    normalCharging,
 					UnitPrice:   settings.CarChargingNormalPrice,
 					TotalPrice:  normalChargingCost,
 					ItemType:    "car_charging_normal",
 				})
-				log.Printf("  Solar Charging: %.3f kWh × %.3f = %.3f %s", normalCharging, settings.CarChargingNormalPrice, normalChargingCost, settings.Currency)
+				log.Printf("  Solar Charging: %.3f kWh Ã— %.3f = %.3f %s", normalCharging, settings.CarChargingNormalPrice, normalChargingCost, settings.Currency)
 			}
 
 			if priorityCharging > 0 {
 				priorityChargingCost := priorityCharging * settings.CarChargingPriorityPrice
 				totalAmount += priorityChargingCost
 				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh", tr.PriorityMode, priorityCharging, settings.CarChargingPriorityPrice, settings.Currency),
+					Description: fmt.Sprintf("%s: %.3f kWh Ã— %.3f %s/kWh", tr.PriorityMode, priorityCharging, settings.CarChargingPriorityPrice, settings.Currency),
 					Quantity:    priorityCharging,
 					UnitPrice:   settings.CarChargingPriorityPrice,
 					TotalPrice:  priorityChargingCost,
 					ItemType:    "car_charging_priority",
 				})
-				log.Printf("  Priority Charging: %.3f kWh × %.3f = %.3f %s", priorityCharging, settings.CarChargingPriorityPrice, priorityChargingCost, settings.Currency)
+				log.Printf("  Priority Charging: %.3f kWh Ã— %.3f = %.3f %s", priorityCharging, settings.CarChargingPriorityPrice, priorityChargingCost, settings.Currency)
 			}
 		}
 	}
@@ -846,7 +846,7 @@ func (bs *BillingService) generateUserInvoiceForPeriod(userPeriod UserPeriod, bu
 	} else if len(sharedMeterItems) > 0 {
 		items = append(items, sharedMeterItems...)
 		totalAmount += sharedMeterCost
-		log.Printf("  ✅ Added %d shared meter items (total: %.3f)", len(sharedMeterItems), sharedMeterCost)
+		log.Printf("  âœ… Added %d shared meter items (total: %.3f)", len(sharedMeterItems), sharedMeterCost)
 	}
 
 	log.Printf("  Checking for custom line items (pro-rated by %.1f%% of period)...", userPeriod.ProrationFactor*100)
@@ -856,7 +856,7 @@ func (bs *BillingService) generateUserInvoiceForPeriod(userPeriod UserPeriod, bu
 	} else if len(customItems) > 0 {
 		items = append(items, customItems...)
 		totalAmount += customCost
-		log.Printf("  ✅ Added %d custom items (total: %.3f)", len(customItems), customCost)
+		log.Printf("  âœ… Added %d custom items (total: %.3f)", len(customItems), customCost)
 	}
 
 	log.Printf("  INVOICE TOTAL: %s %.3f", settings.Currency, totalAmount)
@@ -1230,7 +1230,7 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 
 	// Add vZEV mode notice
 	items = append(items, models.InvoiceItem{
-		Description: "⚡ vZEV Mode: Virtual Self-Consumption Community",
+		Description: "âš¡ vZEV Mode: Virtual Self-Consumption Community",
 		Quantity:    0,
 		UnitPrice:   0,
 		TotalPrice:  0,
@@ -1240,7 +1240,7 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 	// Add period notice if prorated
 	if userPeriod.ProrationFactor < 1.0 {
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("⚠️ %s: %s to %s (%.1f%% of billing period)",
+			Description: fmt.Sprintf("âš ï¸ %s: %s to %s (%.1f%% of billing period)",
 				tr.PartialPeriod,
 				start.Format("02.01.2006"),
 				end.Format("02.01.2006"),
@@ -1293,7 +1293,7 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 
 	// Energy breakdown with correct vZEV logic
 	items = append(items, models.InvoiceItem{
-		Description: "🔆 vZEV Energy Breakdown:",
+		Description: "ðŸ”† vZEV Energy Breakdown:",
 		Quantity:    0,
 		UnitPrice:   0,
 		TotalPrice:  0,
@@ -1305,14 +1305,14 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 		selfConsumedCost := energyResult.SelfConsumedSolar * settings.SolarPowerPrice
 		totalAmount += selfConsumedCost
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  └─ Own Building Solar: %.3f kWh × %.3f %s/kWh",
+			Description: fmt.Sprintf("  â””â”€ Own Building Solar: %.3f kWh Ã— %.3f %s/kWh",
 				energyResult.SelfConsumedSolar, settings.SolarPowerPrice, settings.Currency),
 			Quantity:    energyResult.SelfConsumedSolar,
 			UnitPrice:   settings.SolarPowerPrice,
 			TotalPrice:  selfConsumedCost,
 			ItemType:    "vzev_self_solar",
 		})
-		log.Printf("  Self-Consumed Solar: %.3f kWh × %.3f = %.3f %s", 
+		log.Printf("  Self-Consumed Solar: %.3f kWh Ã— %.3f = %.3f %s", 
 			energyResult.SelfConsumedSolar, settings.SolarPowerPrice, selfConsumedCost, settings.Currency)
 	}
 
@@ -1321,14 +1321,14 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 		virtualPVCost := energyResult.VirtualPV * settings.VZEVExportPrice
 		totalAmount += virtualPVCost
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  └─ Virtual PV (from vZEV): %.3f kWh × %.3f %s/kWh",
+			Description: fmt.Sprintf("  â””â”€ Virtual PV (from vZEV): %.3f kWh Ã— %.3f %s/kWh",
 				energyResult.VirtualPV, settings.VZEVExportPrice, settings.Currency),
 			Quantity:    energyResult.VirtualPV,
 			UnitPrice:   settings.VZEVExportPrice,
 			TotalPrice:  virtualPVCost,
 			ItemType:    "vzev_virtual_pv",
 		})
-		log.Printf("  Virtual PV: %.3f kWh × %.3f = %.3f %s", 
+		log.Printf("  Virtual PV: %.3f kWh Ã— %.3f = %.3f %s", 
 			energyResult.VirtualPV, settings.VZEVExportPrice, virtualPVCost, settings.Currency)
 	}
 
@@ -1337,14 +1337,14 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 		gridCost := energyResult.GridEnergy * settings.NormalPowerPrice
 		totalAmount += gridCost
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  └─ %s: %.3f kWh × %.3f %s/kWh",
+			Description: fmt.Sprintf("  â””â”€ %s: %.3f kWh Ã— %.3f %s/kWh",
 				tr.NormalPowerGrid, energyResult.GridEnergy, settings.NormalPowerPrice, settings.Currency),
 			Quantity:    energyResult.GridEnergy,
 			UnitPrice:   settings.NormalPowerPrice,
 			TotalPrice:  gridCost,
 			ItemType:    "normal_power",
 		})
-		log.Printf("  Grid Energy: %.3f kWh × %.3f = %.3f %s", 
+		log.Printf("  Grid Energy: %.3f kWh Ã— %.3f = %.3f %s", 
 			energyResult.GridEnergy, settings.NormalPowerPrice, gridCost, settings.Currency)
 	}
 
@@ -1397,7 +1397,7 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 				normalChargingCost := normalCharging * settings.CarChargingNormalPrice
 				totalAmount += normalChargingCost
 				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh",
+					Description: fmt.Sprintf("%s: %.3f kWh Ã— %.3f %s/kWh",
 						tr.SolarMode, normalCharging, settings.CarChargingNormalPrice, settings.Currency),
 					Quantity:    normalCharging,
 					UnitPrice:   settings.CarChargingNormalPrice,
@@ -1410,7 +1410,7 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 				priorityChargingCost := priorityCharging * settings.CarChargingPriorityPrice
 				totalAmount += priorityChargingCost
 				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh",
+					Description: fmt.Sprintf("%s: %.3f kWh Ã— %.3f %s/kWh",
 						tr.PriorityMode, priorityCharging, settings.CarChargingPriorityPrice, settings.Currency),
 					Quantity:    priorityCharging,
 					UnitPrice:   settings.CarChargingPriorityPrice,
@@ -1687,7 +1687,7 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 		}
 
 		if (intervalCount <= 5) || (userSolar > 0 && solarUsed <= userSolar*3) {
-			log.Printf("    [ZEV] %s: User %.3f kWh, Building %.3f kWh, Solar %.3f kWh → %.3f solar + %.3f grid",
+			log.Printf("    [ZEV] %s: User %.3f kWh, Building %.3f kWh, Solar %.3f kWh â†’ %.3f solar + %.3f grid",
 				timestamp.Format("15:04"), data.UserConsumption, data.BuildingConsumption,
 				data.SolarProduction, userSolar, userNormal)
 		}
@@ -1928,10 +1928,10 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 
 			if shouldLog {
 				if isBillable {
-					log.Printf("  [CHARGING]     [%d] %s: %.3f kWh, mode=%s, state=%s → BILLABLE",
+					log.Printf("  [CHARGING]     [%d] %s: %.3f kWh, mode=%s, state=%s â†’ BILLABLE",
 						sessionNum, session.SessionTime.Format("15:04"), session.PowerKwh, session.Mode, session.State)
 				} else {
-					log.Printf("  [CHARGING]     [%d] %s: %.3f kWh, mode=%s, state=%s → SKIP (idle)",
+					log.Printf("  [CHARGING]     [%d] %s: %.3f kWh, mode=%s, state=%s â†’ SKIP (idle)",
 						sessionNum, session.SessionTime.Format("15:04"), session.PowerKwh, session.Mode, session.State)
 				}
 			}
@@ -1977,24 +1977,24 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 				if isNormal {
 					chargerNormal += consumption
 					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh NORMAL (%.3f → %.3f)",
+						log.Printf("  [CHARGING]     [%d] âœ“ %.3f kWh NORMAL (%.3f â†’ %.3f)",
 							sessionNum, consumption, previousPower, session.PowerKwh)
 					}
 				} else if isPriority {
 					chargerPriority += consumption
 					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh PRIORITY (%.3f → %.3f)",
+						log.Printf("  [CHARGING]     [%d] âœ“ %.3f kWh PRIORITY (%.3f â†’ %.3f)",
 							sessionNum, consumption, previousPower, session.PowerKwh)
 					}
 				} else {
 					chargerNormal += consumption
 					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh UNKNOWN mode '%s' → NORMAL",
+						log.Printf("  [CHARGING]     [%d] âœ“ %.3f kWh UNKNOWN mode '%s' â†’ NORMAL",
 							sessionNum, consumption, session.Mode)
 					}
 				}
 			} else if shouldLog {
-				log.Printf("  [CHARGING]     [%d] Zero consumption (%.3f → %.3f)",
+				log.Printf("  [CHARGING]     [%d] Zero consumption (%.3f â†’ %.3f)",
 					sessionNum, previousPower, session.PowerKwh)
 			}
 

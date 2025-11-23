@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, ChevronLeft, ChevronRight, Check, FileText, Zap, DollarSign, Home, User as UserIcon } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Check, FileText, Zap, DollarSign, Home, User as UserIcon, ChevronDown, ChevronUp } from 'lucide-react';
 import { api } from '../api/client';
 import type { Building, User, Meter, SharedMeterConfig, CustomLineItem, GenerateBillsRequest, ApartmentWithUser } from '../types';
 import { useTranslation } from '../i18n';
@@ -49,7 +49,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
   useEffect(() => {
     if (isOpen) {
       loadData();
-      loadSavedInfo();
     }
   }, [isOpen]);
 
@@ -84,6 +83,13 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     }
   }, [config.building_ids, users, meters]);
 
+  // Auto-fill administrator information when moving to step 5
+  useEffect(() => {
+    if (step === 5 && config.building_ids.length > 0) {
+      loadAdministratorInfo();
+    }
+  }, [step, config.building_ids]);
+
   const loadData = async () => {
     try {
       const [buildingsData, usersData, metersData, sharedMetersData, customItemsData] = await Promise.all([
@@ -106,34 +112,59 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     }
   };
 
-  const loadSavedInfo = () => {
+  const loadAdministratorInfo = async () => {
     try {
-      const savedSender = sessionStorage.getItem('zev_sender_info');
-      const savedBanking = sessionStorage.getItem('zev_banking_info');
+      // Get administrator user for the first selected building
+      const firstBuildingId = config.building_ids[0];
+      const allUsers = await api.getUsers(undefined, true);
+      
+      // Find administrator user for this building
+      const adminUser = allUsers.find(
+        u => u.building_id === firstBuildingId && u.user_type === 'administration'
+      );
 
-      if (savedSender) {
-        const parsed = JSON.parse(savedSender);
+      if (adminUser) {
+        console.log('Found administrator user:', adminUser);
         setConfig(prev => ({
           ...prev,
-          sender_name: parsed.name || '',
-          sender_address: parsed.address || '',
-          sender_city: parsed.city || '',
-          sender_zip: parsed.zip || '',
-          sender_country: parsed.country || 'Switzerland'
+          sender_name: `${adminUser.first_name} ${adminUser.last_name}`.trim() || '',
+          sender_address: adminUser.address_street || '',
+          sender_city: adminUser.address_city || '',
+          sender_zip: adminUser.address_zip || '',
+          sender_country: adminUser.address_country || 'Switzerland',
+          bank_name: adminUser.bank_name || '',
+          bank_iban: adminUser.bank_iban || '',
+          bank_account_holder: adminUser.bank_account_holder || ''
         }));
-      }
-
-      if (savedBanking) {
-        const parsed = JSON.parse(savedBanking);
+      } else {
+        // No administrator found - clear fields
+        console.log('No administrator user found for building', firstBuildingId);
         setConfig(prev => ({
           ...prev,
-          bank_name: parsed.name || '',
-          bank_iban: parsed.iban || '',
-          bank_account_holder: parsed.holder || ''
+          sender_name: '',
+          sender_address: '',
+          sender_city: '',
+          sender_zip: '',
+          sender_country: 'Switzerland',
+          bank_name: '',
+          bank_iban: '',
+          bank_account_holder: ''
         }));
       }
-    } catch (e) {
-      console.error('Failed to load saved info:', e);
+    } catch (err) {
+      console.error('Failed to load administrator info:', err);
+      // On error, clear fields
+      setConfig(prev => ({
+        ...prev,
+        sender_name: '',
+        sender_address: '',
+        sender_city: '',
+        sender_zip: '',
+        sender_country: 'Switzerland',
+        bank_name: '',
+        bank_iban: '',
+        bank_account_holder: ''
+      }));
     }
   };
 
@@ -275,7 +306,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
     newSelected.forEach(selectedKey => {
       const parts = selectedKey.split('|||');
       if (parts.length < 2) {
-        console.log(`  âš ï¸  Invalid key format: ${selectedKey}`);
+        console.log(`  ✗ Invalid key format: ${selectedKey}`);
         return;
       }
 
@@ -299,7 +330,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
 
       // Add user if exists and is active
       if (apartment?.user?.is_active) {
-        console.log(`  âœ“ Adding user ${apartment.user.id}: ${apartment.user.first_name} ${apartment.user.last_name} from building ${parsedBuildingId}`);
+        console.log(`  ✓ Adding user ${apartment.user.id}: ${apartment.user.first_name} ${apartment.user.last_name} from building ${parsedBuildingId}`);
         
         // Only add if not already in list (prevent duplicates)
         if (!userIds.includes(apartment.user.id)) {
@@ -312,14 +343,14 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           user_id: apartment.user.id
         });
       } else if (apartment) {
-        console.log(`  âœ— Apartment found but no active user`);
+        console.log(`  ✗ Apartment found but no active user`);
         apartmentSelections.push({
           building_id: parsedBuildingId,
           apartment_unit: aptUnit,
           user_id: undefined
         });
       } else {
-        console.log(`  âœ— Apartment not found in map!`);
+        console.log(`  ✗ Apartment not found in map!`);
       }
     });
 
@@ -440,20 +471,6 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
 
     setLoading(true);
     try {
-      sessionStorage.setItem('zev_sender_info', JSON.stringify({
-        name: config.sender_name,
-        address: config.sender_address,
-        city: config.sender_city,
-        zip: config.sender_zip,
-        country: config.sender_country
-      }));
-
-      sessionStorage.setItem('zev_banking_info', JSON.stringify({
-        name: config.bank_name,
-        iban: config.bank_iban,
-        holder: config.bank_account_holder
-      }));
-
       const sharedMeterConfigs = selectedSharedMeters.map(id => {
         const meter = sharedMeters.find(m => m.id === id);
         return meter!;
@@ -503,6 +520,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
       include_shared_meters: false,
       shared_meter_configs: [],
       custom_line_items: [],
+      is_vzev: false,
       sender_name: '',
       sender_address: '',
       sender_city: '',
@@ -550,7 +568,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           border: '2px solid #4338ca'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <span style={{ fontSize: '24px' }}>⚡</span>
+            <Zap size={24} color="#4338ca" />
             <h4 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#4338ca' }}>
               {t('billConfig.vzevMode.title')}
             </h4>
@@ -570,7 +588,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
           border: '2px solid #3b82f6'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <span style={{ fontSize: '24px' }}>🔌</span>
+            <Zap size={24} color="#1e40af" />
             <h4 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#1e40af' }}>
               {t('billConfig.zevMode.title')}
             </h4>
@@ -914,7 +932,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                     {meter.meter_name}
                   </div>
                   <div style={{ fontSize: '13px', color: '#6c757d' }}>
-                    {building?.name} Ã¢â‚¬Â¢ {meter.split_type} {t('billConfig.step3.split')} Ã¢â‚¬Â¢ CHF {meter.unit_price.toFixed(3)}/kWh
+                    {building?.name} • {meter.split_type} {t('billConfig.step3.split')} • CHF {meter.unit_price.toFixed(3)}/kWh
                   </div>
                 </div>
               </label>
@@ -989,7 +1007,7 @@ export default function BillConfiguration({ isOpen, onClose, onGenerate }: BillC
                     {item.description}
                   </div>
                   <div style={{ fontSize: '13px', color: '#6c757d' }}>
-                    {building?.name} Ã¢â‚¬Â¢ CHF {item.amount.toFixed(2)} Ã¢â‚¬Â¢ {item.frequency} Ã¢â‚¬Â¢ {item.category}
+                    {building?.name} • CHF {item.amount.toFixed(2)} • {item.frequency} • {item.category}
                   </div>
                 </div>
               </label>
