@@ -662,17 +662,17 @@ func (dc *DataCollector) collectAndSaveChargers() {
 			}
 			// Use TotalEnergy for power (cumulative energy reading)
 			power = data.TotalEnergy
-			// Use UserID from Zaptec data (may be empty for no active session)
+			// UserID comes from session API - should be consistent
 			userID = data.UserID
 			if userID == "" {
-				userID = "unknown" // Use "unknown" if no user is associated
+				userID = "unknown"
 			}
 			mode = data.Mode
 			state = data.State
 			hasData = true
 			
-			log.Printf("[%d/%d] Charger '%s': Zaptec data - Power: %.3f kWh, User: %s, State: %s, Mode: %s", 
-				totalCount, totalCount, name, power, userID, state, mode)
+			log.Printf("[%d/%d] Charger '%s': Zaptec data - Power: %.3f kWh, User: %s, State: %s (%s)", 
+				totalCount, totalCount, name, power, userID, state, data.StateDescription)
 			
 		default:
 			log.Printf("[%d/%d] WARNING: Unknown connection type '%s' for charger '%s'", 
@@ -682,11 +682,20 @@ func (dc *DataCollector) collectAndSaveChargers() {
 
 		// Save data even if userID is "unknown" to maintain energy history
 		if hasData && mode != "" && state != "" {
-			// Save to database with interpolation
-			if err := dc.saveChargerSession(id, name, currentTime, power, userID, mode, state); err != nil {
-				log.Printf("ERROR: Failed to save charger session for '%s': %v", name, err)
+			// FIXED: Use separate handler for Zaptec to avoid duplicate records
+			if connectionType == "zaptec_api" {
+				if err := dc.saveZaptecChargerData(id, name, currentTime, power, userID, mode, state); err != nil {
+					log.Printf("ERROR: Failed to save Zaptec charger data for '%s': %v", name, err)
+				} else {
+					successCount++
+				}
 			} else {
-				successCount++
+				// Original behavior for other charger types
+				if err := dc.saveChargerSession(id, name, currentTime, power, userID, mode, state); err != nil {
+					log.Printf("ERROR: Failed to save charger session for '%s': %v", name, err)
+				} else {
+					successCount++
+				}
 			}
 		}
 	}
@@ -694,8 +703,83 @@ func (dc *DataCollector) collectAndSaveChargers() {
 	log.Printf("--- CHARGER COLLECTION COMPLETED: %d/%d successful ---", successCount, totalCount)
 }
 
+// saveZaptecChargerData saves Zaptec charger data WITHOUT user_id-based grouping
+// This fixes the duplicate record issue by tracking by charger_id only
+func (dc *DataCollector) saveZaptecChargerData(chargerID int, chargerName string, currentTime time.Time, power float64, userID, mode, state string) error {
+	// Get last reading for this charger (regardless of user_id)
+	var lastPower float64
+	var lastTime time.Time
+	
+	err := dc.db.QueryRow(`
+		SELECT power_kwh, session_time FROM charger_sessions 
+		WHERE charger_id = ?
+		ORDER BY session_time DESC LIMIT 1
+	`, chargerID).Scan(&lastPower, &lastTime)
+
+	if err == nil && !lastTime.IsZero() {
+		// Check if we need to interpolate missing intervals
+		interpolated := interpolateReadings(lastTime, lastPower, currentTime, power)
+		
+		if len(interpolated) > 0 {
+			log.Printf("Charger '%s': Interpolating %d missing intervals", chargerName, len(interpolated))
+			
+			for _, point := range interpolated {
+				// Use the SAME user_id for interpolated points to maintain consistency
+				dc.db.Exec(`
+					INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
+					VALUES (?, ?, ?, ?, ?, ?)
+				`, chargerID, userID, point.time, point.value, mode, state)
+			}
+		}
+	} else {
+		log.Printf("Charger '%s': First reading", chargerName)
+	}
+
+	// Check for completed session that needs reconciliation
+	if completedSession, exists := dc.zaptecCollector.GetCompletedSession(chargerID); exists {
+		log.Printf("Charger '%s': Reconciling completed session %s with final energy %.3f kWh", 
+			chargerName, completedSession.SessionID, completedSession.FinalEnergy)
+		
+		// Update all records within the session time range to have consistent user_id
+		result, err := dc.db.Exec(`
+			UPDATE charger_sessions 
+			SET user_id = ?
+			WHERE charger_id = ? 
+			AND session_time >= ? 
+			AND session_time <= ?
+			AND user_id != ?
+		`, completedSession.UserID, chargerID, completedSession.StartTime, completedSession.EndTime, completedSession.UserID)
+		
+		if err == nil {
+			if rowsAffected, _ := result.RowsAffected(); rowsAffected > 0 {
+				log.Printf("Charger '%s': Updated %d records with correct user_id %s", 
+					chargerName, rowsAffected, completedSession.UserID)
+			}
+		}
+		
+		// Mark session as processed
+		dc.zaptecCollector.MarkSessionProcessed(completedSession.SessionID)
+	}
+
+	// Save current reading
+	_, err = dc.db.Exec(`
+		INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, chargerID, userID, currentTime, power, mode, state)
+
+	if err != nil {
+		return err
+	}
+
+	log.Printf("SUCCESS: Saved Zaptec charger data: '%s' = %.3f kWh (user: %s, state: %s)", 
+		chargerName, power, userID, state)
+
+	return nil
+}
+
+// saveChargerSession - original implementation for non-Zaptec chargers
 func (dc *DataCollector) saveChargerSession(chargerID int, chargerName string, currentTime time.Time, power float64, userID, mode, state string) error {
-	// Get last reading for interpolation
+	// Get last reading for interpolation (by user_id for non-Zaptec chargers)
 	var lastPower float64
 	var lastTime time.Time
 	err := dc.db.QueryRow(`
