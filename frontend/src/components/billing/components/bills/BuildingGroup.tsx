@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Archive, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Building, Invoice, User } from '../../../../types';
 import { useTranslation } from '../../../../i18n';
@@ -6,6 +6,30 @@ import { organizeInvoicesByYear, organizeInvoicesByUser } from '../../utils/bill
 import InvoiceTable from './InvoiceTable';
 import InvoiceCard from './InvoiceCard';
 import YearGroup from './YearGroup';
+
+const STORAGE_KEY = 'zev_building_expanded_years';
+
+// Helper to load expanded years from localStorage
+const loadExpandedYears = (): Set<string> => {
+    try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            return new Set(JSON.parse(saved));
+        }
+    } catch (e) {
+        console.error('Failed to load expanded years:', e);
+    }
+    return new Set();
+};
+
+// Helper to save expanded years to localStorage
+const saveExpandedYears = (years: Set<string>) => {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(years)));
+    } catch (e) {
+        console.error('Failed to save expanded years:', e);
+    }
+};
 
 interface BuildingGroupProps {
     building: Building;
@@ -26,7 +50,7 @@ export default function BuildingGroup({
 }: BuildingGroupProps) {
     const { t } = useTranslation();
     const [isExpanded, setIsExpanded] = useState(true);
-    const [expandedYears, setExpandedYears] = useState<Set<string>>(new Set());
+    const [expandedYears, setExpandedYears] = useState<Set<string>>(() => loadExpandedYears());
 
     // Separate active and archived invoices
     const activeInvoices = invoices.filter(inv => {
@@ -53,6 +77,7 @@ export default function BuildingGroup({
             newExpanded.add(year);
         }
         setExpandedYears(newExpanded);
+        saveExpandedYears(newExpanded);
     };
 
     if (invoices.length === 0) return null;
@@ -123,7 +148,7 @@ export default function BuildingGroup({
                                     </h3>
                                 </div>
                                 <span style={{ fontSize: '18px', color: '#856404' }}>
-                                    {expandedYears.has('archive-' + building.id) ? 'â–¼' : 'â–¶'}
+                                    {expandedYears.has('archive-' + building.id) ? 'Ã¢â€“Â¼' : 'Ã¢â€“Â¶'}
                                 </span>
                             </div>
 

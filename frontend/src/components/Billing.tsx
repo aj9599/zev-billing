@@ -24,6 +24,7 @@ export default function Billing() {
   const [showInstructions, setShowInstructions] = useState(false);
   const [showAdvancedConfig, setShowAdvancedConfig] = useState(false);
   const [currentView, setCurrentView] = useState<'invoices' | 'shared-meters' | 'custom-items'>('invoices');
+  const [refreshKey, setRefreshKey] = useState(0);
 
   if (loading) {
     return (
@@ -163,6 +164,7 @@ export default function Billing() {
         {/* Content Area */}
         {currentView === 'invoices' && (
           <Bills
+            key={refreshKey}
             selectedBuildingId={selectedBuildingId}
             buildings={buildings}
             users={users}
@@ -188,6 +190,7 @@ export default function Billing() {
           onClose={() => setShowAdvancedConfig(false)}
           onGenerate={() => {
             refresh();
+            setRefreshKey(prev => prev + 1);
             setShowAdvancedConfig(false);
           }}
         />
