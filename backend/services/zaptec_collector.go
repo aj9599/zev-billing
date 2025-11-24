@@ -68,12 +68,14 @@ type ZaptecLiveData struct {
 	TotalEnergy_kWh  float64  // SignedMeterValueKwh - total through charger
 	TotalEnergy      float64  // Alias for backward compatibility
 	SessionEnergy_kWh float64 // Current session energy (from StateId 553)
+	SessionEnergy    float64  // Alias for backward compatibility
 	Voltage          float64
 	Current          float64
 	Power_kW         float64  // Alias for backward compatibility
 	
 	// Session info (for UI display)
 	SessionID        string
+	CurrentSession   string   // Alias for backward compatibility
 	SessionStart     time.Time
 	UserID           string   // Best-effort during charging, accurate after
 	UserName         string
@@ -491,6 +493,7 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 		// Get session ID from StateId 721
 		if sessionID, ok := stateData[721]; ok && sessionID != "" {
 			liveData.SessionID = sessionID
+			liveData.CurrentSession = sessionID // Backward compatibility
 			
 			zc.mu.Lock()
 			zc.activeSessionIDs[chargerID] = sessionID
@@ -501,6 +504,7 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 		if sessionEnergyStr, ok := stateData[553]; ok {
 			if energyVal, err := zc.parseStateValue(sessionEnergyStr); err == nil {
 				liveData.SessionEnergy_kWh = energyVal / 1000.0
+				liveData.SessionEnergy = energyVal / 1000.0 // Backward compatibility
 			}
 		}
 		
@@ -542,7 +546,9 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 		if err == nil && len(history) > 0 {
 			lastSession := history[0]
 			liveData.SessionID = lastSession.ID
+			liveData.CurrentSession = lastSession.ID // Backward compatibility
 			liveData.SessionEnergy_kWh = lastSession.Energy
+			liveData.SessionEnergy = lastSession.Energy // Backward compatibility
 			liveData.UserID = lastSession.UserID
 			liveData.UserName = lastSession.UserFullName
 			liveData.SessionStart = zc.parseZaptecTime(lastSession.StartDateTime)
