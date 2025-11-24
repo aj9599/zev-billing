@@ -15,6 +15,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -128,10 +129,84 @@ func (dc *DNSCache) Invalidate() {
 	dc.lastResolved = time.Time{} // Force refresh on next check
 }
 
+// ========== NEW: CHARGER SESSION TRACKING TYPES ==========
+
+// LoxoneChargerLiveData holds live charger data for UI display (not persisted during charging)
+type LoxoneChargerLiveData struct {
+	ChargerID        int
+	ChargerName      string
+	IsOnline         bool
+
+	// Current state
+	VehicleConnected bool
+	ChargingActive   bool
+	State            string // "0"=idle, "1"=charging
+	StateDescription string
+
+	// Live metrics (for UI display during charging)
+	CurrentPower_kW   float64 // Cp - output3 - Real-time charging power
+	TotalEnergy_kWh   float64 // Mr - output7 - Total meter reading
+	SessionEnergy_kWh float64 // Ccc - output8 - Current session energy
+
+	// Mode info
+	Mode            string
+	ModeDescription string
+
+	// User info (from Uid during charging, confirmed from Lcl after session)
+	UserID   string
+	UserName string
+
+	// Session timing
+	SessionStart time.Time
+	Timestamp    time.Time
+}
+
+// LoxoneChargerSessionReading represents a single 15-min interval reading during a session
+type LoxoneChargerSessionReading struct {
+	Timestamp   time.Time
+	Energy_kWh  float64 // Total meter reading at this point
+	Power_kW    float64 // Charging power at this point
+	Mode        string
+}
+
+// LoxoneActiveChargerSession tracks an ongoing charging session
+type LoxoneActiveChargerSession struct {
+	ChargerID       int
+	ChargerName     string
+	StartTime       time.Time
+	StartEnergy_kWh float64           // Mr value at session start
+	UserID          string            // From Uid during charging (may be empty, confirmed later)
+	Mode            string
+	Readings        []LoxoneChargerSessionReading // Buffered readings during session
+	LastLclValue    string            // Track Lcl changes to detect session end
+}
+
+// LoxoneCompletedChargerSession holds all data needed to write a completed session to database
+type LoxoneCompletedChargerSession struct {
+	ChargerID       int
+	ChargerName     string
+	UserID          string    // From Lcl parsing (confirmed)
+	StartTime       time.Time
+	EndTime         time.Time
+	StartEnergy_kWh float64
+	EndEnergy_kWh   float64
+	TotalEnergy_kWh float64
+	Mode            string
+	Readings        []LoxoneChargerSessionReading
+}
+
+// ========== END NEW TYPES ==========
+
 type LoxoneCollector struct {
 	db          *sql.DB
 	connections map[string]*LoxoneWebSocketConnection
 	mu          sync.RWMutex
+
+	// NEW: Charger session tracking (centralized)
+	liveChargerData     map[int]*LoxoneChargerLiveData      // charger_id -> live data for UI
+	activeSessions      map[int]*LoxoneActiveChargerSession // charger_id -> active session
+	processedSessions   map[string]bool                     // session_key -> processed (to avoid duplicates)
+	chargerMu           sync.RWMutex
 }
 
 type LoxoneWebSocketConnection struct {
@@ -183,6 +258,9 @@ type LoxoneWebSocketConnection struct {
 	isShuttingDown bool // NEW: Flag to prevent reconnection during shutdown
 	mu             sync.Mutex
 	db             *sql.DB
+
+	// NEW: Reference to parent collector for session tracking
+	collector *LoxoneCollector
 }
 
 type LoxoneDevice struct {
@@ -306,10 +384,13 @@ func (ld *LoxoneLLData) UnmarshalJSON(data []byte) error {
 }
 
 func NewLoxoneCollector(db *sql.DB) *LoxoneCollector {
-	log.Println("🔧 LOXONE COLLECTOR: Initializing with enhanced auth health management")
+	log.Println("🔧 LOXONE COLLECTOR: Initializing with session-based charger tracking")
 	lc := &LoxoneCollector{
-		db:          db,
-		connections: make(map[string]*LoxoneWebSocketConnection),
+		db:                db,
+		connections:       make(map[string]*LoxoneWebSocketConnection),
+		liveChargerData:   make(map[int]*LoxoneChargerLiveData),
+		activeSessions:    make(map[int]*LoxoneActiveChargerSession),
+		processedSessions: make(map[string]bool),
 	}
 	log.Println("🔧 LOXONE COLLECTOR: Instance created successfully")
 	return lc
@@ -318,10 +399,14 @@ func NewLoxoneCollector(db *sql.DB) *LoxoneCollector {
 func (lc *LoxoneCollector) Start() {
 	log.Println("===================================")
 	log.Println("🚀 LOXONE WEBSOCKET COLLECTOR STARTING")
-	log.Println("   Features: Auth health checks, exponential backoff, metrics, keepalive")
+	log.Println("   Features: Session-based charger tracking, Auth health checks, keepalive")
+	log.Println("   Chargers: Database writes only after session completion (like Zaptec)")
 	log.Println("===================================")
 
-	lc.logToDatabase("Loxone Collector Started", "Enhanced version with robust auth management and keepalive")
+	lc.logToDatabase("Loxone Collector Started", "Session-based charger tracking enabled")
+
+	// Load already processed sessions from database to avoid duplicates on restart
+	lc.loadProcessedSessions()
 
 	lc.initializeConnections()
 
@@ -332,6 +417,36 @@ func (lc *LoxoneCollector) Start() {
 
 	log.Println("✔️ Loxone connection monitor started")
 	log.Println("===================================")
+}
+
+// loadProcessedSessions loads session IDs that have already been written to database
+func (lc *LoxoneCollector) loadProcessedSessions() {
+	// Query for recent sessions (last 30 days) to avoid reprocessing
+	rows, err := lc.db.Query(`
+		SELECT DISTINCT session_id 
+		FROM charger_readings 
+		WHERE session_id IS NOT NULL 
+		  AND session_id != ''
+		  AND timestamp > datetime('now', '-30 days')
+	`)
+	if err != nil {
+		log.Printf("WARNING: Could not load processed Loxone sessions: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	count := 0
+	lc.chargerMu.Lock()
+	for rows.Next() {
+		var sessionID string
+		if err := rows.Scan(&sessionID); err == nil && sessionID != "" {
+			lc.processedSessions[sessionID] = true
+			count++
+		}
+	}
+	lc.chargerMu.Unlock()
+
+	log.Printf("Loxone Collector: Loaded %d already-processed session IDs", count)
 }
 
 func (lc *LoxoneCollector) Stop() {
@@ -370,6 +485,12 @@ func (lc *LoxoneCollector) RestartConnections() {
 	// Wait longer to ensure all goroutines have fully stopped
 	log.Println("Waiting for all connections to fully close...")
 	time.Sleep(2 * time.Second)
+
+	// Clear session data but keep processedSessions
+	lc.chargerMu.Lock()
+	lc.liveChargerData = make(map[int]*LoxoneChargerLiveData)
+	lc.activeSessions = make(map[int]*LoxoneActiveChargerSession)
+	lc.chargerMu.Unlock()
 
 	// Now create new connections
 	lc.initializeConnections()
@@ -447,7 +568,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 				log.Printf("   ├─ Host: %s", host)
 			}
 			log.Printf("   ├─ Username: %s", username)
-			log.Printf("   ├─ Meter Type: %s", meterType) // ✔️ Add this log line
+			log.Printf("   ├─ Meter Type: %s", meterType)
 			log.Printf("   ├─ Mode: %s", loxoneMode)
 			log.Printf("   ├─ Device UUID: %s", deviceID)
 			if (loxoneMode == "virtual_output_dual") && exportDeviceID != "" {
@@ -502,6 +623,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 					db:               lc.db,
 					isShuttingDown:   false,
 					reconnectAttempt: 0,
+					collector:        lc, // NEW: Reference to parent collector
 
 					// IMPROVED: Different backoff strategy for remote vs local
 					reconnectBackoff: func() time.Duration {
@@ -535,7 +657,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 					log.Printf("   📉 Created new LOCAL WebSocket connection for %s", host)
 				}
 			} else {
-				log.Printf("   ☻️  Reusing existing WebSocket connection for %s", host)
+				log.Printf("   ♻️  Reusing existing WebSocket connection for %s", host)
 			}
 
 			device := &LoxoneDevice{
@@ -606,7 +728,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 
 			// Determine which mode we're using
 			if chargerBlockUUID != "" {
-				log.Printf("   ├─ Mode: Single-block (Weidmüller)")
+				log.Printf("   ├─ Mode: Single-block (Weidmüller) - SESSION TRACKING ENABLED")
 				log.Printf("   └─ Charger Block UUID: %s", chargerBlockUUID)
 
 				if host == "" || chargerBlockUUID == "" {
@@ -642,9 +764,10 @@ func (lc *LoxoneCollector) initializeConnections() {
 					reconnectBackoff: 1 * time.Second,
 					maxBackoff:       15 * time.Second,
 					dnsCache:         nil,
+					collector:        lc, // NEW: Reference to parent collector
 				}
 				connectionDevices[connKey] = conn
-				log.Printf("   🔉 Created new WebSocket connection for %s", host)
+				log.Printf("   📉 Created new WebSocket connection for %s", host)
 			} else {
 				log.Printf("   ♻️  Reusing existing WebSocket connection for %s", host)
 			}
@@ -660,6 +783,16 @@ func (lc *LoxoneCollector) initializeConnections() {
 				ModeUUID:         modeUUID,
 			}
 			conn.devices = append(conn.devices, device)
+
+			// Initialize live data for this charger
+			lc.chargerMu.Lock()
+			lc.liveChargerData[id] = &LoxoneChargerLiveData{
+				ChargerID:   id,
+				ChargerName: name,
+				IsOnline:    false,
+				Timestamp:   time.Now(),
+			}
+			lc.chargerMu.Unlock()
 		}
 
 		log.Printf("✅ Loaded %d Loxone chargers", chargerCount)
@@ -757,8 +890,14 @@ func (lc *LoxoneCollector) monitorConnections() {
 		}
 		lc.mu.RUnlock()
 
+		// Log charger session status
+		lc.chargerMu.RLock()
+		activeSessionCount := len(lc.activeSessions)
+		lc.chargerMu.RUnlock()
+
 		log.Printf("📊 Summary: %d connected, %d disconnected, %d total devices",
 			connectedCount, disconnectedCount, totalDevices)
+		log.Printf("📊 Charger Sessions: %d active", activeSessionCount)
 		log.Printf("📊 Metrics: %d total auth failures, %d total reconnects",
 			totalAuthFailures, totalReconnects)
 		log.Println("──────────────────────────────────────────────────────────────")
@@ -818,11 +957,18 @@ func (lc *LoxoneCollector) GetConnectionStatus() map[string]interface{} {
 					"last_successful_auth":   lastSuccessfulAuthStr,
 				}
 			} else if device.Type == "charger" {
-				chargerStatus[device.ID] = map[string]interface{}{
+				// Get live data for charger
+				lc.chargerMu.RLock()
+				liveData := lc.liveChargerData[device.ID]
+				activeSession := lc.activeSessions[device.ID]
+				lc.chargerMu.RUnlock()
+
+				status := map[string]interface{}{
 					"power_uuid":             device.PowerUUID,
 					"state_uuid":             device.StateUUID,
 					"user_id_uuid":           device.UserIDUUID,
 					"mode_uuid":              device.ModeUUID,
+					"charger_block_uuid":     device.ChargerBlockUUID,
 					"charger_name":           device.Name,
 					"host":                   conn.Host,
 					"is_connected":           conn.isConnected,
@@ -836,7 +982,38 @@ func (lc *LoxoneCollector) GetConnectionStatus() map[string]interface{} {
 					"total_auth_failures":    conn.totalAuthFailures,
 					"total_reconnects":       conn.totalReconnects,
 					"last_successful_auth":   lastSuccessfulAuthStr,
+					"collection_mode":        "Session-based (database writes after session completion)",
 				}
+
+				// Add live data if available
+				if liveData != nil {
+					status["live_data"] = map[string]interface{}{
+						"vehicle_connected":   liveData.VehicleConnected,
+						"charging_active":     liveData.ChargingActive,
+						"current_power_kw":    liveData.CurrentPower_kW,
+						"total_energy_kwh":    liveData.TotalEnergy_kWh,
+						"session_energy_kwh":  liveData.SessionEnergy_kWh,
+						"mode":                liveData.Mode,
+						"mode_description":    liveData.ModeDescription,
+						"state":               liveData.State,
+						"state_description":   liveData.StateDescription,
+						"user_id":             liveData.UserID,
+						"timestamp":           liveData.Timestamp.Format("2006-01-02 15:04:05"),
+					}
+				}
+
+				// Add active session info if charging
+				if activeSession != nil {
+					status["active_session"] = map[string]interface{}{
+						"start_time":       activeSession.StartTime.Format("2006-01-02 15:04:05"),
+						"start_energy_kwh": activeSession.StartEnergy_kWh,
+						"user_id":          activeSession.UserID,
+						"readings_count":   len(activeSession.Readings),
+						"duration":         formatDuration(time.Since(activeSession.StartTime)),
+					}
+				}
+
+				chargerStatus[device.ID] = status
 			}
 		}
 		conn.mu.Unlock()
@@ -847,6 +1024,32 @@ func (lc *LoxoneCollector) GetConnectionStatus() map[string]interface{} {
 		"loxone_charger_connections": chargerStatus,
 	}
 }
+
+// ========== NEW: PUBLIC API FOR CHARGER DATA ==========
+
+// GetChargerLiveData returns live charger data for UI display
+func (lc *LoxoneCollector) GetChargerLiveData(chargerID int) (*LoxoneChargerLiveData, bool) {
+	lc.chargerMu.RLock()
+	defer lc.chargerMu.RUnlock()
+
+	data, exists := lc.liveChargerData[chargerID]
+	if !exists || time.Since(data.Timestamp) > 60*time.Second {
+		return nil, false
+	}
+
+	return data, true
+}
+
+// GetActiveSession returns the active session for a charger if one exists
+func (lc *LoxoneCollector) GetActiveSession(chargerID int) (*LoxoneActiveChargerSession, bool) {
+	lc.chargerMu.RLock()
+	defer lc.chargerMu.RUnlock()
+
+	session, exists := lc.activeSessions[chargerID]
+	return session, exists
+}
+
+// ========== END PUBLIC API ==========
 
 func (lc *LoxoneCollector) logToDatabase(action, details string) {
 	lc.db.Exec(`
@@ -1249,7 +1452,7 @@ func (conn *LoxoneWebSocketConnection) ConnectWithBackoff(db *sql.DB) {
 
 		log.Println("├───────────────────────────────────────────────────────────────")
 		log.Printf("│ 💗 CONNECTING: %s (attempt %d/%d)", conn.Host, attempt, maxRetries)
-		log.Println("└──────────────────────────────────────────────────────────────┘")
+		log.Println("└───────────────────────────────────────────────────────────────")
 
 		// CRITICAL FIX: Check if this is a remote connection and ALWAYS re-resolve DNS
 		// before each connection attempt to get the current host/port
@@ -1448,7 +1651,7 @@ func (conn *LoxoneWebSocketConnection) performConnection(ws *websocket.Conn, db 
 	log.Printf("│ ✔️ CONNECTION ESTABLISHED!         │")
 	log.Printf("│ Host: %-27s│", conn.Host)
 	log.Printf("│ Devices: %-24d│", deviceCount)
-	log.Println("└──────────────────────────────────────────────────────────────┘")
+	log.Println("└───────────────────────────────────────────────────────────────")
 
 	conn.updateDeviceStatus(db, fmt.Sprintf("🟢 Connected at %s", time.Now().Format("2006-01-02 15:04:05")))
 	conn.logToDatabase("Loxone Connected",
@@ -1463,7 +1666,7 @@ func (conn *LoxoneWebSocketConnection) performConnection(ws *websocket.Conn, db 
 	conn.goroutinesWg.Add(1)
 	go conn.requestData()
 
-	log.Printf("🔐 Starting token expiry monitor for %s...", conn.Host)
+	log.Printf("🔑 Starting token expiry monitor for %s...", conn.Host)
 	conn.goroutinesWg.Add(1)
 	go conn.monitorTokenExpiry(db)
 
@@ -1813,7 +2016,7 @@ func (conn *LoxoneWebSocketConnection) keepalive() {
 func (conn *LoxoneWebSocketConnection) monitorTokenExpiry(db *sql.DB) {
 	defer conn.goroutinesWg.Done()
 
-	log.Printf("🔑 TOKEN MONITOR STARTED for %s (collection-window aware)", conn.Host)
+	log.Printf("🔒 TOKEN MONITOR STARTED for %s (collection-window aware)", conn.Host)
 
 	// Check every 3 minutes instead of 5
 	ticker := time.NewTicker(3 * time.Minute)
@@ -2011,7 +2214,7 @@ func (conn *LoxoneWebSocketConnection) requestData() {
 				// Check if using single-block mode
 				if device.ChargerBlockUUID != "" {
 					// SINGLE-BLOCK MODE: Request one UUID that contains all outputs
-					log.Printf("   → CHARGER [%s]: single-block mode", device.Name)
+					log.Printf("   → CHARGER [%s]: single-block mode (session tracking)", device.Name)
 					log.Printf("      └─ Block UUID: %s", device.ChargerBlockUUID)
 
 					cmd := fmt.Sprintf("jdev/sps/io/%s/all", device.ChargerBlockUUID)
@@ -2217,7 +2420,7 @@ func (conn *LoxoneWebSocketConnection) readLoop(db *sql.DB) {
 
 			// Check for auth/permission errors in response
 			if response.LL.Code == "401" || response.LL.Code == "403" {
-				log.Printf("🔐 [%s] Auth error detected in response (code: %s)", conn.Host, response.LL.Code)
+				log.Printf("🔑 [%s] Auth error detected in response (code: %s)", conn.Host, response.LL.Code)
 
 				conn.mu.Lock()
 				conn.tokenValid = false
@@ -2694,7 +2897,7 @@ func (conn *LoxoneWebSocketConnection) processChargerField(device *LoxoneDevice,
 				state = fmt.Sprintf("%.0f", v)
 			}
 			collection.State = &state
-			log.Printf("   🔍 [%s] Received state: %s", device.Name, state)
+			log.Printf("   🔑 [%s] Received state: %s", device.Name, state)
 
 		case "user_id":
 			var userID string
@@ -2731,7 +2934,7 @@ func (conn *LoxoneWebSocketConnection) processChargerField(device *LoxoneDevice,
 
 		if hasAll {
 			log.Printf("   ✔️ [%s] All fields collected, saving to database", device.Name)
-			conn.saveChargerData(device, collection, db)
+			conn.saveChargerDataLegacy(device, collection, db)
 
 			// Reset collection
 			collection.Power = nil
@@ -2758,7 +2961,7 @@ func (conn *LoxoneWebSocketConnection) processChargerField(device *LoxoneDevice,
 			case "state":
 				state := response.LL.Value
 				collection.State = &state
-				log.Printf("   🔍 [%s] Received state from Value: %s", device.Name, state)
+				log.Printf("   🔑 [%s] Received state from Value: %s", device.Name, state)
 			case "user_id":
 				userID := response.LL.Value
 				collection.UserID = &userID
@@ -2781,7 +2984,7 @@ func (conn *LoxoneWebSocketConnection) processChargerField(device *LoxoneDevice,
 
 			if hasAll {
 				log.Printf("   ✔️ [%s] All fields collected, saving to database", device.Name)
-				conn.saveChargerData(device, collection, db)
+				conn.saveChargerDataLegacy(device, collection, db)
 
 				// Reset collection
 				collection.Power = nil
@@ -2797,18 +3000,21 @@ func (conn *LoxoneWebSocketConnection) processChargerField(device *LoxoneDevice,
 
 // processChargerSingleBlock processes all charger data from a single Loxone response
 // This is for Weidmüller chargers configured with single-block UUID mode
+// NEW: Implements session-based tracking similar to Zaptec
 func (conn *LoxoneWebSocketConnection) processChargerSingleBlock(device *LoxoneDevice, response LoxoneResponse, db *sql.DB) {
-	log.Printf("   🔍 [%s] Processing single-block response", device.Name)
+	log.Printf("   🔍 [%s] Processing single-block response (session tracking mode)", device.Name)
 	log.Printf("   📦 Number of outputs: %d", len(response.LL.Outputs))
 
 	// Extract values from the response outputs
-	var totalEnergyKWh float64  // output7 (Mr) - Total energy meter
-	var chargingPowerKW float64 // output3 (Cp) - Current charging power
-	var modeValue string        // output4 (M) - Charge mode (1-5=solar, 99=priority, 2=normal)
-	var userID string           // output21 (Uid) - User ID
-	var vehicleConnected int    // output1 (Vc) - 0=disconnected, 1=connected
-	var chargingActive int      // output2 (Cac) - 1=charging active
-	var lastSessionEnergyKWh float64  // output9 (Clc) - Last session energy
+	var totalEnergyKWh float64       // output7 (Mr) - Total energy meter
+	var chargingPowerKW float64      // output3 (Cp) - Current charging power
+	var modeValue string             // output4 (M) - Charge mode (1-5=solar, 99=priority, 2=normal)
+	var userID string                // output21 (Uid) - User ID
+	var vehicleConnected int         // output1 (Vc) - 0=disconnected, 1=connected
+	var chargingActive int           // output2 (Cac) - 1=charging active
+	var currentSessionEnergyKWh float64 // output8 (Ccc) - Current session energy
+	var lastSessionEnergyKWh float64 // output9 (Clc) - Last session energy
+	var lastSessionLog string        // output17 (Lcl) - Last session details
 
 	// Extract output1 (Vc) - Vehicle Connected
 	if output1, ok := response.LL.Outputs["output1"]; ok {
@@ -2875,6 +3081,20 @@ func (conn *LoxoneWebSocketConnection) processChargerSingleBlock(device *LoxoneD
 		log.Printf("      ├─ output7 (Mr - Total Energy): %.3f kWh", totalEnergyKWh)
 	}
 
+	// Extract output8 (Ccc) - Current Session Energy
+	if output8, ok := response.LL.Outputs["output8"]; ok {
+		switch v := output8.Value.(type) {
+		case float64:
+			currentSessionEnergyKWh = v
+		case string:
+			cleanValue := stripUnitSuffix(v)
+			if f, err := strconv.ParseFloat(cleanValue, 64); err == nil {
+				currentSessionEnergyKWh = f
+			}
+		}
+		log.Printf("      ├─ output8 (Ccc - Current Session Energy): %.3f kWh", currentSessionEnergyKWh)
+	}
+
 	// Extract output9 (Clc) - Last Charging Session Energy
 	if output9, ok := response.LL.Outputs["output9"]; ok {
 		switch v := output9.Value.(type) {
@@ -2887,6 +3107,15 @@ func (conn *LoxoneWebSocketConnection) processChargerSingleBlock(device *LoxoneD
 			}
 		}
 		log.Printf("      ├─ output9 (Clc - Last Session Energy): %.3f kWh", lastSessionEnergyKWh)
+	}
+
+	// Extract output17 (Lcl) - Last Session Log
+	if output17, ok := response.LL.Outputs["output17"]; ok {
+		switch v := output17.Value.(type) {
+		case string:
+			lastSessionLog = v
+		}
+		log.Printf("      ├─ output17 (Lcl - Last Session Log): %s", lastSessionLog)
 	}
 
 	// Extract output21 (Uid) - User ID
@@ -2903,48 +3132,342 @@ func (conn *LoxoneWebSocketConnection) processChargerSingleBlock(device *LoxoneD
 	}
 
 	// Determine state based on vehicle connection and charging status
-	// State logic:
-	// - If Vc=0 (no vehicle): state = "0" (Idle/Disconnected)
-	// - If Vc=1 and Cac=0 (vehicle connected, not charging): state = "0" (Cable Locked)
-	// - If Vc=1 and Cac=1 (vehicle connected, charging): state = "1" (Charging)
 	var stateValue string
+	var stateDescription string
 	if vehicleConnected == 0 {
-		stateValue = "0" // Disconnected/Idle
+		stateValue = "0"
+		stateDescription = "Disconnected"
 	} else if chargingActive == 1 {
-		stateValue = "1" // Charging
+		stateValue = "1"
+		stateDescription = "Charging"
 	} else {
-		stateValue = "0" // Connected but not charging
+		stateValue = "0"
+		stateDescription = "Connected (not charging)"
 	}
 
-	// Use "unknown" for empty user ID
-	if userID == "" {
-		userID = "unknown"
-	}
-
-	// Validate we have minimum required data
-	if modeValue == "" {
-		log.Printf("   ⚠️  [%s] Missing mode value in single-block response", device.Name)
-		return
-	}
+	// Get mode description
+	modeDescription := getModeDescription(modeValue)
 
 	// Update device state
 	device.lastReading = totalEnergyKWh
 	device.lastUpdate = time.Now()
 	device.readingGaps = 0
 
-	// Save to database
-	conn.saveChargerData(device, &ChargerDataCollection{
-		Power:  &totalEnergyKWh,
-		State:  &stateValue,
-		UserID: &userID,
-		Mode:   &modeValue,
-	}, db)
+	// Update live data for UI
+	if conn.collector != nil {
+		conn.collector.chargerMu.Lock()
+		liveData := conn.collector.liveChargerData[device.ID]
+		if liveData == nil {
+			liveData = &LoxoneChargerLiveData{
+				ChargerID:   device.ID,
+				ChargerName: device.Name,
+			}
+			conn.collector.liveChargerData[device.ID] = liveData
+		}
 
-	log.Printf("   ✅ [%s] Single-block processing complete: %.3f kWh, User: %s, Mode: %s, State: %s",
-		device.Name, totalEnergyKWh, userID, modeValue, stateValue)
+		liveData.IsOnline = true
+		liveData.VehicleConnected = vehicleConnected == 1
+		liveData.ChargingActive = chargingActive == 1
+		liveData.State = stateValue
+		liveData.StateDescription = stateDescription
+		liveData.CurrentPower_kW = chargingPowerKW
+		liveData.TotalEnergy_kWh = totalEnergyKWh
+		liveData.SessionEnergy_kWh = currentSessionEnergyKWh
+		liveData.Mode = modeValue
+		liveData.ModeDescription = modeDescription
+		liveData.UserID = userID
+		liveData.Timestamp = time.Now()
+
+		// Check for active session
+		activeSession := conn.collector.activeSessions[device.ID]
+		conn.collector.chargerMu.Unlock()
+
+		// ========== SESSION TRACKING LOGIC ==========
+
+		if chargingActive == 1 {
+			// CHARGING IS ACTIVE
+			if activeSession == nil {
+				// Start new session
+				log.Printf("   ⚡ [%s] CHARGING STARTED - Creating new session", device.Name)
+				newSession := &LoxoneActiveChargerSession{
+					ChargerID:       device.ID,
+					ChargerName:     device.Name,
+					StartTime:       roundToQuarterHour(time.Now()),
+					StartEnergy_kWh: totalEnergyKWh,
+					UserID:          userID, // May be empty, will be confirmed from Lcl
+					Mode:            modeValue,
+					LastLclValue:    lastSessionLog,
+					Readings:        []LoxoneChargerSessionReading{},
+				}
+
+				// Add first reading
+				newSession.Readings = append(newSession.Readings, LoxoneChargerSessionReading{
+					Timestamp:  roundToQuarterHour(time.Now()),
+					Energy_kWh: totalEnergyKWh,
+					Power_kW:   chargingPowerKW,
+					Mode:       modeValue,
+				})
+
+				conn.collector.chargerMu.Lock()
+				conn.collector.activeSessions[device.ID] = newSession
+				conn.collector.liveChargerData[device.ID].SessionStart = newSession.StartTime
+				conn.collector.chargerMu.Unlock()
+
+				conn.logToDatabase("Loxone Charger Session Started",
+					fmt.Sprintf("Charger '%s': Session started at %.3f kWh", device.Name, totalEnergyKWh))
+			} else {
+				// Session ongoing - add reading
+				reading := LoxoneChargerSessionReading{
+					Timestamp:  roundToQuarterHour(time.Now()),
+					Energy_kWh: totalEnergyKWh,
+					Power_kW:   chargingPowerKW,
+					Mode:       modeValue,
+				}
+
+				conn.collector.chargerMu.Lock()
+				activeSession.Readings = append(activeSession.Readings, reading)
+				// Update user ID if we got one during charging
+				if userID != "" && activeSession.UserID == "" {
+					activeSession.UserID = userID
+				}
+				conn.collector.chargerMu.Unlock()
+
+				log.Printf("   ⚡ [%s] CHARGING: Session reading added - Energy: %.3f kWh, Power: %.2f kW, Readings: %d",
+					device.Name, totalEnergyKWh, chargingPowerKW, len(activeSession.Readings))
+			}
+		} else {
+			// CHARGING IS NOT ACTIVE
+			if activeSession != nil {
+				// Session just ended - check if Lcl changed
+				conn.collector.chargerMu.Lock()
+				lclChanged := lastSessionLog != activeSession.LastLclValue && lastSessionLog != ""
+				conn.collector.chargerMu.Unlock()
+
+				if lclChanged {
+					// Lcl changed - session definitely ended, process it
+					log.Printf("   🏁 [%s] CHARGING ENDED - Lcl changed, processing session", device.Name)
+
+					// Parse Lcl to get confirmed user ID and session details
+					parsedUserID, parsedEnergy, parsedEndTime := parseLclString(lastSessionLog)
+					if parsedUserID == "" {
+						parsedUserID = activeSession.UserID
+					}
+					if parsedUserID == "" {
+						parsedUserID = "unknown"
+					}
+
+					// Add final reading
+					conn.collector.chargerMu.Lock()
+					activeSession.Readings = append(activeSession.Readings, LoxoneChargerSessionReading{
+						Timestamp:  roundToQuarterHour(time.Now()),
+						Energy_kWh: totalEnergyKWh,
+						Power_kW:   0, // Charging stopped
+						Mode:       modeValue,
+					})
+
+					// Build completed session
+					completedSession := &LoxoneCompletedChargerSession{
+						ChargerID:       device.ID,
+						ChargerName:     device.Name,
+						UserID:          parsedUserID,
+						StartTime:       activeSession.StartTime,
+						EndTime:         parsedEndTime,
+						StartEnergy_kWh: activeSession.StartEnergy_kWh,
+						EndEnergy_kWh:   totalEnergyKWh,
+						TotalEnergy_kWh: parsedEnergy,
+						Mode:            activeSession.Mode,
+						Readings:        activeSession.Readings,
+					}
+
+					// Clear active session
+					delete(conn.collector.activeSessions, device.ID)
+					conn.collector.chargerMu.Unlock()
+
+					// Process completed session in background
+					go conn.processCompletedChargerSession(completedSession, db)
+				} else {
+					// Lcl hasn't changed yet - energy changed but charging stopped
+					// Check if energy increased significantly (more than 0.1 kWh)
+					energyDelta := totalEnergyKWh - activeSession.StartEnergy_kWh
+					if energyDelta > 0.1 {
+						log.Printf("   ⏳ [%s] Charging stopped (Δ%.3f kWh) - waiting for Lcl update", device.Name, energyDelta)
+					} else {
+						// Very small or no energy change - might be a false start, discard session
+						log.Printf("   🔸 [%s] Session discarded (Δ%.3f kWh too small)", device.Name, energyDelta)
+						conn.collector.chargerMu.Lock()
+						delete(conn.collector.activeSessions, device.ID)
+						conn.collector.chargerMu.Unlock()
+					}
+				}
+			} else {
+				// No active session and not charging - check if Lcl changed (missed session)
+				conn.collector.chargerMu.RLock()
+				lastKnownLcl := ""
+				if liveData != nil {
+					// We need to track last Lcl somewhere - use device.readingGaps temporarily
+					// Actually, let's store it properly
+				}
+				conn.collector.chargerMu.RUnlock()
+
+				// For now, just log the idle state
+				if lastKnownLcl != lastSessionLog && lastSessionLog != "" {
+					log.Printf("   ℹ️ [%s] Idle - Last session: %s", device.Name, lastSessionLog)
+				}
+			}
+		}
+	}
+
+	log.Printf("   ✅ [%s] Live data updated: Energy=%.3f kWh, Power=%.2f kW, State=%s (%s), Mode=%s",
+		device.Name, totalEnergyKWh, chargingPowerKW, stateValue, stateDescription, modeDescription)
 }
 
-func (conn *LoxoneWebSocketConnection) saveChargerData(device *LoxoneDevice, collection *ChargerDataCollection, db *sql.DB) {
+// processCompletedChargerSession writes all 15-min readings from a completed session to database
+func (conn *LoxoneWebSocketConnection) processCompletedChargerSession(session *LoxoneCompletedChargerSession, db *sql.DB) {
+	log.Printf("   📝 [%s] Processing completed session...", session.ChargerName)
+	log.Printf("      User: %s, Energy: %.3f kWh, Readings: %d",
+		session.UserID, session.TotalEnergy_kWh, len(session.Readings))
+
+	// Generate session ID
+	sessionID := fmt.Sprintf("loxone-%d-%s", session.ChargerID, session.StartTime.Format("20060102150405"))
+
+	// Check if already processed
+	if conn.collector != nil {
+		conn.collector.chargerMu.RLock()
+		if conn.collector.processedSessions[sessionID] {
+			conn.collector.chargerMu.RUnlock()
+			log.Printf("   ⏭️ [%s] Session %s already processed, skipping", session.ChargerName, sessionID)
+			return
+		}
+		conn.collector.chargerMu.RUnlock()
+	}
+
+	// Build 15-minute interval records
+	// We need to interpolate between readings to ensure we have a record for every 15-min interval
+	if len(session.Readings) < 2 {
+		// Not enough readings, just write what we have
+		if len(session.Readings) == 1 {
+			reading := session.Readings[0]
+			_, err := db.Exec(`
+				INSERT INTO charger_readings (charger_id, timestamp, energy_kwh, user_id, session_id, reading_type)
+				VALUES (?, ?, ?, ?, ?, ?)
+			`, session.ChargerID, reading.Timestamp.Format("2006-01-02T15:04:05-07:00"),
+				reading.Energy_kWh, session.UserID, sessionID, "S") // S = Single
+
+			if err != nil {
+				log.Printf("   ❌ [%s] Failed to save session reading: %v", session.ChargerName, err)
+				return
+			}
+		}
+	} else {
+		// Multiple readings - write all of them
+		tx, err := db.Begin()
+		if err != nil {
+			log.Printf("   ❌ [%s] Failed to begin transaction: %v", session.ChargerName, err)
+			return
+		}
+		defer tx.Rollback()
+
+		stmt, err := tx.Prepare(`
+			INSERT INTO charger_readings (charger_id, timestamp, energy_kwh, user_id, session_id, reading_type)
+			VALUES (?, ?, ?, ?, ?, ?)
+		`)
+		if err != nil {
+			log.Printf("   ❌ [%s] Failed to prepare statement: %v", session.ChargerName, err)
+			return
+		}
+		defer stmt.Close()
+
+		for i, reading := range session.Readings {
+			readingType := "T" // Tariff/intermediate
+			if i == 0 {
+				readingType = "B" // Begin
+			} else if i == len(session.Readings)-1 {
+				readingType = "E" // End
+			}
+
+			_, err := stmt.Exec(
+				session.ChargerID,
+				reading.Timestamp.Format("2006-01-02T15:04:05-07:00"),
+				reading.Energy_kWh,
+				session.UserID,
+				sessionID,
+				readingType,
+			)
+			if err != nil {
+				log.Printf("   ⚠️ [%s] Failed to insert reading: %v", session.ChargerName, err)
+			}
+		}
+
+		if err := tx.Commit(); err != nil {
+			log.Printf("   ❌ [%s] Failed to commit transaction: %v", session.ChargerName, err)
+			return
+		}
+	}
+
+	// Mark session as processed
+	if conn.collector != nil {
+		conn.collector.chargerMu.Lock()
+		conn.collector.processedSessions[sessionID] = true
+		conn.collector.chargerMu.Unlock()
+	}
+
+	log.Printf("   ✅ [%s] SESSION WRITTEN TO DB: ID=%s, User=%s, Energy=%.3f kWh, Readings=%d",
+		session.ChargerName, sessionID, session.UserID, session.TotalEnergy_kWh, len(session.Readings))
+
+	conn.logToDatabase("Loxone Charger Session Completed",
+		fmt.Sprintf("Charger '%s': Session %s completed - User: %s, Energy: %.3f kWh",
+			session.ChargerName, sessionID, session.UserID, session.TotalEnergy_kWh))
+}
+
+// parseLclString parses the Lcl (Last Session Log) string to extract session details
+// Format: "2025-11-24 12:29:08:Fahrzeug getrennt;user:1;Geladene Energie:28.5kWh;Dauer:65438 s;0.00Rp."
+func parseLclString(lcl string) (userID string, energy float64, endTime time.Time) {
+	if lcl == "" {
+		return "", 0, time.Time{}
+	}
+
+	// Parse end time from beginning
+	// Format: "2025-11-24 12:29:08:..."
+	if len(lcl) >= 19 {
+		timeStr := lcl[:19]
+		if t, err := time.ParseInLocation("2006-01-02 15:04:05", timeStr, time.Local); err == nil {
+			endTime = t
+		}
+	}
+
+	// Parse user ID
+	// Format: "...;user:1;..." or "...;user:12;..."
+	userRegex := regexp.MustCompile(`user:(\d+)`)
+	if matches := userRegex.FindStringSubmatch(lcl); len(matches) > 1 {
+		userID = matches[1]
+	}
+
+	// Parse energy
+	// Format: "...Geladene Energie:28.5kWh..." or "...Geladene Energie:28.510kWh..."
+	energyRegex := regexp.MustCompile(`Geladene Energie:(\d+\.?\d*)kWh`)
+	if matches := energyRegex.FindStringSubmatch(lcl); len(matches) > 1 {
+		if e, err := strconv.ParseFloat(matches[1], 64); err == nil {
+			energy = e
+		}
+	}
+
+	return userID, energy, endTime
+}
+
+// getModeDescription returns a human-readable description of the charging mode
+func getModeDescription(mode string) string {
+	switch mode {
+	case "1", "2", "3", "4", "5":
+		return fmt.Sprintf("Solar Mode %s", mode)
+	case "99":
+		return "Priority Charging"
+	default:
+		return fmt.Sprintf("Mode %s", mode)
+	}
+}
+
+// saveChargerDataLegacy - Original implementation for multi-UUID chargers (legacy mode)
+func (conn *LoxoneWebSocketConnection) saveChargerDataLegacy(device *LoxoneDevice, collection *ChargerDataCollection, db *sql.DB) {
 	power := *collection.Power
 	state := *collection.State
 	userID := *collection.UserID
@@ -3060,9 +3583,9 @@ func (conn *LoxoneWebSocketConnection) monitorDNSChanges() {
 		return
 	}
 
-	log.Printf("🌐 DNS MONITOR STARTED for %s (check every 30 minutes)", conn.MacAddress)
+	log.Printf("🌐 DNS MONITOR STARTED for %s (check every 5 minutes)", conn.MacAddress)
 
-	ticker := time.NewTicker(5 * time.Minute) // IMPROVED: 5 min (was 30 min)
+	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
 	for {

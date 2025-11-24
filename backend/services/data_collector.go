@@ -2,6 +2,7 @@ package services
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -84,6 +85,20 @@ func interpolateReadings(startTime time.Time, startValue float64, endTime time.T
 	return result
 }
 
+// formatDuration formats a duration into a human-readable string
+func formatDuration(d time.Duration) string {
+	hours := int(d.Hours())
+	minutes := int(d.Minutes()) % 60
+	seconds := int(d.Seconds()) % 60
+	
+	if hours > 0 {
+		return fmt.Sprintf("%dh %dm", hours, minutes)
+	} else if minutes > 0 {
+		return fmt.Sprintf("%dm %ds", minutes, seconds)
+	}
+	return fmt.Sprintf("%ds", seconds)
+}
+
 func NewDataCollector(db *sql.DB) *DataCollector {
 	dc := &DataCollector{
 		db: db,
@@ -104,12 +119,12 @@ func (dc *DataCollector) Start() {
 	log.Println("===================================")
 	log.Println("ZEV Data Collector Starting")
 	log.Println("Collection Mode: Multi-Collector Architecture")
-	log.Println("  - Loxone WebSocket (real-time, independent)")
+	log.Println("  - Loxone WebSocket (real-time, session-based charger tracking)")
 	log.Println("  - Modbus TCP (coordinated parallel polling)")
 	log.Println("  - UDP Monitoring (continuous listening)")
 	log.Println("  - MQTT Broker (flexible pub/sub messaging)")
 	log.Println("  - Smart-me API (cloud-based polling)")
-	log.Println("  - Zaptec API (cloud-based polling)")
+	log.Println("  - Zaptec API (cloud-based, session-based charger tracking)")
 	log.Println("Collection Interval: 15 minutes (fixed at :00, :15, :30, :45)")
 	log.Println("===================================")
 
@@ -220,6 +235,131 @@ func (dc *DataCollector) GetZaptecLiveSession(chargerID int) (*ZaptecSessionData
 	return dc.zaptecCollector.GetLiveSession(chargerID)
 }
 
+// ========== NEW: LOXONE CHARGER LIVE DATA API ==========
+
+// GetLoxoneChargerLiveData returns Loxone charger live data for a specific charger
+func (dc *DataCollector) GetLoxoneChargerLiveData(chargerID int) (*LoxoneChargerLiveData, bool) {
+	if dc.loxoneCollector == nil {
+		return nil, false
+	}
+	return dc.loxoneCollector.GetChargerLiveData(chargerID)
+}
+
+// GetLoxoneChargerActiveSession returns Loxone charger active session for a specific charger
+func (dc *DataCollector) GetLoxoneChargerActiveSession(chargerID int) (*LoxoneActiveChargerSession, bool) {
+	if dc.loxoneCollector == nil {
+		return nil, false
+	}
+	return dc.loxoneCollector.GetActiveSession(chargerID)
+}
+
+// ChargerLiveStatus represents unified live status for any charger type
+type ChargerLiveStatus struct {
+	ChargerID        int
+	ChargerName      string
+	ConnectionType   string  // "loxone_api", "zaptec_api", etc.
+	IsOnline         bool
+	
+	// Current state
+	State            string  // "0"=idle, "1"=charging
+	StateDescription string
+	
+	// Live metrics
+	CurrentPower_kW   float64
+	TotalEnergy_kWh   float64
+	SessionEnergy_kWh float64
+	
+	// Mode info
+	Mode             string
+	ModeDescription  string
+	
+	// User info
+	UserID           string
+	
+	// Session timing
+	SessionStart     time.Time
+	SessionActive    bool
+	SessionDuration  string
+	
+	Timestamp        time.Time
+}
+
+// GetChargerLiveStatus returns unified live status for any charger type
+func (dc *DataCollector) GetChargerLiveStatus(chargerID int) (*ChargerLiveStatus, bool) {
+	// Get connection type from database
+	var connectionType string
+	err := dc.db.QueryRow("SELECT connection_type FROM chargers WHERE id = ?", chargerID).Scan(&connectionType)
+	if err != nil {
+		return nil, false
+	}
+	
+	switch connectionType {
+	case "loxone_api":
+		liveData, ok := dc.GetLoxoneChargerLiveData(chargerID)
+		if !ok {
+			return nil, false
+		}
+		
+		status := &ChargerLiveStatus{
+			ChargerID:         liveData.ChargerID,
+			ChargerName:       liveData.ChargerName,
+			ConnectionType:    "loxone_api",
+			IsOnline:          liveData.IsOnline,
+			State:             liveData.State,
+			StateDescription:  liveData.StateDescription,
+			CurrentPower_kW:   liveData.CurrentPower_kW,
+			TotalEnergy_kWh:   liveData.TotalEnergy_kWh,
+			SessionEnergy_kWh: liveData.SessionEnergy_kWh,
+			Mode:              liveData.Mode,
+			ModeDescription:   liveData.ModeDescription,
+			UserID:            liveData.UserID,
+			SessionStart:      liveData.SessionStart,
+			SessionActive:     liveData.ChargingActive,
+			Timestamp:         liveData.Timestamp,
+		}
+		
+		if status.SessionActive && !status.SessionStart.IsZero() {
+			status.SessionDuration = formatDuration(time.Since(status.SessionStart))
+		}
+		
+		return status, true
+		
+	case "zaptec_api":
+		liveData, ok := dc.GetZaptecChargerData(chargerID)
+		if !ok {
+			return nil, false
+		}
+		
+		status := &ChargerLiveStatus{
+			ChargerID:         chargerID,
+			ChargerName:       liveData.ChargerName,
+			ConnectionType:    "zaptec_api",
+			IsOnline:          liveData.IsOnline,
+			State:             liveData.State,
+			StateDescription:  liveData.StateDescription,
+			CurrentPower_kW:   liveData.CurrentPower_kW,
+			TotalEnergy_kWh:   liveData.TotalEnergy_kWh,
+			SessionEnergy_kWh: liveData.SessionEnergy_kWh,
+			Mode:              liveData.Mode,
+			UserID:            liveData.UserID,
+			SessionStart:      liveData.SessionStart,
+			SessionActive:     liveData.OperatingMode == 3, // 3 = Charging
+			Timestamp:         liveData.Timestamp,
+		}
+		
+		if status.SessionActive && !status.SessionStart.IsZero() {
+			status.SessionDuration = formatDuration(time.Since(status.SessionStart))
+		}
+		
+		return status, true
+		
+	default:
+		return nil, false
+	}
+}
+
+// ========== END NEW API ==========
+
 func (dc *DataCollector) logSystemStatus() {
 	var activeMeters, totalMeters, activeChargers, totalChargers int
 	dc.db.QueryRow("SELECT COUNT(*) FROM meters WHERE is_active = 1").Scan(&activeMeters)
@@ -242,12 +382,12 @@ func (dc *DataCollector) logSystemStatus() {
 	dc.db.QueryRow("SELECT COUNT(*) FROM chargers WHERE is_active = 1 AND connection_type = 'zaptec_api'").Scan(&zaptecChargerCount)
 
 	log.Printf("System Status: %d/%d meters active, %d/%d chargers active", activeMeters, totalMeters, activeChargers, totalChargers)
-	log.Printf("  - Loxone API: %d meters, %d chargers (WebSocket real-time)", loxoneMeterCount, loxoneChargerCount)
+	log.Printf("  - Loxone API: %d meters, %d chargers (WebSocket, session-based)", loxoneMeterCount, loxoneChargerCount)
 	log.Printf("  - Modbus TCP: %d meters (coordinated polling)", modbusMeterCount)
 	log.Printf("  - UDP: %d meters, %d chargers (continuous listening)", udpMeterCount, udpChargerCount)
 	log.Printf("  - MQTT: %d meters, %d chargers (pub/sub messaging)", mqttMeterCount, mqttChargerCount)
 	log.Printf("  - Smart-me: %d meters (cloud API polling)", smartmeMeterCount)
-	log.Printf("  - Zaptec: %d chargers (cloud API polling)", zaptecChargerCount)
+	log.Printf("  - Zaptec: %d chargers (cloud API, session-based)", zaptecChargerCount)
 }
 
 func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
@@ -280,7 +420,7 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 		"next_collection":         nextCollection.Format("2006-01-02 15:04:05"),
 		"next_collection_minutes": minutesToNext,
 		"recent_errors":           recentErrors,
-		"collection_mode":         "Multi-Collector: Loxone (independent) + Modbus (coordinated) + UDP (continuous) + MQTT (pub/sub) + Smart-me (cloud) + Zaptec (cloud)",
+		"collection_mode":         "Multi-Collector: Loxone (session-based) + Modbus + UDP + MQTT + Smart-me + Zaptec (session-based)",
 	}
    
 	// Merge collector statuses
@@ -490,7 +630,7 @@ func (dc *DataCollector) collectAndSaveMeters() {
 			log.Printf("ERROR: Failed to save Smart-me meter '%s': %v", info.name, err)
 		} else {
 			successCount++
-			log.Printf("[Smart-me] ✓ Saved meter '%s' at EXACT time %s: %.3f kWh import, %.3f kWh export",
+			log.Printf("[Smart-me] ✔ Saved meter '%s' at EXACT time %s: %.3f kWh import, %.3f kWh export",
 				info.name, currentTime.Format("15:04:05"), readingImport, readingExport)
 		}
 	}
@@ -625,9 +765,21 @@ func (dc *DataCollector) collectAndSaveChargers() {
 		// Get data from appropriate collector
 		switch connectionType {
 		case "loxone_api":
-			// Loxone handles its own data collection via WebSocket
-			log.Printf("[%d/%d] Charger '%s': Loxone API - collected independently via WebSocket", 
-				totalCount, totalCount, name)
+			// NEW: Loxone now uses session-based tracking (like Zaptec)
+			// Database writes happen after session completion, not during charging
+			liveData, exists := dc.GetLoxoneChargerLiveData(id)
+			if !exists {
+				log.Printf("[%d/%d] WARNING: No Loxone live data for charger '%s'", totalCount, totalCount, name)
+				continue
+			}
+			
+			// Log live data for monitoring (no database write - handled by loxone_collector sessions)
+			log.Printf("[%d/%d] Charger '%s': Loxone LIVE - Energy: %.3f kWh, Power: %.2f kW, User: %s, State: %s (%s)", 
+				totalCount, totalCount, name, liveData.TotalEnergy_kWh, liveData.CurrentPower_kW, 
+				liveData.UserID, liveData.State, liveData.StateDescription)
+			
+			// Count as success since we got data (database writes happen via session tracking)
+			successCount++
 			continue
 			
 		case "udp":
@@ -655,9 +807,7 @@ func (dc *DataCollector) collectAndSaveChargers() {
 			hasData = true
 			
 		case "zaptec_api":
-			// NEW APPROACH: Zaptec collector handles database writes internally
-			// using SignedSession OCMF data after session completion.
-			// Here we just log the live data for monitoring purposes.
+			// Zaptec uses session-based tracking - database writes happen after session completion
 			data, exists := dc.zaptecCollector.GetChargerData(id)
 			if !exists {
 				log.Printf("[%d/%d] WARNING: No Zaptec data for charger '%s'", totalCount, totalCount, name)
@@ -670,7 +820,7 @@ func (dc *DataCollector) collectAndSaveChargers() {
 			
 			// Count as success since we got data (database writes happen via OCMF after session ends)
 			successCount++
-			continue // Skip the database save section below
+			continue
 			
 		default:
 			log.Printf("[%d/%d] WARNING: Unknown connection type '%s' for charger '%s'", 
@@ -678,22 +828,12 @@ func (dc *DataCollector) collectAndSaveChargers() {
 			continue
 		}
 
-		// Save data even if userID is "unknown" to maintain energy history
+		// Save data for non-session-based chargers (UDP, MQTT)
 		if hasData && mode != "" && state != "" {
-			// FIXED: Use separate handler for Zaptec to avoid duplicate records
-			if connectionType == "zaptec_api" {
-				if err := dc.saveZaptecChargerData(id, name, currentTime, power, userID, mode, state); err != nil {
-					log.Printf("ERROR: Failed to save Zaptec charger data for '%s': %v", name, err)
-				} else {
-					successCount++
-				}
+			if err := dc.saveChargerSession(id, name, currentTime, power, userID, mode, state); err != nil {
+				log.Printf("ERROR: Failed to save charger session for '%s': %v", name, err)
 			} else {
-				// Original behavior for other charger types
-				if err := dc.saveChargerSession(id, name, currentTime, power, userID, mode, state); err != nil {
-					log.Printf("ERROR: Failed to save charger session for '%s': %v", name, err)
-				} else {
-					successCount++
-				}
+				successCount++
 			}
 		}
 	}
@@ -701,86 +841,9 @@ func (dc *DataCollector) collectAndSaveChargers() {
 	log.Printf("--- CHARGER COLLECTION COMPLETED: %d/%d successful ---", successCount, totalCount)
 }
 
-// saveZaptecChargerData saves Zaptec charger data WITHOUT user_id-based grouping
-// DEPRECATED: This function is no longer used. Database writes for Zaptec chargers
-// are now handled internally by ZaptecCollector using SignedSession OCMF data
-// after session completion. This provides accurate user identification and
-// verified meter readings.
-func (dc *DataCollector) saveZaptecChargerData(chargerID int, chargerName string, currentTime time.Time, power float64, userID, mode, state string) error {
-	// Get last reading for this charger (regardless of user_id)
-	var lastPower float64
-	var lastTime time.Time
-	
-	err := dc.db.QueryRow(`
-		SELECT power_kwh, session_time FROM charger_sessions 
-		WHERE charger_id = ?
-		ORDER BY session_time DESC LIMIT 1
-	`, chargerID).Scan(&lastPower, &lastTime)
-
-	if err == nil && !lastTime.IsZero() {
-		// Check if we need to interpolate missing intervals
-		interpolated := interpolateReadings(lastTime, lastPower, currentTime, power)
-		
-		if len(interpolated) > 0 {
-			log.Printf("Charger '%s': Interpolating %d missing intervals", chargerName, len(interpolated))
-			
-			for _, point := range interpolated {
-				// Use the SAME user_id for interpolated points to maintain consistency
-				dc.db.Exec(`
-					INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
-					VALUES (?, ?, ?, ?, ?, ?)
-				`, chargerID, userID, point.time, point.value, mode, state)
-			}
-		}
-	} else {
-		log.Printf("Charger '%s': First reading", chargerName)
-	}
-
-	// Check for completed session that needs reconciliation
-	if completedSession, exists := dc.zaptecCollector.GetCompletedSession(chargerID); exists {
-		log.Printf("Charger '%s': Reconciling completed session %s with final energy %.3f kWh", 
-			chargerName, completedSession.SessionID, completedSession.FinalEnergy)
-		
-		// Update all records within the session time range to have consistent user_id
-		result, err := dc.db.Exec(`
-			UPDATE charger_sessions 
-			SET user_id = ?
-			WHERE charger_id = ? 
-			AND session_time >= ? 
-			AND session_time <= ?
-			AND user_id != ?
-		`, completedSession.UserID, chargerID, completedSession.StartTime, completedSession.EndTime, completedSession.UserID)
-		
-		if err == nil {
-			if rowsAffected, _ := result.RowsAffected(); rowsAffected > 0 {
-				log.Printf("Charger '%s': Updated %d records with correct user_id %s", 
-					chargerName, rowsAffected, completedSession.UserID)
-			}
-		}
-		
-		// Mark session as processed
-		dc.zaptecCollector.MarkSessionProcessed(completedSession.SessionID)
-	}
-
-	// Save current reading
-	_, err = dc.db.Exec(`
-		INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, chargerID, userID, currentTime, power, mode, state)
-
-	if err != nil {
-		return err
-	}
-
-	log.Printf("SUCCESS: Saved Zaptec charger data: '%s' = %.3f kWh (user: %s, state: %s)", 
-		chargerName, power, userID, state)
-
-	return nil
-}
-
-// saveChargerSession - original implementation for non-Zaptec chargers
+// saveChargerSession - for non-session-based chargers (UDP, MQTT)
 func (dc *DataCollector) saveChargerSession(chargerID int, chargerName string, currentTime time.Time, power float64, userID, mode, state string) error {
-	// Get last reading for interpolation (by user_id for non-Zaptec chargers)
+	// Get last reading for interpolation (by user_id)
 	var lastPower float64
 	var lastTime time.Time
 	err := dc.db.QueryRow(`
