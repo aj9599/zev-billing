@@ -1,10 +1,10 @@
-import { useTranslation } from '../../i18n';
-import { useAutoBillingConfig } from './hooks/useAutoBillingConfig';
-import AutoBillingHeader from './components/AutoBillingHeader';
-import AutoBillingConfigCard from './components/AutoBillingConfigCard';
-import AutoBillingConfigModal from './components/AutoBillingConfigModal';
-import AutoBillingInstructionsModal from './components/AutoBillingInstructionsModal';
-import AutoBillingEmptyState from './components/AutoBillingEmptyState';
+import { useTranslation } from '../i18n';
+import { useAutoBillingConfig } from './autobilling/hooks/useAutoBillingConfig';
+import AutoBillingHeader from './autobilling/components/AutoBillingHeader';
+import AutoBillingConfigCard from './autobilling/components/AutoBillingConfigCard';
+import AutoBillingConfigModal from './autobilling/components/AutoBillingConfigModal';
+import AutoBillingInstructionsModal from './autobilling/components/AutoBillingInstructionsModal';
+import AutoBillingEmptyState from './autobilling/components/AutoBillingEmptyState';
 
 export default function AutoBilling() {
   const { t } = useTranslation();
