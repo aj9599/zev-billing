@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Archive, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Building, Invoice, User } from '../../../../types';
 import { useTranslation } from '../../../../i18n';
@@ -148,7 +148,7 @@ export default function BuildingGroup({
                                     </h3>
                                 </div>
                                 <span style={{ fontSize: '18px', color: '#856404' }}>
-                                    {expandedYears.has('archive-' + building.id) ? 'Ã¢â€“Â¼' : 'Ã¢â€“Â¶'}
+                                    {expandedYears.has('archive-' + building.id) ? 'ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¼' : 'ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¶'}
                                 </span>
                             </div>
 

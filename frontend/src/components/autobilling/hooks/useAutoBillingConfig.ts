@@ -568,12 +568,12 @@ export function useAutoBillingConfig() {
   }, [loadData]);
 
   // Check if can proceed to next step
-  const canProceed = useCallback(() => {
+  const canProceed = useCallback((): boolean => {
     switch (step) {
       case 1:
         return formData.building_ids.length > 0 && formData.apartments.length > 0;
       case 2:
-        return formData.name && formData.frequency && formData.generation_day >= 1 && formData.generation_day <= 28;
+        return !!(formData.name && formData.frequency && formData.generation_day >= 1 && formData.generation_day <= 28);
       case 3:
         return true; // Shared meters are optional
       case 4:
@@ -583,7 +583,7 @@ export function useAutoBillingConfig() {
       case 6:
         return true; // Banking info validation done in final step
       case 7:
-        return formData.sender_name && formData.bank_iban; // Required for final step
+        return !!(formData.sender_name && formData.bank_iban); // Required for final step
       default:
         return false;
     }
