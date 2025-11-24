@@ -1752,6 +1752,104 @@ export const de: Translations = {
   'autoBilling.error.selectComplex': 'Bitte wählen Sie einen Gebäudekomplex aus',
   'autoBilling.validation.vzevComplexRequired': 'vZEV-Modus erfordert, dass alle ausgewählten Gebäude Komplexe sind',
 
+  // Step Labels (Stepper)
+  'autoBilling.step.selection': 'Auswahl',
+  'autoBilling.step.schedule': 'Zeitplan',
+  'autoBilling.step.sharedMeters': 'Allgemeinzähler',
+  'autoBilling.step.customItems': 'Zusatzposten',
+  'autoBilling.step.sender': 'Absender',
+  'autoBilling.step.banking': 'Bankdaten',
+  'autoBilling.step.review': 'Überprüfung',
+  
+  // Empty State
+  'autoBilling.noConfigsDescription': 'Klicken Sie auf "Konfiguration hinzufügen", um loszulegen.',
+  
+  // Step 2 - Schedule
+  'autoBilling.modal.billingSchedule': 'Abrechnungszeitplan',
+  'autoBilling.scheduleInfo.title': 'Wann werden Rechnungen erstellt?',
+  'autoBilling.scheduleInfo.monthly': 'Monatlich: Jeden Monat am gewählten Tag',
+  'autoBilling.scheduleInfo.quarterly': 'Vierteljährlich: Im Januar, April, Juli und Oktober',
+  'autoBilling.scheduleInfo.half_yearly': 'Halbjährlich: Im Januar und Juli',
+  'autoBilling.scheduleInfo.yearly': 'Jährlich: Einmal pro Jahr im Januar',
+  
+  // Step 3 - Shared Meters
+  'autoBilling.step3.title': 'Allgemeinzähler auswählen',
+  'autoBilling.step3.description': 'Wählen Sie die Allgemeinzähler aus, deren Kosten auf die Mieter verteilt werden sollen.',
+  'autoBilling.splitType.equal': 'Gleichmässig',
+  'autoBilling.splitType.byArea': 'Nach Fläche',
+  'autoBilling.splitType.byUnits': 'Nach Einheiten',
+  'autoBilling.splitType.custom': 'Benutzerdefiniert',
+  'autoBilling.step3.noMeters': 'Keine Allgemeinzähler verfügbar',
+  'autoBilling.step3.noMetersHint': 'Erstellen Sie zuerst Allgemeinzähler in den Gebäudeeinstellungen.',
+  'autoBilling.step3.selected': 'Ausgewählt',
+  'autoBilling.step3.meters': 'Zähler',
+  'autoBilling.step3.optional': 'Optional',
+  'autoBilling.step3.infoTitle': 'Hinweis zu Allgemeinzählern',
+  'autoBilling.step3.infoDescription': 'Allgemeinzählerkosten werden automatisch gemäss der konfigurierten Aufteilungsmethode auf alle ausgewählten Wohnungen verteilt.',
+  
+  // Step 4 - Custom Items
+  'autoBilling.step4.title': 'Zusatzposten auswählen',
+  'autoBilling.step4.description': 'Wählen Sie zusätzliche Positionen aus, die auf den Rechnungen erscheinen sollen.',
+  'autoBilling.itemFrequency.once': 'Einmalig',
+  'autoBilling.itemFrequency.monthly': 'Monatlich',
+  'autoBilling.itemFrequency.quarterly': 'Vierteljährlich',
+  'autoBilling.itemFrequency.yearly': 'Jährlich',
+  'autoBilling.itemCategory.meterRent': 'Zählermiete',
+  'autoBilling.itemCategory.maintenance': 'Wartung',
+  'autoBilling.itemCategory.service': 'Service',
+  'autoBilling.itemCategory.other': 'Sonstiges',
+  'autoBilling.step4.noItems': 'Keine Zusatzposten verfügbar',
+  'autoBilling.step4.noItemsHint': 'Erstellen Sie zuerst Zusatzposten in den Gebäudeeinstellungen.',
+  'autoBilling.step4.selected': 'Ausgewählt',
+  'autoBilling.step4.items': 'Posten',
+  'autoBilling.step4.optional': 'Optional',
+  'autoBilling.step4.infoTitle': 'Hinweis zu Zusatzposten',
+  'autoBilling.step4.infoDescription': 'Zusatzposten werden automatisch auf jeder Rechnung hinzugefügt, basierend auf ihrer konfigurierten Frequenz.',
+  
+  // Step 5 - Sender
+  'autoBilling.senderDescription': 'Diese Informationen erscheinen als Absender auf den generierten Rechnungen.',
+  'autoBilling.senderInfoNote.title': 'Absenderinformationen',
+  'autoBilling.senderInfoNote.description': 'Die Absenderdaten werden für alle automatisch generierten Rechnungen dieser Konfiguration verwendet.',
+  
+  // Step 6 - Banking
+  'autoBilling.bankingDescription': 'Diese Bankdaten werden für den QR-Einzahlungsschein auf den Rechnungen verwendet.',
+  'autoBilling.ibanFormat': 'Schweizer IBAN-Format: CH00 0000 0000 0000 0000 0',
+  'autoBilling.qrBillInfo.title': 'Swiss QR-Rechnung',
+  'autoBilling.qrBillInfo.description': 'Die IBAN wird verwendet, um den QR-Code für die einfache Zahlung per Mobile Banking zu generieren.',
+  'autoBilling.ibanRequired': 'IBAN ist erforderlich für die QR-Rechnung',
+  
+  // Step 7 - Review
+  'autoBilling.modal.reviewConfiguration': 'Konfiguration überprüfen',
+  'autoBilling.modal.configurationSummary': 'Zusammenfassung der Konfiguration',
+  'autoBilling.review.billingItems': 'Rechnungspositionen',
+  'autoBilling.review.sharedMeters': 'Allgemeinzähler',
+  'autoBilling.review.customItems': 'Zusatzposten',
+  'autoBilling.missingRequiredFields': 'Fehlende Pflichtfelder',
+  'autoBilling.readyToCreate': 'Bereit zum Erstellen',
+  'autoBilling.readyToCreateDescription': 'Alle erforderlichen Informationen sind vorhanden. Klicken Sie auf "Erstellen", um die automatische Abrechnung zu aktivieren.',
+  
+  // Common (if missing)
+  'common.selectAll': 'Alle auswählen',
+  'common.deselectAll': 'Alle abwählen',
+  
+  // Step 1
+  "autoBilling.noBuildingsAvailable": "Keine Gebäude verfügbar",
+  
+  // Placeholders
+  "autoBilling.placeholder.companyName": "Firmen- oder Organisationsname",
+  "autoBilling.placeholder.streetNumber": "Strasse und Nummer",
+  "autoBilling.placeholder.zip": "1234",
+  "autoBilling.placeholder.city": "Ortsname",
+  "autoBilling.placeholder.bankName": "Bankname",
+  "autoBilling.placeholder.accountHolder": "Kontoinhaber",
+  
+  // Countries
+  "countries.switzerland": "Schweiz",
+  "countries.germany": "Deutschland",
+  "countries.austria": "Österreich",
+  "countries.france": "Frankreich",
+  "countries.italy": "Italien",
+
   // ============================================================================
   // PRICING
   // ============================================================================
