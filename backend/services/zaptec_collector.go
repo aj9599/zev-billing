@@ -61,13 +61,16 @@ type ZaptecLiveData struct {
 	State            string  // "0"=offline, "1"=disconnected, "2"=waiting, "3"=charging, "5"=finished
 	StateDescription string
 	OperatingMode    int
+	Mode             string  // For backward compatibility with data_collector
 	
 	// Live metrics (for UI display during charging)
 	CurrentPower_kW  float64
 	TotalEnergy_kWh  float64  // SignedMeterValueKwh - total through charger
+	TotalEnergy      float64  // Alias for backward compatibility
 	SessionEnergy_kWh float64 // Current session energy (from StateId 553)
 	Voltage          float64
 	Current          float64
+	Power_kW         float64  // Alias for backward compatibility
 	
 	// Session info (for UI display)
 	SessionID        string
@@ -122,6 +125,7 @@ type CompletedSession struct {
 	StartTime       time.Time
 	EndTime         time.Time
 	TotalEnergy_kWh float64
+	FinalEnergy     float64  // Alias for backward compatibility
 	MeterReadings   []SessionMeterReading
 }
 
@@ -465,9 +469,12 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 		State:            zc.mapOperatingModeToState(currentState, chargerDetails.IsOnline),
 		StateDescription: zc.getStateDescription(currentState),
 		TotalEnergy_kWh:  chargerDetails.SignedMeterValueKwh,
+		TotalEnergy:      chargerDetails.SignedMeterValueKwh, // Backward compatibility
 		CurrentPower_kW:  chargerDetails.TotalChargePower / 1000.0,
+		Power_kW:         chargerDetails.TotalChargePower / 1000.0, // Backward compatibility
 		Voltage:          chargerDetails.Voltage,
 		Current:          chargerDetails.Current,
+		Mode:             "1", // Backward compatibility - always "1" for Zaptec
 		Timestamp:        time.Now(),
 	}
 	
@@ -475,6 +482,7 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 	if powerStr, ok := stateData[513]; ok {
 		if powerVal, err := zc.parseStateValue(powerStr); err == nil {
 			liveData.CurrentPower_kW = powerVal / 1000.0
+			liveData.Power_kW = powerVal / 1000.0 // Backward compatibility
 		}
 	}
 	
@@ -719,6 +727,7 @@ func (zc *ZaptecCollector) parseSignedSession(history *ZaptecChargeHistory, char
 		StartTime:       startTime,
 		EndTime:         endTime,
 		TotalEnergy_kWh: totalEnergy,
+		FinalEnergy:     totalEnergy, // Backward compatibility
 		MeterReadings:   readings,
 	}, nil
 }

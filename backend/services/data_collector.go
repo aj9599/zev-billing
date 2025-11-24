@@ -655,24 +655,22 @@ func (dc *DataCollector) collectAndSaveChargers() {
 			hasData = true
 			
 		case "zaptec_api":
+			// NEW APPROACH: Zaptec collector handles database writes internally
+			// using SignedSession OCMF data after session completion.
+			// Here we just log the live data for monitoring purposes.
 			data, exists := dc.zaptecCollector.GetChargerData(id)
 			if !exists {
 				log.Printf("[%d/%d] WARNING: No Zaptec data for charger '%s'", totalCount, totalCount, name)
 				continue
 			}
-			// Use TotalEnergy for power (cumulative energy reading)
-			power = data.TotalEnergy
-			// UserID comes from session API - should be consistent
-			userID = data.UserID
-			if userID == "" {
-				userID = "unknown"
-			}
-			mode = data.Mode
-			state = data.State
-			hasData = true
 			
-			log.Printf("[%d/%d] Charger '%s': Zaptec data - Power: %.3f kWh, User: %s, State: %s (%s)", 
-				totalCount, totalCount, name, power, userID, state, data.StateDescription)
+			// Log live data for monitoring (no database write - handled by zaptec_collector)
+			log.Printf("[%d/%d] Charger '%s': Zaptec LIVE - Energy: %.3f kWh, Power: %.2f kW, User: %s, State: %s (%s)", 
+				totalCount, totalCount, name, data.TotalEnergy, data.Power_kW, data.UserID, data.State, data.StateDescription)
+			
+			// Count as success since we got data (database writes happen via OCMF after session ends)
+			successCount++
+			continue // Skip the database save section below
 			
 		default:
 			log.Printf("[%d/%d] WARNING: Unknown connection type '%s' for charger '%s'", 
@@ -704,7 +702,10 @@ func (dc *DataCollector) collectAndSaveChargers() {
 }
 
 // saveZaptecChargerData saves Zaptec charger data WITHOUT user_id-based grouping
-// This fixes the duplicate record issue by tracking by charger_id only
+// DEPRECATED: This function is no longer used. Database writes for Zaptec chargers
+// are now handled internally by ZaptecCollector using SignedSession OCMF data
+// after session completion. This provides accurate user identification and
+// verified meter readings.
 func (dc *DataCollector) saveZaptecChargerData(chargerID int, chargerName string, currentTime time.Time, power float64, userID, mode, state string) error {
 	// Get last reading for this charger (regardless of user_id)
 	var lastPower float64
