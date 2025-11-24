@@ -1166,7 +1166,7 @@ export const en: Translations = {
   'chargers.state.charging': 'Charging',
   'chargers.state.idle': 'Idle',
   'chargers.state.unknown': 'Unknown',
-  'chargers.mode.solar': 'Solar',
+  'chargers.mode.normal': 'Solar',
   'chargers.mode.priority': 'Priority',
   'chargers.mode.unknown': 'Unknown',
 
