@@ -142,6 +142,7 @@ export interface Invoice {
   currency: string;
   status: string;
   pdf_path?: string;
+  is_vzev?: boolean;
   items?: InvoiceItem[];
   user?: User;
   generated_at: string;
@@ -204,7 +205,8 @@ export interface GenerateBillsRequest {
   bank_account_holder?: string;
   include_shared_meters?: boolean;
   shared_meter_configs?: SharedMeterConfig[];
-  custom_line_items?: CustomLineItemSelection[];
+  custom_line_items?: CustomLineItemSelection[];  // Legacy - kept for backward compatibility
+  custom_item_ids?: number[];  // NEW: Array of custom line item IDs to include
   is_vzev?: boolean;
 }
 
@@ -227,10 +229,13 @@ export interface AutoBillingConfig {
   name: string;
   building_ids: number[];
   user_ids: number[];
+  apartments?: ApartmentSelection[];    // NEW: Apartment selections
+  custom_item_ids?: number[];           // NEW: Array of custom line item IDs
   frequency: 'monthly' | 'quarterly' | 'half_yearly' | 'yearly';
   generation_day: number;
   first_execution_date?: string;
   is_active: boolean;
+  is_vzev?: boolean;                    // NEW: vZEV mode flag
   last_run?: string;
   next_run?: string;
   sender_name?: string;

@@ -57,7 +57,23 @@ type InvoiceTranslations struct {
 	AdditionalInfo    string  // "Zusätzliche Informationen" / "Additional information" / "Informations supplémentaires" / "Informazioni aggiuntive"
 	InvoiceLabel      string  // "Invoice" / "Rechnung" / "Facture" / "Fattura"	
 		
-	PartialPeriod        string
+	PartialPeriod     string
+	
+	// NEW: Frequency translations for custom line items
+	FrequencyOnce      string
+	FrequencyMonthly   string
+	FrequencyQuarterly string
+	FrequencyYearly    string
+	
+	// NEW: Category translations for custom line items
+	CategoryMeterRent   string
+	CategoryMaintenance string
+	CategoryService     string
+	CategoryOther       string
+	
+	// NEW: Proration description translations
+	Days               string
+	OfPeriod           string
 }
 
 // GetTranslations returns translations for the specified language
@@ -114,6 +130,19 @@ func GetTranslations(language string) InvoiceTranslations {
 			AdditionalInfo:     "Zusätzliche Informationen",
 			InvoiceLabel:       "Rechnung",
 			PartialPeriod:      "Anteiliger Zeitraum",
+			// Frequency translations
+			FrequencyOnce:      "Einmalig",
+			FrequencyMonthly:   "Monatlich",
+			FrequencyQuarterly: "Vierteljährlich",
+			FrequencyYearly:    "Jährlich",
+			// Category translations
+			CategoryMeterRent:   "Zählermiete",
+			CategoryMaintenance: "Wartung",
+			CategoryService:     "Service",
+			CategoryOther:       "Sonstiges",
+			// Proration translations
+			Days:               "Tage",
+			OfPeriod:           "des Zeitraums",
 		}
 	case "fr": // French
 		return InvoiceTranslations{
@@ -166,6 +195,19 @@ func GetTranslations(language string) InvoiceTranslations {
 			AdditionalInfo:     "Informations supplémentaires",
 			InvoiceLabel:       "Facture",
 			PartialPeriod:      "Période partielle",
+			// Frequency translations
+			FrequencyOnce:      "Une fois",
+			FrequencyMonthly:   "Mensuel",
+			FrequencyQuarterly: "Trimestriel",
+			FrequencyYearly:    "Annuel",
+			// Category translations
+			CategoryMeterRent:   "Location compteur",
+			CategoryMaintenance: "Maintenance",
+			CategoryService:     "Service",
+			CategoryOther:       "Autre",
+			// Proration translations
+			Days:               "jours",
+			OfPeriod:           "de la période",
 		}
 	case "it": // Italian
 		return InvoiceTranslations{
@@ -218,6 +260,19 @@ func GetTranslations(language string) InvoiceTranslations {
 			AdditionalInfo:     "Informazioni supplementari",
 			InvoiceLabel:       "Fattura",
 			PartialPeriod:      "Periodo parziale",
+			// Frequency translations
+			FrequencyOnce:      "Una tantum",
+			FrequencyMonthly:   "Mensile",
+			FrequencyQuarterly: "Trimestrale",
+			FrequencyYearly:    "Annuale",
+			// Category translations
+			CategoryMeterRent:   "Noleggio contatore",
+			CategoryMaintenance: "Manutenzione",
+			CategoryService:     "Servizio",
+			CategoryOther:       "Altro",
+			// Proration translations
+			Days:               "giorni",
+			OfPeriod:           "del periodo",
 		}
 	default: // English
 		return InvoiceTranslations{
@@ -270,6 +325,19 @@ func GetTranslations(language string) InvoiceTranslations {
 			AdditionalInfo:     "Additional information",
 			InvoiceLabel:       "Invoice",
 			PartialPeriod:      "Partial Period",
+			// Frequency translations
+			FrequencyOnce:      "One-time",
+			FrequencyMonthly:   "Monthly",
+			FrequencyQuarterly: "Quarterly",
+			FrequencyYearly:    "Yearly",
+			// Category translations
+			CategoryMeterRent:   "Meter Rental",
+			CategoryMaintenance: "Maintenance",
+			CategoryService:     "Service",
+			CategoryOther:       "Other",
+			// Proration translations
+			Days:               "days",
+			OfPeriod:           "of period",
 		}
 	}
 }
