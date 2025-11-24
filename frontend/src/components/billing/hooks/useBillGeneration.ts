@@ -75,7 +75,7 @@ export function useConfigurationState(
     end_date: '',
     include_shared_meters: false,
     shared_meter_configs: [],
-    custom_line_items: [],
+    custom_item_ids: [], // NEW: Array of custom item IDs to include
     is_vzev: false,
     sender_name: '',
     sender_address: '',
@@ -167,7 +167,7 @@ export function useConfigurationState(
       end_date: '',
       include_shared_meters: false,
       shared_meter_configs: [],
-      custom_line_items: [],
+      custom_item_ids: [], // Reset custom items
       is_vzev: false,
       sender_name: '',
       sender_address: '',

@@ -192,6 +192,7 @@ func RunMigrations(db *sql.DB) error {
 			building_ids TEXT NOT NULL,
 			user_ids TEXT,
 			apartments_json TEXT,
+			custom_item_ids TEXT DEFAULT '',
 			frequency TEXT NOT NULL,
 			generation_day INTEGER NOT NULL,
 			first_execution_date DATE,
@@ -317,6 +318,11 @@ func RunMigrations(db *sql.DB) error {
 		return err
 	}
 
+	// NEW: Add custom_item_ids column for custom item selection in auto billing
+	if err := addCustomItemIdsColumn(db); err != nil {
+		return err
+	}
+
 	if err := migrateZaptecConfigs(db); err != nil {
 		return err
 	}
@@ -345,15 +351,15 @@ func addGroupBuildingsColumn(db *sql.DB) error {
 		_, err := db.Exec(`ALTER TABLE buildings ADD COLUMN group_buildings TEXT`)
 		if err != nil {
 			if contains(err.Error(), "duplicate column") {
-				log.Println("Ã¢Å“â€¦ group_buildings column already exists")
+				log.Println("✓ group_buildings column already exists")
 			} else {
 				return fmt.Errorf("failed to add group_buildings column: %v", err)
 			}
 		} else {
-			log.Println("Ã¢Å“â€¦ group_buildings column added successfully")
+			log.Println("✓ group_buildings column added successfully")
 		}
 	} else {
-		log.Println("Ã¢Å“â€¦ group_buildings column already exists")
+		log.Println("✓ group_buildings column already exists")
 	}
 
 	return nil
@@ -378,15 +384,15 @@ func addAutoBillingApartmentsColumn(db *sql.DB) error {
 		_, err := db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN apartments_json TEXT`)
 		if err != nil {
 			if contains(err.Error(), "duplicate column") {
-				log.Println("Ã¢Å“â€¦ apartments_json column already exists")
+				log.Println("✓ apartments_json column already exists")
 			} else {
 				return fmt.Errorf("failed to add apartments_json column: %v", err)
 			}
 		} else {
-			log.Println("Ã¢Å“â€¦ apartments_json column added successfully")
+			log.Println("✓ apartments_json column added successfully")
 		}
 	} else {
-		log.Println("Ã¢Å“â€¦ apartments_json column already exists")
+		log.Println("✓ apartments_json column already exists")
 	}
 
 	// Add is_vzev column
@@ -395,15 +401,48 @@ func addAutoBillingApartmentsColumn(db *sql.DB) error {
 		_, err := db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN is_vzev INTEGER DEFAULT 0`)
 		if err != nil {
 			if contains(err.Error(), "duplicate column") {
-				log.Println("Ã¢Å“â€¦ is_vzev column already exists")
+				log.Println("✓ is_vzev column already exists")
 			} else {
 				return fmt.Errorf("failed to add is_vzev column: %v", err)
 			}
 		} else {
-			log.Println("Ã¢Å“â€¦ is_vzev column added successfully")
+			log.Println("✓ is_vzev column added successfully")
 		}
 	} else {
-		log.Println("Ã¢Å“â€¦ is_vzev column already exists")
+		log.Println("✓ is_vzev column already exists")
+	}
+
+	return nil
+}
+
+// NEW: Add custom_item_ids column to auto_billing_configs for custom item selection
+func addCustomItemIdsColumn(db *sql.DB) error {
+	// Check auto_billing_configs table
+	var autoBillingConfigsSql string
+	err := db.QueryRow(`
+		SELECT sql FROM sqlite_master 
+		WHERE type='table' AND name='auto_billing_configs'
+	`).Scan(&autoBillingConfigsSql)
+
+	if err != nil {
+		return err
+	}
+
+	// Add custom_item_ids column
+	if !contains(autoBillingConfigsSql, "custom_item_ids") {
+		log.Println("Adding custom_item_ids column to auto_billing_configs table...")
+		_, err := db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN custom_item_ids TEXT DEFAULT ''`)
+		if err != nil {
+			if contains(err.Error(), "duplicate column") {
+				log.Println("✓ custom_item_ids column already exists")
+			} else {
+				return fmt.Errorf("failed to add custom_item_ids column: %v", err)
+			}
+		} else {
+			log.Println("✓ custom_item_ids column added successfully")
+		}
+	} else {
+		log.Println("✓ custom_item_ids column already exists")
 	}
 
 	return nil
@@ -428,12 +467,12 @@ func addDeviceTypeColumn(db *sql.DB) error {
 		_, err := db.Exec(`ALTER TABLE meters ADD COLUMN device_type TEXT DEFAULT 'generic'`)
 		if err != nil {
 			if contains(err.Error(), "duplicate column") {
-				log.Println("Ã¢Å“â€¦ device_type column already exists")
+				log.Println("✓ device_type column already exists")
 				return nil
 			}
 			return fmt.Errorf("failed to add device_type column: %v", err)
 		}
-		log.Println("Ã¢Å“â€¦ device_type column added successfully")
+		log.Println("✓ device_type column added successfully")
 
 		// Update existing MQTT meters to generic type
 		_, err = db.Exec(`UPDATE meters SET device_type = 'generic' WHERE connection_type = 'mqtt' AND (device_type IS NULL OR device_type = '')`)
@@ -441,7 +480,7 @@ func addDeviceTypeColumn(db *sql.DB) error {
 			log.Printf("Warning: Failed to update existing meters: %v", err)
 		}
 	} else {
-		log.Println("Ã¢Å“â€¦ device_type column already exists")
+		log.Println("✓ device_type column already exists")
 	}
 
 	return nil
@@ -466,15 +505,15 @@ func addExportColumns(db *sql.DB) error {
 		_, err := db.Exec(`ALTER TABLE meters ADD COLUMN last_reading_export REAL DEFAULT 0`)
 		if err != nil {
 			if contains(err.Error(), "duplicate column") {
-				log.Println("Ã¢Å“â€¦ last_reading_export column already exists")
+				log.Println("✓ last_reading_export column already exists")
 			} else {
 				return fmt.Errorf("failed to add last_reading_export column: %v", err)
 			}
 		} else {
-			log.Println("Ã¢Å“â€¦ last_reading_export column added successfully")
+			log.Println("✓ last_reading_export column added successfully")
 		}
 	} else {
-		log.Println("Ã¢Å“â€¦ last_reading_export column already exists")
+		log.Println("✓ last_reading_export column already exists")
 	}
 
 	// Check meter_readings table
@@ -494,15 +533,15 @@ func addExportColumns(db *sql.DB) error {
 		_, err := db.Exec(`ALTER TABLE meter_readings ADD COLUMN power_kwh_export REAL DEFAULT 0`)
 		if err != nil {
 			if contains(err.Error(), "duplicate column") {
-				log.Println("Ã¢Å“â€¦ power_kwh_export column already exists")
+				log.Println("✓ power_kwh_export column already exists")
 			} else {
 				return fmt.Errorf("failed to add power_kwh_export column: %v", err)
 			}
 		} else {
-			log.Println("Ã¢Å“â€¦ power_kwh_export column added successfully")
+			log.Println("✓ power_kwh_export column added successfully")
 		}
 	} else {
-		log.Println("Ã¢Å“â€¦ power_kwh_export column already exists")
+		log.Println("✓ power_kwh_export column already exists")
 	}
 
 	// Add consumption_export to meter_readings table
@@ -511,15 +550,15 @@ func addExportColumns(db *sql.DB) error {
 		_, err := db.Exec(`ALTER TABLE meter_readings ADD COLUMN consumption_export REAL DEFAULT 0`)
 		if err != nil {
 			if contains(err.Error(), "duplicate column") {
-				log.Println("Ã¢Å“â€¦ consumption_export column already exists")
+				log.Println("✓ consumption_export column already exists")
 			} else {
 				return fmt.Errorf("failed to add consumption_export column: %v", err)
 			}
 		} else {
-			log.Println("Ã¢Å“â€¦ consumption_export column added successfully")
+			log.Println("✓ consumption_export column added successfully")
 		}
 	} else {
-		log.Println("Ã¢Å“â€¦ consumption_export column already exists")
+		log.Println("✓ consumption_export column already exists")
 	}
 
 	return nil
@@ -603,10 +642,10 @@ func createDefaultAdmin(db *sql.DB) error {
 			return err
 		}
 
-		log.Println("Ã¢Å“â€¦ Default admin user created")
+		log.Println("✓ Default admin user created")
 		log.Println("   Username: admin")
 		log.Println("   Password: admin123")
-		log.Println("   Ã¢Å¡Â Ã¯Â¸Â  IMPORTANT: Change the default password immediately!")
+		log.Println("   ⚠️  IMPORTANT: Change the default password immediately!")
 	}
 
 	return nil
@@ -631,15 +670,15 @@ func addVZEVColumns(db *sql.DB) error {
 		_, err := db.Exec(`ALTER TABLE billing_settings ADD COLUMN is_complex INTEGER DEFAULT 0`)
 		if err != nil {
 			if contains(err.Error(), "duplicate column") {
-				log.Println("Ã¢Å“â€¦ is_complex column already exists")
+				log.Println("✓ is_complex column already exists")
 			} else {
 				return fmt.Errorf("failed to add is_complex column: %v", err)
 			}
 		} else {
-			log.Println("Ã¢Å“â€¦ is_complex column added successfully")
+			log.Println("✓ is_complex column added successfully")
 		}
 	} else {
-		log.Println("Ã¢Å“â€¦ is_complex column already exists")
+		log.Println("✓ is_complex column already exists")
 	}
 
 	// Add vzev_export_price to billing_settings table
@@ -648,15 +687,15 @@ func addVZEVColumns(db *sql.DB) error {
 		_, err := db.Exec(`ALTER TABLE billing_settings ADD COLUMN vzev_export_price REAL DEFAULT 0.18`)
 		if err != nil {
 			if contains(err.Error(), "duplicate column") {
-				log.Println("Ã¢Å“â€¦ vzev_export_price column already exists")
+				log.Println("✓ vzev_export_price column already exists")
 			} else {
 				return fmt.Errorf("failed to add vzev_export_price column: %v", err)
 			}
 		} else {
-			log.Println("Ã¢Å“â€¦ vzev_export_price column added successfully")
+			log.Println("✓ vzev_export_price column added successfully")
 		}
 	} else {
-		log.Println("Ã¢Å“â€¦ vzev_export_price column already exists")
+		log.Println("✓ vzev_export_price column already exists")
 	}
 
 	// Check invoices table
@@ -676,23 +715,24 @@ func addVZEVColumns(db *sql.DB) error {
 		_, err := db.Exec(`ALTER TABLE invoices ADD COLUMN is_vzev INTEGER DEFAULT 0`)
 		if err != nil {
 			if contains(err.Error(), "duplicate column") {
-				log.Println("Ã¢Å“â€¦ is_vzev column already exists")
+				log.Println("✓ is_vzev column already exists")
 			} else {
 				return fmt.Errorf("failed to add is_vzev column: %v", err)
 			}
 		} else {
-			log.Println("Ã¢Å“â€¦ is_vzev column added successfully")
+			log.Println("✓ is_vzev column added successfully")
 		}
 	} else {
-		log.Println("Ã¢Å“â€¦ is_vzev column already exists")
+		log.Println("✓ is_vzev column already exists")
 	}
 
 	return nil
 }
+
 // migrateZaptecConfigs migrates old Zaptec configuration format to new format
 func migrateZaptecConfigs(db *sql.DB) error {
 	log.Println("Checking for Zaptec chargers that need configuration migration...")
-	
+
 	// Get all Zaptec chargers
 	rows, err := db.Query(`
 		SELECT id, name, connection_config 
@@ -704,13 +744,13 @@ func migrateZaptecConfigs(db *sql.DB) error {
 		return nil // Don't fail migrations if we can't query
 	}
 	defer rows.Close()
-	
+
 	type ChargerConfig struct {
 		ID     int
 		Name   string
 		Config string
 	}
-	
+
 	var chargers []ChargerConfig
 	for rows.Next() {
 		var c ChargerConfig
@@ -719,14 +759,14 @@ func migrateZaptecConfigs(db *sql.DB) error {
 		}
 		chargers = append(chargers, c)
 	}
-	
+
 	if len(chargers) == 0 {
-		log.Println("âœ… No Zaptec chargers found - skipping migration")
+		log.Println("✅ No Zaptec chargers found - skipping migration")
 		return nil
 	}
-	
+
 	log.Printf("Found %d Zaptec charger(s) to check for migration", len(chargers))
-	
+
 	migratedCount := 0
 	for _, charger := range chargers {
 		// Parse the JSON config
@@ -735,12 +775,12 @@ func migrateZaptecConfigs(db *sql.DB) error {
 			log.Printf("Warning: Failed to parse config for charger '%s' (ID: %d): %v", charger.Name, charger.ID, err)
 			continue
 		}
-		
+
 		// Check if this config needs migration (has old field names)
 		needsMigration := false
 		hasOldFormat := false
 		hasNewFormat := false
-		
+
 		// Check for old format
 		if _, hasOldUsername := config["username"]; hasOldUsername {
 			hasOldFormat = true
@@ -751,7 +791,7 @@ func migrateZaptecConfigs(db *sql.DB) error {
 		if _, hasOldChargerId := config["charger_id"]; hasOldChargerId {
 			hasOldFormat = true
 		}
-		
+
 		// Check for new format
 		if _, hasNewUsername := config["zaptec_username"]; hasNewUsername {
 			hasNewFormat = true
@@ -762,104 +802,104 @@ func migrateZaptecConfigs(db *sql.DB) error {
 		if _, hasNewChargerId := config["zaptec_charger_id"]; hasNewChargerId {
 			hasNewFormat = true
 		}
-		
+
 		// Only migrate if we have old format and not new format
 		needsMigration = hasOldFormat && !hasNewFormat
-		
+
 		// Skip if already migrated
 		if !needsMigration {
 			continue
 		}
-		
+
 		log.Printf("Migrating Zaptec charger: %s (ID: %d)", charger.Name, charger.ID)
-		
+
 		// Create new config with correct field names
 		newConfig := make(map[string]interface{})
-		
+
 		// Migrate username
 		if username, ok := config["username"].(string); ok {
 			newConfig["zaptec_username"] = username
 		} else if username, ok := config["zaptec_username"].(string); ok {
 			newConfig["zaptec_username"] = username
 		}
-		
+
 		// Migrate password
 		if password, ok := config["password"].(string); ok {
 			newConfig["zaptec_password"] = password
 		} else if password, ok := config["zaptec_password"].(string); ok {
 			newConfig["zaptec_password"] = password
 		}
-		
+
 		// Migrate charger_id
 		if chargerId, ok := config["charger_id"].(string); ok {
 			newConfig["zaptec_charger_id"] = chargerId
 		} else if chargerId, ok := config["zaptec_charger_id"].(string); ok {
 			newConfig["zaptec_charger_id"] = chargerId
 		}
-		
+
 		// Migrate installation_id
 		if installationId, ok := config["installation_id"].(string); ok {
 			newConfig["zaptec_installation_id"] = installationId
 		} else if installationId, ok := config["zaptec_installation_id"].(string); ok {
 			newConfig["zaptec_installation_id"] = installationId
 		}
-		
+
 		// Add state mappings (use existing or defaults)
 		if stateCableLocked, ok := config["state_cable_locked"].(string); ok {
 			newConfig["state_cable_locked"] = stateCableLocked
 		} else {
 			newConfig["state_cable_locked"] = "65"
 		}
-		
+
 		if stateWaitingAuth, ok := config["state_waiting_auth"].(string); ok {
 			newConfig["state_waiting_auth"] = stateWaitingAuth
 		} else {
 			newConfig["state_waiting_auth"] = "66"
 		}
-		
+
 		if stateCharging, ok := config["state_charging"].(string); ok {
 			newConfig["state_charging"] = stateCharging
 		} else {
 			newConfig["state_charging"] = "67"
 		}
-		
+
 		if stateIdle, ok := config["state_idle"].(string); ok {
 			newConfig["state_idle"] = stateIdle
 		} else {
 			newConfig["state_idle"] = "50"
 		}
-		
+
 		// Add mode mappings (use existing or defaults)
 		if modeNormal, ok := config["mode_normal"].(string); ok {
 			newConfig["mode_normal"] = modeNormal
 		} else {
 			newConfig["mode_normal"] = "1"
 		}
-		
+
 		if modePriority, ok := config["mode_priority"].(string); ok {
 			newConfig["mode_priority"] = modePriority
 		} else {
 			newConfig["mode_priority"] = "2"
 		}
-		
+
 		// Check if we have the required fields
 		if newConfig["zaptec_username"] == nil || newConfig["zaptec_username"] == "" {
-			log.Printf("âš ï¸  Warning: Charger '%s' (ID: %d) is missing username - you'll need to reconfigure it", charger.Name, charger.ID)
+			log.Printf("⚠️  Warning: Charger '%s' (ID: %d) is missing username - you'll need to reconfigure it", charger.Name, charger.ID)
 		}
 		if newConfig["zaptec_password"] == nil || newConfig["zaptec_password"] == "" {
-			log.Printf("âš ï¸  Warning: Charger '%s' (ID: %d) is missing password - you'll need to reconfigure it", charger.Name, charger.ID)
+			log.Printf("⚠️  Warning: Charger '%s' (ID: %d) is missing password - you'll need to reconfigure it", charger.Name, charger.ID)
 		}
 		if newConfig["zaptec_charger_id"] == nil || newConfig["zaptec_charger_id"] == "" {
-			log.Printf("âš ï¸  Warning: Charger '%s' (ID: %d) is missing charger ID - you'll need to reconfigure it", charger.Name, charger.ID)
+			log.Printf("⚠️  Warning: Charger '%s' (ID: %d) is missing charger ID - you'll need to reconfigure it", charger.Name, charger.ID)
 		}
-		
+
 		// Marshal new config back to JSON
 		newConfigJSON, err := json.Marshal(newConfig)
 		if err != nil {
 			log.Printf("Warning: Failed to marshal new config for charger '%s' (ID: %d): %v", charger.Name, charger.ID, err)
 			continue
 		}
-		
+
 		// Update the database
 		_, err = db.Exec(`
 			UPDATE chargers 
@@ -867,21 +907,21 @@ func migrateZaptecConfigs(db *sql.DB) error {
 			    updated_at = CURRENT_TIMESTAMP
 			WHERE id = ?
 		`, string(newConfigJSON), charger.ID)
-		
+
 		if err != nil {
 			log.Printf("Warning: Failed to update config for charger '%s' (ID: %d): %v", charger.Name, charger.ID, err)
 			continue
 		}
-		
+
 		migratedCount++
-		log.Printf("âœ… Successfully migrated charger '%s' (ID: %d)", charger.Name, charger.ID)
+		log.Printf("✅ Successfully migrated charger '%s' (ID: %d)", charger.Name, charger.ID)
 	}
-	
+
 	if migratedCount > 0 {
-		log.Printf("âœ… Zaptec migration complete: %d charger(s) migrated", migratedCount)
+		log.Printf("✅ Zaptec migration complete: %d charger(s) migrated", migratedCount)
 	} else {
-		log.Println("âœ… No Zaptec chargers needed migration")
+		log.Println("✅ No Zaptec chargers needed migration")
 	}
-	
+
 	return nil
 }

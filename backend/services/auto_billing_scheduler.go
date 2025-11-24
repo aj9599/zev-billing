@@ -17,9 +17,9 @@ type AutoBillingScheduler struct {
 }
 
 type ApartmentSelection struct {
-	BuildingID    int  `json:"building_id"`
+	BuildingID    int    `json:"building_id"`
 	ApartmentUnit string `json:"apartment_unit"`
-	UserID        *int `json:"user_id,omitempty"`
+	UserID        *int   `json:"user_id,omitempty"`
 }
 
 func NewAutoBillingScheduler(db *sql.DB, billingService *BillingService, pdfGenerator *PDFGenerator) *AutoBillingScheduler {
@@ -65,7 +65,7 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 	now := time.Now()
 
 	rows, err := s.db.Query(`
-		SELECT id, name, building_ids, apartments_json, frequency, generation_day,
+		SELECT id, name, building_ids, apartments_json, custom_item_ids, frequency, generation_day,
 		       next_run, first_execution_date, is_vzev, sender_name, sender_address, 
 		       sender_city, sender_zip, sender_country, bank_name, bank_iban, 
 		       bank_account_holder
@@ -84,6 +84,7 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 		var id int
 		var name, buildingIDsStr string
 		var apartmentsJSON sql.NullString
+		var customItemIDsStr sql.NullString
 		var frequency string
 		var generationDay int
 		var nextRun time.Time
@@ -92,8 +93,8 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 		var senderName, senderAddress, senderCity, senderZip, senderCountry sql.NullString
 		var bankName, bankIBAN, bankAccountHolder sql.NullString
 
-		err := rows.Scan(&id, &name, &buildingIDsStr, &apartmentsJSON, &frequency,
-			&generationDay, &nextRun, &firstExecutionDate, &isVZEV, &senderName, &senderAddress, 
+		err := rows.Scan(&id, &name, &buildingIDsStr, &apartmentsJSON, &customItemIDsStr, &frequency,
+			&generationDay, &nextRun, &firstExecutionDate, &isVZEV, &senderName, &senderAddress,
 			&senderCity, &senderZip, &senderCountry, &bankName, &bankIBAN, &bankAccountHolder)
 
 		if err != nil {
@@ -111,6 +112,13 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 			log.Printf("WARNING: Config %d has no buildings, skipping", id)
 			continue
 		}
+
+		// Parse custom item IDs
+		var customItemIDs []int
+		if customItemIDsStr.Valid && customItemIDsStr.String != "" {
+			customItemIDs = parseIDList(customItemIDsStr.String)
+		}
+		log.Printf("Custom items to include: %v", customItemIDs)
 
 		// Parse apartments
 		var apartments []ApartmentSelection
@@ -156,9 +164,9 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 
 		log.Printf("Generating bills for period: %s to %s (vZEV mode: %v)", startDate.Format("2006-01-02"), endDate.Format("2006-01-02"), isVZEV)
 
-		// Generate bills using the billing service with vZEV flag
-		invoices, err := s.billingService.GenerateBills(buildingIDs, userIDs,
-			startDate.Format("2006-01-02"), endDate.Format("2006-01-02"), isVZEV)
+		// Generate bills using the billing service with vZEV flag and custom item IDs
+		invoices, err := s.billingService.GenerateBillsWithOptions(buildingIDs, userIDs,
+			startDate.Format("2006-01-02"), endDate.Format("2006-01-02"), isVZEV, customItemIDs)
 
 		if err != nil {
 			log.Printf("ERROR: Failed to generate bills for config %d: %v", id, err)
@@ -231,13 +239,14 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 
 		// Log to admin logs
 		details := map[string]interface{}{
-			"config_id":      id,
-			"config_name":    name,
-			"invoices_count": len(invoices),
-			"pdfs_generated": successCount,
-			"period_start":   startDate.Format("2006-01-02"),
-			"period_end":     endDate.Format("2006-01-02"),
-			"is_vzev":        isVZEV,
+			"config_id":       id,
+			"config_name":     name,
+			"invoices_count":  len(invoices),
+			"pdfs_generated":  successCount,
+			"period_start":    startDate.Format("2006-01-02"),
+			"period_end":      endDate.Format("2006-01-02"),
+			"is_vzev":         isVZEV,
+			"custom_item_ids": customItemIDs,
 		}
 		detailsJSON, _ := json.Marshal(details)
 
@@ -348,16 +357,16 @@ func (s *AutoBillingScheduler) loadFullInvoice(invoiceID int) (map[string]interf
 		userMap["address_zip"] = addressZip
 		userMap["address_country"] = addressCountry
 		userMap["is_active"] = isActive
-		
+
 		// CRITICAL: Include language in user map for PDF generator
 		if language.Valid && language.String != "" {
 			userMap["language"] = language.String
 		} else {
 			userMap["language"] = "de" // Default to German
 		}
-		
+
 		log.Printf("Loaded user %d with language: %s", userID, userMap["language"])
-		
+
 		inv["user"] = userMap
 	} else {
 		log.Printf("ERROR: Failed to load user %d: %v", userID, err)
@@ -477,7 +486,7 @@ func CalculateInitialNextRun(frequency string, generationDay int, firstExecution
 	case "half_yearly":
 		// Find next half-year month (Jan, Jul)
 		currentMonth := int(now.Month())
-		
+
 		if currentMonth < 7 {
 			// Next occurrence is July this year
 			nextRun = time.Date(now.Year(), time.July, generationDay, 0, 0, 0, 0, now.Location())

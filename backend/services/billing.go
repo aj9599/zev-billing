@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-    "math"
+	"math"
 	"strings"
 	"time"
 
@@ -54,17 +54,37 @@ type UserPeriod struct {
 }
 
 type VZEVEnergyResult struct {
-	TotalConsumption   float64
-	SelfConsumedSolar  float64 // Solar produced and consumed in same building
-	VirtualPV          float64 // Solar received from other buildings in vZEV
-	GridEnergy         float64 // Energy from grid
+	TotalConsumption  float64
+	SelfConsumedSolar float64 // Solar produced and consumed in same building
+	VirtualPV         float64 // Solar received from other buildings in vZEV
+	GridEnergy        float64 // Energy from grid
 }
 
+// BillingOptions contains optional parameters for bill generation
+type BillingOptions struct {
+	CustomItemIDs []int // If empty/nil, no custom items are included. Use specific IDs to include selected items.
+}
+
+// GenerateBills generates bills for the specified buildings and users
+// customItemIDs: if nil or empty, no custom items are included. Pass specific IDs to include those items.
 func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, endDate string, isVZEV bool) ([]models.Invoice, error) {
+	// Call with empty custom item IDs for backward compatibility (no custom items)
+	return bs.GenerateBillsWithOptions(buildingIDs, userIDs, startDate, endDate, isVZEV, nil)
+}
+
+// GenerateBillsWithOptions generates bills with custom item selection
+func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, startDate, endDate string, isVZEV bool, customItemIDs []int) ([]models.Invoice, error) {
 	log.Printf("=== BILL GENERATION START ===")
-	log.Printf("Mode: %s, Buildings: %v, Users: %v, Period: %s to %s", 
-		func() string { if isVZEV { return "vZEV (Virtual Allocation)" } else { return "ZEV (Direct Sharing)" } }(),
+	log.Printf("Mode: %s, Buildings: %v, Users: %v, Period: %s to %s",
+		func() string {
+			if isVZEV {
+				return "vZEV (Virtual Allocation)"
+			} else {
+				return "ZEV (Direct Sharing)"
+			}
+		}(),
 		buildingIDs, userIDs, startDate, endDate)
+	log.Printf("Custom Item IDs: %v", customItemIDs)
 
 	// VALIDATION: Check if all buildings have active pricing
 	buildingsWithoutPricing := []string{}
@@ -110,7 +130,7 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 
 	for _, buildingID := range buildingIDs {
 		log.Printf("\n--- Processing Building ID: %d ---", buildingID)
-	
+
 		// Check if this is a vZEV complex
 		var isComplex bool
 		var groupBuildings string
@@ -118,12 +138,12 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 			SELECT is_group, COALESCE(group_buildings, '') 
 			FROM buildings WHERE id = ?
 		`, buildingID).Scan(&isComplex, &groupBuildings)
-	
+
 		if err != nil {
 			log.Printf("ERROR: Failed to get building info: %v", err)
 			continue
 		}
-	
+
 		var settings models.BillingSettings
 		err = bs.db.QueryRow(`
 			SELECT id, building_id, is_complex, normal_power_price, solar_power_price, 
@@ -137,21 +157,27 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 			&settings.CarChargingNormalPrice, &settings.CarChargingPriorityPrice,
 			&settings.VZEVExportPrice, &settings.Currency,
 		)
-	
+
 		if err != nil {
 			log.Printf("ERROR: No active billing settings for building %d: %v", buildingID, err)
 			continue
 		}
-	
+
 		log.Printf("Billing Settings - Type: %s, Normal: %.3f, Solar: %.3f, vZEV Export: %.3f",
-			func() string { if settings.IsComplex { return "vZEV" } else { return "ZEV" } }(),
+			func() string {
+				if settings.IsComplex {
+					return "vZEV"
+				} else {
+					return "ZEV"
+				}
+			}(),
 			settings.NormalPowerPrice, settings.SolarPowerPrice, settings.VZEVExportPrice)
-	
+
 		// Route to appropriate billing logic
 		if isVZEV && isComplex {
 			// vZEV: Virtual allocation between buildings in complex
 			log.Printf("Using vZEV billing logic for complex %d", buildingID)
-			complexInvoices, err := bs.generateVZEVBills(buildingID, groupBuildings, userIDs, start, end, settings)
+			complexInvoices, err := bs.generateVZEVBillsWithOptions(buildingID, groupBuildings, userIDs, start, end, settings, customItemIDs)
 			if err != nil {
 				log.Printf("ERROR: vZEV billing failed: %v", err)
 				continue
@@ -165,9 +191,9 @@ func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, e
 				log.Printf("ERROR: Failed to get user periods: %v", err)
 				continue
 			}
-	
+
 			for _, userPeriod := range userPeriods {
-				invoice, err := bs.generateUserInvoiceForPeriod(userPeriod, buildingID, start, end, settings)
+				invoice, err := bs.generateUserInvoiceForPeriodWithOptions(userPeriod, buildingID, start, end, settings, customItemIDs)
 				if err != nil {
 					log.Printf("ERROR: Failed to generate invoice for user %d: %v", userPeriod.UserID, err)
 					continue
@@ -223,7 +249,7 @@ func (bs *BillingService) getUserPeriodsForBilling(buildingID int, userIDs []int
 		var language string
 		var rentStartStr, rentEndStr sql.NullString
 
-		if err := rows.Scan(&userID, &firstName, &lastName, &email, &chargerIDs, 
+		if err := rows.Scan(&userID, &firstName, &lastName, &email, &chargerIDs,
 			&isActive, &language, &rentStartStr, &rentEndStr); err != nil {
 			log.Printf("ERROR: Failed to scan user row: %v", err)
 			continue
@@ -248,9 +274,9 @@ func (bs *BillingService) getUserPeriodsForBilling(buildingID int, userIDs []int
 
 		// If no rent period is defined, use the full billing period
 		if !hasRentPeriod {
-			log.Printf("  User %d (%s %s) has no rent period - using full billing period", 
+			log.Printf("  User %d (%s %s) has no rent period - using full billing period",
 				userID, firstName, lastName)
-			
+
 			userPeriods = append(userPeriods, UserPeriod{
 				UserID:          userID,
 				FirstName:       firstName,
@@ -336,7 +362,7 @@ func (bs *BillingService) calculateSharedMeterCosts(buildingID int, start, end t
 
 func (bs *BillingService) getCustomLineItems(buildingID int) ([]models.InvoiceItem, float64, error) {
 	tr := GetTranslations("de")
-	return bs.getCustomLineItemsWithTranslations(buildingID, tr, 1.0)
+	return bs.getCustomLineItemsWithTranslations(buildingID, tr, 1.0, time.Now(), time.Now(), nil)
 }
 
 func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID int, start, end time.Time, userID int, totalActiveUsers int, tr InvoiceTranslations, currency string, prorationFactor float64) ([]models.InvoiceItem, float64, error) {
@@ -402,7 +428,7 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 		consumption := readingTo - readingFrom
 		totalMeterCost := consumption * unitPrice
 
-		log.Printf("  [SHARED METERS]   Readings: %.3f â†’ %.3f kWh (consumption: %.3f kWh)",
+		log.Printf("  [SHARED METERS]   Readings: %.3f → %.3f kWh (consumption: %.3f kWh)",
 			readingFrom, readingTo, consumption)
 		log.Printf("  [SHARED METERS]   Total meter cost: %.3f × %.3f = %.3f",
 			consumption, unitPrice, totalMeterCost)
@@ -426,7 +452,7 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 
 			if err == nil && totalArea > 0 && userArea > 0 {
 				userShare = totalMeterCost * (userArea / totalArea)
-				splitDescription = fmt.Sprintf("Split by area: %.1fmÂ² %s %.1fmÂ² total", userArea, tr.Of, totalArea)
+				splitDescription = fmt.Sprintf("Split by area: %.1fm² %s %.1fm² total", userArea, tr.Of, totalArea)
 			} else {
 				if totalActiveUsers > 0 {
 					userShare = totalMeterCost / float64(totalActiveUsers)
@@ -532,15 +558,65 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 	return items, totalCost, nil
 }
 
-func (bs *BillingService) getCustomLineItemsWithTranslations(buildingID int, tr InvoiceTranslations, prorationFactor float64) ([]models.InvoiceItem, float64, error) {
-	log.Printf("  [CUSTOM ITEMS] Getting custom line items for building %d (proration: %.3f)", buildingID, prorationFactor)
+// calculateFrequencyProration calculates the proration factor based on item frequency and billing period
+// For example: yearly item of 120 CHF on a 30-day billing period = 120 * (30/365) ≈ 9.86 CHF
+func calculateFrequencyProration(frequency string, billingPeriodDays float64) float64 {
+	switch frequency {
+	case "once":
+		// One-time charges are charged in full
+		return 1.0
+	case "monthly":
+		// Monthly items: if billing period is 30 days, factor is 1.0
+		// If billing period is 90 days (quarterly), factor is 3.0
+		return billingPeriodDays / 30.44 // Average days per month
+	case "quarterly":
+		// Quarterly items: if billing period is 30 days, factor is ~0.33
+		// 365/4 = 91.25 days per quarter
+		return billingPeriodDays / 91.25
+	case "yearly":
+		// Yearly items: if billing period is 30 days, factor is ~0.082
+		return billingPeriodDays / 365.0
+	default:
+		// Unknown frequency, treat as monthly
+		return billingPeriodDays / 30.44
+	}
+}
 
-	rows, err := bs.db.Query(`
+// getCustomLineItemsWithTranslations fetches custom line items with proper frequency and occupancy proration
+// customItemIDs: if nil or empty, no custom items are included. Pass specific IDs to include those items.
+func (bs *BillingService) getCustomLineItemsWithTranslations(buildingID int, tr InvoiceTranslations, occupancyProration float64, billingStart, billingEnd time.Time, customItemIDs []int) ([]models.InvoiceItem, float64, error) {
+	// Calculate billing period in days
+	billingPeriodDays := billingEnd.Sub(billingStart).Hours() / 24
+	if billingPeriodDays <= 0 {
+		billingPeriodDays = 30 // Default to 30 days if calculation fails
+	}
+
+	log.Printf("  [CUSTOM ITEMS] Getting custom line items for building %d", buildingID)
+	log.Printf("  [CUSTOM ITEMS] Billing period: %.1f days, Occupancy proration: %.3f", billingPeriodDays, occupancyProration)
+	log.Printf("  [CUSTOM ITEMS] Selected custom item IDs: %v", customItemIDs)
+
+	// If no custom item IDs specified, return empty - no custom items will be included
+	if len(customItemIDs) == 0 {
+		log.Printf("  [CUSTOM ITEMS] No custom items selected - skipping custom items")
+		return nil, 0, nil
+	}
+
+	// Build query with ID filter
+	placeholders := make([]string, len(customItemIDs))
+	args := []interface{}{buildingID}
+	for i, id := range customItemIDs {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+
+	query := fmt.Sprintf(`
 		SELECT id, description, amount, frequency, category
 		FROM custom_line_items
-		WHERE building_id = ? AND is_active = 1
+		WHERE building_id = ? AND is_active = 1 AND id IN (%s)
 		ORDER BY category, description
-	`, buildingID)
+	`, strings.Join(placeholders, ","))
+
+	rows, err := bs.db.Query(query, args...)
 	if err != nil {
 		log.Printf("  [CUSTOM ITEMS] ERROR: Failed to query custom line items: %v", err)
 		return nil, 0, err
@@ -566,13 +642,13 @@ func (bs *BillingService) getCustomLineItemsWithTranslations(buildingID int, tr 
 		var frequencyLabel string
 		switch frequency {
 		case "once":
-			frequencyLabel = "One-time charge"
+			frequencyLabel = tr.FrequencyOnce
 		case "monthly":
-			frequencyLabel = "Monthly"
+			frequencyLabel = tr.FrequencyMonthly
 		case "quarterly":
-			frequencyLabel = "Quarterly"
+			frequencyLabel = tr.FrequencyQuarterly
 		case "yearly":
-			frequencyLabel = "Yearly"
+			frequencyLabel = tr.FrequencyYearly
 		default:
 			frequencyLabel = frequency
 		}
@@ -580,21 +656,44 @@ func (bs *BillingService) getCustomLineItemsWithTranslations(buildingID int, tr 
 		var categoryLabel string
 		switch category {
 		case "meter_rent":
-			categoryLabel = "Meter Rental"
+			categoryLabel = tr.CategoryMeterRent
 		case "maintenance":
-			categoryLabel = "Maintenance"
+			categoryLabel = tr.CategoryMaintenance
 		case "service":
-			categoryLabel = "Service Fee"
+			categoryLabel = tr.CategoryService
 		case "other":
-			categoryLabel = "Other"
+			categoryLabel = tr.CategoryOther
 		default:
 			categoryLabel = category
 		}
 
-		proratedAmount := amount * prorationFactor
-		
-		log.Printf("  [CUSTOM ITEMS] Item #%d: %s - %.3f CHF (%.3f before proration) (%s, %s)",
-			itemCount, description, proratedAmount, amount, frequencyLabel, categoryLabel)
+		// Calculate frequency proration (e.g., yearly item on monthly bill)
+		frequencyProration := calculateFrequencyProration(frequency, billingPeriodDays)
+
+		// Calculate final amount: base amount × frequency proration × occupancy proration
+		// Example: 120 CHF yearly, 30-day bill, full occupancy = 120 × (30/365) × 1.0 ≈ 9.86 CHF
+		// Example: 120 CHF yearly, 30-day bill, 50% occupancy = 120 × (30/365) × 0.5 ≈ 4.93 CHF
+		proratedAmount := amount * frequencyProration * occupancyProration
+
+		log.Printf("  [CUSTOM ITEMS] Item #%d (ID %d): %s", itemCount, itemID, description)
+		log.Printf("  [CUSTOM ITEMS]   Base amount: %.2f CHF (%s)", amount, frequencyLabel)
+		log.Printf("  [CUSTOM ITEMS]   Frequency proration: %.4f (%.1f days / %s cycle)",
+			frequencyProration, billingPeriodDays,
+			func() string {
+				switch frequency {
+				case "yearly":
+					return "365"
+				case "quarterly":
+					return "91.25"
+				case "monthly":
+					return "30.44"
+				default:
+					return "N/A"
+				}
+			}())
+		log.Printf("  [CUSTOM ITEMS]   Occupancy proration: %.4f", occupancyProration)
+		log.Printf("  [CUSTOM ITEMS]   Final amount: %.2f × %.4f × %.4f = %.2f CHF",
+			amount, frequencyProration, occupancyProration, proratedAmount)
 
 		if itemCount == 1 {
 			items = append(items, models.InvoiceItem{
@@ -604,7 +703,7 @@ func (bs *BillingService) getCustomLineItemsWithTranslations(buildingID int, tr 
 				TotalPrice:  0,
 				ItemType:    "separator",
 			})
-			
+
 			items = append(items, models.InvoiceItem{
 				Description: tr.AdditionalServices,
 				Quantity:    0,
@@ -614,14 +713,25 @@ func (bs *BillingService) getCustomLineItemsWithTranslations(buildingID int, tr 
 			})
 		}
 
+		// Build description with proration details
 		descriptionText := fmt.Sprintf("%s: %s", categoryLabel, description)
-		if prorationFactor < 1.0 {
-			descriptionText += fmt.Sprintf(" (%.1f%% of period)", prorationFactor*100)
+
+		// Add proration explanation
+		prorationDetails := []string{}
+		if frequency != "once" {
+			prorationDetails = append(prorationDetails, fmt.Sprintf("%.2f %s × %.1f %s", amount, frequencyLabel, billingPeriodDays, tr.Days))
+		}
+		if occupancyProration < 1.0 {
+			prorationDetails = append(prorationDetails, fmt.Sprintf("%.1f%% %s", occupancyProration*100, tr.OfPeriod))
+		}
+
+		if len(prorationDetails) > 0 {
+			descriptionText += " (" + strings.Join(prorationDetails, ", ") + ")"
 		}
 
 		items = append(items, models.InvoiceItem{
 			Description: descriptionText,
-			Quantity:    prorationFactor,
+			Quantity:    frequencyProration * occupancyProration,
 			UnitPrice:   amount,
 			TotalPrice:  proratedAmount,
 			ItemType:    "custom_item",
@@ -631,9 +741,9 @@ func (bs *BillingService) getCustomLineItemsWithTranslations(buildingID int, tr 
 	}
 
 	if itemCount == 0 {
-		log.Printf("  [CUSTOM ITEMS] No active custom line items found for building %d", buildingID)
+		log.Printf("  [CUSTOM ITEMS] No matching custom line items found for building %d with IDs %v", buildingID, customItemIDs)
 	} else {
-		log.Printf("  [CUSTOM ITEMS] Added %d custom items, total cost: %.3f", itemCount, totalCost)
+		log.Printf("  [CUSTOM ITEMS] Added %d custom items, total cost: %.2f", itemCount, totalCost)
 	}
 
 	return items, totalCost, nil
@@ -650,10 +760,15 @@ func (bs *BillingService) countActiveUsers(buildingID int) (int, error) {
 	return count, err
 }
 
-// Generate invoice for a specific user period with ACTUAL consumption
+// Generate invoice for a specific user period with ACTUAL consumption (backward compatible)
 func (bs *BillingService) generateUserInvoiceForPeriod(userPeriod UserPeriod, buildingID int, fullStart, fullEnd time.Time, settings models.BillingSettings) (*models.Invoice, error) {
+	return bs.generateUserInvoiceForPeriodWithOptions(userPeriod, buildingID, fullStart, fullEnd, settings, nil)
+}
+
+// generateUserInvoiceForPeriodWithOptions generates invoice with custom item selection
+func (bs *BillingService) generateUserInvoiceForPeriodWithOptions(userPeriod UserPeriod, buildingID int, fullStart, fullEnd time.Time, settings models.BillingSettings, customItemIDs []int) (*models.Invoice, error) {
 	tr := GetTranslations(userPeriod.Language)
-	
+
 	invoiceYear := fullStart.Year()
 	timestamp := time.Now().Format("20060102150405")
 	invoiceNumber := fmt.Sprintf("INV-%d-%d-%d-%s", invoiceYear, buildingID, userPeriod.UserID, timestamp)
@@ -668,7 +783,7 @@ func (bs *BillingService) generateUserInvoiceForPeriod(userPeriod UserPeriod, bu
 	// Add proration notice if not full period
 	if userPeriod.ProrationFactor < 1.0 {
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("âš ï¸ %s: %s to %s (%.1f%% of billing period)", 
+			Description: fmt.Sprintf("⚠️ %s: %s to %s (%.1f%% of billing period)",
 				tr.PartialPeriod,
 				start.Format("02.01.2006"),
 				end.Format("02.01.2006"),
@@ -689,7 +804,7 @@ func (bs *BillingService) generateUserInvoiceForPeriod(userPeriod UserPeriod, bu
 
 	// CRITICAL: Get meter readings for THIS USER'S ACTUAL PERIOD
 	meterReadingFrom, meterReadingTo, meterName := bs.getMeterReadings(userPeriod.UserID, start, end)
-	
+
 	// CRITICAL: Calculate consumption for THIS USER'S ACTUAL PERIOD
 	normalPower, solarPower, totalConsumption := bs.calculateZEVConsumption(userPeriod.UserID, buildingID, start, end)
 
@@ -846,17 +961,18 @@ func (bs *BillingService) generateUserInvoiceForPeriod(userPeriod UserPeriod, bu
 	} else if len(sharedMeterItems) > 0 {
 		items = append(items, sharedMeterItems...)
 		totalAmount += sharedMeterCost
-		log.Printf("  âœ… Added %d shared meter items (total: %.3f)", len(sharedMeterItems), sharedMeterCost)
+		log.Printf("  ✅ Added %d shared meter items (total: %.3f)", len(sharedMeterItems), sharedMeterCost)
 	}
 
-	log.Printf("  Checking for custom line items (pro-rated by %.1f%% of period)...", userPeriod.ProrationFactor*100)
-	customItems, customCost, err := bs.getCustomLineItemsWithTranslations(buildingID, tr, userPeriod.ProrationFactor)
+	// Custom items with frequency and occupancy proration
+	log.Printf("  Checking for custom line items...")
+	customItems, customCost, err := bs.getCustomLineItemsWithTranslations(buildingID, tr, userPeriod.ProrationFactor, fullStart, fullEnd, customItemIDs)
 	if err != nil {
 		log.Printf("  WARNING: Failed to get custom line items: %v", err)
 	} else if len(customItems) > 0 {
 		items = append(items, customItems...)
 		totalAmount += customCost
-		log.Printf("  âœ… Added %d custom items (total: %.3f)", len(customItems), customCost)
+		log.Printf("  ✅ Added %d custom items (total: %.3f)", len(customItems), customCost)
 	}
 
 	log.Printf("  INVOICE TOTAL: %s %.3f", settings.Currency, totalAmount)
@@ -905,8 +1021,13 @@ func (bs *BillingService) generateUserInvoiceForPeriod(userPeriod UserPeriod, bu
 	return invoice, nil
 }
 
-// generateVZEVBills handles virtual energy allocation for building complexes
+// generateVZEVBills handles virtual energy allocation for building complexes (backward compatible)
 func (bs *BillingService) generateVZEVBills(complexID int, groupBuildingsJSON string, userIDs []int, start, end time.Time, settings models.BillingSettings) ([]models.Invoice, error) {
+	return bs.generateVZEVBillsWithOptions(complexID, groupBuildingsJSON, userIDs, start, end, settings, nil)
+}
+
+// generateVZEVBillsWithOptions handles virtual energy allocation with custom item selection
+func (bs *BillingService) generateVZEVBillsWithOptions(complexID int, groupBuildingsJSON string, userIDs []int, start, end time.Time, settings models.BillingSettings, customItemIDs []int) ([]models.Invoice, error) {
 	log.Printf("\n=== vZEV BILLING START ===")
 	log.Printf("Complex ID: %d, Period: %s to %s", complexID, start.Format("2006-01-02"), end.Format("2006-01-02"))
 
@@ -926,18 +1047,18 @@ func (bs *BillingService) generateVZEVBills(complexID int, groupBuildingsJSON st
 
 	// Get all user periods for all buildings in complex
 	type UserInfo struct {
-		UserID          int
-		BuildingID      int
-		UserPeriod      UserPeriod
+		UserID     int
+		BuildingID int
+		UserPeriod UserPeriod
 	}
-	
+
 	allUsers := []UserInfo{}
 	for _, buildingID := range groupBuildings {
 		userPeriods, err := bs.getUserPeriodsForBilling(buildingID, userIDs, start, end)
 		if err != nil {
 			continue
 		}
-		
+
 		for _, userPeriod := range userPeriods {
 			allUsers = append(allUsers, UserInfo{
 				UserID:     userPeriod.UserID,
@@ -951,7 +1072,7 @@ func (bs *BillingService) generateVZEVBills(complexID int, groupBuildingsJSON st
 
 	// Calculate vZEV energy distribution for each user
 	userEnergyResults := make(map[int]*VZEVEnergyResult)
-	
+
 	for _, userInfo := range allUsers {
 		result, err := bs.calculateVZEVEnergyForUser(
 			userInfo.UserID,
@@ -960,15 +1081,15 @@ func (bs *BillingService) generateVZEVBills(complexID int, groupBuildingsJSON st
 			userInfo.UserPeriod.BillingStart,
 			userInfo.UserPeriod.BillingEnd,
 		)
-		
+
 		if err != nil {
 			log.Printf("ERROR: Failed to calculate vZEV energy for user %d: %v", userInfo.UserID, err)
 			continue
 		}
-		
+
 		userEnergyResults[userInfo.UserID] = result
-		
-		log.Printf("\n  User %d (%s %s) - Building %d:", 
+
+		log.Printf("\n  User %d (%s %s) - Building %d:",
 			userInfo.UserID, userInfo.UserPeriod.FirstName, userInfo.UserPeriod.LastName, userInfo.BuildingID)
 		log.Printf("    Total Consumption: %.3f kWh", result.TotalConsumption)
 		log.Printf("    Self-Consumed Solar: %.3f kWh (%.1f%%)", result.SelfConsumedSolar, (result.SelfConsumedSolar/result.TotalConsumption)*100)
@@ -978,27 +1099,28 @@ func (bs *BillingService) generateVZEVBills(complexID int, groupBuildingsJSON st
 
 	// Generate invoices for each user
 	invoices := []models.Invoice{}
-	
+
 	for _, userInfo := range allUsers {
 		energyResult := userEnergyResults[userInfo.UserID]
 		if energyResult == nil {
 			continue
 		}
-		
-		invoice, err := bs.generateVZEVInvoice(
+
+		invoice, err := bs.generateVZEVInvoiceWithOptions(
 			userInfo.UserPeriod,
 			userInfo.BuildingID,
 			start,
 			end,
 			settings,
 			energyResult,
+			customItemIDs,
 		)
-		
+
 		if err != nil {
 			log.Printf("ERROR: Failed to generate vZEV invoice for user %d: %v", userInfo.UserID, err)
 			continue
 		}
-		
+
 		invoices = append(invoices, *invoice)
 	}
 
@@ -1008,7 +1130,7 @@ func (bs *BillingService) generateVZEVBills(complexID int, groupBuildingsJSON st
 
 func (bs *BillingService) calculateVZEVEnergyForUser(userID, userBuildingID int, allBuildingsInComplex []int, start, end time.Time) (*VZEVEnergyResult, error) {
 	log.Printf("    [vZEV] Calculating energy for user %d in building %d", userID, userBuildingID)
-	
+
 	type IntervalReading struct {
 		MeterID           int
 		MeterType         string
@@ -1018,7 +1140,7 @@ func (bs *BillingService) calculateVZEVEnergyForUser(userID, userBuildingID int,
 		ConsumptionKWh    float64
 		ConsumptionExport float64
 	}
-	
+
 	// Fetch ALL readings for ALL meters in the complex
 	rows, err := bs.db.Query(`
 		SELECT m.id, m.meter_type, m.building_id, m.user_id, mr.reading_time, 
@@ -1030,35 +1152,35 @@ func (bs *BillingService) calculateVZEVEnergyForUser(userID, userBuildingID int,
 		AND mr.reading_time >= ? AND mr.reading_time <= ?
 		ORDER BY mr.reading_time, m.id
 	`, appendBuildingIDs(allBuildingsInComplex, start, end)...)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to query readings: %v", err)
 	}
 	defer rows.Close()
-	
+
 	allReadings := []IntervalReading{}
 	for rows.Next() {
 		var r IntervalReading
-		if err := rows.Scan(&r.MeterID, &r.MeterType, &r.BuildingID, &r.UserID, 
+		if err := rows.Scan(&r.MeterID, &r.MeterType, &r.BuildingID, &r.UserID,
 			&r.ReadingTime, &r.ConsumptionKWh, &r.ConsumptionExport); err != nil {
 			continue
 		}
 		allReadings = append(allReadings, r)
 	}
-	
+
 	log.Printf("    [vZEV] Fetched %d readings across %d buildings", len(allReadings), len(allBuildingsInComplex))
-	
+
 	// Organize readings by timestamp and process interval-by-interval
 	type IntervalData struct {
-		Timestamp             time.Time
-		BuildingConsumption   map[int]float64  // buildingID -> consumption
-		BuildingSolarProd     map[int]float64  // buildingID -> solar production
-		UserConsumption       map[int]float64  // userID -> consumption
-		UserBuildingMap       map[int]int      // userID -> buildingID
+		Timestamp           time.Time
+		BuildingConsumption map[int]float64 // buildingID -> consumption
+		BuildingSolarProd   map[int]float64 // buildingID -> solar production
+		UserConsumption     map[int]float64 // userID -> consumption
+		UserBuildingMap     map[int]int     // userID -> buildingID
 	}
-	
+
 	intervals := make(map[time.Time]*IntervalData)
-	
+
 	// Process all readings into interval structure
 	for _, reading := range allReadings {
 		if intervals[reading.ReadingTime] == nil {
@@ -1070,9 +1192,9 @@ func (bs *BillingService) calculateVZEVEnergyForUser(userID, userBuildingID int,
 				UserBuildingMap:     make(map[int]int),
 			}
 		}
-		
+
 		interval := intervals[reading.ReadingTime]
-		
+
 		if reading.MeterType == "apartment_meter" {
 			if reading.UserID.Valid {
 				uid := int(reading.UserID.Int64)
@@ -1085,102 +1207,102 @@ func (bs *BillingService) calculateVZEVEnergyForUser(userID, userBuildingID int,
 			interval.BuildingSolarProd[reading.BuildingID] += reading.ConsumptionExport
 		}
 	}
-	
+
 	// Sort timestamps
 	timestamps := make([]time.Time, 0, len(intervals))
 	for ts := range intervals {
 		timestamps = append(timestamps, ts)
 	}
 	sortTimestamps(timestamps)
-	
+
 	// Process each interval with correct vZEV logic
 	result := &VZEVEnergyResult{}
 	intervalCount := 0
-	
+
 	for _, ts := range timestamps {
 		interval := intervals[ts]
-		
+
 		// Get user's consumption in this interval
 		userConsumption := interval.UserConsumption[userID]
 		if userConsumption <= 0 {
 			continue
 		}
-		
+
 		intervalCount++
 		result.TotalConsumption += userConsumption
-		
+
 		// Step 1: Calculate self-consumption for each building
 		buildingSelfConsumed := make(map[int]float64)
 		buildingSurplus := make(map[int]float64)
 		buildingDeficit := make(map[int]float64)
-		
+
 		for _, buildingID := range allBuildingsInComplex {
 			consumption := interval.BuildingConsumption[buildingID]
 			production := interval.BuildingSolarProd[buildingID]
-			
+
 			selfConsumed := math.Min(production, consumption)
 			buildingSelfConsumed[buildingID] = selfConsumed
-			
+
 			if production > consumption {
 				buildingSurplus[buildingID] = production - consumption
 			} else {
 				buildingDeficit[buildingID] = consumption - production
 			}
 		}
-		
+
 		// Step 2: Calculate total surplus and deficit in vZEV
 		totalSurplus := 0.0
 		totalDeficit := 0.0
-		
+
 		for _, surplus := range buildingSurplus {
 			totalSurplus += surplus
 		}
 		for _, deficit := range buildingDeficit {
 			totalDeficit += deficit
 		}
-		
+
 		// Step 3: Allocate user's energy sources
 		// 3a. Self-consumed solar (if user is in a building with solar)
 		userSelfConsumed := 0.0
 		buildingConsumption := interval.BuildingConsumption[userBuildingID]
 		buildingSolarProd := interval.BuildingSolarProd[userBuildingID]
-		
+
 		if buildingConsumption > 0 && buildingSolarProd > 0 {
 			selfConsumedInBuilding := math.Min(buildingSolarProd, buildingConsumption)
 			userSelfConsumed = selfConsumedInBuilding * (userConsumption / buildingConsumption)
 		}
-		
+
 		result.SelfConsumedSolar += userSelfConsumed
-		
+
 		// 3b. Virtual PV from other buildings
 		userVirtualPV := 0.0
 		userDeficit := userConsumption - userSelfConsumed
-		
+
 		if userDeficit > 0 && totalDeficit > 0 && totalSurplus > 0 {
 			// User gets proportional share of vZEV surplus based on their deficit
 			availableVirtualPV := math.Min(totalSurplus, totalDeficit)
 			userVirtualPV = availableVirtualPV * (userDeficit / totalDeficit)
 		}
-		
+
 		result.VirtualPV += userVirtualPV
-		
+
 		// 3c. Grid energy (remainder)
 		userGrid := userConsumption - userSelfConsumed - userVirtualPV
 		if userGrid < 0 {
 			userGrid = 0
 		}
-		
+
 		result.GridEnergy += userGrid
-		
+
 		// Log first few intervals for debugging
 		if intervalCount <= 5 {
 			log.Printf("    [vZEV] %s: User consumption: %.3f kWh -> Self: %.3f, Virtual: %.3f, Grid: %.3f",
 				ts.Format("15:04"), userConsumption, userSelfConsumed, userVirtualPV, userGrid)
 		}
 	}
-	
+
 	log.Printf("    [vZEV] Processed %d intervals", intervalCount)
-	
+
 	return result, nil
 }
 
@@ -1214,8 +1336,13 @@ func sortTimestamps(timestamps []time.Time) {
 	}
 }
 
-// generateVZEVInvoice creates an invoice with correct vZEV energy breakdown
+// generateVZEVInvoice creates an invoice with correct vZEV energy breakdown (backward compatible)
 func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID int, fullStart, fullEnd time.Time, settings models.BillingSettings, energyResult *VZEVEnergyResult) (*models.Invoice, error) {
+	return bs.generateVZEVInvoiceWithOptions(userPeriod, buildingID, fullStart, fullEnd, settings, energyResult, nil)
+}
+
+// generateVZEVInvoiceWithOptions creates an invoice with custom item selection
+func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, buildingID int, fullStart, fullEnd time.Time, settings models.BillingSettings, energyResult *VZEVEnergyResult, customItemIDs []int) (*models.Invoice, error) {
 	tr := GetTranslations(userPeriod.Language)
 
 	invoiceYear := fullStart.Year()
@@ -1230,7 +1357,7 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 
 	// Add vZEV mode notice
 	items = append(items, models.InvoiceItem{
-		Description: "âš¡ vZEV Mode: Virtual Self-Consumption Community",
+		Description: "⚡ vZEV Mode: Virtual Self-Consumption Community",
 		Quantity:    0,
 		UnitPrice:   0,
 		TotalPrice:  0,
@@ -1240,7 +1367,7 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 	// Add period notice if prorated
 	if userPeriod.ProrationFactor < 1.0 {
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("âš ï¸ %s: %s to %s (%.1f%% of billing period)",
+			Description: fmt.Sprintf("⚠️ %s: %s to %s (%.1f%% of billing period)",
 				tr.PartialPeriod,
 				start.Format("02.01.2006"),
 				end.Format("02.01.2006"),
@@ -1293,7 +1420,7 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 
 	// Energy breakdown with correct vZEV logic
 	items = append(items, models.InvoiceItem{
-		Description: "ðŸ”† vZEV Energy Breakdown:",
+		Description: "🔋 vZEV Energy Breakdown:",
 		Quantity:    0,
 		UnitPrice:   0,
 		TotalPrice:  0,
@@ -1305,14 +1432,14 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 		selfConsumedCost := energyResult.SelfConsumedSolar * settings.SolarPowerPrice
 		totalAmount += selfConsumedCost
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  â””â”€ Own Building Solar: %.3f kWh × %.3f %s/kWh",
+			Description: fmt.Sprintf("  ├─ Own Building Solar: %.3f kWh × %.3f %s/kWh",
 				energyResult.SelfConsumedSolar, settings.SolarPowerPrice, settings.Currency),
 			Quantity:    energyResult.SelfConsumedSolar,
 			UnitPrice:   settings.SolarPowerPrice,
 			TotalPrice:  selfConsumedCost,
 			ItemType:    "vzev_self_solar",
 		})
-		log.Printf("  Self-Consumed Solar: %.3f kWh × %.3f = %.3f %s", 
+		log.Printf("  Self-Consumed Solar: %.3f kWh × %.3f = %.3f %s",
 			energyResult.SelfConsumedSolar, settings.SolarPowerPrice, selfConsumedCost, settings.Currency)
 	}
 
@@ -1321,14 +1448,14 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 		virtualPVCost := energyResult.VirtualPV * settings.VZEVExportPrice
 		totalAmount += virtualPVCost
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  â””â”€ Virtual PV (from vZEV): %.3f kWh × %.3f %s/kWh",
+			Description: fmt.Sprintf("  ├─ Virtual PV (from vZEV): %.3f kWh × %.3f %s/kWh",
 				energyResult.VirtualPV, settings.VZEVExportPrice, settings.Currency),
 			Quantity:    energyResult.VirtualPV,
 			UnitPrice:   settings.VZEVExportPrice,
 			TotalPrice:  virtualPVCost,
 			ItemType:    "vzev_virtual_pv",
 		})
-		log.Printf("  Virtual PV: %.3f kWh × %.3f = %.3f %s", 
+		log.Printf("  Virtual PV: %.3f kWh × %.3f = %.3f %s",
 			energyResult.VirtualPV, settings.VZEVExportPrice, virtualPVCost, settings.Currency)
 	}
 
@@ -1337,14 +1464,14 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 		gridCost := energyResult.GridEnergy * settings.NormalPowerPrice
 		totalAmount += gridCost
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  â””â”€ %s: %.3f kWh × %.3f %s/kWh",
+			Description: fmt.Sprintf("  └─ %s: %.3f kWh × %.3f %s/kWh",
 				tr.NormalPowerGrid, energyResult.GridEnergy, settings.NormalPowerPrice, settings.Currency),
 			Quantity:    energyResult.GridEnergy,
 			UnitPrice:   settings.NormalPowerPrice,
 			TotalPrice:  gridCost,
 			ItemType:    "normal_power",
 		})
-		log.Printf("  Grid Energy: %.3f kWh × %.3f = %.3f %s", 
+		log.Printf("  Grid Energy: %.3f kWh × %.3f = %.3f %s",
 			energyResult.GridEnergy, settings.NormalPowerPrice, gridCost, settings.Currency)
 	}
 
@@ -1435,7 +1562,8 @@ func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID 
 		totalAmount += sharedMeterCost
 	}
 
-	customItems, customCost, _ := bs.getCustomLineItemsWithTranslations(buildingID, tr, userPeriod.ProrationFactor)
+	// Custom items with frequency and occupancy proration
+	customItems, customCost, _ := bs.getCustomLineItemsWithTranslations(buildingID, tr, userPeriod.ProrationFactor, fullStart, fullEnd, customItemIDs)
 	if len(customItems) > 0 {
 		items = append(items, customItems...)
 		totalAmount += customCost
@@ -1563,12 +1691,12 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 	log.Printf("    [ZEV] Period: %s to %s", start.Format("2006-01-02 15:04:05"), end.Format("2006-01-02 15:04:05"))
 
 	type ReadingData struct {
-		MeterID        int
-		MeterType      string
-		UserID         sql.NullInt64
-		ReadingTime    time.Time
-		ConsumptionKWh float64
-		ConsumptionExport float64  // NEW: For solar export energy
+		MeterID           int
+		MeterType         string
+		UserID            sql.NullInt64
+		ReadingTime       time.Time
+		ConsumptionKWh    float64
+		ConsumptionExport float64 // NEW: For solar export energy
 	}
 
 	// FIXED: Now also fetch consumption_export for solar meters
@@ -1611,7 +1739,7 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 	type IntervalData struct {
 		UserConsumption     float64
 		BuildingConsumption float64
-		SolarProduction     float64  // FIXED: Now uses export energy
+		SolarProduction     float64 // FIXED: Now uses export energy
 	}
 
 	intervalData := make(map[time.Time]*IntervalData)
@@ -1687,7 +1815,7 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 		}
 
 		if (intervalCount <= 5) || (userSolar > 0 && solarUsed <= userSolar*3) {
-			log.Printf("    [ZEV] %s: User %.3f kWh, Building %.3f kWh, Solar %.3f kWh â†’ %.3f solar + %.3f grid",
+			log.Printf("    [ZEV] %s: User %.3f kWh, Building %.3f kWh, Solar %.3f kWh → %.3f solar + %.3f grid",
 				timestamp.Format("15:04"), data.UserConsumption, data.BuildingConsumption,
 				data.SolarProduction, userSolar, userNormal)
 		}
@@ -1928,10 +2056,10 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 
 			if shouldLog {
 				if isBillable {
-					log.Printf("  [CHARGING]     [%d] %s: %.3f kWh, mode=%s, state=%s â†’ BILLABLE",
+					log.Printf("  [CHARGING]     [%d] %s: %.3f kWh, mode=%s, state=%s → BILLABLE",
 						sessionNum, session.SessionTime.Format("15:04"), session.PowerKwh, session.Mode, session.State)
 				} else {
-					log.Printf("  [CHARGING]     [%d] %s: %.3f kWh, mode=%s, state=%s â†’ SKIP (idle)",
+					log.Printf("  [CHARGING]     [%d] %s: %.3f kWh, mode=%s, state=%s → SKIP (idle)",
 						sessionNum, session.SessionTime.Format("15:04"), session.PowerKwh, session.Mode, session.State)
 				}
 			}
@@ -1977,24 +2105,24 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 				if isNormal {
 					chargerNormal += consumption
 					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] âœ“ %.3f kWh NORMAL (%.3f â†’ %.3f)",
+						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh NORMAL (%.3f → %.3f)",
 							sessionNum, consumption, previousPower, session.PowerKwh)
 					}
 				} else if isPriority {
 					chargerPriority += consumption
 					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] âœ“ %.3f kWh PRIORITY (%.3f â†’ %.3f)",
+						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh PRIORITY (%.3f → %.3f)",
 							sessionNum, consumption, previousPower, session.PowerKwh)
 					}
 				} else {
 					chargerNormal += consumption
 					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] âœ“ %.3f kWh UNKNOWN mode '%s' â†’ NORMAL",
+						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh UNKNOWN mode '%s' → NORMAL",
 							sessionNum, consumption, session.Mode)
 					}
 				}
 			} else if shouldLog {
-				log.Printf("  [CHARGING]     [%d] Zero consumption (%.3f â†’ %.3f)",
+				log.Printf("  [CHARGING]     [%d] Zero consumption (%.3f → %.3f)",
 					sessionNum, previousPower, session.PowerKwh)
 			}
 

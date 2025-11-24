@@ -323,22 +323,12 @@ export default function BillConfigModal({
         return meter!;
       });
 
-      const customLineItems = selectedCustomItems.map(id => {
-        const item = customItems.find(i => i.id === id);
-        return {
-          item_id: item!.id,
-          description: item!.description,
-          amount: item!.amount,
-          category: item!.category,
-          is_one_time: false
-        };
-      });
-
+      // UPDATED: Pass custom_item_ids as array of IDs instead of full objects
       const finalConfig = {
         ...config,
         include_shared_meters: selectedSharedMeters.length > 0,
         shared_meter_configs: sharedMeterConfigs,
-        custom_line_items: customLineItems
+        custom_item_ids: selectedCustomItems // Just pass the array of IDs
       };
 
       const result = await generateBills(finalConfig);

@@ -190,11 +190,25 @@ type InvoiceItem struct {
 	ItemType    string  `json:"item_type"`
 }
 
+// CustomLineItem represents a custom charge item that can be added to invoices
+type CustomLineItem struct {
+	ID          int       `json:"id"`
+	BuildingID  int       `json:"building_id"`
+	Description string    `json:"description"`
+	Amount      float64   `json:"amount"`
+	Frequency   string    `json:"frequency"` // once, monthly, quarterly, yearly
+	Category    string    `json:"category"`  // meter_rent, maintenance, service, other
+	IsActive    bool      `json:"is_active"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 type AutoBillingConfig struct {
 	ID                 int        `json:"id"`
 	Name               string     `json:"name"`
 	BuildingIDs        string     `json:"building_ids"`
 	UserIDs            string     `json:"user_ids"`
+	CustomItemIDs      string     `json:"custom_item_ids"`      // NEW: Comma-separated list of custom item IDs to include
 	Frequency          string     `json:"frequency"`
 	GenerationDay      int        `json:"generation_day"`
 	FirstExecutionDate *string    `json:"first_execution_date,omitempty"`
@@ -224,23 +238,23 @@ type AdminLog struct {
 }
 
 type DashboardStats struct {
-	TotalUsers          int     `json:"total_users"`
-	RegularUsers        int     `json:"regular_users"`
-	AdminUsers          int     `json:"admin_users"`
-	ActiveUsers         int     `json:"active_users"`
-	InactiveUsers       int     `json:"inactive_users"`
-	TotalBuildings      int     `json:"total_buildings"`
-	TotalComplexes      int     `json:"total_complexes"`
-	TotalMeters         int     `json:"total_meters"`
-	TotalChargers       int     `json:"total_chargers"`
-	ActiveMeters        int     `json:"active_meters"`
-	ActiveChargers      int     `json:"active_chargers"`
-	TodayConsumption    float64 `json:"today_consumption"`
-	MonthConsumption    float64 `json:"month_consumption"`
-	TodaySolar          float64 `json:"today_solar"`
-	MonthSolar          float64 `json:"month_solar"`
-	TodayCharging       float64 `json:"today_charging"`
-	MonthCharging       float64 `json:"month_charging"`
+	TotalUsers       int     `json:"total_users"`
+	RegularUsers     int     `json:"regular_users"`
+	AdminUsers       int     `json:"admin_users"`
+	ActiveUsers      int     `json:"active_users"`
+	InactiveUsers    int     `json:"inactive_users"`
+	TotalBuildings   int     `json:"total_buildings"`
+	TotalComplexes   int     `json:"total_complexes"`
+	TotalMeters      int     `json:"total_meters"`
+	TotalChargers    int     `json:"total_chargers"`
+	ActiveMeters     int     `json:"active_meters"`
+	ActiveChargers   int     `json:"active_chargers"`
+	TodayConsumption float64 `json:"today_consumption"`
+	MonthConsumption float64 `json:"month_consumption"`
+	TodaySolar       float64 `json:"today_solar"`
+	MonthSolar       float64 `json:"month_solar"`
+	TodayCharging    float64 `json:"today_charging"`
+	MonthCharging    float64 `json:"month_charging"`
 }
 
 type ConsumptionData struct {

@@ -38,6 +38,9 @@ type GenerateBillsRequest struct {
 	EndDate     string `json:"end_date"`
 	IsVZEV      bool   `json:"is_vzev"`
 
+	// Custom item IDs to include in bills (NEW)
+	CustomItemIDs []int `json:"custom_item_ids"`
+
 	// Sender information
 	SenderName    string `json:"sender_name"`
 	SenderAddress string `json:"sender_address"`
@@ -231,12 +234,44 @@ func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("=== Starting bill generation ===")
 	log.Printf("Mode: %s, Buildings: %v, Users: %v, Period: %s to %s",
-		func() string { if req.IsVZEV { return "vZEV" } else { return "ZEV" } }(),
+		func() string {
+			if req.IsVZEV {
+				return "vZEV"
+			} else {
+				return "ZEV"
+			}
+		}(),
 		req.BuildingIDs, req.UserIDs, req.StartDate, req.EndDate)
+	log.Printf("Custom Item IDs: %v", req.CustomItemIDs)
 	log.Printf("Sender: %s, IBAN: %s", req.SenderName, req.BankIBAN)
 
-	// Generate invoices (service will handle vZEV vs ZEV logic)
-	invoices, err := h.billingService.GenerateBills(req.BuildingIDs, req.UserIDs, req.StartDate, req.EndDate, req.IsVZEV)
+	// Generate invoices with custom item selection
+	// Use GenerateBillsWithOptions to pass custom item IDs
+	var invoices []models.Invoice
+	var err error
+
+	if len(req.CustomItemIDs) > 0 {
+		// Use new method with custom item selection
+		invoices, err = h.billingService.GenerateBillsWithOptions(
+			req.BuildingIDs,
+			req.UserIDs,
+			req.StartDate,
+			req.EndDate,
+			req.IsVZEV,
+			req.CustomItemIDs,
+		)
+	} else {
+		// Backward compatible: no custom items when none selected
+		invoices, err = h.billingService.GenerateBillsWithOptions(
+			req.BuildingIDs,
+			req.UserIDs,
+			req.StartDate,
+			req.EndDate,
+			req.IsVZEV,
+			[]int{}, // Empty = no custom items
+		)
+	}
+
 	if err != nil {
 		log.Printf("ERROR: Bill generation failed: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -286,7 +321,7 @@ func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 			log.Printf("WARNING: Failed to update PDF path for invoice %d: %v", invoice.ID, err)
 		} else {
 			successCount++
-			log.Printf("âœ“ Generated PDF %d/%d: %s", i+1, len(invoices), pdfPath)
+			log.Printf("✓ Generated PDF %d/%d: %s", i+1, len(invoices), pdfPath)
 		}
 	}
 
