@@ -1,6 +1,6 @@
 import { Home, User as UserIcon, Building, Zap, Plug } from 'lucide-react';
-import type { Building as BuildingType, ApartmentWithUser } from '../../../types';
-import { useTranslation } from '../../../i18n';
+import type { Building as BuildingType, ApartmentWithUser } from '../../../../types';
+import { useTranslation } from '../../../../i18n';
 
 interface AutoBillingStep1SelectionProps {
   buildings: BuildingType[];

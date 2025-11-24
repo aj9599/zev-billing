@@ -1,6 +1,6 @@
 import { Zap, Dot, Lightbulb } from 'lucide-react';
-import type { Building, SharedMeterConfig } from '../../../types';
-import { useTranslation } from '../../../i18n';
+import type { Building, SharedMeterConfig } from '../../../../types';
+import { useTranslation } from '../../../../i18n';
 
 interface AutoBillingStep3SharedMetersProps {
   buildings: Building[];

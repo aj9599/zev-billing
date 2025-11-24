@@ -1,6 +1,6 @@
 import { DollarSign, Dot, ClipboardList } from 'lucide-react';
-import type { Building, CustomLineItem } from '../../../types';
-import { useTranslation } from '../../../i18n';
+import type { Building, CustomLineItem } from '../../../../types';
+import { useTranslation } from '../../../../i18n';
 
 interface AutoBillingStep4CustomItemsProps {
   buildings: Building[];

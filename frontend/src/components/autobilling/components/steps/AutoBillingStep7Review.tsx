@@ -1,6 +1,6 @@
 import { AlertTriangle, CheckCircle } from 'lucide-react';
-import { useTranslation } from '../../../i18n';
-import type { Building } from '../../../types';
+import { useTranslation } from '../../../../i18n';
+import type { Building } from '../../../../types';
 
 interface AutoBillingStep7ReviewProps {
   name: string;

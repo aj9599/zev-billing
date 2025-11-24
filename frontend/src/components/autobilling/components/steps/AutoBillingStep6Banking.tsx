@@ -1,5 +1,5 @@
 import { Landmark, AlertTriangle } from 'lucide-react';
-import { useTranslation } from '../../../i18n';
+import { useTranslation } from '../../../../i18n';
 
 interface AutoBillingStep6BankingProps {
   bankName: string;
