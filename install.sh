@@ -3,13 +3,14 @@
 # ZEV Billing System - Automated Installation Script for Raspberry Pi
 # Enhanced with port configuration, architecture detection, and persistent settings
 # Includes MQTT support, fresh install option and Chromium for PDF generation
-# Version 2.0 - COMPLETE with ALL original features
+# Version 2.1 - FIXED git repository handling
+# Fixed: Proper handling of non-git directories and repository structure
 
 set -e  # Exit on any error
 
 echo "=========================================="
 echo "ZEV Billing System - Automated Installer"
-echo "Version 2.0 - Enhanced Edition"
+echo "Version 2.1 - Fixed Edition"
 echo "=========================================="
 echo ""
 
@@ -228,324 +229,191 @@ MQTT_USERNAME=""
 MQTT_PASSWORD=""
 
 if command -v mosquitto &> /dev/null; then
-    echo -e "${GREEN}Mosquitto is already installed: $(mosquitto -h 2>&1 | head -1)${NC}"
+    echo -e "${GREEN}Mosquitto is already installed: $(mosquitto -h 2>&1 | head -n 1)${NC}"
 else
-    echo "Installing Mosquitto MQTT broker and clients..."
+    echo "Installing Mosquitto..."
     apt-get install -y mosquitto mosquitto-clients
-    
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ Mosquitto installed successfully${NC}"
-        
-        # Ask about authentication
-        echo ""
-        echo -e "${YELLOW}========================================${NC}"
-        echo -e "${YELLOW}MQTT Broker Authentication Setup${NC}"
-        echo -e "${YELLOW}========================================${NC}"
-        echo ""
-        echo "Do you want to enable MQTT authentication?"
-        echo "  - Choose 'yes' for production (more secure, requires password)"
-        echo "  - Choose 'no' for development (easier testing, no password)"
-        echo ""
-        read -p "Enable MQTT authentication? (yes/no) [no]: " enable_auth
-        
-        # Ask about network access
-        echo ""
-        echo -e "${YELLOW}========================================${NC}"
-        echo -e "${YELLOW}MQTT Network Access Configuration${NC}"
-        echo -e "${YELLOW}========================================${NC}"
-        echo ""
-        echo "Where should MQTT be accessible from?"
-        echo "  - 'localhost' = Only from this Raspberry Pi (more secure)"
-        echo "  - 'network' = From any device on your network (more flexible)"
-        echo ""
-        echo "Choose 'network' if you want to:"
-        echo "  - Use MQTT Explorer from another computer"
-        echo "  - Connect external MQTT devices/meters"
-        echo "  - Access MQTT from other machines"
-        echo ""
-        read -p "Access mode? (localhost/network) [localhost]: " access_mode
-        
-        MQTT_BIND_ADDRESS="localhost"
-        if [ "$access_mode" == "network" ] || [ "$access_mode" == "n" ] || [ "$access_mode" == "NETWORK" ]; then
-            MQTT_BIND_ADDRESS="0.0.0.0"
-            echo -e "${YELLOW}⚠  MQTT will be accessible from the network${NC}"
-            echo -e "${YELLOW}   Make sure your network is trusted!${NC}"
-        else
-            echo -e "${GREEN}MQTT will only be accessible from localhost${NC}"
-        fi
-        echo ""
-        
-        if [ "$enable_auth" == "yes" ] || [ "$enable_auth" == "y" ] || [ "$enable_auth" == "YES" ]; then
-            MQTT_AUTH_ENABLED=true
-            echo ""
-            echo -e "${GREEN}Setting up MQTT authentication...${NC}"
-            
-            # Get username
-            while [ -z "$MQTT_USERNAME" ]; do
-                read -p "Enter MQTT username [zev-billing]: " mqtt_user_input
-                MQTT_USERNAME="${mqtt_user_input:-zev-billing}"
-            done
-            
-            # Get password
-            while [ -z "$MQTT_PASSWORD" ]; do
-                read -s -p "Enter MQTT password: " mqtt_pass1
-                echo ""
-                read -s -p "Confirm MQTT password: " mqtt_pass2
-                echo ""
-                
-                if [ "$mqtt_pass1" == "$mqtt_pass2" ]; then
-                    MQTT_PASSWORD="$mqtt_pass1"
-                else
-                    echo -e "${RED}Passwords don't match. Please try again.${NC}"
-                fi
-            done
-            
-            # Create password file
-            echo "Creating password file..."
-            mosquitto_passwd -c -b /etc/mosquitto/passwd "$MQTT_USERNAME" "$MQTT_PASSWORD"
-            chmod 600 /etc/mosquitto/passwd
-            chown mosquitto:mosquitto /etc/mosquitto/passwd
-            
-            echo -e "${GREEN}✓ MQTT authentication configured${NC}"
-            echo -e "${GREEN}  Username: $MQTT_USERNAME${NC}"
-            echo -e "${YELLOW}  Password: (hidden)${NC}"
-        else
-            echo -e "${YELLOW}MQTT authentication disabled - anonymous connections allowed${NC}"
-        fi
-        
-        # Create Mosquitto configuration for ZEV Billing
-        echo "Configuring Mosquitto for ZEV Billing..."
-        
-        # Backup existing config if it exists
-        if [ -f /etc/mosquitto/mosquitto.conf ]; then
-            cp /etc/mosquitto/mosquitto.conf /etc/mosquitto/mosquitto.conf.backup 2>/dev/null || true
-        fi
-        
-        # =================================================
-        # FIXED: Create clean main config to avoid duplicate persistence_location errors
-        # =================================================
-        echo "Creating clean main Mosquitto configuration..."
-        cat > /etc/mosquitto/mosquitto.conf << 'MAIN_CONF_EOF'
-# Place your local configuration in /etc/mosquitto/conf.d/
-#
-# A full description of the configuration file is at
-# /usr/share/doc/mosquitto/examples/mosquitto.conf
-
-# Include all configurations from conf.d directory
-include_dir /etc/mosquitto/conf.d
-MAIN_CONF_EOF
-        
-        # Create ZEV Billing specific configuration in conf.d
-        mkdir -p /etc/mosquitto/conf.d
-        
-        if [ "$MQTT_AUTH_ENABLED" = true ]; then
-            # Configuration WITH authentication
-            cat > /etc/mosquitto/conf.d/zev-billing.conf << MQTT_EOF
-# ZEV Billing System MQTT Configuration
-
-# Listen on MQTT port
-listener 1883 $MQTT_BIND_ADDRESS
-
-# Authentication enabled - password required
-allow_anonymous false
-password_file /etc/mosquitto/passwd
-
-# Persistence settings
-persistence true
-persistence_location /var/lib/mosquitto/
-
-# Logging
-log_dest file /var/log/mosquitto/mosquitto.log
-log_dest stdout
-log_type error
-log_type warning
-log_type notice
-log_type information
-
-# Connection settings
-max_connections -1
-max_queued_messages 1000
-
-# Message size limit (10MB for large payloads)
-message_size_limit 10485760
-MQTT_EOF
-        else
-            # Configuration WITHOUT authentication
-            cat > /etc/mosquitto/conf.d/zev-billing.conf << MQTT_EOF
-# ZEV Billing System MQTT Configuration
-
-# Listen on MQTT port
-listener 1883 $MQTT_BIND_ADDRESS
-
-# Allow anonymous connections (no authentication required)
-allow_anonymous true
-
-# Persistence settings
-persistence true
-persistence_location /var/lib/mosquitto/
-
-# Logging
-log_dest file /var/log/mosquitto/mosquitto.log
-log_dest stdout
-log_type error
-log_type warning
-log_type notice
-log_type information
-
-# Connection settings
-max_connections -1
-max_queued_messages 1000
-
-# Message size limit (10MB for large payloads)
-message_size_limit 10485760
-MQTT_EOF
-        fi
-        
-        # Set proper permissions
-        chown mosquitto:mosquitto /var/lib/mosquitto -R 2>/dev/null || true
-        chown mosquitto:mosquitto /var/log/mosquitto -R 2>/dev/null || true
-        
-        # Enable and start Mosquitto
-        systemctl enable mosquitto
-        systemctl restart mosquitto
-        
-        # Wait for service to start
-        sleep 2
-        
-        # Check if service is running
-        if systemctl is-active --quiet mosquitto; then
-            echo -e "${GREEN}✓ Mosquitto service is running${NC}"
-            
-            # Test MQTT broker
-            echo "Testing MQTT broker..."
-            
-            # Test with or without authentication
-            if [ "$MQTT_AUTH_ENABLED" = true ]; then
-                echo "Testing with authentication (user: $MQTT_USERNAME)..."
-                timeout 3 mosquitto_sub -h localhost -t "test/zev" -u "$MQTT_USERNAME" -P "$MQTT_PASSWORD" > /tmp/mqtt_test.txt 2>&1 &
-                SUB_PID=$!
-                sleep 1
-                mosquitto_pub -h localhost -t "test/zev" -m "ZEV Billing MQTT Test" -u "$MQTT_USERNAME" -P "$MQTT_PASSWORD" 2>/dev/null || true
-            else
-                timeout 3 mosquitto_sub -h localhost -t "test/zev" > /tmp/mqtt_test.txt 2>&1 &
-                SUB_PID=$!
-                sleep 1
-                mosquitto_pub -h localhost -t "test/zev" -m "ZEV Billing MQTT Test" 2>/dev/null || true
-            fi
-            
-            sleep 1
-            
-            if grep -q "ZEV Billing MQTT Test" /tmp/mqtt_test.txt 2>/dev/null; then
-                echo -e "${GREEN}✓ MQTT broker is working correctly${NC}"
-            else
-                echo -e "${YELLOW}⚠  MQTT test inconclusive - broker should still work${NC}"
-            fi
-            
-            kill $SUB_PID 2>/dev/null || true
-            rm -f /tmp/mqtt_test.txt
-        else
-            echo -e "${YELLOW}⚠  Warning: Mosquitto service failed to start${NC}"
-            echo "Check logs: journalctl -u mosquitto -n 20"
-        fi
     else
         echo -e "${RED}✗ Mosquitto installation failed${NC}"
         echo -e "${YELLOW}Warning: MQTT functionality will not be available${NC}"
     fi
 fi
 
-# Check if Go is already installed with correct version
-GO_VERSION="1.25.0"
-GO_REQUIRED_MAJOR=1
-GO_REQUIRED_MINOR=25
-
-install_go() {
-    echo "Installing Go $GO_VERSION..."
+# Configure Mosquitto
+if command -v mosquitto &> /dev/null; then
+    echo ""
+    echo "Configuring Mosquitto MQTT Broker..."
     
-    # Detect architecture - ENHANCED with proper mapping
-    case $ARCH in
-        x86_64|amd64)
+    # Ask about authentication
+    read -p "Enable MQTT authentication? (recommended for production) (yes/no) [no]: " enable_auth
+    if [ "$enable_auth" == "yes" ] || [ "$enable_auth" == "y" ]; then
+        MQTT_AUTH_ENABLED=true
+        
+        # Get username
+        while [ -z "$MQTT_USERNAME" ]; do
+            read -p "Enter MQTT username: " MQTT_USERNAME
+        done
+        
+        # Get password
+        while [ -z "$MQTT_PASSWORD" ]; do
+            read -s -p "Enter MQTT password: " MQTT_PASSWORD
+            echo ""
+            read -s -p "Confirm MQTT password: " MQTT_PASSWORD_CONFIRM
+            echo ""
+            
+            if [ "$MQTT_PASSWORD" != "$MQTT_PASSWORD_CONFIRM" ]; then
+                echo -e "${RED}Passwords don't match. Please try again.${NC}"
+                MQTT_PASSWORD=""
+            fi
+        done
+        
+        # Create password file
+        mosquitto_passwd -c -b /etc/mosquitto/passwd "$MQTT_USERNAME" "$MQTT_PASSWORD"
+        
+        # Create Mosquitto config with authentication
+        cat > /etc/mosquitto/mosquitto.conf << MQTT_CONF
+# Mosquitto Configuration for ZEV Billing
+# Generated: $(date)
+
+# Listener
+listener 1883
+protocol mqtt
+
+# Authentication
+allow_anonymous false
+password_file /etc/mosquitto/passwd
+
+# Persistence
+persistence true
+persistence_location /var/lib/mosquitto/
+
+# Logging
+log_dest file /var/log/mosquitto/mosquitto.log
+log_dest stdout
+log_type error
+log_type warning
+log_type notice
+log_type information
+
+# Connection settings
+max_connections -1
+MQTT_CONF
+        
+        echo -e "${GREEN}✓ Mosquitto configured with authentication${NC}"
+    else
+        # Create Mosquitto config without authentication
+        cat > /etc/mosquitto/mosquitto.conf << MQTT_CONF
+# Mosquitto Configuration for ZEV Billing
+# Generated: $(date)
+
+# Listener
+listener 1883
+protocol mqtt
+
+# Authentication
+allow_anonymous true
+
+# Persistence
+persistence true
+persistence_location /var/lib/mosquitto/
+
+# Logging
+log_dest file /var/log/mosquitto/mosquitto.log
+log_dest stdout
+log_type error
+log_type warning
+log_type notice
+log_type information
+
+# Connection settings
+max_connections -1
+MQTT_CONF
+        
+        echo -e "${GREEN}✓ Mosquitto configured (no authentication)${NC}"
+    fi
+    
+    # Start and enable Mosquitto
+    systemctl enable mosquitto
+    systemctl restart mosquitto
+    
+    if systemctl is-active --quiet mosquitto; then
+        echo -e "${GREEN}✓ Mosquitto MQTT broker is running${NC}"
+    else
+        echo -e "${YELLOW}⚠  Warning: Mosquitto may not be running properly${NC}"
+    fi
+fi
+
+# Install Go
+echo ""
+echo -e "${GREEN}Installing Go...${NC}"
+
+# Check if Go is already installed and is a recent version
+if command -v go &> /dev/null; then
+    GO_VERSION=$(go version | awk '{print $3}' | sed 's/go//')
+    echo -e "${GREEN}Go is already installed: $GO_VERSION${NC}"
+    
+    # Check if version is at least 1.20
+    if [ "$(printf '%s\n' "1.20" "$GO_VERSION" | sort -V | head -n1)" = "1.20" ]; then
+        echo -e "${GREEN}✓ Go version is sufficient${NC}"
+    else
+        echo -e "${YELLOW}⚠  Go version is old, will install newer version${NC}"
+        rm -rf /usr/local/go
+    fi
+fi
+
+# Install Go if not present or old
+if ! command -v go &> /dev/null || [ "$(printf '%s\n' "1.20" "$(go version | awk '{print $3}' | sed 's/go//')" | sort -V | head -n1)" != "1.20" ]; then
+    cd /tmp
+    
+    # Determine architecture for Go download
+    case "$ARCH" in
+        x86_64)
             GO_ARCH="amd64"
             ;;
         aarch64|arm64)
             GO_ARCH="arm64"
             ;;
-        armv7l)
-            GO_ARCH="armv6l"  # ARMv7 uses ARMv6 Go builds
-            ;;
-        armv6l)
+        armv7l|armv6l)
             GO_ARCH="armv6l"
             ;;
         *)
             echo -e "${RED}Unsupported architecture: $ARCH${NC}"
+            echo "Please install Go manually from https://go.dev/dl/"
             exit 1
             ;;
     esac
     
-    echo "Detected architecture: $ARCH -> Go arch: $GO_ARCH"
+    GO_VERSION="1.21.5"
+    GO_TARBALL="go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
     
-    # Remove old Go installations
-    apt-get remove -y golang-go 2>/dev/null || true
-    rm -rf /usr/local/go
-    rm -rf /usr/lib/go*
+    echo "Downloading Go ${GO_VERSION} for ${GO_ARCH}..."
+    wget -q --show-progress "https://go.dev/dl/${GO_TARBALL}" || {
+        echo -e "${RED}Failed to download Go${NC}"
+        exit 1
+    }
     
-    # Download and install Go
-    GO_TAR="go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
-    echo "Downloading $GO_TAR..."
-    wget -q "https://go.dev/dl/${GO_TAR}" -O /tmp/go.tar.gz
+    echo "Installing Go..."
+    tar -C /usr/local -xzf "$GO_TARBALL"
+    rm "$GO_TARBALL"
     
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}Failed to download Go $GO_VERSION${NC}"
-        echo -e "${YELLOW}Trying latest stable version...${NC}"
-        # Fallback to a known working version
-        GO_VERSION="1.23.0"
-        GO_TAR="go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
-        wget -q "https://go.dev/dl/${GO_TAR}" -O /tmp/go.tar.gz || {
-            echo -e "${RED}Failed to download Go${NC}"
-            exit 1
-        }
-    fi
-    
-    tar -C /usr/local -xzf /tmp/go.tar.gz
-    rm /tmp/go.tar.gz
-    
-    # Update PATH
-    export PATH=/usr/local/go/bin:$PATH
-    
-    # Make PATH persistent
+    # Add Go to PATH
     if ! grep -q "/usr/local/go/bin" /etc/profile; then
-        echo 'export PATH=/usr/local/go/bin:$PATH' >> /etc/profile
+        echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile
     fi
     
-    # Create symlink for convenience
-    ln -sf /usr/local/go/bin/go /usr/bin/go
-    
-    echo -e "${GREEN}Go $GO_VERSION installed successfully${NC}"
-}
-
-if command -v go &> /dev/null; then
-    CURRENT_GO_VERSION=$(go version | grep -oP 'go\K[0-9]+\.[0-9]+' | head -1)
-    CURRENT_MAJOR=$(echo $CURRENT_GO_VERSION | cut -d. -f1)
-    CURRENT_MINOR=$(echo $CURRENT_GO_VERSION | cut -d. -f2)
-    
-    echo "Found Go version: $CURRENT_GO_VERSION"
-    
-    if [ "$CURRENT_MAJOR" -lt "$GO_REQUIRED_MAJOR" ] || \
-       ([ "$CURRENT_MAJOR" -eq "$GO_REQUIRED_MAJOR" ] && [ "$CURRENT_MINOR" -lt "$GO_REQUIRED_MINOR" ]); then
-        echo -e "${YELLOW}Go version $CURRENT_GO_VERSION is too old, need $GO_VERSION${NC}"
-        install_go
-    else
-        echo -e "${GREEN}Go is already installed: $(go version)${NC}"
+    if ! grep -q "/usr/local/go/bin" "$ACTUAL_HOME/.profile" 2>/dev/null; then
+        echo 'export PATH=$PATH:/usr/local/go/bin' >> "$ACTUAL_HOME/.profile"
+        chown "$ACTUAL_USER:$ACTUAL_USER" "$ACTUAL_HOME/.profile"
     fi
-else
-    install_go
+    
+    export PATH=$PATH:/usr/local/go/bin
 fi
 
-# Verify Go installation
-go version
-if [ $? -ne 0 ]; then
-    echo -e "${RED}Go installation failed${NC}"
-    exit 1
-fi
+# Install Node.js
+echo ""
+echo -e "${GREEN}Installing Node.js and npm...${NC}"
 
 # Check if Node.js and npm are already installed
 if command -v node &> /dev/null && command -v npm &> /dev/null; then
@@ -605,18 +473,65 @@ fi
 
 echo ""
 echo -e "${GREEN}Step 5: Cloning/Updating repository${NC}"
+
+# FIXED: Better handling of git repository state
 if [ -d "$INSTALL_DIR" ]; then
-    echo "Directory exists, pulling latest changes..."
-    cd "$INSTALL_DIR"
-    sudo -u "$ACTUAL_USER" git pull || {
-        echo -e "${YELLOW}Git pull failed, repository may not exist yet${NC}"
-        echo "Please push your code to GitHub first, or skip this step for manual installation"
-    }
+    echo "Directory $INSTALL_DIR exists..."
+    
+    # Check if it's a git repository
+    if [ -d "$INSTALL_DIR/.git" ]; then
+        echo "Directory is a git repository, pulling latest changes..."
+        cd "$INSTALL_DIR"
+        sudo -u "$ACTUAL_USER" git pull || {
+            echo -e "${YELLOW}Git pull failed${NC}"
+            echo "This might happen if you have local changes or connection issues"
+            read -p "Continue with existing files? (yes/no) [yes]: " continue_anyway
+            if [ "$continue_anyway" == "no" ]; then
+                exit 1
+            fi
+        }
+    else
+        echo -e "${YELLOW}Directory exists but is not a git repository${NC}"
+        echo "Options:"
+        echo "  1. Remove directory and clone fresh from GitHub"
+        echo "  2. Initialize as git repository and pull"
+        echo "  3. Keep existing files and skip git operations"
+        read -p "Choose option (1/2/3) [3]: " git_option
+        
+        case "$git_option" in
+            1)
+                echo "Removing existing directory and cloning fresh..."
+                cd "$ACTUAL_HOME"
+                rm -rf "$INSTALL_DIR"
+                sudo -u "$ACTUAL_USER" git clone https://github.com/aj9599/zev-billing.git || {
+                    echo -e "${RED}Failed to clone repository${NC}"
+                    echo -e "${YELLOW}Creating directory structure for manual setup...${NC}"
+                    sudo -u "$ACTUAL_USER" mkdir -p "$INSTALL_DIR/backend"
+                    sudo -u "$ACTUAL_USER" mkdir -p "$INSTALL_DIR/frontend"
+                }
+                ;;
+            2)
+                echo "Initializing as git repository..."
+                cd "$INSTALL_DIR"
+                sudo -u "$ACTUAL_USER" git init
+                sudo -u "$ACTUAL_USER" git remote add origin https://github.com/aj9599/zev-billing.git || true
+                sudo -u "$ACTUAL_USER" git fetch
+                sudo -u "$ACTUAL_USER" git reset --hard origin/main || sudo -u "$ACTUAL_USER" git reset --hard origin/master || {
+                    echo -e "${YELLOW}Failed to pull from remote${NC}"
+                    echo "Continuing with existing files..."
+                }
+                ;;
+            3|*)
+                echo "Keeping existing files..."
+                cd "$INSTALL_DIR"
+                ;;
+        esac
+    fi
 else
-    echo "Attempting to clone repository..."
+    echo "Directory does not exist, cloning repository..."
     cd "$ACTUAL_HOME"
     sudo -u "$ACTUAL_USER" git clone https://github.com/aj9599/zev-billing.git || {
-        echo -e "${YELLOW}Repository not found on GitHub${NC}"
+        echo -e "${YELLOW}Repository not found on GitHub or connection failed${NC}"
         echo "Creating directory structure for manual setup..."
         sudo -u "$ACTUAL_USER" mkdir -p "$INSTALL_DIR/backend"
         sudo -u "$ACTUAL_USER" mkdir -p "$INSTALL_DIR/frontend"
@@ -624,13 +539,35 @@ else
     cd "$INSTALL_DIR"
 fi
 
+# Verify we're in the right directory
+if [ ! -d "$INSTALL_DIR" ]; then
+    echo -e "${RED}Installation directory was not created properly${NC}"
+    exit 1
+fi
+
+cd "$INSTALL_DIR"
+
 echo ""
 echo -e "${GREEN}Step 6: Building Backend${NC}"
+
+# Ensure backend directory exists
+if [ ! -d "$INSTALL_DIR/backend" ]; then
+    echo -e "${YELLOW}Backend directory doesn't exist, creating it...${NC}"
+    sudo -u "$ACTUAL_USER" mkdir -p "$INSTALL_DIR/backend"
+fi
+
 cd "$INSTALL_DIR/backend"
 
 if [ ! -f "main.go" ]; then
     echo -e "${RED}main.go not found in $INSTALL_DIR/backend${NC}"
-    echo -e "${YELLOW}Please ensure your code is in the correct directory${NC}"
+    echo -e "${YELLOW}Please ensure your code files are in the correct directory:${NC}"
+    echo "  - Backend Go files should be in: $INSTALL_DIR/backend/"
+    echo "  - Frontend files should be in: $INSTALL_DIR/frontend/"
+    echo ""
+    echo "You can:"
+    echo "  1. Copy your files manually to these directories"
+    echo "  2. Push your code to GitHub and run this installer again"
+    echo "  3. Clone/download your code and place it in $INSTALL_DIR"
     exit 1
 fi
 
@@ -648,39 +585,43 @@ sudo -u "$ACTUAL_USER" CGO_ENABLED=1 go build -o zev-billing
 
 if [ ! -f "zev-billing" ]; then
     echo -e "${RED}Backend build failed!${NC}"
-    echo "Checking for errors..."
-    sudo -u "$ACTUAL_USER" go build -o zev-billing 2>&1
+    echo "Check the error messages above"
     exit 1
 fi
 
-# Make executable
+echo -e "${GREEN}✓ Backend built successfully${NC}"
+
+# Set executable permissions
 chmod +x zev-billing
 
-echo -e "${GREEN}Backend built successfully!${NC}"
+# Store Chromium path for backend
+CHROMIUM_PATH=""
+if command -v chromium-browser &> /dev/null; then
+    CHROMIUM_PATH=$(which chromium-browser)
+elif command -v chromium &> /dev/null; then
+    CHROMIUM_PATH=$(which chromium)
+fi
 
 echo ""
 echo -e "${GREEN}Step 7: Building Frontend${NC}"
+
+# Ensure frontend directory exists
+if [ ! -d "$INSTALL_DIR/frontend" ]; then
+    echo -e "${YELLOW}Frontend directory doesn't exist, creating it...${NC}"
+    sudo -u "$ACTUAL_USER" mkdir -p "$INSTALL_DIR/frontend"
+fi
+
 cd "$INSTALL_DIR/frontend"
 
 if [ ! -f "package.json" ]; then
     echo -e "${RED}package.json not found in $INSTALL_DIR/frontend${NC}"
-    echo -e "${YELLOW}Please ensure your code is in the correct directory${NC}"
+    echo -e "${YELLOW}Please ensure your frontend code is in the correct directory${NC}"
     exit 1
 fi
 
-# Ensure meterUtils.ts exists
-if [ ! -f "src/utils/meterUtils.ts" ]; then
-    echo -e "${YELLOW}⚠  Warning: meterUtils.ts not found${NC}"
-    echo -e "${YELLOW}Creating utils directory and placeholder file...${NC}"
-    mkdir -p src/utils
-    echo -e "${YELLOW}Please add the meterUtils.ts file to src/utils/ after installation${NC}"
-fi
-
-# Clean old builds
-rm -rf node_modules dist package-lock.json
-
-# Install dependencies
-echo "Installing npm dependencies..."
+# Clean and install dependencies
+echo "Installing frontend dependencies..."
+rm -rf node_modules package-lock.json
 sudo -u "$ACTUAL_USER" npm install
 
 # Build frontend
@@ -689,35 +630,79 @@ sudo -u "$ACTUAL_USER" npm run build
 
 if [ ! -d "dist" ]; then
     echo -e "${RED}Frontend build failed!${NC}"
+    echo "Check the error messages above"
     exit 1
 fi
 
-echo -e "${GREEN}Frontend built successfully!${NC}"
+echo -e "${GREEN}✓ Frontend built successfully${NC}"
 
 echo ""
-echo -e "${GREEN}Step 8: Configuring Nginx (Port: $BACKEND_PORT)${NC}"
+echo -e "${GREEN}Step 8: Setting up systemd service${NC}"
 
-# Find Chromium path
-CHROMIUM_PATH=""
-if command -v chromium-browser &> /dev/null; then
-    CHROMIUM_PATH=$(command -v chromium-browser)
-elif command -v chromium &> /dev/null; then
-    CHROMIUM_PATH=$(command -v chromium)
+# Create systemd service file
+cat > /etc/systemd/system/zev-billing.service << SERVICE_EOF
+[Unit]
+Description=ZEV Billing System
+After=network.target mosquitto.service
+Wants=mosquitto.service
+
+[Service]
+Type=simple
+User=$ACTUAL_USER
+WorkingDirectory=$INSTALL_DIR/backend
+Environment="PORT=$BACKEND_PORT"
+Environment="CHROMIUM_PATH=$CHROMIUM_PATH"
+ExecStart=$INSTALL_DIR/backend/zev-billing
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+SERVICE_EOF
+
+# Reload systemd
+systemctl daemon-reload
+
+# Enable and start service
+systemctl enable zev-billing.service
+systemctl restart zev-billing.service
+
+# Wait for service to start
+sleep 3
+
+# Check service status
+if systemctl is-active --quiet zev-billing.service; then
+    echo -e "${GREEN}✓ Service is running${NC}"
+else
+    echo -e "${RED}✗ Service failed to start${NC}"
+    echo "Check logs: journalctl -u zev-billing.service -n 50"
+    exit 1
 fi
 
-# Configure nginx - UPDATED with dynamic port
+echo ""
+echo -e "${GREEN}Step 9: Configuring Nginx${NC}"
+
+# Create nginx configuration
 cat > /etc/nginx/sites-available/zev-billing << NGINX_EOF
 server {
     listen 80;
     server_name _;
     
     # Frontend
-    root $INSTALL_DIR/frontend/dist;
-    index index.html;
+    location / {
+        root $INSTALL_DIR/frontend/dist;
+        try_files \$uri \$uri/ /index.html;
+        
+        # Cache static assets
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+    }
     
-    # API proxy - UPDATED with configured port
+    # Backend API
     location /api/ {
-        proxy_pass http://localhost:$BACKEND_PORT/api/;
+        proxy_pass http://localhost:$BACKEND_PORT;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -726,30 +711,20 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         
-        # Increased timeouts for long-running operations
+        # Increase timeouts for long-running requests
         proxy_connect_timeout 300s;
         proxy_send_timeout 300s;
         proxy_read_timeout 300s;
     }
     
-    # Webhook endpoints (no auth required) - UPDATED with configured port
-    location /webhook/ {
-        proxy_pass http://localhost:$BACKEND_PORT/webhook/;
+    # WebSocket support for future use
+    location /ws {
+        proxy_pass http://localhost:$BACKEND_PORT;
         proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    }
-    
-    # Frontend routing
-    location / {
-        try_files \$uri \$uri/ /index.html;
-    }
-    
-    # Cache static assets
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
     }
 }
 NGINX_EOF
@@ -761,298 +736,354 @@ rm -f /etc/nginx/sites-enabled/default
 # Test nginx configuration
 nginx -t
 if [ $? -ne 0 ]; then
-    echo -e "${RED}Nginx configuration test failed${NC}"
+    echo -e "${RED}Nginx configuration test failed!${NC}"
     exit 1
 fi
 
-# Reload nginx
-systemctl reload nginx
-
-echo -e "${GREEN}Nginx configured successfully${NC}"
-
-echo ""
-echo -e "${GREEN}Step 9: Creating systemd service (Port: $BACKEND_PORT)${NC}"
-
-# UPDATED with SERVER_PORT environment variable
-cat > /etc/systemd/system/zev-billing.service << SERVICE_EOF
-[Unit]
-Description=ZEV Billing System Backend
-After=network.target mosquitto.service
-Wants=mosquitto.service
-
-[Service]
-Type=simple
-User=$ACTUAL_USER
-WorkingDirectory=$INSTALL_DIR/backend
-ExecStart=$INSTALL_DIR/backend/zev-billing
-Restart=always
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
-
-# Environment variables - UPDATED with SERVER_PORT
-Environment="DATABASE_PATH=$INSTALL_DIR/backend/zev-billing.db"
-Environment="SERVER_PORT=$BACKEND_PORT"
-Environment="CHROMIUM_PATH=$CHROMIUM_PATH"
-
-# Security hardening
-NoNewPrivileges=true
-PrivateTmp=true
-
-[Install]
-WantedBy=multi-user.target
-SERVICE_EOF
-
-# Reload systemd
-systemctl daemon-reload
-
-# Enable and start service
-systemctl enable zev-billing.service
-systemctl start zev-billing.service
-
-# Check service status
-sleep 3
-if systemctl is-active --quiet zev-billing.service; then
-    echo -e "${GREEN}✓ Backend service started successfully${NC}"
-else
-    echo -e "${RED}✗ Backend service failed to start${NC}"
-    echo "Checking logs..."
-    journalctl -u zev-billing.service -n 20 --no-pager
-    exit 1
-fi
-
-echo ""
-echo -e "${GREEN}Step 10: Setting up auto-start on boot${NC}"
+# Restart nginx
+systemctl restart nginx
 systemctl enable nginx
-systemctl enable mosquitto
-systemctl enable zev-billing.service
-echo -e "${GREEN}✓ All services configured for auto-start${NC}"
+
+echo -e "${GREEN}✓ Nginx configured and restarted${NC}"
 
 echo ""
-echo -e "${GREEN}Step 11: Setting permissions${NC}"
-chown -R "$ACTUAL_USER:$ACTUAL_USER" "$INSTALL_DIR"
-chmod 755 "$INSTALL_DIR/backend/zev-billing"
-echo -e "${GREEN}Permissions set${NC}"
+echo -e "${GREEN}Step 10: Setting up database${NC}"
+
+# Initialize database if it doesn't exist
+if [ ! -f "$DB_PATH" ]; then
+    echo "Initializing new database..."
+    cd "$INSTALL_DIR/backend"
+    
+    # The backend will create the database on first run
+    # Let it run for a moment to initialize
+    sleep 2
+    
+    if [ -f "$DB_PATH" ]; then
+        echo -e "${GREEN}✓ Database initialized${NC}"
+    else
+        echo -e "${YELLOW}⚠  Database will be created on first access${NC}"
+    fi
+else
+    echo -e "${GREEN}✓ Using existing database${NC}"
+fi
 
 echo ""
-echo -e "${GREEN}Step 12: Creating backup directories${NC}"
-mkdir -p "$INSTALL_DIR/backups"
-mkdir -p "$INSTALL_DIR/invoices"
-chown -R "$ACTUAL_USER:$ACTUAL_USER" "$INSTALL_DIR/backups"
-chown -R "$ACTUAL_USER:$ACTUAL_USER" "$INSTALL_DIR/invoices"
-echo -e "${GREEN}Backup directories created${NC}"
-
-echo ""
-echo -e "${GREEN}Step 13: Creating management scripts${NC}"
+echo -e "${GREEN}Step 11: Creating management scripts${NC}"
 
 # Create start script
-cat > "$INSTALL_DIR/start.sh" << 'EOF'
+cat > "$INSTALL_DIR/start.sh" << 'START_EOF'
 #!/bin/bash
+echo "Starting ZEV Billing System..."
 sudo systemctl start mosquitto
 sudo systemctl start zev-billing.service
 sudo systemctl start nginx
-echo "ZEV Billing System started"
-systemctl status zev-billing.service --no-pager
-systemctl status mosquitto --no-pager | head -5
-EOF
+sleep 2
+echo "Checking status..."
+sudo systemctl status zev-billing.service --no-pager -l
+START_EOF
 
 # Create stop script
-cat > "$INSTALL_DIR/stop.sh" << 'EOF'
+cat > "$INSTALL_DIR/stop.sh" << 'STOP_EOF'
 #!/bin/bash
+echo "Stopping ZEV Billing System..."
 sudo systemctl stop zev-billing.service
+sudo systemctl stop nginx
 sudo systemctl stop mosquitto
-echo "ZEV Billing System stopped"
-EOF
+echo "✓ All services stopped"
+STOP_EOF
 
 # Create restart script
-cat > "$INSTALL_DIR/restart.sh" << 'EOF'
+cat > "$INSTALL_DIR/restart.sh" << 'RESTART_EOF'
 #!/bin/bash
+echo "Restarting ZEV Billing System..."
 sudo systemctl restart mosquitto
 sudo systemctl restart zev-billing.service
 sudo systemctl restart nginx
-echo "ZEV Billing System restarted"
 sleep 2
-systemctl status zev-billing.service --no-pager
-systemctl status mosquitto --no-pager | head -5
-EOF
+echo "Checking status..."
+sudo systemctl status zev-billing.service --no-pager -l
+RESTART_EOF
 
-# Create status script - UPDATED with port display
-cat > "$INSTALL_DIR/status.sh" << 'EOF'
+# Create status script - UPDATED to show port
+cat > "$INSTALL_DIR/status.sh" << STATUS_EOF
 #!/bin/bash
-
-# Load configuration if available
-source ~/zev-billing/.zev-config 2>/dev/null || true
-
 echo "=== ZEV Billing System Status ==="
 echo ""
-if [ -n "$BACKEND_PORT" ]; then
-    echo "Backend Port: $BACKEND_PORT"
+
+# Load config to get port
+if [ -f "$CONFIG_FILE" ]; then
+    source "$CONFIG_FILE"
+    echo "Configuration:"
+    echo "  Backend Port: \$BACKEND_PORT"
     echo ""
 fi
-echo "=== Backend Status ==="
-systemctl status zev-billing.service --no-pager
-echo ""
-echo "=== MQTT Broker Status ==="
-systemctl status mosquitto --no-pager
-echo ""
-echo "=== Nginx Status ==="
-systemctl status nginx --no-pager
-echo ""
-echo "=== Auto-start Status ==="
-if systemctl is-enabled --quiet zev-billing.service; then
-    echo "✓ Backend auto-start: ENABLED"
-else
-    echo "✗ Backend auto-start: DISABLED"
-fi
-if systemctl is-enabled --quiet mosquitto; then
-    echo "✓ MQTT Broker auto-start: ENABLED"
-else
-    echo "✗ MQTT Broker auto-start: DISABLED"
-fi
-if systemctl is-enabled --quiet nginx; then
-    echo "✓ Nginx auto-start: ENABLED"
-else
-    echo "✗ Nginx auto-start: DISABLED"
-fi
-echo ""
-echo "=== Recent Backend Logs ==="
-journalctl -u zev-billing.service -n 10 --no-pager
-echo ""
-echo "=== MQTT Connection Status ==="
-journalctl -u zev-billing.service --since "5 minutes ago" | grep -i mqtt | tail -5 || echo "No recent MQTT logs"
-EOF
 
-# Create test MQTT script
-cat > "$INSTALL_DIR/test-mqtt.sh" << 'EOF'
+echo "Backend Service:"
+sudo systemctl status zev-billing.service --no-pager -l | head -n 10
+echo ""
+
+echo "Nginx:"
+sudo systemctl status nginx --no-pager -l | head -n 3
+echo ""
+
+echo "Mosquitto MQTT:"
+sudo systemctl status mosquitto --no-pager -l | head -n 3
+echo ""
+
+echo "Recent Backend Logs:"
+sudo journalctl -u zev-billing.service -n 10 --no-pager
+STATUS_EOF
+
+# Create logs script
+cat > "$INSTALL_DIR/logs.sh" << 'LOGS_EOF'
 #!/bin/bash
-echo "=========================================="
-echo "ZEV Billing - MQTT Quick Test"
-echo "=========================================="
-echo ""
+echo "Following ZEV Billing backend logs (Ctrl+C to exit)..."
+sudo journalctl -u zev-billing.service -f
+LOGS_EOF
 
-# Check if mosquitto is running
-if ! systemctl is-active --quiet mosquitto; then
-    echo "✗ MQTT broker is NOT running"
-    echo "Start it with: sudo systemctl start mosquitto"
+# Create MQTT logs script
+cat > "$INSTALL_DIR/mqtt-logs.sh" << 'MQTT_LOGS_EOF'
+#!/bin/bash
+echo "Following MQTT-related logs (Ctrl+C to exit)..."
+sudo journalctl -u zev-billing.service -f | grep -i mqtt
+MQTT_LOGS_EOF
+
+# Create MQTT test script
+if [ "$MQTT_AUTH_ENABLED" = true ]; then
+    cat > "$INSTALL_DIR/test-mqtt.sh" << TEST_MQTT_EOF
+#!/bin/bash
+echo "Testing MQTT broker with authentication..."
+echo ""
+echo "Publishing test message..."
+mosquitto_pub -h localhost -t "test/topic" -u "$MQTT_USERNAME" -P "$MQTT_PASSWORD" -m "Test message at \$(date)"
+if [ \$? -eq 0 ]; then
+    echo "✓ Publish successful"
+else
+    echo "✗ Publish failed"
     exit 1
 fi
 
-echo "✓ MQTT broker is running"
 echo ""
-
-# Test MQTT publish/subscribe
-echo "Testing MQTT broker..."
-timeout 3 mosquitto_sub -h localhost -t "test/zev" > /tmp/mqtt_quick_test.txt 2>&1 &
-SUB_PID=$!
-
+echo "Subscribing to test topic for 5 seconds..."
+timeout 5 mosquitto_sub -h localhost -t "test/topic" -u "$MQTT_USERNAME" -P "$MQTT_PASSWORD" -v &
 sleep 1
+mosquitto_pub -h localhost -t "test/topic" -u "$MQTT_USERNAME" -P "$MQTT_PASSWORD" -m "Test message at \$(date)"
+wait
 
-mosquitto_pub -h localhost -t "test/zev" -m "Test message from ZEV Billing" 2>/dev/null
-
-sleep 1
-
-if grep -q "Test message" /tmp/mqtt_quick_test.txt 2>/dev/null; then
-    echo "✓ MQTT broker is working correctly"
+echo ""
+echo "✓ MQTT test completed"
+TEST_MQTT_EOF
 else
-    echo "⚠  MQTT test inconclusive"
+    cat > "$INSTALL_DIR/test-mqtt.sh" << 'TEST_MQTT_EOF'
+#!/bin/bash
+echo "Testing MQTT broker (no authentication)..."
+echo ""
+echo "Publishing test message..."
+mosquitto_pub -h localhost -t "test/topic" -m "Test message at $(date)"
+if [ $? -eq 0 ]; then
+    echo "✓ Publish successful"
+else
+    echo "✗ Publish failed"
+    exit 1
 fi
 
-kill $SUB_PID 2>/dev/null || true
-rm -f /tmp/mqtt_quick_test.txt
+echo ""
+echo "Subscribing to test topic for 5 seconds..."
+timeout 5 mosquitto_sub -h localhost -t "test/topic" -v &
+sleep 1
+mosquitto_pub -h localhost -t "test/topic" -m "Test message at $(date)"
+wait
 
 echo ""
-echo "To send a test meter reading:"
-echo "  mosquitto_pub -h localhost -t 'meters/test/meter1' -m '{\"energy\": 123.456}'"
-echo ""
-echo "To monitor all MQTT messages:"
-echo "  mosquitto_sub -h localhost -t 'meters/#' -v"
-echo ""
-echo "Check backend MQTT logs:"
-echo "  sudo journalctl -u zev-billing.service | grep MQTT"
-EOF
+echo "✓ MQTT test completed"
+TEST_MQTT_EOF
+fi
 
-# Create update script - UPDATED with config loading
-cat > "$INSTALL_DIR/update.sh" << 'EOF'
+# Create update script - UPDATED to preserve port configuration
+cat > "$INSTALL_DIR/update.sh" << 'UPDATE_EOF'
 #!/bin/bash
-set -e
+echo "Updating ZEV Billing System..."
+echo ""
 
-# Load configuration
-source ~/zev-billing/.zev-config 2>/dev/null || true
+# Save current directory
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR"
 
+# Load existing configuration
+if [ -f .zev-config ]; then
+    echo "Loading existing configuration..."
+    source .zev-config
+    echo "✓ Configuration loaded (Port: $BACKEND_PORT)"
+else
+    echo "⚠  No existing configuration found"
+fi
+
+echo ""
+echo "Pulling latest changes from GitHub..."
+git pull
+
+if [ $? -ne 0 ]; then
+    echo "✗ Git pull failed"
+    echo "Possible reasons:"
+    echo "  - No internet connection"
+    echo "  - Local changes conflict with remote"
+    echo "  - Not a git repository"
+    exit 1
+fi
+
+echo ""
 echo "Stopping services..."
 sudo systemctl stop zev-billing.service
 
-echo "Pulling latest changes..."
-cd ~/zev-billing
-git pull
-
-echo "Building backend..."
+echo ""
+echo "Rebuilding backend..."
 cd backend
+rm -f zev-billing go.sum
+go mod download
+go mod tidy
 CGO_ENABLED=1 go build -o zev-billing
 
-echo "Building frontend..."
+if [ ! -f zev-billing ]; then
+    echo "✗ Backend build failed"
+    exit 1
+fi
+
+echo "✓ Backend rebuilt"
+
+echo ""
+echo "Rebuilding frontend..."
 cd ../frontend
+rm -rf node_modules package-lock.json dist
 npm install
 npm run build
 
-echo "Fixing permissions..."
-sudo chmod 755 ~/zev-billing/backend/zev-billing
-sudo chown -R $USER:$USER ~/zev-billing
+if [ ! -d dist ]; then
+    echo "✗ Frontend build failed"
+    exit 1
+fi
 
+echo "✓ Frontend rebuilt"
+
+echo ""
 echo "Starting services..."
 sudo systemctl start zev-billing.service
+sudo systemctl restart nginx
 
-echo "Update completed!"
-if [ -n "$BACKEND_PORT" ]; then
-    echo "Backend is running on port: $BACKEND_PORT"
+sleep 2
+
+if sudo systemctl is-active --quiet zev-billing.service; then
+    echo "✓ Update completed successfully"
+    echo ""
+    echo "Current configuration:"
+    if [ -f "$SCRIPT_DIR/.zev-config" ]; then
+        cat "$SCRIPT_DIR/.zev-config"
+    fi
+else
+    echo "✗ Service failed to start after update"
+    echo "Check logs: sudo journalctl -u zev-billing.service -n 50"
+    exit 1
 fi
+UPDATE_EOF
+
+# Create port change script
+cat > "$INSTALL_DIR/change-port.sh" << 'PORT_EOF'
+#!/bin/bash
+
+if [ "$EUID" -ne 0 ]; then 
+   echo "Please run with sudo"
+   exit 1
+fi
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+CONFIG_FILE="$SCRIPT_DIR/.zev-config"
+
+echo "=== Change Backend Port ==="
 echo ""
-./status.sh
-EOF
 
-# Create logs script
-cat > "$INSTALL_DIR/logs.sh" << 'EOF'
-#!/bin/bash
-echo "Following live logs (Ctrl+C to exit)..."
-journalctl -u zev-billing.service -f
-EOF
+if [ -f "$CONFIG_FILE" ]; then
+    source "$CONFIG_FILE"
+    echo "Current port: $BACKEND_PORT"
+else
+    echo "No existing configuration found"
+    BACKEND_PORT=8080
+fi
 
-# Create MQTT logs script
-cat > "$INSTALL_DIR/mqtt-logs.sh" << 'EOF'
-#!/bin/bash
-echo "Filtering MQTT-related logs (Ctrl+C to exit)..."
-journalctl -u zev-billing.service -f | grep --line-buffered -i mqtt
-EOF
+echo ""
+read -p "Enter new port number: " NEW_PORT
+
+if ! [[ "$NEW_PORT" =~ ^[0-9]+$ ]] || [ "$NEW_PORT" -lt 1024 ] || [ "$NEW_PORT" -gt 65535 ]; then
+    echo "Invalid port number"
+    exit 1
+fi
+
+echo ""
+echo "Updating configuration..."
+
+# Update config file
+cat > "$CONFIG_FILE" << CONFIG_EOF
+# ZEV Billing System Configuration
+# Updated: $(date)
+
+BACKEND_PORT=$NEW_PORT
+INSTALL_DIR=$SCRIPT_DIR
+ACTUAL_USER=${SUDO_USER:-$USER}
+CONFIG_EOF
+
+# Update systemd service
+sed -i "s/Environment=\"PORT=.*\"/Environment=\"PORT=$NEW_PORT\"/" /etc/systemd/system/zev-billing.service
+
+# Update nginx config
+sed -i "s|proxy_pass http://localhost:.*|proxy_pass http://localhost:$NEW_PORT;|" /etc/nginx/sites-available/zev-billing
+
+echo "Restarting services..."
+systemctl daemon-reload
+systemctl restart zev-billing.service
+systemctl restart nginx
+
+sleep 2
+
+if systemctl is-active --quiet zev-billing.service; then
+    echo "✓ Port changed successfully to $NEW_PORT"
+else
+    echo "✗ Service failed to start"
+    exit 1
+fi
+PORT_EOF
 
 # Create fresh install script
-cat > "$INSTALL_DIR/fresh_install.sh" << 'EOF'
+cat > "$INSTALL_DIR/fresh_install.sh" << 'FRESH_EOF'
 #!/bin/bash
-echo "This will perform a FRESH INSTALL with a NEW DATABASE"
-echo "All existing data will be backed up but the database will be reset"
+echo "This will perform a fresh installation with a new database."
+echo "Your old database will be backed up."
 echo ""
-read -p "Are you sure? (yes/no): " confirm
+read -p "Continue? (yes/no): " confirm
+
 if [ "$confirm" != "yes" ]; then
-    echo "Cancelled."
+    echo "Cancelled"
     exit 0
 fi
 
-cd ~
-sudo bash zev-billing/install.sh --fresh
-EOF
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR/.."
+
+if [ -f "install.sh" ]; then
+    sudo bash install.sh --fresh
+else
+    echo "install.sh not found in parent directory"
+    exit 1
+fi
+FRESH_EOF
 
 # Create database recovery script
-cat > "$INSTALL_DIR/fix_database.sh" << 'EOF'
+cat > "$INSTALL_DIR/fix_database.sh" << 'FIX_DB_EOF'
 #!/bin/bash
-set -e
-
-echo "=========================================="
-echo "ZEV Billing - Database Recovery"
-echo "=========================================="
+echo "=== ZEV Billing Database Recovery ==="
+echo ""
 
 DB_PATH="$HOME/zev-billing/backend/zev-billing.db"
 
 if [ ! -f "$DB_PATH" ]; then
-    echo "Error: Database not found at $DB_PATH"
+    echo "Database not found at $DB_PATH"
     exit 1
 fi
 
@@ -1100,7 +1131,7 @@ else
     echo "Check logs: journalctl -u zev-billing.service -n 50"
     exit 1
 fi
-EOF
+FIX_DB_EOF
 
 # Make scripts executable
 chmod +x "$INSTALL_DIR"/*.sh
@@ -1139,7 +1170,7 @@ fi
 echo -e "${GREEN}Management scripts created${NC}"
 
 echo ""
-echo -e "${GREEN}Step 14: Final verification${NC}"
+echo -e "${GREEN}Step 12: Final verification${NC}"
 
 # Test backend API - UPDATED with configured port
 sleep 2
@@ -1228,6 +1259,7 @@ echo "  ./test-mqtt.sh     - Quick MQTT functionality test"
 echo "  ./update.sh        - Update to latest version (preserves port config)"
 echo "  ./fix_database.sh  - Recover corrupted database"
 echo "  ./fresh_install.sh - Reinstall with fresh database"
+echo "  ./change-port.sh   - Change backend port"
 echo ""
 echo -e "${BLUE}Access the application:${NC}"
 RASPBERRY_PI_IP=$(hostname -I | awk '{print $1}')
@@ -1259,6 +1291,7 @@ if [ "$MQTT_AUTH_ENABLED" = true ]; then
     echo "  - Authentication: ${GREEN}ENABLED${NC}"
     echo "  - Username: ${GREEN}$MQTT_USERNAME${NC}"
     echo "  - Password: ${YELLOW}(set during installation)${NC}"
+    echo "  - Credentials saved in: $INSTALL_DIR/.mqtt_credentials"
     echo "  - ${YELLOW}Note: Update meter configs in web interface with these credentials${NC}"
 else
     echo "  - Authentication: Anonymous (no password required)"
@@ -1268,7 +1301,7 @@ echo "  - Topic pattern: meters/{building}/{apartment}/{meter_name}"
 echo ""
 echo -e "${BLUE}💡 Port Configuration:${NC}"
 echo "  - Current port: ${GREEN}$BACKEND_PORT${NC}"
-echo "  - To change port later: sudo bash change-port.sh"
+echo "  - To change port: sudo bash $INSTALL_DIR/change-port.sh"
 echo "  - Configuration file: $CONFIG_FILE"
 echo "  - Port setting persists across updates"
 echo ""
@@ -1281,4 +1314,10 @@ echo "  - Create a meter with MQTT connection type in the web interface"
 echo "  - Topics are auto-generated based on building/meter names"
 echo "  - Test with: mosquitto_pub -h localhost -t 'YOUR_TOPIC' -m '{\"energy\": 123.456}'"
 echo "  - Monitor with: mosquitto_sub -h localhost -t 'meters/#' -v"
+echo ""
+echo -e "${BLUE}🔍 Troubleshooting:${NC}"
+echo "  If the repository wasn't cloned:"
+echo "    1. Make sure your code is pushed to GitHub"
+echo "    2. Or manually place your code in $INSTALL_DIR/"
+echo "    3. Then run this installer again"
 echo ""
