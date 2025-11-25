@@ -322,36 +322,12 @@ func (zc *ZaptecCollector) loadChargers() {
 	log.Printf("Zaptec Collector: Loaded %d active chargers", count)
 }
 
-// loadProcessedSessions loads session IDs that have already been written to database
+// loadProcessedSessions loads session info to avoid reprocessing
+// Since charger_sessions doesn't have session_id, we track by checking existing data
 func (zc *ZaptecCollector) loadProcessedSessions() {
-	// Query for recent sessions (last 30 days) to avoid reprocessing
-	// We identify Zaptec sessions by looking for session_time entries with state='3' (charging)
-	// and a UUID-like pattern in state field or specific mode
-	rows, err := zc.db.Query(`
-		SELECT DISTINCT user_id || '_' || DATE(session_time) as session_key
-		FROM charger_sessions 
-		WHERE charger_id IN (SELECT id FROM chargers WHERE connection_type = 'zaptec_api')
-		  AND session_time > datetime('now', '-30 days')
-		  AND state = '3'
-	`)
-	if err != nil {
-		log.Printf("WARNING: Could not load processed sessions: %v", err)
-		return
-	}
-	defer rows.Close()
-	
-	count := 0
-	zc.mu.Lock()
-	for rows.Next() {
-		var sessionKey string
-		if err := rows.Scan(&sessionKey); err == nil && sessionKey != "" {
-			zc.processedSessions[sessionKey] = true
-			count++
-		}
-	}
-	zc.mu.Unlock()
-	
-	log.Printf("Zaptec Collector: Loaded %d already-processed session keys", count)
+	// We'll check for existing data when writing instead of preloading
+	// This keeps the logic simple and handles restarts correctly
+	log.Println("Zaptec Collector: Session tracking initialized (will check for duplicates on write)")
 }
 
 func (zc *ZaptecCollector) getAccessToken(chargerID int, config ZaptecConnectionConfig) (string, error) {
@@ -553,17 +529,36 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 		// ========== GAP FILLING: Write idle readings at 15-minute intervals ==========
 		zc.writeIdleReadingIfNeeded(chargerID, chargerName, liveData.TotalEnergy_kWh, liveData.State)
 		
-		// For UI: show last session info from charge history
-		history, err := zc.getRecentChargeHistory(token, config.ChargerID, 1)
+		// ========== FALLBACK: Check for any unprocessed sessions in history ==========
+		// This catches sessions missed due to service restarts or missed transitions
+		history, err := zc.getRecentChargeHistory(token, config.ChargerID, 5)
 		if err == nil && len(history) > 0 {
+			// For UI: show last session info
 			lastSession := history[0]
 			liveData.SessionID = lastSession.ID
-			liveData.CurrentSession = lastSession.ID // Backward compatibility
+			liveData.CurrentSession = lastSession.ID
 			liveData.SessionEnergy_kWh = lastSession.Energy
-			liveData.SessionEnergy = lastSession.Energy // Backward compatibility
+			liveData.SessionEnergy = lastSession.Energy
 			liveData.UserID = lastSession.UserID
 			liveData.UserName = lastSession.UserFullName
 			liveData.SessionStart = zc.parseZaptecTime(lastSession.StartDateTime)
+			
+			// Check ALL recent sessions for unprocessed ones
+			for _, session := range history {
+				zc.mu.RLock()
+				alreadyProcessed := zc.processedSessions[session.ID]
+				zc.mu.RUnlock()
+				
+				if !alreadyProcessed && session.Energy > 0 {
+					// Check if session is actually completed (has EndDateTime)
+					endTime := zc.parseZaptecTime(session.EndDateTime)
+					if !endTime.IsZero() && time.Since(endTime) > 30*time.Second {
+						log.Printf("Zaptec: [%s] FALLBACK: Found unprocessed session %s (%.3f kWh), processing now...", 
+							chargerName, session.ID, session.Energy)
+						go zc.processCompletedSession(chargerID, chargerName, config, token, session.ID)
+					}
+				}
+			}
 		}
 	}
 	
@@ -789,6 +784,26 @@ func (zc *ZaptecCollector) parseOCMFTimestamp(ts string) time.Time {
 // writeSessionToDatabase writes all meter readings from a completed session to charger_sessions
 // Handles sessions spanning midnight correctly by preserving original timestamps
 func (zc *ZaptecCollector) writeSessionToDatabase(session *CompletedSession) error {
+	if len(session.MeterReadings) == 0 {
+		return fmt.Errorf("no readings to write")
+	}
+	
+	// Check if we already have data for this session (by checking first reading timestamp)
+	firstReading := session.MeterReadings[0]
+	firstTimestamp := firstReading.Timestamp.In(zc.localTimezone).Format("2006-01-02 15:04:05")
+	
+	var existingCount int
+	err := zc.db.QueryRow(`
+		SELECT COUNT(*) FROM charger_sessions 
+		WHERE charger_id = ? AND user_id = ? AND session_time = ?
+	`, session.ChargerID, session.UserID, firstTimestamp).Scan(&existingCount)
+	
+	if err == nil && existingCount > 0 {
+		log.Printf("Zaptec: [%s] Session already exists in database (timestamp %s), skipping", 
+			session.ChargerName, firstTimestamp)
+		return nil
+	}
+	
 	tx, err := zc.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %v", err)
@@ -797,7 +812,7 @@ func (zc *ZaptecCollector) writeSessionToDatabase(session *CompletedSession) err
 	
 	// Prepare insert statement for charger_sessions
 	stmt, err := tx.Prepare(`
-		INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
+		INSERT OR IGNORE INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
 		VALUES (?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
@@ -805,6 +820,7 @@ func (zc *ZaptecCollector) writeSessionToDatabase(session *CompletedSession) err
 	}
 	defer stmt.Close()
 	
+	insertCount := 0
 	// Insert each reading with local timezone timestamp
 	for _, reading := range session.MeterReadings {
 		// Format timestamp for SQLite
@@ -813,7 +829,7 @@ func (zc *ZaptecCollector) writeSessionToDatabase(session *CompletedSession) err
 		// Determine state: "3" for charging readings
 		state := "3" // Charging
 		
-		_, err := stmt.Exec(
+		result, err := stmt.Exec(
 			session.ChargerID,
 			session.UserID,
 			localTimestamp,
@@ -822,14 +838,21 @@ func (zc *ZaptecCollector) writeSessionToDatabase(session *CompletedSession) err
 			state,
 		)
 		if err != nil {
-			// Log but continue - might be duplicate
 			log.Printf("WARNING: Failed to insert session reading: %v", err)
+			continue
+		}
+		
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected > 0 {
+			insertCount++
 		}
 	}
 	
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %v", err)
 	}
+	
+	log.Printf("Zaptec: [%s] Inserted %d/%d readings for session", session.ChargerName, insertCount, len(session.MeterReadings))
 	
 	return nil
 }
@@ -853,10 +876,24 @@ func (zc *ZaptecCollector) writeSessionFallback(history *ZaptecChargeHistory, ch
 	localStartTime := startTime.In(zc.localTimezone).Format("2006-01-02 15:04:05")
 	localEndTime := endTime.In(zc.localTimezone).Format("2006-01-02 15:04:05")
 	
-	// Get baseline energy (we need to estimate start energy)
-	// For fallback, we'll write start and end entries
-	var baselineEnergy float64
+	// Check if already exists
+	var existingCount int
 	err := zc.db.QueryRow(`
+		SELECT COUNT(*) FROM charger_sessions 
+		WHERE charger_id = ? AND user_id = ? AND session_time = ?
+	`, chargerID, userID, localStartTime).Scan(&existingCount)
+	
+	if err == nil && existingCount > 0 {
+		log.Printf("Zaptec: [%s] Fallback session already exists, skipping", chargerName)
+		zc.mu.Lock()
+		zc.processedSessions[history.ID] = true
+		zc.mu.Unlock()
+		return
+	}
+	
+	// Get baseline energy (we need to estimate start energy)
+	var baselineEnergy float64
+	err = zc.db.QueryRow(`
 		SELECT power_kwh FROM charger_sessions 
 		WHERE charger_id = ? 
 		ORDER BY session_time DESC LIMIT 1
@@ -870,7 +907,7 @@ func (zc *ZaptecCollector) writeSessionFallback(history *ZaptecChargeHistory, ch
 	
 	// Write start reading
 	_, err = zc.db.Exec(`
-		INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
+		INSERT OR IGNORE INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
 		VALUES (?, ?, ?, ?, ?, ?)
 	`, chargerID, userID, localStartTime, startEnergy, "1", "3")
 	
@@ -880,7 +917,7 @@ func (zc *ZaptecCollector) writeSessionFallback(history *ZaptecChargeHistory, ch
 	
 	// Write end reading
 	_, err = zc.db.Exec(`
-		INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
+		INSERT OR IGNORE INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
 		VALUES (?, ?, ?, ?, ?, ?)
 	`, chargerID, userID, localEndTime, endEnergy, "1", "3")
 	
@@ -939,14 +976,22 @@ func (zc *ZaptecCollector) writeIdleReadingIfNeeded(chargerID int, chargerName s
 	timestamp := currentInterval.Format("2006-01-02 15:04:05")
 	
 	// Write idle reading with no user, state=1 (disconnected)
-	_, err := zc.db.Exec(`
-		INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
+	result, err := zc.db.Exec(`
+		INSERT OR IGNORE INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
 		VALUES (?, ?, ?, ?, ?, ?)
 	`, chargerID, "", timestamp, totalEnergy, "1", state)
 	
 	if err != nil {
-		// Might be duplicate, which is fine
-		log.Printf("Zaptec: [%s] Could not write idle reading (may be duplicate): %v", chargerName, err)
+		log.Printf("Zaptec: [%s] Could not write idle reading: %v", chargerName, err)
+		return
+	}
+	
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		// Already exists, just update the tracking
+		zc.mu.Lock()
+		zc.lastIdleWrite[chargerID] = currentInterval
+		zc.mu.Unlock()
 		return
 	}
 	
