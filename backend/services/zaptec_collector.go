@@ -496,8 +496,15 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 			liveData.CurrentSession = sessionID // Backward compatibility
 			
 			zc.mu.Lock()
+			oldSessionID := zc.activeSessionIDs[chargerID]
 			zc.activeSessionIDs[chargerID] = sessionID
 			zc.mu.Unlock()
+			
+			if oldSessionID != sessionID {
+				log.Printf("Zaptec: [%s] CAPTURED SESSION ID: %s (was: %s)", chargerName, sessionID, oldSessionID)
+			}
+		} else {
+			log.Printf("Zaptec: [%s] WARNING: Charging but no session ID from StateId 721!", chargerName)
 		}
 		
 		// Get session energy from StateId 553 (for live display)
@@ -542,7 +549,8 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 		}
 		
 		// For UI: show last session info from charge history
-		history, err := zc.getRecentChargeHistory(token, config.ChargerID, 1)
+		// ALSO: Check for any unprocessed sessions (fallback for missed transitions)
+		history, err := zc.getRecentChargeHistory(token, config.ChargerID, 5)
 		if err == nil && len(history) > 0 {
 			lastSession := history[0]
 			liveData.SessionID = lastSession.ID
@@ -552,11 +560,34 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 			liveData.UserID = lastSession.UserID
 			liveData.UserName = lastSession.UserFullName
 			liveData.SessionStart = zc.parseZaptecTime(lastSession.StartDateTime)
+			
+			// FALLBACK: Check if any recent sessions weren't processed
+			// This catches sessions missed due to service restarts or missed transitions
+			for _, session := range history {
+				zc.mu.RLock()
+				alreadyProcessed := zc.processedSessions[session.ID]
+				zc.mu.RUnlock()
+				
+				if !alreadyProcessed && session.Energy > 0 {
+					// Check if session is actually completed (has EndDateTime)
+					endTime := zc.parseZaptecTime(session.EndDateTime)
+					if !endTime.IsZero() && time.Since(endTime) > 30*time.Second {
+						log.Printf("Zaptec: [%s] FALLBACK: Found unprocessed completed session %s (%.3f kWh), processing now", 
+							chargerName, session.ID, session.Energy)
+						go zc.processCompletedSession(chargerID, chargerName, config, token, session.ID)
+					}
+				}
+			}
 		}
 	}
 	
 	// Update state tracking
 	zc.mu.Lock()
+	if previousState != currentState {
+		log.Printf("Zaptec: [%s] STATE TRANSITION: %d (%s) -> %d (%s)", 
+			chargerName, previousState, zc.getStateDescription(previousState), 
+			currentState, zc.getStateDescription(currentState))
+	}
 	zc.previousStates[chargerID] = currentState
 	zc.liveChargerData[chargerID] = liveData
 	zc.mu.Unlock()
@@ -568,6 +599,8 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 
 // processCompletedSession fetches charge history with SignedSession and writes to database
 func (zc *ZaptecCollector) processCompletedSession(chargerID int, chargerName string, config ZaptecConnectionConfig, token, sessionID string) {
+	log.Printf("Zaptec: [%s] >>> PROCESSING SESSION %s <<<", chargerName, sessionID)
+	
 	// Check if already processed
 	zc.mu.RLock()
 	if zc.processedSessions[sessionID] {
@@ -578,18 +611,24 @@ func (zc *ZaptecCollector) processCompletedSession(chargerID int, chargerName st
 	zc.mu.RUnlock()
 	
 	// Wait a moment for Zaptec API to finalize the session data
+	log.Printf("Zaptec: [%s] Waiting 5 seconds for Zaptec API to finalize session data...", chargerName)
 	time.Sleep(5 * time.Second)
 	
 	// Fetch recent charge history to get SignedSession
+	log.Printf("Zaptec: [%s] Fetching charge history from Zaptec API...", chargerName)
 	history, err := zc.getRecentChargeHistory(token, config.ChargerID, 5)
 	if err != nil {
 		log.Printf("ERROR: [%s] Failed to get charge history: %v", chargerName, err)
 		return
 	}
 	
+	log.Printf("Zaptec: [%s] Got %d sessions from charge history", chargerName, len(history))
+	
 	// Find the session we're looking for
 	var targetSession *ZaptecChargeHistory
 	for i := range history {
+		log.Printf("Zaptec: [%s] History item %d: ID=%s, Energy=%.3f kWh, User=%s", 
+			chargerName, i, history[i].ID, history[i].Energy, history[i].UserFullName)
 		if history[i].ID == sessionID {
 			targetSession = &history[i]
 			break
@@ -608,6 +647,9 @@ func (zc *ZaptecCollector) processCompletedSession(chargerID int, chargerName st
 		return
 	}
 	
+	log.Printf("Zaptec: [%s] Target session: ID=%s, Energy=%.3f kWh, User=%s, SignedSession length=%d", 
+		chargerName, targetSession.ID, targetSession.Energy, targetSession.UserFullName, len(targetSession.SignedSession))
+	
 	// Check again if this session was already processed
 	zc.mu.RLock()
 	if zc.processedSessions[targetSession.ID] {
@@ -621,10 +663,14 @@ func (zc *ZaptecCollector) processCompletedSession(chargerID int, chargerName st
 	completedSession, err := zc.parseSignedSession(targetSession, chargerID, chargerName)
 	if err != nil {
 		log.Printf("ERROR: [%s] Failed to parse SignedSession: %v", chargerName, err)
+		log.Printf("Zaptec: [%s] Using fallback write method...", chargerName)
 		// Fallback: write single entry with session totals
 		zc.writeSessionFallback(targetSession, chargerID, chargerName)
 		return
 	}
+	
+	log.Printf("Zaptec: [%s] Parsed OCMF: UserID=%s, TotalEnergy=%.3f kWh, Readings=%d", 
+		chargerName, completedSession.UserID, completedSession.TotalEnergy_kWh, len(completedSession.MeterReadings))
 	
 	// Write all meter readings to database
 	err = zc.writeSessionToDatabase(completedSession)
@@ -638,7 +684,7 @@ func (zc *ZaptecCollector) processCompletedSession(chargerID int, chargerName st
 	zc.processedSessions[completedSession.SessionID] = true
 	zc.mu.Unlock()
 	
-	log.Printf("Zaptec: [%s] SESSION WRITTEN TO DB: ID=%s, User=%s, Energy=%.3f kWh, Readings=%d", 
+	log.Printf("Zaptec: [%s] >>> SESSION WRITTEN TO DB: ID=%s, User=%s, Energy=%.3f kWh, Readings=%d <<<", 
 		chargerName, completedSession.SessionID, completedSession.UserID, 
 		completedSession.TotalEnergy_kWh, len(completedSession.MeterReadings))
 }
