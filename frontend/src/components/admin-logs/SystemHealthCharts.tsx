@@ -202,7 +202,7 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       </h2>
       <div style={{
         display: 'grid',
-        gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(240px, 1fr))',
+        gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(280px, 1fr))',
         gap: isMobile ? '12px' : '20px',
         width: '100%'
       }}>
