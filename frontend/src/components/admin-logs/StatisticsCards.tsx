@@ -17,10 +17,20 @@ interface Statistics {
 export const StatisticsCards = () => {
   const { t } = useTranslation();
   const [stats, setStats] = useState<Statistics | null>(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     loadStatistics();
-    const interval = setInterval(loadStatistics, 30000); // Refresh every 30s
+    const interval = setInterval(loadStatistics, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -48,101 +58,107 @@ export const StatisticsCards = () => {
 
   if (!stats) return null;
 
+  const cardStyle = {
+    backgroundColor: 'white',
+    padding: isMobile ? '16px' : '24px',
+    borderRadius: isMobile ? '12px' : '16px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+    transition: 'all 0.3s ease'
+  };
+
   return (
-    <div style={{ marginBottom: '30px', width: '100%' }}>
-      <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '16px', color: '#1f2937' }}>
+    <div style={{ marginBottom: isMobile ? '20px' : '30px', width: '100%' }}>
+      <h2 style={{ 
+        fontSize: isMobile ? '18px' : '20px', 
+        fontWeight: '700', 
+        marginBottom: '12px', 
+        color: '#1f2937',
+        paddingLeft: '4px'
+      }}>
         {t('logs.systemOverview')}
       </h2>
       <div className="debug-grid" style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-        gap: '20px',
+        gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(240px, 1fr))',
+        gap: isMobile ? '12px' : '20px',
         width: '100%'
       }}>
         <div className="debug-card" style={{
-          backgroundColor: 'white',
-          padding: '24px',
-          borderRadius: '16px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-          border: '2px solid #667eea',
-          transition: 'all 0.3s ease'
+          ...cardStyle,
+          border: '2px solid #667eea'
         }}
-        onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
-        onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+        onMouseEnter={(e) => !isMobile && (e.currentTarget.style.transform = 'translateY(-4px)')}
+        onMouseLeave={(e) => !isMobile && (e.currentTarget.style.transform = 'translateY(0)')}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-            <Users size={24} color="#667eea" />
-            <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>{t('logs.totalUsers')}</div>
+            <Users size={isMobile ? 20 : 24} color="#667eea" />
+            <div style={{ fontSize: isMobile ? '13px' : '14px', color: '#6b7280', fontWeight: '500' }}>
+              {t('logs.totalUsers')}
+            </div>
           </div>
-          <div style={{ fontSize: '28px', fontWeight: '800', color: '#667eea' }}>
+          <div style={{ fontSize: isMobile ? '24px' : '28px', fontWeight: '800', color: '#667eea' }}>
             {stats.total_users}
           </div>
-          <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
+          <div style={{ fontSize: isMobile ? '11px' : '12px', color: '#6b7280', marginTop: '8px' }}>
             {stats.regular_users} {t('logs.regular')} • {stats.admin_users} {t('logs.admins')}
           </div>
         </div>
 
         <div className="debug-card" style={{
-          backgroundColor: 'white',
-          padding: '24px',
-          borderRadius: '16px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-          border: '2px solid #10b981',
-          transition: 'all 0.3s ease'
+          ...cardStyle,
+          border: '2px solid #10b981'
         }}
-        onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
-        onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+        onMouseEnter={(e) => !isMobile && (e.currentTarget.style.transform = 'translateY(-4px)')}
+        onMouseLeave={(e) => !isMobile && (e.currentTarget.style.transform = 'translateY(0)')}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-            <Building2 size={24} color="#10b981" />
-            <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>{t('logs.totalBuildings')}</div>
+            <Building2 size={isMobile ? 20 : 24} color="#10b981" />
+            <div style={{ fontSize: isMobile ? '13px' : '14px', color: '#6b7280', fontWeight: '500' }}>
+              {t('logs.totalBuildings')}
+            </div>
           </div>
-          <div style={{ fontSize: '28px', fontWeight: '800', color: '#10b981' }}>
+          <div style={{ fontSize: isMobile ? '24px' : '28px', fontWeight: '800', color: '#10b981' }}>
             {stats.total_buildings}
           </div>
-          <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
+          <div style={{ fontSize: isMobile ? '11px' : '12px', color: '#6b7280', marginTop: '8px' }}>
             {stats.total_complexes} {t('logs.complexes')}
           </div>
         </div>
 
         <div className="debug-card" style={{
-          backgroundColor: 'white',
-          padding: '24px',
-          borderRadius: '16px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-          border: '2px solid #f59e0b',
-          transition: 'all 0.3s ease'
+          ...cardStyle,
+          border: '2px solid #f59e0b'
         }}
-        onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
-        onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+        onMouseEnter={(e) => !isMobile && (e.currentTarget.style.transform = 'translateY(-4px)')}
+        onMouseLeave={(e) => !isMobile && (e.currentTarget.style.transform = 'translateY(0)')}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-            <Zap size={24} color="#f59e0b" />
-            <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>{t('logs.metersAndChargers')}</div>
+            <Zap size={isMobile ? 20 : 24} color="#f59e0b" />
+            <div style={{ fontSize: isMobile ? '13px' : '14px', color: '#6b7280', fontWeight: '500' }}>
+              {t('logs.metersAndChargers')}
+            </div>
           </div>
-          <div style={{ fontSize: '28px', fontWeight: '800', color: '#f59e0b' }}>
+          <div style={{ fontSize: isMobile ? '24px' : '28px', fontWeight: '800', color: '#f59e0b' }}>
             {stats.total_meters + stats.total_chargers}
           </div>
-          <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
+          <div style={{ fontSize: isMobile ? '11px' : '12px', color: '#6b7280', marginTop: '8px' }}>
             {stats.total_meters} {t('logs.meters')} • {stats.total_chargers} {t('logs.chargers')}
           </div>
         </div>
 
         <div className="debug-card" style={{
-          backgroundColor: 'white',
-          padding: '24px',
-          borderRadius: '16px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-          border: '2px solid #3b82f6',
-          transition: 'all 0.3s ease'
+          ...cardStyle,
+          border: '2px solid #3b82f6'
         }}
-        onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
-        onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+        onMouseEnter={(e) => !isMobile && (e.currentTarget.style.transform = 'translateY(-4px)')}
+        onMouseLeave={(e) => !isMobile && (e.currentTarget.style.transform = 'translateY(0)')}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-            <FileText size={24} color="#3b82f6" />
-            <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>{t('logs.totalInvoices')}</div>
+            <FileText size={isMobile ? 20 : 24} color="#3b82f6" />
+            <div style={{ fontSize: isMobile ? '13px' : '14px', color: '#6b7280', fontWeight: '500' }}>
+              {t('logs.totalInvoices')}
+            </div>
           </div>
-          <div style={{ fontSize: '28px', fontWeight: '800', color: '#3b82f6' }}>
+          <div style={{ fontSize: isMobile ? '24px' : '28px', fontWeight: '800', color: '#3b82f6' }}>
             {stats.total_invoices}
           </div>
-          <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
+          <div style={{ fontSize: isMobile ? '11px' : '12px', color: '#6b7280', marginTop: '8px' }}>
             {t('logs.invoicesGenerated')}
           </div>
         </div>

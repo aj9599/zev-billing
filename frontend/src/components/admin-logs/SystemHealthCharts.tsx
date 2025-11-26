@@ -58,17 +58,31 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Get container dimensions
+    const container = canvas.parentElement;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
     
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
+    // Set canvas size based on container
+    const displayWidth = rect.width;
+    const displayHeight = Math.min(300, window.innerWidth < 768 ? 200 : 300);
+    
+    canvas.width = displayWidth * dpr;
+    canvas.height = displayHeight * dpr;
+    
+    canvas.style.width = displayWidth + 'px';
+    canvas.style.height = displayHeight + 'px';
     
     ctx.scale(dpr, dpr);
     
-    const width = rect.width;
-    const height = rect.height;
-    const padding = 40;
+    const width = displayWidth;
+    const height = displayHeight;
+    
+    // Responsive padding
+    const isMobile = window.innerWidth < 768;
+    const padding = isMobile ? 35 : 40;
     const chartWidth = width - padding * 2;
     const chartHeight = height - padding * 2;
 
@@ -80,15 +94,16 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       .filter(d => d && typeof d === 'object' && typeof d[key] === 'number')
       .map(d => d[key] as number);
     
-    if (values.length === 0) return; // Exit if no valid data
+    if (values.length === 0) return;
     
-    const maxValue = key === 'temperature' ? 100 : 100; // Max percentage or temp
+    const maxValue = key === 'temperature' ? 100 : 100;
 
     // Draw grid lines
     ctx.strokeStyle = '#e5e7eb';
     ctx.lineWidth = 1;
-    for (let i = 0; i <= 4; i++) {
-      const y = padding + (chartHeight / 4) * i;
+    const gridLines = isMobile ? 4 : 4;
+    for (let i = 0; i <= gridLines; i++) {
+      const y = padding + (chartHeight / gridLines) * i;
       ctx.beginPath();
       ctx.moveTo(padding, y);
       ctx.lineTo(width - padding, y);
@@ -96,22 +111,22 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       
       // Draw y-axis labels
       ctx.fillStyle = '#9ca3af';
-      ctx.font = '12px sans-serif';
+      ctx.font = isMobile ? '10px sans-serif' : '12px sans-serif';
       ctx.textAlign = 'right';
-      const value = maxValue - (maxValue / 4) * i;
-      ctx.fillText(value.toFixed(0) + (key === 'temperature' ? '°C' : '%'), padding - 10, y + 4);
+      const value = maxValue - (maxValue / gridLines) * i;
+      ctx.fillText(value.toFixed(0) + (key === 'temperature' ? '°C' : '%'), padding - 5, y + 3);
     }
 
     // Draw line chart
     if (values.length > 0) {
       ctx.beginPath();
       ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = isMobile ? 1.5 : 2;
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
 
       values.forEach((value, index) => {
-        const x = padding + (chartWidth / (values.length - 1)) * index;
+        const x = padding + (chartWidth / Math.max(values.length - 1, 1)) * index;
         const y = padding + chartHeight - (value / maxValue) * chartHeight;
         
         if (index === 0) {
@@ -135,110 +150,135 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       ctx.fill();
     }
 
-    // Draw x-axis time labels - with safety checks
+    // Draw x-axis time labels
     ctx.fillStyle = '#9ca3af';
-    ctx.font = '12px sans-serif';
+    ctx.font = isMobile ? '9px sans-serif' : '12px sans-serif';
     ctx.textAlign = 'center';
     
-    // Filter valid data points for time labels
     const validData = data.filter(d => d && typeof d === 'object' && d.timestamp);
     
     if (validData.length > 0) {
-      const timeSteps = Math.min(6, validData.length);
-      for (let i = 0; i < timeSteps; i++) {
-        const index = Math.floor((validData.length - 1) * (i / (timeSteps - 1)));
+      const timeSteps = isMobile ? 4 : 6;
+      const actualSteps = Math.min(timeSteps, validData.length);
+      
+      for (let i = 0; i < actualSteps; i++) {
+        const index = Math.floor((validData.length - 1) * (i / Math.max(actualSteps - 1, 1)));
         const point = validData[index];
         
-        if (point && point.timestamp) { // Safety check
-          const x = padding + (chartWidth / (timeSteps - 1)) * i;
+        if (point && point.timestamp) {
+          const x = padding + (chartWidth / Math.max(actualSteps - 1, 1)) * i;
           
           const date = new Date(point.timestamp);
           const timeStr = date.getHours().toString().padStart(2, '0') + ':' + 
                           date.getMinutes().toString().padStart(2, '0');
-          ctx.fillText(timeStr, x, height - padding + 20);
+          ctx.fillText(timeStr, x, height - padding + (isMobile ? 15 : 20));
         }
       }
     }
   };
 
-  // Validate healthHistory before checking for temperature data
   const hasTempData = healthHistory && Array.isArray(healthHistory) && 
                       healthHistory.some(d => d && d.temperature > 0);
-  const gridCols = hasTempData ? 'repeat(auto-fit, minmax(500px, 1fr))' : 'repeat(auto-fit, minmax(500px, 1fr))';
 
   return (
-    <div style={{ marginBottom: '30px', width: '100%' }}>
-      <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '16px', color: '#1f2937' }}>
+    <div style={{ marginBottom: '20px', width: '100%' }}>
+      <h2 style={{ 
+        fontSize: window.innerWidth < 768 ? '18px' : '20px', 
+        fontWeight: '700', 
+        marginBottom: '12px', 
+        color: '#1f2937',
+        paddingLeft: '4px'
+      }}>
         {t('logs.performance24h')}
       </h2>
       <div style={{
         display: 'grid',
-        gridTemplateColumns: gridCols,
-        gap: '20px',
+        gridTemplateColumns: window.innerWidth < 768 ? '1fr' : 'repeat(auto-fit, minmax(400px, 1fr))',
+        gap: window.innerWidth < 768 ? '12px' : '20px',
         width: '100%'
       }}>
         <div className="chart-container" style={{
           backgroundColor: 'white',
-          padding: '24px',
-          borderRadius: '16px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+          padding: window.innerWidth < 768 ? '16px' : '24px',
+          borderRadius: '12px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           border: '2px solid #667eea'
         }}>
-          <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#667eea' }}>
+          <h3 style={{ 
+            fontSize: window.innerWidth < 768 ? '14px' : '16px', 
+            fontWeight: '600', 
+            marginBottom: '12px', 
+            color: '#667eea' 
+          }}>
             {t('logs.cpuUsage')}
           </h3>
           <canvas
             ref={cpuCanvasRef}
-            style={{ width: '100%', height: '300px' }}
+            style={{ width: '100%', display: 'block' }}
           />
         </div>
 
         <div className="chart-container" style={{
           backgroundColor: 'white',
-          padding: '24px',
-          borderRadius: '16px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+          padding: window.innerWidth < 768 ? '16px' : '24px',
+          borderRadius: '12px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           border: '2px solid #10b981'
         }}>
-          <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#10b981' }}>
+          <h3 style={{ 
+            fontSize: window.innerWidth < 768 ? '14px' : '16px', 
+            fontWeight: '600', 
+            marginBottom: '12px', 
+            color: '#10b981' 
+          }}>
             {t('logs.memoryUsage')}
           </h3>
           <canvas
             ref={memoryCanvasRef}
-            style={{ width: '100%', height: '300px' }}
+            style={{ width: '100%', display: 'block' }}
           />
         </div>
 
         <div className="chart-container" style={{
           backgroundColor: 'white',
-          padding: '24px',
-          borderRadius: '16px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+          padding: window.innerWidth < 768 ? '16px' : '24px',
+          borderRadius: '12px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           border: '2px solid #f59e0b'
         }}>
-          <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#f59e0b' }}>
+          <h3 style={{ 
+            fontSize: window.innerWidth < 768 ? '14px' : '16px', 
+            fontWeight: '600', 
+            marginBottom: '12px', 
+            color: '#f59e0b' 
+          }}>
             {t('logs.diskUsage')}
           </h3>
           <canvas
             ref={diskCanvasRef}
-            style={{ width: '100%', height: '300px' }}
+            style={{ width: '100%', display: 'block' }}
           />
         </div>
 
         {hasTempData && (
           <div className="chart-container" style={{
             backgroundColor: 'white',
-            padding: '24px',
-            borderRadius: '16px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+            padding: window.innerWidth < 768 ? '16px' : '24px',
+            borderRadius: '12px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
             border: '2px solid #ef4444'
           }}>
-            <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#ef4444' }}>
+            <h3 style={{ 
+              fontSize: window.innerWidth < 768 ? '14px' : '16px', 
+              fontWeight: '600', 
+              marginBottom: '12px', 
+              color: '#ef4444' 
+            }}>
               {t('logs.cpuTemperature')}
             </h3>
             <canvas
               ref={tempCanvasRef}
-              style={{ width: '100%', height: '300px' }}
+              style={{ width: '100%', display: 'block' }}
             />
           </div>
         )}
