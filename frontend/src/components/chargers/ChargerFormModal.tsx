@@ -39,9 +39,9 @@ export default function ChargerFormModal({
   const isSingleBlockMode = formData.preset === 'weidmuller_single';
   const isMultiUuidMode = !isSingleBlockMode && formData.connection_type === 'loxone_api';
 
-  // ðŸ” DEBUG: Log form state on render
+  // 🔍 DEBUG: Log form state on render
   React.useEffect(() => {
-    console.log('ðŸŽ¨ MODAL RENDER STATE:');
+    console.log('🖨 MODAL RENDER STATE:');
     console.log('  Preset:', formData.preset);
     console.log('  Is Single Block Mode:', isSingleBlockMode);
     console.log('  Is Multi UUID Mode:', isMultiUuidMode);
@@ -187,22 +187,119 @@ export default function ChargerFormModal({
                   </p>
                 </div>
 
+                {/* Connection Mode Selection - Local vs Remote */}
                 <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                    {t('chargers.loxoneHost')} *
+                  <label style={{
+                    display: 'block',
+                    marginBottom: '8px',
+                    fontWeight: '500',
+                    fontSize: '14px'
+                  }}>
+                    {t('meters.loxoneConnectionMode')} *
                   </label>
-                  <input 
-                    type="text" 
-                    required 
-                    value={connectionConfig.loxone_host || ''}
-                    onChange={(e) => onConnectionConfigChange({ ...connectionConfig, loxone_host: e.target.value })}
-                    placeholder="192.168.1.100"
-                    style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} 
-                  />
+                  <select
+                    required
+                    value={connectionConfig.loxone_connection_mode || 'local'}
+                    onChange={(e) => onConnectionConfigChange({
+                      ...connectionConfig,
+                      loxone_connection_mode: e.target.value as 'local' | 'remote'
+                    })}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px'
+                    }}
+                  >
+                    <option value="local">{t('meters.loxoneConnectionModeLocal')}</option>
+                    <option value="remote">{t('meters.loxoneConnectionModeRemote')}</option>
+                  </select>
                   <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                    {t('chargers.loxoneHostDescription')}
+                    {connectionConfig.loxone_connection_mode === 'remote'
+                      ? t('meters.loxoneConnectionModeRemoteHelp')
+                      : t('meters.loxoneConnectionModeLocalHelp')}
                   </p>
                 </div>
+
+                {/* Conditional: Local IP or Remote MAC Address */}
+                {connectionConfig.loxone_connection_mode === 'remote' ? (
+                  // REMOTE MODE - MAC Address
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={{
+                      display: 'block',
+                      marginBottom: '8px',
+                      fontWeight: '500',
+                      fontSize: '14px'
+                    }}>
+                      {t('meters.loxoneMacAddress')} *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={connectionConfig.loxone_mac_address || ''}
+                      onChange={(e) => {
+                        // Auto-format: remove non-hex chars and convert to uppercase
+                        const cleaned = e.target.value.toUpperCase().replace(/[^0-9A-F]/g, '');
+                        onConnectionConfigChange({
+                          ...connectionConfig,
+                          loxone_mac_address: cleaned
+                        });
+                      }}
+                      placeholder="504F94XXXXXX"
+                      maxLength={12}
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        border: '1px solid #ddd',
+                        borderRadius: '6px',
+                        fontFamily: 'monospace',
+                        fontSize: '14px',
+                        textTransform: 'uppercase'
+                      }}
+                    />
+                    <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                      {t('meters.loxoneMacAddressHelp')}
+                    </p>
+                    <div style={{
+                      backgroundColor: '#fef3c7',
+                      padding: '12px',
+                      borderRadius: '6px',
+                      marginTop: '8px',
+                      border: '1px solid #f59e0b'
+                    }}>
+                      <p style={{ fontSize: '12px', color: '#92400e', margin: 0 }}>
+                        <strong>⚠️ {t('meters.loxoneCloudDnsTitle')}</strong><br />
+                        {t('meters.loxoneCloudDnsDescription')}
+                        <br /><br />
+                        <strong>{t('meters.loxoneMacAddressLocationTitle')}:</strong><br />
+                        {t('meters.loxoneMacAddressLocation')}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  // LOCAL MODE - IP Address
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={{
+                      display: 'block',
+                      marginBottom: '8px',
+                      fontWeight: '500',
+                      fontSize: '14px'
+                    }}>
+                      {t('chargers.loxoneHost')} *
+                    </label>
+                    <input 
+                      type="text" 
+                      required 
+                      value={connectionConfig.loxone_host || ''}
+                      onChange={(e) => onConnectionConfigChange({ ...connectionConfig, loxone_host: e.target.value })}
+                      placeholder="192.168.1.100"
+                      style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} 
+                    />
+                    <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                      {t('chargers.loxoneHostDescription')}
+                    </p>
+                  </div>
+                )}
 
                 {isSingleBlockMode ? (
                   // SINGLE-BLOCK MODE: Only one UUID needed

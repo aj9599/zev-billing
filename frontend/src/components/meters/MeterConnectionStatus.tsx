@@ -101,10 +101,10 @@ export default function MeterConnectionStatus({
                     <WifiOff size={16} style={{ color: '#ef4444' }} />
                     <div style={{ flex: 1 }}>
                         <div style={{ fontSize: '12px', fontWeight: '600', color: '#ef4444' }}>
-                            MQTT Broker Disconnected
+                            {t('meters.mqttBrokerDisconnected')}
                         </div>
                         <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
-                            Cannot reach MQTT broker
+                            {t('meters.cannotReachBroker')}
                         </div>
                     </div>
                 </div>
@@ -127,13 +127,13 @@ export default function MeterConnectionStatus({
                             <Rss size={16} style={{ color: '#22c55e' }} />
                             <div style={{ flex: 1 }}>
                                 <div style={{ fontSize: '12px', fontWeight: '600', color: '#22c55e' }}>
-                                    MQTT Connected
+                                    {t('meters.mqttConnected')}
                                 </div>
                                 <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
-                                    Topic: {status.topic}
+                                    {t('meters.topic')}: {status.topic}
                                 </div>
                                 <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                                    Last update: {new Date(status.last_update).toLocaleTimeString('de-CH', {
+                                    {t('meters.lastUpdate')}: {new Date(status.last_update).toLocaleString(i18n.language === 'de' ? 'de-CH' : 'en-US', {
                                         hour: '2-digit',
                                         minute: '2-digit',
                                         second: '2-digit',
@@ -147,10 +147,10 @@ export default function MeterConnectionStatus({
                             <AlertCircle size={16} style={{ color: '#f59e0b' }} />
                             <div style={{ flex: 1 }}>
                                 <div style={{ fontSize: '12px', fontWeight: '600', color: '#f59e0b' }}>
-                                    MQTT Waiting for Data
+                                    {t('meters.mqttWaitingForData')}
                                 </div>
                                 <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
-                                    Topic: {status.topic}
+                                    {t('meters.topic')}: {status.topic}
                                 </div>
                                 {status.last_error && (
                                     <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>

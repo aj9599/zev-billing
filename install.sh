@@ -30,7 +30,7 @@ print_header() {
 # Function to print step headers
 print_step() {
     echo ""
-    echo -e "${GREEN}${BOLD}â–¶ Step $1: $2${NC}"
+    echo -e "${GREEN}${BOLD}▶ Step $1: $2${NC}"
     echo ""
 }
 
@@ -51,7 +51,7 @@ print_error() {
 
 # Function to print info messages
 print_info() {
-    echo -e "${BLUE}â„¹  $1${NC}"
+    echo -e "${BLUE}ℹ️  $1${NC}"
 }
 
 clear

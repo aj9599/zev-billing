@@ -435,6 +435,11 @@ export const en: Translations = {
   'meters.loxoneConnected': 'Connected',
   'meters.loxoneDisconnected': 'Disconnected',
   'meters.loxoneConnecting': 'Connecting...',
+  'meters.mqttBrokerDisconnected': 'MQTT Broker Disconnected',
+  'meters.cannotReachBroker': 'Cannot reach MQTT broker',
+  'meters.mqttConnected': 'MQTT Connected',
+  'meters.mqttWaitingForData': 'MQTT Waiting for Data',
+  'meters.topic': 'Topic',
 
   // Loxone Setup Guide
   'meters.loxoneSetupGuide': 'Quick Setup:',
@@ -446,6 +451,7 @@ export const en: Translations = {
   'meters.loxoneFeature1': '✓ Real-time data updates',
   'meters.loxoneFeature2': '✓ Automatic reconnection',
   'meters.loxoneFeature3': '✓ Secure WebSocket connection',
+  'meters.loxoneFeature4': 'Import/Export tracking with meter blocks or virtual outputs',
 
   // UDP Connection
   'meters.udpDeprecatedWarning': 'UDP is deprecated. Please use Loxone WebSocket API for new meters.',
@@ -1760,10 +1766,10 @@ export const en: Translations = {
   'autoBilling.step.sender': 'Sender',
   'autoBilling.step.banking': 'Banking',
   'autoBilling.step.review': 'Review',
-  
+
   // Empty State
   'autoBilling.noConfigsDescription': 'Click "Add Configuration" to get started.',
-  
+
   // Step 2 - Schedule
   'autoBilling.modal.billingSchedule': 'Billing Schedule',
   'autoBilling.scheduleInfo.title': 'When will invoices be generated?',
@@ -1771,7 +1777,7 @@ export const en: Translations = {
   'autoBilling.scheduleInfo.quarterly': 'Quarterly: In January, April, July and October',
   'autoBilling.scheduleInfo.half_yearly': 'Half-yearly: In January and July',
   'autoBilling.scheduleInfo.yearly': 'Yearly: Once per year in January',
-  
+
   // Step 3 - Shared Meters
   'autoBilling.step3.title': 'Select Shared Meters',
   'autoBilling.step3.description': 'Select the shared meters whose costs should be distributed among tenants.',
@@ -1786,7 +1792,7 @@ export const en: Translations = {
   'autoBilling.step3.optional': 'Optional',
   'autoBilling.step3.infoTitle': 'Note about Shared Meters',
   'autoBilling.step3.infoDescription': 'Shared meter costs are automatically distributed to all selected apartments according to the configured split method.',
-  
+
   // Step 4 - Custom Items
   'autoBilling.step4.title': 'Select Custom Items',
   'autoBilling.step4.description': 'Select additional items that should appear on the invoices.',
@@ -1805,19 +1811,19 @@ export const en: Translations = {
   'autoBilling.step4.optional': 'Optional',
   'autoBilling.step4.infoTitle': 'Note about Custom Items',
   'autoBilling.step4.infoDescription': 'Custom items are automatically added to each invoice based on their configured frequency.',
-  
+
   // Step 5 - Sender
   'autoBilling.senderDescription': 'This information will appear as the sender on generated invoices.',
   'autoBilling.senderInfoNote.title': 'Sender Information',
   'autoBilling.senderInfoNote.description': 'The sender details will be used for all automatically generated invoices from this configuration.',
-  
+
   // Step 6 - Banking
   'autoBilling.bankingDescription': 'This banking information will be used for the QR payment slip on invoices.',
   'autoBilling.ibanFormat': 'Swiss IBAN format: CH00 0000 0000 0000 0000 0',
   'autoBilling.qrBillInfo.title': 'Swiss QR-Bill',
   'autoBilling.qrBillInfo.description': 'The IBAN is used to generate the QR code for easy payment via mobile banking.',
   'autoBilling.ibanRequired': 'IBAN is required for QR-Bill generation',
-  
+
   // Step 7 - Review
   'autoBilling.modal.reviewConfiguration': 'Review Configuration',
   'autoBilling.modal.configurationSummary': 'Configuration Summary',
@@ -1827,24 +1833,24 @@ export const en: Translations = {
   'autoBilling.missingRequiredFields': 'Missing Required Fields',
   'autoBilling.readyToCreate': 'Ready to Create',
   'autoBilling.readyToCreateDescription': 'All required information is complete. Click "Create" to activate automatic billing.',
-  
+
   // Common (if missing)
   'common.selectAll': 'Select All',
   'common.deselectAll': 'Deselect All',
 
   // Step 1 - Building Selection
   "autoBilling.noBuildingsAvailable": "No buildings available",
-  
+
   // Step 5 - Sender Placeholders
   "autoBilling.placeholder.companyName": "Company or Organization Name",
   "autoBilling.placeholder.streetNumber": "Street and Number",
   "autoBilling.placeholder.zip": "1234",
   "autoBilling.placeholder.city": "City Name",
-  
+
   // Step 6 - Banking Placeholders
   "autoBilling.placeholder.bankName": "Bank Name",
   "autoBilling.placeholder.accountHolder": "Account Holder Name",
-  
+
   // Countries (for dropdown)
   "countries.switzerland": "Switzerland",
   "countries.germany": "Germany",

@@ -27,6 +27,8 @@ export interface ChargerConnectionConfig {
   mode_normal?: string;
   mode_priority?: string;
   loxone_host?: string;
+  loxone_mac_address?: string;
+  loxone_connection_mode?: 'local' | 'remote';
   loxone_username?: string;
   loxone_password?: string;
   loxone_power_uuid?: string;
@@ -77,6 +79,8 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
     mode_normal: '1',
     mode_priority: '2',
     loxone_host: '',
+    loxone_mac_address: '',
+    loxone_connection_mode: 'local',
     loxone_username: '',
     loxone_password: '',
     loxone_power_uuid: '',
@@ -144,6 +148,8 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
       mode_normal: preset.defaultModeMappings.normal,
       mode_priority: preset.defaultModeMappings.priority,
       loxone_host: '',
+      loxone_mac_address: '',
+      loxone_connection_mode: 'local',
       loxone_username: '',
       loxone_password: '',
       loxone_power_uuid: '',
@@ -177,7 +183,7 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
       const preset = getPreset(charger.preset);
 
       // 🔍 DEBUG: Log what we're loading
-      console.log('📝 EDIT CHARGER DEBUG:');
+      console.log('🔍 EDIT CHARGER DEBUG:');
       console.log('  Charger ID:', charger.id);
       console.log('  Charger Name:', charger.name);
       console.log('  Preset:', charger.preset);
@@ -213,6 +219,8 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
         mode_normal: config.mode_normal || preset.defaultModeMappings.normal,
         mode_priority: config.mode_priority || preset.defaultModeMappings.priority,
         loxone_host: config.loxone_host || '',
+        loxone_mac_address: config.loxone_mac_address || '',
+        loxone_connection_mode: config.loxone_connection_mode || 'local',
         loxone_username: config.loxone_username || '',
         loxone_password: config.loxone_password || '',
         loxone_power_uuid: config.loxone_power_uuid || '',
@@ -265,14 +273,15 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
       console.log('  Preset:', formData.preset);
       console.log('  Is Single Block:', isSingleBlock);
       console.log('  Connection Type:', formData.connection_type);
+      console.log('  Connection Mode:', connectionConfig.loxone_connection_mode);
       console.log('  Block UUID from form:', connectionConfig.loxone_charger_block_uuid);
       console.log('  Block UUID length:', connectionConfig.loxone_charger_block_uuid?.length);
       
       config = {
-        loxone_host: connectionConfig.loxone_host,
+        loxone_connection_mode: connectionConfig.loxone_connection_mode,
         loxone_username: connectionConfig.loxone_username,
         loxone_password: connectionConfig.loxone_password,
-        // ðŸ‘‡ Conditionally save UUIDs based on mode
+        // 🔧 Conditionally save UUIDs based on mode
         ...(isSingleBlock ? {
           // Single-block mode: only save the charger block UUID
           loxone_charger_block_uuid: connectionConfig.loxone_charger_block_uuid,
@@ -283,14 +292,24 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
           loxone_user_id_uuid: connectionConfig.loxone_user_id_uuid,
           loxone_mode_uuid: connectionConfig.loxone_mode_uuid,
         }),
-        // Always save state and mode mappings
-        state_cable_locked: connectionConfig.state_cable_locked,
-        state_waiting_auth: connectionConfig.state_waiting_auth,
-        state_charging: connectionConfig.state_charging,
-        state_idle: connectionConfig.state_idle,
-        mode_normal: connectionConfig.mode_normal,
-        mode_priority: connectionConfig.mode_priority
       };
+
+      // Add host or MAC address depending on connection mode
+      if (connectionConfig.loxone_connection_mode === 'remote') {
+        config.loxone_mac_address = connectionConfig.loxone_mac_address;
+      } else {
+        config.loxone_host = connectionConfig.loxone_host;
+      }
+
+      // Always save state and mode mappings (except for single-block mode)
+      if (!isSingleBlock) {
+        config.state_cable_locked = connectionConfig.state_cable_locked;
+        config.state_waiting_auth = connectionConfig.state_waiting_auth;
+        config.state_charging = connectionConfig.state_charging;
+        config.state_idle = connectionConfig.state_idle;
+        config.mode_normal = connectionConfig.mode_normal;
+        config.mode_priority = connectionConfig.mode_priority;
+      }
       
       // 🔍 DEBUG: Log the final config being saved
       console.log('  Final config object:', config);
