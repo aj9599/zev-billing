@@ -30,41 +30,41 @@ print_header() {
 # Function to print step headers
 print_step() {
     echo ""
-    echo -e "${GREEN}${BOLD}▶ Step $1: $2${NC}"
+    echo -e "${GREEN}${BOLD}â–¶ Step $1: $2${NC}"
     echo ""
 }
 
 # Function to print success messages
 print_success() {
-    echo -e "${GREEN}✓ $1${NC}"
+    echo -e "${GREEN}âœ“ $1${NC}"
 }
 
 # Function to print warning messages
 print_warning() {
-    echo -e "${YELLOW}⚠  $1${NC}"
+    echo -e "${YELLOW}âš   $1${NC}"
 }
 
 # Function to print error messages
 print_error() {
-    echo -e "${RED}✗ $1${NC}"
+    echo -e "${RED}âœ— $1${NC}"
 }
 
 # Function to print info messages
 print_info() {
-    echo -e "${BLUE}ℹ  $1${NC}"
+    echo -e "${BLUE}â„¹  $1${NC}"
 }
 
 clear
 echo -e "${CYAN}${BOLD}"
 cat << "EOF"
-╔═══════════════════════════════════════════════════════════╗
-║                                                           ║
-║        ZEV BILLING SYSTEM - AUTOMATED INSTALLER          ║
-║                                                           ║
-║                     Version 2.2                           ║
-║              Enhanced Edition with Fixes                  ║
-║                                                           ║
-╚═══════════════════════════════════════════════════════════╝
+â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+â•‘                                                           â•‘
+â•‘        ZEV BILLING SYSTEM - AUTOMATED INSTALLER          â•‘
+â•‘                                                           â•‘
+â•‘                     Version 2.2                           â•‘
+â•‘              Enhanced Edition with Fixes                  â•‘
+â•‘                                                           â•‘
+â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 EOF
 echo -e "${NC}"
 
@@ -299,6 +299,12 @@ fi
 if command -v mosquitto &> /dev/null; then
     print_info "Configuring Mosquitto MQTT Broker..."
     
+    # Ensure mosquitto user exists
+    if ! id mosquitto &>/dev/null; then
+        print_info "Creating mosquitto user..."
+        useradd -r -M -d /var/lib/mosquitto -s /usr/sbin/nologin mosquitto
+    fi
+    
     # Ask about authentication
     read -p "Enable MQTT authentication? (recommended for production) (yes/no) [no]: " enable_auth
     if [ "$enable_auth" == "yes" ] || [ "$enable_auth" == "y" ]; then
@@ -322,10 +328,28 @@ if command -v mosquitto &> /dev/null; then
             fi
         done
         
-        # Create password file
-        mosquitto_passwd -c -b /etc/mosquitto/passwd "$MQTT_USERNAME" "$MQTT_PASSWORD"
+        # Create password file with proper permissions
+        print_info "Creating password file..."
         
-        # Create Mosquitto config with authentication
+        # Remove old password file if it exists
+        rm -f /etc/mosquitto/passwd
+        
+        # Create password file
+        if mosquitto_passwd -c -b /etc/mosquitto/passwd "$MQTT_USERNAME" "$MQTT_PASSWORD"; then
+            # Set proper ownership and permissions
+            chown mosquitto:mosquitto /etc/mosquitto/passwd
+            chmod 600 /etc/mosquitto/passwd
+            print_success "Password file created successfully"
+        else
+            print_error "Failed to create password file"
+            print_warning "Continuing without authentication..."
+            MQTT_AUTH_ENABLED=false
+        fi
+    fi
+    
+    # Create Mosquitto config based on authentication setting
+    if [ "$MQTT_AUTH_ENABLED" = true ] && [ -f /etc/mosquitto/passwd ]; then
+        # Create config with authentication
         cat > /etc/mosquitto/mosquitto.conf << MQTT_CONF
 # Mosquitto Configuration for ZEV Billing
 # Generated: $(date)
@@ -369,16 +393,53 @@ MQTT_CONF
         print_success "Mosquitto configured (no authentication)"
     fi
     
+    # Ensure mosquitto directories have correct permissions
+    print_info "Setting Mosquitto directory permissions..."
+    mkdir -p /var/lib/mosquitto
+    mkdir -p /var/log/mosquitto
+    chown -R mosquitto:mosquitto /var/lib/mosquitto
+    chown -R mosquitto:mosquitto /var/log/mosquitto
+    chmod 755 /var/lib/mosquitto
+    chmod 755 /var/log/mosquitto
+    
     # Start and enable Mosquitto
     systemctl enable mosquitto 2>/dev/null
+    
+    print_info "Starting Mosquitto..."
     systemctl restart mosquitto
     
-    sleep 1
+    # Wait a bit longer and check more thoroughly
+    sleep 3
     
     if systemctl is-active --quiet mosquitto; then
         print_success "Mosquitto MQTT broker is running"
     else
-        print_warning "Mosquitto may not be running properly"
+        print_error "Mosquitto failed to start!"
+        echo ""
+        print_info "Checking logs..."
+        journalctl -u mosquitto.service -n 20 --no-pager
+        echo ""
+        print_warning "Attempting to fix and restart..."
+        
+        # Try to fix common issues
+        if [ "$MQTT_AUTH_ENABLED" = true ] && [ ! -f /etc/mosquitto/passwd ]; then
+            print_info "Password file missing, recreating..."
+            mosquitto_passwd -c -b /etc/mosquitto/passwd "$MQTT_USERNAME" "$MQTT_PASSWORD"
+            chown mosquitto:mosquitto /etc/mosquitto/passwd
+            chmod 600 /etc/mosquitto/passwd
+        fi
+        
+        # Try starting again
+        systemctl restart mosquitto
+        sleep 2
+        
+        if systemctl is-active --quiet mosquitto; then
+            print_success "Mosquitto started successfully after fix"
+        else
+            print_error "Mosquitto still not running"
+            print_warning "MQTT functionality will not be available"
+            print_info "You can check logs with: journalctl -u mosquitto.service"
+        fi
     fi
 fi
 
@@ -832,7 +893,7 @@ echo "Stopping ZEV Billing System..."
 sudo systemctl stop zev-billing.service
 sudo systemctl stop nginx
 sudo systemctl stop mosquitto
-echo "✓ All services stopped"
+echo "âœ“ All services stopped"
 STOP_EOF
 
 # Create restart script
@@ -901,9 +962,9 @@ echo ""
 echo "Publishing test message..."
 mosquitto_pub -h localhost -t "test/topic" -u "$MQTT_USERNAME" -P "$MQTT_PASSWORD" -m "Test message at \$(date)"
 if [ \$? -eq 0 ]; then
-    echo "✓ Publish successful"
+    echo "âœ“ Publish successful"
 else
-    echo "✗ Publish failed"
+    echo "âœ— Publish failed"
     exit 1
 fi
 
@@ -915,7 +976,7 @@ mosquitto_pub -h localhost -t "test/topic" -u "$MQTT_USERNAME" -P "$MQTT_PASSWOR
 wait
 
 echo ""
-echo "✓ MQTT test completed"
+echo "âœ“ MQTT test completed"
 TEST_MQTT_EOF
 else
     cat > "$INSTALL_DIR/test-mqtt.sh" << 'TEST_MQTT_EOF'
@@ -925,9 +986,9 @@ echo ""
 echo "Publishing test message..."
 mosquitto_pub -h localhost -t "test/topic" -m "Test message at $(date)"
 if [ $? -eq 0 ]; then
-    echo "✓ Publish successful"
+    echo "âœ“ Publish successful"
 else
-    echo "✗ Publish failed"
+    echo "âœ— Publish failed"
     exit 1
 fi
 
@@ -939,7 +1000,7 @@ mosquitto_pub -h localhost -t "test/topic" -m "Test message at $(date)"
 wait
 
 echo ""
-echo "✓ MQTT test completed"
+echo "âœ“ MQTT test completed"
 TEST_MQTT_EOF
 fi
 
@@ -957,9 +1018,9 @@ cd "$SCRIPT_DIR"
 if [ -f .zev-config ]; then
     echo "Loading existing configuration..."
     source .zev-config
-    echo "✓ Configuration loaded (Port: $BACKEND_PORT)"
+    echo "âœ“ Configuration loaded (Port: $BACKEND_PORT)"
 else
-    echo "⚠  No existing configuration found"
+    echo "âš   No existing configuration found"
 fi
 
 echo ""
@@ -967,7 +1028,7 @@ echo "Pulling latest changes from GitHub..."
 git pull
 
 if [ $? -ne 0 ]; then
-    echo "✗ Git pull failed"
+    echo "âœ— Git pull failed"
     echo "Possible reasons:"
     echo "  - No internet connection"
     echo "  - Local changes conflict with remote"
@@ -988,13 +1049,13 @@ go mod tidy
 CGO_ENABLED=1 go build -o zev-billing
 
 if [ ! -f zev-billing ]; then
-    echo "✗ Backend build failed"
+    echo "âœ— Backend build failed"
     exit 1
 fi
 
 chmod +x zev-billing
 
-echo "✓ Backend rebuilt"
+echo "âœ“ Backend rebuilt"
 
 echo ""
 echo "Rebuilding frontend..."
@@ -1004,14 +1065,14 @@ npm install
 npm run build
 
 if [ ! -d dist ]; then
-    echo "✗ Frontend build failed"
+    echo "âœ— Frontend build failed"
     exit 1
 fi
 
 # Fix permissions
 chmod -R 755 dist
 
-echo "✓ Frontend rebuilt"
+echo "âœ“ Frontend rebuilt"
 
 echo ""
 echo "Starting services..."
@@ -1021,14 +1082,14 @@ sudo systemctl restart nginx
 sleep 2
 
 if sudo systemctl is-active --quiet zev-billing.service; then
-    echo "✓ Update completed successfully"
+    echo "âœ“ Update completed successfully"
     echo ""
     echo "Current configuration:"
     if [ -f "$SCRIPT_DIR/.zev-config" ]; then
         cat "$SCRIPT_DIR/.zev-config"
     fi
 else
-    echo "✗ Service failed to start after update"
+    echo "âœ— Service failed to start after update"
     echo "Check logs: sudo journalctl -u zev-billing.service -n 50"
     exit 1
 fi
@@ -1092,9 +1153,9 @@ systemctl restart nginx
 sleep 2
 
 if systemctl is-active --quiet zev-billing.service; then
-    echo "✓ Port changed successfully to $NEW_PORT"
+    echo "âœ“ Port changed successfully to $NEW_PORT"
 else
-    echo "✗ Service failed to start"
+    echo "âœ— Service failed to start"
     exit 1
 fi
 PORT_EOF
@@ -1149,7 +1210,7 @@ fi
 echo "Creating backup..."
 BACKUP_PATH="\$INSTALL_DIR/backend/zev-billing-backup-\$(date +%Y%m%d-%H%M%S).db"
 cp "\$DB_PATH" "\$BACKUP_PATH"
-echo "✓ Backup created: \$BACKUP_PATH"
+echo "âœ“ Backup created: \$BACKUP_PATH"
 
 echo "Stopping service..."
 sudo systemctl stop zev-billing.service
@@ -1158,13 +1219,13 @@ sleep 2
 echo "Checking database integrity..."
 sqlite3 "\$DB_PATH" "PRAGMA integrity_check;" > /tmp/integrity_check.txt
 if grep -q "ok" /tmp/integrity_check.txt; then
-    echo "✓ Database integrity OK"
+    echo "âœ“ Database integrity OK"
 else
-    echo "✗ Database corrupted, attempting recovery..."
+    echo "âœ— Database corrupted, attempting recovery..."
     sqlite3 "\$DB_PATH" .dump > /tmp/dump.sql
     mv "\$DB_PATH" "\$DB_PATH.corrupted"
     sqlite3 "\$DB_PATH" < /tmp/dump.sql
-    echo "✓ Database recovered"
+    echo "âœ“ Database recovered"
 fi
 
 echo "Optimizing database..."
@@ -1179,11 +1240,11 @@ sudo systemctl start zev-billing.service
 sleep 3
 
 if systemctl is-active --quiet zev-billing.service; then
-    echo "✓ Service is running"
+    echo "âœ“ Service is running"
     echo ""
     echo "Database recovery completed!"
 else
-    echo "✗ Service failed to start"
+    echo "âœ— Service failed to start"
     echo "Check logs: journalctl -u zev-billing.service -n 50"
     exit 1
 fi
@@ -1269,19 +1330,19 @@ if systemctl is-active --quiet zev-billing.service && \
    [ -d "$INSTALL_DIR/frontend/dist" ]; then
     
     echo -e "${GREEN}${BOLD}"
-    echo "╔═══════════════════════════════════════════════════════════╗"
-    echo "║                                                           ║"
-    echo "║              ✓ INSTALLATION SUCCESSFUL!                  ║"
-    echo "║                                                           ║"
-    echo "╚═══════════════════════════════════════════════════════════╝"
+    echo "â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—"
+    echo "â•‘                                                           â•‘"
+    echo "â•‘              âœ“ INSTALLATION SUCCESSFUL!                  â•‘"
+    echo "â•‘                                                           â•‘"
+    echo "â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•"
     echo -e "${NC}"
 else
     echo -e "${YELLOW}${BOLD}"
-    echo "╔═══════════════════════════════════════════════════════════╗"
-    echo "║                                                           ║"
-    echo "║         ⚠ INSTALLATION COMPLETED WITH WARNINGS           ║"
-    echo "║                                                           ║"
-    echo "╚═══════════════════════════════════════════════════════════╝"
+    echo "â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—"
+    echo "â•‘                                                           â•‘"
+    echo "â•‘         âš  INSTALLATION COMPLETED WITH WARNINGS           â•‘"
+    echo "â•‘                                                           â•‘"
+    echo "â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•"
     echo -e "${NC}"
 fi
 
@@ -1304,7 +1365,7 @@ echo -e "${CYAN}${BOLD}Default Login Credentials:${NC}"
 echo -e "  Username: ${GREEN}admin${NC}"
 echo -e "  Password: ${GREEN}admin123${NC}"
 echo ""
-echo -e "${RED}${BOLD}⚠ IMPORTANT: Change the default password immediately!${NC}"
+echo -e "${RED}${BOLD}âš  IMPORTANT: Change the default password immediately!${NC}"
 echo ""
 
 echo -e "${CYAN}${BOLD}Service Management:${NC}"
@@ -1342,7 +1403,7 @@ echo "  - Database location: $INSTALL_DIR/backend/zev-billing.db"
 echo ""
 
 if [ "$FRESH_INSTALL" = true ]; then
-    echo -e "${YELLOW}📦 Old database backed up to: $INSTALL_DIR/backups/${NC}"
+    echo -e "${YELLOW}ðŸ“¦ Old database backed up to: $INSTALL_DIR/backups/${NC}"
     echo ""
 fi
 
