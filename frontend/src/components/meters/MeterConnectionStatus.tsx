@@ -15,7 +15,7 @@ export default function MeterConnectionStatus({
     mqttStatus,
     mqttBrokerConnected
 }: MeterConnectionStatusProps) {
-    const { t, i18n } = useTranslation();
+    const { t } = useTranslation();
 
     if (meter.connection_type === 'loxone_api') {
         const status = loxoneStatus[meter.id];
@@ -133,7 +133,7 @@ export default function MeterConnectionStatus({
                                     {t('meters.topic')}: {status.topic}
                                 </div>
                                 <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                                    {t('meters.lastUpdate')}: {new Date(status.last_update).toLocaleString(i18n.language === 'de' ? 'de-CH' : 'en-US', {
+                                    {t('meters.lastUpdate')}: {new Date(status.last_update).toLocaleTimeString('de-CH', {
                                         hour: '2-digit',
                                         minute: '2-digit',
                                         second: '2-digit',
