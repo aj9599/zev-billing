@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../i18n';
 
 interface HealthDataPoint {
@@ -15,10 +15,20 @@ interface SystemHealthChartsProps {
 
 export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) => {
   const { t } = useTranslation();
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const cpuCanvasRef = useRef<HTMLCanvasElement>(null);
   const memoryCanvasRef = useRef<HTMLCanvasElement>(null);
   const diskCanvasRef = useRef<HTMLCanvasElement>(null);
   const tempCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     // Validate healthHistory exists and is an array
@@ -45,7 +55,7 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
     if (hasTempData) {
       drawChart(tempCanvasRef.current, validHistory, 'temperature', '#ef4444');
     }
-  }, [healthHistory, t]);
+  }, [healthHistory, isMobile]);
 
   const drawChart = (
     canvas: HTMLCanvasElement | null,
@@ -67,7 +77,7 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
     
     // Set canvas size based on container
     const displayWidth = rect.width;
-    const displayHeight = Math.min(300, window.innerWidth < 768 ? 200 : 300);
+    const displayHeight = Math.min(300, isMobile ? 200 : 300);
     
     canvas.width = displayWidth * dpr;
     canvas.height = displayHeight * dpr;
@@ -81,7 +91,6 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
     const height = displayHeight;
     
     // Responsive padding
-    const isMobile = window.innerWidth < 768;
     const padding = isMobile ? 35 : 40;
     const chartWidth = width - padding * 2;
     const chartHeight = height - padding * 2;
@@ -181,9 +190,9 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
                       healthHistory.some(d => d && d.temperature > 0);
 
   return (
-    <div style={{ marginBottom: '20px', width: '100%' }}>
+    <div style={{ marginBottom: isMobile ? '20px' : '30px', width: '100%' }}>
       <h2 style={{ 
-        fontSize: window.innerWidth < 768 ? '18px' : '20px', 
+        fontSize: isMobile ? '18px' : '20px', 
         fontWeight: '700', 
         marginBottom: '12px', 
         color: '#1f2937',
@@ -193,19 +202,19 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       </h2>
       <div style={{
         display: 'grid',
-        gridTemplateColumns: window.innerWidth < 768 ? '1fr' : 'repeat(auto-fit, minmax(400px, 1fr))',
-        gap: window.innerWidth < 768 ? '12px' : '20px',
+        gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(240px, 1fr))',
+        gap: isMobile ? '12px' : '20px',
         width: '100%'
       }}>
         <div className="chart-container" style={{
           backgroundColor: 'white',
-          padding: window.innerWidth < 768 ? '16px' : '24px',
+          padding: isMobile ? '16px' : '24px',
           borderRadius: '12px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           border: '2px solid #667eea'
         }}>
           <h3 style={{ 
-            fontSize: window.innerWidth < 768 ? '14px' : '16px', 
+            fontSize: isMobile ? '14px' : '16px', 
             fontWeight: '600', 
             marginBottom: '12px', 
             color: '#667eea' 
@@ -220,13 +229,13 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
 
         <div className="chart-container" style={{
           backgroundColor: 'white',
-          padding: window.innerWidth < 768 ? '16px' : '24px',
+          padding: isMobile ? '16px' : '24px',
           borderRadius: '12px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           border: '2px solid #10b981'
         }}>
           <h3 style={{ 
-            fontSize: window.innerWidth < 768 ? '14px' : '16px', 
+            fontSize: isMobile ? '14px' : '16px', 
             fontWeight: '600', 
             marginBottom: '12px', 
             color: '#10b981' 
@@ -241,13 +250,13 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
 
         <div className="chart-container" style={{
           backgroundColor: 'white',
-          padding: window.innerWidth < 768 ? '16px' : '24px',
+          padding: isMobile ? '16px' : '24px',
           borderRadius: '12px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           border: '2px solid #f59e0b'
         }}>
           <h3 style={{ 
-            fontSize: window.innerWidth < 768 ? '14px' : '16px', 
+            fontSize: isMobile ? '14px' : '16px', 
             fontWeight: '600', 
             marginBottom: '12px', 
             color: '#f59e0b' 
@@ -263,13 +272,13 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
         {hasTempData && (
           <div className="chart-container" style={{
             backgroundColor: 'white',
-            padding: window.innerWidth < 768 ? '16px' : '24px',
+            padding: isMobile ? '16px' : '24px',
             borderRadius: '12px',
             boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
             border: '2px solid #ef4444'
           }}>
             <h3 style={{ 
-              fontSize: window.innerWidth < 768 ? '14px' : '16px', 
+              fontSize: isMobile ? '14px' : '16px', 
               fontWeight: '600', 
               marginBottom: '12px', 
               color: '#ef4444' 
