@@ -15,7 +15,7 @@ export default function MeterConnectionStatus({
     mqttStatus,
     mqttBrokerConnected
 }: MeterConnectionStatusProps) {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
 
     if (meter.connection_type === 'loxone_api') {
         const status = loxoneStatus[meter.id];
@@ -85,7 +85,7 @@ export default function MeterConnectionStatus({
 
     if (meter.connection_type === 'mqtt') {
         const status = mqttStatus[meter.id];
-        
+
         // Check if MQTT broker is connected
         if (mqttBrokerConnected === false) {
             return (
@@ -110,7 +110,7 @@ export default function MeterConnectionStatus({
                 </div>
             );
         }
-        
+
         if (status) {
             return (
                 <div style={{
@@ -163,7 +163,7 @@ export default function MeterConnectionStatus({
                 </div>
             );
         }
-        
+
         // No status data yet, but broker is connected
         return (
             <div style={{
@@ -177,7 +177,7 @@ export default function MeterConnectionStatus({
             }}>
                 <Rss size={16} style={{ color: '#f59e0b' }} />
                 <div style={{ fontSize: '12px', color: '#92400e' }}>
-                    MQTT Connecting...
+                    {t('meters.mqttConnecting')}
                 </div>
             </div>
         );

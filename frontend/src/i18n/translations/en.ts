@@ -440,6 +440,7 @@ export const en: Translations = {
   'meters.mqttConnected': 'MQTT Connected',
   'meters.mqttWaitingForData': 'MQTT Waiting for Data',
   'meters.topic': 'Topic',
+  'meters.mqttConnecting': 'MQTT Connecting...',
 
   // Loxone Setup Guide
   'meters.loxoneSetupGuide': 'Quick Setup:',
