@@ -75,9 +75,9 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
     const rect = container.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     
-    // Set canvas size based on container
+    // Set canvas size based on container - reduced heights for better ratio
     const displayWidth = rect.width;
-    const displayHeight = Math.min(300, isMobile ? 200 : 300);
+    const displayHeight = isMobile ? 150 : 200;
     
     canvas.width = displayWidth * dpr;
     canvas.height = displayHeight * dpr;
@@ -90,10 +90,14 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
     const width = displayWidth;
     const height = displayHeight;
     
-    // Responsive padding
-    const padding = isMobile ? 35 : 40;
-    const chartWidth = width - padding * 2;
-    const chartHeight = height - padding * 2;
+    // Responsive padding - increased bottom padding for timeline
+    const paddingTop = isMobile ? 20 : 25;
+    const paddingBottom = isMobile ? 25 : 30;
+    const paddingLeft = isMobile ? 30 : 35;
+    const paddingRight = isMobile ? 10 : 15;
+    
+    const chartWidth = width - paddingLeft - paddingRight;
+    const chartHeight = height - paddingTop - paddingBottom;
 
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
@@ -110,20 +114,20 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
     // Draw grid lines
     ctx.strokeStyle = '#e5e7eb';
     ctx.lineWidth = 1;
-    const gridLines = isMobile ? 4 : 4;
+    const gridLines = 4;
     for (let i = 0; i <= gridLines; i++) {
-      const y = padding + (chartHeight / gridLines) * i;
+      const y = paddingTop + (chartHeight / gridLines) * i;
       ctx.beginPath();
-      ctx.moveTo(padding, y);
-      ctx.lineTo(width - padding, y);
+      ctx.moveTo(paddingLeft, y);
+      ctx.lineTo(width - paddingRight, y);
       ctx.stroke();
       
       // Draw y-axis labels
       ctx.fillStyle = '#9ca3af';
-      ctx.font = isMobile ? '10px sans-serif' : '12px sans-serif';
+      ctx.font = isMobile ? '9px sans-serif' : '11px sans-serif';
       ctx.textAlign = 'right';
       const value = maxValue - (maxValue / gridLines) * i;
-      ctx.fillText(value.toFixed(0) + (key === 'temperature' ? '°C' : '%'), padding - 5, y + 3);
+      ctx.fillText(value.toFixed(0) + (key === 'temperature' ? '°C' : '%'), paddingLeft - 5, y + 3);
     }
 
     // Draw line chart
@@ -135,8 +139,8 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       ctx.lineCap = 'round';
 
       values.forEach((value, index) => {
-        const x = padding + (chartWidth / Math.max(values.length - 1, 1)) * index;
-        const y = padding + chartHeight - (value / maxValue) * chartHeight;
+        const x = paddingLeft + (chartWidth / Math.max(values.length - 1, 1)) * index;
+        const y = paddingTop + chartHeight - (value / maxValue) * chartHeight;
         
         if (index === 0) {
           ctx.moveTo(x, y);
@@ -148,11 +152,11 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       ctx.stroke();
 
       // Fill area under line
-      ctx.lineTo(width - padding, padding + chartHeight);
-      ctx.lineTo(padding, padding + chartHeight);
+      ctx.lineTo(width - paddingRight, paddingTop + chartHeight);
+      ctx.lineTo(paddingLeft, paddingTop + chartHeight);
       ctx.closePath();
       
-      const gradient = ctx.createLinearGradient(0, padding, 0, height - padding);
+      const gradient = ctx.createLinearGradient(0, paddingTop, 0, height - paddingBottom);
       gradient.addColorStop(0, color + '40');
       gradient.addColorStop(1, color + '00');
       ctx.fillStyle = gradient;
@@ -161,13 +165,13 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
 
     // Draw x-axis time labels
     ctx.fillStyle = '#9ca3af';
-    ctx.font = isMobile ? '9px sans-serif' : '12px sans-serif';
+    ctx.font = isMobile ? '8px sans-serif' : '10px sans-serif';
     ctx.textAlign = 'center';
     
     const validData = data.filter(d => d && typeof d === 'object' && d.timestamp);
     
     if (validData.length > 0) {
-      const timeSteps = isMobile ? 4 : 6;
+      const timeSteps = isMobile ? 3 : 5;
       const actualSteps = Math.min(timeSteps, validData.length);
       
       for (let i = 0; i < actualSteps; i++) {
@@ -175,12 +179,12 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
         const point = validData[index];
         
         if (point && point.timestamp) {
-          const x = padding + (chartWidth / Math.max(actualSteps - 1, 1)) * i;
+          const x = paddingLeft + (chartWidth / Math.max(actualSteps - 1, 1)) * i;
           
           const date = new Date(point.timestamp);
           const timeStr = date.getHours().toString().padStart(2, '0') + ':' + 
                           date.getMinutes().toString().padStart(2, '0');
-          ctx.fillText(timeStr, x, height - padding + (isMobile ? 15 : 20));
+          ctx.fillText(timeStr, x, height - paddingBottom + (isMobile ? 12 : 15));
         }
       }
     }
