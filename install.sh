@@ -36,17 +36,17 @@ print_step() {
 
 # Function to print success messages
 print_success() {
-    echo -e "${GREEN}âœ“ $1${NC}"
+    echo -e "${GREEN}✓ $1${NC}"
 }
 
 # Function to print warning messages
 print_warning() {
-    echo -e "${YELLOW}âš   $1${NC}"
+    echo -e "${YELLOW}⚠️  $1${NC}"
 }
 
 # Function to print error messages
 print_error() {
-    echo -e "${RED}âœ— $1${NC}"
+    echo -e "${RED}✗ $1${NC}"
 }
 
 # Function to print info messages
@@ -57,14 +57,14 @@ print_info() {
 clear
 echo -e "${CYAN}${BOLD}"
 cat << "EOF"
-â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-â•‘                                                           â•‘
-â•‘        ZEV BILLING SYSTEM - AUTOMATED INSTALLER          â•‘
-â•‘                                                           â•‘
-â•‘                     Version 2.2                           â•‘
-â•‘              Enhanced Edition with Fixes                  â•‘
-â•‘                                                           â•‘
-â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+┌──────────────────────────────────────────────────────────┐
+│                                                          │
+│        ZEV BILLING SYSTEM - AUTOMATED INSTALLER          │
+│                                                          │
+│                     Version 2.2                          │
+│              Enhanced Edition with Fixes                 │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
 EOF
 echo -e "${NC}"
 
@@ -451,8 +451,8 @@ if command -v go &> /dev/null; then
     GO_VERSION=$(go version | awk '{print $3}' | sed 's/go//')
     print_success "Go is already installed: $GO_VERSION"
     
-    # Check if version is at least 1.20
-    if [ "$(printf '%s\n' "1.20" "$GO_VERSION" | sort -V | head -n1)" = "1.20" ]; then
+    # Check if version is at least 1.25
+    if [ "$(printf '%s\n' "1.25" "$GO_VERSION" | sort -V | head -n1)" = "1.25" ]; then
         print_success "Go version is sufficient"
     else
         print_warning "Go version is old, will install newer version"
@@ -461,7 +461,7 @@ if command -v go &> /dev/null; then
 fi
 
 # Install Go if not present or old
-if ! command -v go &> /dev/null || [ "$(printf '%s\n' "1.20" "$(go version | awk '{print $3}' | sed 's/go//')" | sort -V | head -n1)" != "1.20" ]; then
+if ! command -v go &> /dev/null || [ "$(printf '%s\n' "1.25" "$(go version | awk '{print $3}' | sed 's/go//')" | sort -V | head -n1)" != "1.25" ]; then
     cd /tmp
     
     # Determine architecture for Go download
@@ -482,7 +482,7 @@ if ! command -v go &> /dev/null || [ "$(printf '%s\n' "1.20" "$(go version | awk
             ;;
     esac
     
-    GO_VERSION="1.21.5"
+    GO_VERSION="1.25.4"
     GO_TARBALL="go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
     
     print_info "Downloading Go ${GO_VERSION} for ${GO_ARCH}..."
@@ -669,11 +669,13 @@ rm -f zev-billing go.sum
 
 # Download dependencies
 print_info "Downloading Go dependencies..."
+export GOTOOLCHAIN=local
 sudo -u "$ACTUAL_USER" go mod download || true
 sudo -u "$ACTUAL_USER" go mod tidy || true
 
 # Build backend
 print_info "Building backend..."
+export GOTOOLCHAIN=local
 sudo -u "$ACTUAL_USER" CGO_ENABLED=1 go build -o zev-billing
 
 if [ ! -f "zev-billing" ]; then
@@ -756,6 +758,7 @@ User=$ACTUAL_USER
 WorkingDirectory=$INSTALL_DIR/backend
 Environment="SERVER_PORT=$BACKEND_PORT"
 Environment="CHROMIUM_PATH=$CHROMIUM_PATH"
+Environment="GOTOOLCHAIN=local"
 ExecStart=$INSTALL_DIR/backend/zev-billing
 Restart=always
 RestartSec=10
@@ -893,7 +896,7 @@ echo "Stopping ZEV Billing System..."
 sudo systemctl stop zev-billing.service
 sudo systemctl stop nginx
 sudo systemctl stop mosquitto
-echo "âœ“ All services stopped"
+echo "✓ All services stopped"
 STOP_EOF
 
 # Create restart script
@@ -962,9 +965,9 @@ echo ""
 echo "Publishing test message..."
 mosquitto_pub -h localhost -t "test/topic" -u "$MQTT_USERNAME" -P "$MQTT_PASSWORD" -m "Test message at \$(date)"
 if [ \$? -eq 0 ]; then
-    echo "âœ“ Publish successful"
+    echo "✓ Publish successful"
 else
-    echo "âœ— Publish failed"
+    echo "✗ Publish failed"
     exit 1
 fi
 
@@ -976,7 +979,7 @@ mosquitto_pub -h localhost -t "test/topic" -u "$MQTT_USERNAME" -P "$MQTT_PASSWOR
 wait
 
 echo ""
-echo "âœ“ MQTT test completed"
+echo "✓ MQTT test completed"
 TEST_MQTT_EOF
 else
     cat > "$INSTALL_DIR/test-mqtt.sh" << 'TEST_MQTT_EOF'
@@ -986,9 +989,9 @@ echo ""
 echo "Publishing test message..."
 mosquitto_pub -h localhost -t "test/topic" -m "Test message at $(date)"
 if [ $? -eq 0 ]; then
-    echo "âœ“ Publish successful"
+    echo "✓ Publish successful"
 else
-    echo "âœ— Publish failed"
+    echo "✗ Publish failed"
     exit 1
 fi
 
@@ -1000,7 +1003,7 @@ mosquitto_pub -h localhost -t "test/topic" -m "Test message at $(date)"
 wait
 
 echo ""
-echo "âœ“ MQTT test completed"
+echo "✓ MQTT test completed"
 TEST_MQTT_EOF
 fi
 
@@ -1018,9 +1021,9 @@ cd "$SCRIPT_DIR"
 if [ -f .zev-config ]; then
     echo "Loading existing configuration..."
     source .zev-config
-    echo "âœ“ Configuration loaded (Port: $BACKEND_PORT)"
+    echo "✓ Configuration loaded (Port: $BACKEND_PORT)"
 else
-    echo "âš   No existing configuration found"
+    echo "⚠️  No existing configuration found"
 fi
 
 echo ""
@@ -1028,7 +1031,7 @@ echo "Pulling latest changes from GitHub..."
 git pull
 
 if [ $? -ne 0 ]; then
-    echo "âœ— Git pull failed"
+    echo "✗ Git pull failed"
     echo "Possible reasons:"
     echo "  - No internet connection"
     echo "  - Local changes conflict with remote"
@@ -1044,18 +1047,19 @@ echo ""
 echo "Rebuilding backend..."
 cd backend
 rm -f zev-billing go.sum
+export GOTOOLCHAIN=local
 go mod download
 go mod tidy
 CGO_ENABLED=1 go build -o zev-billing
 
 if [ ! -f zev-billing ]; then
-    echo "âœ— Backend build failed"
+    echo "✗ Backend build failed"
     exit 1
 fi
 
 chmod +x zev-billing
 
-echo "âœ“ Backend rebuilt"
+echo "✓ Backend rebuilt"
 
 echo ""
 echo "Rebuilding frontend..."
@@ -1065,14 +1069,14 @@ npm install
 npm run build
 
 if [ ! -d dist ]; then
-    echo "âœ— Frontend build failed"
+    echo "✗ Frontend build failed"
     exit 1
 fi
 
 # Fix permissions
 chmod -R 755 dist
 
-echo "âœ“ Frontend rebuilt"
+echo "✓ Frontend rebuilt"
 
 echo ""
 echo "Starting services..."
@@ -1082,14 +1086,14 @@ sudo systemctl restart nginx
 sleep 2
 
 if sudo systemctl is-active --quiet zev-billing.service; then
-    echo "âœ“ Update completed successfully"
+    echo "✓ Update completed successfully"
     echo ""
     echo "Current configuration:"
     if [ -f "$SCRIPT_DIR/.zev-config" ]; then
         cat "$SCRIPT_DIR/.zev-config"
     fi
 else
-    echo "âœ— Service failed to start after update"
+    echo "✗ Service failed to start after update"
     echo "Check logs: sudo journalctl -u zev-billing.service -n 50"
     exit 1
 fi
@@ -1153,9 +1157,9 @@ systemctl restart nginx
 sleep 2
 
 if systemctl is-active --quiet zev-billing.service; then
-    echo "âœ“ Port changed successfully to $NEW_PORT"
+    echo "✓ Port changed successfully to $NEW_PORT"
 else
-    echo "âœ— Service failed to start"
+    echo "✗ Service failed to start"
     exit 1
 fi
 PORT_EOF
@@ -1210,7 +1214,7 @@ fi
 echo "Creating backup..."
 BACKUP_PATH="\$INSTALL_DIR/backend/zev-billing-backup-\$(date +%Y%m%d-%H%M%S).db"
 cp "\$DB_PATH" "\$BACKUP_PATH"
-echo "âœ“ Backup created: \$BACKUP_PATH"
+echo "✓ Backup created: \$BACKUP_PATH"
 
 echo "Stopping service..."
 sudo systemctl stop zev-billing.service
@@ -1219,13 +1223,13 @@ sleep 2
 echo "Checking database integrity..."
 sqlite3 "\$DB_PATH" "PRAGMA integrity_check;" > /tmp/integrity_check.txt
 if grep -q "ok" /tmp/integrity_check.txt; then
-    echo "âœ“ Database integrity OK"
+    echo "✓ Database integrity OK"
 else
-    echo "âœ— Database corrupted, attempting recovery..."
+    echo "✗ Database corrupted, attempting recovery..."
     sqlite3 "\$DB_PATH" .dump > /tmp/dump.sql
     mv "\$DB_PATH" "\$DB_PATH.corrupted"
     sqlite3 "\$DB_PATH" < /tmp/dump.sql
-    echo "âœ“ Database recovered"
+    echo "✓ Database recovered"
 fi
 
 echo "Optimizing database..."
@@ -1240,11 +1244,11 @@ sudo systemctl start zev-billing.service
 sleep 3
 
 if systemctl is-active --quiet zev-billing.service; then
-    echo "âœ“ Service is running"
+    echo "✓ Service is running"
     echo ""
     echo "Database recovery completed!"
 else
-    echo "âœ— Service failed to start"
+    echo "✗ Service failed to start"
     echo "Check logs: journalctl -u zev-billing.service -n 50"
     exit 1
 fi
@@ -1330,19 +1334,19 @@ if systemctl is-active --quiet zev-billing.service && \
    [ -d "$INSTALL_DIR/frontend/dist" ]; then
     
     echo -e "${GREEN}${BOLD}"
-    echo "â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—"
-    echo "â•‘                                                           â•‘"
-    echo "â•‘              âœ“ INSTALLATION SUCCESSFUL!                  â•‘"
-    echo "â•‘                                                           â•‘"
-    echo "â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•"
+    echo "┌──────────────────────────────────────────────────────────┐"
+    echo "│                                                          │"
+    echo "│              ✓ INSTALLATION SUCCESSFUL!                  │"
+    echo "│                                                          │"
+    echo "└──────────────────────────────────────────────────────────┘"
     echo -e "${NC}"
 else
     echo -e "${YELLOW}${BOLD}"
-    echo "â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—"
-    echo "â•‘                                                           â•‘"
-    echo "â•‘         âš  INSTALLATION COMPLETED WITH WARNINGS           â•‘"
-    echo "â•‘                                                           â•‘"
-    echo "â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•"
+    echo "┌──────────────────────────────────────────────────────────┐"
+    echo "│                                                          │"
+    echo "│         ⚠️ INSTALLATION COMPLETED WITH WARNINGS           │"
+    echo "│                                                          │"
+    echo "└──────────────────────────────────────────────────────────┘"
     echo -e "${NC}"
 fi
 
@@ -1365,7 +1369,7 @@ echo -e "${CYAN}${BOLD}Default Login Credentials:${NC}"
 echo -e "  Username: ${GREEN}admin${NC}"
 echo -e "  Password: ${GREEN}admin123${NC}"
 echo ""
-echo -e "${RED}${BOLD}âš  IMPORTANT: Change the default password immediately!${NC}"
+echo -e "${RED}${BOLD}⚠️ IMPORTANT: Change the default password immediately!${NC}"
 echo ""
 
 echo -e "${CYAN}${BOLD}Service Management:${NC}"
@@ -1403,7 +1407,7 @@ echo "  - Database location: $INSTALL_DIR/backend/zev-billing.db"
 echo ""
 
 if [ "$FRESH_INSTALL" = true ]; then
-    echo -e "${YELLOW}ðŸ“¦ Old database backed up to: $INSTALL_DIR/backups/${NC}"
+    echo -e "${YELLOW}📦 Old database backed up to: $INSTALL_DIR/backups/${NC}"
     echo ""
 fi
 
