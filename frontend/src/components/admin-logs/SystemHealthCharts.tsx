@@ -77,7 +77,7 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
     
     // Set canvas size based on container - reduced heights for better ratio
     const displayWidth = rect.width;
-    const displayHeight = isMobile ? 150 : 200;
+    const displayHeight = isMobile ? 140 : 200;
     
     canvas.width = displayWidth * dpr;
     canvas.height = displayHeight * dpr;
@@ -90,11 +90,11 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
     const width = displayWidth;
     const height = displayHeight;
     
-    // Responsive padding - increased bottom padding for timeline
-    const paddingTop = isMobile ? 20 : 25;
-    const paddingBottom = isMobile ? 25 : 30;
-    const paddingLeft = isMobile ? 30 : 35;
-    const paddingRight = isMobile ? 10 : 15;
+    // Responsive padding - ensure right padding prevents overflow
+    const paddingTop = isMobile ? 15 : 25;
+    const paddingBottom = isMobile ? 22 : 30;
+    const paddingLeft = isMobile ? 28 : 35;
+    const paddingRight = isMobile ? 8 : 15;
     
     const chartWidth = width - paddingLeft - paddingRight;
     const chartHeight = height - paddingTop - paddingBottom;
@@ -111,7 +111,7 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
     
     const maxValue = key === 'temperature' ? 100 : 100;
 
-    // Draw grid lines
+    // Draw grid lines - ensure they don't exceed right padding
     ctx.strokeStyle = '#e5e7eb';
     ctx.lineWidth = 1;
     const gridLines = 4;
@@ -119,7 +119,7 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       const y = paddingTop + (chartHeight / gridLines) * i;
       ctx.beginPath();
       ctx.moveTo(paddingLeft, y);
-      ctx.lineTo(width - paddingRight, y);
+      ctx.lineTo(paddingLeft + chartWidth, y); // Changed to use chartWidth
       ctx.stroke();
       
       // Draw y-axis labels
@@ -127,7 +127,7 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       ctx.font = isMobile ? '9px sans-serif' : '11px sans-serif';
       ctx.textAlign = 'right';
       const value = maxValue - (maxValue / gridLines) * i;
-      ctx.fillText(value.toFixed(0) + (key === 'temperature' ? '°C' : '%'), paddingLeft - 5, y + 3);
+      ctx.fillText(value.toFixed(0) + (key === 'temperature' ? '°C' : '%'), paddingLeft - 4, y + 3);
     }
 
     // Draw line chart
@@ -151,12 +151,12 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       
       ctx.stroke();
 
-      // Fill area under line
-      ctx.lineTo(width - paddingRight, paddingTop + chartHeight);
+      // Fill area under line - ensure it stays within bounds
+      ctx.lineTo(paddingLeft + chartWidth, paddingTop + chartHeight);
       ctx.lineTo(paddingLeft, paddingTop + chartHeight);
       ctx.closePath();
       
-      const gradient = ctx.createLinearGradient(0, paddingTop, 0, height - paddingBottom);
+      const gradient = ctx.createLinearGradient(0, paddingTop, 0, paddingTop + chartHeight);
       gradient.addColorStop(0, color + '40');
       gradient.addColorStop(1, color + '00');
       ctx.fillStyle = gradient;
@@ -184,7 +184,7 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
           const date = new Date(point.timestamp);
           const timeStr = date.getHours().toString().padStart(2, '0') + ':' + 
                           date.getMinutes().toString().padStart(2, '0');
-          ctx.fillText(timeStr, x, height - paddingBottom + (isMobile ? 12 : 15));
+          ctx.fillText(timeStr, x, paddingTop + chartHeight + (isMobile ? 12 : 15));
         }
       }
     }
@@ -212,15 +212,15 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       }}>
         <div className="chart-container" style={{
           backgroundColor: 'white',
-          padding: isMobile ? '16px' : '24px',
+          padding: isMobile ? '12px' : '24px',
           borderRadius: '12px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           border: '2px solid #667eea'
         }}>
           <h3 style={{ 
-            fontSize: isMobile ? '14px' : '16px', 
+            fontSize: isMobile ? '13px' : '16px', 
             fontWeight: '600', 
-            marginBottom: '12px', 
+            marginBottom: isMobile ? '8px' : '12px', 
             color: '#667eea' 
           }}>
             {t('logs.cpuUsage')}
@@ -233,15 +233,15 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
 
         <div className="chart-container" style={{
           backgroundColor: 'white',
-          padding: isMobile ? '16px' : '24px',
+          padding: isMobile ? '12px' : '24px',
           borderRadius: '12px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           border: '2px solid #10b981'
         }}>
           <h3 style={{ 
-            fontSize: isMobile ? '14px' : '16px', 
+            fontSize: isMobile ? '13px' : '16px', 
             fontWeight: '600', 
-            marginBottom: '12px', 
+            marginBottom: isMobile ? '8px' : '12px', 
             color: '#10b981' 
           }}>
             {t('logs.memoryUsage')}
@@ -254,15 +254,15 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
 
         <div className="chart-container" style={{
           backgroundColor: 'white',
-          padding: isMobile ? '16px' : '24px',
+          padding: isMobile ? '12px' : '24px',
           borderRadius: '12px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           border: '2px solid #f59e0b'
         }}>
           <h3 style={{ 
-            fontSize: isMobile ? '14px' : '16px', 
+            fontSize: isMobile ? '13px' : '16px', 
             fontWeight: '600', 
-            marginBottom: '12px', 
+            marginBottom: isMobile ? '8px' : '12px', 
             color: '#f59e0b' 
           }}>
             {t('logs.diskUsage')}
@@ -276,15 +276,15 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
         {hasTempData && (
           <div className="chart-container" style={{
             backgroundColor: 'white',
-            padding: isMobile ? '16px' : '24px',
+            padding: isMobile ? '12px' : '24px',
             borderRadius: '12px',
             boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
             border: '2px solid #ef4444'
           }}>
             <h3 style={{ 
-              fontSize: isMobile ? '14px' : '16px', 
+              fontSize: isMobile ? '13px' : '16px', 
               fontWeight: '600', 
-              marginBottom: '12px', 
+              marginBottom: isMobile ? '8px' : '12px', 
               color: '#ef4444' 
             }}>
               {t('logs.cpuTemperature')}
