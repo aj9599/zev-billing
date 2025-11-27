@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { api } from '../api/client';
 import { useTranslation } from '../i18n';
 import { AdminLogsHeader } from './admin-logs/AdminLogsHeader';
 import { UpdateInfoCard } from './admin-logs/UpdateInfoCard';
