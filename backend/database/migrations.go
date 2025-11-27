@@ -289,6 +289,29 @@ func RunMigrations(db *sql.DB) error {
 			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
 			UNIQUE(config_id, user_id)
 		)`,
+
+		`CREATE TABLE IF NOT EXISTS app_settings (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			mobile_app_enabled INTEGER DEFAULT 0,
+			firebase_project_id TEXT DEFAULT '',
+			firebase_config TEXT DEFAULT '',
+			last_sync DATETIME,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		`CREATE TABLE IF NOT EXISTS app_users (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			username TEXT UNIQUE NOT NULL,
+			password_hash TEXT NOT NULL,
+			description TEXT,
+			permissions_json TEXT NOT NULL DEFAULT '{"meters":false,"chargers":false,"users":false,"buildings":false,"bills":false}',
+			firebase_uid TEXT UNIQUE,
+			device_id TEXT,
+			is_active INTEGER DEFAULT 1,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
 	}
 
 	for _, migration := range migrations {
@@ -344,6 +367,10 @@ func RunMigrations(db *sql.DB) error {
 	}
 
 	if err := createTriggers(db); err != nil {
+		return err
+	}
+
+	if err := initializeAppSettings(db); err != nil {
 		return err
 	}
 
@@ -634,6 +661,27 @@ func containsHelper(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func initializeAppSettings(db *sql.DB) error {
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM app_settings").Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		_, err = db.Exec(`
+			INSERT INTO app_settings (id, mobile_app_enabled, firebase_project_id, firebase_config)
+			VALUES (1, 0, '', '')
+		`)
+		if err != nil {
+			return err
+		}
+		log.Println("✅ Default app settings created")
+	}
+
+	return nil
 }
 
 func createDefaultAdmin(db *sql.DB) error {

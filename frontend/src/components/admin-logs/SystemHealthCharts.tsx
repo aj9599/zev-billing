@@ -127,7 +127,7 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       ctx.font = isMobile ? '9px sans-serif' : '11px sans-serif';
       ctx.textAlign = 'right';
       const value = maxValue - (maxValue / gridLines) * i;
-      ctx.fillText(value.toFixed(0) + (key === 'temperature' ? 'Â°C' : '%'), paddingLeft - 4, y + 3);
+      ctx.fillText(value.toFixed(0) + (key === 'temperature' ? '°C' : '%'), paddingLeft - 4, y + 3);
     }
 
     // Draw line chart

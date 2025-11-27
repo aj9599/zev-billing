@@ -71,6 +71,12 @@ func main() {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
+	firebaseSync := services.NewFirebaseSync(db)
+	if err := firebaseSync.Initialize(); err != nil {
+		log.Printf("Warning: Firebase sync initialization failed: %v", err)
+	}
+	
+	firebaseSync.StartPeriodicSync()
 	dataCollector = services.NewDataCollector(db)
 	billingService := services.NewBillingService(db)
 	pdfGenerator := services.NewPDFGenerator(db)
@@ -92,6 +98,7 @@ func main() {
 	webhookHandler := handlers.NewWebhookHandler(db)
 	sharedMeterHandler := handlers.NewSharedMeterHandler(db)
 	customItemHandler := handlers.NewCustomItemHandler(db)
+	appHandler := handlers.NewAppHandler(db, firebaseSync)
 
 	r := mux.NewRouter()
 
@@ -198,6 +205,16 @@ func main() {
 	api.HandleFunc("/custom-line-items/{id}", customItemHandler.Update).Methods("PUT")
 	api.HandleFunc("/custom-line-items/{id}", customItemHandler.Delete).Methods("DELETE")
 
+	// App Management routes
+	api.HandleFunc("/app/settings", appHandler.GetSettings).Methods("GET")
+	api.HandleFunc("/app/settings", appHandler.UpdateSettings).Methods("PUT")
+	api.HandleFunc("/app/users", appHandler.ListUsers).Methods("GET")
+	api.HandleFunc("/app/users", appHandler.CreateUser).Methods("POST")
+	api.HandleFunc("/app/users/{id}", appHandler.GetUser).Methods("GET")
+	api.HandleFunc("/app/users/{id}", appHandler.UpdateUser).Methods("PUT")
+	api.HandleFunc("/app/users/{id}", appHandler.DeleteUser).Methods("DELETE")
+	api.HandleFunc("/app/sync", appHandler.SyncToFirebase).Methods("POST")
+
 	// Serve invoice PDFs from filesystem
 	invoicesDir := "./invoices"
 	if _, err := os.Stat("/home/pi/zev-billing/backend/invoices"); err == nil {
@@ -248,6 +265,9 @@ func main() {
 			dataCollector.Stop()
 		}
 		
+		// Stop Firebase sync if needed
+		// (Firebase sync will stop automatically when app terminates)
+		
 		// Create a deadline for shutdown
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -266,6 +286,7 @@ func main() {
 	log.Println("  - Loxone WebSocket (real-time)")
 	log.Println("  - Modbus TCP (direct polling)")
 	log.Println("Auto billing scheduler running (hourly checks)")
+	log.Println("Firebase sync running (15-minute intervals)") // NEW LINE
 	log.Println("Webhook endpoints available:")
 	log.Println("  - POST/GET /webhook/meter?meter_id=X")
 	log.Println("  - POST/GET /webhook/charger?charger_id=X")

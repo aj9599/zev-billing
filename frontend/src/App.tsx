@@ -12,7 +12,9 @@ import Billing from './components/Billing';
 import AutoBilling from './components/AutoBilling';
 import PricingSettings from './components/PricingSettings';
 import Settings from './components/Settings';
-import AdminLogs from './components/AdminLogs';
+import SystemMonitor from './components/AdminLogs'; // System Monitor page (health, charts, stats)
+import ActivityLogs from './components/Logs'; // Activity Logs page (logs table)
+import AppManagement from './components/AppManagement'; // App Management page
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
@@ -50,8 +52,11 @@ function App() {
             <Route path="billing" element={<Billing />} />
             <Route path="auto-billing" element={<AutoBilling />} />
             <Route path="pricing" element={<PricingSettings />} />
+            {/* Settings submenu routes */}
+            <Route path="system-monitor" element={<SystemMonitor />} />
+            <Route path="logs" element={<ActivityLogs />} />
+            <Route path="app-management" element={<AppManagement />} />
             <Route path="settings" element={<Settings />} />
-            <Route path="logs" element={<AdminLogs />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

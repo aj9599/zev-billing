@@ -462,7 +462,7 @@ class ApiClient {
     return this.request('/system/update/apply', { method: 'POST' });
   }
 
-  // NEW: Factory Reset method
+  // Factory Reset method
   async factoryReset(): Promise<{ 
     status: string; 
     message: string; 
@@ -470,6 +470,50 @@ class ApiClient {
     backup_path: string 
   }> {
     return this.request('/system/factory-reset', { method: 'POST' });
+  }
+
+  // App Management - App Settings
+  async getAppSettings(): Promise<any> {
+    return this.request('/app/settings');
+  }
+
+  async updateAppSettings(settings: any): Promise<any> {
+    return this.request('/app/settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    });
+  }
+
+  // App Management - App Users
+  async getAppUsers(): Promise<any[]> {
+    return this.request('/app/users');
+  }
+
+  async getAppUser(id: number): Promise<any> {
+    return this.request(`/app/users/${id}`);
+  }
+
+  async createAppUser(user: any): Promise<any> {
+    return this.request('/app/users', {
+      method: 'POST',
+      body: JSON.stringify(user),
+    });
+  }
+
+  async updateAppUser(id: number, user: any): Promise<any> {
+    return this.request(`/app/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(user),
+    });
+  }
+
+  async deleteAppUser(id: number) {
+    return this.request(`/app/users/${id}`, { method: 'DELETE' });
+  }
+
+  // Firebase Sync
+  async syncToFirebase(): Promise<{ status: string; message: string }> {
+    return this.request('/app/sync', { method: 'POST' });
   }
 }
 
