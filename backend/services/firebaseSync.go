@@ -267,6 +267,7 @@ func (fs *FirebaseSync) DeleteFirebaseUser(uid string) error {
 // Data is organized by device_id for each app user
 func (fs *FirebaseSync) SyncAllData() error {
 	if !fs.enabled {
+		log.Println("ℹ️  Firebase sync is not enabled - skipping sync")
 		return fmt.Errorf("Firebase sync is not enabled or configured")
 	}
 
@@ -283,6 +284,11 @@ func (fs *FirebaseSync) SyncAllData() error {
 	if err != nil {
 		log.Printf("❌ Error getting app users: %v", err)
 		return err
+	}
+
+	if len(appUsers) == 0 {
+		log.Println("ℹ️  No app users with device_id found - nothing to sync")
+		return nil
 	}
 
 	log.Printf("📱 Found %d app users to sync", len(appUsers))
@@ -323,13 +329,20 @@ type AppUserInfo struct {
 }
 
 func (fs *FirebaseSync) getAppUsersWithDeviceIDs() ([]AppUserInfo, error) {
+	// Check if database is available
+	if fs.db == nil {
+		log.Println("⚠️  Database is nil in getAppUsersWithDeviceIDs")
+		return []AppUserInfo{}, nil
+	}
+
 	rows, err := fs.db.Query(`
 		SELECT id, username, device_id, permissions_json
 		FROM app_users
 		WHERE is_active = 1 AND device_id IS NOT NULL AND device_id != ''
 	`)
 	if err != nil {
-		return nil, err
+		log.Printf("⚠️  Error querying app users: %v", err)
+		return []AppUserInfo{}, nil // Return empty list instead of error
 	}
 	defer rows.Close()
 
@@ -351,6 +364,10 @@ func (fs *FirebaseSync) getAppUsersWithDeviceIDs() ([]AppUserInfo, error) {
 		}
 
 		users = append(users, user)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("⚠️  Error iterating app user rows: %v", err)
 	}
 
 	return users, nil
