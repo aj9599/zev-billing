@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Smartphone, Plus, Edit2, Trash2, Eye, EyeOff, Power, Users, CheckCircle, XCircle, RefreshCw, Shield, Key, Upload, AlertCircle } from 'lucide-react';
+import { Smartphone, Plus, Edit2, Trash2, Eye, EyeOff, Power, Users, CheckCircle, XCircle, RefreshCw, Shield, Key, Upload, AlertCircle, Tablet } from 'lucide-react';
 import { useTranslation } from '../i18n';
 import { api } from '../api/client';
 
@@ -45,6 +45,7 @@ export default function AppManagement() {
     username: '',
     password: '',
     description: '',
+    device_id: '', // NEW: Device ID field
     permissions: {
       meters: false,
       chargers: false,
@@ -178,11 +179,24 @@ export default function AppManagement() {
     }
   };
 
+  const generateDeviceID = () => {
+    // Generate a random device ID (you can customize this format)
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).substring(2, 7);
+    return `device_${timestamp}_${random}`;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.username || (!editingUser && !formData.password)) {
       alert(t('appManagement.fillRequiredFields') || 'Please fill in all required fields.');
+      return;
+    }
+
+    // Validate device_id is provided
+    if (!formData.device_id) {
+      alert('Please provide a Device ID or generate one.');
       return;
     }
 
@@ -201,6 +215,7 @@ export default function AppManagement() {
         username: '',
         password: '',
         description: '',
+        device_id: '',
         permissions: {
           meters: false,
           chargers: false,
@@ -222,6 +237,7 @@ export default function AppManagement() {
       username: user.username,
       password: '',
       description: user.description,
+      device_id: user.device_id || '',
       permissions: user.permissions
     });
     setShowForm(true);
@@ -670,6 +686,7 @@ export default function AppManagement() {
                     username: '',
                     password: '',
                     description: '',
+                    device_id: '',
                     permissions: {
                       meters: false,
                       chargers: false,
@@ -807,6 +824,63 @@ export default function AppManagement() {
                       </button>
                     </div>
                   </div>
+                </div>
+
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ 
+                    display: 'block', 
+                    marginBottom: '8px', 
+                    fontWeight: '600', 
+                    color: '#374151',
+                    fontSize: '14px'
+                  }}>
+                    Device ID *
+                  </label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="text"
+                      required
+                      value={formData.device_id}
+                      onChange={(e) => setFormData({ ...formData, device_id: e.target.value })}
+                      style={{ 
+                        flex: 1,
+                        padding: '12px', 
+                        border: '1px solid #d1d5db', 
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        fontFamily: 'inherit',
+                        outline: 'none',
+                        transition: 'border-color 0.2s'
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                      onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                      placeholder="Enter device ID"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, device_id: generateDeviceID() })}
+                      style={{
+                        padding: '10px 18px',
+                        backgroundColor: '#667eea',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      <Tablet size={16} />
+                      Generate
+                    </button>
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '6px 0 0 0' }}>
+                    Each device needs a unique identifier for Firebase sync
+                  </p>
                 </div>
 
                 <div style={{ marginBottom: '20px' }}>
@@ -1037,8 +1111,8 @@ export default function AppManagement() {
                         {user.description || 'No description'}
                       </p>
                       {user.device_id && (
-                        <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '4px', margin: 0 }}>
-                          Device: {user.device_id}
+                        <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '4px', margin: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Tablet size={14} /> Device: {user.device_id}
                         </p>
                       )}
                     </div>
@@ -1151,7 +1225,7 @@ export default function AppManagement() {
           width: 16px;
           height: 16px;
           border: 2px solid #d1d5db;
-          border-radius: 4px;
+          borderRadius: 4px;
           background-color: white;
           cursor: pointer;
           position: relative;
