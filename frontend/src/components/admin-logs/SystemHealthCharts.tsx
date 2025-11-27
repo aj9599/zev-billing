@@ -75,12 +75,8 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
     const rect = container.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     
-    // Account for container padding to get actual available space
-    const containerPadding = isMobile ? 24 : 48; // 12px * 2 or 24px * 2
-    const titleHeight = isMobile ? 29 : 40; // Approximate height of title + margin
-    
-    // Set canvas size based on available container space
-    const displayWidth = rect.width - containerPadding;
+    // Set canvas size based on container space (rect already accounts for container's actual size)
+    const displayWidth = rect.width;
     const displayHeight = isMobile ? 140 : 180;
     
     canvas.width = displayWidth * dpr;
@@ -143,7 +139,10 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       ctx.lineCap = 'round';
 
       values.forEach((value, index) => {
-        const x = paddingLeft + (chartWidth / Math.max(values.length - 1, 1)) * index;
+        const x = Math.min(
+          paddingLeft + (chartWidth / Math.max(values.length - 1, 1)) * index,
+          paddingLeft + chartWidth
+        );
         const y = paddingTop + chartHeight - (value / maxValue) * chartHeight;
         
         if (index === 0) {
@@ -183,7 +182,10 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
         const point = validData[index];
         
         if (point && point.timestamp) {
-          const x = paddingLeft + (chartWidth / Math.max(actualSteps - 1, 1)) * i;
+          const x = Math.min(
+            paddingLeft + (chartWidth / Math.max(actualSteps - 1, 1)) * i,
+            paddingLeft + chartWidth
+          );
           
           const date = new Date(point.timestamp);
           const timeStr = date.getHours().toString().padStart(2, '0') + ':' + 
