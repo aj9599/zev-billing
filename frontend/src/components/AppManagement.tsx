@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Smartphone, Plus, Edit2, Trash2, Eye, EyeOff, Power, Users, CheckCircle, XCircle, RefreshCw, Shield, Key, Upload, AlertCircle, Download } from 'lucide-react';
+import { Smartphone, Plus, Edit2, Trash2, Eye, EyeOff, Power, Users, CheckCircle, XCircle, RefreshCw, Shield, Key, Upload, AlertCircle } from 'lucide-react';
 import { useTranslation } from '../i18n';
 import { api } from '../api/client';
 
