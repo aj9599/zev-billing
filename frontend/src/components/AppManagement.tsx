@@ -25,6 +25,7 @@ interface AppSettings {
   mobile_app_enabled: boolean;
   firebase_project_id: string;
   firebase_config: string;
+  device_id: string;
   last_sync: string;
 }
 
@@ -45,7 +46,6 @@ export default function AppManagement() {
     username: '',
     password: '',
     description: '',
-    device_id: '', // NEW: Device ID field
     permissions: {
       meters: false,
       chargers: false,
@@ -57,7 +57,8 @@ export default function AppManagement() {
 
   const [firebaseConfig, setFirebaseConfig] = useState({
     project_id: '',
-    config_json: ''
+    config_json: '',
+    device_id: ''
   });
 
   useEffect(() => {
@@ -82,6 +83,7 @@ export default function AppManagement() {
           mobile_app_enabled: false,
           firebase_project_id: '',
           firebase_config: '',
+          device_id: '',
           last_sync: null
         }))
       ]);
@@ -91,7 +93,8 @@ export default function AppManagement() {
       if (settings?.firebase_project_id) {
         setFirebaseConfig({
           project_id: settings.firebase_project_id,
-          config_json: settings.firebase_config || ''
+          config_json: settings.firebase_config || '',
+          device_id: settings.device_id || ''
         });
       }
     } catch (err) {
@@ -109,6 +112,13 @@ export default function AppManagement() {
     // Check if Firebase is configured before enabling
     if (!appSettings.mobile_app_enabled && !appSettings.firebase_config) {
       alert(t('appManagement.configureFirebaseFirst') || 'Please configure Firebase first before enabling the mobile app.');
+      setShowFirebaseConfig(true);
+      return;
+    }
+
+    // Check if device_id is set before enabling
+    if (!appSettings.mobile_app_enabled && !appSettings.device_id) {
+      alert('Please configure Device ID first before enabling the mobile app.');
       setShowFirebaseConfig(true);
       return;
     }
@@ -146,6 +156,7 @@ export default function AppManagement() {
       }
 
       setFirebaseConfig({
+        ...firebaseConfig,
         project_id: config.project_id,
         config_json: text
       });
@@ -159,16 +170,29 @@ export default function AppManagement() {
     }
   };
 
+  const generateDeviceID = () => {
+    // Generate a random device ID for this Raspberry Pi
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).substring(2, 7);
+    return `rpi_${timestamp}_${random}`;
+  };
+
   const handleSaveFirebaseConfig = async () => {
     if (!firebaseConfig.config_json) {
       alert(t('appManagement.uploadConfigFirst') || 'Please upload a Firebase configuration file first.');
       return;
     }
 
+    if (!firebaseConfig.device_id) {
+      alert('Please provide a Device ID for this Raspberry Pi.');
+      return;
+    }
+
     try {
       const newSettings = await api.updateAppSettings({
         firebase_project_id: firebaseConfig.project_id,
-        firebase_config: firebaseConfig.config_json
+        firebase_config: firebaseConfig.config_json,
+        device_id: firebaseConfig.device_id
       });
       setAppSettings(newSettings);
       setShowFirebaseConfig(false);
@@ -179,24 +203,11 @@ export default function AppManagement() {
     }
   };
 
-  const generateDeviceID = () => {
-    // Generate a random device ID (you can customize this format)
-    const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substring(2, 7);
-    return `device_${timestamp}_${random}`;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.username || (!editingUser && !formData.password)) {
       alert(t('appManagement.fillRequiredFields') || 'Please fill in all required fields.');
-      return;
-    }
-
-    // Validate device_id is provided
-    if (!formData.device_id) {
-      alert('Please provide a Device ID or generate one.');
       return;
     }
 
@@ -215,7 +226,6 @@ export default function AppManagement() {
         username: '',
         password: '',
         description: '',
-        device_id: '',
         permissions: {
           meters: false,
           chargers: false,
@@ -237,7 +247,6 @@ export default function AppManagement() {
       username: user.username,
       password: '',
       description: user.description,
-      device_id: user.device_id || '',
       permissions: user.permissions
     });
     setShowForm(true);
@@ -361,6 +370,11 @@ export default function AppManagement() {
                 ? `Project: ${appSettings.firebase_project_id}` 
                 : 'No configuration uploaded'}
             </p>
+            {appSettings?.device_id && (
+              <p style={{ fontSize: '12px', color: '#9ca3af', margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Tablet size={14} /> Device ID: {appSettings.device_id}
+              </p>
+            )}
           </div>
           
           <button
@@ -393,23 +407,82 @@ export default function AppManagement() {
             borderRadius: '8px',
             border: '1px solid #e5e7eb'
           }}>
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                marginBottom: '12px',
-                padding: '12px',
-                backgroundColor: '#fef3c7',
-                border: '1px solid #fbbf24',
-                borderRadius: '6px'
-              }}>
-                <AlertCircle size={18} color="#d97706" />
-                <p style={{ fontSize: '13px', color: '#92400e', margin: 0, fontWeight: '500' }}>
-                  Upload your Firebase service account JSON key. This will be encrypted before storage.
-                </p>
-              </div>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '20px',
+              padding: '12px',
+              backgroundColor: '#fef3c7',
+              border: '1px solid #fbbf24',
+              borderRadius: '6px'
+            }}>
+              <AlertCircle size={18} color="#d97706" />
+              <p style={{ fontSize: '13px', color: '#92400e', margin: 0, fontWeight: '500' }}>
+                Configure this Raspberry Pi's Firebase settings. All app users created here will be assigned to this device automatically.
+              </p>
+            </div>
 
+            {/* Device ID Field */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '8px',
+                fontSize: '14px',
+                fontWeight: '600',
+                color: '#374151'
+              }}>
+                Device ID (This Raspberry Pi) *
+              </label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  required
+                  value={firebaseConfig.device_id}
+                  onChange={(e) => setFirebaseConfig({ ...firebaseConfig, device_id: e.target.value })}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontFamily: 'inherit',
+                    outline: 'none',
+                    transition: 'border-color 0.2s'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                  onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                  placeholder="e.g., rpi-house-a or rpi-building-101"
+                />
+                <button
+                  type="button"
+                  onClick={() => setFirebaseConfig({ ...firebaseConfig, device_id: generateDeviceID() })}
+                  style={{
+                    padding: '10px 18px',
+                    backgroundColor: '#667eea',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  <Tablet size={16} />
+                  Generate
+                </button>
+              </div>
+              <p style={{ fontSize: '12px', color: '#6b7280', margin: '6px 0 0 0' }}>
+                Unique identifier for this Raspberry Pi. All users will sync to this device.
+              </p>
+            </div>
+
+            {/* Firebase Config Upload */}
+            <div style={{ marginBottom: '16px' }}>
               <label style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -469,7 +542,7 @@ export default function AppManagement() {
               </label>
             </div>
 
-            {firebaseConfig.config_json && (
+            {(firebaseConfig.config_json || firebaseConfig.device_id !== appSettings?.device_id) && (
               <div style={{
                 display: 'flex',
                 gap: '12px',
@@ -479,7 +552,11 @@ export default function AppManagement() {
               }}>
                 <button
                   onClick={() => {
-                    setFirebaseConfig({ project_id: '', config_json: '' });
+                    setFirebaseConfig({ 
+                      project_id: appSettings?.firebase_project_id || '', 
+                      config_json: appSettings?.firebase_config || '',
+                      device_id: appSettings?.device_id || ''
+                    });
                     setShowFirebaseConfig(false);
                   }}
                   style={{
@@ -686,7 +763,6 @@ export default function AppManagement() {
                     username: '',
                     password: '',
                     description: '',
-                    device_id: '',
                     permissions: {
                       meters: false,
                       chargers: false,
@@ -824,63 +900,6 @@ export default function AppManagement() {
                       </button>
                     </div>
                   </div>
-                </div>
-
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{ 
-                    display: 'block', 
-                    marginBottom: '8px', 
-                    fontWeight: '600', 
-                    color: '#374151',
-                    fontSize: '14px'
-                  }}>
-                    Device ID *
-                  </label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <input
-                      type="text"
-                      required
-                      value={formData.device_id}
-                      onChange={(e) => setFormData({ ...formData, device_id: e.target.value })}
-                      style={{ 
-                        flex: 1,
-                        padding: '12px', 
-                        border: '1px solid #d1d5db', 
-                        borderRadius: '8px',
-                        fontSize: '14px',
-                        fontFamily: 'inherit',
-                        outline: 'none',
-                        transition: 'border-color 0.2s'
-                      }}
-                      onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                      onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
-                      placeholder="Enter device ID"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, device_id: generateDeviceID() })}
-                      style={{
-                        padding: '10px 18px',
-                        backgroundColor: '#667eea',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '8px',
-                        fontSize: '14px',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      <Tablet size={16} />
-                      Generate
-                    </button>
-                  </div>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '6px 0 0 0' }}>
-                    Each device needs a unique identifier for Firebase sync
-                  </p>
                 </div>
 
                 <div style={{ marginBottom: '20px' }}>

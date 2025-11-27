@@ -42,19 +42,20 @@ func (h *AppHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	var settings models.AppSettings
 	var lastSync sql.NullString
 	var encryptedConfig string
+	var deviceID sql.NullString
 	
 	err := h.db.QueryRow(`
-		SELECT mobile_app_enabled, firebase_project_id, firebase_config, last_sync
+		SELECT mobile_app_enabled, firebase_project_id, firebase_config, device_id, last_sync
 		FROM app_settings
 		WHERE id = 1
-	`).Scan(&settings.MobileAppEnabled, &settings.FirebaseProjectID, &encryptedConfig, &lastSync)
+	`).Scan(&settings.MobileAppEnabled, &settings.FirebaseProjectID, &encryptedConfig, &deviceID, &lastSync)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// Create default settings if none exist
 			_, err = h.db.Exec(`
-				INSERT INTO app_settings (id, mobile_app_enabled, firebase_project_id, firebase_config, last_sync)
-				VALUES (1, 0, '', '', NULL)
+				INSERT INTO app_settings (id, mobile_app_enabled, firebase_project_id, firebase_config, device_id, last_sync)
+				VALUES (1, 0, '', '', '', NULL)
 			`)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -64,6 +65,7 @@ func (h *AppHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 				MobileAppEnabled:  false,
 				FirebaseProjectID: "",
 				FirebaseConfig:    "",
+				DeviceID:          "",
 				LastSync:          nil,
 			}
 		} else {
@@ -85,6 +87,13 @@ func (h *AppHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 			settings.FirebaseConfig = encryptedConfig
 		}
 		
+		// Convert sql.NullString to string
+		if deviceID.Valid {
+			settings.DeviceID = deviceID.String
+		} else {
+			settings.DeviceID = ""
+		}
+		
 		// Convert sql.NullString to *string
 		if lastSync.Valid {
 			settings.LastSync = &lastSync.String
@@ -102,6 +111,7 @@ func (h *AppHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		MobileAppEnabled  *bool   `json:"mobile_app_enabled"`
 		FirebaseProjectID *string `json:"firebase_project_id"`
 		FirebaseConfig    *string `json:"firebase_config"`
+		DeviceID          *string `json:"device_id"`
 	}
 	
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -121,6 +131,11 @@ func (h *AppHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	if input.FirebaseProjectID != nil {
 		query += ", firebase_project_id = ?"
 		args = append(args, *input.FirebaseProjectID)
+	}
+
+	if input.DeviceID != nil {
+		query += ", device_id = ?"
+		args = append(args, *input.DeviceID)
 	}
 
 	if input.FirebaseConfig != nil {
@@ -189,6 +204,9 @@ func (h *AppHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if input.FirebaseConfig != nil {
 		actionDetails += " - Firebase config updated"
+	}
+	if input.DeviceID != nil {
+		actionDetails += " - Device ID: " + *input.DeviceID
 	}
 	h.logAdminAction(r, "App Settings Updated", actionDetails)
 
@@ -307,7 +325,6 @@ func (h *AppHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		Password    string                      `json:"password"`
 		Description string                      `json:"description"`
 		Permissions models.AppUserPermissions   `json:"permissions"`
-		DeviceID    string                      `json:"device_id"` // NEW: Device ID for this user
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -337,6 +354,23 @@ func (h *AppHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	if exists > 0 {
 		http.Error(w, "Username already exists", http.StatusBadRequest)
 		return
+	}
+
+	// Get system device_id from app_settings
+	var systemDeviceID sql.NullString
+	err = h.db.QueryRow("SELECT device_id FROM app_settings WHERE id = 1").Scan(&systemDeviceID)
+	if err != nil {
+		log.Printf("Warning: Failed to get system device_id: %v", err)
+		// Continue with empty device_id
+	}
+
+	deviceID := ""
+	if systemDeviceID.Valid {
+		deviceID = systemDeviceID.String
+	}
+
+	if deviceID == "" {
+		log.Println("⚠️  Warning: System device_id is not configured in app settings")
 	}
 
 	// Hash password
@@ -369,11 +403,11 @@ func (h *AppHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		log.Println("⚠️  Firebase not enabled - skipping Firebase user creation")
 	}
 
-	// Insert into database
+	// Insert into database with system device_id
 	result, err := h.db.Exec(`
 		INSERT INTO app_users (username, password_hash, description, permissions_json, firebase_uid, device_id, is_active)
 		VALUES (?, ?, ?, ?, ?, ?, 1)
-	`, input.Username, string(hashedPassword), input.Description, string(permissionsJSON), firebaseUID, input.DeviceID)
+	`, input.Username, string(hashedPassword), input.Description, string(permissionsJSON), firebaseUID, deviceID)
 
 	if err != nil {
 		// If database insert fails but Firebase user was created, try to clean up
@@ -391,8 +425,8 @@ func (h *AppHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	h.logAdminAction(r, "App User Created", "Created app user: "+input.Username)
 
 	// Sync to Firebase if enabled and device_id is set
-	if h.firebaseSync.IsEnabled() && input.DeviceID != "" {
-		log.Println("🔄 Triggering initial sync for new device...")
+	if h.firebaseSync.IsEnabled() && deviceID != "" {
+		log.Println("🔄 Triggering initial sync for new user...")
 		go h.firebaseSync.SyncAllData()
 	}
 
@@ -438,7 +472,6 @@ func (h *AppHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		Password    *string                    `json:"password"`
 		Description *string                    `json:"description"`
 		Permissions *models.AppUserPermissions `json:"permissions"`
-		DeviceID    *string                    `json:"device_id"` // NEW: Allow updating device_id
 		IsActive    *bool                      `json:"is_active"`
 	}
 
@@ -498,11 +531,6 @@ func (h *AppHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		args = append(args, *input.Description)
 	}
 
-	if input.DeviceID != nil {
-		query += ", device_id = ?"
-		args = append(args, *input.DeviceID)
-	}
-
 	if input.Permissions != nil {
 		permissionsJSON, err := json.Marshal(input.Permissions)
 		if err != nil {
@@ -530,8 +558,8 @@ func (h *AppHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	// Log the action
 	h.logAdminAction(r, "App User Updated", "Updated app user ID: "+strconv.Itoa(id))
 
-	// Trigger sync if device_id or permissions changed
-	if (input.DeviceID != nil || input.Permissions != nil) && h.firebaseSync.IsEnabled() {
+	// Trigger sync if permissions changed
+	if input.Permissions != nil && h.firebaseSync.IsEnabled() {
 		log.Println("🔄 Triggering sync after user update...")
 		go h.firebaseSync.SyncAllData()
 	}

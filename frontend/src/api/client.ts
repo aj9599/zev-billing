@@ -477,7 +477,12 @@ class ApiClient {
     return this.request('/app/settings');
   }
 
-  async updateAppSettings(settings: any): Promise<any> {
+  async updateAppSettings(settings: {
+    mobile_app_enabled?: boolean;
+    firebase_project_id?: string;
+    firebase_config?: string;
+    device_id?: string;
+  }): Promise<any> {
     return this.request('/app/settings', {
       method: 'PUT',
       body: JSON.stringify(settings),
