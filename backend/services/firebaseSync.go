@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"time"
 
+	"github.com/aj9599/zev-billing/backend/crypto"
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/auth"
 	"firebase.google.com/go/v4/db"
@@ -14,95 +16,167 @@ import (
 )
 
 type FirebaseSync struct {
-	db          *sql.DB
-	firebaseApp *firebase.App
-	authClient  *auth.Client
-	dbClient    *db.Client
-	enabled     bool
+	db             *sql.DB
+	firebaseApp    *firebase.App
+	authClient     *auth.Client
+	dbClient       *db.Client
+	enabled        bool
+	encryptionKey  []byte
+	projectID      string
 }
 
 func NewFirebaseSync(database *sql.DB) *FirebaseSync {
-	return &FirebaseSync{
-		db:      database,
-		enabled: false,
+	// Get encryption key
+	encryptionKey, err := crypto.GetEncryptionKey()
+	if err != nil {
+		log.Printf("Warning: Failed to get encryption key: %v", err)
 	}
+	
+	sync := &FirebaseSync{
+		db:            database,
+		enabled:       false,
+		encryptionKey: encryptionKey,
+	}
+	
+	// Try to initialize on creation
+	if err := sync.Initialize(); err != nil {
+		log.Printf("Firebase sync not initialized: %v", err)
+	}
+	
+	return sync
 }
 
-// Initialize Firebase with credentials
+// Initialize Firebase with credentials from database
 func (fs *FirebaseSync) Initialize() error {
 	// Check if Firebase is enabled
 	var enabled bool
-	var firebaseConfig string
+	var firebaseProjectID string
+	var encryptedConfig string
+	
 	err := fs.db.QueryRow(`
-		SELECT mobile_app_enabled, firebase_config
+		SELECT mobile_app_enabled, firebase_project_id, firebase_config
 		FROM app_settings
 		WHERE id = 1
-	`).Scan(&enabled, &firebaseConfig)
+	`).Scan(&enabled, &firebaseProjectID, &encryptedConfig)
 
-	if err != nil || !enabled || firebaseConfig == "" {
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Println("No app settings found - Firebase sync disabled")
+			fs.enabled = false
+			return nil
+		}
+		return fmt.Errorf("failed to query app settings: %v", err)
+	}
+
+	if !enabled || encryptedConfig == "" {
 		log.Println("Firebase sync not enabled or not configured")
 		fs.enabled = false
 		return nil
 	}
 
-	// Parse Firebase config
+	// Decrypt Firebase config
+	var firebaseConfig string
+	if fs.encryptionKey != nil {
+		decrypted, err := crypto.Decrypt(encryptedConfig, fs.encryptionKey)
+		if err != nil {
+			log.Printf("Failed to decrypt Firebase config: %v", err)
+			return fmt.Errorf("failed to decrypt Firebase config: %v", err)
+		}
+		firebaseConfig = decrypted
+	} else {
+		firebaseConfig = encryptedConfig
+	}
+
+	// Validate Firebase config
+	if firebaseConfig == "" {
+		log.Println("Firebase config is empty")
+		fs.enabled = false
+		return nil
+	}
+
+	// Parse Firebase config to validate
 	var config map[string]interface{}
 	if err := json.Unmarshal([]byte(firebaseConfig), &config); err != nil {
-		log.Printf("Failed to parse Firebase config: %v", err)
-		return err
+		return fmt.Errorf("failed to parse Firebase config: %v", err)
+	}
+
+	// Validate required fields
+	if _, ok := config["project_id"]; !ok {
+		return fmt.Errorf("Firebase config missing project_id")
+	}
+	if _, ok := config["private_key"]; !ok {
+		return fmt.Errorf("Firebase config missing private_key")
+	}
+	if _, ok := config["client_email"]; !ok {
+		return fmt.Errorf("Firebase config missing client_email")
+	}
+
+	// Get database URL from config or construct it
+	databaseURL, ok := config["database_url"].(string)
+	if !ok || databaseURL == "" {
+		projectID, _ := config["project_id"].(string)
+		databaseURL = fmt.Sprintf("https://%s-default-rtdb.firebaseio.com", projectID)
 	}
 
 	// Initialize Firebase app
 	ctx := context.Background()
 	opt := option.WithCredentialsJSON([]byte(firebaseConfig))
 	
-	app, err := firebase.NewApp(ctx, nil, opt)
+	conf := &firebase.Config{
+		DatabaseURL: databaseURL,
+	}
+	
+	app, err := firebase.NewApp(ctx, conf, opt)
 	if err != nil {
-		log.Printf("Failed to initialize Firebase app: %v", err)
-		return err
+		return fmt.Errorf("failed to initialize Firebase app: %v", err)
 	}
 
 	// Get Auth client
 	authClient, err := app.Auth(ctx)
 	if err != nil {
-		log.Printf("Failed to get Firebase Auth client: %v", err)
-		return err
+		return fmt.Errorf("failed to get Firebase Auth client: %v", err)
 	}
 
 	// Get Database client
 	dbClient, err := app.Database(ctx)
 	if err != nil {
-		log.Printf("Failed to get Firebase Database client: %v", err)
-		return err
+		return fmt.Errorf("failed to get Firebase Database client: %v", err)
 	}
 
 	fs.firebaseApp = app
 	fs.authClient = authClient
 	fs.dbClient = dbClient
 	fs.enabled = true
+	fs.projectID = firebaseProjectID
 
-	log.Println("✅ Firebase sync initialized successfully")
+	log.Printf("✅ Firebase sync initialized successfully (Project: %s)", firebaseProjectID)
 	return nil
 }
 
 // CreateFirebaseUser creates a user in Firebase Authentication
 func (fs *FirebaseSync) CreateFirebaseUser(username, password string) (string, error) {
 	if !fs.enabled {
+		log.Println("Firebase sync not enabled - skipping user creation")
 		return "", nil
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Create email from username (use your domain)
+	email := username + "@zev-app.local"
+
 	params := (&auth.UserToCreate{}).
-		Email(username + "@app.local"). // Using app.local domain for app users
+		Email(email).
 		Password(password).
 		DisplayName(username)
 
 	user, err := fs.authClient.CreateUser(ctx, params)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create Firebase user: %v", err)
 	}
 
-	log.Printf("Created Firebase user: %s (UID: %s)", username, user.UID)
+	log.Printf("✅ Created Firebase user: %s (UID: %s)", username, user.UID)
 	return user.UID, nil
 }
 
@@ -112,15 +186,17 @@ func (fs *FirebaseSync) UpdateFirebasePassword(uid, newPassword string) error {
 		return nil
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	params := (&auth.UserToUpdate{}).Password(newPassword)
 	
 	_, err := fs.authClient.UpdateUser(ctx, uid, params)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to update Firebase password: %v", err)
 	}
 
-	log.Printf("Updated Firebase user password: %s", uid)
+	log.Printf("✅ Updated Firebase user password: %s", uid)
 	return nil
 }
 
@@ -130,57 +206,88 @@ func (fs *FirebaseSync) DeleteFirebaseUser(uid string) error {
 		return nil
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	err := fs.authClient.DeleteUser(ctx, uid)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to delete Firebase user: %v", err)
 	}
 
-	log.Printf("Deleted Firebase user: %s", uid)
+	log.Printf("✅ Deleted Firebase user: %s", uid)
 	return nil
 }
 
 // SyncAllData synchronizes all data from SQL to Firebase Realtime Database
 func (fs *FirebaseSync) SyncAllData() error {
 	if !fs.enabled {
-		return nil
+		return fmt.Errorf("Firebase sync is not enabled or configured")
 	}
 
 	log.Println("🔄 Starting Firebase data sync...")
+	startTime := time.Now()
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	errors := []error{}
 
 	// Sync Users
 	if err := fs.syncUsers(ctx); err != nil {
-		log.Printf("Error syncing users: %v", err)
+		log.Printf("❌ Error syncing users: %v", err)
+		errors = append(errors, err)
+	} else {
+		log.Println("✅ Users synced")
 	}
 
 	// Sync Buildings
 	if err := fs.syncBuildings(ctx); err != nil {
-		log.Printf("Error syncing buildings: %v", err)
+		log.Printf("❌ Error syncing buildings: %v", err)
+		errors = append(errors, err)
+	} else {
+		log.Println("✅ Buildings synced")
 	}
 
 	// Sync Meters
 	if err := fs.syncMeters(ctx); err != nil {
-		log.Printf("Error syncing meters: %v", err)
+		log.Printf("❌ Error syncing meters: %v", err)
+		errors = append(errors, err)
+	} else {
+		log.Println("✅ Meters synced")
 	}
 
 	// Sync Chargers
 	if err := fs.syncChargers(ctx); err != nil {
-		log.Printf("Error syncing chargers: %v", err)
+		log.Printf("❌ Error syncing chargers: %v", err)
+		errors = append(errors, err)
+	} else {
+		log.Println("✅ Chargers synced")
 	}
 
 	// Sync Invoices
 	if err := fs.syncInvoices(ctx); err != nil {
-		log.Printf("Error syncing invoices: %v", err)
+		log.Printf("❌ Error syncing invoices: %v", err)
+		errors = append(errors, err)
+	} else {
+		log.Println("✅ Invoices synced")
 	}
 
-	// Sync App Users with Device Mappings
+	// Sync App Users with permissions
 	if err := fs.syncAppUsers(ctx); err != nil {
-		log.Printf("Error syncing app users: %v", err)
+		log.Printf("❌ Error syncing app users: %v", err)
+		errors = append(errors, err)
+	} else {
+		log.Println("✅ App users synced")
 	}
 
-	log.Println("✅ Firebase data sync completed")
+	duration := time.Since(startTime)
+	
+	if len(errors) > 0 {
+		log.Printf("⚠️  Firebase sync completed with %d errors in %v", len(errors), duration)
+		return fmt.Errorf("sync completed with %d errors", len(errors))
+	}
+
+	log.Printf("✅ Firebase data sync completed successfully in %v", duration)
 	return nil
 }
 
@@ -200,6 +307,7 @@ func (fs *FirebaseSync) syncUsers(ctx context.Context) error {
 	ref := fs.dbClient.NewRef("users")
 	usersData := make(map[string]interface{})
 
+	count := 0
 	for rows.Next() {
 		var id int
 		var firstName, lastName, email, phone, apartmentUnit, userType string
@@ -209,6 +317,7 @@ func (fs *FirebaseSync) syncUsers(ctx context.Context) error {
 		err := rows.Scan(&id, &firstName, &lastName, &email, &phone, &buildingID, 
 			&apartmentUnit, &userType, &isActive)
 		if err != nil {
+			log.Printf("Warning: Failed to scan user row: %v", err)
 			continue
 		}
 
@@ -227,10 +336,16 @@ func (fs *FirebaseSync) syncUsers(ctx context.Context) error {
 			userData["building_id"] = *buildingID
 		}
 
-		usersData[string(rune(id))] = userData
+		usersData[fmt.Sprintf("%d", id)] = userData
+		count++
 	}
 
-	return ref.Set(ctx, usersData)
+	if err := ref.Set(ctx, usersData); err != nil {
+		return fmt.Errorf("failed to sync users: %v", err)
+	}
+
+	log.Printf("  Synced %d users", count)
+	return nil
 }
 
 // syncBuildings syncs buildings to Firebase
@@ -248,36 +363,46 @@ func (fs *FirebaseSync) syncBuildings(ctx context.Context) error {
 	ref := fs.dbClient.NewRef("buildings")
 	buildingsData := make(map[string]interface{})
 
+	count := 0
 	for rows.Next() {
 		var id int
-		var name, street, city, zip, country, floorsConfig string
+		var name, street, city, zip, country string
+		var floorsConfig sql.NullString
 		var hasApartments bool
 
 		err := rows.Scan(&id, &name, &street, &city, &zip, &country, &hasApartments, &floorsConfig)
 		if err != nil {
+			log.Printf("Warning: Failed to scan building row: %v", err)
 			continue
 		}
 
 		buildingData := map[string]interface{}{
-			"id":             id,
-			"name":           name,
-			"address_street": street,
-			"address_city":   city,
-			"address_zip":    zip,
+			"id":              id,
+			"name":            name,
+			"address_street":  street,
+			"address_city":    city,
+			"address_zip":     zip,
 			"address_country": country,
-			"has_apartments": hasApartments,
+			"has_apartments":  hasApartments,
 		}
 
-		if floorsConfig != "" {
+		if floorsConfig.Valid && floorsConfig.String != "" {
 			var floors []interface{}
-			json.Unmarshal([]byte(floorsConfig), &floors)
-			buildingData["floors_config"] = floors
+			if err := json.Unmarshal([]byte(floorsConfig.String), &floors); err == nil {
+				buildingData["floors_config"] = floors
+			}
 		}
 
-		buildingsData[string(rune(id))] = buildingData
+		buildingsData[fmt.Sprintf("%d", id)] = buildingData
+		count++
 	}
 
-	return ref.Set(ctx, buildingsData)
+	if err := ref.Set(ctx, buildingsData); err != nil {
+		return fmt.Errorf("failed to sync buildings: %v", err)
+	}
+
+	log.Printf("  Synced %d buildings", count)
+	return nil
 }
 
 // syncMeters syncs meters to Firebase
@@ -296,6 +421,7 @@ func (fs *FirebaseSync) syncMeters(ctx context.Context) error {
 	ref := fs.dbClient.NewRef("meters")
 	metersData := make(map[string]interface{})
 
+	count := 0
 	for rows.Next() {
 		var id, buildingID int
 		var name, meterType, apartmentUnit string
@@ -307,6 +433,7 @@ func (fs *FirebaseSync) syncMeters(ctx context.Context) error {
 		err := rows.Scan(&id, &name, &meterType, &buildingID, &userID, &apartmentUnit,
 			&lastReading, &lastReadingTime, &isActive)
 		if err != nil {
+			log.Printf("Warning: Failed to scan meter row: %v", err)
 			continue
 		}
 
@@ -328,10 +455,16 @@ func (fs *FirebaseSync) syncMeters(ctx context.Context) error {
 			meterData["last_reading_time"] = lastReadingTime.Unix()
 		}
 
-		metersData[string(rune(id))] = meterData
+		metersData[fmt.Sprintf("%d", id)] = meterData
+		count++
 	}
 
-	return ref.Set(ctx, metersData)
+	if err := ref.Set(ctx, metersData); err != nil {
+		return fmt.Errorf("failed to sync meters: %v", err)
+	}
+
+	log.Printf("  Synced %d meters", count)
+	return nil
 }
 
 // syncChargers syncs chargers to Firebase
@@ -349,6 +482,7 @@ func (fs *FirebaseSync) syncChargers(ctx context.Context) error {
 	ref := fs.dbClient.NewRef("chargers")
 	chargersData := make(map[string]interface{})
 
+	count := 0
 	for rows.Next() {
 		var id, buildingID int
 		var name, brand string
@@ -356,6 +490,7 @@ func (fs *FirebaseSync) syncChargers(ctx context.Context) error {
 
 		err := rows.Scan(&id, &name, &brand, &buildingID, &supportsPriority, &isActive)
 		if err != nil {
+			log.Printf("Warning: Failed to scan charger row: %v", err)
 			continue
 		}
 
@@ -368,16 +503,22 @@ func (fs *FirebaseSync) syncChargers(ctx context.Context) error {
 			"is_active":         isActive,
 		}
 
-		chargersData[string(rune(id))] = chargerData
+		chargersData[fmt.Sprintf("%d", id)] = chargerData
+		count++
 	}
 
-	return ref.Set(ctx, chargersData)
+	if err := ref.Set(ctx, chargersData); err != nil {
+		return fmt.Errorf("failed to sync chargers: %v", err)
+	}
+
+	log.Printf("  Synced %d chargers", count)
+	return nil
 }
 
 // syncInvoices syncs recent invoices to Firebase
 func (fs *FirebaseSync) syncInvoices(ctx context.Context) error {
-	// Only sync invoices from last 6 months
-	sixMonthsAgo := time.Now().AddDate(0, -6, 0)
+	// Only sync invoices from last 12 months
+	twelveMonthsAgo := time.Now().AddDate(0, -12, 0)
 
 	rows, err := fs.db.Query(`
 		SELECT id, invoice_number, user_id, building_id, period_start, period_end,
@@ -385,7 +526,8 @@ func (fs *FirebaseSync) syncInvoices(ctx context.Context) error {
 		FROM invoices
 		WHERE generated_at > ?
 		ORDER BY generated_at DESC
-	`, sixMonthsAgo)
+		LIMIT 1000
+	`, twelveMonthsAgo)
 	if err != nil {
 		return err
 	}
@@ -394,15 +536,18 @@ func (fs *FirebaseSync) syncInvoices(ctx context.Context) error {
 	ref := fs.dbClient.NewRef("invoices")
 	invoicesData := make(map[string]interface{})
 
+	count := 0
 	for rows.Next() {
 		var id, userID, buildingID int
-		var invoiceNumber, periodStart, periodEnd, currency, status, pdfPath string
+		var invoiceNumber, periodStart, periodEnd, currency, status string
+		var pdfPath sql.NullString
 		var totalAmount float64
 		var generatedAt time.Time
 
 		err := rows.Scan(&id, &invoiceNumber, &userID, &buildingID, &periodStart, &periodEnd,
 			&totalAmount, &currency, &status, &pdfPath, &generatedAt)
 		if err != nil {
+			log.Printf("Warning: Failed to scan invoice row: %v", err)
 			continue
 		}
 
@@ -416,14 +561,23 @@ func (fs *FirebaseSync) syncInvoices(ctx context.Context) error {
 			"total_amount":   totalAmount,
 			"currency":       currency,
 			"status":         status,
-			"pdf_path":       pdfPath,
 			"generated_at":   generatedAt.Unix(),
 		}
 
-		invoicesData[string(rune(id))] = invoiceData
+		if pdfPath.Valid {
+			invoiceData["pdf_path"] = pdfPath.String
+		}
+
+		invoicesData[fmt.Sprintf("%d", id)] = invoiceData
+		count++
 	}
 
-	return ref.Set(ctx, invoicesData)
+	if err := ref.Set(ctx, invoicesData); err != nil {
+		return fmt.Errorf("failed to sync invoices: %v", err)
+	}
+
+	log.Printf("  Synced %d invoices", count)
+	return nil
 }
 
 // syncAppUsers syncs app users and their permissions to Firebase
@@ -441,42 +595,58 @@ func (fs *FirebaseSync) syncAppUsers(ctx context.Context) error {
 	ref := fs.dbClient.NewRef("app_users")
 	usersData := make(map[string]interface{})
 
+	count := 0
 	for rows.Next() {
 		var id int
-		var username, firebaseUID, deviceID, permissionsJSON string
+		var username, permissionsJSON string
+		var firebaseUID, deviceID sql.NullString
 		var isActive bool
 
 		err := rows.Scan(&id, &username, &firebaseUID, &deviceID, &permissionsJSON, &isActive)
 		if err != nil {
+			log.Printf("Warning: Failed to scan app user row: %v", err)
 			continue
 		}
 
 		var permissions map[string]bool
-		json.Unmarshal([]byte(permissionsJSON), &permissions)
+		if err := json.Unmarshal([]byte(permissionsJSON), &permissions); err != nil {
+			log.Printf("Warning: Failed to parse permissions for user %d: %v", id, err)
+			permissions = make(map[string]bool)
+		}
 
 		userData := map[string]interface{}{
 			"id":          id,
 			"username":    username,
-			"device_id":   deviceID,
 			"permissions": permissions,
 			"is_active":   isActive,
 		}
 
+		if deviceID.Valid {
+			userData["device_id"] = deviceID.String
+		}
+
 		// Use Firebase UID as key if available, otherwise use ID
-		key := firebaseUID
-		if key == "" {
-			key = string(rune(id))
+		key := fmt.Sprintf("%d", id)
+		if firebaseUID.Valid && firebaseUID.String != "" {
+			key = firebaseUID.String
 		}
 
 		usersData[key] = userData
+		count++
 	}
 
-	return ref.Set(ctx, usersData)
+	if err := ref.Set(ctx, usersData); err != nil {
+		return fmt.Errorf("failed to sync app users: %v", err)
+	}
+
+	log.Printf("  Synced %d app users", count)
+	return nil
 }
 
 // StartPeriodicSync starts a goroutine that syncs data every 15 minutes
 func (fs *FirebaseSync) StartPeriodicSync() {
 	if !fs.enabled {
+		log.Println("Firebase periodic sync not started - sync is disabled")
 		return
 	}
 
@@ -484,13 +654,23 @@ func (fs *FirebaseSync) StartPeriodicSync() {
 		ticker := time.NewTicker(15 * time.Minute)
 		defer ticker.Stop()
 
+		log.Println("✅ Firebase periodic sync started (15-minute intervals)")
+
 		for range ticker.C {
 			log.Println("🔄 Starting periodic Firebase sync...")
 			if err := fs.SyncAllData(); err != nil {
-				log.Printf("Periodic sync error: %v", err)
+				log.Printf("❌ Periodic sync error: %v", err)
 			}
 		}
 	}()
+}
 
-	log.Println("✅ Firebase periodic sync started (15-minute intervals)")
+// IsEnabled returns whether Firebase sync is enabled
+func (fs *FirebaseSync) IsEnabled() bool {
+	return fs.enabled
+}
+
+// GetProjectID returns the Firebase project ID
+func (fs *FirebaseSync) GetProjectID() string {
+	return fs.projectID
 }

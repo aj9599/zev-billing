@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/aj9599/zev-billing/backend/crypto"
 	"github.com/aj9599/zev-billing/backend/models"
 	"github.com/aj9599/zev-billing/backend/services"
 	"github.com/gorilla/mux"
@@ -16,12 +17,21 @@ import (
 type AppHandler struct {
 	db            *sql.DB
 	firebaseSync  *services.FirebaseSync
+	encryptionKey []byte
 }
 
 func NewAppHandler(db *sql.DB, firebaseSync *services.FirebaseSync) *AppHandler {
+	// Get encryption key for Firebase config
+	encryptionKey, err := crypto.GetEncryptionKey()
+	if err != nil {
+		log.Printf("Warning: Failed to get encryption key: %v", err)
+		log.Println("⚠️  Firebase configuration will not be encrypted!")
+	}
+	
 	return &AppHandler{
-		db:           db,
-		firebaseSync: firebaseSync,
+		db:            db,
+		firebaseSync:  firebaseSync,
+		encryptionKey: encryptionKey,
 	}
 }
 
@@ -30,12 +40,13 @@ func NewAppHandler(db *sql.DB, firebaseSync *services.FirebaseSync) *AppHandler 
 func (h *AppHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	var settings models.AppSettings
 	var lastSync sql.NullString
+	var encryptedConfig string
 	
 	err := h.db.QueryRow(`
 		SELECT mobile_app_enabled, firebase_project_id, firebase_config, last_sync
 		FROM app_settings
 		WHERE id = 1
-	`).Scan(&settings.MobileAppEnabled, &settings.FirebaseProjectID, &settings.FirebaseConfig, &lastSync)
+	`).Scan(&settings.MobileAppEnabled, &settings.FirebaseProjectID, &encryptedConfig, &lastSync)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -59,6 +70,20 @@ func (h *AppHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
+		// Decrypt Firebase config if it exists
+		if encryptedConfig != "" && h.encryptionKey != nil {
+			decrypted, err := crypto.Decrypt(encryptedConfig, h.encryptionKey)
+			if err != nil {
+				log.Printf("Warning: Failed to decrypt Firebase config: %v", err)
+				// Don't fail the request, just log the error
+				settings.FirebaseConfig = ""
+			} else {
+				settings.FirebaseConfig = decrypted
+			}
+		} else {
+			settings.FirebaseConfig = encryptedConfig
+		}
+		
 		// Convert sql.NullString to *string
 		if lastSync.Valid {
 			settings.LastSync = &lastSync.String
@@ -72,25 +97,93 @@ func (h *AppHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AppHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
-	var settings models.AppSettings
-	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
+	var input struct {
+		MobileAppEnabled  *bool   `json:"mobile_app_enabled"`
+		FirebaseProjectID *string `json:"firebase_project_id"`
+		FirebaseConfig    *string `json:"firebase_config"`
+	}
+	
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	_, err := h.db.Exec(`
-		UPDATE app_settings
-		SET mobile_app_enabled = ?, firebase_project_id = ?, firebase_config = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE id = 1
-	`, settings.MobileAppEnabled, settings.FirebaseProjectID, settings.FirebaseConfig)
+	// Build update query dynamically
+	query := "UPDATE app_settings SET updated_at = CURRENT_TIMESTAMP"
+	args := []interface{}{}
 
+	if input.MobileAppEnabled != nil {
+		query += ", mobile_app_enabled = ?"
+		args = append(args, *input.MobileAppEnabled)
+	}
+
+	if input.FirebaseProjectID != nil {
+		query += ", firebase_project_id = ?"
+		args = append(args, *input.FirebaseProjectID)
+	}
+
+	if input.FirebaseConfig != nil {
+		// Validate Firebase config JSON
+		var configMap map[string]interface{}
+		if err := json.Unmarshal([]byte(*input.FirebaseConfig), &configMap); err != nil {
+			http.Error(w, "Invalid Firebase configuration JSON", http.StatusBadRequest)
+			return
+		}
+		
+		// Validate required fields
+		if _, ok := configMap["project_id"]; !ok {
+			http.Error(w, "Firebase config missing project_id", http.StatusBadRequest)
+			return
+		}
+		if _, ok := configMap["private_key"]; !ok {
+			http.Error(w, "Firebase config missing private_key", http.StatusBadRequest)
+			return
+		}
+		if _, ok := configMap["client_email"]; !ok {
+			http.Error(w, "Firebase config missing client_email", http.StatusBadRequest)
+			return
+		}
+		
+		// Encrypt the Firebase config before storing
+		var encryptedConfig string
+		if h.encryptionKey != nil {
+			encrypted, err := crypto.Encrypt(*input.FirebaseConfig, h.encryptionKey)
+			if err != nil {
+				log.Printf("Warning: Failed to encrypt Firebase config: %v", err)
+				encryptedConfig = *input.FirebaseConfig // Store unencrypted as fallback
+			} else {
+				encryptedConfig = encrypted
+			}
+		} else {
+			encryptedConfig = *input.FirebaseConfig
+		}
+		
+		query += ", firebase_config = ?"
+		args = append(args, encryptedConfig)
+		
+		// Reinitialize Firebase with new config
+		if err := h.firebaseSync.Initialize(); err != nil {
+			log.Printf("Warning: Failed to reinitialize Firebase: %v", err)
+		}
+	}
+
+	query += " WHERE id = 1"
+
+	_, err := h.db.Exec(query, args...)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// Log the action
-	h.logAdminAction(r, "App Settings Updated", "Mobile app enabled: "+strconv.FormatBool(settings.MobileAppEnabled))
+	actionDetails := "App settings updated"
+	if input.MobileAppEnabled != nil {
+		actionDetails += " - Mobile app: " + strconv.FormatBool(*input.MobileAppEnabled)
+	}
+	if input.FirebaseConfig != nil {
+		actionDetails += " - Firebase config updated"
+	}
+	h.logAdminAction(r, "App Settings Updated", actionDetails)
 
 	// Return updated settings
 	h.GetSettings(w, r)
@@ -114,14 +207,24 @@ func (h *AppHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var user models.AppUser
 		var permissionsJSON string
+		var firebaseUID, deviceID sql.NullString
+		
 		err := rows.Scan(
 			&user.ID, &user.Username, &user.Description, &permissionsJSON,
-			&user.FirebaseUID, &user.DeviceID, &user.IsActive,
+			&firebaseUID, &deviceID, &user.IsActive,
 			&user.CreatedAt, &user.UpdatedAt,
 		)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+
+		// Handle nullable fields
+		if firebaseUID.Valid {
+			user.FirebaseUID = firebaseUID.String
+		}
+		if deviceID.Valid {
+			user.DeviceID = deviceID.String
 		}
 
 		// Parse permissions JSON
@@ -152,13 +255,15 @@ func (h *AppHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 
 	var user models.AppUser
 	var permissionsJSON string
+	var firebaseUID, deviceID sql.NullString
+	
 	err = h.db.QueryRow(`
 		SELECT id, username, description, permissions_json, firebase_uid, device_id, is_active, created_at, updated_at
 		FROM app_users
 		WHERE id = ?
 	`, id).Scan(
 		&user.ID, &user.Username, &user.Description, &permissionsJSON,
-		&user.FirebaseUID, &user.DeviceID, &user.IsActive,
+		&firebaseUID, &deviceID, &user.IsActive,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -169,6 +274,14 @@ func (h *AppHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
+	}
+
+	// Handle nullable fields
+	if firebaseUID.Valid {
+		user.FirebaseUID = firebaseUID.String
+	}
+	if deviceID.Valid {
+		user.DeviceID = deviceID.String
 	}
 
 	// Parse permissions JSON
@@ -197,6 +310,12 @@ func (h *AppHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	// Validate required fields
 	if input.Username == "" || input.Password == "" {
 		http.Error(w, "Username and password are required", http.StatusBadRequest)
+		return
+	}
+
+	// Validate password strength
+	if len(input.Password) < 6 {
+		http.Error(w, "Password must be at least 6 characters long", http.StatusBadRequest)
 		return
 	}
 
@@ -241,6 +360,10 @@ func (h *AppHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	`, input.Username, string(hashedPassword), input.Description, string(permissionsJSON), firebaseUID)
 
 	if err != nil {
+		// If database insert fails but Firebase user was created, try to clean up
+		if firebaseUID != "" {
+			h.firebaseSync.DeleteFirebaseUser(firebaseUID)
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -252,18 +375,27 @@ func (h *AppHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	// Return created user
 	var user models.AppUser
+	var permissionsJSONStr string
+	var fuid, did sql.NullString
+	
 	err = h.db.QueryRow(`
 		SELECT id, username, description, permissions_json, firebase_uid, device_id, is_active, created_at, updated_at
 		FROM app_users
 		WHERE id = ?
 	`, id).Scan(
-		&user.ID, &user.Username, &user.Description, &permissionsJSON,
-		&user.FirebaseUID, &user.DeviceID, &user.IsActive,
+		&user.ID, &user.Username, &user.Description, &permissionsJSONStr,
+		&fuid, &did, &user.IsActive,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
 	if err == nil {
-		json.Unmarshal([]byte(permissionsJSON), &user.Permissions)
+		if fuid.Valid {
+			user.FirebaseUID = fuid.String
+		}
+		if did.Valid {
+			user.DeviceID = did.String
+		}
+		json.Unmarshal([]byte(permissionsJSONStr), &user.Permissions)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(user)
@@ -296,11 +428,29 @@ func (h *AppHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	args := []interface{}{}
 
 	if input.Username != nil {
+		// Check if new username already exists
+		var exists int
+		err := h.db.QueryRow("SELECT COUNT(*) FROM app_users WHERE username = ? AND id != ?", *input.Username, id).Scan(&exists)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if exists > 0 {
+			http.Error(w, "Username already exists", http.StatusBadRequest)
+			return
+		}
+		
 		query += ", username = ?"
 		args = append(args, *input.Username)
 	}
 
 	if input.Password != nil && *input.Password != "" {
+		// Validate password strength
+		if len(*input.Password) < 6 {
+			http.Error(w, "Password must be at least 6 characters long", http.StatusBadRequest)
+			return
+		}
+		
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(*input.Password), bcrypt.DefaultCost)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -310,10 +460,10 @@ func (h *AppHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		args = append(args, string(hashedPassword))
 
 		// Update password in Firebase as well
-		var firebaseUID string
+		var firebaseUID sql.NullString
 		h.db.QueryRow("SELECT firebase_uid FROM app_users WHERE id = ?", id).Scan(&firebaseUID)
-		if firebaseUID != "" {
-			if err := h.firebaseSync.UpdateFirebasePassword(firebaseUID, *input.Password); err != nil {
+		if firebaseUID.Valid && firebaseUID.String != "" {
+			if err := h.firebaseSync.UpdateFirebasePassword(firebaseUID.String, *input.Password); err != nil {
 				log.Printf("Warning: Failed to update Firebase password: %v", err)
 			}
 		}
@@ -354,17 +504,25 @@ func (h *AppHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	// Return updated user
 	var user models.AppUser
 	var permissionsJSON string
+	var firebaseUID, deviceID sql.NullString
+	
 	err = h.db.QueryRow(`
 		SELECT id, username, description, permissions_json, firebase_uid, device_id, is_active, created_at, updated_at
 		FROM app_users
 		WHERE id = ?
 	`, id).Scan(
 		&user.ID, &user.Username, &user.Description, &permissionsJSON,
-		&user.FirebaseUID, &user.DeviceID, &user.IsActive,
+		&firebaseUID, &deviceID, &user.IsActive,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
 	if err == nil {
+		if firebaseUID.Valid {
+			user.FirebaseUID = firebaseUID.String
+		}
+		if deviceID.Valid {
+			user.DeviceID = deviceID.String
+		}
 		json.Unmarshal([]byte(permissionsJSON), &user.Permissions)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(user)
@@ -380,7 +538,7 @@ func (h *AppHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get Firebase UID before deleting
-	var firebaseUID string
+	var firebaseUID sql.NullString
 	h.db.QueryRow("SELECT firebase_uid FROM app_users WHERE id = ?", id).Scan(&firebaseUID)
 
 	// Delete from database
@@ -391,8 +549,8 @@ func (h *AppHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Delete from Firebase
-	if firebaseUID != "" {
-		if err := h.firebaseSync.DeleteFirebaseUser(firebaseUID); err != nil {
+	if firebaseUID.Valid && firebaseUID.String != "" {
+		if err := h.firebaseSync.DeleteFirebaseUser(firebaseUID.String); err != nil {
 			log.Printf("Warning: Failed to delete Firebase user: %v", err)
 		}
 	}

@@ -1,0 +1,68 @@
+# Environment variables with secrets
+.env
+.env.local
+.env.production
+
+# Firebase service account keys
+*-firebase-adminsdk-*.json
+firebase-credentials.json
+service-account-*.json
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+data/
+
+# Backup files
+backups/
+*.backup
+
+# Log files
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+bin/
+
+# Node modules (if using any JS tools)
+node_modules/
+
+# Go build files
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test coverage
+*.out
+coverage/
+
+# PDF output directory
+invoices/
+pdfs/
+
+# Certificates and keys
+*.pem
+*.key
+*.crt
+*.cert
