@@ -75,9 +75,13 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
     const rect = container.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     
-    // Set canvas size based on container - reduced heights for better ratio
-    const displayWidth = rect.width;
-    const displayHeight = isMobile ? 140 : 200;
+    // Account for container padding to get actual available space
+    const containerPadding = isMobile ? 24 : 48; // 12px * 2 or 24px * 2
+    const titleHeight = isMobile ? 29 : 40; // Approximate height of title + margin
+    
+    // Set canvas size based on available container space
+    const displayWidth = rect.width - containerPadding;
+    const displayHeight = isMobile ? 140 : 180;
     
     canvas.width = displayWidth * dpr;
     canvas.height = displayHeight * dpr;
@@ -91,10 +95,10 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
     const height = displayHeight;
     
     // Responsive padding - ensure right padding prevents overflow
-    const paddingTop = isMobile ? 15 : 25;
-    const paddingBottom = isMobile ? 22 : 30;
+    const paddingTop = isMobile ? 15 : 20;
+    const paddingBottom = isMobile ? 22 : 25;
     const paddingLeft = isMobile ? 28 : 35;
-    const paddingRight = isMobile ? 8 : 15;
+    const paddingRight = isMobile ? 12 : 15;
     
     const chartWidth = width - paddingLeft - paddingRight;
     const chartHeight = height - paddingTop - paddingBottom;
@@ -127,7 +131,7 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       ctx.font = isMobile ? '9px sans-serif' : '11px sans-serif';
       ctx.textAlign = 'right';
       const value = maxValue - (maxValue / gridLines) * i;
-      ctx.fillText(value.toFixed(0) + (key === 'temperature' ? '°C' : '%'), paddingLeft - 4, y + 3);
+      ctx.fillText(value.toFixed(0) + (key === 'temperature' ? 'Â°C' : '%'), paddingLeft - 4, y + 3);
     }
 
     // Draw line chart
@@ -215,7 +219,8 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
           padding: isMobile ? '12px' : '24px',
           borderRadius: '12px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          border: '2px solid #667eea'
+          border: '2px solid #667eea',
+          overflow: 'hidden'
         }}>
           <h3 style={{ 
             fontSize: isMobile ? '13px' : '16px', 
@@ -227,7 +232,7 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
           </h3>
           <canvas
             ref={cpuCanvasRef}
-            style={{ width: '100%', display: 'block' }}
+            style={{ width: '100%', display: 'block', maxWidth: '100%' }}
           />
         </div>
 
@@ -236,7 +241,8 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
           padding: isMobile ? '12px' : '24px',
           borderRadius: '12px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          border: '2px solid #10b981'
+          border: '2px solid #10b981',
+          overflow: 'hidden'
         }}>
           <h3 style={{ 
             fontSize: isMobile ? '13px' : '16px', 
@@ -248,7 +254,7 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
           </h3>
           <canvas
             ref={memoryCanvasRef}
-            style={{ width: '100%', display: 'block' }}
+            style={{ width: '100%', display: 'block', maxWidth: '100%' }}
           />
         </div>
 
@@ -257,7 +263,8 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
           padding: isMobile ? '12px' : '24px',
           borderRadius: '12px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          border: '2px solid #f59e0b'
+          border: '2px solid #f59e0b',
+          overflow: 'hidden'
         }}>
           <h3 style={{ 
             fontSize: isMobile ? '13px' : '16px', 
@@ -269,7 +276,7 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
           </h3>
           <canvas
             ref={diskCanvasRef}
-            style={{ width: '100%', display: 'block' }}
+            style={{ width: '100%', display: 'block', maxWidth: '100%' }}
           />
         </div>
 
@@ -279,7 +286,8 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
             padding: isMobile ? '12px' : '24px',
             borderRadius: '12px',
             boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            border: '2px solid #ef4444'
+            border: '2px solid #ef4444',
+            overflow: 'hidden'
           }}>
             <h3 style={{ 
               fontSize: isMobile ? '13px' : '16px', 
@@ -291,7 +299,7 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
             </h3>
             <canvas
               ref={tempCanvasRef}
-              style={{ width: '100%', display: 'block' }}
+              style={{ width: '100%', display: 'block', maxWidth: '100%' }}
             />
           </div>
         )}
