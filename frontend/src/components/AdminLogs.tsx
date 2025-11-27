@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
-import type { AdminLog } from '../types';
 import { useTranslation } from '../i18n';
 import { AdminLogsHeader } from './admin-logs/AdminLogsHeader';
 import { UpdateInfoCard } from './admin-logs/UpdateInfoCard';
@@ -8,8 +7,6 @@ import { SystemHealthCards } from './admin-logs/SystemHealthCards';
 import { DebugInfoCards } from './admin-logs/DebugInfoCards';
 import { StatisticsCards } from './admin-logs/StatisticsCards';
 import { SystemHealthCharts } from './admin-logs/SystemHealthCharts';
-import { LogsTable } from './admin-logs/LogsTable';
-import { LogsTableMobile } from './admin-logs/LogsTableMobile';
 import { UpdateOverlay } from './admin-logs/UpdateOverlay';
 import { FactoryResetModal } from './admin-logs/FactoryResetModal';
 import { useSystemHealth } from './admin-logs/hooks/useSystemHealth';
@@ -18,11 +15,7 @@ import { useSystemActions } from './admin-logs/hooks/useSystemActions';
 
 export default function AdminLogs() {
   const { t } = useTranslation();
-  const [logs, setLogs] = useState<AdminLog[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isLive, setIsLive] = useState(true);
-  const [logLimit, setLogLimit] = useState(200);
-  const [showAllLogs, setShowAllLogs] = useState(false);
 
   const { systemHealth, debugInfo, healthHistory, loadDebugInfo } = useSystemHealth();
   const { updateInfo, showUpdateCard, setShowUpdateCard, checkingUpdates, checkForUpdates } = useUpdateInfo();
@@ -50,7 +43,6 @@ export default function AdminLogs() {
 
   // Initial load
   useEffect(() => {
-    loadLogs();
     loadDebugInfo();
     checkForUpdates();
   }, []);
@@ -58,36 +50,20 @@ export default function AdminLogs() {
   // Live refresh every 5 seconds
   useEffect(() => {
     const interval = setInterval(() => {
-      loadLogs();
       loadDebugInfo();
+      setIsLive(true);
     }, 5000);
 
-    return () => clearInterval(interval);
-  }, [logLimit]);
-
-  const loadLogs = async () => {
-    setLoading(true);
-    try {
-      const data = await api.getLogs(logLimit);
-      setLogs(data);
-      setIsLive(true);
-    } catch (err) {
-      console.error('Failed to load logs:', err);
+    // Set offline after 10 seconds of no updates
+    const liveTimeout = setTimeout(() => {
       setIsLive(false);
-    } finally {
-      setLoading(false);
-    }
-  };
+    }, 10000);
 
-  const handleToggleAllLogs = () => {
-    if (showAllLogs) {
-      setLogLimit(200);
-      setShowAllLogs(false);
-    } else {
-      setLogLimit(10000); // Load up to 10000 logs (approximately 24h)
-      setShowAllLogs(true);
-    }
-  };
+    return () => {
+      clearInterval(interval);
+      clearTimeout(liveTimeout);
+    };
+  }, [loadDebugInfo]);
 
   return (
     <div className="admin-logs-container" style={{ width: '100%', maxWidth: '100%' }}>
@@ -140,40 +116,6 @@ export default function AdminLogs() {
       <SystemHealthCharts healthHistory={healthHistory} />
 
       <DebugInfoCards debugInfo={debugInfo} />
-
-      <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1f2937', margin: 0 }}>
-          {t('logs.activityLog')}
-        </h2>
-        <button
-          onClick={handleToggleAllLogs}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: showAllLogs ? '#ef4444' : '#3b82f6',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            fontSize: '14px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = 'none';
-          }}
-        >
-          {showAllLogs ? t('logs.showLess') : t('logs.showAll24h')}
-        </button>
-      </div>
-
-      <LogsTable logs={logs} loading={loading} />
-
-      <LogsTableMobile logs={logs} loading={loading} />
 
       <style>{`
         @keyframes spin {

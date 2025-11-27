@@ -13,6 +13,7 @@ export default function Logs() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [showAllLogs, setShowAllLogs] = useState(false);
   const [logLimit, setLogLimit] = useState(200);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -41,27 +42,48 @@ export default function Logs() {
   };
 
   const handleExport = async () => {
+    if (exporting) return;
+    
+    setExporting(true);
     try {
+      console.log('Starting export...');
       const response = await fetch('/api/export/data', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `zev-billing-export-${new Date().toISOString().split('T')[0]}.xlsx`;
-        document.body.appendChild(a);
-        a.click();
+      console.log('Export response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Export failed with status:', response.status, errorText);
+        alert(t('logs.exportFailed') || 'Export failed. Please try again.');
+        return;
+      }
+      
+      const blob = await response.blob();
+      console.log('Blob size:', blob.size);
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `zev-billing-export-${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      
+      console.log('Export completed successfully');
+      
+      // Clean up
+      setTimeout(() => {
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
-      }
+      }, 100);
     } catch (err) {
       console.error('Export failed:', err);
-      alert(t('logs.exportFailed'));
+      alert(t('logs.exportFailed') || 'Export failed. Please try again.');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -146,36 +168,38 @@ export default function Logs() {
 
         <button
           onClick={handleExport}
+          disabled={exporting}
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
             padding: isMobile ? '10px 16px' : '12px 20px',
-            backgroundColor: '#10b981',
+            backgroundColor: exporting ? '#9ca3af' : '#10b981',
             color: 'white',
             border: 'none',
             borderRadius: isMobile ? '8px' : '10px',
             fontSize: isMobile ? '13px' : '14px',
             fontWeight: '600',
-            cursor: 'pointer',
+            cursor: exporting ? 'not-allowed' : 'pointer',
             transition: 'all 0.2s ease',
-            boxShadow: '0 2px 8px rgba(16, 185, 129, 0.2)'
+            boxShadow: exporting ? 'none' : '0 2px 8px rgba(16, 185, 129, 0.2)',
+            opacity: exporting ? 0.7 : 1
           }}
           onMouseEnter={(e) => {
-            if (!isMobile) {
+            if (!isMobile && !exporting) {
               e.currentTarget.style.transform = 'translateY(-2px)';
               e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
             }
           }}
           onMouseLeave={(e) => {
-            if (!isMobile) {
+            if (!isMobile && !exporting) {
               e.currentTarget.style.transform = 'translateY(0)';
               e.currentTarget.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.2)';
             }
           }}
         >
           <Download size={isMobile ? 16 : 18} />
-          {t('logs.exportData')}
+          {exporting ? (t('logs.exporting') || 'Exporting...') : (t('logs.exportData') || 'Export Data')}
         </button>
       </div>
 
