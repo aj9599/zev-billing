@@ -25,7 +25,7 @@ func NewAppHandler(db *sql.DB, firebaseSync *services.FirebaseSync) *AppHandler 
 	encryptionKey, err := crypto.GetEncryptionKey()
 	if err != nil {
 		log.Printf("Warning: Failed to get encryption key: %v", err)
-		log.Println("⚠️  Firebase configuration will not be encrypted!")
+		log.Println("âš ï¸  Firebase configuration will not be encrypted!")
 	}
 	
 	return &AppHandler{
@@ -160,11 +160,6 @@ func (h *AppHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		
 		query += ", firebase_config = ?"
 		args = append(args, encryptedConfig)
-		
-		// Reinitialize Firebase with new config
-		if err := h.firebaseSync.Initialize(); err != nil {
-			log.Printf("Warning: Failed to reinitialize Firebase: %v", err)
-		}
 	}
 
 	query += " WHERE id = 1"
@@ -173,6 +168,17 @@ func (h *AppHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	// Reinitialize Firebase sync after any settings change
+	if input.MobileAppEnabled != nil || input.FirebaseConfig != nil || input.FirebaseProjectID != nil {
+		log.Println("🔄 Reinitializing Firebase sync after settings update...")
+		if err := h.firebaseSync.Initialize(); err != nil {
+			log.Printf("⚠️  Warning: Failed to reinitialize Firebase: %v", err)
+			// Don't fail the request, just log the warning
+		} else {
+			log.Println("✅ Firebase sync reinitialized successfully")
+		}
 	}
 
 	// Log the action

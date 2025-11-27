@@ -48,6 +48,8 @@ func NewFirebaseSync(database *sql.DB) *FirebaseSync {
 
 // Initialize Firebase with credentials from database
 func (fs *FirebaseSync) Initialize() error {
+	log.Println("🔧 Attempting to initialize Firebase sync...")
+	
 	// Check if Firebase is enabled
 	var enabled bool
 	var firebaseProjectID string
@@ -61,15 +63,25 @@ func (fs *FirebaseSync) Initialize() error {
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			log.Println("No app settings found - Firebase sync disabled")
+			log.Println("ℹ️  No app settings found - Firebase sync disabled")
 			fs.enabled = false
 			return nil
 		}
+		log.Printf("❌ Failed to query app settings: %v", err)
 		return fmt.Errorf("failed to query app settings: %v", err)
 	}
 
-	if !enabled || encryptedConfig == "" {
-		log.Println("Firebase sync not enabled or not configured")
+	log.Printf("📊 App settings - mobile_app_enabled: %v, has_config: %v, project_id: %s", 
+		enabled, encryptedConfig != "", firebaseProjectID)
+
+	if !enabled {
+		log.Println("ℹ️  Mobile app not enabled - Firebase sync disabled")
+		fs.enabled = false
+		return nil
+	}
+	
+	if encryptedConfig == "" {
+		log.Println("⚠️  Firebase config is empty - Firebase sync disabled")
 		fs.enabled = false
 		return nil
 	}
@@ -77,48 +89,65 @@ func (fs *FirebaseSync) Initialize() error {
 	// Decrypt Firebase config
 	var firebaseConfig string
 	if fs.encryptionKey != nil {
+		log.Println("🔐 Decrypting Firebase config...")
 		decrypted, err := crypto.Decrypt(encryptedConfig, fs.encryptionKey)
 		if err != nil {
-			log.Printf("Failed to decrypt Firebase config: %v", err)
+			log.Printf("❌ Failed to decrypt Firebase config: %v", err)
+			fs.enabled = false
 			return fmt.Errorf("failed to decrypt Firebase config: %v", err)
 		}
 		firebaseConfig = decrypted
+		log.Println("✅ Config decrypted successfully")
 	} else {
+		log.Println("⚠️  No encryption key, using config as-is")
 		firebaseConfig = encryptedConfig
 	}
 
 	// Validate Firebase config
 	if firebaseConfig == "" {
-		log.Println("Firebase config is empty")
+		log.Println("❌ Firebase config is empty after decryption")
 		fs.enabled = false
 		return nil
 	}
 
 	// Parse Firebase config to validate
+	log.Println("📝 Parsing Firebase config...")
 	var config map[string]interface{}
 	if err := json.Unmarshal([]byte(firebaseConfig), &config); err != nil {
+		log.Printf("❌ Failed to parse Firebase config: %v", err)
+		fs.enabled = false
 		return fmt.Errorf("failed to parse Firebase config: %v", err)
 	}
 
 	// Validate required fields
+	log.Println("✓ Validating required fields...")
 	if _, ok := config["project_id"]; !ok {
+		log.Println("❌ Missing project_id")
+		fs.enabled = false
 		return fmt.Errorf("Firebase config missing project_id")
 	}
 	if _, ok := config["private_key"]; !ok {
+		log.Println("❌ Missing private_key")
+		fs.enabled = false
 		return fmt.Errorf("Firebase config missing private_key")
 	}
 	if _, ok := config["client_email"]; !ok {
+		log.Println("❌ Missing client_email")
+		fs.enabled = false
 		return fmt.Errorf("Firebase config missing client_email")
 	}
+	log.Println("✅ All required fields present")
 
 	// Get database URL from config or construct it
 	databaseURL, ok := config["database_url"].(string)
 	if !ok || databaseURL == "" {
 		projectID, _ := config["project_id"].(string)
 		databaseURL = fmt.Sprintf("https://%s-default-rtdb.firebaseio.com", projectID)
+		log.Printf("ℹ️  Constructed DB URL: %s", databaseURL)
 	}
 
 	// Initialize Firebase app
+	log.Println("🚀 Initializing Firebase app...")
 	ctx := context.Background()
 	opt := option.WithCredentialsJSON([]byte(firebaseConfig))
 	
@@ -128,18 +157,26 @@ func (fs *FirebaseSync) Initialize() error {
 	
 	app, err := firebase.NewApp(ctx, conf, opt)
 	if err != nil {
+		log.Printf("❌ Failed to initialize app: %v", err)
+		fs.enabled = false
 		return fmt.Errorf("failed to initialize Firebase app: %v", err)
 	}
 
 	// Get Auth client
+	log.Println("🔑 Getting Auth client...")
 	authClient, err := app.Auth(ctx)
 	if err != nil {
+		log.Printf("❌ Failed to get Auth client: %v", err)
+		fs.enabled = false
 		return fmt.Errorf("failed to get Firebase Auth client: %v", err)
 	}
 
 	// Get Database client
+	log.Println("💾 Getting Database client...")
 	dbClient, err := app.Database(ctx)
 	if err != nil {
+		log.Printf("❌ Failed to get DB client: %v", err)
+		fs.enabled = false
 		return fmt.Errorf("failed to get Firebase Database client: %v", err)
 	}
 
