@@ -298,3 +298,35 @@ export interface AdminLog {
   ip_address: string;
   created_at: string;
 }
+
+// App Management Types
+
+export interface AppSettings {
+  mobile_app_enabled: boolean;
+  firebase_project_id: string;
+  firebase_config: string;
+  device_id: string; // System-wide device identifier for this Raspberry Pi
+  last_sync?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AppUserPermissions {
+  meters: boolean;
+  chargers: boolean;
+  users: boolean;
+  buildings: boolean;
+  bills: boolean;
+}
+
+export interface AppUser {
+  id: number;
+  username: string;
+  description: string;
+  permissions: AppUserPermissions;
+  firebase_uid: string;
+  device_id: string; // Inherited from system device_id in app_settings
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}

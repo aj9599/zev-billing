@@ -268,6 +268,7 @@ type AppSettings struct {
 	MobileAppEnabled  bool      `json:"mobile_app_enabled"`
 	FirebaseProjectID string    `json:"firebase_project_id"`
 	FirebaseConfig    string    `json:"firebase_config"`
+	DeviceID          string    `json:"device_id"` // NEW: System-wide device identifier for this Raspberry Pi
 	LastSync          *string   `json:"last_sync,omitempty"`
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
@@ -289,7 +290,7 @@ type AppUser struct {
 	Description string             `json:"description"`
 	Permissions AppUserPermissions `json:"permissions"`
 	FirebaseUID string             `json:"firebase_uid"`
-	DeviceID    string             `json:"device_id"`
+	DeviceID    string             `json:"device_id"` // Inherited from system device_id in app_settings
 	IsActive    bool               `json:"is_active"`
 	CreatedAt   time.Time          `json:"created_at"`
 	UpdatedAt   time.Time          `json:"updated_at"`
