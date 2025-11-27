@@ -4,33 +4,36 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
-	"log"
+	"os"
 )
 
 func main() {
-	fmt.Println("=== Firebase Encryption Key Generator ===")
-	fmt.Println()
-	
 	// Generate a 256-bit (32-byte) encryption key
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
-		log.Fatalf("Failed to generate key: %v", err)
+		fmt.Fprintf(os.Stderr, "Error generating key: %v\n", err)
+		os.Exit(1)
 	}
-	
-	// Encode to base64 for easy storage
+
+	// Encode to base64 for easy storage in environment variables
 	encodedKey := base64.StdEncoding.EncodeToString(key)
-	
-	fmt.Println("Your new encryption key has been generated:")
+
+	fmt.Println("🔐 Firebase Encryption Key Generated Successfully!")
+	fmt.Println("═══════════════════════════════════════════════════")
 	fmt.Println()
+	fmt.Println("Your encryption key:")
 	fmt.Println(encodedKey)
 	fmt.Println()
-	fmt.Println("Add this to your .env file:")
-	fmt.Printf("FIREBASE_ENCRYPTION_KEY=%s\n", encodedKey)
+	fmt.Println("📋 Instructions:")
+	fmt.Println("1. Copy the key above")
+	fmt.Println("2. Add it to your .env file:")
+	fmt.Println("   FIREBASE_ENCRYPTION_KEY=" + encodedKey)
 	fmt.Println()
-	fmt.Println("IMPORTANT:")
-	fmt.Println("- Keep this key secure and never commit it to version control")
-	fmt.Println("- The same key must be used to decrypt Firebase credentials")
-	fmt.Println("- If you lose this key, you'll need to re-upload Firebase config")
-	fmt.Println("- Store this key in a secure password manager or secret management system")
+	fmt.Println("⚠️  IMPORTANT SECURITY NOTES:")
+	fmt.Println("• Keep this key secret and secure")
+	fmt.Println("• Never commit it to version control")
+	fmt.Println("• Back it up in a secure location")
+	fmt.Println("• If you lose this key, you won't be able to decrypt")
+	fmt.Println("  your Firebase configuration")
 	fmt.Println()
 }

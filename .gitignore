@@ -1,68 +1,195 @@
-# Environment variables with secrets
+# ZEV Billing System - Git Ignore File
+
+# ============================================
+# Environment and Secrets (CRITICAL!)
+# ============================================
 .env
 .env.local
 .env.production
+.env.*.local
+*.key
+*.pem
+*.p12
+*.pfx
 
-# Firebase service account keys
-*-firebase-adminsdk-*.json
-firebase-credentials.json
-service-account-*.json
+# Firebase service account files
+firebase-*.json
+serviceAccountKey.json
 
-# Database files
+# ============================================
+# Database Files
+# ============================================
 *.db
 *.db-shm
 *.db-wal
-data/
+*.sqlite
+*.sqlite3
 
-# Backup files
+# Database backups
 backups/
-*.backup
+*.db.backup
+*.db.gz
 
-# Log files
-*.log
-logs/
-
-# Temporary files
-tmp/
-temp/
-*.tmp
-
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Build artifacts
-dist/
-build/
-bin/
-
-# Node modules (if using any JS tools)
-node_modules/
-
-# Go build files
+# ============================================
+# Go Build Files
+# ============================================
+# Binaries
+zev-billing
+zev-billing.exe
 *.exe
-*.exe~
 *.dll
 *.so
 *.dylib
 
-# Test coverage
+# Test binaries
+*.test
+
+# Output of the go coverage tool
 *.out
-coverage/
 
-# PDF output directory
+# Go workspace file
+go.work
+go.work.sum
+
+# Build cache
+.cache/
+
+# ============================================
+# Application Generated Files
+# ============================================
+# Invoice PDFs
 invoices/
-pdfs/
+*.pdf
 
-# Certificates and keys
-*.pem
-*.key
+# Logs
+*.log
+logs/
+log/
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# ============================================
+# IDE and Editor Files
+# ============================================
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# GoLand / IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+.*.swp
+.*.swo
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# ============================================
+# Operating System Files
+# ============================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*
+
+# ============================================
+# Node.js (Frontend)
+# ============================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn/
+
+# Build output
+dist/
+build/
+out/
+
+# ============================================
+# Testing and Coverage
+# ============================================
+coverage/
+*.cover
+*.coverage
+.coverage
+htmlcov/
+
+# ============================================
+# Deployment
+# ============================================
+# Docker
+.dockerignore
+
+# Kubernetes
+*.kubeconfig
+
+# ============================================
+# Miscellaneous
+# ============================================
+# Certificates
 *.crt
-*.cert
+*.cer
+*.der
+
+# Archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+
+# Cache directories
+.cache/
+cache/
+
+# Local configuration overrides
+config.local.*
+local.config
+
+# Security scan results
+.security/
+security-report.*
+
+# ============================================
+# Documentation Build
+# ============================================
+docs/_build/
+docs/.doctrees/
+site/
+
+# ============================================
+# IMPORTANT NOTES
+# ============================================
+# Always review files before committing!
+# Use 'git status' to verify no sensitive files are tracked
+# Use 'git add -p' for careful staging of changes
