@@ -46,7 +46,7 @@ export default function Logs() {
     
     setExporting(true);
     try {
-      console.log('Starting export...');
+      console.log('Starting logs export...');
       
       // Get date range - last 12 months
       const endDate = new Date();
@@ -54,7 +54,7 @@ export default function Logs() {
       startDate.setFullYear(startDate.getFullYear() - 1);
       
       const params = new URLSearchParams({
-        type: 'all', // Export all data
+        type: 'logs', // Export logs only
         start_date: startDate.toISOString().split('T')[0],
         end_date: endDate.toISOString().split('T')[0]
       });
@@ -80,7 +80,7 @@ export default function Logs() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `zev-billing-export-${new Date().toISOString().split('T')[0]}.xlsx`;
+      a.download = `activity-logs-export-${new Date().toISOString().split('T')[0]}.csv`;
       document.body.appendChild(a);
       a.click();
       

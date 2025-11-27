@@ -52,6 +52,15 @@ func (h *ExportHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 	case "all":
 		// Export all data as Excel
 		h.exportAllData(w, startDate, endDate)
+	case "logs":
+		// Export activity logs as CSV
+		data, err := h.exportLogsData(startDate, endDate)
+		if err != nil {
+			log.Printf("Export error: %v", err)
+			http.Error(w, fmt.Sprintf("Failed to export data: %v", err), http.StatusInternalServerError)
+			return
+		}
+		h.writeCSV(w, data, "activity-logs", startDate, endDate)
 	case "meters":
 		// Export meter data as CSV
 		data, err := h.exportMeterData(startDate, endDate, meterIDStr)
@@ -72,7 +81,7 @@ func (h *ExportHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 		h.writeCSV(w, data, "chargers", startDate, endDate)
 	default:
 		log.Printf("Invalid export type: %s", exportType)
-		http.Error(w, "Invalid export type. Must be 'all', 'meters' or 'chargers'", http.StatusBadRequest)
+		http.Error(w, "Invalid export type. Must be 'all', 'logs', 'meters' or 'chargers'", http.StatusBadRequest)
 		return
 	}
 }
@@ -574,6 +583,49 @@ func (h *ExportHandler) exportChargerData(startDate, endDate, chargerIDStr strin
 			fmt.Sprintf("%.3f", powerKWh),
 			mode,
 			state,
+		})
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("row iteration error: %v", err)
+	}
+
+	return data, nil
+}
+
+func (h *ExportHandler) exportLogsData(startDate, endDate string) ([][]string, error) {
+	rows, err := h.db.Query(`
+		SELECT id, action, details, ip_address, created_at
+		FROM admin_logs
+		WHERE DATE(created_at) BETWEEN ? AND ?
+		ORDER BY created_at DESC
+		LIMIT 10000
+	`, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("query failed: %v", err)
+	}
+	defer rows.Close()
+
+	data := [][]string{
+		{"ID", "Action", "Details", "IP Address", "Created At"},
+	}
+
+	for rows.Next() {
+		var id int
+		var action, details, ipAddress, createdAt string
+
+		err := rows.Scan(&id, &action, &details, &ipAddress, &createdAt)
+		if err != nil {
+			log.Printf("Error scanning log row: %v", err)
+			continue
+		}
+
+		data = append(data, []string{
+			fmt.Sprintf("%d", id),
+			action,
+			details,
+			ipAddress,
+			createdAt,
 		})
 	}
 
