@@ -47,7 +47,19 @@ export default function Logs() {
     setExporting(true);
     try {
       console.log('Starting export...');
-      const response = await fetch('/api/export/data', {
+      
+      // Get date range - last 12 months
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setFullYear(startDate.getFullYear() - 1);
+      
+      const params = new URLSearchParams({
+        type: 'all', // Export all data
+        start_date: startDate.toISOString().split('T')[0],
+        end_date: endDate.toISOString().split('T')[0]
+      });
+      
+      const response = await fetch(`/api/export/data?${params}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
