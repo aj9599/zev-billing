@@ -69,13 +69,20 @@ export default function AppManagement() {
     try {
       setLoading(true);
       const [users, settings] = await Promise.all([
-        api.getAppUsers(),
-        api.getAppSettings()
+        api.getAppUsers().catch(() => []), // Return empty array on error
+        api.getAppSettings().catch(() => ({
+          mobile_app_enabled: false,
+          firebase_project_id: '',
+          firebase_config: '',
+          last_sync: null
+        }))
       ]);
-      setAppUsers(users);
-      setAppSettings(settings);
+      setAppUsers(Array.isArray(users) ? users : []); // Ensure it's an array
+      setAppSettings(settings || null);
     } catch (err) {
       console.error('Failed to load app management data:', err);
+      setAppUsers([]); // Set to empty array on error
+      setAppSettings(null);
     } finally {
       setLoading(false);
     }
@@ -618,7 +625,7 @@ export default function AppManagement() {
             <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
               {t('appManagement.loading')}
             </div>
-          ) : appUsers.length === 0 ? (
+          ) : !appUsers || appUsers.length === 0 ? (
             <div style={{
               backgroundColor: 'white',
               borderRadius: isMobile ? '12px' : '16px',
@@ -740,7 +747,7 @@ export default function AppManagement() {
                     paddingTop: '12px',
                     borderTop: '1px solid #f3f4f6'
                   }}>
-                    {Object.entries(user.permissions).map(([key, value]) => (
+                    {user.permissions && Object.entries(user.permissions).map(([key, value]) => (
                       value && (
                         <span
                           key={key}

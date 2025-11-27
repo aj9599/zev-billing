@@ -47,8 +47,8 @@ export default function SystemMonitor() {
       boxSizing: 'border-box'
     }}>
       <div className="system-monitor-header" style={{ marginBottom: isMobile ? '20px' : '30px' }}>
-        <div className="logs-header-title">
-          <h1 className="logs-title" style={{ 
+        <div>
+          <h1 style={{ 
             fontSize: isMobile ? '24px' : '36px', 
             fontWeight: '800', 
             marginBottom: '8px',
@@ -60,7 +60,7 @@ export default function SystemMonitor() {
             <Activity size={isMobile ? 24 : 36} />
             {t('logs.systemMonitor')}
           </h1>
-          <p className="logs-subtitle" style={{ 
+          <p style={{ 
             color: '#6b7280', 
             fontSize: isMobile ? '13px' : '16px',
             display: 'flex',

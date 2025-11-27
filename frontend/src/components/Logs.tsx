@@ -5,48 +5,14 @@ import { useTranslation } from '../i18n';
 import type { AdminLog } from '../types';
 import { LogsTable } from './admin-logs/LogsTable';
 import { LogsTableMobile } from './admin-logs/LogsTableMobile';
-import { AdminLogsHeader } from './admin-logs/AdminLogsHeader';
-import { UpdateInfoCard } from './admin-logs/UpdateInfoCard';
-import { UpdateOverlay } from './admin-logs/UpdateOverlay';
-import { FactoryResetModal } from './admin-logs/FactoryResetModal';
-import { useUpdateInfo } from './admin-logs/hooks/useUpdateInfo';
-import { useSystemActions } from './admin-logs/hooks/useSystemActions';
 
 export default function Logs() {
   const { t } = useTranslation();
   const [logs, setLogs] = useState<AdminLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-
-  const {
-    updateInfo,
-    checkingUpdates,
-    showUpdateCard,
-    setShowUpdateCard,
-    checkForUpdates
-  } = useUpdateInfo();
-
-  const {
-    rebooting,
-    backing,
-    restoring,
-    updating,
-    factoryResetting,
-    showUpdateOverlay,
-    updateProgress,
-    showFactoryResetModal,
-    setShowFactoryResetModal,
-    factoryCaptchaValid,
-    setFactoryCaptchaValid,
-    fileInputRef,
-    handleReboot,
-    handleBackup,
-    handleRestoreClick,
-    handleRestoreFile,
-    handleUpdate,
-    handleFactoryResetClick,
-    handleFactoryResetConfirm
-  } = useSystemActions(updateInfo, t);
+  const [showAllLogs, setShowAllLogs] = useState(false);
+  const [logLimit, setLogLimit] = useState(200);
 
   useEffect(() => {
     const handleResize = () => {
@@ -61,11 +27,11 @@ export default function Logs() {
     loadLogs();
     const interval = setInterval(loadLogs, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [logLimit]);
 
   const loadLogs = async () => {
     try {
-      const data = await api.getLogs(100);
+      const data = await api.getLogs(logLimit);
       setLogs(data);
     } catch (err) {
       console.error('Failed to load logs:', err);
@@ -99,6 +65,16 @@ export default function Logs() {
     }
   };
 
+  const handleToggleAllLogs = () => {
+    if (showAllLogs) {
+      setLogLimit(200);
+      setShowAllLogs(false);
+    } else {
+      setLogLimit(10000);
+      setShowAllLogs(true);
+    }
+  };
+
   return (
     <div className="logs-page-container" style={{ 
       maxWidth: '100%', 
@@ -106,17 +82,6 @@ export default function Logs() {
       padding: isMobile ? '0' : '0',
       boxSizing: 'border-box'
     }}>
-      <UpdateOverlay show={showUpdateOverlay} progress={updateProgress} />
-      
-      <FactoryResetModal
-        show={showFactoryResetModal}
-        factoryResetting={factoryResetting}
-        factoryCaptchaValid={factoryCaptchaValid}
-        onClose={() => setShowFactoryResetModal(false)}
-        onConfirm={handleFactoryResetConfirm}
-        onValidationChange={setFactoryCaptchaValid}
-      />
-
       <div className="logs-header-section" style={{ marginBottom: isMobile ? '20px' : '30px' }}>
         <div className="logs-header-title" style={{ marginBottom: isMobile ? '16px' : '20px' }}>
           <h1 className="logs-title" style={{ 
@@ -141,32 +106,44 @@ export default function Logs() {
         </div>
       </div>
 
-      <AdminLogsHeader
-        isLive={true}
-        backing={backing}
-        restoring={restoring}
-        checkingUpdates={checkingUpdates}
-        updating={updating}
-        updateInfo={updateInfo}
-        factoryResetting={factoryResetting}
-        rebooting={rebooting}
-        fileInputRef={fileInputRef}
-        onBackup={handleBackup}
-        onRestore={handleRestoreClick}
-        onRestoreFile={handleRestoreFile}
-        onCheckUpdates={checkForUpdates}
-        onUpdate={handleUpdate}
-        onFactoryReset={handleFactoryResetClick}
-        onReboot={handleReboot}
-      />
+      <div style={{ 
+        marginBottom: isMobile ? '16px' : '20px', 
+        display: 'flex', 
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: '12px',
+        flexWrap: 'wrap'
+      }}>
+        <button
+          onClick={handleToggleAllLogs}
+          style={{
+            padding: isMobile ? '10px 16px' : '12px 20px',
+            backgroundColor: showAllLogs ? '#ef4444' : '#3b82f6',
+            color: 'white',
+            border: 'none',
+            borderRadius: isMobile ? '8px' : '10px',
+            fontSize: isMobile ? '13px' : '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+          }}
+          onMouseEnter={(e) => {
+            if (!isMobile) {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!isMobile) {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+            }
+          }}
+        >
+          {showAllLogs ? t('logs.showLess') : t('logs.showAll24h')}
+        </button>
 
-      <UpdateInfoCard 
-        updateInfo={updateInfo}
-        showUpdateCard={showUpdateCard}
-        onClose={() => setShowUpdateCard(false)}
-      />
-
-      <div style={{ marginBottom: isMobile ? '16px' : '20px', display: 'flex', justifyContent: 'flex-end' }}>
         <button
           onClick={handleExport}
           style={{

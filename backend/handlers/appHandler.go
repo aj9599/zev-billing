@@ -29,11 +29,13 @@ func NewAppHandler(db *sql.DB, firebaseSync *services.FirebaseSync) *AppHandler 
 
 func (h *AppHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	var settings models.AppSettings
+	var lastSync sql.NullString
+	
 	err := h.db.QueryRow(`
 		SELECT mobile_app_enabled, firebase_project_id, firebase_config, last_sync
 		FROM app_settings
 		WHERE id = 1
-	`).Scan(&settings.MobileAppEnabled, &settings.FirebaseProjectID, &settings.FirebaseConfig, &settings.LastSync)
+	`).Scan(&settings.MobileAppEnabled, &settings.FirebaseProjectID, &settings.FirebaseConfig, &lastSync)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -50,10 +52,18 @@ func (h *AppHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 				MobileAppEnabled:  false,
 				FirebaseProjectID: "",
 				FirebaseConfig:    "",
+				LastSync:          nil,
 			}
 		} else {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+	} else {
+		// Convert sql.NullString to *string
+		if lastSync.Valid {
+			settings.LastSync = &lastSync.String
+		} else {
+			settings.LastSync = nil
 		}
 	}
 
@@ -121,6 +131,11 @@ func (h *AppHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		}
 
 		users = append(users, user)
+	}
+
+	// Ensure we always return an array, even if empty
+	if users == nil {
+		users = []models.AppUser{}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
