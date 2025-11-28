@@ -443,6 +443,38 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 		result[key] = value
 	}
 	
+	// DEBUG: Log what we got from collectors
+	log.Printf("[DEBUG] GetConnectionStatus results:")
+	log.Printf("  - Loxone: %d keys", len(loxoneStatus))
+	log.Printf("  - Modbus: %d keys", len(modbusStatus))
+	log.Printf("  - UDP: %d keys", len(udpStatus))
+	log.Printf("  - MQTT: %d keys", len(mqttStatus))
+	log.Printf("  - Smart-me: %d keys", len(smartmeStatus))
+	log.Printf("  - Zaptec: %d keys", len(zaptecStatus))
+	log.Printf("  - Final result: %d keys", len(result))
+	
+	// Ensure the frontend gets the expected keys even if collectors return empty
+	if _, ok := result["loxone_connections"]; !ok {
+		log.Printf("[DEBUG] Adding empty loxone_connections")
+		result["loxone_connections"] = make(map[int]interface{})
+	}
+	if _, ok := result["loxone_charger_connections"]; !ok {
+		log.Printf("[DEBUG] Adding empty loxone_charger_connections")
+		result["loxone_charger_connections"] = make(map[int]interface{})
+	}
+	if _, ok := result["mqtt_connections"]; !ok {
+		log.Printf("[DEBUG] Adding empty mqtt_connections")
+		result["mqtt_connections"] = make(map[int]interface{})
+	}
+	if _, ok := result["mqtt_broker_connected"]; !ok {
+		log.Printf("[DEBUG] Adding mqtt_broker_connected = false")
+		result["mqtt_broker_connected"] = false
+	}
+	if _, ok := result["zaptec_charger_connections"]; !ok {
+		log.Printf("[DEBUG] Adding empty zaptec_charger_connections")
+		result["zaptec_charger_connections"] = make(map[int]interface{})
+	}
+	
 	return result
 }
 
@@ -630,7 +662,7 @@ func (dc *DataCollector) collectAndSaveMeters() {
 			log.Printf("ERROR: Failed to save Smart-me meter '%s': %v", info.name, err)
 		} else {
 			successCount++
-			log.Printf("[Smart-me] ✔ Saved meter '%s' at EXACT time %s: %.3f kWh import, %.3f kWh export",
+			log.Printf("[Smart-me] âœ” Saved meter '%s' at EXACT time %s: %.3f kWh import, %.3f kWh export",
 				info.name, currentTime.Format("15:04:05"), readingImport, readingExport)
 		}
 	}
@@ -724,7 +756,7 @@ func (dc *DataCollector) saveMeterReading(meterID int, meterName string, current
 		log.Printf("SUCCESS: First reading for meter '%s' = %.3f kWh import, %.3f kWh export (consumption: 0 kWh)", 
 			meterName, reading, readingExport)
 	} else {
-		log.Printf("SUCCESS: Saved meter data: '%s' = %.3f kWh import (Δ%.3f), %.3f kWh export (Δ%.3f)", 
+		log.Printf("SUCCESS: Saved meter data: '%s' = %.3f kWh import (Î”%.3f), %.3f kWh export (Î”%.3f)", 
 			meterName, reading, consumption, readingExport, consumptionExport)
 	}
 
