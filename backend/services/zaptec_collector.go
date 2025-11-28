@@ -752,6 +752,8 @@ func (zc *ZaptecCollector) parseOCMFTimestamp(ts string) time.Time {
 		return time.Time{}
 	}
 	
+	originalTS := ts // Save for logging
+	
 	// Remove trailing " R" or " S" (reading type indicator)
 	ts = strings.TrimSuffix(ts, " R")
 	ts = strings.TrimSuffix(ts, " S")
@@ -774,7 +776,12 @@ func (zc *ZaptecCollector) parseOCMFTimestamp(ts string) time.Time {
 	for _, format := range formats {
 		if t, err := time.Parse(format, ts); err == nil {
 			// Convert from UTC to local timezone
-			return t.In(zc.localTimezone)
+			localTime := t.In(zc.localTimezone)
+			// Log first few parses for debugging
+			log.Printf("   OCMF Parse: '%s' (UTC: %s) -> Local: %s", 
+				originalTS, t.Format("2006-01-02 15:04:05 MST"), 
+				localTime.Format("2006-01-02 15:04:05 MST"))
+			return localTime
 		}
 	}
 	
@@ -790,7 +797,8 @@ func (zc *ZaptecCollector) writeSessionToDatabase(session *CompletedSession) err
 	
 	// Check if we already have data for this session (by checking first reading timestamp)
 	firstReading := session.MeterReadings[0]
-	firstTimestamp := firstReading.Timestamp.In(zc.localTimezone).Format("2006-01-02 15:04:05")
+	// Timestamp is already in local timezone from parseOCMFTimestamp
+	firstTimestamp := firstReading.Timestamp.Format("2006-01-02 15:04:05")
 	
 	var existingCount int
 	err := zc.db.QueryRow(`
@@ -821,10 +829,10 @@ func (zc *ZaptecCollector) writeSessionToDatabase(session *CompletedSession) err
 	defer stmt.Close()
 	
 	insertCount := 0
-	// Insert each reading with local timezone timestamp
+	// Insert each reading - timestamps are already in local timezone from parseOCMFTimestamp
 	for _, reading := range session.MeterReadings {
-		// Format timestamp for SQLite
-		localTimestamp := reading.Timestamp.In(zc.localTimezone).Format("2006-01-02 15:04:05")
+		// Format timestamp for SQLite (timestamp is already in local timezone)
+		localTimestamp := reading.Timestamp.Format("2006-01-02 15:04:05")
 		
 		// Determine state: "3" for charging readings
 		state := "3" // Charging
@@ -939,6 +947,7 @@ func (zc *ZaptecCollector) writeSessionFallback(history *ZaptecChargeHistory, ch
 // This fills gaps in the data so billing/dashboard can show continuous data
 func (zc *ZaptecCollector) writeIdleReadingIfNeeded(chargerID int, chargerName string, totalEnergy float64, state string) {
 	now := time.Now().In(zc.localTimezone)
+	systemNow := time.Now() // For comparison
 	
 	// Round to current 15-minute interval
 	minutes := now.Minute()
@@ -954,12 +963,25 @@ func (zc *ZaptecCollector) writeIdleReadingIfNeeded(chargerID int, chargerName s
 	}
 	currentInterval := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), roundedMinutes, 0, 0, zc.localTimezone)
 	
-	// Check if we already wrote for this interval
+	// Log timezone info on first write for this charger (for debugging)
 	zc.mu.RLock()
-	lastWrite, hasLastWrite := zc.lastIdleWrite[chargerID]
+	_, hasLastWrite := zc.lastIdleWrite[chargerID]
 	zc.mu.RUnlock()
 	
-	if hasLastWrite && !lastWrite.Before(currentInterval) {
+	if !hasLastWrite {
+		log.Printf("Zaptec: [%s] Timezone debug - System: %s, Local: %s, Interval: %s", 
+			chargerName,
+			systemNow.Format("2006-01-02 15:04:05 MST"),
+			now.Format("2006-01-02 15:04:05 MST"),
+			currentInterval.Format("2006-01-02 15:04:05 MST"))
+	}
+	
+	// Check if we already wrote for this interval
+	zc.mu.RLock()
+	lastWrite, hasLastWrite2 := zc.lastIdleWrite[chargerID]
+	zc.mu.RUnlock()
+	
+	if hasLastWrite2 && !lastWrite.Before(currentInterval) {
 		// Already wrote for this interval
 		return
 	}
