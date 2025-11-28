@@ -92,7 +92,7 @@ export default function Chargers() {
         params.append('charger_id', chargerId.toString());
       }
 
-      const response = await fetch(`/api/export/data?${params}`, {
+      const response = await fetch(`/api/export?${params}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }

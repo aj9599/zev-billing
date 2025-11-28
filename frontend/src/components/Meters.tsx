@@ -114,7 +114,7 @@ export default function Meters() {
                 params.append('meter_id', meterId.toString());
             }
 
-            const response = await fetch(`/api/export/data?${params}`, {
+            const response = await fetch(`/api/export?${params}`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 }
