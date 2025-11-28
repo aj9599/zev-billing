@@ -3,7 +3,7 @@ import { CheckCircle, X, ExternalLink, Upload, Tablet } from 'lucide-react';
 import { useTranslation } from '../i18n';
 
 interface SetupWizardProps {
-  onComplete: (config: { device_id: string; firebase_config: string; project_id: string }) => void;
+  onComplete: (config: { device_id: string; config_json: string; project_id: string }) => void;
   onCancel: () => void;
   existingConfig?: {
     device_id: string;
@@ -78,7 +78,7 @@ export default function SetupWizard({ onComplete, onCancel, existingConfig }: Se
 
     onComplete({
       device_id: deviceId,
-      firebase_config: firebaseConfig,
+      config_json: firebaseConfig,
       project_id: projectId
     });
   };
