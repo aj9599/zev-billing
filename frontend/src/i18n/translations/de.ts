@@ -2114,7 +2114,7 @@ export const de: Translations = {
   'nav.systemMonitor': 'Systemüberwachung',
   'nav.appManagement': 'App-Verwaltung',
   'nav.login': 'Anmeldung',
-  
+
   // Logs & System Monitor
   'logs.systemMonitor': 'Systemüberwachung',
   'logs.activityLogs': 'Aktivitätsprotokolle',
@@ -2122,7 +2122,7 @@ export const de: Translations = {
   'logs.logsSubtitle': 'Verfolgen Sie alle Systemaktivitäten und Änderungen',
   'logs.exportData': 'Daten exportieren',
   'logs.exportFailed': 'Export fehlgeschlagen. Bitte versuchen Sie es erneut.',
-  
+
   // App Management
   'appManagement.title': 'App-Verwaltung',
   'appManagement.subtitle': 'Verwalten Sie den mobilen App-Zugriff und Firebase-Synchronisation',
@@ -2177,10 +2177,92 @@ export const de: Translations = {
   'appManagement.deactivate': 'Deaktivieren',
   'appManagement.edit': 'Bearbeiten',
   'appManagement.delete': 'Löschen',
-  
+  'appManagement.wizardCompleted': 'Firebase-Einrichtung erfolgreich abgeschlossen!',
+  'appManagement.wizardCancelConfirm': 'Firebase ist noch nicht konfiguriert. Möchten Sie den Einrichtungsassistenten wirklich schließen?',
+  'appManagement.setupWizard': 'Einrichtungsassistent',
+  'appManagement.setupWizardReopen': 'Assistenten erneut öffnen',
+  'appManagement.configureFirebaseFirst': 'Bitte konfigurieren Sie zuerst Firebase, bevor Sie die mobile App aktivieren.',
+  'appManagement.invalidFirebaseConfig': 'Ungültiger Firebase-Dienstkonto-Schlüssel. Bitte laden Sie eine gültige JSON-Datei hoch.',
+  'appManagement.configUploaded': 'Firebase-Konfiguration erfolgreich hochgeladen. Klicken Sie auf "Konfiguration speichern", um sie anzuwenden.',
+  'appManagement.configParseFailed': 'Firebase-Konfigurationsdatei konnte nicht geparst werden. Bitte stellen Sie sicher, dass es sich um eine gültige JSON-Datei handelt.',
+  'appManagement.uploadConfigFirst': 'Bitte laden Sie zuerst eine Firebase-Konfigurationsdatei hoch.',
+  'appManagement.configSaved': 'Firebase-Konfiguration erfolgreich gespeichert!',
+  'appManagement.configSaveFailed': 'Fehler beim Speichern der Firebase-Konfiguration.',
+
   // Settings / Login
   'settings.loginSettings': 'Anmeldeeinstellungen',
   'settings.manageLoginCredentials': 'Verwalten Sie Ihre Webanwendungs-Anmeldedaten',
+
+  // Setup Wizard Übersetzungen
+  'setupWizard.title': 'Willkommen bei ZEV Billing',
+  'setupWizard.subtitle': 'Richten Sie Ihre mobile App in wenigen Schritten ein',
+
+  'setupWizard.step1Title': 'Projekt erstellen',
+  'setupWizard.step1Description': 'Firebase-Projekt einrichten',
+  'setupWizard.step1Heading': 'Schritt 1: Firebase-Projekt erstellen',
+  'setupWizard.step1Text': 'Sie benötigen ein Firebase-Projekt, um die mobile App-Funktionalität zu aktivieren. Dies ist in den meisten Fällen kostenlos.',
+  'setupWizard.step1Inst1': 'Gehen Sie zu',
+  'setupWizard.step1Inst2': 'Klicken Sie auf "Projekt hinzufügen" oder "Projekt erstellen"',
+  'setupWizard.step1Inst3': 'Geben Sie einen Projektnamen ein (z.B. "Mein Gebäude EV-Laden")',
+  'setupWizard.step1Inst4': 'Deaktivieren Sie Google Analytics (nicht benötigt)',
+  'setupWizard.step1Inst5': 'Klicken Sie auf "Projekt erstellen"',
+  'setupWizard.step1Tip': 'Wählen Sie eine Firebase-Projektregion in Ihrer Nähe für bessere Leistung (z.B. europe-west1 für Europa).',
+
+  'setupWizard.step2Title': 'Dienste aktivieren',
+  'setupWizard.step2Description': 'Auth und Datenbank aktivieren',
+  'setupWizard.step2Heading': 'Schritt 2: Erforderliche Dienste aktivieren',
+  'setupWizard.step2Text': 'Aktivieren Sie Authentication und Realtime Database in Ihrem Firebase-Projekt.',
+  'setupWizard.step2AuthHeading': 'A. Authentication aktivieren:',
+  'setupWizard.step2AuthInst1': 'Klicken Sie in der Firebase Console im linken Menü auf "Authentication"',
+  'setupWizard.step2AuthInst2': 'Klicken Sie auf "Erste Schritte"',
+  'setupWizard.step2AuthInst3': 'Aktivieren Sie die Anmeldemethode "E-Mail/Passwort"',
+  'setupWizard.step2AuthInst4': 'Klicken Sie auf "Speichern"',
+  'setupWizard.step2DbHeading': 'B. Realtime Database aktivieren:',
+  'setupWizard.step2DbInst1': 'Klicken Sie im linken Menü auf "Realtime Database"',
+  'setupWizard.step2DbInst2': 'Klicken Sie auf "Datenbank erstellen"',
+  'setupWizard.step2DbInst3': 'Wählen Sie Ihre Region (z.B. europe-west1)',
+  'setupWizard.step2DbInst4': 'Starten Sie im gesperrten Modus (wir setzen Regeln über die API)',
+  'setupWizard.step2DbInst5': 'Klicken Sie auf "Aktivieren"',
+  'setupWizard.step2Important': 'Notieren Sie sich Ihre Datenbank-URL (z.B. https://ihr-projekt.europe-west1.firebasedatabase.app) - Sie müssen überprüfen, ob die Region übereinstimmt.',
+
+  'setupWizard.step3Title': 'Dienstkonto',
+  'setupWizard.step3Description': 'Anmeldedaten herunterladen',
+  'setupWizard.step3Heading': 'Schritt 3: Dienstkonto-Schlüssel herunterladen',
+  'setupWizard.step3Text': 'Generieren und laden Sie Ihren privaten Dienstkonto-Schlüssel herunter. Diese Datei enthält Anmeldedaten für den serverseitigen Zugriff.',
+  'setupWizard.step3Inst1': 'Gehen Sie zu Projekteinstellungen → Dienstkonten',
+  'setupWizard.step3Inst2': 'Stellen Sie sicher, dass "Firebase Admin SDK" ausgewählt ist',
+  'setupWizard.step3Inst3': 'Klicken Sie auf "Neuen privaten Schlüssel generieren"',
+  'setupWizard.step3Inst4': 'Klicken Sie zur Bestätigung auf "Schlüssel generieren"',
+  'setupWizard.step3Inst5': 'Speichern Sie die JSON-Datei sicher (Sie laden sie im nächsten Schritt hoch)',
+  'setupWizard.step3SecurityWarning': 'Diese Datei gewährt vollen Zugriff auf Ihr Firebase-Projekt. Teilen Sie sie niemals und übertragen Sie sie nicht in die Versionskontrolle. Bewahren Sie sie sicher auf und laden Sie sie nur auf Ihren Raspberry Pi hoch.',
+
+  'setupWizard.step4Title': 'Gerät konfigurieren',
+  'setupWizard.step4Description': 'Konfiguration hochladen',
+  'setupWizard.step4Heading': 'Schritt 4: Ihr Gerät konfigurieren',
+  'setupWizard.step4Text': 'Legen Sie eine eindeutige Geräte-ID für diesen Raspberry Pi fest und laden Sie Ihre Firebase-Konfiguration hoch.',
+  'setupWizard.deviceIdLabel': 'Geräte-ID (Eindeutige Kennung für diesen Raspberry Pi)',
+  'setupWizard.deviceIdPlaceholder': 'z.B. rpi-gebaeude-101 oder rpi-haus-a',
+  'setupWizard.deviceIdHelp': 'Diese ID wird verwendet, um Daten in Firebase zu organisieren. Alle App-Benutzer auf diesem Gerät teilen diese ID.',
+  'setupWizard.serviceAccountLabel': 'Firebase-Dienstkonto-Schlüssel',
+  'setupWizard.configLoaded': '✓ Konfiguration erfolgreich geladen!',
+  'setupWizard.uploadPrompt': 'Klicken Sie zum Hochladen oder ziehen Sie eine Datei per Drag & Drop',
+  'setupWizard.jsonFileHint': 'JSON-Datei aus der Firebase Console',
+  'setupWizard.readyToComplete': 'Bereit zum Abschließen der Einrichtung!',
+  'setupWizard.readyToCompleteText': 'Klicken Sie unten auf "Einrichtung abschließen", um Ihre Konfiguration zu speichern und die mobile App zu aktivieren.',
+
+  'setupWizard.instructions': 'Anweisungen:',
+  'setupWizard.tip': 'Tipp:',
+  'setupWizard.important': 'Wichtig:',
+  'setupWizard.securityWarning': 'Sicherheitswarnung:',
+
+  'setupWizard.generate': 'Generieren',
+  'setupWizard.previous': 'Zurück',
+  'setupWizard.next': 'Weiter',
+  'setupWizard.completeSetup': 'Einrichtung abschließen',
+  'setupWizard.completeAllFields': 'Bitte füllen Sie alle Felder aus, bevor Sie fortfahren.',
+  'setupWizard.invalidConfig': 'Ungültiger Firebase-Dienstkonto-Schlüssel. Bitte laden Sie eine gültige JSON-Datei hoch.',
+  'setupWizard.configParseFailed': 'Firebase-Konfigurationsdatei konnte nicht geparst werden. Bitte stellen Sie sicher, dass es sich um eine gültige JSON-Datei handelt.',
+  'setupWizard.helpText': 'Benötigen Sie Hilfe? Lesen Sie die Dokumentation oder kontaktieren Sie den Support.',
 
   // ============================================================================
   // LOGIN

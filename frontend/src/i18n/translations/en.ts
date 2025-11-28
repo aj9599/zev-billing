@@ -2115,7 +2115,7 @@ export const en: Translations = {
   'nav.systemMonitor': 'System Monitor',
   'nav.appManagement': 'App Management',
   'nav.login': 'Login',
-  
+
   // Logs & System Monitor
   'logs.systemMonitor': 'System Monitor',
   'logs.activityLogs': 'Activity Logs',
@@ -2123,7 +2123,7 @@ export const en: Translations = {
   'logs.logsSubtitle': 'Track all system activities and changes',
   'logs.exportData': 'Export Data',
   'logs.exportFailed': 'Export failed. Please try again.',
-  
+
   // App Management
   'appManagement.title': 'App Management',
   'appManagement.subtitle': 'Manage mobile app access and Firebase synchronization',
@@ -2178,10 +2178,92 @@ export const en: Translations = {
   'appManagement.deactivate': 'Deactivate',
   'appManagement.edit': 'Edit',
   'appManagement.delete': 'Delete',
-  
+  'appManagement.wizardCompleted': 'Firebase setup completed successfully!',
+  'appManagement.wizardCancelConfirm': 'Firebase is not configured yet. Are you sure you want to close the setup wizard?',
+  'appManagement.setupWizard': 'Setup Wizard',
+  'appManagement.setupWizardReopen': 'Reopen Wizard',
+  'appManagement.configureFirebaseFirst': 'Please configure Firebase first before enabling the mobile app.',
+  'appManagement.invalidFirebaseConfig': 'Invalid Firebase service account key. Please upload a valid JSON file.',
+  'appManagement.configUploaded': 'Firebase configuration uploaded successfully. Click "Save Configuration" to apply.',
+  'appManagement.configParseFailed': 'Failed to parse Firebase configuration file. Please ensure it\'s a valid JSON file.',
+  'appManagement.uploadConfigFirst': 'Please upload a Firebase configuration file first.',
+  'appManagement.configSaved': 'Firebase configuration saved successfully!',
+  'appManagement.configSaveFailed': 'Failed to save Firebase configuration.',
+
   // Settings / Login
   'settings.loginSettings': 'Login Settings',
   'settings.manageLoginCredentials': 'Manage your web application login credentials',
+
+  // Setup Wizard Translations
+  'setupWizard.title': 'Welcome to ZEV Billing',
+  'setupWizard.subtitle': 'Let\'s set up your mobile app in just a few steps',
+
+  'setupWizard.step1Title': 'Create Project',
+  'setupWizard.step1Description': 'Set up Firebase project',
+  'setupWizard.step1Heading': 'Step 1: Create Firebase Project',
+  'setupWizard.step1Text': 'You\'ll need a Firebase project to enable the mobile app functionality. This is free for most use cases.',
+  'setupWizard.step1Inst1': 'Go to',
+  'setupWizard.step1Inst2': 'Click "Add project" or "Create a project"',
+  'setupWizard.step1Inst3': 'Enter a project name (e.g., "My Building EV Charging")',
+  'setupWizard.step1Inst4': 'Disable Google Analytics (not needed)',
+  'setupWizard.step1Inst5': 'Click "Create project"',
+  'setupWizard.step1Tip': 'Choose a Firebase project region close to your location for better performance (e.g., europe-west1 for Europe).',
+
+  'setupWizard.step2Title': 'Enable Services',
+  'setupWizard.step2Description': 'Enable Auth and Database',
+  'setupWizard.step2Heading': 'Step 2: Enable Required Services',
+  'setupWizard.step2Text': 'Enable Authentication and Realtime Database in your Firebase project.',
+  'setupWizard.step2AuthHeading': 'A. Enable Authentication:',
+  'setupWizard.step2AuthInst1': 'In Firebase Console, click "Authentication" in the left menu',
+  'setupWizard.step2AuthInst2': 'Click "Get started"',
+  'setupWizard.step2AuthInst3': 'Enable "Email/Password" sign-in method',
+  'setupWizard.step2AuthInst4': 'Click "Save"',
+  'setupWizard.step2DbHeading': 'B. Enable Realtime Database:',
+  'setupWizard.step2DbInst1': 'Click "Realtime Database" in the left menu',
+  'setupWizard.step2DbInst2': 'Click "Create Database"',
+  'setupWizard.step2DbInst3': 'Select your region (e.g., europe-west1)',
+  'setupWizard.step2DbInst4': 'Start in locked mode (we\'ll set rules via API)',
+  'setupWizard.step2DbInst5': 'Click "Enable"',
+  'setupWizard.step2Important': 'Make note of your database URL (e.g., https://your-project.europe-west1.firebasedatabase.app) - you\'ll need to verify the region matches.',
+
+  'setupWizard.step3Title': 'Service Account',
+  'setupWizard.step3Description': 'Download credentials',
+  'setupWizard.step3Heading': 'Step 3: Download Service Account Key',
+  'setupWizard.step3Text': 'Generate and download your private service account key. This file contains credentials for server-side access.',
+  'setupWizard.step3Inst1': 'Go to Project Settings → Service Accounts',
+  'setupWizard.step3Inst2': 'Make sure "Firebase Admin SDK" is selected',
+  'setupWizard.step3Inst3': 'Click "Generate new private key"',
+  'setupWizard.step3Inst4': 'Click "Generate key" to confirm',
+  'setupWizard.step3Inst5': 'Save the JSON file securely (you\'ll upload it in the next step)',
+  'setupWizard.step3SecurityWarning': 'This file grants full access to your Firebase project. Never share it or commit it to version control. Store it securely and only upload it to your Raspberry Pi.',
+
+  'setupWizard.step4Title': 'Configure Device',
+  'setupWizard.step4Description': 'Upload configuration',
+  'setupWizard.step4Heading': 'Step 4: Configure Your Device',
+  'setupWizard.step4Text': 'Set a unique device ID for this Raspberry Pi and upload your Firebase configuration.',
+  'setupWizard.deviceIdLabel': 'Device ID (Unique identifier for this Raspberry Pi)',
+  'setupWizard.deviceIdPlaceholder': 'e.g., rpi-building-101 or rpi-house-a',
+  'setupWizard.deviceIdHelp': 'This ID will be used to organize data in Firebase. All app users on this device will share this ID.',
+  'setupWizard.serviceAccountLabel': 'Firebase Service Account Key',
+  'setupWizard.configLoaded': '✓ Configuration loaded successfully!',
+  'setupWizard.uploadPrompt': 'Click to upload or drag and drop',
+  'setupWizard.jsonFileHint': 'JSON file from Firebase Console',
+  'setupWizard.readyToComplete': 'Ready to complete setup!',
+  'setupWizard.readyToCompleteText': 'Click "Complete Setup" below to save your configuration and enable the mobile app.',
+
+  'setupWizard.instructions': 'Instructions:',
+  'setupWizard.tip': 'Tip:',
+  'setupWizard.important': 'Important:',
+  'setupWizard.securityWarning': 'Security Warning:',
+
+  'setupWizard.generate': 'Generate',
+  'setupWizard.previous': 'Previous',
+  'setupWizard.next': 'Next',
+  'setupWizard.completeSetup': 'Complete Setup',
+  'setupWizard.completeAllFields': 'Please complete all fields before continuing.',
+  'setupWizard.invalidConfig': 'Invalid Firebase service account key. Please upload a valid JSON file.',
+  'setupWizard.configParseFailed': 'Failed to parse Firebase configuration file. Please ensure it\'s a valid JSON file.',
+  'setupWizard.helpText': 'Need help? Check the documentation or contact support.',
 
   // ============================================================================
   // LOGIN

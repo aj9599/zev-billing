@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Smartphone, Plus, Edit2, Trash2, Eye, EyeOff, Power, Users, CheckCircle, XCircle, RefreshCw, Shield, Key, Upload, AlertCircle, Tablet } from 'lucide-react';
+import { Smartphone, Plus, Edit2, Trash2, Eye, EyeOff, Power, Users, CheckCircle, XCircle, RefreshCw, Shield, Key, Upload, AlertCircle, Tablet, BookOpen, ExternalLink, Sparkles } from 'lucide-react';
 import { useTranslation } from '../i18n';
 import { api } from '../api/client';
+import SetupWizard from './SetupWizard';
 
 interface AppUser {
   id: number;
@@ -41,6 +42,8 @@ export default function AppManagement() {
   const [syncing, setSyncing] = useState(false);
   const [showFirebaseConfig, setShowFirebaseConfig] = useState(false);
   const [uploadingConfig, setUploadingConfig] = useState(false);
+  const [showSetupGuide, setShowSetupGuide] = useState(false);
+  const [showSetupWizard, setShowSetupWizard] = useState(false);
   
   const [formData, setFormData] = useState({
     username: '',
@@ -89,6 +92,11 @@ export default function AppManagement() {
       ]);
       setAppUsers(Array.isArray(users) ? users : []);
       setAppSettings(settings || null);
+      
+      // Automatically show setup wizard if Firebase is not configured
+      if (!settings?.firebase_config || settings?.firebase_config === '') {
+        setShowSetupWizard(true);
+      }
       
       if (settings?.firebase_project_id) {
         setFirebaseConfig({
@@ -290,7 +298,43 @@ export default function AppManagement() {
   };
 
   return (
-    <div className="app-management-container" style={{ 
+    <>
+      {/* Setup Wizard Modal */}
+      {showSetupWizard && (
+        <SetupWizard 
+          onComplete={async (config) => {
+            // Save configuration
+            setFirebaseConfig(config);
+            try {
+              const newSettings = await api.updateAppSettings({
+                firebase_project_id: config.project_id,
+                firebase_config: config.config_json,
+                device_id: config.device_id
+              });
+              setAppSettings(newSettings);
+              setShowSetupWizard(false);
+              alert(t('appManagement.wizardCompleted') || 'Firebase setup completed successfully!');
+              loadData(); // Reload to get updated settings
+            } catch (err) {
+              console.error('Failed to save Firebase config:', err);
+              alert(t('appManagement.configSaveFailed') || 'Failed to save Firebase configuration.');
+            }
+          }}
+          onCancel={() => {
+            // Only allow closing wizard if Firebase is already configured
+            if (appSettings?.firebase_config) {
+              setShowSetupWizard(false);
+            } else {
+              if (confirm(t('appManagement.wizardCancelConfirm') || 'Firebase is not configured yet. Are you sure you want to close the setup wizard?')) {
+                setShowSetupWizard(false);
+              }
+            }
+          }}
+          existingConfig={firebaseConfig}
+        />
+      )}
+
+      <div className="app-management-container" style={{ 
       maxWidth: '100%', 
       width: '100%',
       padding: 0,
@@ -377,27 +421,309 @@ export default function AppManagement() {
             )}
           </div>
           
-          <button
-            onClick={() => setShowFirebaseConfig(!showFirebaseConfig)}
-            style={{
-              padding: '10px 18px',
-              backgroundColor: showFirebaseConfig ? '#f3f4f6' : '#667eea',
-              color: showFirebaseConfig ? '#374151' : 'white',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '14px',
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => setShowSetupWizard(true)}
+              style={{
+                padding: '10px 18px',
+                backgroundColor: '#10b981',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <Sparkles size={16} />
+              {appSettings?.firebase_config ? t('appManagement.setupWizardReopen') || 'Setup Wizard' : t('appManagement.setupWizard') || 'Setup Wizard'}
+            </button>
+            
+            {!appSettings?.firebase_config && (
+              <button
+                onClick={() => setShowSetupGuide(!showSetupGuide)}
+                style={{
+                  padding: '10px 18px',
+                  backgroundColor: showSetupGuide ? '#f3f4f6' : '#3b82f6',
+                  color: showSetupGuide ? '#374151' : 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <BookOpen size={16} />
+                {showSetupGuide ? 'Hide' : 'Setup Guide'}
+              </button>
+            )}
+            
+            <button
+              onClick={() => setShowFirebaseConfig(!showFirebaseConfig)}
+              style={{
+                padding: '10px 18px',
+                backgroundColor: showFirebaseConfig ? '#f3f4f6' : '#667eea',
+                color: showFirebaseConfig ? '#374151' : 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <Key size={16} />
+              {showFirebaseConfig ? 'Hide Configuration' : 'Configure Firebase'}
+            </button>
+          </div>
+        </div>
+
+        {/* Setup Guide */}
+        {showSetupGuide && !appSettings?.firebase_config && (
+          <div style={{
+            marginTop: '20px',
+            padding: '24px',
+            backgroundColor: '#f0f9ff',
+            borderRadius: '12px',
+            border: '2px solid #3b82f6'
+          }}>
+            <h3 style={{
+              fontSize: '18px',
               fontWeight: '600',
-              cursor: 'pointer',
+              color: '#1e40af',
+              marginBottom: '16px',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            <Key size={16} />
-            {showFirebaseConfig ? 'Hide Configuration' : 'Configure Firebase'}
-          </button>
-        </div>
+              gap: '8px'
+            }}>
+              📖 First-Time Setup Guide
+            </h3>
+            
+            <p style={{ color: '#1e40af', fontSize: '14px', marginBottom: '20px', lineHeight: '1.6' }}>
+              Follow these steps to set up Firebase for your mobile app. This is a one-time setup process.
+            </p>
+
+            {/* Step 1 */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              padding: '20px',
+              marginBottom: '16px',
+              border: '1px solid #e5e7eb'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                marginBottom: '12px'
+              }}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  backgroundColor: '#667eea',
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '16px',
+                  fontWeight: '600'
+                }}>
+                  1
+                </div>
+                <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+                  Create Firebase Project
+                </h4>
+              </div>
+              <ul style={{ color: '#6b7280', fontSize: '14px', lineHeight: '1.8', paddingLeft: '44px' }}>
+                <li>Go to <a href="https://console.firebase.google.com" target="_blank" rel="noopener noreferrer" style={{ color: '#667eea', fontWeight: '600' }}>Firebase Console <ExternalLink size={12} style={{ display: 'inline' }} /></a></li>
+                <li>Click "Add project" or "Create a project"</li>
+                <li>Enter a project name (e.g., "My-Building-EV-Charging")</li>
+                <li>Disable Google Analytics (not needed)</li>
+                <li>Click "Create project"</li>
+              </ul>
+            </div>
+
+            {/* Step 2 */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              padding: '20px',
+              marginBottom: '16px',
+              border: '1px solid #e5e7eb'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                marginBottom: '12px'
+              }}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  backgroundColor: '#667eea',
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '16px',
+                  fontWeight: '600'
+                }}>
+                  2
+                </div>
+                <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+                  Enable Services
+                </h4>
+              </div>
+              <div style={{ paddingLeft: '44px' }}>
+                <p style={{ color: '#374151', fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>
+                  A. Enable Authentication:
+                </p>
+                <ul style={{ color: '#6b7280', fontSize: '14px', lineHeight: '1.8', marginBottom: '16px' }}>
+                  <li>Click "Authentication" in the left menu</li>
+                  <li>Click "Get started"</li>
+                  <li>Enable "Email/Password" sign-in method</li>
+                </ul>
+                
+                <p style={{ color: '#374151', fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>
+                  B. Enable Realtime Database:
+                </p>
+                <ul style={{ color: '#6b7280', fontSize: '14px', lineHeight: '1.8' }}>
+                  <li>Click "Realtime Database" in the left menu</li>
+                  <li>Click "Create Database"</li>
+                  <li>Select region close to you (e.g., europe-west1 for Europe)</li>
+                  <li>Start in <strong>locked mode</strong></li>
+                  <li>Click "Enable"</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Step 3 */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              padding: '20px',
+              marginBottom: '16px',
+              border: '1px solid #e5e7eb'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                marginBottom: '12px'
+              }}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  backgroundColor: '#667eea',
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '16px',
+                  fontWeight: '600'
+                }}>
+                  3
+                </div>
+                <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+                  Download Service Account Key
+                </h4>
+              </div>
+              <ul style={{ color: '#6b7280', fontSize: '14px', lineHeight: '1.8', paddingLeft: '44px' }}>
+                <li>Go to Project Settings → Service Accounts</li>
+                <li>Make sure "Firebase Admin SDK" is selected</li>
+                <li>Click "Generate new private key"</li>
+                <li>Click "Generate key" to confirm</li>
+                <li>Save the JSON file securely</li>
+              </ul>
+              <div style={{
+                marginTop: '12px',
+                marginLeft: '44px',
+                padding: '12px',
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fecaca',
+                borderRadius: '6px'
+              }}>
+                <p style={{ margin: 0, color: '#991b1b', fontSize: '13px' }}>
+                  🔒 <strong>Security:</strong> This file grants full access to your Firebase project. Keep it secure!
+                </p>
+              </div>
+            </div>
+
+            {/* Step 4 */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              padding: '20px',
+              border: '1px solid #e5e7eb'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                marginBottom: '12px'
+              }}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  backgroundColor: '#10b981',
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '16px',
+                  fontWeight: '600'
+                }}>
+                  4
+                </div>
+                <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+                  Upload Configuration
+                </h4>
+              </div>
+              <p style={{ color: '#6b7280', fontSize: '14px', lineHeight: '1.8', paddingLeft: '44px' }}>
+                Click "Configure Firebase" above, set a Device ID, and upload your JSON file. That's it! 🎉
+              </p>
+            </div>
+
+            <div style={{
+              marginTop: '20px',
+              padding: '16px',
+              backgroundColor: '#fef3c7',
+              border: '1px solid #fbbf24',
+              borderRadius: '8px'
+            }}>
+              <p style={{ margin: 0, color: '#92400e', fontSize: '13px', lineHeight: '1.6' }}>
+                💡 <strong>Estimated time:</strong> 5-10 minutes for first-time setup. Firebase is free for most use cases.
+              </p>
+            </div>
+
+            <div style={{
+              marginTop: '16px',
+              padding: '16px',
+              backgroundColor: '#dbeafe',
+              border: '1px solid #3b82f6',
+              borderRadius: '8px'
+            }}>
+              <p style={{ margin: 0, color: '#1e40af', fontSize: '13px', lineHeight: '1.6' }}>
+                📚 For detailed documentation with screenshots, visit: <a href="https://github.com/your-repo/docs/firebase-setup" target="_blank" rel="noopener noreferrer" style={{ color: '#1e40af', fontWeight: '600' }}>Firebase Setup Guide</a>
+              </p>
+            </div>
+          </div>
+        )}
 
         {showFirebaseConfig && (
           <div style={{
@@ -1257,7 +1583,7 @@ export default function AppManagement() {
         }
 
         input[type="checkbox"]:checked::after {
-          content: '✓';
+          content: 'âœ“';
           position: absolute;
           color: white;
           font-size: 12px;
@@ -1268,5 +1594,6 @@ export default function AppManagement() {
         }
       `}</style>
     </div>
+    </>
   );
 }
