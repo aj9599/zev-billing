@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math"
-	"sync"
 	"time"
 )
 
