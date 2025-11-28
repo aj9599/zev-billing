@@ -1,17 +1,15 @@
 import { useState } from 'react';
-import { CheckCircle, Upload, ExternalLink, Tablet, X } from 'lucide-react';
+import { CheckCircle, X, ExternalLink, Upload, Tablet } from 'lucide-react';
 import { useTranslation } from '../i18n';
 
 interface SetupWizardProps {
-  onComplete: (config: { project_id: string; config_json: string; device_id: string }) => void;
+  onComplete: (config: { device_id: string; firebase_config: string; project_id: string }) => void;
   onCancel: () => void;
-  existingConfig?: { project_id: string; config_json: string; device_id: string };
-}
-
-interface SetupStep {
-  titleKey: string;
-  descriptionKey: string;
-  completed: boolean;
+  existingConfig?: {
+    device_id: string;
+    project_id: string;
+    config_json: string;
+  };
 }
 
 export default function SetupWizard({ onComplete, onCancel, existingConfig }: SetupWizardProps) {
@@ -21,26 +19,26 @@ export default function SetupWizard({ onComplete, onCancel, existingConfig }: Se
   const [firebaseConfig, setFirebaseConfig] = useState(existingConfig?.config_json || '');
   const [projectId, setProjectId] = useState(existingConfig?.project_id || '');
 
-  const steps: SetupStep[] = [
+  const steps = [
     {
       titleKey: 'setupWizard.step1Title',
-      descriptionKey: 'setupWizard.step1Description',
-      completed: false
+      descKey: 'setupWizard.step1Description',
+      completed: currentStep > 0
     },
     {
       titleKey: 'setupWizard.step2Title',
-      descriptionKey: 'setupWizard.step2Description',
-      completed: false
+      descKey: 'setupWizard.step2Description',
+      completed: currentStep > 1
     },
     {
       titleKey: 'setupWizard.step3Title',
-      descriptionKey: 'setupWizard.step3Description',
-      completed: false
+      descKey: 'setupWizard.step3Description',
+      completed: currentStep > 2
     },
     {
       titleKey: 'setupWizard.step4Title',
-      descriptionKey: 'setupWizard.step4Description',
-      completed: firebaseConfig !== '' && deviceId !== ''
+      descKey: 'setupWizard.step4Description',
+      completed: deviceId && firebaseConfig
     }
   ];
 
@@ -57,7 +55,7 @@ export default function SetupWizard({ onComplete, onCancel, existingConfig }: Se
     try {
       const text = await file.text();
       const config = JSON.parse(text);
-      
+
       if (!config.project_id || !config.private_key || !config.client_email) {
         alert(t('setupWizard.invalidConfig'));
         return;
@@ -65,21 +63,23 @@ export default function SetupWizard({ onComplete, onCancel, existingConfig }: Se
 
       setFirebaseConfig(text);
       setProjectId(config.project_id);
+      alert(t('setupWizard.configLoaded'));
     } catch (err) {
+      console.error('Failed to parse Firebase config:', err);
       alert(t('setupWizard.configParseFailed'));
     }
   };
 
   const handleComplete = () => {
-    if (!firebaseConfig || !deviceId) {
+    if (!deviceId || !firebaseConfig) {
       alert(t('setupWizard.completeAllFields'));
       return;
     }
-    
+
     onComplete({
-      project_id: projectId,
-      config_json: firebaseConfig,
-      device_id: deviceId
+      device_id: deviceId,
+      firebase_config: firebaseConfig,
+      project_id: projectId
     });
   };
 
@@ -91,72 +91,79 @@ export default function SetupWizard({ onComplete, onCancel, existingConfig }: Se
       right: 0,
       bottom: 0,
       zIndex: 9999,
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       padding: '20px',
-      overflowY: 'auto'
+      backdropFilter: 'blur(4px)'
     }}>
       <div style={{
         maxWidth: '900px',
         width: '100%',
         backgroundColor: 'white',
-        borderRadius: '16px',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+        borderRadius: '12px',
+        boxShadow: '0 25px 50px rgba(0,0,0,0.15)',
         overflow: 'hidden',
         maxHeight: '90vh',
         display: 'flex',
-        flexDirection: 'column'
+        flexDirection: 'column',
+        border: '1px solid #e5e7eb'
       }}>
         {/* Header */}
         <div style={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          padding: '40px',
-          color: 'white',
-          textAlign: 'center',
+          backgroundColor: '#f9fafb',
+          borderBottom: '1px solid #e5e7eb',
+          padding: '32px 40px',
           position: 'relative'
         }}>
           <button
             onClick={onCancel}
             style={{
               position: 'absolute',
-              top: '20px',
-              right: '20px',
-              background: 'rgba(255,255,255,0.2)',
-              border: 'none',
-              borderRadius: '50%',
-              width: '36px',
-              height: '36px',
+              top: '24px',
+              right: '24px',
+              background: 'white',
+              border: '1px solid #d1d5db',
+              borderRadius: '6px',
+              width: '32px',
+              height: '32px',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              transition: 'background 0.2s'
+              transition: 'all 0.2s'
             }}
-            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.3)'}
-            onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#f3f4f6';
+              e.currentTarget.style.borderColor = '#9ca3af';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'white';
+              e.currentTarget.style.borderColor = '#d1d5db';
+            }}
           >
-            <X size={20} color="white" />
+            <X size={18} color="#6b7280" />
           </button>
           
-          <h1 style={{ fontSize: '32px', fontWeight: '700', margin: '0 0 12px 0' }}>
+          <h1 style={{ fontSize: '28px', fontWeight: '600', margin: '0 0 8px 0', color: '#111827' }}>
             {t('setupWizard.title')}
           </h1>
-          <p style={{ fontSize: '16px', opacity: 0.9, margin: 0 }}>
+          <p style={{ fontSize: '15px', margin: 0, color: '#6b7280' }}>
             {t('setupWizard.subtitle')}
           </p>
         </div>
 
         {/* Progress Steps */}
         <div style={{
-          padding: '30px 40px',
+          padding: '24px 40px',
+          backgroundColor: 'white',
           borderBottom: '1px solid #e5e7eb'
         }}>
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: '20px'
+            gap: '16px'
           }}>
             {steps.map((step, index) => (
               <div
@@ -166,31 +173,34 @@ export default function SetupWizard({ onComplete, onCancel, existingConfig }: Se
                   flexDirection: 'column',
                   alignItems: 'center',
                   cursor: 'pointer',
-                  opacity: currentStep === index ? 1 : 0.5,
-                  transition: 'opacity 0.3s'
+                  opacity: currentStep === index ? 1 : 0.6,
+                  transition: 'opacity 0.2s'
                 }}
                 onClick={() => setCurrentStep(index)}
               >
                 <div style={{
-                  width: '48px',
-                  height: '48px',
+                  width: '40px',
+                  height: '40px',
                   borderRadius: '50%',
-                  backgroundColor: step.completed ? '#10b981' : currentStep === index ? '#667eea' : '#e5e7eb',
-                  color: 'white',
+                  backgroundColor: step.completed ? '#10b981' : currentStep === index ? '#3b82f6' : '#e5e7eb',
+                  color: step.completed || currentStep === index ? 'white' : '#9ca3af',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  marginBottom: '12px',
-                  fontSize: '20px',
-                  fontWeight: '600'
+                  marginBottom: '10px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  border: currentStep === index ? '2px solid #3b82f6' : 'none',
+                  boxShadow: currentStep === index ? '0 0 0 3px rgba(59, 130, 246, 0.1)' : 'none'
                 }}>
-                  {step.completed ? <CheckCircle size={24} /> : index + 1}
+                  {step.completed ? <CheckCircle size={20} /> : index + 1}
                 </div>
                 <div style={{
-                  fontSize: '12px',
+                  fontSize: '11px',
                   fontWeight: '600',
                   textAlign: 'center',
-                  color: currentStep === index ? '#667eea' : '#6b7280'
+                  color: currentStep === index ? '#111827' : '#6b7280',
+                  lineHeight: '1.3'
                 }}>
                   {t(step.titleKey)}
                 </div>
@@ -199,34 +209,44 @@ export default function SetupWizard({ onComplete, onCancel, existingConfig }: Se
           </div>
         </div>
 
-        {/* Step Content - Scrollable */}
-        <div style={{ 
+        {/* Content */}
+        <div style={{
           padding: '40px',
           overflowY: 'auto',
           flex: 1
         }}>
-          {/* Step 0: Create Firebase Project */}
+          {/* Step 1: Create Firebase Project */}
           {currentStep === 0 && (
             <div>
-              <h2 style={{ fontSize: '24px', fontWeight: '600', marginBottom: '16px', color: '#111827' }}>
+              <h2 style={{ fontSize: '22px', fontWeight: '600', marginBottom: '12px', color: '#111827' }}>
                 {t('setupWizard.step1Heading')}
               </h2>
-              <p style={{ color: '#6b7280', marginBottom: '24px', lineHeight: '1.6' }}>
+              <p style={{ fontSize: '15px', color: '#6b7280', marginBottom: '24px' }}>
                 {t('setupWizard.step1Text')}
               </p>
 
               <div style={{
                 backgroundColor: '#f9fafb',
-                border: '2px solid #e5e7eb',
-                borderRadius: '12px',
-                padding: '24px',
-                marginBottom: '24px'
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                padding: '20px',
+                marginBottom: '20px'
               }}>
-                <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#374151' }}>
+                <div style={{ fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '12px' }}>
                   {t('setupWizard.instructions')}
-                </h3>
-                <ol style={{ color: '#6b7280', paddingLeft: '20px', lineHeight: '2' }}>
-                  <li>{t('setupWizard.step1Inst1')} <a href="https://console.firebase.google.com" target="_blank" rel="noopener noreferrer" style={{ color: '#667eea', textDecoration: 'none', fontWeight: '600' }}>Firebase Console <ExternalLink size={14} style={{ display: 'inline', marginLeft: '4px' }} /></a></li>
+                </div>
+                <ol style={{ margin: 0, paddingLeft: '20px', fontSize: '14px', color: '#4b5563', lineHeight: '1.8' }}>
+                  <li>
+                    {t('setupWizard.step1Inst1')}{' '}
+                    <a
+                      href="https://console.firebase.google.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: '#3b82f6', textDecoration: 'none', fontWeight: '500' }}
+                    >
+                      console.firebase.google.com <ExternalLink size={12} style={{ display: 'inline', marginLeft: '2px' }} />
+                    </a>
+                  </li>
                   <li>{t('setupWizard.step1Inst2')}</li>
                   <li>{t('setupWizard.step1Inst3')}</li>
                   <li>{t('setupWizard.step1Inst4')}</li>
@@ -236,38 +256,39 @@ export default function SetupWizard({ onComplete, onCancel, existingConfig }: Se
 
               <div style={{
                 backgroundColor: '#fef3c7',
-                border: '2px solid #fbbf24',
-                borderRadius: '12px',
-                padding: '20px'
+                border: '1px solid #fbbf24',
+                borderRadius: '8px',
+                padding: '16px',
+                fontSize: '14px',
+                color: '#92400e'
               }}>
-                <p style={{ margin: 0, color: '#92400e', fontSize: '14px', lineHeight: '1.6' }}>
-                  💡 <strong>{t('setupWizard.tip')}</strong> {t('setupWizard.step1Tip')}
-                </p>
+                <strong style={{ display: 'block', marginBottom: '4px' }}>💡 {t('setupWizard.tip')}</strong>
+                {t('setupWizard.step1Tip')}
               </div>
             </div>
           )}
 
-          {/* Step 1: Enable Services */}
+          {/* Step 2: Enable Services */}
           {currentStep === 1 && (
             <div>
-              <h2 style={{ fontSize: '24px', fontWeight: '600', marginBottom: '16px', color: '#111827' }}>
+              <h2 style={{ fontSize: '22px', fontWeight: '600', marginBottom: '12px', color: '#111827' }}>
                 {t('setupWizard.step2Heading')}
               </h2>
-              <p style={{ color: '#6b7280', marginBottom: '24px', lineHeight: '1.6' }}>
+              <p style={{ fontSize: '15px', color: '#6b7280', marginBottom: '24px' }}>
                 {t('setupWizard.step2Text')}
               </p>
 
               <div style={{
                 backgroundColor: '#f9fafb',
-                border: '2px solid #e5e7eb',
-                borderRadius: '12px',
-                padding: '24px',
-                marginBottom: '20px'
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                padding: '20px',
+                marginBottom: '16px'
               }}>
-                <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#374151' }}>
+                <div style={{ fontSize: '15px', fontWeight: '600', color: '#111827', marginBottom: '12px' }}>
                   {t('setupWizard.step2AuthHeading')}
-                </h3>
-                <ol style={{ color: '#6b7280', paddingLeft: '20px', lineHeight: '2', marginBottom: 0 }}>
+                </div>
+                <ol style={{ margin: 0, paddingLeft: '20px', fontSize: '14px', color: '#4b5563', lineHeight: '1.8' }}>
                   <li>{t('setupWizard.step2AuthInst1')}</li>
                   <li>{t('setupWizard.step2AuthInst2')}</li>
                   <li>{t('setupWizard.step2AuthInst3')}</li>
@@ -277,15 +298,15 @@ export default function SetupWizard({ onComplete, onCancel, existingConfig }: Se
 
               <div style={{
                 backgroundColor: '#f9fafb',
-                border: '2px solid #e5e7eb',
-                borderRadius: '12px',
-                padding: '24px',
-                marginBottom: '24px'
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                padding: '20px',
+                marginBottom: '20px'
               }}>
-                <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#374151' }}>
+                <div style={{ fontSize: '15px', fontWeight: '600', color: '#111827', marginBottom: '12px' }}>
                   {t('setupWizard.step2DbHeading')}
-                </h3>
-                <ol style={{ color: '#6b7280', paddingLeft: '20px', lineHeight: '2', marginBottom: 0 }}>
+                </div>
+                <ol style={{ margin: 0, paddingLeft: '20px', fontSize: '14px', color: '#4b5563', lineHeight: '1.8' }}>
                   <li>{t('setupWizard.step2DbInst1')}</li>
                   <li>{t('setupWizard.step2DbInst2')}</li>
                   <li>{t('setupWizard.step2DbInst3')}</li>
@@ -296,38 +317,39 @@ export default function SetupWizard({ onComplete, onCancel, existingConfig }: Se
 
               <div style={{
                 backgroundColor: '#dbeafe',
-                border: '2px solid #3b82f6',
-                borderRadius: '12px',
-                padding: '20px'
+                border: '1px solid #3b82f6',
+                borderRadius: '8px',
+                padding: '16px',
+                fontSize: '14px',
+                color: '#1e40af'
               }}>
-                <p style={{ margin: 0, color: '#1e40af', fontSize: '14px', lineHeight: '1.6' }}>
-                  📌 <strong>{t('setupWizard.important')}</strong> {t('setupWizard.step2Important')}
-                </p>
+                <strong style={{ display: 'block', marginBottom: '4px' }}>📌 {t('setupWizard.important')}</strong>
+                {t('setupWizard.step2Important')}
               </div>
             </div>
           )}
 
-          {/* Step 2: Generate Service Account */}
+          {/* Step 3: Download Service Account Key */}
           {currentStep === 2 && (
             <div>
-              <h2 style={{ fontSize: '24px', fontWeight: '600', marginBottom: '16px', color: '#111827' }}>
+              <h2 style={{ fontSize: '22px', fontWeight: '600', marginBottom: '12px', color: '#111827' }}>
                 {t('setupWizard.step3Heading')}
               </h2>
-              <p style={{ color: '#6b7280', marginBottom: '24px', lineHeight: '1.6' }}>
+              <p style={{ fontSize: '15px', color: '#6b7280', marginBottom: '24px' }}>
                 {t('setupWizard.step3Text')}
               </p>
 
               <div style={{
                 backgroundColor: '#f9fafb',
-                border: '2px solid #e5e7eb',
-                borderRadius: '12px',
-                padding: '24px',
-                marginBottom: '24px'
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                padding: '20px',
+                marginBottom: '20px'
               }}>
-                <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#374151' }}>
+                <div style={{ fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '12px' }}>
                   {t('setupWizard.instructions')}
-                </h3>
-                <ol style={{ color: '#6b7280', paddingLeft: '20px', lineHeight: '2' }}>
+                </div>
+                <ol style={{ margin: 0, paddingLeft: '20px', fontSize: '14px', color: '#4b5563', lineHeight: '1.8' }}>
                   <li>{t('setupWizard.step3Inst1')}</li>
                   <li>{t('setupWizard.step3Inst2')}</li>
                   <li>{t('setupWizard.step3Inst3')}</li>
@@ -337,29 +359,30 @@ export default function SetupWizard({ onComplete, onCancel, existingConfig }: Se
               </div>
 
               <div style={{
-                backgroundColor: '#fef2f2',
-                border: '2px solid #ef4444',
-                borderRadius: '12px',
-                padding: '20px'
+                backgroundColor: '#fee2e2',
+                border: '1px solid #ef4444',
+                borderRadius: '8px',
+                padding: '16px',
+                fontSize: '14px',
+                color: '#991b1b'
               }}>
-                <p style={{ margin: 0, color: '#991b1b', fontSize: '14px', lineHeight: '1.6' }}>
-                  🔒 <strong>{t('setupWizard.securityWarning')}</strong> {t('setupWizard.step3SecurityWarning')}
-                </p>
+                <strong style={{ display: 'block', marginBottom: '4px' }}>🔒 {t('setupWizard.securityWarning')}</strong>
+                {t('setupWizard.step3SecurityWarning')}
               </div>
             </div>
           )}
 
-          {/* Step 3: Configure Device */}
+          {/* Step 4: Configure Device */}
           {currentStep === 3 && (
             <div>
-              <h2 style={{ fontSize: '24px', fontWeight: '600', marginBottom: '16px', color: '#111827' }}>
+              <h2 style={{ fontSize: '22px', fontWeight: '600', marginBottom: '12px', color: '#111827' }}>
                 {t('setupWizard.step4Heading')}
               </h2>
-              <p style={{ color: '#6b7280', marginBottom: '24px', lineHeight: '1.6' }}>
+              <p style={{ fontSize: '15px', color: '#6b7280', marginBottom: '24px' }}>
                 {t('setupWizard.step4Text')}
               </p>
 
-              {/* Device ID */}
+              {/* Device ID Input */}
               <div style={{ marginBottom: '24px' }}>
                 <label style={{
                   display: 'block',
@@ -368,46 +391,51 @@ export default function SetupWizard({ onComplete, onCancel, existingConfig }: Se
                   fontWeight: '600',
                   color: '#374151'
                 }}>
-                  {t('setupWizard.deviceIdLabel')}
+                  {t('setupWizard.deviceIdLabel')} *
                 </label>
-                <div style={{ display: 'flex', gap: '12px' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
                   <input
                     type="text"
+                    required
                     value={deviceId}
                     onChange={(e) => setDeviceId(e.target.value)}
-                    placeholder={t('setupWizard.deviceIdPlaceholder')}
                     style={{
                       flex: 1,
                       padding: '12px',
-                      border: '2px solid #d1d5db',
+                      border: '1px solid #d1d5db',
                       borderRadius: '8px',
                       fontSize: '14px',
                       fontFamily: 'inherit',
-                      outline: 'none'
+                      outline: 'none',
+                      transition: 'border-color 0.2s'
                     }}
+                    onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                    onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                    placeholder={t('setupWizard.deviceIdPlaceholder')}
                   />
                   <button
+                    type="button"
                     onClick={() => setDeviceId(generateDeviceId())}
                     style={{
-                      padding: '12px 20px',
-                      backgroundColor: '#667eea',
+                      padding: '10px 18px',
+                      backgroundColor: '#3b82f6',
                       color: 'white',
                       border: 'none',
                       borderRadius: '8px',
                       fontSize: '14px',
                       fontWeight: '600',
                       cursor: 'pointer',
-                      whiteSpace: 'nowrap',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '8px'
+                      gap: '8px',
+                      whiteSpace: 'nowrap'
                     }}
                   >
                     <Tablet size={16} />
                     {t('setupWizard.generate')}
                   </button>
                 </div>
-                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
+                <p style={{ fontSize: '12px', color: '#6b7280', margin: '6px 0 0 0' }}>
                   {t('setupWizard.deviceIdHelp')}
                 </p>
               </div>
@@ -415,38 +443,56 @@ export default function SetupWizard({ onComplete, onCancel, existingConfig }: Se
               {/* Firebase Config Upload */}
               <div style={{ marginBottom: '24px' }}>
                 <label style={{
-                  display: 'block',
-                  marginBottom: '8px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: '#374151'
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  cursor: 'pointer'
                 }}>
-                  {t('setupWizard.serviceAccountLabel')}
-                </label>
-                <label style={{
-                  display: 'block',
-                  padding: '40px',
-                  border: '2px dashed #d1d5db',
-                  borderRadius: '12px',
-                  backgroundColor: firebaseConfig ? '#f0fdf4' : '#f9fafb',
-                  borderColor: firebaseConfig ? '#10b981' : '#d1d5db',
-                  textAlign: 'center',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}>
-                  <Upload size={32} color={firebaseConfig ? '#10b981' : '#9ca3af'} style={{ marginBottom: '12px' }} />
-                  <p style={{ 
-                    color: firebaseConfig ? '#047857' : '#6b7280', 
-                    fontSize: '14px', 
-                    margin: '0 0 4px 0',
-                    fontWeight: firebaseConfig ? '600' : '400'
-                  }}>
-                    {firebaseConfig ? t('setupWizard.configLoaded') : t('setupWizard.uploadPrompt')}
-                  </p>
-                  <p style={{ color: '#9ca3af', fontSize: '12px', margin: 0 }}>
-                    {t('setupWizard.jsonFileHint')}
-                  </p>
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                    {t('setupWizard.serviceAccountLabel')} *
+                  </span>
+                  <div style={{
+                    padding: '32px',
+                    border: firebaseConfig ? '2px solid #10b981' : '2px dashed #d1d5db',
+                    borderRadius: '8px',
+                    backgroundColor: firebaseConfig ? '#ecfdf5' : 'white',
+                    textAlign: 'center',
+                    transition: 'all 0.2s ease',
+                    cursor: 'pointer'
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.style.borderColor = '#3b82f6';
+                    e.currentTarget.style.backgroundColor = '#eff6ff';
+                  }}
+                  onDragLeave={(e) => {
+                    e.currentTarget.style.borderColor = firebaseConfig ? '#10b981' : '#d1d5db';
+                    e.currentTarget.style.backgroundColor = firebaseConfig ? '#ecfdf5' : 'white';
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.style.borderColor = firebaseConfig ? '#10b981' : '#d1d5db';
+                    e.currentTarget.style.backgroundColor = firebaseConfig ? '#ecfdf5' : 'white';
+                    const file = e.dataTransfer.files[0];
+                    if (file) {
+                      const input = document.getElementById('firebase-config-input') as HTMLInputElement;
+                      const dataTransfer = new DataTransfer();
+                      dataTransfer.items.add(file);
+                      input.files = dataTransfer.files;
+                      handleFileUpload({ target: input } as any);
+                    }
+                  }}
+                  >
+                    <Upload size={32} color={firebaseConfig ? '#10b981' : '#9ca3af'} style={{ marginBottom: '8px' }} />
+                    <p style={{ color: firebaseConfig ? '#059669' : '#6b7280', fontSize: '14px', margin: 0, fontWeight: '500' }}>
+                      {firebaseConfig ? t('setupWizard.configLoaded') : t('setupWizard.uploadPrompt')}
+                    </p>
+                    <p style={{ color: '#9ca3af', fontSize: '12px', margin: '4px 0 0 0' }}>
+                      {t('setupWizard.jsonFileHint')}
+                    </p>
+                  </div>
                   <input
+                    id="firebase-config-input"
                     type="file"
                     accept=".json"
                     onChange={handleFileUpload}
@@ -455,106 +501,111 @@ export default function SetupWizard({ onComplete, onCancel, existingConfig }: Se
                 </label>
               </div>
 
-              {firebaseConfig && deviceId && (
+              {/* Ready to Complete */}
+              {deviceId && firebaseConfig && (
                 <div style={{
-                  backgroundColor: '#d1fae5',
-                  border: '2px solid #10b981',
-                  borderRadius: '12px',
-                  padding: '20px'
+                  backgroundColor: '#ecfdf5',
+                  border: '1px solid #10b981',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  fontSize: '14px',
+                  color: '#065f46'
                 }}>
-                  <p style={{ margin: 0, color: '#065f46', fontSize: '14px', lineHeight: '1.6' }}>
-                    ✓ <strong>{t('setupWizard.readyToComplete')}</strong> {t('setupWizard.readyToCompleteText')}
-                  </p>
+                  <strong style={{ display: 'block', marginBottom: '4px' }}>✓ {t('setupWizard.readyToComplete')}</strong>
+                  {t('setupWizard.readyToCompleteText')}
                 </div>
               )}
             </div>
           )}
-
-          {/* Navigation Buttons */}
-          <div style={{
-            display: 'flex',
-            gap: '12px',
-            justifyContent: 'space-between',
-            marginTop: '32px',
-            paddingTop: '24px',
-            borderTop: '1px solid #e5e7eb'
-          }}>
-            <button
-              onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
-              disabled={currentStep === 0}
-              style={{
-                padding: '12px 24px',
-                backgroundColor: currentStep === 0 ? '#f3f4f6' : 'white',
-                color: currentStep === 0 ? '#9ca3af' : '#374151',
-                border: '2px solid #e5e7eb',
-                borderRadius: '8px',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: currentStep === 0 ? 'not-allowed' : 'pointer'
-              }}
-            >
-              ← {t('setupWizard.previous')}
-            </button>
-
-            <div style={{ display: 'flex', gap: '12px' }}>
-              {currentStep < 3 && (
-                <button
-                  onClick={() => setCurrentStep(Math.min(3, currentStep + 1))}
-                  style={{
-                    padding: '12px 24px',
-                    backgroundColor: '#667eea',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {t('setupWizard.next')} →
-                </button>
-              )}
-
-              {currentStep === 3 && (
-                <button
-                  onClick={handleComplete}
-                  disabled={!firebaseConfig || !deviceId}
-                  style={{
-                    padding: '12px 32px',
-                    backgroundColor: (!firebaseConfig || !deviceId) ? '#9ca3af' : '#10b981',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    cursor: (!firebaseConfig || !deviceId) ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px'
-                  }}
-                >
-                  <CheckCircle size={16} />
-                  {t('setupWizard.completeSetup')}
-                </button>
-              )}
-            </div>
-          </div>
         </div>
 
-        {/* Help Section */}
+        {/* Footer */}
         <div style={{
           backgroundColor: '#f9fafb',
-          padding: '20px 40px',
           borderTop: '1px solid #e5e7eb',
+          padding: '20px 40px',
           display: 'flex',
-          alignItems: 'center',
-          gap: '12px'
+          justifyContent: 'space-between',
+          alignItems: 'center'
         }}>
-          <div style={{ fontSize: '24px' }}>💬</div>
-          <div style={{ flex: 1 }}>
-            <p style={{ margin: 0, color: '#6b7280', fontSize: '13px' }}>
-              {t('setupWizard.helpText')}
-            </p>
+          <div style={{ fontSize: '13px', color: '#6b7280' }}>
+            {t('setupWizard.helpText')}
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px' }}>
+            {currentStep > 0 && (
+              <button
+                onClick={() => setCurrentStep(currentStep - 1)}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: 'white',
+                  color: '#374151',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+              >
+                {t('setupWizard.previous')}
+              </button>
+            )}
+
+            {currentStep < 3 ? (
+              <button
+                onClick={() => setCurrentStep(currentStep + 1)}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#3b82f6'}
+              >
+                {t('setupWizard.next')}
+              </button>
+            ) : (
+              <button
+                onClick={handleComplete}
+                disabled={!deviceId || !firebaseConfig}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: deviceId && firebaseConfig ? '#10b981' : '#d1d5db',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: deviceId && firebaseConfig ? 'pointer' : 'not-allowed',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  if (deviceId && firebaseConfig) {
+                    e.currentTarget.style.backgroundColor = '#059669';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (deviceId && firebaseConfig) {
+                    e.currentTarget.style.backgroundColor = '#10b981';
+                  }
+                }}
+              >
+                <CheckCircle size={16} />
+                {t('setupWizard.completeSetup')}
+              </button>
+            )}
           </div>
         </div>
       </div>
