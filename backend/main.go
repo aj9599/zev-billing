@@ -495,6 +495,8 @@ var startTime = time.Now()
 
 // debugStatusHandler returns detailed system status
 func debugStatusHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("🔥🔥🔥 DEBUG STATUS HANDLER CALLED 🔥🔥🔥")
+	
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
@@ -513,6 +515,18 @@ func debugStatusHandler(w http.ResponseWriter, r *http.Request) {
 			"data_collector":         dataCollector != nil,
 			"auto_billing_scheduler": autoBillingScheduler != nil,
 		},
+	}
+
+	// ⭐ ADD THIS SECTION ⭐
+	if dataCollector != nil {
+		log.Println("🔥 Calling dataCollector.GetDebugInfo()...")
+		debugInfo := dataCollector.GetDebugInfo()
+		log.Printf("🔥 Got %d keys from GetDebugInfo", len(debugInfo))
+		for k, v := range debugInfo {
+			status[k] = v
+		}
+	} else {
+		log.Println("⚠️ dataCollector is nil!")
 	}
 
 	w.Header().Set("Content-Type", "application/json")
