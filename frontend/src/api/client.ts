@@ -520,6 +520,45 @@ class ApiClient {
   async syncToFirebase(): Promise<{ status: string; message: string }> {
     return this.request('/app/sync', { method: 'POST' });
   }
+
+  // Export methods
+  exportMeters(startDate: string, endDate: string, meterId?: number): string {
+    const params = new URLSearchParams({
+      type: 'meters',
+      start_date: startDate,
+      end_date: endDate,
+    });
+    if (meterId) params.append('meter_id', meterId.toString());
+    return `${API_BASE}/export?${params.toString()}`;
+  }
+
+  exportChargers(startDate: string, endDate: string, chargerId?: number): string {
+    const params = new URLSearchParams({
+      type: 'chargers',
+      start_date: startDate,
+      end_date: endDate,
+    });
+    if (chargerId) params.append('charger_id', chargerId.toString());
+    return `${API_BASE}/export?${params.toString()}`;
+  }
+
+  exportLogs(startDate: string, endDate: string): string {
+    const params = new URLSearchParams({
+      type: 'logs',
+      start_date: startDate,
+      end_date: endDate,
+    });
+    return `${API_BASE}/export?${params.toString()}`;
+  }
+
+  exportAll(startDate: string, endDate: string): string {
+    const params = new URLSearchParams({
+      type: 'all',
+      start_date: startDate,
+      end_date: endDate,
+    });
+    return `${API_BASE}/export?${params.toString()}`;
+  }
 }
 
 export const api = new ApiClient();

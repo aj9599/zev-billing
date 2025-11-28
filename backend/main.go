@@ -37,9 +37,9 @@ var (
 func init() {
 	// Load .env file (gracefully handle if not found)
 	if err := godotenv.Load(); err != nil {
-		log.Println("ðŸ“ No .env file found, using environment variables")
+		log.Println("Ã°Å¸â€œÂ No .env file found, using environment variables")
 	} else {
-		log.Println("âœ… Loaded .env file")
+		log.Println("Ã¢Å“â€¦ Loaded .env file")
 	}
 }
 
@@ -48,7 +48,7 @@ func recoverMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
-				log.Printf("âŒ PANIC RECOVERED: %v", err)
+				log.Printf("Ã¢ÂÅ’ PANIC RECOVERED: %v", err)
 				log.Printf("Stack trace:\n%s", debug.Stack())
 
 				w.Header().Set("Content-Type", "application/json")
@@ -68,7 +68,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		
 		// Log request
-		log.Printf("â†’ [%s] %s %s from %s", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr)
+		log.Printf("Ã¢â€ â€™ [%s] %s %s from %s", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr)
 		
 		// Wrap ResponseWriter to capture status code
 		wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
@@ -77,7 +77,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		
 		// Log response with status code and duration
 		duration := time.Since(start)
-		log.Printf("â† [%s] %s - %d in %v", r.Method, r.URL.Path, wrapped.statusCode, duration)
+		log.Printf("Ã¢â€ Â [%s] %s - %d in %v", r.Method, r.URL.Path, wrapped.statusCode, duration)
 	})
 }
 
@@ -112,9 +112,9 @@ func main() {
 	// Setup logging
 	setupLogging()
 	
-	log.Println("â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—")
-	log.Println("â•‘          ZEV Billing System - Production Mode             â•‘")
-	log.Println("â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•")
+	log.Println("Ã¢â€¢â€Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢â€”")
+	log.Println("Ã¢â€¢â€˜          ZEV Billing System - Production Mode             Ã¢â€¢â€˜")
+	log.Println("Ã¢â€¢Å¡Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â")
 	log.Printf("Version: %s (Built: %s)", version, buildTime)
 	
 	// Get Go version from build info
@@ -130,57 +130,57 @@ func main() {
 	
 	// Validate configuration
 	if err := validateConfig(cfg); err != nil {
-		log.Fatalf("âŒ Configuration validation failed: %v", err)
+		log.Fatalf("Ã¢ÂÅ’ Configuration validation failed: %v", err)
 	}
 	
-	log.Println("âœ… Configuration validated successfully")
+	log.Println("Ã¢Å“â€¦ Configuration validated successfully")
 	log.Println()
 
 	// Initialize database
-	log.Println("ðŸ—„ï¸  Initializing database...")
+	log.Println("Ã°Å¸â€”â€žÃ¯Â¸Â  Initializing database...")
 	db, err := database.InitDB(cfg.DatabasePath)
 	if err != nil {
-		log.Fatalf("âŒ Failed to initialize database: %v", err)
+		log.Fatalf("Ã¢ÂÅ’ Failed to initialize database: %v", err)
 	}
 	defer func() {
-		log.Println("ðŸ—„ï¸  Closing database connection...")
+		log.Println("Ã°Å¸â€”â€žÃ¯Â¸Â  Closing database connection...")
 		db.Close()
 	}()
 
 	// Run migrations
-	log.Println("ðŸ”„ Running database migrations...")
+	log.Println("Ã°Å¸â€â€ž Running database migrations...")
 	if err := database.RunMigrations(db); err != nil {
-		log.Fatalf("âŒ Failed to run migrations: %v", err)
+		log.Fatalf("Ã¢ÂÅ’ Failed to run migrations: %v", err)
 	}
-	log.Println("âœ… Database migrations completed")
+	log.Println("Ã¢Å“â€¦ Database migrations completed")
 
 	// Initialize Firebase sync
-	log.Println("ðŸ”¥ Initializing Firebase sync...")
+	log.Println("Ã°Å¸â€Â¥ Initializing Firebase sync...")
 	firebaseSync := services.NewFirebaseSync(db)
 	if err := firebaseSync.Initialize(); err != nil {
-		log.Printf("âš ï¸  Firebase sync initialization: %v", err)
+		log.Printf("Ã¢Å¡Â Ã¯Â¸Â  Firebase sync initialization: %v", err)
 	} else {
-		log.Println("âœ… Firebase sync initialized")
+		log.Println("Ã¢Å“â€¦ Firebase sync initialized")
 	}
 	
 	// Start periodic Firebase sync
 	firebaseSync.StartPeriodicSync()
 
 	// Initialize services
-	log.Println("âš™ï¸  Initializing services...")
+	log.Println("Ã¢Å¡â„¢Ã¯Â¸Â  Initializing services...")
 	dataCollector = services.NewDataCollector(db)
 	billingService := services.NewBillingService(db)
 	pdfGenerator := services.NewPDFGenerator(db)
 	autoBillingScheduler = services.NewAutoBillingScheduler(db, billingService, pdfGenerator)
 
 	// Start background services
-	log.Println("ðŸš€ Starting background services...")
+	log.Println("Ã°Å¸Å¡â‚¬ Starting background services...")
 	go dataCollector.Start()
 	go autoBillingScheduler.Start()
-	log.Println("âœ… Background services started")
+	log.Println("Ã¢Å“â€¦ Background services started")
 
 	// Initialize all handlers
-	log.Println("ðŸ”Œ Initializing handlers...")
+	log.Println("Ã°Å¸â€Å’ Initializing handlers...")
 	authHandler := handlers.NewAuthHandler(db, cfg.JWTSecret)
 	userHandler := handlers.NewUserHandler(db)
 	buildingHandler := handlers.NewBuildingHandler(db)
@@ -193,7 +193,8 @@ func main() {
 	sharedMeterHandler := handlers.NewSharedMeterHandler(db)
 	customItemHandler := handlers.NewCustomItemHandler(db)
 	appHandler := handlers.NewAppHandler(db, firebaseSync)
-	log.Println("âœ… Handlers initialized")
+	exportHandler := handlers.NewExportHandler(db)
+	log.Println("Ã¢Å“â€¦ Handlers initialized")
 
 	// Setup router
 	r := mux.NewRouter()
@@ -319,6 +320,9 @@ func main() {
 	api.HandleFunc("/dashboard/consumption-by-building", dashboardHandler.GetConsumptionByBuilding).Methods("GET")
 	api.HandleFunc("/dashboard/logs", dashboardHandler.GetLogs).Methods("GET")
 
+	// Export routes
+	api.HandleFunc("/export", exportHandler.ExportData).Methods("GET")
+
 	// CORS configuration
 	corsHandler := cors.New(cors.Options{
 		AllowedOrigins:   getAllowedOrigins(cfg),
@@ -341,15 +345,15 @@ func main() {
 	// Start server in a goroutine
 	go func() {
 		log.Println()
-		log.Println("â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—")
-		log.Printf("â•‘  ðŸš€ Server started on port %d                              â•‘", cfg.ServerPort)
-		log.Println("â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•")
+		log.Println("Ã¢â€¢â€Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢â€”")
+		log.Printf("Ã¢â€¢â€˜  Ã°Å¸Å¡â‚¬ Server started on port %d                              Ã¢â€¢â€˜", cfg.ServerPort)
+		log.Println("Ã¢â€¢Å¡Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â")
 		log.Println()
 		
 		if config.IsDevelopment() {
-			log.Printf("ðŸ“ Local URL: http://localhost:%d", cfg.ServerPort)
-			log.Printf("ðŸ“ API URL: http://localhost:%d/api", cfg.ServerPort)
-			log.Printf("ðŸ“ Health Check: http://localhost:%d/api/health", cfg.ServerPort)
+			log.Printf("Ã°Å¸â€œÂ Local URL: http://localhost:%d", cfg.ServerPort)
+			log.Printf("Ã°Å¸â€œÂ API URL: http://localhost:%d/api", cfg.ServerPort)
+			log.Printf("Ã°Å¸â€œÂ Health Check: http://localhost:%d/api/health", cfg.ServerPort)
 		}
 		
 		log.Println()
@@ -357,7 +361,7 @@ func main() {
 		log.Println()
 		
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("âŒ Server failed to start: %v", err)
+			log.Fatalf("Ã¢ÂÅ’ Server failed to start: %v", err)
 		}
 	}()
 
@@ -386,11 +390,11 @@ func validateConfig(cfg *config.Config) error {
 		if config.IsProduction() {
 			return fmt.Errorf("JWT secret must be changed in production")
 		}
-		log.Println("âš ï¸  WARNING: Using default JWT secret (acceptable for development only)")
+		log.Println("Ã¢Å¡Â Ã¯Â¸Â  WARNING: Using default JWT secret (acceptable for development only)")
 	}
 	
 	if cfg.FirebaseEncryptionKey == "" {
-		log.Println("âš ï¸  WARNING: Firebase encryption key not set")
+		log.Println("Ã¢Å¡Â Ã¯Â¸Â  WARNING: Firebase encryption key not set")
 	}
 	
 	return nil
@@ -429,14 +433,14 @@ func gracefulShutdown(srv *http.Server, db interface{ Close() error }) {
 	// Wait for interrupt signal
 	<-quit
 	log.Println()
-	log.Println("âš ï¸  Shutdown signal received, initiating graceful shutdown...")
+	log.Println("Ã¢Å¡Â Ã¯Â¸Â  Shutdown signal received, initiating graceful shutdown...")
 
 	// Create shutdown context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	// Stop background services
-	log.Println("ðŸ›‘ Stopping background services...")
+	log.Println("Ã°Å¸â€ºâ€˜ Stopping background services...")
 	if dataCollector != nil {
 		dataCollector.Stop()
 	}
@@ -445,18 +449,18 @@ func gracefulShutdown(srv *http.Server, db interface{ Close() error }) {
 	}
 
 	// Shutdown HTTP server
-	log.Println("ðŸ›‘ Stopping HTTP server...")
+	log.Println("Ã°Å¸â€ºâ€˜ Stopping HTTP server...")
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Printf("âŒ Server shutdown error: %v", err)
+		log.Printf("Ã¢ÂÅ’ Server shutdown error: %v", err)
 	}
 
 	// Close database
-	log.Println("ðŸ›‘ Closing database connection...")
+	log.Println("Ã°Å¸â€ºâ€˜ Closing database connection...")
 	if err := db.Close(); err != nil {
-		log.Printf("âŒ Database close error: %v", err)
+		log.Printf("Ã¢ÂÅ’ Database close error: %v", err)
 	}
 
-	log.Println("âœ… Graceful shutdown completed")
+	log.Println("Ã¢Å“â€¦ Graceful shutdown completed")
 	os.Exit(0)
 }
 
@@ -495,7 +499,7 @@ var startTime = time.Now()
 
 // debugStatusHandler returns detailed system status
 func debugStatusHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("🔥🔥🔥 DEBUG STATUS HANDLER CALLED 🔥🔥🔥")
+	log.Println("ðŸ”¥ðŸ”¥ðŸ”¥ DEBUG STATUS HANDLER CALLED ðŸ”¥ðŸ”¥ðŸ”¥")
 	
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
@@ -517,16 +521,16 @@ func debugStatusHandler(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	// ⭐ ADD THIS SECTION ⭐
+	// â­ ADD THIS SECTION â­
 	if dataCollector != nil {
-		log.Println("🔥 Calling dataCollector.GetDebugInfo()...")
+		log.Println("ðŸ”¥ Calling dataCollector.GetDebugInfo()...")
 		debugInfo := dataCollector.GetDebugInfo()
-		log.Printf("🔥 Got %d keys from GetDebugInfo", len(debugInfo))
+		log.Printf("ðŸ”¥ Got %d keys from GetDebugInfo", len(debugInfo))
 		for k, v := range debugInfo {
 			status[k] = v
 		}
 	} else {
-		log.Println("⚠️ dataCollector is nil!")
+		log.Println("âš ï¸ dataCollector is nil!")
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -535,7 +539,7 @@ func debugStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 // rebootHandler handles system reboot
 func rebootHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("ðŸ”„ System reboot requested")
+	log.Println("Ã°Å¸â€â€ž System reboot requested")
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
@@ -546,7 +550,7 @@ func rebootHandler(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		time.Sleep(1 * time.Second)
 		if err := exec.Command("sudo", "reboot").Run(); err != nil {
-			log.Printf("âŒ Failed to reboot: %v", err)
+			log.Printf("Ã¢ÂÅ’ Failed to reboot: %v", err)
 		}
 	}()
 }
@@ -560,7 +564,7 @@ func createBackupHandler(dbPath string) http.HandlerFunc {
 		}
 
 		if err := os.MkdirAll(backupDir, 0755); err != nil {
-			log.Printf("âŒ Failed to create backup directory: %v", err)
+			log.Printf("Ã¢ÂÅ’ Failed to create backup directory: %v", err)
 			http.Error(w, "Failed to create backup directory", http.StatusInternalServerError)
 			return
 		}
@@ -570,12 +574,12 @@ func createBackupHandler(dbPath string) http.HandlerFunc {
 		backupPath := filepath.Join(backupDir, backupName)
 
 		if err := copyFile(dbPath, backupPath); err != nil {
-			log.Printf("âŒ Failed to create backup: %v", err)
+			log.Printf("Ã¢ÂÅ’ Failed to create backup: %v", err)
 			http.Error(w, "Failed to create backup", http.StatusInternalServerError)
 			return
 		}
 
-		log.Printf("âœ… Backup created: %s", backupName)
+		log.Printf("Ã¢Å“â€¦ Backup created: %s", backupName)
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{
@@ -631,7 +635,7 @@ func restoreBackupHandler(dbPath string) http.HandlerFunc {
 		preRestoreBackup := fmt.Sprintf("%s.pre-restore_%s", dbPath, timestamp)
 		
 		if err := copyFile(dbPath, preRestoreBackup); err != nil {
-			log.Printf("âŒ Failed to create pre-restore backup: %v", err)
+			log.Printf("Ã¢ÂÅ’ Failed to create pre-restore backup: %v", err)
 			http.Error(w, "Failed to create pre-restore backup", http.StatusInternalServerError)
 			return
 		}
@@ -649,7 +653,7 @@ func restoreBackupHandler(dbPath string) http.HandlerFunc {
 			return
 		}
 
-		log.Println("âœ… Database restored from backup")
+		log.Println("Ã¢Å“â€¦ Database restored from backup")
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{
@@ -675,7 +679,7 @@ func checkUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	// Fetch latest changes
 	fetchCmd := exec.Command("git", "-C", repoPath, "fetch", "origin", "main")
 	if err := fetchCmd.Run(); err != nil {
-		log.Printf("âŒ Failed to fetch updates: %v", err)
+		log.Printf("Ã¢ÂÅ’ Failed to fetch updates: %v", err)
 		http.Error(w, "Failed to check for updates", http.StatusInternalServerError)
 		return
 	}
@@ -723,13 +727,13 @@ func performUpdate() {
 	repoPath := getRepoPath()
 	logFile := getLogFilePath("zev-billing-update.log")
 
-	log.Println("ðŸ”„ Starting update process...")
-	log.Printf("ðŸ“ Repository: %s", repoPath)
-	log.Printf("ðŸ“ Log file: %s", logFile)
+	log.Println("Ã°Å¸â€â€ž Starting update process...")
+	log.Printf("Ã°Å¸â€œÂ Repository: %s", repoPath)
+	log.Printf("Ã°Å¸â€œÂ Log file: %s", logFile)
 
 	f, err := os.Create(logFile)
 	if err != nil {
-		log.Printf("âŒ Failed to create log file: %v", err)
+		log.Printf("Ã¢ÂÅ’ Failed to create log file: %v", err)
 		return
 	}
 	defer f.Close()
@@ -742,21 +746,21 @@ func performUpdate() {
 	}
 
 	// Stash changes
-	writeLog("ðŸ“¦ Stashing local changes...")
+	writeLog("Ã°Å¸â€œÂ¦ Stashing local changes...")
 	exec.Command("git", "-C", repoPath, "stash").Run()
 
 	// Pull updates
-	writeLog("â¬‡ï¸  Pulling latest changes...")
+	writeLog("Ã¢Â¬â€¡Ã¯Â¸Â  Pulling latest changes...")
 	pullCmd := exec.Command("git", "-C", repoPath, "pull", "origin", "main")
 	pullCmd.Stdout = f
 	pullCmd.Stderr = f
 	if err := pullCmd.Run(); err != nil {
-		writeLog(fmt.Sprintf("âŒ Pull failed: %v", err))
+		writeLog(fmt.Sprintf("Ã¢ÂÅ’ Pull failed: %v", err))
 		return
 	}
 
 	// Build backend
-	writeLog("ðŸ”¨ Building backend...")
+	writeLog("Ã°Å¸â€Â¨ Building backend...")
 	backendPath := filepath.Join(repoPath, "backend")
 	buildCmd := exec.Command("go", "build", "-o", "zev-billing")
 	buildCmd.Dir = backendPath
@@ -764,30 +768,30 @@ func performUpdate() {
 	buildCmd.Stdout = f
 	buildCmd.Stderr = f
 	if err := buildCmd.Run(); err != nil {
-		writeLog(fmt.Sprintf("âŒ Build failed: %v", err))
+		writeLog(fmt.Sprintf("Ã¢ÂÅ’ Build failed: %v", err))
 		return
 	}
 
 	// Build frontend
-	writeLog("ðŸ“¦ Installing frontend dependencies...")
+	writeLog("Ã°Å¸â€œÂ¦ Installing frontend dependencies...")
 	frontendPath := filepath.Join(repoPath, "frontend")
 	exec.Command("npm", "install").Dir = frontendPath
 	
-	writeLog("ðŸ”¨ Building frontend...")
+	writeLog("Ã°Å¸â€Â¨ Building frontend...")
 	npmBuildCmd := exec.Command("npm", "run", "build")
 	npmBuildCmd.Dir = frontendPath
 	npmBuildCmd.Stdout = f
 	npmBuildCmd.Stderr = f
 	if err := npmBuildCmd.Run(); err != nil {
-		writeLog(fmt.Sprintf("âš ï¸  Frontend build warning: %v", err))
+		writeLog(fmt.Sprintf("Ã¢Å¡Â Ã¯Â¸Â  Frontend build warning: %v", err))
 	}
 
 	// Restart services
-	writeLog("ðŸ”„ Restarting services...")
+	writeLog("Ã°Å¸â€â€ž Restarting services...")
 	exec.Command("systemctl", "restart", "nginx").Run()
 
-	writeLog("âœ… Update completed successfully!")
-	writeLog("ðŸ”„ Exiting for systemd restart...")
+	writeLog("Ã¢Å“â€¦ Update completed successfully!")
+	writeLog("Ã°Å¸â€â€ž Exiting for systemd restart...")
 
 	time.Sleep(500 * time.Millisecond)
 	os.Exit(0)
@@ -796,7 +800,7 @@ func performUpdate() {
 // factoryResetHandler performs a factory reset
 func factoryResetHandler(dbPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log.Println("âš ï¸  FACTORY RESET REQUESTED")
+		log.Println("Ã¢Å¡Â Ã¯Â¸Â  FACTORY RESET REQUESTED")
 
 		// Create backup first
 		backupDir := "./backups"
@@ -818,7 +822,7 @@ func factoryResetHandler(dbPath string) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("âœ… Pre-reset backup: %s", backupName)
+		log.Printf("Ã¢Å“â€¦ Pre-reset backup: %s", backupName)
 
 		// Delete database
 		if err := os.Remove(dbPath); err != nil {
@@ -835,7 +839,7 @@ func factoryResetHandler(dbPath string) http.HandlerFunc {
 		os.RemoveAll(invoicesDir)
 		os.MkdirAll(invoicesDir, 0755)
 
-		log.Println("âœ… Factory reset completed")
+		log.Println("Ã¢Å“â€¦ Factory reset completed")
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{
