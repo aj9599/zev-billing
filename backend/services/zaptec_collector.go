@@ -1209,16 +1209,6 @@ func (zc *ZaptecCollector) getStateDescription(mode int) string {
 	}
 }
 
-// formatDuration formats a duration into a human-readable string
-func formatDuration(d time.Duration) string {
-	hours := int(d.Hours())
-	minutes := int(d.Minutes()) % 60
-	if hours > 0 {
-		return fmt.Sprintf("%dh %dm", hours, minutes)
-	}
-	return fmt.Sprintf("%dm", minutes)
-}
-
 // ========== PUBLIC API FOR UI ==========
 
 // GetChargerData returns live charger data for UI display (always available)
