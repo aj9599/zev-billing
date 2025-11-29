@@ -21,6 +21,36 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
   const diskCanvasRef = useRef<HTMLCanvasElement>(null);
   const tempCanvasRef = useRef<HTMLCanvasElement>(null);
 
+  // DEBUG: Log everything on mount and when healthHistory changes
+  useEffect(() => {
+    console.log('=== SystemHealthCharts Debug ===');
+    console.log('healthHistory received:', healthHistory);
+    console.log('healthHistory type:', typeof healthHistory);
+    console.log('healthHistory is array?', Array.isArray(healthHistory));
+    console.log('healthHistory length:', healthHistory?.length);
+    
+    if (healthHistory && healthHistory.length > 0) {
+      console.log('First data point:', healthHistory[0]);
+      console.log('Last data point:', healthHistory[healthHistory.length - 1]);
+      
+      // Check values
+      const cpuValues = healthHistory.map(d => d.cpu_usage);
+      const memoryValues = healthHistory.map(d => d.memory_percent);
+      const diskValues = healthHistory.map(d => d.disk_percent);
+      const tempValues = healthHistory.map(d => d.temperature);
+      
+      console.log('CPU values:', cpuValues.slice(0, 5), '...');
+      console.log('Memory values:', memoryValues.slice(0, 5), '...');
+      console.log('Disk values:', diskValues.slice(0, 5), '...');
+      console.log('Temperature values:', tempValues.slice(0, 5), '...');
+      
+      console.log('Any CPU > 0?', cpuValues.some(v => v > 0));
+      console.log('Any Memory > 0?', memoryValues.some(v => v > 0));
+      console.log('Any Disk > 0?', diskValues.some(v => v > 0));
+      console.log('Any Temperature > 0?', tempValues.some(v => v > 0));
+    }
+  }, [healthHistory]);
+
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
@@ -32,8 +62,13 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
 
   useEffect(() => {
     // Validate healthHistory exists and is an array
-    if (!healthHistory || !Array.isArray(healthHistory) || healthHistory.length === 0) {
-      console.warn('SystemHealthCharts: No health history data');
+    if (!healthHistory || !Array.isArray(healthHistory)) {
+      console.error('❌ healthHistory is not an array:', healthHistory);
+      return;
+    }
+    
+    if (healthHistory.length === 0) {
+      console.warn('⚠️ healthHistory is empty - no data to display');
       return;
     }
 
@@ -47,24 +82,27 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       typeof d.disk_percent === 'number'
     );
 
+    console.log('✓ Valid data points:', validHistory.length, 'out of', healthHistory.length);
+
     if (validHistory.length === 0) {
-      console.warn('SystemHealthCharts: No valid data points');
+      console.error('❌ No valid data points after filtering');
       return;
     }
 
-    console.log('SystemHealthCharts: Drawing charts with', validHistory.length, 'data points');
-
     // Use requestAnimationFrame to ensure DOM is ready
     requestAnimationFrame(() => {
+      console.log('🎨 Starting to draw charts...');
       drawChart(cpuCanvasRef.current, validHistory, 'cpu_usage', '#667eea');
       drawChart(memoryCanvasRef.current, validHistory, 'memory_percent', '#10b981');
       drawChart(diskCanvasRef.current, validHistory, 'disk_percent', '#f59e0b');
       
       // Only draw temperature if we have temperature data
       const hasTempData = validHistory.some(d => d.temperature > 0);
-      console.log('SystemHealthCharts: Has temperature data?', hasTempData);
+      console.log('🌡️ Temperature data available?', hasTempData);
       if (hasTempData) {
         drawChart(tempCanvasRef.current, validHistory, 'temperature', '#ef4444');
+      } else {
+        console.warn('⚠️ No temperature data (all values are 0)');
       }
     });
   }, [healthHistory, isMobile]);
@@ -75,19 +113,28 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
     key: keyof HealthDataPoint,
     color: string
   ) => {
-    if (!canvas || data.length === 0) {
-      console.warn(`SystemHealthCharts: Cannot draw ${key} - no canvas or data`);
+    console.log(`📊 Drawing ${key} chart...`);
+    
+    if (!canvas) {
+      console.error(`❌ Canvas is null for ${key}`);
+      return;
+    }
+    
+    if (data.length === 0) {
+      console.error(`❌ No data for ${key}`);
       return;
     }
 
     const ctx = canvas.getContext('2d');
     if (!ctx) {
-      console.warn(`SystemHealthCharts: Cannot get context for ${key}`);
+      console.error(`❌ Could not get 2d context for ${key}`);
       return;
     }
 
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
+    
+    console.log(`  Canvas rect for ${key}:`, rect);
     
     // Use fixed height like the old working version
     const height = isMobile ? 250 : 300;
@@ -105,6 +152,8 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
     const chartWidth = width - padding * 2;
     const chartHeight = height - padding * 2;
 
+    console.log(`  Drawing area for ${key}: ${chartWidth}x${chartHeight}`);
+
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
 
@@ -113,8 +162,11 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       .filter(d => d && typeof d === 'object' && typeof d[key] === 'number')
       .map(d => d[key] as number);
     
+    console.log(`  Values for ${key}:`, values.slice(0, 10), '... (showing first 10)');
+    console.log(`  Min: ${Math.min(...values)}, Max: ${Math.max(...values)}, Avg: ${(values.reduce((a,b) => a+b, 0) / values.length).toFixed(1)}`);
+    
     if (values.length === 0) {
-      console.warn(`SystemHealthCharts: No values for ${key}`);
+      console.error(`❌ No values extracted for ${key}`);
       return;
     }
     
@@ -135,9 +187,10 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       ctx.font = isMobile ? '10px sans-serif' : '12px sans-serif';
       ctx.textAlign = 'right';
       const value = maxValue - (maxValue / 4) * i;
-      // Fixed character encoding - was Â°C, now °C
       ctx.fillText(value.toFixed(0) + (key === 'temperature' ? '°C' : '%'), padding - 10, y + 4);
     }
+
+    console.log(`  ✓ Grid lines drawn for ${key}`);
 
     // Draw line chart
     if (values.length > 0) {
@@ -147,6 +200,7 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
 
+      let pointsDrawn = 0;
       values.forEach((value, index) => {
         const x = padding + (chartWidth / (values.length - 1)) * index;
         const y = padding + chartHeight - (value / maxValue) * chartHeight;
@@ -156,9 +210,12 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
         } else {
           ctx.lineTo(x, y);
         }
+        pointsDrawn++;
       });
       
+      console.log(`  ✓ Line path created with ${pointsDrawn} points for ${key}`);
       ctx.stroke();
+      console.log(`  ✓ Line drawn for ${key}`);
 
       // Fill area under line
       ctx.lineTo(width - padding, padding + chartHeight);
@@ -170,6 +227,8 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       gradient.addColorStop(1, color + '00');
       ctx.fillStyle = gradient;
       ctx.fill();
+      
+      console.log(`  ✓ Gradient fill applied for ${key}`);
     }
 
     // Draw x-axis time labels
@@ -196,13 +255,37 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
           ctx.fillText(timeStr, x, height - padding + 20);
         }
       }
+      console.log(`  ✓ Time labels drawn for ${key}`);
     }
     
-    console.log(`SystemHealthCharts: Successfully drew ${key} chart`);
+    console.log(`✅ Successfully completed drawing ${key} chart`);
   };
 
   const hasTempData = healthHistory && Array.isArray(healthHistory) && 
                       healthHistory.some(d => d && d.temperature > 0);
+
+  // Show debug info if no data
+  if (!healthHistory || healthHistory.length === 0) {
+    return (
+      <div style={{ 
+        marginBottom: '30px', 
+        padding: '40px', 
+        backgroundColor: '#fee2e2',
+        borderRadius: '12px',
+        border: '2px solid #dc2626'
+      }}>
+        <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '16px', color: '#991b1b' }}>
+          ⚠️ No Chart Data Available
+        </h2>
+        <p style={{ color: '#7f1d1d', marginBottom: '12px' }}>
+          The health history is empty. Check browser console for details.
+        </p>
+        <p style={{ color: '#7f1d1d', fontSize: '14px' }}>
+          Open DevTools Console (F12) to see debug information.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ marginBottom: isMobile ? '20px' : '30px', width: '100%' }}>
@@ -212,7 +295,7 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
         marginBottom: isMobile ? '12px' : '16px', 
         color: '#1f2937' 
       }}>
-        {t('logs.performance24h')}
+        {t('logs.performance24h')} ({healthHistory.length} data points)
       </h2>
       <div style={{
         display: 'grid',
