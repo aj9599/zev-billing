@@ -29,7 +29,7 @@ export const useSystemHealth = () => {
       if (data.system_health) {
         setSystemHealth(data.system_health);
         
-        // Add to history (keep last 24 hours of data, one point every 5 seconds = 17280 points max)
+        // Add to history
         setHealthHistory(prev => {
           const newPoint: HealthDataPoint = {
             timestamp: Date.now(),
@@ -43,7 +43,16 @@ export const useSystemHealth = () => {
           
           // Keep only last 24 hours (288 points at 5-minute intervals)
           const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
-          return updated.filter(p => p.timestamp > twentyFourHoursAgo).slice(-288);
+          const filtered = updated.filter(p => p.timestamp > twentyFourHoursAgo).slice(-288);
+          
+          // Save to localStorage
+          try {
+            localStorage.setItem('healthHistory', JSON.stringify(filtered));
+          } catch (err) {
+            console.error('Failed to save health history:', err);
+          }
+          
+          return filtered;
         });
       }
     } catch (err) {
@@ -58,19 +67,30 @@ export const useSystemHealth = () => {
       try {
         const parsed = JSON.parse(stored);
         const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
-        setHealthHistory(parsed.filter((p: HealthDataPoint) => p.timestamp > twentyFourHoursAgo));
+        const validHistory = parsed.filter((p: HealthDataPoint) => 
+          p && 
+          typeof p === 'object' &&
+          typeof p.timestamp === 'number' && 
+          p.timestamp > twentyFourHoursAgo &&
+          typeof p.cpu_usage === 'number' &&
+          typeof p.memory_percent === 'number' &&
+          typeof p.disk_percent === 'number'
+        );
+        
+        if (validHistory.length > 0) {
+          console.log('Loaded health history from localStorage:', validHistory.length, 'points');
+          setHealthHistory(validHistory);
+        } else {
+          console.log('No valid health history in localStorage, will build from scratch');
+        }
       } catch (err) {
-        console.error('Failed to load health history:', err);
+        console.error('Failed to load health history from localStorage:', err);
+        localStorage.removeItem('healthHistory'); // Clear corrupted data
       }
+    } else {
+      console.log('No health history in localStorage, starting fresh');
     }
   }, []);
-
-  // Save history to localStorage whenever it updates
-  useEffect(() => {
-    if (healthHistory.length > 0) {
-      localStorage.setItem('healthHistory', JSON.stringify(healthHistory));
-    }
-  }, [healthHistory]);
 
   return {
     systemHealth,
