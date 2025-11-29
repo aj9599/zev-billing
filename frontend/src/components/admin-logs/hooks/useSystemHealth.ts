@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { api } from '../../../api/client';
 import type { SystemHealth, DebugInfo } from '../types';
 import { useTranslation } from '../../../i18n';
 
@@ -10,14 +11,16 @@ interface HealthDataPoint {
   temperature: number;
 }
 
-// Generate initial placeholder data for smooth chart rendering
+// Generate initial placeholder data so charts show immediately
 const generateInitialData = (currentData?: SystemHealth): HealthDataPoint[] => {
   const now = Date.now();
   const points: HealthDataPoint[] = [];
   
-  // Generate 20 points spanning the last hour for initial display
-  for (let i = 19; i >= 0; i--) {
-    const timestamp = now - (i * 3 * 60 * 1000); // 3-minute intervals
+  console.log('🎨 Generating initial health data with current values:', currentData);
+  
+  // Generate 30 points spanning the last 2.5 hours
+  for (let i = 29; i >= 0; i--) {
+    const timestamp = now - (i * 5 * 60 * 1000); // 5-minute intervals
     points.push({
       timestamp,
       cpu_usage: currentData?.cpu_usage || 0,
@@ -27,6 +30,7 @@ const generateInitialData = (currentData?: SystemHealth): HealthDataPoint[] => {
     });
   }
   
+  console.log('✅ Generated', points.length, 'initial data points');
   return points;
 };
 
@@ -39,27 +43,43 @@ export const useSystemHealth = () => {
 
   const loadDebugInfo = async () => {
     try {
-      const response = await fetch('/api/debug/status', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      const data = await response.json();
+      console.log('📡 Fetching debug status from API...');
+      
+      // Use the API client from client.ts
+      const data = await api.getDebugStatus();
+      
+      console.log('✅ API Response received:', data);
+      console.log('   System Health:', data.system_health);
+      
       setDebugInfo(data);
       
       if (data.system_health) {
         setSystemHealth(data.system_health);
+        
+        console.log('💾 System health data:', {
+          cpu: data.system_health.cpu_usage,
+          memory: data.system_health.memory_percent,
+          disk: data.system_health.disk_percent,
+          temp: data.system_health.temperature
+        });
         
         // Initialize with dummy data on first load if history is empty
         if (!isInitialized && healthHistory.length === 0) {
           const initialData = generateInitialData(data.system_health);
           setHealthHistory(initialData);
           setIsInitialized(true);
-          console.log('Initialized health history with placeholder data');
+          
+          // Save to localStorage
+          try {
+            localStorage.setItem('healthHistory', JSON.stringify(initialData));
+            console.log('✅ Saved initial data to localStorage');
+          } catch (err) {
+            console.error('❌ Failed to save to localStorage:', err);
+          }
           return;
         }
         
-        // Add to history
+        // Add to history (normal operation after initialization)
         setHealthHistory(prev => {
           const newPoint: HealthDataPoint = {
             timestamp: Date.now(),
@@ -68,6 +88,8 @@ export const useSystemHealth = () => {
             disk_percent: data.system_health.disk_percent || 0,
             temperature: data.system_health.temperature || 0
           };
+          
+          console.log('➕ Adding new data point:', newPoint);
           
           const updated = [...prev, newPoint];
           
@@ -79,21 +101,26 @@ export const useSystemHealth = () => {
           try {
             localStorage.setItem('healthHistory', JSON.stringify(filtered));
           } catch (err) {
-            console.error('Failed to save health history:', err);
+            console.error('❌ Failed to save to localStorage:', err);
           }
           
           return filtered;
         });
         
         setIsInitialized(true);
+      } else {
+        console.warn('⚠️ No system_health in API response');
       }
     } catch (err) {
-      console.error(t('logs.debugInfoFailed'), err);
+      console.error('❌ Failed to load debug info:', err);
+      console.error('   Error details:', err);
     }
   };
 
   // Load initial history from localStorage if available
   useEffect(() => {
+    console.log('🔍 Checking localStorage for existing health history...');
+    
     const stored = localStorage.getItem('healthHistory');
     if (stored) {
       try {
@@ -110,16 +137,18 @@ export const useSystemHealth = () => {
         );
         
         if (validHistory.length > 0) {
-          console.log('Loaded health history from localStorage:', validHistory.length, 'points');
+          console.log('✅ Loaded', validHistory.length, 'points from localStorage');
           setHealthHistory(validHistory);
           setIsInitialized(true);
         } else {
-          console.log('No valid health history in localStorage');
+          console.log('⚠️ No valid health history in localStorage');
         }
       } catch (err) {
-        console.error('Failed to load health history from localStorage:', err);
+        console.error('❌ Failed to parse localStorage data:', err);
         localStorage.removeItem('healthHistory'); // Clear corrupted data
       }
+    } else {
+      console.log('ℹ️ No health history in localStorage (first visit or cleared)');
     }
   }, []);
 
