@@ -1,4 +1,4 @@
-import { Edit2, Trash2, Wifi, WifiOff, Activity, Battery, TrendingUp, Gauge, Clock, User } from 'lucide-react';
+import { Edit2, Trash2, Wifi, WifiOff, Activity, Battery, TrendingUp, Gauge, Clock, User, Zap } from 'lucide-react';
 import type { Charger } from '../../types';
 import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus } from './hooks/useChargerStatus';
 import { getPreset } from '../chargerPresets';
@@ -25,16 +25,16 @@ export default function ChargerCard({
     t
 }: ChargerCardProps) {
     const chargerPreset = getPreset(charger.preset);
-    
+
     // Determine state value - prioritize zaptecStatus for Zaptec chargers
     const stateValue = charger.connection_type === 'zaptec_api'
-        ? (zaptecStatus?.state_description ? 
+        ? (zaptecStatus?.state_description ?
             // Map state description to state number
             (zaptecStatus.state_description === 'Unknown' ? '0' :
-             zaptecStatus.state_description === 'Disconnected' ? '1' :
-             zaptecStatus.state_description === 'Waiting for Authorization' ? '2' :
-             zaptecStatus.state_description === 'Charging' ? '3' :
-             zaptecStatus.state_description === 'Finished Charging' ? '5' : '0')
+                zaptecStatus.state_description === 'Disconnected' ? '1' :
+                    zaptecStatus.state_description === 'Waiting for Authorization' ? '2' :
+                        zaptecStatus.state_description === 'Charging' ? '3' :
+                            zaptecStatus.state_description === 'Finished Charging' ? '5' : '0')
             : liveData?.state ?? '0')
         : liveData?.state ?? '0';
 
@@ -58,10 +58,10 @@ export default function ChargerCard({
     const isAwaitingStart = charger.connection_type === 'zaptec_api'
         ? stateValue === '2'
         : stateValue === '66';
-    
+
     // CRITICAL FIX: Always get session energy from zaptecStatus for Zaptec chargers
     const sessionEnergy = charger.connection_type === 'zaptec_api'
-        ? (isAwaitingStart 
+        ? (isAwaitingStart
             ? 0 // No session yet when waiting for auth
             : (zaptecStatus?.session_energy ?? zaptecStatus?.live_session?.energy ?? liveData?.session_energy ?? 0))
         : (liveData?.session_energy ?? 0);
@@ -107,26 +107,26 @@ export default function ChargerCard({
         if (!startTimeStr || startTimeStr === '0001-01-01T00:00:00' || startTimeStr === '0001-01-01T00:00:00Z') {
             return '';
         }
-    
+
         try {
             // Add 'Z' if no timezone indicator to force UTC interpretation
             const timestamp = startTimeStr.endsWith('Z') ? startTimeStr : startTimeStr + 'Z';
             const startTime = new Date(timestamp);
-            
+
             if (isNaN(startTime.getTime())) {
                 return '';
             }
-    
+
             const diffMs = Date.now() - startTime.getTime();
-            
+
             if (diffMs < 0) return ''; // Safety check
-    
+
             const hours = Math.floor(diffMs / (1000 * 60 * 60));
             const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-    
+
             if (hours > 0) return `${hours}h ${minutes}m`;
             if (minutes > 0) return `${minutes}m`;
-            
+
             const seconds = Math.floor(diffMs / 1000);
             return `${seconds}s`;
         } catch {
@@ -487,9 +487,13 @@ export default function ChargerCard({
                                     fontSize: '10px',
                                     fontWeight: '700',
                                     color: '#22c55e',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
                                     animation: 'chargingPulse 2s ease-in-out infinite'
                                 }}>
-                                    âš¡ {t('chargers.state.charging')}
+                                    <Zap size={12} fill="#22c55e" strokeWidth={2} />
+                                    {t('chargers.state.charging')}
                                 </div>
                             )}
                             {isCompleted && (
@@ -771,7 +775,7 @@ export default function ChargerCard({
                             }}>
                                 <Activity size={12} style={{ color: '#7c3aed' }} />
                                 <span style={{ fontSize: '11px', color: '#5b21b6', fontWeight: '700' }}>
-                                    {isCharging 
+                                    {isCharging
                                         ? (t('chargers.session.activeSession') || 'Active Session')
                                         : (t('chargers.session.lastSession') || 'Last Session')}
                                 </span>
