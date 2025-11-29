@@ -974,7 +974,7 @@ func (zc *ZaptecCollector) writeSessionFallback(history *ZaptecChargeHistory, ch
 }
 
 // writeIdleReadingIfNeeded writes an idle reading at 15-minute intervals when not charging
-// This fills gaps in the data so billing/dashboard can show continuous data
+// Uses OCMF session boundaries: user_id only during active sessions, empty after session ends
 func (zc *ZaptecCollector) writeIdleReadingIfNeeded(chargerID int, chargerName string, totalEnergy float64, state string) {
 	now := time.Now().In(zc.localTimezone)
 	
@@ -1013,24 +1013,40 @@ func (zc *ZaptecCollector) writeIdleReadingIfNeeded(chargerID int, chargerName s
 	// Format timestamp with timezone offset
 	timestamp := currentInterval.Format("2006-01-02 15:04:05-07:00")
 	
-	// Get last user_id for this charger to maintain continuity
-	var lastUserID string
-	err := zc.db.QueryRow(`
-		SELECT user_id FROM charger_sessions 
-		WHERE charger_id = ? AND user_id != ''
-		ORDER BY session_time DESC LIMIT 1
-	`, chargerID).Scan(&lastUserID)
+	// OCMF-based logic: Check if we have an active session
+	zc.mu.RLock()
+	activeSessionID := zc.activeSessionIDs[chargerID]
+	zc.mu.RUnlock()
 	
-	if err != nil {
-		// If no previous user found, use empty string
-		lastUserID = ""
+	var gapUserID string
+	if activeSessionID != "" {
+		// We're INSIDE an active OCMF session (between Begin and End)
+		// Even if not actively charging, the car is still plugged in
+		// Get user_id from the most recent session data
+		err := zc.db.QueryRow(`
+			SELECT user_id FROM charger_sessions 
+			WHERE charger_id = ? AND user_id != ''
+			ORDER BY session_time DESC LIMIT 1
+		`, chargerID).Scan(&gapUserID)
+		
+		if err != nil {
+			gapUserID = "" // Fallback to empty if query fails
+		}
+		
+		log.Printf("Zaptec: [%s] Gap during active session %s, using user_id: %s", 
+			chargerName, activeSessionID, gapUserID)
+	} else {
+		// No active session = AFTER OCMF End
+		// Charger is available, car unplugged
+		gapUserID = ""
+		log.Printf("Zaptec: [%s] Gap after session end, charger available (no user)", chargerName)
 	}
 	
-	// Write idle reading with last user's ID, current state
+	// Write idle reading with OCMF-based user_id logic
 	result, err := zc.db.Exec(`
 		INSERT OR IGNORE INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
 		VALUES (?, ?, ?, ?, ?, ?)
-	`, chargerID, lastUserID, timestamp, totalEnergy, "1", state)
+	`, chargerID, gapUserID, timestamp, totalEnergy, "1", state)
 	
 	if err != nil {
 		log.Printf("Zaptec: [%s] Could not write idle reading: %v", chargerName, err)
