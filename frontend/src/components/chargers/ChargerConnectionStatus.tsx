@@ -80,7 +80,6 @@ export default function ChargerConnectionStatus({
   if (charger.connection_type === 'zaptec_api') {
     if (zaptecStatus) {
       const isConnected = zaptecStatus?.is_connected || false;
-      const isOnline = zaptecStatus?.is_online || false;
 
       return (
         <div style={{
