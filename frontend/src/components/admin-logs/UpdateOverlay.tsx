@@ -1,5 +1,4 @@
 import { useTranslation } from '../../i18n';
-import { useState, useEffect } from 'react';
 
 interface UpdateOverlayProps {
   show: boolean;
@@ -8,16 +7,6 @@ interface UpdateOverlayProps {
 
 export const UpdateOverlay = ({ show, progress }: UpdateOverlayProps) => {
   const { t } = useTranslation();
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   if (!show) return null;
 
@@ -33,21 +22,20 @@ export const UpdateOverlay = ({ show, progress }: UpdateOverlayProps) => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      backdropFilter: 'blur(4px)',
-      padding: isMobile ? '16px' : '20px'
+      backdropFilter: 'blur(4px)'
     }}>
       <div style={{
         backgroundColor: 'white',
-        borderRadius: isMobile ? '16px' : '20px',
-        padding: isMobile ? '32px 24px' : '48px',
-        maxWidth: isMobile ? '100%' : '500px',
-        width: '100%',
+        borderRadius: '20px',
+        padding: '48px',
+        maxWidth: '500px',
+        width: '90%',
         boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4)',
         textAlign: 'center'
       }}>
         <div style={{
-          width: isMobile ? '60px' : '80px',
-          height: isMobile ? '60px' : '80px',
+          width: '80px',
+          height: '80px',
           margin: '0 auto 24px',
           border: '4px solid #e5e7eb',
           borderTop: '4px solid #667eea',
@@ -56,7 +44,7 @@ export const UpdateOverlay = ({ show, progress }: UpdateOverlayProps) => {
         }}></div>
         
         <h2 style={{
-          fontSize: isMobile ? '20px' : '24px',
+          fontSize: '24px',
           fontWeight: '700',
           marginBottom: '12px',
           color: '#1f2937'
@@ -65,16 +53,16 @@ export const UpdateOverlay = ({ show, progress }: UpdateOverlayProps) => {
         </h2>
         
         <p style={{
-          fontSize: isMobile ? '13px' : '14px',
+          fontSize: '14px',
           color: '#6b7280',
-          marginBottom: isMobile ? '24px' : '32px'
+          marginBottom: '32px'
         }}>
           {t('logs.updateInProgress')}
         </p>
         
         <div style={{
           width: '100%',
-          height: isMobile ? '10px' : '12px',
+          height: '12px',
           backgroundColor: '#e5e7eb',
           borderRadius: '6px',
           overflow: 'hidden',
@@ -90,7 +78,7 @@ export const UpdateOverlay = ({ show, progress }: UpdateOverlayProps) => {
         </div>
         
         <p style={{
-          fontSize: isMobile ? '14px' : '16px',
+          fontSize: '16px',
           fontWeight: '600',
           color: '#667eea'
         }}>
@@ -98,7 +86,7 @@ export const UpdateOverlay = ({ show, progress }: UpdateOverlayProps) => {
         </p>
         
         <p style={{
-          fontSize: isMobile ? '11px' : '12px',
+          fontSize: '12px',
           color: '#9ca3af',
           marginTop: '16px'
         }}>

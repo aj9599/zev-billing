@@ -262,36 +262,3 @@ type ConsumptionData struct {
 	Power     float64   `json:"power"`
 	Source    string    `json:"source"`
 }
-
-// AppSettings stores mobile app configuration
-type AppSettings struct {
-	MobileAppEnabled  bool      `json:"mobile_app_enabled"`
-	FirebaseProjectID string    `json:"firebase_project_id"`
-	FirebaseConfig    string    `json:"firebase_config"`
-	DeviceID          string    `json:"device_id"` // NEW: System-wide device identifier for this Raspberry Pi
-	LastSync          *string   `json:"last_sync,omitempty"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
-}
-
-// AppUserPermissions defines what data an app user can access
-type AppUserPermissions struct {
-	Meters    bool `json:"meters"`
-	Chargers  bool `json:"chargers"`
-	Users     bool `json:"users"`
-	Buildings bool `json:"buildings"`
-	Bills     bool `json:"bills"`
-}
-
-// AppUser represents a mobile app user
-type AppUser struct {
-	ID          int                `json:"id"`
-	Username    string             `json:"username"`
-	Description string             `json:"description"`
-	Permissions AppUserPermissions `json:"permissions"`
-	FirebaseUID string             `json:"firebase_uid"`
-	DeviceID    string             `json:"device_id"` // Inherited from system device_id in app_settings
-	IsActive    bool               `json:"is_active"`
-	CreatedAt   time.Time          `json:"created_at"`
-	UpdatedAt   time.Time          `json:"updated_at"`
-}

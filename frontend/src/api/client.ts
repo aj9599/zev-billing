@@ -462,7 +462,7 @@ class ApiClient {
     return this.request('/system/update/apply', { method: 'POST' });
   }
 
-  // Factory Reset method
+  // NEW: Factory Reset method
   async factoryReset(): Promise<{ 
     status: string; 
     message: string; 
@@ -470,94 +470,6 @@ class ApiClient {
     backup_path: string 
   }> {
     return this.request('/system/factory-reset', { method: 'POST' });
-  }
-
-  // App Management - App Settings
-  async getAppSettings(): Promise<any> {
-    return this.request('/app/settings');
-  }
-
-  async updateAppSettings(settings: {
-    mobile_app_enabled?: boolean;
-    firebase_project_id?: string;
-    firebase_config?: string;
-    device_id?: string;
-  }): Promise<any> {
-    return this.request('/app/settings', {
-      method: 'PUT',
-      body: JSON.stringify(settings),
-    });
-  }
-
-  // App Management - App Users
-  async getAppUsers(): Promise<any[]> {
-    return this.request('/app/users');
-  }
-
-  async getAppUser(id: number): Promise<any> {
-    return this.request(`/app/users/${id}`);
-  }
-
-  async createAppUser(user: any): Promise<any> {
-    return this.request('/app/users', {
-      method: 'POST',
-      body: JSON.stringify(user),
-    });
-  }
-
-  async updateAppUser(id: number, user: any): Promise<any> {
-    return this.request(`/app/users/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(user),
-    });
-  }
-
-  async deleteAppUser(id: number) {
-    return this.request(`/app/users/${id}`, { method: 'DELETE' });
-  }
-
-  // Firebase Sync
-  async syncToFirebase(): Promise<{ status: string; message: string }> {
-    return this.request('/app/sync', { method: 'POST' });
-  }
-
-  // Export methods
-  exportMeters(startDate: string, endDate: string, meterId?: number): string {
-    const params = new URLSearchParams({
-      type: 'meters',
-      start_date: startDate,
-      end_date: endDate,
-    });
-    if (meterId) params.append('meter_id', meterId.toString());
-    return `${API_BASE}/export?${params.toString()}`;
-  }
-
-  exportChargers(startDate: string, endDate: string, chargerId?: number): string {
-    const params = new URLSearchParams({
-      type: 'chargers',
-      start_date: startDate,
-      end_date: endDate,
-    });
-    if (chargerId) params.append('charger_id', chargerId.toString());
-    return `${API_BASE}/export?${params.toString()}`;
-  }
-
-  exportLogs(startDate: string, endDate: string): string {
-    const params = new URLSearchParams({
-      type: 'logs',
-      start_date: startDate,
-      end_date: endDate,
-    });
-    return `${API_BASE}/export?${params.toString()}`;
-  }
-
-  exportAll(startDate: string, endDate: string): string {
-    const params = new URLSearchParams({
-      type: 'all',
-      start_date: startDate,
-      end_date: endDate,
-    });
-    return `${API_BASE}/export?${params.toString()}`;
   }
 }
 

@@ -140,22 +140,6 @@ func RunMigrations(db *sql.DB) error {
 			FOREIGN KEY (charger_id) REFERENCES chargers(id)
 		)`,
 
-		`CREATE TABLE IF NOT EXISTS charger_readings (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			charger_id INTEGER NOT NULL,
-			timestamp DATETIME NOT NULL,
-			energy_kwh REAL NOT NULL,
-			user_id TEXT,
-			session_id TEXT,
-			reading_type TEXT,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (charger_id) REFERENCES chargers(id)
-		)`,
-
-		`CREATE INDEX IF NOT EXISTS idx_charger_readings_charger_id ON charger_readings(charger_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_charger_readings_session_id ON charger_readings(session_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_charger_readings_timestamp ON charger_readings(timestamp)`,
-
 		`CREATE TABLE IF NOT EXISTS billing_settings (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			building_id INTEGER NOT NULL,
@@ -289,29 +273,6 @@ func RunMigrations(db *sql.DB) error {
 			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
 			UNIQUE(config_id, user_id)
 		)`,
-
-		`CREATE TABLE IF NOT EXISTS app_settings (
-			id INTEGER PRIMARY KEY CHECK (id = 1),
-			mobile_app_enabled INTEGER DEFAULT 0,
-			firebase_project_id TEXT DEFAULT '',
-			firebase_config TEXT DEFAULT '',
-			last_sync DATETIME,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
-
-		`CREATE TABLE IF NOT EXISTS app_users (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			username TEXT UNIQUE NOT NULL,
-			password_hash TEXT NOT NULL,
-			description TEXT,
-			permissions_json TEXT NOT NULL DEFAULT '{"meters":false,"chargers":false,"users":false,"buildings":false,"bills":false}',
-			firebase_uid TEXT UNIQUE,
-			device_id TEXT,
-			is_active INTEGER DEFAULT 1,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
 	}
 
 	for _, migration := range migrations {
@@ -362,20 +323,11 @@ func RunMigrations(db *sql.DB) error {
 		return err
 	}
 
-	// NEW: Add device_id column to app_settings for system-wide device identification
-	if err := addDeviceIdToAppSettings(db); err != nil {
-		return err
-	}
-
 	if err := migrateZaptecConfigs(db); err != nil {
 		return err
 	}
 
 	if err := createTriggers(db); err != nil {
-		return err
-	}
-
-	if err := initializeAppSettings(db); err != nil {
 		return err
 	}
 
@@ -413,8 +365,92 @@ func addGroupBuildingsColumn(db *sql.DB) error {
 	return nil
 }
 
-// Add device_type column to meters table
+// Add apartments_json and is_vzev columns to auto_billing_configs
+func addAutoBillingApartmentsColumn(db *sql.DB) error {
+	// Check auto_billing_configs table
+	var autoBillingConfigsSql string
+	err := db.QueryRow(`
+		SELECT sql FROM sqlite_master 
+		WHERE type='table' AND name='auto_billing_configs'
+	`).Scan(&autoBillingConfigsSql)
+
+	if err != nil {
+		return err
+	}
+
+	// Add apartments_json column
+	if !contains(autoBillingConfigsSql, "apartments_json") {
+		log.Println("Adding apartments_json column to auto_billing_configs table...")
+		_, err := db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN apartments_json TEXT`)
+		if err != nil {
+			if contains(err.Error(), "duplicate column") {
+				log.Println("✓ apartments_json column already exists")
+			} else {
+				return fmt.Errorf("failed to add apartments_json column: %v", err)
+			}
+		} else {
+			log.Println("✓ apartments_json column added successfully")
+		}
+	} else {
+		log.Println("✓ apartments_json column already exists")
+	}
+
+	// Add is_vzev column
+	if !contains(autoBillingConfigsSql, "is_vzev") {
+		log.Println("Adding is_vzev column to auto_billing_configs table...")
+		_, err := db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN is_vzev INTEGER DEFAULT 0`)
+		if err != nil {
+			if contains(err.Error(), "duplicate column") {
+				log.Println("✓ is_vzev column already exists")
+			} else {
+				return fmt.Errorf("failed to add is_vzev column: %v", err)
+			}
+		} else {
+			log.Println("✓ is_vzev column added successfully")
+		}
+	} else {
+		log.Println("✓ is_vzev column already exists")
+	}
+
+	return nil
+}
+
+// NEW: Add custom_item_ids column to auto_billing_configs for custom item selection
+func addCustomItemIdsColumn(db *sql.DB) error {
+	// Check auto_billing_configs table
+	var autoBillingConfigsSql string
+	err := db.QueryRow(`
+		SELECT sql FROM sqlite_master 
+		WHERE type='table' AND name='auto_billing_configs'
+	`).Scan(&autoBillingConfigsSql)
+
+	if err != nil {
+		return err
+	}
+
+	// Add custom_item_ids column
+	if !contains(autoBillingConfigsSql, "custom_item_ids") {
+		log.Println("Adding custom_item_ids column to auto_billing_configs table...")
+		_, err := db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN custom_item_ids TEXT DEFAULT ''`)
+		if err != nil {
+			if contains(err.Error(), "duplicate column") {
+				log.Println("✓ custom_item_ids column already exists")
+			} else {
+				return fmt.Errorf("failed to add custom_item_ids column: %v", err)
+			}
+		} else {
+			log.Println("✓ custom_item_ids column added successfully")
+		}
+	} else {
+		log.Println("✓ custom_item_ids column already exists")
+	}
+
+	return nil
+}
+
+// addDeviceTypeColumn adds device_type column to meters table
 func addDeviceTypeColumn(db *sql.DB) error {
+	// Check if device_type column exists in meters table
 	var metersSql string
 	err := db.QueryRow(`
 		SELECT sql FROM sqlite_master 
@@ -425,17 +461,23 @@ func addDeviceTypeColumn(db *sql.DB) error {
 		return err
 	}
 
+	// Add device_type if it doesn't exist
 	if !contains(metersSql, "device_type") {
 		log.Println("Adding device_type column to meters table...")
 		_, err := db.Exec(`ALTER TABLE meters ADD COLUMN device_type TEXT DEFAULT 'generic'`)
 		if err != nil {
 			if contains(err.Error(), "duplicate column") {
 				log.Println("✓ device_type column already exists")
-			} else {
-				return fmt.Errorf("failed to add device_type column: %v", err)
+				return nil
 			}
-		} else {
-			log.Println("✓ device_type column added successfully")
+			return fmt.Errorf("failed to add device_type column: %v", err)
+		}
+		log.Println("✓ device_type column added successfully")
+
+		// Update existing MQTT meters to generic type
+		_, err = db.Exec(`UPDATE meters SET device_type = 'generic' WHERE connection_type = 'mqtt' AND (device_type IS NULL OR device_type = '')`)
+		if err != nil {
+			log.Printf("Warning: Failed to update existing meters: %v", err)
 		}
 	} else {
 		log.Println("✓ device_type column already exists")
@@ -444,7 +486,7 @@ func addDeviceTypeColumn(db *sql.DB) error {
 	return nil
 }
 
-// Add export-related columns to meters and meter_readings tables
+// Add export energy columns
 func addExportColumns(db *sql.DB) error {
 	// Check meters table
 	var metersSql string
@@ -522,7 +564,94 @@ func addExportColumns(db *sql.DB) error {
 	return nil
 }
 
-// Add vZEV-related columns
+func createTriggers(db *sql.DB) error {
+	triggers := []string{
+		`CREATE TRIGGER IF NOT EXISTS update_shared_meters_timestamp 
+		AFTER UPDATE ON shared_meter_configs
+		FOR EACH ROW
+		BEGIN
+			UPDATE shared_meter_configs 
+			SET updated_at = CURRENT_TIMESTAMP 
+			WHERE id = NEW.id;
+		END`,
+
+		`CREATE TRIGGER IF NOT EXISTS update_custom_items_timestamp 
+		AFTER UPDATE ON custom_line_items
+		FOR EACH ROW
+		BEGIN
+			UPDATE custom_line_items 
+			SET updated_at = CURRENT_TIMESTAMP 
+			WHERE id = NEW.id;
+		END`,
+
+		`CREATE TRIGGER IF NOT EXISTS update_custom_splits_timestamp 
+		AFTER UPDATE ON shared_meter_custom_splits
+		FOR EACH ROW
+		BEGIN
+			UPDATE shared_meter_custom_splits 
+			SET updated_at = CURRENT_TIMESTAMP 
+			WHERE id = NEW.id;
+		END`,
+	}
+
+	for _, trigger := range triggers {
+		if _, err := db.Exec(trigger); err != nil {
+			// Triggers may already exist, don't fail
+			if !contains(err.Error(), "already exists") {
+				log.Printf("Note: Trigger warning: %v", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// Helper function to check if string contains substring
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && containsHelper(s, substr)
+}
+
+func containsHelper(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
+func createDefaultAdmin(db *sql.DB) error {
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM admin_users").Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`
+			INSERT INTO admin_users (username, password_hash)
+			VALUES (?, ?)
+		`, "admin", string(hashedPassword))
+
+		if err != nil {
+			return err
+		}
+
+		log.Println("✓ Default admin user created")
+		log.Println("   Username: admin")
+		log.Println("   Password: admin123")
+		log.Println("   ⚠️  IMPORTANT: Change the default password immediately!")
+	}
+
+	return nil
+}
+
+// addVZEVColumns adds vZEV support columns to billing_settings and invoices tables
 func addVZEVColumns(db *sql.DB) error {
 	// Check billing_settings table
 	var billingSettingsSql string
@@ -595,99 +724,6 @@ func addVZEVColumns(db *sql.DB) error {
 		}
 	} else {
 		log.Println("✓ is_vzev column already exists")
-	}
-
-	return nil
-}
-
-// Add apartments_json column to auto_billing_configs table
-func addAutoBillingApartmentsColumn(db *sql.DB) error {
-	var autoBillingSql string
-	err := db.QueryRow(`
-		SELECT sql FROM sqlite_master 
-		WHERE type='table' AND name='auto_billing_configs'
-	`).Scan(&autoBillingSql)
-
-	if err != nil {
-		return err
-	}
-
-	if !contains(autoBillingSql, "apartments_json") {
-		log.Println("Adding apartments_json column to auto_billing_configs table...")
-		_, err := db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN apartments_json TEXT`)
-		if err != nil {
-			if contains(err.Error(), "duplicate column") {
-				log.Println("✓ apartments_json column already exists")
-			} else {
-				return fmt.Errorf("failed to add apartments_json column: %v", err)
-			}
-		} else {
-			log.Println("✓ apartments_json column added successfully")
-		}
-	} else {
-		log.Println("✓ apartments_json column already exists")
-	}
-
-	return nil
-}
-
-// Add custom_item_ids column to auto_billing_configs table
-func addCustomItemIdsColumn(db *sql.DB) error {
-	var autoBillingSql string
-	err := db.QueryRow(`
-		SELECT sql FROM sqlite_master 
-		WHERE type='table' AND name='auto_billing_configs'
-	`).Scan(&autoBillingSql)
-
-	if err != nil {
-		return err
-	}
-
-	if !contains(autoBillingSql, "custom_item_ids") {
-		log.Println("Adding custom_item_ids column to auto_billing_configs table...")
-		_, err := db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN custom_item_ids TEXT DEFAULT ''`)
-		if err != nil {
-			if contains(err.Error(), "duplicate column") {
-				log.Println("✓ custom_item_ids column already exists")
-			} else {
-				return fmt.Errorf("failed to add custom_item_ids column: %v", err)
-			}
-		} else {
-			log.Println("✓ custom_item_ids column added successfully")
-		}
-	} else {
-		log.Println("✓ custom_item_ids column already exists")
-	}
-
-	return nil
-}
-
-// NEW: Add device_id column to app_settings table for system-wide device identification
-func addDeviceIdToAppSettings(db *sql.DB) error {
-	var appSettingsSql string
-	err := db.QueryRow(`
-		SELECT sql FROM sqlite_master 
-		WHERE type='table' AND name='app_settings'
-	`).Scan(&appSettingsSql)
-
-	if err != nil {
-		return err
-	}
-
-	if !contains(appSettingsSql, "device_id") {
-		log.Println("Adding device_id column to app_settings table...")
-		_, err := db.Exec(`ALTER TABLE app_settings ADD COLUMN device_id TEXT DEFAULT ''`)
-		if err != nil {
-			if contains(err.Error(), "duplicate column") {
-				log.Println("✓ device_id column already exists")
-			} else {
-				return fmt.Errorf("failed to add device_id column: %v", err)
-			}
-		} else {
-			log.Println("✓ device_id column added successfully")
-		}
-	} else {
-		log.Println("✓ device_id column already exists")
 	}
 
 	return nil
@@ -888,124 +924,4 @@ func migrateZaptecConfigs(db *sql.DB) error {
 	}
 
 	return nil
-}
-
-func createTriggers(db *sql.DB) error {
-	triggers := []string{
-		`CREATE TRIGGER IF NOT EXISTS update_users_timestamp 
-		AFTER UPDATE ON users 
-		BEGIN 
-			UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-		END`,
-
-		`CREATE TRIGGER IF NOT EXISTS update_buildings_timestamp 
-		AFTER UPDATE ON buildings 
-		BEGIN 
-			UPDATE buildings SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-		END`,
-
-		`CREATE TRIGGER IF NOT EXISTS update_meters_timestamp 
-		AFTER UPDATE ON meters 
-		BEGIN 
-			UPDATE meters SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-		END`,
-
-		`CREATE TRIGGER IF NOT EXISTS update_chargers_timestamp 
-		AFTER UPDATE ON chargers 
-		BEGIN 
-			UPDATE chargers SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-		END`,
-
-		`CREATE TRIGGER IF NOT EXISTS update_billing_settings_timestamp 
-		AFTER UPDATE ON billing_settings 
-		BEGIN 
-			UPDATE billing_settings SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-		END`,
-
-		`CREATE TRIGGER IF NOT EXISTS update_app_settings_timestamp 
-		AFTER UPDATE ON app_settings 
-		BEGIN 
-			UPDATE app_settings SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-		END`,
-
-		`CREATE TRIGGER IF NOT EXISTS update_app_users_timestamp 
-		AFTER UPDATE ON app_users 
-		BEGIN 
-			UPDATE app_users SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-		END`,
-	}
-
-	for _, trigger := range triggers {
-		if _, err := db.Exec(trigger); err != nil {
-			log.Printf("Trigger creation warning: %v", err)
-		}
-	}
-
-	return nil
-}
-
-func initializeAppSettings(db *sql.DB) error {
-	// Check if app_settings row exists
-	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM app_settings WHERE id = 1").Scan(&count)
-	if err != nil {
-		return fmt.Errorf("failed to check app_settings: %v", err)
-	}
-
-	if count == 0 {
-		log.Println("Initializing app_settings with default values...")
-		_, err := db.Exec(`
-			INSERT INTO app_settings (id, mobile_app_enabled, firebase_project_id, firebase_config, device_id, last_sync)
-			VALUES (1, 0, '', '', '', NULL)
-		`)
-		if err != nil {
-			return fmt.Errorf("failed to initialize app_settings: %v", err)
-		}
-		log.Println("✓ app_settings initialized successfully")
-	}
-
-	return nil
-}
-
-func createDefaultAdmin(db *sql.DB) error {
-	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM admin_users").Scan(&count)
-	if err != nil {
-		return err
-	}
-
-	if count == 0 {
-		log.Println("Creating default admin user...")
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
-		if err != nil {
-			return err
-		}
-
-		_, err = db.Exec(`
-			INSERT INTO admin_users (username, password_hash)
-			VALUES (?, ?)
-		`, "admin", string(hashedPassword))
-
-		if err != nil {
-			return err
-		}
-
-		log.Println("✓ Default admin user created (username: admin, password: admin)")
-		log.Println("⚠️  IMPORTANT: Please change the admin password immediately!")
-	}
-
-	return nil
-}
-
-func contains(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 && s != "" && substr != "" && 
-		(s == substr || len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
-		func() bool {
-			for i := 0; i <= len(s)-len(substr); i++ {
-				if s[i:i+len(substr)] == substr {
-					return true
-				}
-			}
-			return false
-		}()))
 }

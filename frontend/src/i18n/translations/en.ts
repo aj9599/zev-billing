@@ -435,12 +435,6 @@ export const en: Translations = {
   'meters.loxoneConnected': 'Connected',
   'meters.loxoneDisconnected': 'Disconnected',
   'meters.loxoneConnecting': 'Connecting...',
-  'meters.mqttBrokerDisconnected': 'MQTT Broker Disconnected',
-  'meters.cannotReachBroker': 'Cannot reach MQTT broker',
-  'meters.mqttConnected': 'MQTT Connected',
-  'meters.mqttWaitingForData': 'MQTT Waiting for Data',
-  'meters.topic': 'Topic',
-  'meters.mqttConnecting': 'MQTT Connecting...',
 
   // Loxone Setup Guide
   'meters.loxoneSetupGuide': 'Quick Setup:',
@@ -452,7 +446,6 @@ export const en: Translations = {
   'meters.loxoneFeature1': '✓ Real-time data updates',
   'meters.loxoneFeature2': '✓ Automatic reconnection',
   'meters.loxoneFeature3': '✓ Secure WebSocket connection',
-  'meters.loxoneFeature4': 'Import/Export tracking with meter blocks or virtual outputs',
 
   // UDP Connection
   'meters.udpDeprecatedWarning': 'UDP is deprecated. Please use Loxone WebSocket API for new meters.',
@@ -1767,10 +1760,10 @@ export const en: Translations = {
   'autoBilling.step.sender': 'Sender',
   'autoBilling.step.banking': 'Banking',
   'autoBilling.step.review': 'Review',
-
+  
   // Empty State
   'autoBilling.noConfigsDescription': 'Click "Add Configuration" to get started.',
-
+  
   // Step 2 - Schedule
   'autoBilling.modal.billingSchedule': 'Billing Schedule',
   'autoBilling.scheduleInfo.title': 'When will invoices be generated?',
@@ -1778,7 +1771,7 @@ export const en: Translations = {
   'autoBilling.scheduleInfo.quarterly': 'Quarterly: In January, April, July and October',
   'autoBilling.scheduleInfo.half_yearly': 'Half-yearly: In January and July',
   'autoBilling.scheduleInfo.yearly': 'Yearly: Once per year in January',
-
+  
   // Step 3 - Shared Meters
   'autoBilling.step3.title': 'Select Shared Meters',
   'autoBilling.step3.description': 'Select the shared meters whose costs should be distributed among tenants.',
@@ -1793,7 +1786,7 @@ export const en: Translations = {
   'autoBilling.step3.optional': 'Optional',
   'autoBilling.step3.infoTitle': 'Note about Shared Meters',
   'autoBilling.step3.infoDescription': 'Shared meter costs are automatically distributed to all selected apartments according to the configured split method.',
-
+  
   // Step 4 - Custom Items
   'autoBilling.step4.title': 'Select Custom Items',
   'autoBilling.step4.description': 'Select additional items that should appear on the invoices.',
@@ -1812,19 +1805,19 @@ export const en: Translations = {
   'autoBilling.step4.optional': 'Optional',
   'autoBilling.step4.infoTitle': 'Note about Custom Items',
   'autoBilling.step4.infoDescription': 'Custom items are automatically added to each invoice based on their configured frequency.',
-
+  
   // Step 5 - Sender
   'autoBilling.senderDescription': 'This information will appear as the sender on generated invoices.',
   'autoBilling.senderInfoNote.title': 'Sender Information',
   'autoBilling.senderInfoNote.description': 'The sender details will be used for all automatically generated invoices from this configuration.',
-
+  
   // Step 6 - Banking
   'autoBilling.bankingDescription': 'This banking information will be used for the QR payment slip on invoices.',
   'autoBilling.ibanFormat': 'Swiss IBAN format: CH00 0000 0000 0000 0000 0',
   'autoBilling.qrBillInfo.title': 'Swiss QR-Bill',
   'autoBilling.qrBillInfo.description': 'The IBAN is used to generate the QR code for easy payment via mobile banking.',
   'autoBilling.ibanRequired': 'IBAN is required for QR-Bill generation',
-
+  
   // Step 7 - Review
   'autoBilling.modal.reviewConfiguration': 'Review Configuration',
   'autoBilling.modal.configurationSummary': 'Configuration Summary',
@@ -1834,24 +1827,24 @@ export const en: Translations = {
   'autoBilling.missingRequiredFields': 'Missing Required Fields',
   'autoBilling.readyToCreate': 'Ready to Create',
   'autoBilling.readyToCreateDescription': 'All required information is complete. Click "Create" to activate automatic billing.',
-
+  
   // Common (if missing)
   'common.selectAll': 'Select All',
   'common.deselectAll': 'Deselect All',
 
   // Step 1 - Building Selection
   "autoBilling.noBuildingsAvailable": "No buildings available",
-
+  
   // Step 5 - Sender Placeholders
   "autoBilling.placeholder.companyName": "Company or Organization Name",
   "autoBilling.placeholder.streetNumber": "Street and Number",
   "autoBilling.placeholder.zip": "1234",
   "autoBilling.placeholder.city": "City Name",
-
+  
   // Step 6 - Banking Placeholders
   "autoBilling.placeholder.bankName": "Bank Name",
   "autoBilling.placeholder.accountHolder": "Account Holder Name",
-
+  
   // Countries (for dropdown)
   "countries.switzerland": "Switzerland",
   "countries.germany": "Germany",
@@ -2110,160 +2103,6 @@ export const en: Translations = {
   'settings.monitorActivity': 'Monitor Activity',
   'settings.monitorActivityDesc': 'Check Admin Logs for suspicious activity',
   'settings.updateYourPassword': 'Update your password to keep your account secure',
-
-  // Navigation
-  'nav.systemMonitor': 'System Monitor',
-  'nav.appManagement': 'App Management',
-  'nav.login': 'Login',
-
-  // Logs & System Monitor
-  'logs.systemMonitor': 'System Monitor',
-  'logs.activityLogs': 'Activity Logs',
-  'logs.monitoringSubtitle': 'Real-time system health and performance monitoring',
-  'logs.logsSubtitle': 'Track all system activities and changes',
-  'logs.exportData': 'Export Data',
-  'logs.exportFailed': 'Export failed. Please try again.',
-
-  // App Management
-  'appManagement.title': 'App Management',
-  'appManagement.subtitle': 'Manage mobile app access and Firebase synchronization',
-  'appManagement.mobileAppStatus': 'Mobile App Status',
-  'appManagement.appCurrentlyEnabled': 'Mobile app is currently enabled',
-  'appManagement.appCurrentlyDisabled': 'Mobile app is currently disabled',
-  'appManagement.enableApp': 'Enable App',
-  'appManagement.disableApp': 'Disable App',
-  'appManagement.appEnabled': 'Mobile app has been enabled',
-  'appManagement.appDisabled': 'Mobile app has been disabled',
-  'appManagement.toggleFailed': 'Failed to toggle mobile app status',
-  'appManagement.syncStatus': 'Sync Status',
-  'appManagement.lastSync': 'Last sync',
-  'appManagement.neverSynced': 'Never synced',
-  'appManagement.syncNow': 'Sync Now',
-  'appManagement.syncing': 'Syncing...',
-  'appManagement.syncSuccess': 'Data synchronized to Firebase successfully',
-  'appManagement.syncFailed': 'Synchronization failed. Please try again.',
-  'appManagement.appUsers': 'App Users',
-  'appManagement.addUser': 'Add User',
-  'appManagement.addNewUser': 'Add New User',
-  'appManagement.editUser': 'Edit User',
-  'appManagement.username': 'Username',
-  'appManagement.password': 'Password',
-  'appManagement.description': 'Description / Name',
-  'appManagement.permissions': 'Permissions',
-  'appManagement.meters': 'Meters',
-  'appManagement.chargers': 'Chargers',
-  'appManagement.users': 'Users',
-  'appManagement.buildings': 'Buildings',
-  'appManagement.bills': 'Bills',
-  'appManagement.enterUsername': 'Enter username',
-  'appManagement.enterPassword': 'Enter password',
-  'appManagement.enterDescription': 'Enter description or full name',
-  'appManagement.leaveBlankToKeep': 'Leave blank to keep current password',
-  'appManagement.createUser': 'Create User',
-  'appManagement.updateUser': 'Update User',
-  'appManagement.cancel': 'Cancel',
-  'appManagement.fillRequiredFields': 'Please fill all required fields',
-  'appManagement.userCreated': 'App user created successfully',
-  'appManagement.userUpdated': 'App user updated successfully',
-  'appManagement.userDeleted': 'App user deleted successfully',
-  'appManagement.saveFailed': 'Failed to save app user',
-  'appManagement.deleteFailed': 'Failed to delete app user',
-  'appManagement.toggleUserFailed': 'Failed to toggle user status',
-  'appManagement.confirmDelete': 'Are you sure you want to delete this user?',
-  'appManagement.noUsers': 'No app users found',
-  'appManagement.loading': 'Loading...',
-  'appManagement.noDescription': 'No description',
-  'appManagement.deviceId': 'Device ID',
-  'appManagement.activate': 'Activate',
-  'appManagement.deactivate': 'Deactivate',
-  'appManagement.edit': 'Edit',
-  'appManagement.delete': 'Delete',
-  'appManagement.wizardCompleted': 'Firebase setup completed successfully!',
-  'appManagement.wizardCancelConfirm': 'Firebase is not configured yet. Are you sure you want to close the setup wizard?',
-  'appManagement.setupWizard': 'Setup Wizard',
-  'appManagement.setupWizardReopen': 'Reopen Wizard',
-  'appManagement.configureFirebaseFirst': 'Please configure Firebase first before enabling the mobile app.',
-  'appManagement.invalidFirebaseConfig': 'Invalid Firebase service account key. Please upload a valid JSON file.',
-  'appManagement.configUploaded': 'Firebase configuration uploaded successfully. Click "Save Configuration" to apply.',
-  'appManagement.configParseFailed': 'Failed to parse Firebase configuration file. Please ensure it\'s a valid JSON file.',
-  'appManagement.uploadConfigFirst': 'Please upload a Firebase configuration file first.',
-  'appManagement.configSaved': 'Firebase configuration saved successfully!',
-  'appManagement.configSaveFailed': 'Failed to save Firebase configuration.',
-
-  // Settings / Login
-  'settings.loginSettings': 'Login Settings',
-  'settings.manageLoginCredentials': 'Manage your web application login credentials',
-
-  // Setup Wizard Translations
-  'setupWizard.title': 'Welcome to ZEV Billing',
-  'setupWizard.subtitle': 'Let\'s set up your mobile app in just a few steps',
-
-  'setupWizard.step1Title': 'Create Project',
-  'setupWizard.step1Description': 'Set up Firebase project',
-  'setupWizard.step1Heading': 'Step 1: Create Firebase Project',
-  'setupWizard.step1Text': 'You\'ll need a Firebase project to enable the mobile app functionality. This is free for most use cases.',
-  'setupWizard.step1Inst1': 'Go to',
-  'setupWizard.step1Inst2': 'Click "Add project" or "Create a project"',
-  'setupWizard.step1Inst3': 'Enter a project name (e.g., "My Building EV Charging")',
-  'setupWizard.step1Inst4': 'Disable Google Analytics (not needed)',
-  'setupWizard.step1Inst5': 'Click "Create project"',
-  'setupWizard.step1Tip': 'Choose a Firebase project region close to your location for better performance (e.g., europe-west1 for Europe).',
-
-  'setupWizard.step2Title': 'Enable Services',
-  'setupWizard.step2Description': 'Enable Auth and Database',
-  'setupWizard.step2Heading': 'Step 2: Enable Required Services',
-  'setupWizard.step2Text': 'Enable Authentication and Realtime Database in your Firebase project.',
-  'setupWizard.step2AuthHeading': 'A. Enable Authentication:',
-  'setupWizard.step2AuthInst1': 'In Firebase Console, click "Authentication" in the left menu',
-  'setupWizard.step2AuthInst2': 'Click "Get started"',
-  'setupWizard.step2AuthInst3': 'Enable "Email/Password" sign-in method',
-  'setupWizard.step2AuthInst4': 'Click "Save"',
-  'setupWizard.step2DbHeading': 'B. Enable Realtime Database:',
-  'setupWizard.step2DbInst1': 'Click "Realtime Database" in the left menu',
-  'setupWizard.step2DbInst2': 'Click "Create Database"',
-  'setupWizard.step2DbInst3': 'Select your region (e.g., europe-west1)',
-  'setupWizard.step2DbInst4': 'Start in locked mode (we\'ll set rules via API)',
-  'setupWizard.step2DbInst5': 'Click "Enable"',
-  'setupWizard.step2Important': 'Make note of your database URL (e.g., https://your-project.europe-west1.firebasedatabase.app) - you\'ll need to verify the region matches.',
-
-  'setupWizard.step3Title': 'Service Account',
-  'setupWizard.step3Description': 'Download credentials',
-  'setupWizard.step3Heading': 'Step 3: Download Service Account Key',
-  'setupWizard.step3Text': 'Generate and download your private service account key. This file contains credentials for server-side access.',
-  'setupWizard.step3Inst1': 'Go to Project Settings → Service Accounts',
-  'setupWizard.step3Inst2': 'Make sure "Firebase Admin SDK" is selected',
-  'setupWizard.step3Inst3': 'Click "Generate new private key"',
-  'setupWizard.step3Inst4': 'Click "Generate key" to confirm',
-  'setupWizard.step3Inst5': 'Save the JSON file securely (you\'ll upload it in the next step)',
-  'setupWizard.step3SecurityWarning': 'This file grants full access to your Firebase project. Never share it or commit it to version control. Store it securely and only upload it to your Raspberry Pi.',
-
-  'setupWizard.step4Title': 'Configure Device',
-  'setupWizard.step4Description': 'Upload configuration',
-  'setupWizard.step4Heading': 'Step 4: Configure Your Device',
-  'setupWizard.step4Text': 'Set a unique device ID for this Raspberry Pi and upload your Firebase configuration.',
-  'setupWizard.deviceIdLabel': 'Device ID (Unique identifier for this Raspberry Pi)',
-  'setupWizard.deviceIdPlaceholder': 'e.g., rpi-building-101 or rpi-house-a',
-  'setupWizard.deviceIdHelp': 'This ID will be used to organize data in Firebase. All app users on this device will share this ID.',
-  'setupWizard.serviceAccountLabel': 'Firebase Service Account Key',
-  'setupWizard.configLoaded': '✓ Configuration loaded successfully!',
-  'setupWizard.uploadPrompt': 'Click to upload or drag and drop',
-  'setupWizard.jsonFileHint': 'JSON file from Firebase Console',
-  'setupWizard.readyToComplete': 'Ready to complete setup!',
-  'setupWizard.readyToCompleteText': 'Click "Complete Setup" below to save your configuration and enable the mobile app.',
-
-  'setupWizard.instructions': 'Instructions:',
-  'setupWizard.tip': 'Tip:',
-  'setupWizard.important': 'Important:',
-  'setupWizard.securityWarning': 'Security Warning:',
-
-  'setupWizard.generate': 'Generate',
-  'setupWizard.previous': 'Previous',
-  'setupWizard.next': 'Next',
-  'setupWizard.completeSetup': 'Complete Setup',
-  'setupWizard.completeAllFields': 'Please complete all fields before continuing.',
-  'setupWizard.invalidConfig': 'Invalid Firebase service account key. Please upload a valid JSON file.',
-  'setupWizard.configParseFailed': 'Failed to parse Firebase configuration file. Please ensure it\'s a valid JSON file.',
-  'setupWizard.helpText': 'Need help? Check the documentation or contact support.',
 
   // ============================================================================
   // LOGIN

@@ -436,12 +436,6 @@ export const de: Translations = {
   'meters.loxoneConnected': 'Verbunden',
   'meters.loxoneDisconnected': 'Getrennt',
   'meters.loxoneConnecting': 'Verbinde...',
-  'meters.mqttBrokerDisconnected': 'MQTT-Broker getrennt',
-  'meters.cannotReachBroker': 'MQTT-Broker nicht erreichbar',
-  'meters.mqttConnected': 'MQTT verbunden',
-  'meters.mqttWaitingForData': 'MQTT wartet auf Daten',
-  'meters.topic': 'Topic',
-  'meters.mqttConnecting': 'MQTT wird verbunden...',
 
   // Loxone Setup Guide
   'meters.loxoneSetupGuide': 'Schnelleinrichtung:',
@@ -453,7 +447,6 @@ export const de: Translations = {
   'meters.loxoneFeature1': '✓ Echtzeit-Datenaktualisierungen',
   'meters.loxoneFeature2': '✓ Automatische Wiederverbindung',
   'meters.loxoneFeature3': '✓ Sichere WebSocket-Verbindung',
-  'meters.loxoneFeature4': 'Import/Export-Tracking mit Zählerblöcken oder virtuellen Ausgängen',
 
   // UDP Connection
   'meters.udpDeprecatedWarning': 'UDP ist veraltet. Bitte verwenden Sie Loxone WebSocket API für neue Zähler.',
@@ -1768,10 +1761,10 @@ export const de: Translations = {
   'autoBilling.step.sender': 'Absender',
   'autoBilling.step.banking': 'Bankdaten',
   'autoBilling.step.review': 'Überprüfung',
-
+  
   // Empty State
   'autoBilling.noConfigsDescription': 'Klicken Sie auf "Konfiguration hinzufügen", um loszulegen.',
-
+  
   // Step 2 - Schedule
   'autoBilling.modal.billingSchedule': 'Abrechnungszeitplan',
   'autoBilling.scheduleInfo.title': 'Wann werden Rechnungen erstellt?',
@@ -1779,7 +1772,7 @@ export const de: Translations = {
   'autoBilling.scheduleInfo.quarterly': 'Vierteljährlich: Im Januar, April, Juli und Oktober',
   'autoBilling.scheduleInfo.half_yearly': 'Halbjährlich: Im Januar und Juli',
   'autoBilling.scheduleInfo.yearly': 'Jährlich: Einmal pro Jahr im Januar',
-
+  
   // Step 3 - Shared Meters
   'autoBilling.step3.title': 'Allgemeinzähler auswählen',
   'autoBilling.step3.description': 'Wählen Sie die Allgemeinzähler aus, deren Kosten auf die Mieter verteilt werden sollen.',
@@ -1794,7 +1787,7 @@ export const de: Translations = {
   'autoBilling.step3.optional': 'Optional',
   'autoBilling.step3.infoTitle': 'Hinweis zu Allgemeinzählern',
   'autoBilling.step3.infoDescription': 'Allgemeinzählerkosten werden automatisch gemäss der konfigurierten Aufteilungsmethode auf alle ausgewählten Wohnungen verteilt.',
-
+  
   // Step 4 - Custom Items
   'autoBilling.step4.title': 'Zusatzposten auswählen',
   'autoBilling.step4.description': 'Wählen Sie zusätzliche Positionen aus, die auf den Rechnungen erscheinen sollen.',
@@ -1813,19 +1806,19 @@ export const de: Translations = {
   'autoBilling.step4.optional': 'Optional',
   'autoBilling.step4.infoTitle': 'Hinweis zu Zusatzposten',
   'autoBilling.step4.infoDescription': 'Zusatzposten werden automatisch auf jeder Rechnung hinzugefügt, basierend auf ihrer konfigurierten Frequenz.',
-
+  
   // Step 5 - Sender
   'autoBilling.senderDescription': 'Diese Informationen erscheinen als Absender auf den generierten Rechnungen.',
   'autoBilling.senderInfoNote.title': 'Absenderinformationen',
   'autoBilling.senderInfoNote.description': 'Die Absenderdaten werden für alle automatisch generierten Rechnungen dieser Konfiguration verwendet.',
-
+  
   // Step 6 - Banking
   'autoBilling.bankingDescription': 'Diese Bankdaten werden für den QR-Einzahlungsschein auf den Rechnungen verwendet.',
   'autoBilling.ibanFormat': 'Schweizer IBAN-Format: CH00 0000 0000 0000 0000 0',
   'autoBilling.qrBillInfo.title': 'Swiss QR-Rechnung',
   'autoBilling.qrBillInfo.description': 'Die IBAN wird verwendet, um den QR-Code für die einfache Zahlung per Mobile Banking zu generieren.',
   'autoBilling.ibanRequired': 'IBAN ist erforderlich für die QR-Rechnung',
-
+  
   // Step 7 - Review
   'autoBilling.modal.reviewConfiguration': 'Konfiguration überprüfen',
   'autoBilling.modal.configurationSummary': 'Zusammenfassung der Konfiguration',
@@ -1835,14 +1828,14 @@ export const de: Translations = {
   'autoBilling.missingRequiredFields': 'Fehlende Pflichtfelder',
   'autoBilling.readyToCreate': 'Bereit zum Erstellen',
   'autoBilling.readyToCreateDescription': 'Alle erforderlichen Informationen sind vorhanden. Klicken Sie auf "Erstellen", um die automatische Abrechnung zu aktivieren.',
-
+  
   // Common (if missing)
   'common.selectAll': 'Alle auswählen',
   'common.deselectAll': 'Alle abwählen',
-
+  
   // Step 1
   "autoBilling.noBuildingsAvailable": "Keine Gebäude verfügbar",
-
+  
   // Placeholders
   "autoBilling.placeholder.companyName": "Firmen- oder Organisationsname",
   "autoBilling.placeholder.streetNumber": "Strasse und Nummer",
@@ -1850,7 +1843,7 @@ export const de: Translations = {
   "autoBilling.placeholder.city": "Ortsname",
   "autoBilling.placeholder.bankName": "Bankname",
   "autoBilling.placeholder.accountHolder": "Kontoinhaber",
-
+  
   // Countries
   "countries.switzerland": "Schweiz",
   "countries.germany": "Deutschland",
@@ -2109,160 +2102,6 @@ export const de: Translations = {
   'settings.monitorActivity': 'Aktivität überwachen',
   'settings.monitorActivityDesc': 'Überprüfen Sie Admin-Protokolle auf verdächtige Aktivitäten',
   'settings.updateYourPassword': 'Aktualisieren Sie Ihr Passwort, um Ihr Konto sicher zu halten',
-
-  // Navigation
-  'nav.systemMonitor': 'Systemüberwachung',
-  'nav.appManagement': 'App-Verwaltung',
-  'nav.login': 'Anmeldung',
-
-  // Logs & System Monitor
-  'logs.systemMonitor': 'Systemüberwachung',
-  'logs.activityLogs': 'Aktivitätsprotokolle',
-  'logs.monitoringSubtitle': 'Echtzeit-Systemgesundheit und Leistungsüberwachung',
-  'logs.logsSubtitle': 'Verfolgen Sie alle Systemaktivitäten und Änderungen',
-  'logs.exportData': 'Daten exportieren',
-  'logs.exportFailed': 'Export fehlgeschlagen. Bitte versuchen Sie es erneut.',
-
-  // App Management
-  'appManagement.title': 'App-Verwaltung',
-  'appManagement.subtitle': 'Verwalten Sie den mobilen App-Zugriff und Firebase-Synchronisation',
-  'appManagement.mobileAppStatus': 'Mobile App Status',
-  'appManagement.appCurrentlyEnabled': 'Mobile App ist derzeit aktiviert',
-  'appManagement.appCurrentlyDisabled': 'Mobile App ist derzeit deaktiviert',
-  'appManagement.enableApp': 'App aktivieren',
-  'appManagement.disableApp': 'App deaktivieren',
-  'appManagement.appEnabled': 'Mobile App wurde aktiviert',
-  'appManagement.appDisabled': 'Mobile App wurde deaktiviert',
-  'appManagement.toggleFailed': 'Fehler beim Umschalten des App-Status',
-  'appManagement.syncStatus': 'Sync-Status',
-  'appManagement.lastSync': 'Letzte Synchronisation',
-  'appManagement.neverSynced': 'Nie synchronisiert',
-  'appManagement.syncNow': 'Jetzt synchronisieren',
-  'appManagement.syncing': 'Synchronisiere...',
-  'appManagement.syncSuccess': 'Daten erfolgreich mit Firebase synchronisiert',
-  'appManagement.syncFailed': 'Synchronisation fehlgeschlagen. Bitte versuchen Sie es erneut.',
-  'appManagement.appUsers': 'App-Benutzer',
-  'appManagement.addUser': 'Benutzer hinzufügen',
-  'appManagement.addNewUser': 'Neuen Benutzer hinzufügen',
-  'appManagement.editUser': 'Benutzer bearbeiten',
-  'appManagement.username': 'Benutzername',
-  'appManagement.password': 'Passwort',
-  'appManagement.description': 'Beschreibung / Name',
-  'appManagement.permissions': 'Berechtigungen',
-  'appManagement.meters': 'Zähler',
-  'appManagement.chargers': 'Ladestationen',
-  'appManagement.users': 'Benutzer',
-  'appManagement.buildings': 'Gebäude',
-  'appManagement.bills': 'Rechnungen',
-  'appManagement.enterUsername': 'Benutzernamen eingeben',
-  'appManagement.enterPassword': 'Passwort eingeben',
-  'appManagement.enterDescription': 'Beschreibung oder vollständigen Namen eingeben',
-  'appManagement.leaveBlankToKeep': 'Leer lassen, um aktuelles Passwort zu behalten',
-  'appManagement.createUser': 'Benutzer erstellen',
-  'appManagement.updateUser': 'Benutzer aktualisieren',
-  'appManagement.cancel': 'Abbrechen',
-  'appManagement.fillRequiredFields': 'Bitte füllen Sie alle erforderlichen Felder aus',
-  'appManagement.userCreated': 'App-Benutzer erfolgreich erstellt',
-  'appManagement.userUpdated': 'App-Benutzer erfolgreich aktualisiert',
-  'appManagement.userDeleted': 'App-Benutzer erfolgreich gelöscht',
-  'appManagement.saveFailed': 'Fehler beim Speichern des App-Benutzers',
-  'appManagement.deleteFailed': 'Fehler beim Löschen des App-Benutzers',
-  'appManagement.toggleUserFailed': 'Fehler beim Umschalten des Benutzerstatus',
-  'appManagement.confirmDelete': 'Sind Sie sicher, dass Sie diesen Benutzer löschen möchten?',
-  'appManagement.noUsers': 'Keine App-Benutzer gefunden',
-  'appManagement.loading': 'Lade...',
-  'appManagement.noDescription': 'Keine Beschreibung',
-  'appManagement.deviceId': 'Geräte-ID',
-  'appManagement.activate': 'Aktivieren',
-  'appManagement.deactivate': 'Deaktivieren',
-  'appManagement.edit': 'Bearbeiten',
-  'appManagement.delete': 'Löschen',
-  'appManagement.wizardCompleted': 'Firebase-Einrichtung erfolgreich abgeschlossen!',
-  'appManagement.wizardCancelConfirm': 'Firebase ist noch nicht konfiguriert. Möchten Sie den Einrichtungsassistenten wirklich schließen?',
-  'appManagement.setupWizard': 'Einrichtungsassistent',
-  'appManagement.setupWizardReopen': 'Assistenten erneut öffnen',
-  'appManagement.configureFirebaseFirst': 'Bitte konfigurieren Sie zuerst Firebase, bevor Sie die mobile App aktivieren.',
-  'appManagement.invalidFirebaseConfig': 'Ungültiger Firebase-Dienstkonto-Schlüssel. Bitte laden Sie eine gültige JSON-Datei hoch.',
-  'appManagement.configUploaded': 'Firebase-Konfiguration erfolgreich hochgeladen. Klicken Sie auf "Konfiguration speichern", um sie anzuwenden.',
-  'appManagement.configParseFailed': 'Firebase-Konfigurationsdatei konnte nicht geparst werden. Bitte stellen Sie sicher, dass es sich um eine gültige JSON-Datei handelt.',
-  'appManagement.uploadConfigFirst': 'Bitte laden Sie zuerst eine Firebase-Konfigurationsdatei hoch.',
-  'appManagement.configSaved': 'Firebase-Konfiguration erfolgreich gespeichert!',
-  'appManagement.configSaveFailed': 'Fehler beim Speichern der Firebase-Konfiguration.',
-
-  // Settings / Login
-  'settings.loginSettings': 'Anmeldeeinstellungen',
-  'settings.manageLoginCredentials': 'Verwalten Sie Ihre Webanwendungs-Anmeldedaten',
-
-  // Setup Wizard Übersetzungen
-  'setupWizard.title': 'Willkommen bei ZEV Billing',
-  'setupWizard.subtitle': 'Richten Sie Ihre mobile App in wenigen Schritten ein',
-
-  'setupWizard.step1Title': 'Projekt erstellen',
-  'setupWizard.step1Description': 'Firebase-Projekt einrichten',
-  'setupWizard.step1Heading': 'Schritt 1: Firebase-Projekt erstellen',
-  'setupWizard.step1Text': 'Sie benötigen ein Firebase-Projekt, um die mobile App-Funktionalität zu aktivieren. Dies ist in den meisten Fällen kostenlos.',
-  'setupWizard.step1Inst1': 'Gehen Sie zu',
-  'setupWizard.step1Inst2': 'Klicken Sie auf "Projekt hinzufügen" oder "Projekt erstellen"',
-  'setupWizard.step1Inst3': 'Geben Sie einen Projektnamen ein (z.B. "Mein Gebäude EV-Laden")',
-  'setupWizard.step1Inst4': 'Deaktivieren Sie Google Analytics (nicht benötigt)',
-  'setupWizard.step1Inst5': 'Klicken Sie auf "Projekt erstellen"',
-  'setupWizard.step1Tip': 'Wählen Sie eine Firebase-Projektregion in Ihrer Nähe für bessere Leistung (z.B. europe-west1 für Europa).',
-
-  'setupWizard.step2Title': 'Dienste aktivieren',
-  'setupWizard.step2Description': 'Auth und Datenbank aktivieren',
-  'setupWizard.step2Heading': 'Schritt 2: Erforderliche Dienste aktivieren',
-  'setupWizard.step2Text': 'Aktivieren Sie Authentication und Realtime Database in Ihrem Firebase-Projekt.',
-  'setupWizard.step2AuthHeading': 'A. Authentication aktivieren:',
-  'setupWizard.step2AuthInst1': 'Klicken Sie in der Firebase Console im linken Menü auf "Authentication"',
-  'setupWizard.step2AuthInst2': 'Klicken Sie auf "Erste Schritte"',
-  'setupWizard.step2AuthInst3': 'Aktivieren Sie die Anmeldemethode "E-Mail/Passwort"',
-  'setupWizard.step2AuthInst4': 'Klicken Sie auf "Speichern"',
-  'setupWizard.step2DbHeading': 'B. Realtime Database aktivieren:',
-  'setupWizard.step2DbInst1': 'Klicken Sie im linken Menü auf "Realtime Database"',
-  'setupWizard.step2DbInst2': 'Klicken Sie auf "Datenbank erstellen"',
-  'setupWizard.step2DbInst3': 'Wählen Sie Ihre Region (z.B. europe-west1)',
-  'setupWizard.step2DbInst4': 'Starten Sie im gesperrten Modus (wir setzen Regeln über die API)',
-  'setupWizard.step2DbInst5': 'Klicken Sie auf "Aktivieren"',
-  'setupWizard.step2Important': 'Notieren Sie sich Ihre Datenbank-URL (z.B. https://ihr-projekt.europe-west1.firebasedatabase.app) - Sie müssen überprüfen, ob die Region übereinstimmt.',
-
-  'setupWizard.step3Title': 'Dienstkonto',
-  'setupWizard.step3Description': 'Anmeldedaten herunterladen',
-  'setupWizard.step3Heading': 'Schritt 3: Dienstkonto-Schlüssel herunterladen',
-  'setupWizard.step3Text': 'Generieren und laden Sie Ihren privaten Dienstkonto-Schlüssel herunter. Diese Datei enthält Anmeldedaten für den serverseitigen Zugriff.',
-  'setupWizard.step3Inst1': 'Gehen Sie zu Projekteinstellungen → Dienstkonten',
-  'setupWizard.step3Inst2': 'Stellen Sie sicher, dass "Firebase Admin SDK" ausgewählt ist',
-  'setupWizard.step3Inst3': 'Klicken Sie auf "Neuen privaten Schlüssel generieren"',
-  'setupWizard.step3Inst4': 'Klicken Sie zur Bestätigung auf "Schlüssel generieren"',
-  'setupWizard.step3Inst5': 'Speichern Sie die JSON-Datei sicher (Sie laden sie im nächsten Schritt hoch)',
-  'setupWizard.step3SecurityWarning': 'Diese Datei gewährt vollen Zugriff auf Ihr Firebase-Projekt. Teilen Sie sie niemals und übertragen Sie sie nicht in die Versionskontrolle. Bewahren Sie sie sicher auf und laden Sie sie nur auf Ihren Raspberry Pi hoch.',
-
-  'setupWizard.step4Title': 'Gerät konfigurieren',
-  'setupWizard.step4Description': 'Konfiguration hochladen',
-  'setupWizard.step4Heading': 'Schritt 4: Ihr Gerät konfigurieren',
-  'setupWizard.step4Text': 'Legen Sie eine eindeutige Geräte-ID für diesen Raspberry Pi fest und laden Sie Ihre Firebase-Konfiguration hoch.',
-  'setupWizard.deviceIdLabel': 'Geräte-ID (Eindeutige Kennung für diesen Raspberry Pi)',
-  'setupWizard.deviceIdPlaceholder': 'z.B. rpi-gebaeude-101 oder rpi-haus-a',
-  'setupWizard.deviceIdHelp': 'Diese ID wird verwendet, um Daten in Firebase zu organisieren. Alle App-Benutzer auf diesem Gerät teilen diese ID.',
-  'setupWizard.serviceAccountLabel': 'Firebase-Dienstkonto-Schlüssel',
-  'setupWizard.configLoaded': '✓ Konfiguration erfolgreich geladen!',
-  'setupWizard.uploadPrompt': 'Klicken Sie zum Hochladen oder ziehen Sie eine Datei per Drag & Drop',
-  'setupWizard.jsonFileHint': 'JSON-Datei aus der Firebase Console',
-  'setupWizard.readyToComplete': 'Bereit zum Abschließen der Einrichtung!',
-  'setupWizard.readyToCompleteText': 'Klicken Sie unten auf "Einrichtung abschließen", um Ihre Konfiguration zu speichern und die mobile App zu aktivieren.',
-
-  'setupWizard.instructions': 'Anweisungen:',
-  'setupWizard.tip': 'Tipp:',
-  'setupWizard.important': 'Wichtig:',
-  'setupWizard.securityWarning': 'Sicherheitswarnung:',
-
-  'setupWizard.generate': 'Generieren',
-  'setupWizard.previous': 'Zurück',
-  'setupWizard.next': 'Weiter',
-  'setupWizard.completeSetup': 'Einrichtung abschließen',
-  'setupWizard.completeAllFields': 'Bitte füllen Sie alle Felder aus, bevor Sie fortfahren.',
-  'setupWizard.invalidConfig': 'Ungültiger Firebase-Dienstkonto-Schlüssel. Bitte laden Sie eine gültige JSON-Datei hoch.',
-  'setupWizard.configParseFailed': 'Firebase-Konfigurationsdatei konnte nicht geparst werden. Bitte stellen Sie sicher, dass es sich um eine gültige JSON-Datei handelt.',
-  'setupWizard.helpText': 'Benötigen Sie Hilfe? Lesen Sie die Dokumentation oder kontaktieren Sie den Support.',
 
   // ============================================================================
   // LOGIN

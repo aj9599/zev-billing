@@ -85,7 +85,7 @@ export default function MeterConnectionStatus({
 
     if (meter.connection_type === 'mqtt') {
         const status = mqttStatus[meter.id];
-
+        
         // Check if MQTT broker is connected
         if (mqttBrokerConnected === false) {
             return (
@@ -101,16 +101,16 @@ export default function MeterConnectionStatus({
                     <WifiOff size={16} style={{ color: '#ef4444' }} />
                     <div style={{ flex: 1 }}>
                         <div style={{ fontSize: '12px', fontWeight: '600', color: '#ef4444' }}>
-                            {t('meters.mqttBrokerDisconnected')}
+                            MQTT Broker Disconnected
                         </div>
                         <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
-                            {t('meters.cannotReachBroker')}
+                            Cannot reach MQTT broker
                         </div>
                     </div>
                 </div>
             );
         }
-
+        
         if (status) {
             return (
                 <div style={{
@@ -127,13 +127,13 @@ export default function MeterConnectionStatus({
                             <Rss size={16} style={{ color: '#22c55e' }} />
                             <div style={{ flex: 1 }}>
                                 <div style={{ fontSize: '12px', fontWeight: '600', color: '#22c55e' }}>
-                                    {t('meters.mqttConnected')}
+                                    MQTT Connected
                                 </div>
                                 <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
-                                    {t('meters.topic')}: {status.topic}
+                                    Topic: {status.topic}
                                 </div>
                                 <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                                    {t('meters.lastUpdate')}: {new Date(status.last_update).toLocaleTimeString('de-CH', {
+                                    Last update: {new Date(status.last_update).toLocaleTimeString('de-CH', {
                                         hour: '2-digit',
                                         minute: '2-digit',
                                         second: '2-digit',
@@ -147,10 +147,10 @@ export default function MeterConnectionStatus({
                             <AlertCircle size={16} style={{ color: '#f59e0b' }} />
                             <div style={{ flex: 1 }}>
                                 <div style={{ fontSize: '12px', fontWeight: '600', color: '#f59e0b' }}>
-                                    {t('meters.mqttWaitingForData')}
+                                    MQTT Waiting for Data
                                 </div>
                                 <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
-                                    {t('meters.topic')}: {status.topic}
+                                    Topic: {status.topic}
                                 </div>
                                 {status.last_error && (
                                     <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
@@ -163,7 +163,7 @@ export default function MeterConnectionStatus({
                 </div>
             );
         }
-
+        
         // No status data yet, but broker is connected
         return (
             <div style={{
@@ -177,7 +177,7 @@ export default function MeterConnectionStatus({
             }}>
                 <Rss size={16} style={{ color: '#f59e0b' }} />
                 <div style={{ fontSize: '12px', color: '#92400e' }}>
-                    {t('meters.mqttConnecting')}
+                    MQTT Connecting...
                 </div>
             </div>
         );
