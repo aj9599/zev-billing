@@ -96,7 +96,7 @@ type CompletedSession struct {
 
 func main() {
 	// Database path - adjust if needed
-	dbPath := "./charger_data.db"
+	dbPath := "./zev-billing.db"
 	
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
@@ -111,12 +111,12 @@ func main() {
 		localTZ = time.UTC
 	}
 	
-	log.Println("=" * 70)
+	log.Println(strings.Repeat("=", 70))
 	log.Println("ZAPTEC OCMF BACKFILL UTILITY")
-	log.Println("=" * 70)
+	log.Println(strings.Repeat("=", 70))
 	log.Printf("Timezone: %s\n", localTZ.String())
 	log.Printf("Database: %s\n", dbPath)
-	log.Println("=" * 70)
+	log.Println(strings.Repeat("=", 70))
 	
 	// Get all Zaptec chargers
 	rows, err := db.Query(`
@@ -208,7 +208,7 @@ func main() {
 		log.Println(strings.Repeat("-", 70))
 		
 		// Step 1: Delete existing data for last 7 days
-		log.Println("\n[1/3] Deleting existing data from last 7 days...")
+		log.Println("\n[1/4] Deleting existing data from last 7 days...")
 		
 		sevenDaysAgo := startDate.Format("2006-01-02 15:04:05")
 		result, err := db.Exec(`
@@ -227,7 +227,7 @@ func main() {
 		log.Printf("✓ Deleted %d existing records\n", deleted)
 		
 		// Step 2: Get access token
-		log.Println("\n[2/3] Authenticating with Zaptec API...")
+		log.Println("\n[2/4] Authenticating with Zaptec API...")
 		
 		token, err := getAccessToken(client, apiBaseURL, charger.Config)
 		if err != nil {
@@ -238,7 +238,7 @@ func main() {
 		log.Println("✓ Authentication successful")
 		
 		// Step 3: Fetch charge history
-		log.Println("\n[3/3] Fetching charge history with OCMF data...")
+		log.Println("\n[3/4] Fetching charge history with OCMF data...")
 		
 		history, err := getChargeHistoryDateRange(client, apiBaseURL, token, charger.Config.ChargerID, startDate, endDate)
 		if err != nil {
@@ -294,8 +294,13 @@ func main() {
 		totalSessions += sessionCount
 		totalReadings += readingCount
 		
-		log.Printf("\n✓ Charger '%s' complete: %d sessions, %d readings written\n", 
-			charger.Name, sessionCount, readingCount)
+		// Step 5: Fill gaps between sessions with 15-minute idle readings
+		log.Println("\n[4/4] Filling gaps between sessions...")
+		gapReadings := fillGapsBetweenSessions(db, charger.ID, charger.Name, history, localTZ, startDate, endDate)
+		totalReadings += gapReadings
+		
+		log.Printf("\n✓ Charger '%s' complete: %d sessions, %d session readings, %d gap readings\n", 
+			charger.Name, sessionCount, readingCount-gapReadings, gapReadings)
 	}
 	
 	// Final summary
@@ -304,7 +309,7 @@ func main() {
 	log.Println(strings.Repeat("=", 70))
 	log.Printf("Total deleted:        %d records\n", totalDeleted)
 	log.Printf("Total sessions:       %d\n", totalSessions)
-	log.Printf("Total readings:       %d\n", totalReadings)
+	log.Printf("Total readings:       %d (OCMF session data + gap filling)\n", totalReadings)
 	log.Println(strings.Repeat("=", 70))
 }
 
@@ -534,6 +539,153 @@ func parseZaptecTime(timeStr string, localTZ *time.Location) time.Time {
 	return time.Time{}
 }
 
+func fillGapsBetweenSessions(db *sql.DB, chargerID int, chargerName string, sessions []ZaptecChargeHistory, localTZ *time.Location, startDate, endDate time.Time) int {
+	if len(sessions) == 0 {
+		return 0
+	}
+	
+	// Sort sessions by start time
+	type sessionTime struct {
+		start  time.Time
+		end    time.Time
+		energy float64
+		userID string
+	}
+	
+	var sortedSessions []sessionTime
+	for _, session := range sessions {
+		start := parseZaptecTime(session.StartDateTime, localTZ)
+		end := parseZaptecTime(session.EndDateTime, localTZ)
+		if start.IsZero() || end.IsZero() {
+			continue
+		}
+		
+		// Get final energy and user ID from OCMF if available
+		finalEnergy := 0.0
+		userID := session.UserID
+		if session.SignedSession != "" {
+			if parsed, err := parseSignedSession(&session, chargerID, chargerName, localTZ); err == nil && len(parsed.MeterReadings) > 0 {
+				// Use the last reading's energy value
+				finalEnergy = parsed.MeterReadings[len(parsed.MeterReadings)-1].Energy_kWh
+				userID = parsed.UserID
+			}
+		}
+		
+		sortedSessions = append(sortedSessions, sessionTime{
+			start:  start,
+			end:    end,
+			energy: finalEnergy,
+			userID: userID,
+		})
+	}
+	
+	// Sort by start time
+	for i := 0; i < len(sortedSessions)-1; i++ {
+		for j := i + 1; j < len(sortedSessions); j++ {
+			if sortedSessions[i].start.After(sortedSessions[j].start) {
+				sortedSessions[i], sortedSessions[j] = sortedSessions[j], sortedSessions[i]
+			}
+		}
+	}
+	
+	gapCount := 0
+	lastUserID := "" // Track the last known user
+	
+	// Fill gap before first session (from startDate to first session)
+	if len(sortedSessions) > 0 {
+		firstStart := sortedSessions[0].start
+		if firstStart.After(startDate) {
+			// Get baseline energy and last user from database
+			var baselineEnergy float64
+			var lastUser sql.NullString
+			db.QueryRow(`
+				SELECT power_kwh, user_id FROM charger_sessions 
+				WHERE charger_id = ? AND session_time < ?
+				ORDER BY session_time DESC LIMIT 1
+			`, chargerID, startDate.Format("2006-01-02 15:04:05")).Scan(&baselineEnergy, &lastUser)
+			
+			if lastUser.Valid {
+				lastUserID = lastUser.String
+			}
+			
+			gapCount += fillGapRange(db, chargerID, startDate, firstStart, baselineEnergy, lastUserID, localTZ)
+		}
+		
+		// Update lastUserID after first session
+		lastUserID = sortedSessions[0].userID
+	}
+	
+	// Fill gaps between sessions
+	for i := 0; i < len(sortedSessions)-1; i++ {
+		currentEnd := sortedSessions[i].end
+		nextStart := sortedSessions[i+1].start
+		gapEnergy := sortedSessions[i].energy
+		gapUserID := sortedSessions[i].userID // Use the user from the session that just ended
+		
+		if nextStart.After(currentEnd.Add(15 * time.Minute)) {
+			gapCount += fillGapRange(db, chargerID, currentEnd, nextStart, gapEnergy, gapUserID, localTZ)
+		}
+	}
+	
+	// Fill gap after last session (from last session to endDate)
+	if len(sortedSessions) > 0 {
+		lastEnd := sortedSessions[len(sortedSessions)-1].end
+		lastEnergy := sortedSessions[len(sortedSessions)-1].energy
+		lastUserID = sortedSessions[len(sortedSessions)-1].userID
+		if endDate.After(lastEnd) {
+			gapCount += fillGapRange(db, chargerID, lastEnd, endDate, lastEnergy, lastUserID, localTZ)
+		}
+	}
+	
+	if gapCount > 0 {
+		log.Printf("✓ Filled %d gap readings (15-min intervals)\n", gapCount)
+	}
+	
+	return gapCount
+}
+
+func fillGapRange(db *sql.DB, chargerID int, startTime, endTime time.Time, energy float64, userID string, localTZ *time.Location) int {
+	count := 0
+	
+	// Round start to next 15-minute interval
+	start := startTime.In(localTZ)
+	minutes := start.Minute()
+	var roundedMinutes int
+	if minutes < 15 {
+		roundedMinutes = 15
+	} else if minutes < 30 {
+		roundedMinutes = 30
+	} else if minutes < 45 {
+		roundedMinutes = 45
+	} else {
+		roundedMinutes = 0
+		start = start.Add(1 * time.Hour)
+	}
+	current := time.Date(start.Year(), start.Month(), start.Day(), start.Hour(), roundedMinutes, 0, 0, localTZ)
+	
+	// Fill every 15 minutes until end time
+	for current.Before(endTime) {
+		// Format with timezone offset (matching the session data format)
+		timestamp := current.Format("2006-01-02 15:04:05-07:00")
+		
+		// Write idle reading with same user_id as last session
+		result, err := db.Exec(`
+			INSERT OR IGNORE INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
+			VALUES (?, ?, ?, ?, ?, ?)
+		`, chargerID, userID, timestamp, energy, "1", "1")
+		
+		if err == nil {
+			if rows, _ := result.RowsAffected(); rows > 0 {
+				count++
+			}
+		}
+		
+		current = current.Add(15 * time.Minute)
+	}
+	
+	return count
+}
+
 func writeSessionToDatabase(db *sql.DB, session *CompletedSession) error {
 	if len(session.MeterReadings) == 0 {
 		return fmt.Errorf("no readings to write")
@@ -555,7 +707,8 @@ func writeSessionToDatabase(db *sql.DB, session *CompletedSession) error {
 	defer stmt.Close()
 	
 	for _, reading := range session.MeterReadings {
-		localTimestamp := reading.Timestamp.Format("2006-01-02 15:04:05")
+		// Format timestamp with timezone offset (e.g., 2025-11-29 23:30:00+01:00)
+		localTimestamp := reading.Timestamp.Format("2006-01-02 15:04:05-07:00")
 		
 		_, err := stmt.Exec(
 			session.ChargerID,
@@ -586,8 +739,9 @@ func writeSessionFallback(db *sql.DB, history *ZaptecChargeHistory, chargerID in
 		userID = "unknown"
 	}
 	
-	localStartTime := startTime.Format("2006-01-02 15:04:05")
-	localEndTime := endTime.Format("2006-01-02 15:04:05")
+	// Format timestamps with timezone offset
+	localStartTime := startTime.Format("2006-01-02 15:04:05-07:00")
+	localEndTime := endTime.Format("2006-01-02 15:04:05-07:00")
 	
 	var baselineEnergy float64
 	db.QueryRow(`
