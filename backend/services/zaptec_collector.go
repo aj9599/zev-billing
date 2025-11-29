@@ -828,7 +828,7 @@ func (zc *ZaptecCollector) writeSessionToDatabase(session *CompletedSession) err
 	
 	// Check if we already have data for this session (by checking first reading timestamp)
 	firstReading := session.MeterReadings[0]
-	firstTimestamp := firstReading.Timestamp.Format("2006-01-02 15:04:05")
+	firstTimestamp := firstReading.Timestamp.Format("2006-01-02 15:04:05-07:00")
 	
 	var existingCount int
 	err := zc.db.QueryRow(`
@@ -859,10 +859,10 @@ func (zc *ZaptecCollector) writeSessionToDatabase(session *CompletedSession) err
 	defer stmt.Close()
 	
 	insertCount := 0
-	// Insert each OCMF reading - timestamps are already in local timezone
+	// Insert each OCMF reading with timezone-aware timestamps
 	for _, reading := range session.MeterReadings {
-		// Format timestamp for SQLite
-		localTimestamp := reading.Timestamp.Format("2006-01-02 15:04:05")
+		// Format timestamp with timezone offset (e.g., +01:00)
+		localTimestamp := reading.Timestamp.Format("2006-01-02 15:04:05-07:00")
 		
 		// State: "3" for charging readings
 		state := "3" // Charging
@@ -910,9 +910,9 @@ func (zc *ZaptecCollector) writeSessionFallback(history *ZaptecChargeHistory, ch
 		userID = "unknown"
 	}
 	
-	// Format timestamps for SQLite
-	localStartTime := startTime.In(zc.localTimezone).Format("2006-01-02 15:04:05")
-	localEndTime := endTime.In(zc.localTimezone).Format("2006-01-02 15:04:05")
+	// Format timestamps with timezone offset
+	localStartTime := startTime.In(zc.localTimezone).Format("2006-01-02 15:04:05-07:00")
+	localEndTime := endTime.In(zc.localTimezone).Format("2006-01-02 15:04:05-07:00")
 	
 	// Check if already exists
 	var existingCount int
@@ -1010,14 +1010,27 @@ func (zc *ZaptecCollector) writeIdleReadingIfNeeded(chargerID int, chargerName s
 		return
 	}
 	
-	// Format timestamp for SQLite
-	timestamp := currentInterval.Format("2006-01-02 15:04:05")
+	// Format timestamp with timezone offset
+	timestamp := currentInterval.Format("2006-01-02 15:04:05-07:00")
 	
-	// Write idle reading with no user, current state
+	// Get last user_id for this charger to maintain continuity
+	var lastUserID string
+	err := zc.db.QueryRow(`
+		SELECT user_id FROM charger_sessions 
+		WHERE charger_id = ? AND user_id != ''
+		ORDER BY session_time DESC LIMIT 1
+	`, chargerID).Scan(&lastUserID)
+	
+	if err != nil {
+		// If no previous user found, use empty string
+		lastUserID = ""
+	}
+	
+	// Write idle reading with last user's ID, current state
 	result, err := zc.db.Exec(`
 		INSERT OR IGNORE INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
 		VALUES (?, ?, ?, ?, ?, ?)
-	`, chargerID, "", timestamp, totalEnergy, "1", state)
+	`, chargerID, lastUserID, timestamp, totalEnergy, "1", state)
 	
 	if err != nil {
 		log.Printf("Zaptec: [%s] Could not write idle reading: %v", chargerName, err)
