@@ -32,7 +32,10 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
 
   useEffect(() => {
     // Validate healthHistory exists and is an array
-    if (!healthHistory || !Array.isArray(healthHistory) || healthHistory.length === 0) return;
+    if (!healthHistory || !Array.isArray(healthHistory) || healthHistory.length === 0) {
+      console.warn('SystemHealthCharts: No health history data');
+      return;
+    }
 
     // Filter out any invalid data points
     const validHistory = healthHistory.filter(d => 
@@ -44,17 +47,26 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       typeof d.disk_percent === 'number'
     );
 
-    if (validHistory.length === 0) return;
-
-    drawChart(cpuCanvasRef.current, validHistory, 'cpu_usage', '#667eea');
-    drawChart(memoryCanvasRef.current, validHistory, 'memory_percent', '#10b981');
-    drawChart(diskCanvasRef.current, validHistory, 'disk_percent', '#f59e0b');
-    
-    // Only draw temperature if we have temperature data
-    const hasTempData = validHistory.some(d => d.temperature > 0);
-    if (hasTempData) {
-      drawChart(tempCanvasRef.current, validHistory, 'temperature', '#ef4444');
+    if (validHistory.length === 0) {
+      console.warn('SystemHealthCharts: No valid data points');
+      return;
     }
+
+    console.log('SystemHealthCharts: Drawing charts with', validHistory.length, 'data points');
+
+    // Use requestAnimationFrame to ensure DOM is ready
+    requestAnimationFrame(() => {
+      drawChart(cpuCanvasRef.current, validHistory, 'cpu_usage', '#667eea');
+      drawChart(memoryCanvasRef.current, validHistory, 'memory_percent', '#10b981');
+      drawChart(diskCanvasRef.current, validHistory, 'disk_percent', '#f59e0b');
+      
+      // Only draw temperature if we have temperature data
+      const hasTempData = validHistory.some(d => d.temperature > 0);
+      console.log('SystemHealthCharts: Has temperature data?', hasTempData);
+      if (hasTempData) {
+        drawChart(tempCanvasRef.current, validHistory, 'temperature', '#ef4444');
+      }
+    });
   }, [healthHistory, isMobile]);
 
   const drawChart = (
@@ -63,41 +75,35 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
     key: keyof HealthDataPoint,
     color: string
   ) => {
-    if (!canvas || data.length === 0) return;
+    if (!canvas || data.length === 0) {
+      console.warn(`SystemHealthCharts: Cannot draw ${key} - no canvas or data`);
+      return;
+    }
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      console.warn(`SystemHealthCharts: Cannot get context for ${key}`);
+      return;
+    }
 
-    // Get container dimensions
-    const container = canvas.parentElement;
-    if (!container) return;
-
-    const rect = container.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
     
-    // Set canvas size based on container space (rect already accounts for container's actual size)
-    const displayWidth = rect.width;
-    const displayHeight = isMobile ? 140 : 180;
+    // Use fixed height like the old working version
+    const height = isMobile ? 250 : 300;
     
-    canvas.width = displayWidth * dpr;
-    canvas.height = displayHeight * dpr;
+    canvas.width = rect.width * dpr;
+    canvas.height = height * dpr;
     
-    canvas.style.width = displayWidth + 'px';
-    canvas.style.height = displayHeight + 'px';
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = height + 'px';
     
     ctx.scale(dpr, dpr);
     
-    const width = displayWidth;
-    const height = displayHeight;
-    
-    // Responsive padding - ensure right padding prevents overflow
-    const paddingTop = isMobile ? 15 : 20;
-    const paddingBottom = isMobile ? 22 : 25;
-    const paddingLeft = isMobile ? 28 : 35;
-    const paddingRight = isMobile ? 12 : 15;
-    
-    const chartWidth = width - paddingLeft - paddingRight;
-    const chartHeight = height - paddingTop - paddingBottom;
+    const width = rect.width;
+    const padding = isMobile ? 35 : 40;
+    const chartWidth = width - padding * 2;
+    const chartHeight = height - padding * 2;
 
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
@@ -107,43 +113,43 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       .filter(d => d && typeof d === 'object' && typeof d[key] === 'number')
       .map(d => d[key] as number);
     
-    if (values.length === 0) return;
+    if (values.length === 0) {
+      console.warn(`SystemHealthCharts: No values for ${key}`);
+      return;
+    }
     
     const maxValue = key === 'temperature' ? 100 : 100;
 
-    // Draw grid lines - ensure they don't exceed right padding
+    // Draw grid lines
     ctx.strokeStyle = '#e5e7eb';
     ctx.lineWidth = 1;
-    const gridLines = 4;
-    for (let i = 0; i <= gridLines; i++) {
-      const y = paddingTop + (chartHeight / gridLines) * i;
+    for (let i = 0; i <= 4; i++) {
+      const y = padding + (chartHeight / 4) * i;
       ctx.beginPath();
-      ctx.moveTo(paddingLeft, y);
-      ctx.lineTo(paddingLeft + chartWidth, y); // Changed to use chartWidth
+      ctx.moveTo(padding, y);
+      ctx.lineTo(width - padding, y);
       ctx.stroke();
       
       // Draw y-axis labels
       ctx.fillStyle = '#9ca3af';
-      ctx.font = isMobile ? '9px sans-serif' : '11px sans-serif';
+      ctx.font = isMobile ? '10px sans-serif' : '12px sans-serif';
       ctx.textAlign = 'right';
-      const value = maxValue - (maxValue / gridLines) * i;
-      ctx.fillText(value.toFixed(0) + (key === 'temperature' ? '°C' : '%'), paddingLeft - 4, y + 3);
+      const value = maxValue - (maxValue / 4) * i;
+      // Fixed character encoding - was Â°C, now °C
+      ctx.fillText(value.toFixed(0) + (key === 'temperature' ? '°C' : '%'), padding - 10, y + 4);
     }
 
     // Draw line chart
     if (values.length > 0) {
       ctx.beginPath();
       ctx.strokeStyle = color;
-      ctx.lineWidth = isMobile ? 1.5 : 2;
+      ctx.lineWidth = 2;
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
 
       values.forEach((value, index) => {
-        const x = Math.min(
-          paddingLeft + (chartWidth / Math.max(values.length - 1, 1)) * index,
-          paddingLeft + chartWidth
-        );
-        const y = paddingTop + chartHeight - (value / maxValue) * chartHeight;
+        const x = padding + (chartWidth / (values.length - 1)) * index;
+        const y = padding + chartHeight - (value / maxValue) * chartHeight;
         
         if (index === 0) {
           ctx.moveTo(x, y);
@@ -154,12 +160,12 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       
       ctx.stroke();
 
-      // Fill area under line - ensure it stays within bounds
-      ctx.lineTo(paddingLeft + chartWidth, paddingTop + chartHeight);
-      ctx.lineTo(paddingLeft, paddingTop + chartHeight);
+      // Fill area under line
+      ctx.lineTo(width - padding, padding + chartHeight);
+      ctx.lineTo(padding, padding + chartHeight);
       ctx.closePath();
       
-      const gradient = ctx.createLinearGradient(0, paddingTop, 0, paddingTop + chartHeight);
+      const gradient = ctx.createLinearGradient(0, padding, 0, height - padding);
       gradient.addColorStop(0, color + '40');
       gradient.addColorStop(1, color + '00');
       ctx.fillStyle = gradient;
@@ -168,13 +174,13 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
 
     // Draw x-axis time labels
     ctx.fillStyle = '#9ca3af';
-    ctx.font = isMobile ? '8px sans-serif' : '10px sans-serif';
+    ctx.font = isMobile ? '10px sans-serif' : '12px sans-serif';
     ctx.textAlign = 'center';
     
     const validData = data.filter(d => d && typeof d === 'object' && d.timestamp);
     
     if (validData.length > 0) {
-      const timeSteps = isMobile ? 3 : 5;
+      const timeSteps = isMobile ? 4 : 6;
       const actualSteps = Math.min(timeSteps, validData.length);
       
       for (let i = 0; i < actualSteps; i++) {
@@ -182,18 +188,17 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
         const point = validData[index];
         
         if (point && point.timestamp) {
-          const x = Math.min(
-            paddingLeft + (chartWidth / Math.max(actualSteps - 1, 1)) * i,
-            paddingLeft + chartWidth
-          );
+          const x = padding + (chartWidth / Math.max(actualSteps - 1, 1)) * i;
           
           const date = new Date(point.timestamp);
           const timeStr = date.getHours().toString().padStart(2, '0') + ':' + 
                           date.getMinutes().toString().padStart(2, '0');
-          ctx.fillText(timeStr, x, paddingTop + chartHeight + (isMobile ? 12 : 15));
+          ctx.fillText(timeStr, x, height - padding + 20);
         }
       }
     }
+    
+    console.log(`SystemHealthCharts: Successfully drew ${key} chart`);
   };
 
   const hasTempData = healthHistory && Array.isArray(healthHistory) && 
@@ -204,104 +209,99 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       <h2 style={{ 
         fontSize: isMobile ? '18px' : '20px', 
         fontWeight: '700', 
-        marginBottom: '12px', 
-        color: '#1f2937',
-        paddingLeft: '4px'
+        marginBottom: isMobile ? '12px' : '16px', 
+        color: '#1f2937' 
       }}>
         {t('logs.performance24h')}
       </h2>
       <div style={{
         display: 'grid',
-        gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(280px, 1fr))',
-        gap: isMobile ? '12px' : '20px',
+        gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(450px, 1fr))',
+        gap: isMobile ? '16px' : '20px',
         width: '100%'
       }}>
         <div className="chart-container" style={{
           backgroundColor: 'white',
-          padding: isMobile ? '12px' : '24px',
-          borderRadius: '12px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          border: '2px solid #667eea',
-          overflow: 'hidden'
+          padding: isMobile ? '16px' : '24px',
+          borderRadius: isMobile ? '12px' : '16px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+          border: '2px solid #667eea'
         }}>
           <h3 style={{ 
-            fontSize: isMobile ? '13px' : '16px', 
+            fontSize: isMobile ? '14px' : '16px', 
             fontWeight: '600', 
-            marginBottom: isMobile ? '8px' : '12px', 
+            marginBottom: isMobile ? '12px' : '16px', 
             color: '#667eea' 
           }}>
             {t('logs.cpuUsage')}
           </h3>
           <canvas
             ref={cpuCanvasRef}
-            style={{ width: '100%', display: 'block', maxWidth: '100%' }}
+            style={{ width: '100%', height: isMobile ? '250px' : '300px', display: 'block' }}
           />
         </div>
 
         <div className="chart-container" style={{
           backgroundColor: 'white',
-          padding: isMobile ? '12px' : '24px',
-          borderRadius: '12px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          border: '2px solid #10b981',
-          overflow: 'hidden'
+          padding: isMobile ? '16px' : '24px',
+          borderRadius: isMobile ? '12px' : '16px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+          border: '2px solid #10b981'
         }}>
           <h3 style={{ 
-            fontSize: isMobile ? '13px' : '16px', 
+            fontSize: isMobile ? '14px' : '16px', 
             fontWeight: '600', 
-            marginBottom: isMobile ? '8px' : '12px', 
+            marginBottom: isMobile ? '12px' : '16px', 
             color: '#10b981' 
           }}>
             {t('logs.memoryUsage')}
           </h3>
           <canvas
             ref={memoryCanvasRef}
-            style={{ width: '100%', display: 'block', maxWidth: '100%' }}
+            style={{ width: '100%', height: isMobile ? '250px' : '300px', display: 'block' }}
           />
         </div>
 
         <div className="chart-container" style={{
           backgroundColor: 'white',
-          padding: isMobile ? '12px' : '24px',
-          borderRadius: '12px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          border: '2px solid #f59e0b',
-          overflow: 'hidden'
+          padding: isMobile ? '16px' : '24px',
+          borderRadius: isMobile ? '12px' : '16px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+          border: '2px solid #f59e0b'
         }}>
           <h3 style={{ 
-            fontSize: isMobile ? '13px' : '16px', 
+            fontSize: isMobile ? '14px' : '16px', 
             fontWeight: '600', 
-            marginBottom: isMobile ? '8px' : '12px', 
+            marginBottom: isMobile ? '12px' : '16px', 
             color: '#f59e0b' 
           }}>
             {t('logs.diskUsage')}
           </h3>
           <canvas
             ref={diskCanvasRef}
-            style={{ width: '100%', display: 'block', maxWidth: '100%' }}
+            style={{ width: '100%', height: isMobile ? '250px' : '300px', display: 'block' }}
           />
         </div>
 
         {hasTempData && (
           <div className="chart-container" style={{
             backgroundColor: 'white',
-            padding: isMobile ? '12px' : '24px',
-            borderRadius: '12px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            border: '2px solid #ef4444',
-            overflow: 'hidden'
+            padding: isMobile ? '16px' : '24px',
+            borderRadius: isMobile ? '12px' : '16px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+            border: '2px solid #ef4444'
           }}>
             <h3 style={{ 
-              fontSize: isMobile ? '13px' : '16px', 
+              fontSize: isMobile ? '14px' : '16px', 
               fontWeight: '600', 
-              marginBottom: isMobile ? '8px' : '12px', 
+              marginBottom: isMobile ? '12px' : '16px', 
               color: '#ef4444' 
             }}>
               {t('logs.cpuTemperature')}
             </h3>
             <canvas
               ref={tempCanvasRef}
-              style={{ width: '100%', display: 'block', maxWidth: '100%' }}
+              style={{ width: '100%', height: isMobile ? '250px' : '300px', display: 'block' }}
             />
           </div>
         )}

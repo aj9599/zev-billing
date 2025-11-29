@@ -10,11 +10,32 @@ interface HealthDataPoint {
   temperature: number;
 }
 
+// Generate initial placeholder data for smooth chart rendering
+const generateInitialData = (currentData?: SystemHealth): HealthDataPoint[] => {
+  const now = Date.now();
+  const points: HealthDataPoint[] = [];
+  
+  // Generate 20 points spanning the last hour for initial display
+  for (let i = 19; i >= 0; i--) {
+    const timestamp = now - (i * 3 * 60 * 1000); // 3-minute intervals
+    points.push({
+      timestamp,
+      cpu_usage: currentData?.cpu_usage || 0,
+      memory_percent: currentData?.memory_percent || 0,
+      disk_percent: currentData?.disk_percent || 0,
+      temperature: currentData?.temperature || 0
+    });
+  }
+  
+  return points;
+};
+
 export const useSystemHealth = () => {
   const { t } = useTranslation();
   const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
   const [healthHistory, setHealthHistory] = useState<HealthDataPoint[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const loadDebugInfo = async () => {
     try {
@@ -28,6 +49,15 @@ export const useSystemHealth = () => {
       
       if (data.system_health) {
         setSystemHealth(data.system_health);
+        
+        // Initialize with dummy data on first load if history is empty
+        if (!isInitialized && healthHistory.length === 0) {
+          const initialData = generateInitialData(data.system_health);
+          setHealthHistory(initialData);
+          setIsInitialized(true);
+          console.log('Initialized health history with placeholder data');
+          return;
+        }
         
         // Add to history
         setHealthHistory(prev => {
@@ -54,6 +84,8 @@ export const useSystemHealth = () => {
           
           return filtered;
         });
+        
+        setIsInitialized(true);
       }
     } catch (err) {
       console.error(t('logs.debugInfoFailed'), err);
@@ -80,15 +112,14 @@ export const useSystemHealth = () => {
         if (validHistory.length > 0) {
           console.log('Loaded health history from localStorage:', validHistory.length, 'points');
           setHealthHistory(validHistory);
+          setIsInitialized(true);
         } else {
-          console.log('No valid health history in localStorage, will build from scratch');
+          console.log('No valid health history in localStorage');
         }
       } catch (err) {
         console.error('Failed to load health history from localStorage:', err);
         localStorage.removeItem('healthHistory'); // Clear corrupted data
       }
-    } else {
-      console.log('No health history in localStorage, starting fresh');
     }
   }, []);
 
