@@ -99,7 +99,7 @@ export default function ChargerConnectionStatus({
                 <Wifi size={16} style={{ color: '#22c55e' }} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '12px', fontWeight: '600', color: '#22c55e' }}>
-                    {isOnline ? t('chargers.zaptecConnectedOnline') : t('chargers.zaptecConnected')}
+                    {t('chargers.zaptecConnected')}
                   </div>
                   <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
                     {zaptecStatus?.last_update && `${t('chargers.lastUpdate')}: ${new Date(zaptecStatus.last_update).toLocaleTimeString(undefined, { hour12: false })}`}
