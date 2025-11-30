@@ -2,7 +2,7 @@ import React from 'react';
 import { X, Info, Wifi, AlertCircle, Check } from 'lucide-react';
 import type { Charger, Building as BuildingType } from '../../types';
 import type { ChargerConnectionConfig } from './hooks/useChargerForm';
-import { getPreset } from '../chargerPresets';
+import { CHARGER_PRESETS, getPreset } from '../chargerPresets';
 
 interface ChargerFormModalProps {
   editingCharger: Charger | null;
@@ -31,6 +31,10 @@ export default function ChargerFormModal({
   onShowInstructions,
   t
 }: ChargerFormModalProps) {
+  const getCurrentPreset = () => {
+    return getPreset(formData.preset || 'weidmuller');
+  };
+
   // Determine mode based on CONNECTION_TYPE (not preset)
   const isSingleBlockMode = formData.connection_type === 'loxone_api_single';
   const isMultiUuidMode = formData.connection_type === 'loxone_api_multi';
@@ -95,7 +99,7 @@ export default function ChargerFormModal({
             />
           </div>
 
-          {/* Brand/Preset - Just WeidmÃ¼ller, Zaptec, etc. */}
+          {/* Brand/Preset - Dynamically rendered from presets */}
           <div style={{ marginTop: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
               {t('chargers.brand')} *
@@ -106,12 +110,12 @@ export default function ChargerFormModal({
               onChange={(e) => onPresetChange(e.target.value)}
               style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
             >
-              <option value="weidmuller">WeidmÃ¼ller</option>
-              <option value="zaptec">Zaptec</option>
+              {Object.values(CHARGER_PRESETS).map(preset => (
+                <option key={preset.name} value={preset.name}>{preset.label}</option>
+              ))}
             </select>
             <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-              {formData.brand === 'weidmuller' && 'WeidmÃ¼ller AC Smart chargers'}
-              {formData.brand === 'zaptec' && 'Zaptec Go/Pro chargers'}
+              {getCurrentPreset().description}
             </p>
           </div>
 
