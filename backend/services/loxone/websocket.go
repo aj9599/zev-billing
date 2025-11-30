@@ -3,6 +3,7 @@ package loxone
 import (
 	"database/sql"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -39,30 +40,30 @@ func (conn *WebSocketConnection) readLoxoneMessage() (messageType byte, jsonData
 		headerInfo := message[1]
 		payloadLength := binary.LittleEndian.Uint32(message[4:8])
 
-		log.Printf("   📦 Binary header: Type=0x%02X (Info=0x%02X), PayloadLen=%d", headerType, headerInfo, payloadLength)
+		log.Printf("   ðŸ“¦ Binary header: Type=0x%02X (Info=0x%02X), PayloadLen=%d", headerType, headerInfo, payloadLength)
 
 		// Handle keepalive response (identifier 6) - header only, no payload
 		if headerType == LoxoneMsgTypeKeepalive {
-			log.Printf("   💓 Keepalive response received (header-only message)")
+			log.Printf("   ðŸ’“ Keepalive response received (header-only message)")
 			return headerType, nil, nil
 		}
 
 		// Handle out-of-service indicator (identifier 5) - header only
 		if headerType == LoxoneMsgTypeOutOfService {
-			log.Printf("   ⚠️  Out-of-service indicator received")
+			log.Printf("   âš ï¸  Out-of-service indicator received")
 			return headerType, nil, nil
 		}
 
 		// Handle event table and daytimer events - these are binary data, not JSON
 		if headerType == LoxoneMsgTypeEventTable || headerType == LoxoneMsgTypeDaytimerEvent || headerType == LoxoneMsgTypeWeather {
-			log.Printf("   ℹ️  Binary event message (type %d) - ignoring", headerType)
+			log.Printf("   â„¹ï¸  Binary event message (type %d) - ignoring", headerType)
 			return headerType, nil, nil
 		}
 
 		// Handle text event (identifier 3) - has a JSON payload
 		if headerType == LoxoneMsgTypeTextEvent {
 			if payloadLength == 0 {
-				log.Printf("   ℹ️  Text event with no payload (header-only)")
+				log.Printf("   â„¹ï¸  Text event with no payload (header-only)")
 				return headerType, nil, nil
 			}
 
@@ -70,17 +71,17 @@ func (conn *WebSocketConnection) readLoxoneMessage() (messageType byte, jsonData
 			if err != nil {
 				return 0, nil, fmt.Errorf("failed to read JSON payload: %v", err)
 			}
-			log.Printf("   ↓ JSON payload received: %d bytes", len(message))
+			log.Printf("   â†“ JSON payload received: %d bytes", len(message))
 
 			if len(message) < 50 {
-				log.Printf("   🔍 Hex dump: % X", message)
-				log.Printf("   🔍 String: %q", string(message))
+				log.Printf("   ðŸ” Hex dump: % X", message)
+				log.Printf("   ðŸ” String: %q", string(message))
 			}
 
 			jsonData = ExtractJSON(message)
 			if jsonData == nil {
-				log.Printf("   ⚠️  Could not extract JSON from text event")
-				log.Printf("   🔍 Raw message (first 200 bytes): %q", string(message[:Min(len(message), 200)]))
+				log.Printf("   âš ï¸  Could not extract JSON from text event")
+				log.Printf("   ðŸ” Raw message (first 200 bytes): %q", string(message[:Min(len(message), 200)]))
 				return headerType, nil, nil
 			}
 			return headerType, jsonData, nil
@@ -88,27 +89,27 @@ func (conn *WebSocketConnection) readLoxoneMessage() (messageType byte, jsonData
 
 		// Handle binary file (identifier 1)
 		if headerType == LoxoneMsgTypeBinary {
-			log.Printf("   ℹ️  Binary file message - ignoring")
+			log.Printf("   â„¹ï¸  Binary file message - ignoring")
 			return headerType, nil, nil
 		}
 
-		log.Printf("   ⚠️  Unknown binary message type: 0x%02X", headerType)
+		log.Printf("   âš ï¸  Unknown binary message type: 0x%02X", headerType)
 		return headerType, nil, nil
 	}
 
 	// Handle text messages (no binary header)
 	if wsMessageType == websocket.TextMessage {
-		log.Printf("   ↓ Text message received: %d bytes", len(message))
+		log.Printf("   â†“ Text message received: %d bytes", len(message))
 
 		if len(message) < 50 {
-			log.Printf("   🔍 Hex dump: % X", message)
-			log.Printf("   🔍 String: %q", string(message))
+			log.Printf("   ðŸ” Hex dump: % X", message)
+			log.Printf("   ðŸ” String: %q", string(message))
 		}
 
 		jsonData = ExtractJSON(message)
 		if jsonData == nil {
-			log.Printf("   ⚠️  Could not extract JSON from text message")
-			log.Printf("   🔍 Raw message: %q", string(message))
+			log.Printf("   âš ï¸  Could not extract JSON from text message")
+			log.Printf("   ðŸ” Raw message: %q", string(message))
 			return LoxoneMsgTypeText, nil, nil
 		}
 		return LoxoneMsgTypeText, jsonData, nil
@@ -121,7 +122,7 @@ func (conn *WebSocketConnection) readLoxoneMessage() (messageType byte, jsonData
 func (conn *WebSocketConnection) requestData() {
 	defer conn.GoroutinesWg.Done()
 
-	log.Printf("⏰ DATA REQUEST SCHEDULER STARTED for %s", conn.Host)
+	log.Printf("â° DATA REQUEST SCHEDULER STARTED for %s", conn.Host)
 	log.Printf("   Collection interval: 15 minutes (at :00, :15, :30, :45)")
 
 	for {
@@ -129,12 +130,12 @@ func (conn *WebSocketConnection) requestData() {
 		next := GetNextQuarterHour(now)
 		waitDuration := next.Sub(now)
 
-		log.Printf("📅 [%s] Next data request scheduled for %s (in %.0f seconds)",
+		log.Printf("ðŸ“… [%s] Next data request scheduled for %s (in %.0f seconds)",
 			conn.Host, next.Format("15:04:05"), waitDuration.Seconds())
 
 		select {
 		case <-conn.StopChan:
-			log.Printf("🗑️ [%s] Data request scheduler stopping", conn.Host)
+			log.Printf("ðŸ—‘ï¸ [%s] Data request scheduler stopping", conn.Host)
 			return
 		case <-time.After(waitDuration):
 			// Continue to data request
@@ -147,7 +148,7 @@ func (conn *WebSocketConnection) requestData() {
 
 		// Ensure auth before sending requests
 		if err := conn.ensureAuth(); err != nil {
-			log.Printf("❌ [%s] Auth check failed before data request: %v", conn.Host, err)
+			log.Printf("âŒ [%s] Auth check failed before data request: %v", conn.Host, err)
 			log.Printf("   Skipping this collection cycle, will trigger reconnect")
 
 			conn.Mu.Lock()
@@ -162,7 +163,7 @@ func (conn *WebSocketConnection) requestData() {
 
 		conn.Mu.Lock()
 		if !conn.IsConnected || conn.Ws == nil {
-			log.Printf("⚠️  [%s] Not connected after auth check, stopping scheduler", conn.Host)
+			log.Printf("âš ï¸  [%s] Not connected after auth check, stopping scheduler", conn.Host)
 			conn.CollectionInProgress = false
 			conn.Mu.Unlock()
 			return
@@ -171,15 +172,15 @@ func (conn *WebSocketConnection) requestData() {
 		devices := conn.Devices
 		conn.Mu.Unlock()
 
-		log.Println("────────────────────────────────────────────────────────────")
-		log.Printf("📡 [%s] REQUESTING DATA FOR %d DEVICES", conn.Host, len(devices))
+		log.Println("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
+		log.Printf("ðŸ“¡ [%s] REQUESTING DATA FOR %d DEVICES", conn.Host, len(devices))
 		log.Printf("   Time: %s", time.Now().Format("15:04:05"))
 
 		requestFailed := false
 		for _, device := range devices {
 			select {
 			case <-conn.StopChan:
-				log.Printf("🗑️ [%s] Data request scheduler stopping during collection", conn.Host)
+				log.Printf("ðŸ—‘ï¸ [%s] Data request scheduler stopping during collection", conn.Host)
 				conn.Mu.Lock()
 				conn.CollectionInProgress = false
 				conn.Mu.Unlock()
@@ -189,10 +190,10 @@ func (conn *WebSocketConnection) requestData() {
 
 			if device.Type == "meter" {
 				cmd := fmt.Sprintf("jdev/sps/io/%s/all", device.DeviceID)
-				log.Printf("   → METER [%s]: %s (mode: %s)", device.Name, device.DeviceID, device.LoxoneMode)
+				log.Printf("   â†’ METER [%s]: %s (mode: %s)", device.Name, device.DeviceID, device.LoxoneMode)
 
 				if err := conn.safeWriteMessage(websocket.TextMessage, []byte(cmd)); err != nil {
-					log.Printf("❌ Failed to request data for meter %s: %v", device.Name, err)
+					log.Printf("âŒ Failed to request data for meter %s: %v", device.Name, err)
 					conn.Mu.Lock()
 					conn.IsConnected = false
 					conn.TokenValid = false
@@ -207,10 +208,10 @@ func (conn *WebSocketConnection) requestData() {
 
 				if device.LoxoneMode == "virtual_output_dual" && device.ExportDeviceID != "" {
 					cmdExport := fmt.Sprintf("jdev/sps/io/%s/all", device.ExportDeviceID)
-					log.Printf("      ├─ Export UUID: %s", device.ExportDeviceID)
+					log.Printf("      â”œâ”€ Export UUID: %s", device.ExportDeviceID)
 
 					if err := conn.safeWriteMessage(websocket.TextMessage, []byte(cmdExport)); err != nil {
-						log.Printf("❌ Failed to request export data for meter %s: %v", device.Name, err)
+						log.Printf("âŒ Failed to request export data for meter %s: %v", device.Name, err)
 						requestFailed = true
 						break
 					}
@@ -219,13 +220,13 @@ func (conn *WebSocketConnection) requestData() {
 			} else if device.Type == "charger" {
 				if device.ChargerBlockUUID != "" {
 					// SINGLE-BLOCK MODE
-					log.Printf("   → CHARGER [%s]: single-block mode (session tracking)", device.Name)
-					log.Printf("      └─ Block UUID: %s", device.ChargerBlockUUID)
+					log.Printf("   â†’ CHARGER [%s]: single-block mode (session tracking)", device.Name)
+					log.Printf("      â””â”€ Block UUID: %s", device.ChargerBlockUUID)
 
 					cmd := fmt.Sprintf("jdev/sps/io/%s/all", device.ChargerBlockUUID)
 
 					if err := conn.safeWriteMessage(websocket.TextMessage, []byte(cmd)); err != nil {
-						log.Printf("❌ Failed to request data for charger %s: %v", device.Name, err)
+						log.Printf("âŒ Failed to request data for charger %s: %v", device.Name, err)
 						conn.Mu.Lock()
 						conn.IsConnected = false
 						conn.TokenValid = false
@@ -239,7 +240,7 @@ func (conn *WebSocketConnection) requestData() {
 					time.Sleep(100 * time.Millisecond)
 				} else {
 					// MULTI-UUID MODE
-					log.Printf("   → CHARGER [%s]: requesting 4 UUIDs", device.Name)
+					log.Printf("   â†’ CHARGER [%s]: requesting 4 UUIDs", device.Name)
 
 					uuids := []struct {
 						name string
@@ -253,10 +254,10 @@ func (conn *WebSocketConnection) requestData() {
 
 					for _, u := range uuids {
 						cmd := fmt.Sprintf("jdev/sps/io/%s/all", u.uuid)
-						log.Printf("      ├─ %s UUID: %s", u.name, u.uuid)
+						log.Printf("      â”œâ”€ %s UUID: %s", u.name, u.uuid)
 
 						if err := conn.safeWriteMessage(websocket.TextMessage, []byte(cmd)); err != nil {
-							log.Printf("❌ Failed to request %s for charger %s: %v", u.name, device.Name, err)
+							log.Printf("âŒ Failed to request %s for charger %s: %v", u.name, device.Name, err)
 							conn.Mu.Lock()
 							conn.IsConnected = false
 							conn.TokenValid = false
@@ -283,11 +284,11 @@ func (conn *WebSocketConnection) requestData() {
 		conn.Mu.Unlock()
 
 		if requestFailed {
-			log.Printf("   ❌ Data request failed, scheduler stopping")
+			log.Printf("   âŒ Data request failed, scheduler stopping")
 			return
 		}
 
-		log.Printf("   ✔️ All data requests sent successfully")
+		log.Printf("   âœ”ï¸ All data requests sent successfully")
 	}
 }
 
@@ -319,10 +320,10 @@ func (conn *WebSocketConnection) readLoop(db *sql.DB, collector LoxoneCollectorI
 				fmt.Sprintf("Host '%s' disconnected unexpectedly", conn.Host))
 		}
 
-		log.Printf("🔴 [%s] DISCONNECTED from Loxone", conn.Host)
+		log.Printf("ðŸ”´ [%s] DISCONNECTED from Loxone", conn.Host)
 
 		conn.updateDeviceStatus(db,
-			fmt.Sprintf("🔴 Offline since %s", time.Now().Format("2006-01-02 15:04:05")))
+			fmt.Sprintf("ðŸ”´ Offline since %s", time.Now().Format("2006-01-02 15:04:05")))
 		conn.logToDatabase("Loxone Disconnected", fmt.Sprintf("Host '%s' disconnected", conn.Host))
 
 		if !isShuttingDown {
@@ -333,7 +334,7 @@ func (conn *WebSocketConnection) readLoop(db *sql.DB, collector LoxoneCollectorI
 		}
 	}()
 
-	log.Printf("👂 [%s] DATA LISTENER ACTIVE - waiting for messages...", conn.Host)
+	log.Printf("ðŸ‘‚ [%s] DATA LISTENER ACTIVE - waiting for messages...", conn.Host)
 
 	messageCount := 0
 	chargerData := make(map[int]*ChargerDataCollection)
@@ -368,7 +369,7 @@ func (conn *WebSocketConnection) readLoop(db *sql.DB, collector LoxoneCollectorI
 			case readChan <- readResult{msgType, jsonData, err}:
 				time.Sleep(10 * time.Millisecond)
 			default:
-				log.Printf("⚠️  [%s] Read channel full, dropping message", conn.Host)
+				log.Printf("âš ï¸  [%s] Read channel full, dropping message", conn.Host)
 			}
 
 			if err != nil {
@@ -380,21 +381,21 @@ func (conn *WebSocketConnection) readLoop(db *sql.DB, collector LoxoneCollectorI
 	for {
 		select {
 		case <-conn.StopChan:
-			log.Printf("🗑️ [%s] Received stop signal, closing listener", conn.Host)
+			log.Printf("ðŸ—‘ï¸ [%s] Received stop signal, closing listener", conn.Host)
 			return
 
 		case result := <-readChan:
 			if result.err != nil {
 				if strings.Contains(result.err.Error(), "i/o timeout") ||
 					strings.Contains(result.err.Error(), "deadline") {
-					log.Printf("⏱️  [%s] Read timeout (expected between data requests)", conn.Host)
+					log.Printf("â±ï¸  [%s] Read timeout (expected between data requests)", conn.Host)
 					continue
 				}
 
 				if strings.Contains(result.err.Error(), "websocket: close") {
-					log.Printf("ℹ️  [%s] WebSocket closed normally", conn.Host)
+					log.Printf("â„¹ï¸  [%s] WebSocket closed normally", conn.Host)
 				} else {
-					log.Printf("❌ [%s] Read error: %v", conn.Host, result.err)
+					log.Printf("âŒ [%s] Read error: %v", conn.Host, result.err)
 					conn.Mu.Lock()
 					conn.LastError = fmt.Sprintf("Read error: %v", result.err)
 					conn.Mu.Unlock()
@@ -405,7 +406,7 @@ func (conn *WebSocketConnection) readLoop(db *sql.DB, collector LoxoneCollectorI
 			}
 
 			if result.jsonData == nil {
-				log.Printf("  ℹ️  [%s] Empty response received (likely keepalive ACK or status message)", conn.Host)
+				log.Printf("  â„¹ï¸  [%s] Empty response received (likely keepalive ACK or status message)", conn.Host)
 				continue
 			}
 
@@ -419,15 +420,15 @@ func (conn *WebSocketConnection) readLoop(db *sql.DB, collector LoxoneCollectorI
 // processMessage processes incoming JSON messages and routes them to appropriate handlers
 func (conn *WebSocketConnection) processMessage(jsonData []byte, chargerData map[int]*ChargerDataCollection, db *sql.DB, collector LoxoneCollectorInterface) {
 	var response LoxoneResponse
-	if err := UnmarshalLoxoneLLData(&response.LL, jsonData); err != nil {
-		log.Printf("⚠️  [%s] Failed to parse JSON response: %v", conn.Host, err)
-		log.Printf("⚠️  Raw JSON (first 500 chars): %s", string(jsonData[:Min(len(jsonData), 500)]))
+	if err := json.Unmarshal(jsonData, &response); err != nil {
+		log.Printf("âš ï¸  [%s] Failed to parse JSON response: %v", conn.Host, err)
+		log.Printf("âš ï¸  Raw JSON (first 500 chars): %s", string(jsonData[:Min(len(jsonData), 500)]))
 		return
 	}
 
 	// Check for auth/permission errors in response
 	if response.LL.Code == "401" || response.LL.Code == "403" {
-		log.Printf("🔒 [%s] Auth error detected in response (code: %s)", conn.Host, response.LL.Code)
+		log.Printf("ðŸ”’ [%s] Auth error detected in response (code: %s)", conn.Host, response.LL.Code)
 
 		conn.Mu.Lock()
 		conn.TokenValid = false
@@ -469,7 +470,7 @@ func (conn *WebSocketConnection) processMessage(jsonData []byte, chargerData map
 				// SINGLE-BLOCK MODE
 				expectedControl := fmt.Sprintf("dev/sps/io/%s/all", device.ChargerBlockUUID)
 				if strings.Contains(response.LL.Control, expectedControl) {
-					log.Printf("   🎯 [%s] Matched single-block UUID: %s", device.Name, device.ChargerBlockUUID)
+					log.Printf("   ðŸŽ¯ [%s] Matched single-block UUID: %s", device.Name, device.ChargerBlockUUID)
 					conn.processChargerSingleBlock(device, response, db, collector)
 					break
 				}
@@ -485,11 +486,11 @@ func (conn *WebSocketConnection) processMessage(jsonData []byte, chargerData map
 				for uuid, fieldName := range uuidMap {
 					expectedControl := fmt.Sprintf("dev/sps/io/%s/all", uuid)
 					if strings.Contains(response.LL.Control, expectedControl) {
-						log.Printf("   🎯 [%s] Matched UUID for field '%s': %s", device.Name, fieldName, uuid)
+						log.Printf("   ðŸŽ¯ [%s] Matched UUID for field '%s': %s", device.Name, fieldName, uuid)
 
 						if chargerData[device.ID] == nil {
 							chargerData[device.ID] = &ChargerDataCollection{}
-							log.Printf("   📋 [%s] Created new data collection for charger", device.Name)
+							log.Printf("   ðŸ“‹ [%s] Created new data collection for charger", device.Name)
 						}
 
 						conn.processChargerField(device, response, fieldName, chargerData[device.ID], db)
