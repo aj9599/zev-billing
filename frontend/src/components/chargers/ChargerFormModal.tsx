@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Info, Wifi, AlertCircle, TriangleAlert } from 'lucide-react';
+import { X, Info, Wifi, AlertCircle, AlertTriangle } from 'lucide-react';
 import type { Charger, Building as BuildingType } from '../../types';
 import type { ChargerConnectionConfig } from './hooks/useChargerForm';
 import { CHARGER_PRESETS, getPreset } from '../chargerPresets';
@@ -306,7 +306,7 @@ export default function ChargerFormModal({
                     }}>
                       <p style={{ fontSize: '12px', color: '#92400e', margin: 0 }}>
                         <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          <TriangleAlert size={14} style={{ display: 'inline' }} />
+                          <AlertTriangle size={14} style={{ display: 'inline' }} />
                           {t('meters.loxoneCloudDnsTitle')}
                         </strong><br />
                         {t('meters.loxoneCloudDnsDescription')}

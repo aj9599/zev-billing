@@ -85,9 +85,23 @@ export default function ChargerCard({
     const isUnknownOrDisconnected = charger.connection_type === 'loxone_api'
         ? (stateValue === '0' || stateDescription === 'Disconnected')  // Loxone: 0 = disconnected
         : (stateValue === '0' || stateValue === '1');  // Zaptec/WeidmÃ¼ller states
+
+    // State checks - handle Zaptec and Loxone chargers differently
     const isAwaitingStart = charger.connection_type === 'zaptec_api'
-        ? stateValue === '2'
-        : stateValue === '66';
+        ? stateValue === '2'  // Zaptec: state 2 = Awaiting Start
+        : charger.connection_type === 'loxone_api'
+            ? false  // Loxone doesn't have this state
+            : stateValue === '66'; // WeidmÃ¼ller multi-UUID: state 66 = Awaiting Start
+
+    const isCompleted = charger.connection_type === 'zaptec_api'
+        ? stateValue === '5'  // Zaptec: state 5 = Completed
+        : false; // Loxone doesn't have explicit completed state
+    
+    const isDisconnected = charger.connection_type === 'zaptec_api'
+        ? stateValue === '1'  // Zaptec: state 1 = Disconnected
+        : charger.connection_type === 'loxone_api'
+            ? (stateDescription === 'Disconnected' || stateValue === '0')  // Loxone: state 0 = Disconnected
+            : stateValue === '50'; // WeidmÃ¼ller multi-UUID: state 50 = Idle
 
     // CRITICAL FIX: Always get session energy from zaptecStatus for Zaptec chargers
     const sessionEnergy = charger.connection_type === 'zaptec_api'
@@ -127,23 +141,6 @@ export default function ChargerCard({
 
     // Determine charger state for styling - use native Zaptec states
     const stateDisplay = getStateDisplay(charger, stateValue, t);
-
-    // State checks - handle Zaptec and Loxone chargers differently
-    const isCompleted = charger.connection_type === 'zaptec_api'
-        ? stateValue === '5'  // Zaptec: state 5 = Completed
-        : false; // Loxone doesn't have explicit completed state
-    
-    const isAwaitingStart = charger.connection_type === 'zaptec_api'
-        ? stateValue === '2'  // Zaptec: state 2 = Awaiting Start
-        : charger.connection_type === 'loxone_api'
-            ? false  // Loxone doesn't have this state
-            : stateValue === '66'; // WeidmÃ¼ller multi-UUID: state 66 = Awaiting Start
-    
-    const isDisconnected = charger.connection_type === 'zaptec_api'
-        ? stateValue === '1'  // Zaptec: state 1 = Disconnected
-        : charger.connection_type === 'loxone_api'
-            ? (stateDescription === 'Disconnected' || stateValue === '0')  // Loxone: state 0 = Disconnected
-            : stateValue === '50'; // WeidmÃ¼ller multi-UUID: state 50 = Idle
 
     // Calculate session duration properly - FIXED
     const calculateDuration = (startTimeStr: string): string => {
