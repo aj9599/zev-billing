@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aj9599/zev-billing/backend/services/loxone"
 	"github.com/aj9599/zev-billing/backend/services/zaptec"
 )
 
@@ -240,15 +241,15 @@ func (dc *DataCollector) GetZaptecLiveSession(chargerID int) (*zaptec.ZaptecSess
 // ========== NEW: LOXONE CHARGER LIVE DATA API ==========
 
 // GetLoxoneChargerLiveData returns Loxone charger live data for a specific charger
-func (dc *DataCollector) GetLoxoneChargerLiveData(chargerID int) (*LoxoneChargerLiveData, bool) {
+func (dc *DataCollector) GetLoxoneChargerLiveData(chargerID int) (*loxone.ChargerLiveData, bool) {
 	if dc.loxoneCollector == nil {
 		return nil, false
 	}
-	return dc.loxoneCollector.GetChargerLiveData(chargerID)
+	return dc.loxoneCollector.GetLiveChargerData(chargerID)
 }
 
 // GetLoxoneChargerActiveSession returns Loxone charger active session for a specific charger
-func (dc *DataCollector) GetLoxoneChargerActiveSession(chargerID int) (*LoxoneActiveChargerSession, bool) {
+func (dc *DataCollector) GetLoxoneChargerActiveSession(chargerID int) (*loxone.ActiveChargerSession, bool) {
 	if dc.loxoneCollector == nil {
 		return nil, false
 	}
