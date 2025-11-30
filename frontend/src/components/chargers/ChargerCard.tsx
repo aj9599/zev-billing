@@ -62,9 +62,17 @@ export default function ChargerCard({
             : liveData?.state ?? '0')
         : liveData?.state ?? '0';
 
+    // For Loxone chargers, check if we have a state description directly
+    const stateDescription = charger.connection_type === 'loxone_api'
+        ? liveData?.state_description
+        : undefined;
+
+    // Determine if charging based on connection type and state
     const isCharging = charger.connection_type === 'zaptec_api'
         ? stateValue === '3'  // Zaptec: state 3 = Charging
-        : stateValue === '67'; // Weidmüller: state 67 = Charging
+        : charger.connection_type === 'loxone_api'
+            ? (stateDescription === 'Charging' || stateValue === '1')  // Loxone: state 1 = Charging OR state_description = "Charging"
+            : stateValue === '67'; // WeidmÃ¼ller multi-UUID: state 67 = Charging
 
     const hasLiveSession = liveData?.live_session?.is_active || zaptecStatus?.live_session?.is_active;
 
@@ -74,7 +82,9 @@ export default function ChargerCard({
         : (liveData?.total_energy ?? 0);
 
     // FIXED: Session energy logic based on state
-    const isUnknownOrDisconnected = stateValue === '0' || stateValue === '1';
+    const isUnknownOrDisconnected = charger.connection_type === 'loxone_api'
+        ? (stateValue === '0' || stateDescription === 'Disconnected')  // Loxone: 0 = disconnected
+        : (stateValue === '0' || stateValue === '1');  // Zaptec/WeidmÃ¼ller states
     const isAwaitingStart = charger.connection_type === 'zaptec_api'
         ? stateValue === '2'
         : stateValue === '66';
@@ -100,27 +110,40 @@ export default function ChargerCard({
 
     console.log('[ChargerCard] Charging state:', {
         name: charger.name,
+        connection_type: charger.connection_type,
         state: stateValue,
+        state_description: stateDescription,
         isCharging,
         isUnknownOrDisconnected,
         isAwaitingStart,
         power: currentPowerKW,
         sessionEnergy,
+        totalEnergy,
         hasLiveSession,
         zaptecStatus: zaptecStatus,
+        loxoneStatus: loxoneStatus,
         liveData: liveData
     });
 
     // Determine charger state for styling - use native Zaptec states
     const stateDisplay = getStateDisplay(charger, stateValue, t);
 
-    // Zaptec states: 0=Unknown, 1=Disconnected, 2=Awaiting Start, 3=Charging, 5=Completed
+    // State checks - handle Zaptec and Loxone chargers differently
     const isCompleted = charger.connection_type === 'zaptec_api'
         ? stateValue === '5'  // Zaptec: state 5 = Completed
-        : false;
+        : false; // Loxone doesn't have explicit completed state
+    
+    const isAwaitingStart = charger.connection_type === 'zaptec_api'
+        ? stateValue === '2'  // Zaptec: state 2 = Awaiting Start
+        : charger.connection_type === 'loxone_api'
+            ? false  // Loxone doesn't have this state
+            : stateValue === '66'; // WeidmÃ¼ller multi-UUID: state 66 = Awaiting Start
+    
     const isDisconnected = charger.connection_type === 'zaptec_api'
         ? stateValue === '1'  // Zaptec: state 1 = Disconnected
-        : stateValue === '50'; // Weidmüller: state 50 = Idle
+        : charger.connection_type === 'loxone_api'
+            ? (stateDescription === 'Disconnected' || stateValue === '0')  // Loxone: state 0 = Disconnected
+            : stateValue === '50'; // WeidmÃ¼ller multi-UUID: state 50 = Idle
 
     // Calculate session duration properly - FIXED
     const calculateDuration = (startTimeStr: string): string => {
@@ -540,7 +563,7 @@ export default function ChargerCard({
                                     fontWeight: '600',
                                     color: '#2563eb'
                                 }}>
-                                    ✓ {t('chargers.state.completed')}
+                                    âœ“ {t('chargers.state.completed')}
                                 </div>
                             )}
                             {isAwaitingStart && (
@@ -553,7 +576,7 @@ export default function ChargerCard({
                                     fontWeight: '600',
                                     color: '#d97706'
                                 }}>
-                                    ⏳ {t('chargers.state.awaitingStart')}
+                                    â³ {t('chargers.state.awaitingStart')}
                                 </div>
                             )}
                             {isDisconnected && (
@@ -652,7 +675,7 @@ export default function ChargerCard({
                                 alignItems: 'center',
                                 gap: '8px'
                             }}>
-                                <span style={{ fontSize: '16px' }}>⏳</span>
+                                <span style={{ fontSize: '16px' }}>â³</span>
                                 <div style={{ flex: 1 }}>
                                     <div style={{
                                         fontSize: '11px',
@@ -687,7 +710,7 @@ export default function ChargerCard({
                                 <>
                                     <Wifi size={16} color="#22c55e" />
                                     <span style={{ fontSize: '12px', fontWeight: '600', color: '#22c55e' }}>
-                                        {t('chargers.status.connected') || 'Connected'} • {t('chargers.status.online')}
+                                        {t('chargers.status.connected') || 'Connected'} â€¢ {t('chargers.status.online')}
                                     </span>
                                 </>
                             ) : (

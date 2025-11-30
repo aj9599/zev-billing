@@ -17,7 +17,7 @@ export const getStateDisplay = (charger: Charger, stateValue?: string, t?: (key:
     }
   }
 
-  // For Weidmüller chargers, check the UUID mode from config
+  // For WeidmÃ¼ller chargers, check the UUID mode from config
   try {
     const config = JSON.parse(charger.connection_config);
     
@@ -30,7 +30,7 @@ export const getStateDisplay = (charger: Charger, stateValue?: string, t?: (key:
       }
     }
 
-    // For multi-UUID mode (original WeidmÃ¼ller), use config-based mapping
+    // For multi-UUID mode (original WeidmÃƒÂ¼ller), use config-based mapping
     if (stateStr === String(config.state_cable_locked).trim()) {
       return t?.('chargers.state.cableLocked') || 'Cable Locked';
     }
@@ -55,11 +55,11 @@ export const getModeDisplay = (charger: Charger, modeValue?: string, t?: (key: s
 
   const modeStr = String(modeValue).trim();
 
-  // For WeidmÃ¼ller chargers, check the UUID mode from config
+  // For WeidmÃƒÂ¼ller chargers, check the UUID mode from config
   try {
     const config = JSON.parse(charger.connection_config);
     
-    // For single-block mode (M values: 1-5=Solar, 99=Priority, 2=Normal)
+    // For single-block mode (M values: 1-5=Solar, 99=Priority, other=Normal)
     if (config.loxone_uuid_mode === 'single') {
       const modeNum = parseInt(modeStr);
       if (modeNum >= 1 && modeNum <= 5) {
@@ -68,9 +68,7 @@ export const getModeDisplay = (charger: Charger, modeValue?: string, t?: (key: s
       if (modeNum === 99) {
         return t?.('chargers.mode.priority') || 'Priority';
       }
-      if (modeNum === 2) {
-        return t?.('chargers.mode.normal') || 'Normal';
-      }
+      // Default to normal mode for any other value
       return t?.('chargers.mode.normal') || 'Normal';
     }
 

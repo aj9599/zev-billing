@@ -400,29 +400,30 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type LiveChargerData struct {
-		ChargerID      int              `json:"charger_id"`
-		ChargerName    string           `json:"charger_name"`
-		ConnectionType string           `json:"connection_type"`
-		PowerKWh       float64          `json:"power_kwh"`
-		State          string           `json:"state"`
-		Mode           string           `json:"mode"`
-		LastUpdate     string           `json:"last_update"`
-		TotalEnergy    float64          `json:"total_energy,omitempty"`
-		SessionEnergy  float64          `json:"session_energy,omitempty"`
-		IsOnline       bool             `json:"is_online,omitempty"`
-		CurrentPowerKW float64          `json:"current_power_kw,omitempty"`
-		Voltage        float64          `json:"voltage,omitempty"`
-		Current        float64          `json:"current,omitempty"`
-		LiveSession    *LiveSessionData `json:"live_session,omitempty"`
+		ChargerID        int              `json:"charger_id"`
+		ChargerName      string           `json:"charger_name"`
+		ConnectionType   string           `json:"connection_type"`
+		PowerKWh         float64          `json:"power_kwh"`
+		State            string           `json:"state"`
+		StateDescription string           `json:"state_description,omitempty"`
+		Mode             string           `json:"mode"`
+		LastUpdate       string           `json:"last_update"`
+		TotalEnergy      float64          `json:"total_energy,omitempty"`
+		SessionEnergy    float64          `json:"session_energy,omitempty"`
+		IsOnline         bool             `json:"is_online,omitempty"`
+		CurrentPowerKW   float64          `json:"current_power_kw,omitempty"`
+		Voltage          float64          `json:"voltage,omitempty"`
+		Current          float64          `json:"current,omitempty"`
+		LiveSession      *LiveSessionData `json:"live_session,omitempty"`
 		
 		// Enhanced Loxone statistics
-		LastSessionEnergy      float64 `json:"last_session_energy,omitempty"`
-		LastSessionDuration    float64 `json:"last_session_duration_sec,omitempty"`
-		WeeklyEnergy          float64 `json:"weekly_energy,omitempty"`
-		MonthlyEnergy         float64 `json:"monthly_energy,omitempty"`
-		LastMonthEnergy       float64 `json:"last_month_energy,omitempty"`
-		YearlyEnergy          float64 `json:"yearly_energy,omitempty"`
-		LastYearEnergy        float64 `json:"last_year_energy,omitempty"`
+		LastSessionEnergy   float64 `json:"last_session_energy,omitempty"`
+		LastSessionDuration float64 `json:"last_session_duration_sec,omitempty"`
+		WeeklyEnergy        float64 `json:"weekly_energy,omitempty"`
+		MonthlyEnergy       float64 `json:"monthly_energy,omitempty"`
+		LastMonthEnergy     float64 `json:"last_month_energy,omitempty"`
+		YearlyEnergy        float64 `json:"yearly_energy,omitempty"`
+		LastYearEnergy      float64 `json:"last_year_energy,omitempty"`
 	}
 
 	// Get all active chargers - NO ID parameter validation needed
@@ -533,11 +534,14 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 		// For Loxone chargers, get enhanced data from collector
 		if connectionType == "loxone_api" {
 			if loxoneData, exists := h.dataCollector.GetLoxoneChargerLiveData(chargerID); exists {
+				// Core live data
 				data.TotalEnergy = loxoneData.TotalEnergy_kWh
 				data.SessionEnergy = loxoneData.SessionEnergy_kWh
 				data.IsOnline = loxoneData.IsOnline
 				data.CurrentPowerKW = loxoneData.CurrentPower_kW
+				data.PowerKWh = loxoneData.TotalEnergy_kWh // Set PowerKWh for backward compatibility
 				data.State = loxoneData.State
+				data.StateDescription = loxoneData.StateDescription // Add state description
 				data.Mode = loxoneData.Mode
 				data.LastUpdate = loxoneData.Timestamp.Format("2006-01-02 15:04:05")
 
@@ -550,13 +554,14 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 				data.YearlyEnergy = loxoneData.YearlyEnergy_kWh
 				data.LastYearEnergy = loxoneData.LastYearEnergy_kWh
 
-				log.Printf("GetLiveData: Loxone charger %s - State: %s, Power: %.2f kW, Total: %.3f kWh, Session: %.3f kWh, Online: %t", 
-					chargerName, data.State, data.CurrentPowerKW, data.TotalEnergy, data.SessionEnergy, data.IsOnline)
+				log.Printf("GetLiveData: Loxone charger %s - State: %s (%s), Power: %.2f kW, Total: %.3f kWh, Session: %.3f kWh, Online: %t", 
+					chargerName, data.State, data.StateDescription, data.CurrentPowerKW, data.TotalEnergy, data.SessionEnergy, data.IsOnline)
 				log.Printf("  Enhanced stats - Weekly: %.2f, Monthly: %.2f, Yearly: %.2f kWh", 
 					data.WeeklyEnergy, data.MonthlyEnergy, data.YearlyEnergy)
 
-				// Get active session if available
+				// Get live session if available
 				if activeSession, hasSession := h.dataCollector.GetLoxoneChargerActiveSession(chargerID); hasSession {
+					// Validate the start time - don't send invalid timestamps
 					if !activeSession.StartTime.IsZero() {
 						duration := time.Since(activeSession.StartTime)
 						data.LiveSession = &LiveSessionData{
@@ -570,6 +575,8 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 						}
 						log.Printf("GetLiveData: Loxone charger %s - Active session, Energy: %.3f kWh, Duration: %s", 
 							chargerName, data.SessionEnergy, formatDuration(duration))
+					} else {
+						log.Printf("GetLiveData: Loxone charger %s - Active session has zero/invalid start time, skipping", chargerName)
 					}
 				}
 			} else {

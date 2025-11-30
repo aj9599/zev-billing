@@ -1278,6 +1278,11 @@ export const en: Translations = {
 
   // Session Information
   'chargers.session.lastSession': 'Last Session',
+  "chargers.loxoneUuidMode": "Loxone UUID Mode",
+  "chargers.loxoneUuidModeMulti": "Multi UUID (4 separate UUIDs)",
+  "chargers.loxoneUuidModeSingle": "Single Block UUID",
+  "chargers.loxoneUuidModeMultiHelp": "Uses 4 separate UUIDs for power, state, user ID, and mode. Traditional configuration method.",
+  "chargers.loxoneUuidModeSingleHelp": "Uses a single Charger Block UUID. Simplified configuration method.",
 
   // ============================================================================
   // BILLING
