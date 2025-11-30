@@ -2,7 +2,7 @@ import React from 'react';
 import { X, Info, Wifi, AlertCircle, Check } from 'lucide-react';
 import type { Charger, Building as BuildingType } from '../../types';
 import type { ChargerConnectionConfig } from './hooks/useChargerForm';
-import { CHARGER_PRESETS, getPreset } from '../chargerPresets';
+import { getPreset } from '../chargerPresets';
 
 interface ChargerFormModalProps {
   editingCharger: Charger | null;
@@ -31,10 +31,6 @@ export default function ChargerFormModal({
   onShowInstructions,
   t
 }: ChargerFormModalProps) {
-  const getCurrentPreset = () => {
-    return getPreset(formData.preset || 'weidmuller');
-  };
-
   // Determine mode based on CONNECTION_TYPE (not preset)
   const isSingleBlockMode = formData.connection_type === 'loxone_api_single';
   const isMultiUuidMode = formData.connection_type === 'loxone_api_multi';
@@ -99,7 +95,7 @@ export default function ChargerFormModal({
             />
           </div>
 
-          {/* Brand/Preset - Just Weidmüller, Zaptec, etc. */}
+          {/* Brand/Preset - Just WeidmÃ¼ller, Zaptec, etc. */}
           <div style={{ marginTop: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
               {t('chargers.brand')} *
@@ -110,11 +106,11 @@ export default function ChargerFormModal({
               onChange={(e) => onPresetChange(e.target.value)}
               style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
             >
-              <option value="weidmuller">Weidmüller</option>
+              <option value="weidmuller">WeidmÃ¼ller</option>
               <option value="zaptec">Zaptec</option>
             </select>
             <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-              {formData.brand === 'weidmuller' && 'Weidmüller AC Smart chargers'}
+              {formData.brand === 'weidmuller' && 'WeidmÃ¼ller AC Smart chargers'}
               {formData.brand === 'zaptec' && 'Zaptec Go/Pro chargers'}
             </p>
           </div>
@@ -150,7 +146,7 @@ export default function ChargerFormModal({
             >
               {formData.brand === 'weidmuller' && (
                 <>
-                  <option value="loxone_api_single">Loxone API (Single-Block UUID) ⭐ Recommended</option>
+                  <option value="loxone_api_single">Loxone API (Single-Block UUID) â­ Recommended</option>
                   <option value="loxone_api_multi">Loxone API (Multi-UUID) - Legacy</option>
                   <option value="modbus_tcp">Modbus TCP</option>
                   <option value="udp">UDP Listener</option>
@@ -168,7 +164,7 @@ export default function ChargerFormModal({
             )}
             {isMultiUuidMode && (
               <p style={{ fontSize: '12px', color: '#f59e0b', marginTop: '4px' }}>
-                ⚠️ Legacy mode: Requires 4 separate UUIDs (slower)
+                âš ï¸ Legacy mode: Requires 4 separate UUIDs (slower)
               </p>
             )}
           </div>
@@ -194,7 +190,7 @@ export default function ChargerFormModal({
                         name="loxone_mode" 
                         value="local"
                         checked={connectionConfig.loxone_connection_mode === 'local'}
-                        onChange={(e) => onConnectionConfigChange({ ...connectionConfig, loxone_connection_mode: 'local' })}
+                        onChange={() => onConnectionConfigChange({ ...connectionConfig, loxone_connection_mode: 'local' })}
                       />
                       <Wifi size={16} />
                       <span style={{ fontSize: '14px', fontWeight: '500' }}>Local IP</span>
@@ -205,7 +201,7 @@ export default function ChargerFormModal({
                         name="loxone_mode" 
                         value="remote"
                         checked={connectionConfig.loxone_connection_mode === 'remote'}
-                        onChange={(e) => onConnectionConfigChange({ ...connectionConfig, loxone_connection_mode: 'remote' })}
+                        onChange={() => onConnectionConfigChange({ ...connectionConfig, loxone_connection_mode: 'remote' })}
                       />
                       <Wifi size={16} />
                       <span style={{ fontSize: '14px', fontWeight: '500' }}>Remote (Cloud)</span>
@@ -245,7 +241,7 @@ export default function ChargerFormModal({
                       style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} 
                     />
                     <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                      Find in Loxone Config → Miniserver → Network → MAC Address
+                      Find in Loxone Config â†’ Miniserver â†’ Network â†’ MAC Address
                     </p>
                   </div>
                 )}
@@ -274,7 +270,7 @@ export default function ChargerFormModal({
                       required 
                       value={connectionConfig.loxone_password}
                       onChange={(e) => onConnectionConfigChange({ ...connectionConfig, loxone_password: e.target.value })}
-                      placeholder="••••••••"
+                      placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                       style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} 
                     />
                   </div>
@@ -310,13 +306,13 @@ export default function ChargerFormModal({
                         style={{ width: '100%', padding: '10px', border: '1px solid #3b82f6', borderRadius: '6px', fontFamily: 'monospace' }} 
                       />
                       <p style={{ fontSize: '11px', color: '#1e40af', marginTop: '6px' }}>
-                        ℹ️ Right-click the eMobility Charger BLOCK → Properties → Copy UUID
+                        â„¹ï¸ Right-click the eMobility Charger BLOCK â†’ Properties â†’ Copy UUID
                       </p>
                     </div>
 
                     <div style={{ marginTop: '12px', padding: '12px', backgroundColor: '#eff6ff', borderRadius: '6px', border: '1px solid #93c5fd' }}>
                       <p style={{ fontSize: '11px', color: '#1e40af', fontWeight: '600', marginBottom: '6px' }}>
-                        ✨ Features with Single-Block Mode:
+                        âœ¨ Features with Single-Block Mode:
                       </p>
                       <ul style={{ fontSize: '11px', color: '#1e40af', margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
                         <li>All 23 outputs in one request (4x faster)</li>
@@ -403,7 +399,7 @@ export default function ChargerFormModal({
 
                     <div style={{ marginTop: '12px', padding: '12px', backgroundColor: '#fef9c3', borderRadius: '6px', border: '1px solid #fde047' }}>
                       <p style={{ fontSize: '11px', color: '#92400e', fontWeight: '600', marginBottom: '6px' }}>
-                        💡 Tip: Consider upgrading to Single-Block mode for:
+                        ðŸ’¡ Tip: Consider upgrading to Single-Block mode for:
                       </p>
                       <ul style={{ fontSize: '11px', color: '#92400e', margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
                         <li>4x faster data collection (1 request instead of 4)</li>
@@ -445,7 +441,7 @@ export default function ChargerFormModal({
                       required 
                       value={connectionConfig.zaptec_password}
                       onChange={(e) => onConnectionConfigChange({ ...connectionConfig, zaptec_password: e.target.value })}
-                      placeholder="••••••••"
+                      placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                       style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} 
                     />
                   </div>
@@ -462,7 +458,7 @@ export default function ChargerFormModal({
                       style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }} 
                     />
                     <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                      Find in Zaptec Portal → Chargers → Charger Details
+                      Find in Zaptec Portal â†’ Chargers â†’ Charger Details
                     </p>
                   </div>
                   <div>
