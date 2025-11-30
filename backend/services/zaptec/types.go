@@ -180,3 +180,9 @@ type ConnectionConfig struct {
 
 // ChargerData is an alias for backward compatibility
 type ChargerData = LiveData
+
+// ZaptecChargerData is an alias for backward compatibility with old code
+type ZaptecChargerData = LiveData
+
+// ZaptecSessionData is an alias for backward compatibility with old code
+type ZaptecSessionData = SessionData
