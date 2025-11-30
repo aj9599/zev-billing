@@ -6,6 +6,8 @@ import (
 	"log"
 	"sync"
 	"time"
+
+	"github.com/aj9599/zev-billing/backend/services/zaptec"
 )
 
 // DataCollector is the main coordinator that manages all specialized collectors
@@ -220,7 +222,7 @@ func (dc *DataCollector) GetSmartMeCollector() *SmartMeCollector {
 }
 
 // GetZaptecChargerData returns Zaptec charger data for a specific charger
-func (dc *DataCollector) GetZaptecChargerData(chargerID int) (*ZaptecChargerData, bool) {
+func (dc *DataCollector) GetZaptecChargerData(chargerID int) (*zaptec.ZaptecChargerData, bool) {
 	if dc.zaptecCollector == nil {
 		return nil, false
 	}
@@ -228,7 +230,7 @@ func (dc *DataCollector) GetZaptecChargerData(chargerID int) (*ZaptecChargerData
 }
 
 // GetZaptecLiveSession returns Zaptec live session data for a specific charger
-func (dc *DataCollector) GetZaptecLiveSession(chargerID int) (*ZaptecSessionData, bool) {
+func (dc *DataCollector) GetZaptecLiveSession(chargerID int) (*zaptec.ZaptecSessionData, bool) {
 	if dc.zaptecCollector == nil {
 		return nil, false
 	}
