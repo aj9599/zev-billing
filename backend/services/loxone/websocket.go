@@ -156,7 +156,7 @@ func (conn *WebSocketConnection) requestData() {
 			conn.CollectionInProgress = false
 			conn.Mu.Unlock()
 
-			go conn.ConnectWithBackoff(conn.Db, nil)
+			go conn.ConnectWithBackoff(conn.Db, conn.Collector)
 			return
 		}
 

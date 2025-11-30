@@ -511,7 +511,7 @@ func (lc *LoxoneCollector) loadMeters(connectionDevices map[string]*loxone.WebSo
 				actualHost = host
 			}
 
-			conn = loxone.NewWebSocketConnection(actualHost, username, password, macAddress, connectionMode == "remote", lc.db)
+			conn = loxone.NewWebSocketConnection(actualHost, username, password, macAddress, connectionMode == "remote", lc.db, lc)
 			connectionDevices[connKey] = conn
 			if connectionMode == "remote" {
 				log.Printf("   🌐 Created new REMOTE WebSocket connection via Loxone Cloud DNS")
@@ -655,7 +655,7 @@ func (lc *LoxoneCollector) loadChargers(connectionDevices map[string]*loxone.Web
 				actualHost = host
 			}
 
-			conn = loxone.NewWebSocketConnection(actualHost, username, password, macAddress, connectionMode == "remote", lc.db)
+			conn = loxone.NewWebSocketConnection(actualHost, username, password, macAddress, connectionMode == "remote", lc.db, lc)
 			connectionDevices[connKey] = conn
 
 			// Log connection type

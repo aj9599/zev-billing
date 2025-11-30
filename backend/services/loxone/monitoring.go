@@ -53,7 +53,7 @@ func (conn *WebSocketConnection) keepalive() {
 				conn.logToDatabase("Loxone Keepalive Failed",
 					fmt.Sprintf("Host '%s': %v - triggering reconnect", conn.Host, err))
 
-				go conn.ConnectWithBackoff(conn.Db, nil)
+				go conn.ConnectWithBackoff(conn.Db, conn.Collector)
 				return
 			}
 
@@ -135,7 +135,7 @@ func (conn *WebSocketConnection) monitorTokenExpiry(db *sql.DB) {
 
 					if !isShuttingDown {
 						log.Printf("🔄 [%s] Triggering automatic reconnect", conn.Host)
-						go conn.ConnectWithBackoff(db, nil)
+						go conn.ConnectWithBackoff(db, conn.Collector)
 					}
 					return
 				}
@@ -202,7 +202,7 @@ func (conn *WebSocketConnection) monitorDNSChanges() {
 				conn.IsConnected = false
 				conn.Mu.Unlock()
 
-				go conn.ConnectWithBackoff(conn.Db, nil)
+				go conn.ConnectWithBackoff(conn.Db, conn.Collector)
 				return
 			}
 

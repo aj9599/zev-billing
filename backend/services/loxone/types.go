@@ -190,6 +190,7 @@ type WebSocketConnection struct {
 	IsShuttingDown bool // Flag to prevent reconnection during shutdown
 	Mu             sync.Mutex
 	Db             *sql.DB
+    Collector      LoxoneCollectorInterface
 }
 
 // ========== DEVICE ==========

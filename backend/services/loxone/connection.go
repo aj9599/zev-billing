@@ -31,8 +31,8 @@ type LoxoneCollectorInterface interface {
 }
 
 // NewWebSocketConnection creates a new WebSocket connection
-func NewWebSocketConnection(host, username, password, macAddress string, isRemote bool, db *sql.DB) *WebSocketConnection {
-	conn := &WebSocketConnection{
+func NewWebSocketConnection(host, username, password, macAddress string, isRemote bool, db *sql.DB, collector LoxoneCollectorInterface) *WebSocketConnection {
+    conn := &WebSocketConnection{
 		Host:             host,
 		Username:         username,
 		Password:         password,
@@ -43,6 +43,7 @@ func NewWebSocketConnection(host, username, password, macAddress string, isRemot
 		Db:               db,
 		IsShuttingDown:   false,
 		ReconnectAttempt: 0,
+		Collector:        collector,
 	}
 
 	// Different backoff strategy for remote vs local
