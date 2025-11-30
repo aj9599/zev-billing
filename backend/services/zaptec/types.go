@@ -1,6 +1,9 @@
 package zaptec
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // ========== LIVE DATA TYPES ==========
 
@@ -174,9 +177,6 @@ type ConnectionConfig struct {
 }
 
 // ========== LEGACY COMPATIBILITY ==========
-
-// Import json for APIResponse
-import "encoding/json"
 
 // ChargerData is an alias for backward compatibility
 type ChargerData = LiveData
