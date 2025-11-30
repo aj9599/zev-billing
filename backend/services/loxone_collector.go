@@ -527,7 +527,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 			}
 
 			meterCount++
-			log.Println("──────────────────────────────────────────────────────────────")
+			log.Println("────────────────────────────────────────────────────────────")
 			log.Printf("📊 FOUND LOXONE METER #%d", meterCount)
 			log.Printf("   Name: '%s'", name)
 			log.Printf("   ID: %d", id)
@@ -654,7 +654,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 				if connectionMode == "remote" {
 					log.Printf("   🌐 Created new REMOTE WebSocket connection via Loxone Cloud DNS")
 				} else {
-					log.Printf("   📉 Created new LOCAL WebSocket connection for %s", host)
+					log.Printf("   📡 Created new LOCAL WebSocket connection for %s", host)
 				}
 			} else {
 				log.Printf("   ♻️  Reusing existing WebSocket connection for %s", host)
@@ -674,7 +674,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 		log.Printf("✔️ Loaded %d Loxone meters", meterCount)
 	}
 
-	// Load chargers
+	// Load chargers - UPDATED TO SUPPORT REMOTE CONNECTIONS
 	chargerRows, err := lc.db.Query(`
 		SELECT id, name, preset, connection_config
 		FROM chargers 
@@ -697,7 +697,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 			}
 
 			chargerCount++
-			log.Println("────────────────────────────────────────────────────────────────")
+			log.Println("────────────────────────────────────────────────────────────")
 			log.Printf("🔌 FOUND LOXONE CHARGER #%d", chargerCount)
 			log.Printf("   Name: '%s'", name)
 			log.Printf("   ID: %d", id)
@@ -710,7 +710,10 @@ func (lc *LoxoneCollector) initializeConnections() {
 				continue
 			}
 
+			// UPDATED: Read MAC address and connection mode for chargers
 			host, _ := config["loxone_host"].(string)
+			macAddress, _ := config["loxone_mac_address"].(string)
+			connectionMode, _ := config["loxone_connection_mode"].(string)
 			username, _ := config["loxone_username"].(string)
 			password, _ := config["loxone_password"].(string)
 
@@ -723,7 +726,13 @@ func (lc *LoxoneCollector) initializeConnections() {
 			userIDUUID, _ := config["loxone_user_id_uuid"].(string)
 			modeUUID, _ := config["loxone_mode_uuid"].(string)
 
-			log.Printf("   ├─ Host: %s", host)
+			// UPDATED: Log connection mode for chargers
+			log.Printf("   ├─ Connection Mode: %s", connectionMode)
+			if connectionMode == "remote" {
+				log.Printf("   ├─ MAC Address: %s", macAddress)
+			} else {
+				log.Printf("   ├─ Host: %s", host)
+			}
 			log.Printf("   ├─ Username: %s", username)
 
 			// Determine which mode we're using
@@ -731,9 +740,17 @@ func (lc *LoxoneCollector) initializeConnections() {
 				log.Printf("   ├─ Mode: Single-block (Weidmüller) - SESSION TRACKING ENABLED")
 				log.Printf("   └─ Charger Block UUID: %s", chargerBlockUUID)
 
-				if host == "" || chargerBlockUUID == "" {
-					log.Printf("   ⚠️  WARNING: Incomplete config - missing host or block UUID - skipping")
-					continue
+				// UPDATED: Validate based on connection mode
+				if connectionMode == "remote" {
+					if macAddress == "" || chargerBlockUUID == "" {
+						log.Printf("   ⚠️  WARNING: Incomplete remote config - missing MAC or block UUID - skipping")
+						continue
+					}
+				} else {
+					if host == "" || chargerBlockUUID == "" {
+						log.Printf("   ⚠️  WARNING: Incomplete local config - missing host or block UUID - skipping")
+						continue
+					}
 				}
 			} else {
 				log.Printf("   ├─ Mode: Multi-UUID (traditional)")
@@ -742,34 +759,90 @@ func (lc *LoxoneCollector) initializeConnections() {
 				log.Printf("   ├─ User ID UUID: %s", userIDUUID)
 				log.Printf("   └─ Mode UUID: %s", modeUUID)
 
-				if host == "" || powerUUID == "" || stateUUID == "" || userIDUUID == "" || modeUUID == "" {
-					log.Printf("   ⚠️  WARNING: Incomplete config - missing host or UUIDs - skipping")
-					continue
+				// UPDATED: Validate based on connection mode
+				if connectionMode == "remote" {
+					if macAddress == "" || powerUUID == "" || stateUUID == "" || userIDUUID == "" || modeUUID == "" {
+						log.Printf("   ⚠️  WARNING: Incomplete remote config - missing MAC or UUIDs - skipping")
+						continue
+					}
+				} else {
+					if host == "" || powerUUID == "" || stateUUID == "" || userIDUUID == "" || modeUUID == "" {
+						log.Printf("   ⚠️  WARNING: Incomplete local config - missing host or UUIDs - skipping")
+						continue
+					}
 				}
 			}
 
-			connKey := fmt.Sprintf("local|%s|%s|%s", host, username, password)
+			// UPDATED: Create connection key based on mode (remote or local)
+			var connKey string
+			if connectionMode == "remote" {
+				connKey = fmt.Sprintf("remote|%s|%s|%s", macAddress, username, password)
+			} else {
+				connKey = fmt.Sprintf("local|%s|%s|%s", host, username, password)
+			}
 
 			conn, exists := connectionDevices[connKey]
 			if !exists {
+				// UPDATED: Determine the host URL based on connection mode
+				var actualHost string
+				if connectionMode == "remote" {
+					actualHost = fmt.Sprintf("dns.loxonecloud.com/%s", macAddress)
+				} else {
+					actualHost = host
+				}
+
 				conn = &LoxoneWebSocketConnection{
-					Host:             host,
+					Host:             actualHost,
 					Username:         username,
 					Password:         password,
+					MacAddress:       macAddress,
+					IsRemote:         connectionMode == "remote",
 					devices:          []*LoxoneDevice{},
 					stopChan:         make(chan bool),
 					db:               lc.db,
 					isShuttingDown:   false,
 					reconnectAttempt: 0,
-					reconnectBackoff: 1 * time.Second,
-					maxBackoff:       15 * time.Second,
-					dnsCache:         nil,
 					collector:        lc, // NEW: Reference to parent collector
+
+					// UPDATED: Different backoff strategy for remote vs local
+					reconnectBackoff: func() time.Duration {
+						if connectionMode == "remote" {
+							return 10 * time.Second // Remote: start slower (10s vs 2s)
+						}
+						return 1 * time.Second // Local: fast reconnect
+					}(),
+					maxBackoff: func() time.Duration {
+						if connectionMode == "remote" {
+							return 300 * time.Second // Remote: max 5 minutes
+						}
+						return 15 * time.Second // Local: max 30 seconds
+					}(),
+
+					// UPDATED: DNS cache for remote connections
+					dnsCache: func() *DNSCache {
+						if connectionMode == "remote" {
+							return &DNSCache{
+								macAddress: macAddress,
+								cacheTTL:   5 * time.Minute,
+							}
+						}
+						return nil
+					}(),
 				}
 				connectionDevices[connKey] = conn
-				log.Printf("   📉 Created new WebSocket connection for %s", host)
+				
+				// UPDATED: Log connection type
+				if connectionMode == "remote" {
+					log.Printf("   🌐 Created new REMOTE WebSocket connection via Loxone Cloud DNS")
+				} else {
+					log.Printf("   📡 Created new LOCAL WebSocket connection for %s", host)
+				}
 			} else {
-				log.Printf("   ♻️  Reusing existing WebSocket connection for %s", host)
+				if connectionMode == "remote" {
+					log.Printf("   ♻️  Reusing existing REMOTE WebSocket connection")
+				} else {
+					log.Printf("   ♻️  Reusing existing LOCAL WebSocket connection for %s", host)
+				}
 			}
 
 			device := &LoxoneDevice{
@@ -803,7 +876,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 	for key, conn := range connectionDevices {
 		lc.connections[key] = conn
 		deviceCount := len(conn.devices)
-		log.Println("──────────────────────────────────────────────────────────────")
+		log.Println("────────────────────────────────────────────────────────────")
 		log.Printf("🚀 STARTING CONNECTION: %s", key)
 		log.Printf("   Devices on this connection: %d", deviceCount)
 		for _, dev := range conn.devices {
@@ -822,7 +895,7 @@ func (lc *LoxoneCollector) initializeConnections() {
 		log.Println("ℹ️  NO LOXONE API DEVICES FOUND IN DATABASE")
 		lc.logToDatabase("Loxone No Devices", "No Loxone API devices found in database")
 	} else {
-		log.Println("──────────────────────────────────────────────────────────────")
+		log.Println("────────────────────────────────────────────────────────────")
 		log.Printf("✔️ INITIALIZED %d WEBSOCKET CONNECTIONS FOR %d DEVICES",
 			len(connectionDevices), totalDevices)
 		lc.logToDatabase("Loxone Devices Initialized",
@@ -845,7 +918,7 @@ func (lc *LoxoneCollector) monitorConnections() {
 		totalAuthFailures := 0
 		totalReconnects := 0
 
-		log.Println("──────────────────────────────────────────────────────────────")
+		log.Println("────────────────────────────────────────────────────────────")
 		log.Println("🔍 LOXONE CONNECTION STATUS CHECK")
 
 		for key, conn := range lc.connections {
@@ -900,7 +973,7 @@ func (lc *LoxoneCollector) monitorConnections() {
 		log.Printf("📊 Charger Sessions: %d active", activeSessionCount)
 		log.Printf("📊 Metrics: %d total auth failures, %d total reconnects",
 			totalAuthFailures, totalReconnects)
-		log.Println("──────────────────────────────────────────────────────────────")
+		log.Println("────────────────────────────────────────────────────────────")
 
 		if disconnectedCount > 0 {
 			lc.logToDatabase("Loxone Status Check",
@@ -1450,9 +1523,9 @@ func (conn *LoxoneWebSocketConnection) ConnectWithBackoff(db *sql.DB) {
 			time.Sleep(backoffWithJitter)
 		}
 
-		log.Println("├───────────────────────────────────────────────────────────────")
+		log.Println("├────────────────────────────────────────────────────────────")
 		log.Printf("│ 💗 CONNECTING: %s (attempt %d/%d)", conn.Host, attempt, maxRetries)
-		log.Println("└───────────────────────────────────────────────────────────────")
+		log.Println("└────────────────────────────────────────────────────────────")
 
 		// CRITICAL FIX: Check if this is a remote connection and ALWAYS re-resolve DNS
 		// before each connection attempt to get the current host/port
@@ -1647,11 +1720,11 @@ func (conn *LoxoneWebSocketConnection) performConnection(ws *websocket.Conn, db 
 	deviceCount := len(conn.devices)
 	conn.mu.Unlock()
 
-	log.Println("├───────────────────────────────────────────────────────────────")
+	log.Println("├────────────────────────────────────────────────────────────")
 	log.Printf("│ ✔️ CONNECTION ESTABLISHED!         │")
 	log.Printf("│ Host: %-27s│", conn.Host)
 	log.Printf("│ Devices: %-24d│", deviceCount)
-	log.Println("└───────────────────────────────────────────────────────────────")
+	log.Println("└────────────────────────────────────────────────────────────")
 
 	conn.updateDeviceStatus(db, fmt.Sprintf("🟢 Connected at %s", time.Now().Format("2006-01-02 15:04:05")))
 	conn.logToDatabase("Loxone Connected",
@@ -2016,7 +2089,7 @@ func (conn *LoxoneWebSocketConnection) keepalive() {
 func (conn *LoxoneWebSocketConnection) monitorTokenExpiry(db *sql.DB) {
 	defer conn.goroutinesWg.Done()
 
-	log.Printf("🔒 TOKEN MONITOR STARTED for %s (collection-window aware)", conn.Host)
+	log.Printf("🔑 TOKEN MONITOR STARTED for %s (collection-window aware)", conn.Host)
 
 	// Check every 3 minutes instead of 5
 	ticker := time.NewTicker(3 * time.Minute)
@@ -2160,8 +2233,8 @@ func (conn *LoxoneWebSocketConnection) requestData() {
 		devices := conn.devices
 		conn.mu.Unlock()
 
-		log.Println("──────────────────────────────────────────────────────────────")
-		log.Printf("📉 [%s] REQUESTING DATA FOR %d DEVICES", conn.Host, len(devices))
+		log.Println("────────────────────────────────────────────────────────────")
+		log.Printf("📡 [%s] REQUESTING DATA FOR %d DEVICES", conn.Host, len(devices))
 		log.Printf("   Time: %s", time.Now().Format("15:04:05"))
 
 		requestFailed := false
@@ -2420,7 +2493,7 @@ func (conn *LoxoneWebSocketConnection) readLoop(db *sql.DB) {
 
 			// Check for auth/permission errors in response
 			if response.LL.Code == "401" || response.LL.Code == "403" {
-				log.Printf("🔑 [%s] Auth error detected in response (code: %s)", conn.Host, response.LL.Code)
+				log.Printf("🔒 [%s] Auth error detected in response (code: %s)", conn.Host, response.LL.Code)
 
 				conn.mu.Lock()
 				conn.tokenValid = false
