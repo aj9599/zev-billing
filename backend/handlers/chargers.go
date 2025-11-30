@@ -414,6 +414,15 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 		Voltage        float64          `json:"voltage,omitempty"`
 		Current        float64          `json:"current,omitempty"`
 		LiveSession    *LiveSessionData `json:"live_session,omitempty"`
+		
+		// Enhanced Loxone statistics
+		LastSessionEnergy      float64 `json:"last_session_energy,omitempty"`
+		LastSessionDuration    float64 `json:"last_session_duration_sec,omitempty"`
+		WeeklyEnergy          float64 `json:"weekly_energy,omitempty"`
+		MonthlyEnergy         float64 `json:"monthly_energy,omitempty"`
+		LastMonthEnergy       float64 `json:"last_month_energy,omitempty"`
+		YearlyEnergy          float64 `json:"yearly_energy,omitempty"`
+		LastYearEnergy        float64 `json:"last_year_energy,omitempty"`
 	}
 
 	// Get all active chargers - NO ID parameter validation needed
@@ -518,6 +527,53 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 				}
 			} else {
 				log.Printf("GetLiveData: No Zaptec data available for charger %s", chargerName)
+			}
+		}
+
+		// For Loxone chargers, get enhanced data from collector
+		if connectionType == "loxone_api" {
+			if loxoneData, exists := h.dataCollector.GetLoxoneChargerLiveData(chargerID); exists {
+				data.TotalEnergy = loxoneData.TotalEnergy_kWh
+				data.SessionEnergy = loxoneData.SessionEnergy_kWh
+				data.IsOnline = loxoneData.IsOnline
+				data.CurrentPowerKW = loxoneData.CurrentPower_kW
+				data.State = loxoneData.State
+				data.Mode = loxoneData.Mode
+				data.LastUpdate = loxoneData.Timestamp.Format("2006-01-02 15:04:05")
+
+				// Enhanced statistics - ALWAYS populate if available
+				data.LastSessionEnergy = loxoneData.LastSessionEnergy_kWh
+				data.LastSessionDuration = loxoneData.LastSessionDuration_sec
+				data.WeeklyEnergy = loxoneData.WeeklyEnergy_kWh
+				data.MonthlyEnergy = loxoneData.MonthlyEnergy_kWh
+				data.LastMonthEnergy = loxoneData.LastMonthEnergy_kWh
+				data.YearlyEnergy = loxoneData.YearlyEnergy_kWh
+				data.LastYearEnergy = loxoneData.LastYearEnergy_kWh
+
+				log.Printf("GetLiveData: Loxone charger %s - State: %s, Power: %.2f kW, Total: %.3f kWh, Session: %.3f kWh, Online: %t", 
+					chargerName, data.State, data.CurrentPowerKW, data.TotalEnergy, data.SessionEnergy, data.IsOnline)
+				log.Printf("  Enhanced stats - Weekly: %.2f, Monthly: %.2f, Yearly: %.2f kWh", 
+					data.WeeklyEnergy, data.MonthlyEnergy, data.YearlyEnergy)
+
+				// Get active session if available
+				if activeSession, hasSession := h.dataCollector.GetLoxoneChargerActiveSession(chargerID); hasSession {
+					if !activeSession.StartTime.IsZero() {
+						duration := time.Since(activeSession.StartTime)
+						data.LiveSession = &LiveSessionData{
+							SessionID: fmt.Sprintf("loxone-%d-%s", chargerID, activeSession.StartTime.Format("20060102150405")),
+							Energy:    data.SessionEnergy,
+							StartTime: activeSession.StartTime.Format(time.RFC3339),
+							Duration:  formatDuration(duration),
+							UserName:  activeSession.UserID,
+							IsActive:  loxoneData.ChargingActive,
+							PowerKW:   data.CurrentPowerKW,
+						}
+						log.Printf("GetLiveData: Loxone charger %s - Active session, Energy: %.3f kWh, Duration: %s", 
+							chargerName, data.SessionEnergy, formatDuration(duration))
+					}
+				}
+			} else {
+				log.Printf("GetLiveData: No Loxone data available for charger %s", chargerName)
 			}
 		}
 
