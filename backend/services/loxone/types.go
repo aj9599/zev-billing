@@ -102,6 +102,15 @@ type ChargerLiveData struct {
 	// Session timing
 	SessionStart time.Time
 	Timestamp    time.Time
+
+	// Enhanced live data fields (from Loxone block outputs)
+	LastSessionEnergy_kWh    float64 // Clc - output9 - Last completed session energy
+	LastSessionDuration_sec  float64 // Cld - output11 - Last session duration (converted from hours to seconds)
+	WeeklyEnergy_kWh         float64 // Cw - output12 - Weekly total energy
+	MonthlyEnergy_kWh        float64 // Cm - output13 - Monthly total energy
+	LastMonthEnergy_kWh      float64 // Clm - output14 - Previous month total energy
+	YearlyEnergy_kWh         float64 // Cy - output15 - Yearly total energy
+	LastYearEnergy_kWh       float64 // Cly - output16 - Previous year total energy
 }
 
 // ChargerSessionReading represents a single 15-min interval reading during a session
@@ -134,6 +143,7 @@ type CompletedChargerSession struct {
 	StartEnergy_kWh float64
 	EndEnergy_kWh   float64
 	TotalEnergy_kWh float64
+	Duration_sec    float64   // Session duration in seconds (from Lcl)
 	Mode            string
 	Readings        []ChargerSessionReading
 }

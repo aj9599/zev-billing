@@ -11,18 +11,18 @@ import (
 
 // processChargerField processes individual charger UUID data (multi-UUID mode)
 func (conn *WebSocketConnection) processChargerField(device *Device, response LoxoneResponse, fieldName string, collection *ChargerDataCollection, db *sql.DB) {
-	log.Printf("   🔍 [%s] Processing field '%s'", device.Name, fieldName)
-	log.Printf("   🔍 Response Control: %s", response.LL.Control)
-	log.Printf("   🔍 Response Code: %s", response.LL.Code)
-	log.Printf("   🔍 Response Value: %s", response.LL.Value)
-	log.Printf("   🔍 Number of outputs: %d", len(response.LL.Outputs))
+	log.Printf("   📋 [%s] Processing field '%s'", device.Name, fieldName)
+	log.Printf("   📋 Response Control: %s", response.LL.Control)
+	log.Printf("   📋 Response Code: %s", response.LL.Code)
+	log.Printf("   📋 Response Value: %s", response.LL.Value)
+	log.Printf("   📋 Number of outputs: %d", len(response.LL.Outputs))
 
 	for key := range response.LL.Outputs {
-		log.Printf("   🔍 Found output key: %s", key)
+		log.Printf("   📋 Found output key: %s", key)
 	}
 
 	if output1, ok := response.LL.Outputs["output1"]; ok {
-		log.Printf("   🔍 output1 found - Value type: %T, Value: %v", output1.Value, output1.Value)
+		log.Printf("   📋 output1 found - Value type: %T, Value: %v", output1.Value, output1.Value)
 		switch fieldName {
 		case "power":
 			var power float64
@@ -34,11 +34,11 @@ func (conn *WebSocketConnection) processChargerField(device *Device, response Lo
 				if f, err := strconv.ParseFloat(cleanValue, 64); err == nil {
 					power = f
 				} else {
-					log.Printf("   ⚠️  [%s] Failed to parse power from output1: '%s' (err: %v)", device.Name, v, err)
+					log.Printf("   ⚠️ [%s] Failed to parse power from output1: '%s' (err: %v)", device.Name, v, err)
 				}
 			}
 			collection.Power = &power
-			log.Printf("   📜 [%s] Received power: %.4f kWh", device.Name, power)
+			log.Printf("   📊 [%s] Received power: %.4f kWh", device.Name, power)
 
 		case "state":
 			var state string
@@ -71,7 +71,7 @@ func (conn *WebSocketConnection) processChargerField(device *Device, response Lo
 				mode = fmt.Sprintf("%.0f", v)
 			}
 			collection.Mode = &mode
-			log.Printf("   ⚙️  [%s] Received mode: %s", device.Name, mode)
+			log.Printf("   ⚙️ [%s] Received mode: %s", device.Name, mode)
 		}
 
 		hasAll := collection.Power != nil && collection.State != nil &&
@@ -93,17 +93,17 @@ func (conn *WebSocketConnection) processChargerField(device *Device, response Lo
 			collection.Mode = nil
 		}
 	} else {
-		log.Printf("   ⚠️  [%s] output1 not found in response for field '%s'", device.Name, fieldName)
+		log.Printf("   ⚠️ [%s] output1 not found in response for field '%s'", device.Name, fieldName)
 
 		if response.LL.Value != "" {
-			log.Printf("   🔍 Trying to use response.LL.Value: %s", response.LL.Value)
+			log.Printf("   📋 Trying to use response.LL.Value: %s", response.LL.Value)
 
 			switch fieldName {
 			case "power":
 				cleanValue := StripUnitSuffix(response.LL.Value)
 				if f, err := strconv.ParseFloat(cleanValue, 64); err == nil {
 					collection.Power = &f
-					log.Printf("   📜 [%s] Received power from Value: %.4f kWh (from '%s')", device.Name, f, response.LL.Value)
+					log.Printf("   📊 [%s] Received power from Value: %.4f kWh (from '%s')", device.Name, f, response.LL.Value)
 				} else {
 					log.Printf("   ❌ [%s] Failed to parse power from Value: '%s' (err: %v)", device.Name, response.LL.Value, err)
 				}
@@ -118,7 +118,7 @@ func (conn *WebSocketConnection) processChargerField(device *Device, response Lo
 			case "mode":
 				mode := response.LL.Value
 				collection.Mode = &mode
-				log.Printf("   ⚙️  [%s] Received mode from Value: %s", device.Name, mode)
+				log.Printf("   ⚙️ [%s] Received mode from Value: %s", device.Name, mode)
 			}
 
 			hasAll := collection.Power != nil && collection.State != nil &&
@@ -147,18 +147,25 @@ func (conn *WebSocketConnection) processChargerField(device *Device, response Lo
 
 // processChargerSingleBlock processes all charger data from a single Loxone response
 func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, response LoxoneResponse, db *sql.DB, collector LoxoneCollectorInterface) {
-	log.Printf("   🔍 [%s] Processing single-block response (session tracking mode)", device.Name)
+	log.Printf("   📋 [%s] Processing single-block response (enhanced session tracking)", device.Name)
 	log.Printf("   📦 Number of outputs: %d", len(response.LL.Outputs))
 
-	// Extract values from the response outputs
-	var totalEnergyKWh float64
-	var chargingPowerKW float64
-	var modeValue string
-	var userID string
-	var vehicleConnected int
-	var chargingActive int
-	var currentSessionEnergyKWh float64
-	var lastSessionLog string
+	// Extract all values from the response outputs
+	var totalEnergyKWh float64          // Mr - output7
+	var chargingPowerKW float64         // Cp - output3
+	var modeValue string                // M - output4
+	var userID string                   // Uid - output21
+	var vehicleConnected int            // Vc - output1
+	var chargingActive int              // Cac - output2
+	var currentSessionEnergyKWh float64 // Ccc - output8
+	var lastSessionEnergyKWh float64    // Clc - output9
+	var lastSessionDurationSec float64  // Cld - output11 (in hours, need to convert)
+	var weeklyEnergyKWh float64         // Cw - output12
+	var monthlyEnergyKWh float64        // Cm - output13
+	var lastMonthEnergyKWh float64      // Clm - output14
+	var yearlyEnergyKWh float64         // Cy - output15
+	var lastYearEnergyKWh float64       // Cly - output16
+	var lastSessionLog string           // Lcl - output17
 
 	// Extract output1 (Vc) - Vehicle Connected
 	if output1, ok := response.LL.Outputs["output1"]; ok {
@@ -239,6 +246,104 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 		log.Printf("      ├─ output8 (Ccc - Current Session Energy): %.3f kWh", currentSessionEnergyKWh)
 	}
 
+	// Extract output9 (Clc) - Last Session Energy
+	if output9, ok := response.LL.Outputs["output9"]; ok {
+		switch v := output9.Value.(type) {
+		case float64:
+			lastSessionEnergyKWh = v
+		case string:
+			cleanValue := StripUnitSuffix(v)
+			if f, err := strconv.ParseFloat(cleanValue, 64); err == nil {
+				lastSessionEnergyKWh = f
+			}
+		}
+		log.Printf("      ├─ output9 (Clc - Last Session Energy): %.3f kWh", lastSessionEnergyKWh)
+	}
+
+	// Extract output11 (Cld) - Last Session Duration (in hours)
+	if output11, ok := response.LL.Outputs["output11"]; ok {
+		switch v := output11.Value.(type) {
+		case float64:
+			lastSessionDurationSec = v * 3600 // Convert hours to seconds
+		case string:
+			cleanValue := StripUnitSuffix(v)
+			if f, err := strconv.ParseFloat(cleanValue, 64); err == nil {
+				lastSessionDurationSec = f * 3600
+			}
+		}
+		log.Printf("      ├─ output11 (Cld - Last Session Duration): %.3f hours (%.0f seconds)", lastSessionDurationSec/3600, lastSessionDurationSec)
+	}
+
+	// Extract output12 (Cw) - Weekly Energy
+	if output12, ok := response.LL.Outputs["output12"]; ok {
+		switch v := output12.Value.(type) {
+		case float64:
+			weeklyEnergyKWh = v
+		case string:
+			cleanValue := StripUnitSuffix(v)
+			if f, err := strconv.ParseFloat(cleanValue, 64); err == nil {
+				weeklyEnergyKWh = f
+			}
+		}
+		log.Printf("      ├─ output12 (Cw - Weekly Energy): %.3f kWh", weeklyEnergyKWh)
+	}
+
+	// Extract output13 (Cm) - Monthly Energy
+	if output13, ok := response.LL.Outputs["output13"]; ok {
+		switch v := output13.Value.(type) {
+		case float64:
+			monthlyEnergyKWh = v
+		case string:
+			cleanValue := StripUnitSuffix(v)
+			if f, err := strconv.ParseFloat(cleanValue, 64); err == nil {
+				monthlyEnergyKWh = f
+			}
+		}
+		log.Printf("      ├─ output13 (Cm - Monthly Energy): %.3f kWh", monthlyEnergyKWh)
+	}
+
+	// Extract output14 (Clm) - Last Month Energy
+	if output14, ok := response.LL.Outputs["output14"]; ok {
+		switch v := output14.Value.(type) {
+		case float64:
+			lastMonthEnergyKWh = v
+		case string:
+			cleanValue := StripUnitSuffix(v)
+			if f, err := strconv.ParseFloat(cleanValue, 64); err == nil {
+				lastMonthEnergyKWh = f
+			}
+		}
+		log.Printf("      ├─ output14 (Clm - Last Month Energy): %.3f kWh", lastMonthEnergyKWh)
+	}
+
+	// Extract output15 (Cy) - Yearly Energy
+	if output15, ok := response.LL.Outputs["output15"]; ok {
+		switch v := output15.Value.(type) {
+		case float64:
+			yearlyEnergyKWh = v
+		case string:
+			cleanValue := StripUnitSuffix(v)
+			if f, err := strconv.ParseFloat(cleanValue, 64); err == nil {
+				yearlyEnergyKWh = f
+			}
+		}
+		log.Printf("      ├─ output15 (Cy - Yearly Energy): %.3f kWh", yearlyEnergyKWh)
+	}
+
+	// Extract output16 (Cly) - Last Year Energy
+	if output16, ok := response.LL.Outputs["output16"]; ok {
+		switch v := output16.Value.(type) {
+		case float64:
+			lastYearEnergyKWh = v
+		case string:
+			cleanValue := StripUnitSuffix(v)
+			if f, err := strconv.ParseFloat(cleanValue, 64); err == nil {
+				lastYearEnergyKWh = f
+			}
+		}
+		log.Printf("      ├─ output16 (Cly - Last Year Energy): %.3f kWh", lastYearEnergyKWh)
+	}
+
 	// Extract output17 (Lcl) - Last Session Log
 	if output17, ok := response.LL.Outputs["output17"]; ok {
 		switch v := output17.Value.(type) {
@@ -261,7 +366,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 		log.Printf("      └─ output21 (Uid - User ID): '%s'", userID)
 	}
 
-	// Determine state
+	// Determine state based on vehicle connection and charging status
 	var stateValue string
 	var stateDescription string
 	if vehicleConnected == 0 {
@@ -281,7 +386,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 	device.LastUpdate = time.Now()
 	device.ReadingGaps = 0
 
-	// Update live data for UI
+	// Update live data for UI with all enhanced fields
 	if collector != nil {
 		liveData, _ := collector.GetLiveChargerData(device.ID)
 		if liveData == nil {
@@ -304,14 +409,26 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 		liveData.UserID = userID
 		liveData.Timestamp = time.Now()
 
+		// Enhanced live data fields
+		liveData.LastSessionEnergy_kWh = lastSessionEnergyKWh
+		liveData.LastSessionDuration_sec = lastSessionDurationSec
+		liveData.WeeklyEnergy_kWh = weeklyEnergyKWh
+		liveData.MonthlyEnergy_kWh = monthlyEnergyKWh
+		liveData.LastMonthEnergy_kWh = lastMonthEnergyKWh
+		liveData.YearlyEnergy_kWh = yearlyEnergyKWh
+		liveData.LastYearEnergy_kWh = lastYearEnergyKWh
+
 		collector.UpdateLiveChargerData(device.ID, liveData)
 
 		activeSession, _ := collector.GetActiveSession(device.ID)
 
-		// Session tracking logic
-		if chargingActive == 1 {
+		// SESSION LOGIC - Enhanced with proper start/end detection
+		sessionActive := vehicleConnected == 1 || chargingPowerKW > 0
+
+		if sessionActive {
 			if activeSession == nil {
-				log.Printf("   ⚡ [%s] CHARGING STARTED - Creating new session", device.Name)
+				// Session start detected
+				log.Printf("   ⚡ [%s] SESSION STARTED - Creating new session", device.Name)
 				newSession := &ActiveChargerSession{
 					ChargerID:       device.ID,
 					ChargerName:     device.Name,
@@ -323,6 +440,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 					Readings:        []ChargerSessionReading{},
 				}
 
+				// Add first reading
 				newSession.Readings = append(newSession.Readings, ChargerSessionReading{
 					Timestamp:  RoundToQuarterHour(time.Now()),
 					Energy_kWh: totalEnergyKWh,
@@ -335,8 +453,10 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 				collector.UpdateLiveChargerData(device.ID, liveData)
 
 				collector.LogToDatabase("Loxone Charger Session Started",
-					fmt.Sprintf("Charger '%s': Session started at %.3f kWh", device.Name, totalEnergyKWh))
+					fmt.Sprintf("Charger '%s': Session started at %.3f kWh (Vehicle connected: %v, Power: %.3f kW)",
+						device.Name, totalEnergyKWh, vehicleConnected == 1, chargingPowerKW))
 			} else {
+				// Session ongoing - add reading at 15-min intervals
 				reading := ChargerSessionReading{
 					Timestamp:  RoundToQuarterHour(time.Now()),
 					Energy_kWh: totalEnergyKWh,
@@ -348,19 +468,24 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 				if userID != "" && activeSession.UserID == "" {
 					activeSession.UserID = userID
 				}
+				// Update last Lcl value to detect changes
+				activeSession.LastLclValue = lastSessionLog
 				collector.SetActiveSession(device.ID, activeSession)
 
-				log.Printf("   ⚡ [%s] CHARGING: Session reading added - Energy: %.3f kWh, Power: %.2f kW, Readings: %d",
+				log.Printf("   ⚡ [%s] SESSION ONGOING: Reading added - Energy: %.3f kWh, Power: %.2f kW, Readings: %d",
 					device.Name, totalEnergyKWh, chargingPowerKW, len(activeSession.Readings))
 			}
 		} else {
+			// No session active - vehicle disconnected and no power
 			if activeSession != nil {
+				// Session ended - check if Lcl changed
 				lclChanged := lastSessionLog != activeSession.LastLclValue && lastSessionLog != ""
 
 				if lclChanged {
-					log.Printf("   🏁 [%s] CHARGING ENDED - Lcl changed, processing session", device.Name)
+					log.Printf("   🏁 [%s] SESSION ENDED - Lcl changed, processing completed session", device.Name)
 
-					parsedUserID, parsedEnergy, parsedEndTime := ParseLclString(lastSessionLog)
+					// Parse Lcl to get exact session details
+					parsedUserID, parsedEnergy, parsedEndTime, parsedDuration := ParseLclString(lastSessionLog)
 					if parsedUserID == "" {
 						parsedUserID = activeSession.UserID
 					}
@@ -368,44 +493,90 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 						parsedUserID = "unknown"
 					}
 
-					activeSession.Readings = append(activeSession.Readings, ChargerSessionReading{
-						Timestamp:  RoundToQuarterHour(time.Now()),
-						Energy_kWh: totalEnergyKWh,
-						Power_kW:   0,
-						Mode:       modeValue,
-					})
+					// Calculate exact start time from Lcl duration
+					var exactStartTime time.Time
+					if parsedDuration > 0 && !parsedEndTime.IsZero() {
+						exactStartTime = parsedEndTime.Add(-time.Duration(parsedDuration) * time.Second)
+					} else {
+						exactStartTime = activeSession.StartTime
+					}
+
+					// Use parsed energy or calculate from readings
+					finalEnergy := parsedEnergy
+					if finalEnergy == 0 && len(activeSession.Readings) > 0 {
+						finalEnergy = activeSession.Readings[len(activeSession.Readings)-1].Energy_kWh - activeSession.StartEnergy_kWh
+					}
 
 					completedSession := &CompletedChargerSession{
 						ChargerID:       device.ID,
 						ChargerName:     device.Name,
 						UserID:          parsedUserID,
-						StartTime:       activeSession.StartTime,
+						StartTime:       exactStartTime,
 						EndTime:         parsedEndTime,
 						StartEnergy_kWh: activeSession.StartEnergy_kWh,
 						EndEnergy_kWh:   totalEnergyKWh,
-						TotalEnergy_kWh: parsedEnergy,
+						TotalEnergy_kWh: finalEnergy,
+						Duration_sec:    parsedDuration,
 						Mode:            activeSession.Mode,
 						Readings:        activeSession.Readings,
 					}
 
 					collector.DeleteActiveSession(device.ID)
 
+					// Process session asynchronously (will handle backfilling)
 					go ProcessCompletedChargerSession(completedSession, db, collector)
 				} else {
+					// Still waiting for Lcl update
 					energyDelta := totalEnergyKWh - activeSession.StartEnergy_kWh
 					if energyDelta > 0.1 {
-						log.Printf("   ⏳ [%s] Charging stopped (Δ%.3f kWh) - waiting for Lcl update", device.Name, energyDelta)
+						log.Printf("   ⏳ [%s] Session paused (Δ%.3f kWh) - waiting for Lcl update", device.Name, energyDelta)
 					} else {
-						log.Printf("   📸 [%s] Session discarded (Δ%.3f kWh too small)", device.Name, energyDelta)
+						// Very small energy, discard session
+						log.Printf("   🗑️ [%s] Session discarded (Δ%.3f kWh too small)", device.Name, energyDelta)
 						collector.DeleteActiveSession(device.ID)
 					}
 				}
+			} else {
+				// No active session - write 15-min maintenance readings with no user
+				// This ensures database is filled even when charger is idle
+				go WriteMaintenanceReading(device.ID, device.Name, totalEnergyKWh, modeValue, db, collector)
 			}
 		}
 	}
 
 	log.Printf("   ✅ [%s] Live data updated: Energy=%.3f kWh, Power=%.2f kW, State=%s (%s), Mode=%s",
 		device.Name, totalEnergyKWh, chargingPowerKW, stateValue, stateDescription, modeDescription)
+}
+
+// WriteMaintenanceReading writes a 15-min reading when no session is active (idle state)
+func WriteMaintenanceReading(chargerID int, chargerName string, totalEnergy float64, mode string, db *sql.DB, collector LoxoneCollectorInterface) {
+	currentTime := RoundToQuarterHour(time.Now())
+
+	// Check if we already have a reading for this timestamp
+	var exists int
+	err := db.QueryRow(`
+		SELECT COUNT(*) FROM charger_readings 
+		WHERE charger_id = ? AND timestamp = ?
+	`, chargerID, currentTime.Format("2006-01-02T15:04:05-07:00")).Scan(&exists)
+
+	if err == nil && exists > 0 {
+		// Already have a reading for this timestamp
+		return
+	}
+
+	// Write maintenance reading with no user (idle state)
+	_, err = db.Exec(`
+		INSERT INTO charger_readings (charger_id, timestamp, energy_kwh, user_id, session_id, reading_type)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, chargerID, currentTime.Format("2006-01-02T15:04:05-07:00"),
+		totalEnergy, "", "", "M") // M = Maintenance (idle)
+
+	if err != nil {
+		log.Printf("   ⚠️ [%s] Failed to write maintenance reading: %v", chargerName, err)
+	} else {
+		log.Printf("   📝 [%s] Maintenance reading written: %.3f kWh at %s (no user, idle)",
+			chargerName, totalEnergy, currentTime.Format("15:04:05"))
+	}
 }
 
 // saveChargerDataLegacy saves charger data in legacy multi-UUID mode
@@ -441,7 +612,7 @@ func (conn *WebSocketConnection) saveChargerDataLegacy(device *Device, collectio
 
 		if len(interpolated) > 0 {
 			device.ReadingGaps += len(interpolated)
-			log.Printf("   ⚠️  Filled %d reading gaps for charger %s", len(interpolated), device.Name)
+			log.Printf("   ⚠️ Filled %d reading gaps for charger %s", len(interpolated), device.Name)
 		}
 	}
 
@@ -469,12 +640,12 @@ func (conn *WebSocketConnection) saveChargerDataLegacy(device *Device, collectio
 }
 
 // ParseLclString parses the Lcl (Last Session Log) string to extract session details
-func ParseLclString(lcl string) (userID string, energy float64, endTime time.Time) {
+func ParseLclString(lcl string) (userID string, energy float64, endTime time.Time, duration float64) {
 	if lcl == "" {
-		return "", 0, time.Time{}
+		return "", 0, time.Time{}, 0
 	}
 
-	// Parse end time from beginning
+	// Parse end time from beginning (format: "2025-11-29 12:17:16")
 	if len(lcl) >= 19 {
 		timeStr := lcl[:19]
 		if t, err := time.ParseInLocation("2006-01-02 15:04:05", timeStr, time.Local); err == nil {
@@ -482,13 +653,13 @@ func ParseLclString(lcl string) (userID string, energy float64, endTime time.Tim
 		}
 	}
 
-	// Parse user ID
+	// Parse user ID (format: "user:1")
 	userRegex := regexp.MustCompile(`user:(\d+)`)
 	if matches := userRegex.FindStringSubmatch(lcl); len(matches) > 1 {
 		userID = matches[1]
 	}
 
-	// Parse energy
+	// Parse energy (format: "Geladene Energie:37.2kWh")
 	energyRegex := regexp.MustCompile(`Geladene Energie:(\d+\.?\d*)kWh`)
 	if matches := energyRegex.FindStringSubmatch(lcl); len(matches) > 1 {
 		if e, err := strconv.ParseFloat(matches[1], 64); err == nil {
@@ -496,7 +667,15 @@ func ParseLclString(lcl string) (userID string, energy float64, endTime time.Tim
 		}
 	}
 
-	return userID, energy, endTime
+	// Parse duration (format: "Dauer:65357 s")
+	durationRegex := regexp.MustCompile(`Dauer:(\d+)\s*s`)
+	if matches := durationRegex.FindStringSubmatch(lcl); len(matches) > 1 {
+		if d, err := strconv.ParseFloat(matches[1], 64); err == nil {
+			duration = d
+		}
+	}
+
+	return userID, energy, endTime, duration
 }
 
 // GetModeDescription returns a human-readable description of the charging mode

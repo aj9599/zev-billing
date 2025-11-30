@@ -17,6 +17,14 @@ export interface LiveChargerData {
   current?: number;
   state_description?: string;
   live_session?: LiveSessionData;
+  // Loxone enhanced live data
+  last_session_energy?: number;
+  last_session_duration_sec?: number;
+  weekly_energy?: number;
+  monthly_energy?: number;
+  last_month_energy?: number;
+  yearly_energy?: number;
+  last_year_energy?: number;
 }
 
 export interface LiveSessionData {

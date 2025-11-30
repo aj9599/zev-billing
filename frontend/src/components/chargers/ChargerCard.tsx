@@ -1,4 +1,4 @@
-import { Edit2, Trash2, Wifi, WifiOff, Activity, Battery, TrendingUp, Gauge, Clock, User, Zap } from 'lucide-react';
+import { Edit2, Trash2, Wifi, WifiOff, Activity, Battery, TrendingUp, Gauge, Clock, User, Zap, Calendar, BarChart3, TrendingDown } from 'lucide-react';
 import type { Charger } from '../../types';
 import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus } from './hooks/useChargerStatus';
 import { getPreset } from '../chargerPresets';
@@ -14,6 +14,30 @@ interface ChargerCardProps {
     onDelete: () => void;
     t: (key: string) => string;
 }
+
+// Helper function to format duration from seconds
+const formatDurationFromSeconds = (seconds?: number): string => {
+    if (!seconds || seconds === 0) return '';
+    
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    if (minutes > 0) return `${minutes}m`;
+    
+    return `${Math.floor(seconds)}s`;
+};
+
+// Helper function to format energy comparison
+const formatEnergyComparison = (current: number, previous: number): { percentage: number; isIncrease: boolean } => {
+    if (previous === 0) return { percentage: 0, isIncrease: true };
+    
+    const percentage = ((current - previous) / previous) * 100;
+    return {
+        percentage: Math.abs(percentage),
+        isIncrease: percentage >= 0
+    };
+};
 
 export default function ChargerCard({
     charger,
@@ -50,10 +74,6 @@ export default function ChargerCard({
         : (liveData?.total_energy ?? 0);
 
     // FIXED: Session energy logic based on state
-    // For Unknown (0) or Disconnected (1): ALWAYS show last session energy
-    // For Waiting for Authorization (2): show 0 (no session yet)
-    // For Charging (3): show current live session energy
-    // For Completed (5): show completed session energy
     const isUnknownOrDisconnected = stateValue === '0' || stateValue === '1';
     const isAwaitingStart = charger.connection_type === 'zaptec_api'
         ? stateValue === '2'
@@ -151,6 +171,23 @@ export default function ChargerCard({
     const modeValue = liveData?.mode ?? '1';
     const modeDisplay = getModeDisplay(charger, modeValue, t);
 
+    // NEW: Enhanced Loxone stats
+    const hasEnhancedStats = charger.connection_type === 'loxone_api' && (
+        liveData?.last_session_energy ||
+        liveData?.weekly_energy ||
+        liveData?.monthly_energy ||
+        liveData?.yearly_energy
+    );
+
+    // NEW: Calculate comparisons
+    const monthComparison = liveData?.monthly_energy && liveData?.last_month_energy
+        ? formatEnergyComparison(liveData.monthly_energy, liveData.last_month_energy)
+        : null;
+
+    const yearComparison = liveData?.yearly_energy && liveData?.last_year_energy
+        ? formatEnergyComparison(liveData.yearly_energy, liveData.last_year_energy)
+        : null;
+
     return (
         <div
             style={{
@@ -219,8 +256,6 @@ export default function ChargerCard({
           50% { opacity: 0.85; transform: scale(1.02); }
         }
       `}} />
-
-
 
             {/* Action Buttons */}
             <div style={{
@@ -387,7 +422,6 @@ export default function ChargerCard({
                 transition: 'all 0.3s ease'
             }}>
 
-
                 {/* Main content with gauge and data */}
                 <div style={{
                     position: 'relative',
@@ -397,7 +431,7 @@ export default function ChargerCard({
                     justifyContent: 'space-between',
                     gap: '24px'
                 }}>
-                    {/* Circular Power Gauge - FIXED COLORS */}
+                    {/* Circular Power Gauge */}
                     <div style={{
                         position: 'relative',
                         width: circleSize,
@@ -430,7 +464,7 @@ export default function ChargerCard({
                                 strokeWidth={strokeWidth}
                                 fill="transparent"
                             />
-                            {/* Progress circle - Green when charging - FIXED */}
+                            {/* Progress circle - Green when charging */}
                             <circle
                                 cx={circleSize / 2}
                                 cy={circleSize / 2}
@@ -506,7 +540,7 @@ export default function ChargerCard({
                                     fontWeight: '600',
                                     color: '#2563eb'
                                 }}>
-                                    âœ“ {t('chargers.state.completed')}
+                                    ✓ {t('chargers.state.completed')}
                                 </div>
                             )}
                             {isAwaitingStart && (
@@ -519,7 +553,7 @@ export default function ChargerCard({
                                     fontWeight: '600',
                                     color: '#d97706'
                                 }}>
-                                    ðŸ”’ {t('chargers.state.awaitingStart')}
+                                    ⏳ {t('chargers.state.awaitingStart')}
                                 </div>
                             )}
                             {isDisconnected && (
@@ -575,7 +609,7 @@ export default function ChargerCard({
                             </div>
                         )}
 
-                        {/* Session Energy - CRITICAL FIX: Always show if > 0, regardless of state */}
+                        {/* Session Energy - Always show if > 0 */}
                         {sessionEnergy > 0 && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                 <div style={{
@@ -607,7 +641,7 @@ export default function ChargerCard({
                             </div>
                         )}
 
-                        {/* Waiting for Auth Banner - FIXED */}
+                        {/* Waiting for Auth Banner */}
                         {isAwaitingStart && sessionEnergy === 0 && (
                             <div style={{
                                 padding: '12px',
@@ -618,7 +652,7 @@ export default function ChargerCard({
                                 alignItems: 'center',
                                 gap: '8px'
                             }}>
-                                <span style={{ fontSize: '16px' }}>ðŸ”’</span>
+                                <span style={{ fontSize: '16px' }}>⏳</span>
                                 <div style={{ flex: 1 }}>
                                     <div style={{
                                         fontSize: '11px',
@@ -668,6 +702,225 @@ export default function ChargerCard({
                     </div>
                 </div>
             </div>
+
+            {/* NEW: Enhanced Loxone Energy Statistics Section */}
+            {hasEnhancedStats && (
+                <div style={{
+                    marginTop: '16px',
+                    padding: '16px',
+                    background: 'linear-gradient(135deg, rgba(139,92,246,0.05) 0%, rgba(59,130,246,0.05) 100%)',
+                    borderRadius: '16px',
+                    border: '1px solid rgba(139,92,246,0.2)',
+                    position: 'relative',
+                    overflow: 'hidden'
+                }}>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        marginBottom: '16px'
+                    }}>
+                        <BarChart3 size={18} style={{ color: '#8b5cf6' }} />
+                        <h4 style={{
+                            fontSize: '14px',
+                            fontWeight: '700',
+                            color: '#6d28d9',
+                            margin: 0,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                        }}>
+                            {t('chargers.stats.energyStatistics') || 'Energy Statistics'}
+                        </h4>
+                    </div>
+
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: '12px'
+                    }}>
+                        {/* Last Session (if not currently charging) */}
+                        {!isCharging && liveData?.last_session_energy && liveData.last_session_energy > 0 && (
+                            <div style={{
+                                padding: '12px',
+                                backgroundColor: 'rgba(255,255,255,0.8)',
+                                borderRadius: '12px',
+                                border: '1px solid rgba(229,231,235,0.6)'
+                            }}>
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    marginBottom: '6px'
+                                }}>
+                                    <Clock size={14} style={{ color: '#8b5cf6' }} />
+                                    <span style={{
+                                        fontSize: '11px',
+                                        fontWeight: '700',
+                                        color: '#6d28d9',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
+                                    }}>
+                                        {t('chargers.stats.lastSession') || 'Last Session'}
+                                    </span>
+                                </div>
+                                <div style={{
+                                    fontSize: '20px',
+                                    fontWeight: '700',
+                                    color: '#1f2937',
+                                    marginBottom: '2px'
+                                }}>
+                                    {liveData.last_session_energy.toFixed(2)} <span style={{ fontSize: '12px', color: '#6b7280' }}>kWh</span>
+                                </div>
+                                {liveData.last_session_duration_sec && liveData.last_session_duration_sec > 0 && (
+                                    <div style={{
+                                        fontSize: '11px',
+                                        color: '#6b7280',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}>
+                                        <Clock size={10} />
+                                        {formatDurationFromSeconds(liveData.last_session_duration_sec)}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Weekly Energy */}
+                        {liveData?.weekly_energy && liveData.weekly_energy > 0 && (
+                            <div style={{
+                                padding: '12px',
+                                backgroundColor: 'rgba(255,255,255,0.8)',
+                                borderRadius: '12px',
+                                border: '1px solid rgba(229,231,235,0.6)'
+                            }}>
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    marginBottom: '6px'
+                                }}>
+                                    <Calendar size={14} style={{ color: '#3b82f6' }} />
+                                    <span style={{
+                                        fontSize: '11px',
+                                        fontWeight: '700',
+                                        color: '#1e40af',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
+                                    }}>
+                                        {t('chargers.stats.thisWeek') || 'This Week'}
+                                    </span>
+                                </div>
+                                <div style={{
+                                    fontSize: '20px',
+                                    fontWeight: '700',
+                                    color: '#1f2937'
+                                }}>
+                                    {liveData.weekly_energy.toFixed(2)} <span style={{ fontSize: '12px', color: '#6b7280' }}>kWh</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Monthly Energy with Comparison */}
+                        {liveData?.monthly_energy && liveData.monthly_energy > 0 && (
+                            <div style={{
+                                padding: '12px',
+                                backgroundColor: 'rgba(255,255,255,0.8)',
+                                borderRadius: '12px',
+                                border: '1px solid rgba(229,231,235,0.6)'
+                            }}>
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    marginBottom: '6px'
+                                }}>
+                                    <Calendar size={14} style={{ color: '#10b981' }} />
+                                    <span style={{
+                                        fontSize: '11px',
+                                        fontWeight: '700',
+                                        color: '#047857',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
+                                    }}>
+                                        {t('chargers.stats.thisMonth') || 'This Month'}
+                                    </span>
+                                </div>
+                                <div style={{
+                                    fontSize: '20px',
+                                    fontWeight: '700',
+                                    color: '#1f2937',
+                                    marginBottom: '2px'
+                                }}>
+                                    {liveData.monthly_energy.toFixed(2)} <span style={{ fontSize: '12px', color: '#6b7280' }}>kWh</span>
+                                </div>
+                                {monthComparison && (
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        fontSize: '11px',
+                                        color: monthComparison.isIncrease ? '#059669' : '#dc2626',
+                                        fontWeight: '600'
+                                    }}>
+                                        {monthComparison.isIncrease ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                                        {monthComparison.percentage.toFixed(0)}% vs {t('chargers.stats.lastMonth') || 'last month'}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Yearly Energy with Comparison */}
+                        {liveData?.yearly_energy && liveData.yearly_energy > 0 && (
+                            <div style={{
+                                padding: '12px',
+                                backgroundColor: 'rgba(255,255,255,0.8)',
+                                borderRadius: '12px',
+                                border: '1px solid rgba(229,231,235,0.6)'
+                            }}>
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    marginBottom: '6px'
+                                }}>
+                                    <Calendar size={14} style={{ color: '#f59e0b' }} />
+                                    <span style={{
+                                        fontSize: '11px',
+                                        fontWeight: '700',
+                                        color: '#d97706',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
+                                    }}>
+                                        {t('chargers.stats.thisYear') || 'This Year'}
+                                    </span>
+                                </div>
+                                <div style={{
+                                    fontSize: '20px',
+                                    fontWeight: '700',
+                                    color: '#1f2937',
+                                    marginBottom: '2px'
+                                }}>
+                                    {liveData.yearly_energy.toFixed(2)} <span style={{ fontSize: '12px', color: '#6b7280' }}>kWh</span>
+                                </div>
+                                {yearComparison && (
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        fontSize: '11px',
+                                        color: yearComparison.isIncrease ? '#059669' : '#dc2626',
+                                        fontWeight: '600'
+                                    }}>
+                                        {yearComparison.isIncrease ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                                        {yearComparison.percentage.toFixed(0)}% vs {t('chargers.stats.lastYear') || 'last year'}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Additional Details Section */}
             <div style={{
@@ -753,7 +1006,7 @@ export default function ChargerCard({
                     </div>
                 )}
 
-                {/* Live Session Info - CRITICAL FIX: Show for ALL states if liveSession exists */}
+                {/* Live Session Info */}
                 {liveSession && sessionEnergy > 0 && (
                     <div style={{
                         padding: '10px',
@@ -809,7 +1062,7 @@ export default function ChargerCard({
                     </div>
                 )}
 
-                {/* Charging Mode & Active Status - Inline - FIXED MODE DISPLAY */}
+                {/* Charging Mode & Active Status - Inline */}
                 <div style={{
                     display: 'flex',
                     alignItems: 'center',
