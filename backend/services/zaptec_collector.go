@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"zev-billing/backend/services/zaptec"
+	"github.com/aj9599/zev-billing/backend/services/zaptec"
 )
 
 // ZaptecCollector handles Zaptec charger data collection via their API
