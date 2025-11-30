@@ -17,19 +17,20 @@ export const getStateDisplay = (charger: Charger, stateValue?: string, t?: (key:
     }
   }
 
-  // For Weidmüller single-block mode (simplified: 0=idle/disconnected, 1=charging)
-  if (charger.preset === 'weidmuller_single') {
-    switch (stateStr) {
-      case '0': return t?.('chargers.state.idle') || 'Idle';
-      case '1': return t?.('chargers.state.charging') || 'Charging';
-      default: return t?.('chargers.state.unknown') || 'Unknown';
-    }
-  }
-
-  // For multi-UUID mode (original Weidmüller), use config-based mapping
+  // For Weidmüller chargers, check the UUID mode from config
   try {
     const config = JSON.parse(charger.connection_config);
     
+    // For single-block mode (simplified: 0=idle/disconnected, 1=charging)
+    if (config.loxone_uuid_mode === 'single') {
+      switch (stateStr) {
+        case '0': return t?.('chargers.state.idle') || 'Idle';
+        case '1': return t?.('chargers.state.charging') || 'Charging';
+        default: return t?.('chargers.state.unknown') || 'Unknown';
+      }
+    }
+
+    // For multi-UUID mode (original WeidmÃ¼ller), use config-based mapping
     if (stateStr === String(config.state_cable_locked).trim()) {
       return t?.('chargers.state.cableLocked') || 'Cable Locked';
     }
@@ -54,25 +55,26 @@ export const getModeDisplay = (charger: Charger, modeValue?: string, t?: (key: s
 
   const modeStr = String(modeValue).trim();
 
-  // For Weidmüller single-block mode (M values: 1-5=Solar, 99=Priority, 2=Normal)
-  if (charger.preset === 'weidmuller_single') {
-    const modeNum = parseInt(modeStr);
-    if (modeNum >= 1 && modeNum <= 5) {
-      return t?.('chargers.mode.solar') || 'Solar';
-    }
-    if (modeNum === 99) {
-      return t?.('chargers.mode.priority') || 'Priority';
-    }
-    if (modeNum === 2) {
-      return t?.('chargers.mode.normal') || 'Normal';
-    }
-    return t?.('chargers.mode.normal') || 'Normal';
-  }
-
-  // For multi-UUID mode, use config-based mapping
+  // For WeidmÃ¼ller chargers, check the UUID mode from config
   try {
     const config = JSON.parse(charger.connection_config);
     
+    // For single-block mode (M values: 1-5=Solar, 99=Priority, 2=Normal)
+    if (config.loxone_uuid_mode === 'single') {
+      const modeNum = parseInt(modeStr);
+      if (modeNum >= 1 && modeNum <= 5) {
+        return t?.('chargers.mode.solar') || 'Solar';
+      }
+      if (modeNum === 99) {
+        return t?.('chargers.mode.priority') || 'Priority';
+      }
+      if (modeNum === 2) {
+        return t?.('chargers.mode.normal') || 'Normal';
+      }
+      return t?.('chargers.mode.normal') || 'Normal';
+    }
+
+    // For multi-UUID mode, use config-based mapping
     if (modeStr === String(config.mode_normal).trim()) {
       return t?.('chargers.mode.normal') || 'Normal';
     }

@@ -29,6 +29,7 @@ export interface ChargerConnectionConfig {
   loxone_host?: string;
   loxone_mac_address?: string;
   loxone_connection_mode?: 'local' | 'remote';
+  loxone_uuid_mode?: 'single' | 'multi';
   loxone_username?: string;
   loxone_password?: string;
   loxone_power_uuid?: string;
@@ -50,7 +51,7 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
     brand: 'weidmuller',
     preset: 'weidmuller',
     building_id: 0,
-    connection_type: 'loxone_api_single', // Default to recommended single-block mode
+    connection_type: 'loxone_api',
     connection_config: '{}',
     notes: '',
     is_active: true
@@ -81,6 +82,7 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
     loxone_host: '',
     loxone_mac_address: '',
     loxone_connection_mode: 'local',
+    loxone_uuid_mode: 'multi',
     loxone_username: '',
     loxone_password: '',
     loxone_power_uuid: '',
@@ -119,7 +121,7 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
       brand: 'weidmuller',
       preset: 'weidmuller',
       building_id: 0,
-      connection_type: 'loxone_api_single',
+      connection_type: 'loxone_api',
       connection_config: '{}',
       notes: '',
       is_active: true
@@ -150,6 +152,7 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
       loxone_host: '',
       loxone_mac_address: '',
       loxone_connection_mode: 'local',
+      loxone_uuid_mode: 'multi',
       loxone_username: '',
       loxone_password: '',
       loxone_power_uuid: '',
@@ -182,9 +185,30 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
       const config = JSON.parse(charger.connection_config);
       const preset = getPreset(charger.preset);
 
-      console.log('📝 Loading charger for edit:', charger.name);
-      console.log('   Connection Type:', charger.connection_type);
-      console.log('   Has Block UUID:', !!config.loxone_charger_block_uuid);
+      // ðŸ” DEBUG: Log what we're loading
+      console.log('ðŸ” EDIT CHARGER DEBUG:');
+      console.log('  Charger ID:', charger.id);
+      console.log('  Charger Name:', charger.name);
+      console.log('  Preset:', charger.preset);
+      console.log('  Connection Type:', charger.connection_type);
+      console.log('  Raw connection_config:', charger.connection_config);
+      console.log('  Parsed config:', config);
+      console.log('  Has loxone_charger_block_uuid:', 'loxone_charger_block_uuid' in config);
+      console.log('  Block UUID value:', config.loxone_charger_block_uuid);
+      console.log('  Block UUID type:', typeof config.loxone_charger_block_uuid);
+      console.log('  All config keys:', Object.keys(config));
+
+      // Determine UUID mode: if loxone_uuid_mode is explicitly set, use it
+      // Otherwise, infer from presence of loxone_charger_block_uuid
+      let uuidMode: 'single' | 'multi' = 'multi';
+      if (config.loxone_uuid_mode) {
+        uuidMode = config.loxone_uuid_mode;
+      } else if (config.loxone_charger_block_uuid && !config.loxone_power_uuid) {
+        // Legacy single-block charger (has block UUID but no individual UUIDs)
+        uuidMode = 'single';
+      }
+
+      console.log('  Detected UUID mode:', uuidMode);
 
       setConnectionConfig({
         power_endpoint: config.power_endpoint || '',
@@ -212,6 +236,7 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
         loxone_host: config.loxone_host || '',
         loxone_mac_address: config.loxone_mac_address || '',
         loxone_connection_mode: config.loxone_connection_mode || 'local',
+        loxone_uuid_mode: uuidMode,
         loxone_username: config.loxone_username || '',
         loxone_password: config.loxone_password || '',
         loxone_power_uuid: config.loxone_power_uuid || '',
@@ -233,20 +258,12 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
 
   const handlePresetChange = useCallback((presetName: string) => {
     const preset = getPreset(presetName);
-    
-    // Set default connection type based on preset
-    let defaultConnectionType = 'loxone_api_single';
-    if (presetName === 'zaptec') {
-      defaultConnectionType = 'zaptec_api';
-    }
-    
     setFormData(prev => ({
       ...prev,
       brand: presetName,
       preset: presetName,
-      connection_type: defaultConnectionType
+      connection_type: presetName === 'zaptec' ? 'zaptec_api' : prev.connection_type
     }));
-    
     setConnectionConfig(prev => ({
       ...prev,
       state_cable_locked: preset.defaultStateMappings.cable_locked,
@@ -263,20 +280,36 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
   
     let config: ChargerConnectionConfig = {};
   
-    // Determine if this is single-block mode based on CONNECTION_TYPE (not preset)
-    const isSingleBlock = formData.connection_type === 'loxone_api_single';
-    const isMultiUUID = formData.connection_type === 'loxone_api_multi';
-    
-    if (isSingleBlock || isMultiUUID) {
-      console.log('💾 Saving Loxone charger');
-      console.log('   Connection Type:', formData.connection_type);
-      console.log('   Is Single-Block:', isSingleBlock);
+    if (formData.connection_type === 'loxone_api') {
+      // Check if this is single-block mode based on UUID mode setting
+      const isSingleBlock = connectionConfig.loxone_uuid_mode === 'single';
       
-      // Base config - always needed for Loxone
+      // ðŸ” DEBUG: Log what we're about to save
+      console.log('ðŸ’¾ SAVE CHARGER DEBUG:');
+      console.log('  Preset:', formData.preset);
+      console.log('  UUID Mode:', connectionConfig.loxone_uuid_mode);
+      console.log('  Is Single Block:', isSingleBlock);
+      console.log('  Connection Type:', formData.connection_type);
+      console.log('  Connection Mode:', connectionConfig.loxone_connection_mode);
+      console.log('  Block UUID from form:', connectionConfig.loxone_charger_block_uuid);
+      console.log('  Block UUID length:', connectionConfig.loxone_charger_block_uuid?.length);
+      
       config = {
         loxone_connection_mode: connectionConfig.loxone_connection_mode,
+        loxone_uuid_mode: connectionConfig.loxone_uuid_mode,
         loxone_username: connectionConfig.loxone_username,
         loxone_password: connectionConfig.loxone_password,
+        // ðŸ”§ Conditionally save UUIDs based on mode
+        ...(isSingleBlock ? {
+          // Single-block mode: only save the charger block UUID
+          loxone_charger_block_uuid: connectionConfig.loxone_charger_block_uuid,
+        } : {
+          // Original mode: save all four separate UUIDs
+          loxone_power_uuid: connectionConfig.loxone_power_uuid,
+          loxone_state_uuid: connectionConfig.loxone_state_uuid,
+          loxone_user_id_uuid: connectionConfig.loxone_user_id_uuid,
+          loxone_mode_uuid: connectionConfig.loxone_mode_uuid,
+        }),
       };
 
       // Add host or MAC address depending on connection mode
@@ -286,28 +319,20 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
         config.loxone_host = connectionConfig.loxone_host;
       }
 
-      if (isSingleBlock) {
-        // SINGLE-BLOCK MODE: Save only the charger block UUID
-        config.loxone_charger_block_uuid = connectionConfig.loxone_charger_block_uuid;
-        console.log('   ✓ Single-block UUID:', config.loxone_charger_block_uuid);
-      } else {
-        // MULTI-UUID MODE: Save all four separate UUIDs
-        config.loxone_power_uuid = connectionConfig.loxone_power_uuid;
-        config.loxone_state_uuid = connectionConfig.loxone_state_uuid;
-        config.loxone_user_id_uuid = connectionConfig.loxone_user_id_uuid;
-        config.loxone_mode_uuid = connectionConfig.loxone_mode_uuid;
-        
-        // Also save state and mode mappings for multi-UUID mode
+      // Always save state and mode mappings (except for single-block mode)
+      if (!isSingleBlock) {
         config.state_cable_locked = connectionConfig.state_cable_locked;
         config.state_waiting_auth = connectionConfig.state_waiting_auth;
         config.state_charging = connectionConfig.state_charging;
         config.state_idle = connectionConfig.state_idle;
         config.mode_normal = connectionConfig.mode_normal;
         config.mode_priority = connectionConfig.mode_priority;
-        
-        console.log('   ✓ Multi-UUID mode - 4 UUIDs configured');
       }
       
+      // ðŸ” DEBUG: Log the final config being saved
+      console.log('  Final config object:', config);
+      console.log('  Config has block UUID:', 'loxone_charger_block_uuid' in config);
+      console.log('  Config block UUID value:', config.loxone_charger_block_uuid);
     } else if (formData.connection_type === 'zaptec_api') {
       config = {
         zaptec_username: connectionConfig.zaptec_username,
@@ -365,7 +390,11 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
       connection_config: JSON.stringify(config)
     };
     
-    console.log('📤 Sending to API:', dataToSend.connection_type);
+    // ðŸ” DEBUG: Log the final payload
+    console.log('ðŸ“¤ FINAL PAYLOAD TO API:');
+    console.log('  Full data:', dataToSend);
+    console.log('  connection_config (stringified):', dataToSend.connection_config);
+    console.log('  Re-parsed config:', JSON.parse(dataToSend.connection_config));
   
     try {
       if (editingCharger) {
@@ -378,7 +407,6 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
       resetForm();
       onSubmitSuccess();
     } catch (err) {
-      console.error('Failed to save charger:', err);
       alert('Failed to save charger. Please try again.');
     }
   };
