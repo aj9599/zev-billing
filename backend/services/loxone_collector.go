@@ -45,6 +45,7 @@ func (lc *LoxoneCollector) Start() {
 	log.Println("🚀 LOXONE WEBSOCKET COLLECTOR STARTING")
 	log.Println("   Features: Session-based charger tracking, Auth health checks, keepalive")
 	log.Println("   Chargers: Database writes only after session completion (like Zaptec)")
+	log.Println("   Stats: Enhanced statistics persisted to database")
 	log.Println("===================================")
 
 	lc.logToDatabase("Loxone Collector Started", "Session-based charger tracking enabled")
@@ -163,11 +164,16 @@ func (lc *LoxoneCollector) GetConnectionStatus() map[string]interface{} {
 					"last_successful_auth":   lastSuccessfulAuthStr,
 				}
 			} else if device.Type == "charger" {
-				// Get live data for charger
+				// Get live data for charger - with database fallback
 				lc.chargerMu.RLock()
 				liveData := lc.liveChargerData[device.ID]
 				activeSession := lc.activeSessions[device.ID]
 				lc.chargerMu.RUnlock()
+
+				// If no live data in memory, try to load from database
+				if liveData == nil || time.Since(liveData.Timestamp) > 2*time.Minute {
+					liveData = lc.loadChargerStatsFromDatabase(device.ID, device.Name)
+				}
 
 				status := map[string]interface{}{
 					"power_uuid":             device.PowerUUID,
@@ -194,17 +200,24 @@ func (lc *LoxoneCollector) GetConnectionStatus() map[string]interface{} {
 				// Add live data if available
 				if liveData != nil {
 					status["live_data"] = map[string]interface{}{
-						"vehicle_connected":  liveData.VehicleConnected,
-						"charging_active":    liveData.ChargingActive,
-						"current_power_kw":   liveData.CurrentPower_kW,
-						"total_energy_kwh":   liveData.TotalEnergy_kWh,
-						"session_energy_kwh": liveData.SessionEnergy_kWh,
-						"mode":               liveData.Mode,
-						"mode_description":   liveData.ModeDescription,
-						"state":              liveData.State,
-						"state_description":  liveData.StateDescription,
-						"user_id":            liveData.UserID,
-						"timestamp":          liveData.Timestamp.Format("2006-01-02 15:04:05"),
+						"vehicle_connected":        liveData.VehicleConnected,
+						"charging_active":          liveData.ChargingActive,
+						"current_power_kw":         liveData.CurrentPower_kW,
+						"total_energy_kwh":         liveData.TotalEnergy_kWh,
+						"session_energy_kwh":       liveData.SessionEnergy_kWh,
+						"mode":                     liveData.Mode,
+						"mode_description":         liveData.ModeDescription,
+						"state":                    liveData.State,
+						"state_description":        liveData.StateDescription,
+						"user_id":                  liveData.UserID,
+						"timestamp":                liveData.Timestamp.Format("2006-01-02 15:04:05"),
+						"last_session_energy_kwh":  liveData.LastSessionEnergy_kWh,
+						"last_session_duration_sec": liveData.LastSessionDuration_sec,
+						"weekly_energy_kwh":        liveData.WeeklyEnergy_kWh,
+						"monthly_energy_kwh":       liveData.MonthlyEnergy_kWh,
+						"last_month_energy_kwh":    liveData.LastMonthEnergy_kWh,
+						"yearly_energy_kwh":        liveData.YearlyEnergy_kWh,
+						"last_year_energy_kwh":     liveData.LastYearEnergy_kWh,
 					}
 				}
 
@@ -233,17 +246,101 @@ func (lc *LoxoneCollector) GetConnectionStatus() map[string]interface{} {
 
 // ========== INTERFACE IMPLEMENTATION ==========
 
-// GetLiveChargerData returns live charger data for UI display
+// GetLiveChargerData returns live charger data for UI display with database fallback
 func (lc *LoxoneCollector) GetLiveChargerData(chargerID int) (*loxone.ChargerLiveData, bool) {
 	lc.chargerMu.RLock()
-	defer lc.chargerMu.RUnlock()
-
 	data, exists := lc.liveChargerData[chargerID]
-	if !exists || time.Since(data.Timestamp) > 60*time.Second {
+	lc.chargerMu.RUnlock()
+
+	// If data exists and is recent, return it
+	if exists && time.Since(data.Timestamp) < 2*time.Minute {
+		return data, true
+	}
+
+	// Otherwise, try to load from database
+	var chargerName string
+	err := lc.db.QueryRow("SELECT name FROM chargers WHERE id = ?", chargerID).Scan(&chargerName)
+	if err != nil {
 		return nil, false
 	}
 
-	return data, true
+	dbData := lc.loadChargerStatsFromDatabase(chargerID, chargerName)
+	if dbData == nil {
+		return nil, false
+	}
+
+	return dbData, true
+}
+
+// loadChargerStatsFromDatabase loads persisted stats from charger_stats table
+func (lc *LoxoneCollector) loadChargerStatsFromDatabase(chargerID int, chargerName string) *loxone.ChargerLiveData {
+	var lastSessionEnergy, lastSessionDuration float64
+	var weeklyEnergy, monthlyEnergy, lastMonthEnergy float64
+	var yearlyEnergy, lastYearEnergy float64
+	var updatedAt string
+	
+	err := lc.db.QueryRow(`
+		SELECT 
+			last_session_energy_kwh,
+			last_session_duration_sec,
+			weekly_energy_kwh,
+			monthly_energy_kwh,
+			last_month_energy_kwh,
+			yearly_energy_kwh,
+			last_year_energy_kwh,
+			updated_at
+		FROM charger_stats 
+		WHERE charger_id = ?
+	`, chargerID).Scan(
+		&lastSessionEnergy,
+		&lastSessionDuration,
+		&weeklyEnergy,
+		&monthlyEnergy,
+		&lastMonthEnergy,
+		&yearlyEnergy,
+		&lastYearEnergy,
+		&updatedAt,
+	)
+	
+	if err != nil {
+		if err != sql.ErrNoRows {
+			log.Printf("WARNING: Could not load charger stats: %v", err)
+		}
+		return nil
+	}
+
+	// Parse updated_at timestamp
+	timestamp, _ := time.Parse("2006-01-02 15:04:05", updatedAt)
+	if timestamp.IsZero() {
+		timestamp = time.Now()
+	}
+
+	liveData := &loxone.ChargerLiveData{
+		ChargerID:                chargerID,
+		ChargerName:              chargerName,
+		IsOnline:                 false, // Unknown when loading from DB
+		State:                    "0",
+		StateDescription:         "Offline (no recent data)",
+		LastSessionEnergy_kWh:    lastSessionEnergy,
+		LastSessionDuration_sec:  lastSessionDuration,
+		WeeklyEnergy_kWh:         weeklyEnergy,
+		MonthlyEnergy_kWh:        monthlyEnergy,
+		LastMonthEnergy_kWh:      lastMonthEnergy,
+		YearlyEnergy_kWh:         yearlyEnergy,
+		LastYearEnergy_kWh:       lastYearEnergy,
+		Timestamp:                timestamp,
+	}
+
+	// Check if we have any meaningful stats
+	if lastSessionEnergy == 0 && weeklyEnergy == 0 && 
+	   monthlyEnergy == 0 && yearlyEnergy == 0 {
+		return nil
+	}
+
+	log.Printf("📊 [%s] Loaded stats from charger_stats table: Last=%.3f, Weekly=%.3f, Monthly=%.3f, Yearly=%.3f kWh",
+		chargerName, lastSessionEnergy, weeklyEnergy, monthlyEnergy, yearlyEnergy)
+
+	return liveData
 }
 
 // GetActiveSession returns the active session for a charger if one exists
@@ -514,7 +611,7 @@ func (lc *LoxoneCollector) loadMeters(connectionDevices map[string]*loxone.WebSo
 			conn = loxone.NewWebSocketConnection(actualHost, username, password, macAddress, connectionMode == "remote", lc.db, lc)
 			connectionDevices[connKey] = conn
 			if connectionMode == "remote" {
-				log.Printf("   🌐 Created new REMOTE WebSocket connection via Loxone Cloud DNS")
+				log.Printf("   🌍 Created new REMOTE WebSocket connection via Loxone Cloud DNS")
 			} else {
 				log.Printf("   📡 Created new LOCAL WebSocket connection for %s", host)
 			}
@@ -660,7 +757,7 @@ func (lc *LoxoneCollector) loadChargers(connectionDevices map[string]*loxone.Web
 
 			// Log connection type
 			if connectionMode == "remote" {
-				log.Printf("   🌐 Created new REMOTE WebSocket connection via Loxone Cloud DNS")
+				log.Printf("   🌍 Created new REMOTE WebSocket connection via Loxone Cloud DNS")
 			} else {
 				log.Printf("   📡 Created new LOCAL WebSocket connection for %s", host)
 			}
@@ -684,13 +781,19 @@ func (lc *LoxoneCollector) loadChargers(connectionDevices map[string]*loxone.Web
 		}
 		conn.Devices = append(conn.Devices, device)
 
-		// Initialize live data for this charger
+		// Initialize live data for this charger - try to load from database first
 		lc.chargerMu.Lock()
-		lc.liveChargerData[id] = &loxone.ChargerLiveData{
-			ChargerID:   id,
-			ChargerName: name,
-			IsOnline:    false,
-			Timestamp:   time.Now(),
+		dbData := lc.loadChargerStatsFromDatabase(id, name)
+		if dbData != nil {
+			lc.liveChargerData[id] = dbData
+			log.Printf("   📊 Loaded persisted stats from database")
+		} else {
+			lc.liveChargerData[id] = &loxone.ChargerLiveData{
+				ChargerID:   id,
+				ChargerName: name,
+				IsOnline:    false,
+				Timestamp:   time.Now(),
+			}
 		}
 		lc.chargerMu.Unlock()
 	}

@@ -140,6 +140,25 @@ func RunMigrations(db *sql.DB) error {
 			FOREIGN KEY (charger_id) REFERENCES chargers(id)
 		)`,
 
+		`CREATE TABLE IF NOT EXISTS charger_stats (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			charger_id INTEGER NOT NULL UNIQUE,
+			last_session_energy_kwh REAL DEFAULT 0,
+			last_session_duration_sec REAL DEFAULT 0,
+			last_session_user_id TEXT,
+			last_session_end_time DATETIME,
+			weekly_energy_kwh REAL DEFAULT 0,
+			monthly_energy_kwh REAL DEFAULT 0,
+			last_month_energy_kwh REAL DEFAULT 0,
+			yearly_energy_kwh REAL DEFAULT 0,
+			last_year_energy_kwh REAL DEFAULT 0,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (charger_id) REFERENCES chargers(id) ON DELETE CASCADE
+		)`,
+
+		`CREATE INDEX IF NOT EXISTS idx_charger_stats_charger_id ON charger_stats(charger_id)`,
+
 		`CREATE TABLE IF NOT EXISTS billing_settings (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			building_id INTEGER NOT NULL,

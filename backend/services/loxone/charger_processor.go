@@ -11,7 +11,7 @@ import (
 
 // processChargerField processes individual charger UUID data (multi-UUID mode)
 func (conn *WebSocketConnection) processChargerField(device *Device, response LoxoneResponse, fieldName string, collection *ChargerDataCollection, db *sql.DB) {
-	log.Printf("   📋 [%s] Processing field '%s'", device.Name, fieldName)
+	log.Printf("   🔋 [%s] Processing field '%s'", device.Name, fieldName)
 	log.Printf("   📋 Response Control: %s", response.LL.Control)
 	log.Printf("   📋 Response Code: %s", response.LL.Code)
 	log.Printf("   📋 Response Value: %s", response.LL.Value)
@@ -147,7 +147,7 @@ func (conn *WebSocketConnection) processChargerField(device *Device, response Lo
 
 // processChargerSingleBlock processes all charger data from a single Loxone response
 func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, response LoxoneResponse, db *sql.DB, collector LoxoneCollectorInterface) {
-	log.Printf("   📋 [%s] Processing single-block response (enhanced session tracking)", device.Name)
+	log.Printf("   🔋 [%s] Processing single-block response (enhanced session tracking)", device.Name)
 	log.Printf("   📦 Number of outputs: %d", len(response.LL.Outputs))
 
 	// Extract all values from the response outputs
@@ -367,17 +367,21 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 	}
 
 	// Determine state based on vehicle connection and charging status
+	// State mapping matches Zaptec for consistency:
+	// State 1 = Disconnected (Vc=0)
+	// State 5 = Complete (Vc=1, Cac=0 - vehicle connected but not charging)
+	// State 3 = Charging (Vc=1, Cac=1 - vehicle connected and charging)
 	var stateValue string
 	var stateDescription string
 	if vehicleConnected == 0 {
-		stateValue = "0"
+		stateValue = "1"
 		stateDescription = "Disconnected"
 	} else if chargingActive == 1 {
-		stateValue = "1"
+		stateValue = "3"
 		stateDescription = "Charging"
 	} else {
-		stateValue = "0"
-		stateDescription = "Connected (not charging)"
+		stateValue = "5"
+		stateDescription = "Complete"
 	}
 
 	modeDescription := GetModeDescription(modeValue)
@@ -385,6 +389,10 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 	device.LastReading = totalEnergyKWh
 	device.LastUpdate = time.Now()
 	device.ReadingGaps = 0
+
+	// CRITICAL FIX: Always update enhanced stats in database, not just in memory
+	UpdateChargerStatsInDatabase(db, device.ID, lastSessionEnergyKWh, lastSessionDurationSec,
+		weeklyEnergyKWh, monthlyEnergyKWh, lastMonthEnergyKWh, yearlyEnergyKWh, lastYearEnergyKWh)
 
 	// Update live data for UI with all enhanced fields
 	if collector != nil {
@@ -548,16 +556,53 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 		device.Name, totalEnergyKWh, chargingPowerKW, stateValue, stateDescription, modeDescription)
 }
 
+// UpdateChargerStatsInDatabase updates the enhanced statistics in the charger_stats table
+func UpdateChargerStatsInDatabase(db *sql.DB, chargerID int, lastSessionEnergy, lastSessionDuration,
+	weeklyEnergy, monthlyEnergy, lastMonthEnergy, yearlyEnergy, lastYearEnergy float64) {
+	
+	// Insert or update charger_stats table
+	_, err := db.Exec(`
+		INSERT INTO charger_stats (
+			charger_id, 
+			last_session_energy_kwh, 
+			last_session_duration_sec,
+			weekly_energy_kwh, 
+			monthly_energy_kwh, 
+			last_month_energy_kwh,
+			yearly_energy_kwh, 
+			last_year_energy_kwh,
+			updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(charger_id) DO UPDATE SET
+			last_session_energy_kwh = excluded.last_session_energy_kwh,
+			last_session_duration_sec = excluded.last_session_duration_sec,
+			weekly_energy_kwh = excluded.weekly_energy_kwh,
+			monthly_energy_kwh = excluded.monthly_energy_kwh,
+			last_month_energy_kwh = excluded.last_month_energy_kwh,
+			yearly_energy_kwh = excluded.yearly_energy_kwh,
+			last_year_energy_kwh = excluded.last_year_energy_kwh,
+			updated_at = CURRENT_TIMESTAMP
+	`, chargerID, lastSessionEnergy, lastSessionDuration, weeklyEnergy, 
+	   monthlyEnergy, lastMonthEnergy, yearlyEnergy, lastYearEnergy)
+	
+	if err != nil {
+		log.Printf("ERROR: Could not update charger stats: %v", err)
+	} else {
+		log.Printf("   💾 [Charger %d] Stats saved to charger_stats table", chargerID)
+	}
+}
+
 // WriteMaintenanceReading writes a 15-min reading when no session is active (idle state)
+// Writes to charger_sessions table like Zaptec does
 func WriteMaintenanceReading(chargerID int, chargerName string, totalEnergy float64, mode string, db *sql.DB, collector LoxoneCollectorInterface) {
 	currentTime := RoundToQuarterHour(time.Now())
 
 	// Check if we already have a reading for this timestamp
 	var exists int
 	err := db.QueryRow(`
-		SELECT COUNT(*) FROM charger_readings 
-		WHERE charger_id = ? AND timestamp = ?
-	`, chargerID, currentTime.Format("2006-01-02T15:04:05-07:00")).Scan(&exists)
+		SELECT COUNT(*) FROM charger_sessions 
+		WHERE charger_id = ? AND session_time = ?
+	`, chargerID, currentTime.Format("2006-01-02 15:04:05")).Scan(&exists)
 
 	if err == nil && exists > 0 {
 		// Already have a reading for this timestamp
@@ -565,16 +610,17 @@ func WriteMaintenanceReading(chargerID int, chargerName string, totalEnergy floa
 	}
 
 	// Write maintenance reading with no user (idle state)
+	// Use state "1" for disconnected (matches Zaptec: 1 = Disconnected)
 	_, err = db.Exec(`
-		INSERT INTO charger_readings (charger_id, timestamp, energy_kwh, user_id, session_id, reading_type)
+		INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
 		VALUES (?, ?, ?, ?, ?, ?)
-	`, chargerID, currentTime.Format("2006-01-02T15:04:05-07:00"),
-		totalEnergy, "", "", "M") // M = Maintenance (idle)
+	`, chargerID, "", currentTime.Format("2006-01-02 15:04:05"),
+		totalEnergy, mode, "1") // state = 1 (disconnected, like Zaptec)
 
 	if err != nil {
 		log.Printf("   ⚠️ [%s] Failed to write maintenance reading: %v", chargerName, err)
 	} else {
-		log.Printf("   📝 [%s] Maintenance reading written: %.3f kWh at %s (no user, idle)",
+		log.Printf("   📝 [%s] Maintenance reading written: %.3f kWh at %s (disconnected, no user)",
 			chargerName, totalEnergy, currentTime.Format("15:04:05"))
 	}
 }
