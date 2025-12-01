@@ -25,7 +25,7 @@ func NewDashboardHandler(db *sql.DB) *DashboardHandler {
 func roundTo15Min(t time.Time) time.Time {
 	minutes := t.Minute()
 	var roundedMinutes int
-	
+
 	if minutes < 8 {
 		roundedMinutes = 0
 	} else if minutes < 23 {
@@ -37,7 +37,7 @@ func roundTo15Min(t time.Time) time.Time {
 	} else {
 		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour()+1, 0, 0, 0, t.Location())
 	}
-	
+
 	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), roundedMinutes, 0, 0, t.Location())
 }
 
@@ -59,46 +59,46 @@ func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error counting users: %v", err)
 		stats.TotalUsers = 0
 	}
-	
+
 	// Count regular users
 	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users WHERE COALESCE(user_type, 'regular') = 'regular'").Scan(&stats.RegularUsers); err != nil {
 		log.Printf("Error counting regular users: %v", err)
 		stats.RegularUsers = 0
 	}
-	
+
 	// Count admin users
 	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users WHERE user_type = 'administration'").Scan(&stats.AdminUsers); err != nil {
 		log.Printf("Error counting admin users: %v", err)
 		stats.AdminUsers = 0
 	}
-	
+
 	// Count buildings (excluding groups/complexes)
 	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM buildings WHERE COALESCE(is_group, 0) = 0").Scan(&stats.TotalBuildings); err != nil {
 		log.Printf("Error counting buildings: %v", err)
 		stats.TotalBuildings = 0
 	}
-	
+
 	// Count complexes (building groups)
 	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM buildings WHERE is_group = 1").Scan(&stats.TotalComplexes); err != nil {
 		log.Printf("Error counting complexes: %v", err)
 		stats.TotalComplexes = 0
 	}
-	
+
 	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM meters").Scan(&stats.TotalMeters); err != nil {
 		log.Printf("Error counting meters: %v", err)
 		stats.TotalMeters = 0
 	}
-	
+
 	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM chargers").Scan(&stats.TotalChargers); err != nil {
 		log.Printf("Error counting chargers: %v", err)
 		stats.TotalChargers = 0
 	}
-	
+
 	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM meters WHERE is_active = 1").Scan(&stats.ActiveMeters); err != nil {
 		log.Printf("Error counting active meters: %v", err)
 		stats.ActiveMeters = 0
 	}
-	
+
 	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM chargers WHERE is_active = 1").Scan(&stats.ActiveChargers); err != nil {
 		log.Printf("Error counting active chargers: %v", err)
 		stats.ActiveChargers = 0
@@ -136,15 +136,15 @@ func calculateTotalConsumption(db *sql.DB, ctx context.Context, meterTypes []str
 		placeholders[i] = "?"
 		args[i] = mt
 	}
-	
+
 	meterTypeFilter := strings.Join(placeholders, ",")
-	
+
 	meterQuery := fmt.Sprintf(`
 		SELECT id FROM meters 
 		WHERE meter_type IN (%s) 
 		AND COALESCE(is_active, 1) = 1
 	`, meterTypeFilter)
-	
+
 	meterRows, err := db.QueryContext(ctx, meterQuery, args...)
 	if err != nil {
 		log.Printf("Error querying meters: %v", err)
@@ -153,7 +153,7 @@ func calculateTotalConsumption(db *sql.DB, ctx context.Context, meterTypes []str
 	defer meterRows.Close()
 
 	totalConsumption := 0.0
-	
+
 	for meterRows.Next() {
 		var meterID int
 		if err := meterRows.Scan(&meterID); err != nil {
@@ -195,7 +195,7 @@ func calculateTotalConsumption(db *sql.DB, ctx context.Context, meterTypes []str
 			}
 		}
 	}
-	
+
 	return totalConsumption
 }
 
@@ -211,15 +211,15 @@ func calculateTotalSolarExport(db *sql.DB, ctx context.Context, meterTypes []str
 		placeholders[i] = "?"
 		args[i] = mt
 	}
-	
+
 	meterTypeFilter := strings.Join(placeholders, ",")
-	
+
 	meterQuery := fmt.Sprintf(`
 		SELECT id FROM meters 
 		WHERE meter_type IN (%s) 
 		AND COALESCE(is_active, 1) = 1
 	`, meterTypeFilter)
-	
+
 	meterRows, err := db.QueryContext(ctx, meterQuery, args...)
 	if err != nil {
 		log.Printf("Error querying solar meters: %v", err)
@@ -228,7 +228,7 @@ func calculateTotalSolarExport(db *sql.DB, ctx context.Context, meterTypes []str
 	defer meterRows.Close()
 
 	totalExport := 0.0
-	
+
 	for meterRows.Next() {
 		var meterID int
 		if err := meterRows.Scan(&meterID); err != nil {
@@ -274,7 +274,7 @@ func calculateTotalSolarExport(db *sql.DB, ctx context.Context, meterTypes []str
 			}
 		}
 	}
-	
+
 	return totalExport
 }
 
@@ -290,7 +290,7 @@ func calculateTotalChargingConsumption(db *sql.DB, ctx context.Context, periodSt
 	defer chargerRows.Close()
 
 	totalConsumption := 0.0
-	
+
 	for chargerRows.Next() {
 		var chargerID int
 		if err := chargerRows.Scan(&chargerID); err != nil {
@@ -303,7 +303,7 @@ func calculateTotalChargingConsumption(db *sql.DB, ctx context.Context, periodSt
 			WHERE charger_id = ?
 			AND session_time >= ? AND session_time < ?
 		`, chargerID, periodStart, periodEnd)
-		
+
 		if err != nil {
 			continue
 		}
@@ -354,7 +354,7 @@ func calculateTotalChargingConsumption(db *sql.DB, ctx context.Context, periodSt
 		}
 		userRows.Close()
 	}
-	
+
 	return totalConsumption
 }
 
@@ -389,7 +389,7 @@ func (h *DashboardHandler) GetConsumption(w http.ResponseWriter, r *http.Request
 		startTime = now.Add(-24 * time.Hour)
 	}
 
-	log.Printf("GetConsumption: period=%s, startTime=%s, endTime=%s", 
+	log.Printf("GetConsumption: period=%s, startTime=%s, endTime=%s",
 		period, startTime.Format("2006-01-02 15:04:05"), now.Format("2006-01-02 15:04:05"))
 
 	rows, err := h.db.QueryContext(ctx, `
@@ -398,7 +398,7 @@ func (h *DashboardHandler) GetConsumption(w http.ResponseWriter, r *http.Request
 		JOIN meters m ON mr.meter_id = m.id
 		WHERE mr.reading_time >= ? AND mr.reading_time <= ?
 		ORDER BY mr.reading_time ASC
-	`, startTime, now)
+	`, startTimeStr, nowStr)
 
 	if err != nil {
 		log.Printf("Error querying consumption: %v", err)
@@ -452,7 +452,10 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		startTime = now.Add(-24 * time.Hour)
 	}
 
-	log.Printf("GetConsumptionByBuilding: period=%s, startTime=%s, endTime=%s", 
+	startTimeStr := startTime.Format("2006-01-02 15:04:05-07:00")
+	nowStr := now.Format("2006-01-02 15:04:05-07:00")
+
+	log.Printf("GetConsumptionByBuilding: period=%s, startTime=%s, endTime=%s",
 		period, startTime.Format("2006-01-02 15:04:05"), now.Format("2006-01-02 15:04:05"))
 
 	buildingRows, err := h.db.QueryContext(ctx, `
@@ -473,7 +476,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		name string
 	}
 	buildingInfos := []buildingInfo{}
-	
+
 	for buildingRows.Next() {
 		var bi buildingInfo
 		if err := buildingRows.Scan(&bi.id, &bi.name); err != nil {
@@ -483,15 +486,15 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		buildingInfos = append(buildingInfos, bi)
 	}
 	buildingRows.Close()
-	
+
 	log.Printf("Found %d buildings to process", len(buildingInfos))
 
 	type MeterData struct {
-		MeterID   int                        `json:"meter_id"`
-		MeterName string                     `json:"meter_name"`
-		MeterType string                     `json:"meter_type"`
-		UserName  string                     `json:"user_name,omitempty"`
-		Data      []models.ConsumptionData   `json:"data"`
+		MeterID   int                      `json:"meter_id"`
+		MeterName string                   `json:"meter_name"`
+		MeterType string                   `json:"meter_type"`
+		UserName  string                   `json:"user_name,omitempty"`
+		Data      []models.ConsumptionData `json:"data"`
 	}
 
 	type BuildingConsumption struct {
@@ -529,13 +532,13 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		}
 
 		type meterInfo struct {
-			id       int
-			name     string
+			id        int
+			name      string
 			meterType string
-			userID   sql.NullInt64
+			userID    sql.NullInt64
 		}
 		meterInfos := []meterInfo{}
-		
+
 		for meterRows.Next() {
 			var mi meterInfo
 			if err := meterRows.Scan(&mi.id, &mi.name, &mi.meterType, &mi.userID); err != nil {
@@ -545,7 +548,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			meterInfos = append(meterInfos, mi)
 		}
 		meterRows.Close()
-		
+
 		log.Printf("  Found %d meters for building %d", len(meterInfos), bi.id)
 
 		for _, mi := range meterInfos {
@@ -558,7 +561,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					FROM users 
 					WHERE id = ?
 				`, mi.userID.Int64).Scan(&userName)
-				
+
 				if err != nil && err != sql.ErrNoRows {
 					log.Printf("    Error getting user name for user %d: %v", mi.userID.Int64, err)
 				}
@@ -576,7 +579,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					AND reading_time >= ? 
 					AND reading_time <= ?
 					ORDER BY reading_time ASC
-				`, mi.id, startTime, now)
+				`, mi.id, startTimeStr, nowStr)
 			} else {
 				// For other meters, get import consumption
 				dataRows, err = h.db.QueryContext(ctx, `
@@ -586,7 +589,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					AND reading_time >= ? 
 					AND reading_time <= ?
 					ORDER BY reading_time ASC
-				`, mi.id, startTime, now)
+				`, mi.id, startTimeStr, nowStr)
 			}
 
 			meterData := MeterData{
@@ -602,7 +605,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				building.Meters = append(building.Meters, meterData)
 				continue
 			}
-			
+
 			for dataRows.Next() {
 				var timestamp time.Time
 				var powerKwh, consumptionKwh float64
@@ -614,12 +617,12 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				// Power (W) = Energy (kWh) / Time (h) * 1000
 				// Time = 15 min = 0.25 h
 				powerW := (consumptionKwh / 0.25) * 1000
-				
+
 				// For solar meters, make power negative to show as generation/export
 				if mi.meterType == "solar_meter" {
 					powerW = -powerW
 				}
-				
+
 				meterData.Data = append(meterData.Data, models.ConsumptionData{
 					Timestamp: timestamp,
 					Power:     powerW,
@@ -651,7 +654,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				name string
 			}
 			chargerInfos := []chargerInfo{}
-			
+
 			for chargerRows.Next() {
 				var ci chargerInfo
 				if err := chargerRows.Scan(&ci.id, &ci.name); err != nil {
@@ -661,7 +664,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				chargerInfos = append(chargerInfos, ci)
 			}
 			chargerRows.Close()
-			
+
 			log.Printf("  Found %d chargers for building %d", len(chargerInfos), bi.id)
 
 			for _, ci := range chargerInfos {
@@ -675,7 +678,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					AND session_time >= ?
 					AND session_time <= ?
 					ORDER BY user_id
-				`, ci.id, startTime, now)
+				`, ci.id, startTimeStr, nowStr)
 
 				if err != nil {
 					log.Printf("    Error querying users for charger %d: %v", ci.id, err)
@@ -686,7 +689,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					userID string
 				}
 				userInfos := []userInfo{}
-				
+
 				for userRows.Next() {
 					var ui userInfo
 					if err := userRows.Scan(&ui.userID); err != nil {
@@ -707,7 +710,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						FROM users 
 						WHERE id = ?
 					`, ui.userID).Scan(&userName)
-					
+
 					if err != nil && err != sql.ErrNoRows {
 						log.Printf("      Error getting user name for user %s: %v", ui.userID, err)
 					}
@@ -722,7 +725,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						AND session_time >= ?
 						AND session_time <= ?
 						ORDER BY session_time ASC
-					`, ci.id, ui.userID, startTime, now)
+					`, ci.id, ui.userID, startTimeStr, nowStr)
 
 					if err != nil {
 						log.Printf("      Error querying sessions for charger %d, user %s: %v", ci.id, ui.userID, err)
@@ -732,12 +735,12 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					consumptionData := []models.ConsumptionData{}
 					var previousPower float64
 					var hasPrevious bool
-					
+
 					for sessionRows.Next() {
 						var timestamp time.Time
 						var powerKwh float64
 						var state string
-						
+
 						if err := sessionRows.Scan(&timestamp, &powerKwh, &state); err != nil {
 							continue
 						}
@@ -756,7 +759,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 
 						// Calculate consumption
 						consumptionKwh := powerKwh - previousPower
-						
+
 						if consumptionKwh < 0 {
 							// Meter reset
 							log.Printf("      Meter reset detected at %s", timestamp.Format("15:04"))
@@ -766,7 +769,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 
 						// Convert consumption (kWh over 15 min) to power (W)
 						powerW := (consumptionKwh / 0.25) * 1000
-						
+
 						// Cap unrealistic values
 						if powerW > 50000 {
 							powerW = 50000
