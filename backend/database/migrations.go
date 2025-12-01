@@ -159,6 +159,27 @@ func RunMigrations(db *sql.DB) error {
 
 		`CREATE INDEX IF NOT EXISTS idx_charger_stats_charger_id ON charger_stats(charger_id)`,
 
+		// Active charger sessions table - stores sessions in progress (survive restarts)
+		`CREATE TABLE IF NOT EXISTS active_charger_sessions (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			charger_id INTEGER NOT NULL,
+			session_key TEXT NOT NULL UNIQUE,
+			charger_name TEXT NOT NULL,
+			start_time DATETIME NOT NULL,
+			start_energy_kwh REAL NOT NULL,
+			user_id TEXT,
+			mode TEXT,
+			last_lcl_value TEXT,
+			readings_json TEXT,
+			readings_count INTEGER DEFAULT 0,
+			last_update DATETIME DEFAULT CURRENT_TIMESTAMP,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (charger_id) REFERENCES chargers(id) ON DELETE CASCADE
+		)`,
+
+		`CREATE INDEX IF NOT EXISTS idx_active_sessions_charger ON active_charger_sessions(charger_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_active_sessions_key ON active_charger_sessions(session_key)`,
+
 		`CREATE TABLE IF NOT EXISTS billing_settings (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			building_id INTEGER NOT NULL,

@@ -25,7 +25,7 @@ func ProcessCompletedChargerSession(session *CompletedChargerSession, db *sql.DB
 	if collector != nil {
 		processedSessions := collector.GetProcessedSessions()
 		if processedSessions[sessionID] {
-			log.Printf("   ⏭️ [%s] Session %s already processed, skipping", session.ChargerName, sessionID)
+			log.Printf("   ⭐️ [%s] Session %s already processed, skipping", session.ChargerName, sessionID)
 			return
 		}
 	}
@@ -167,6 +167,11 @@ func ProcessCompletedChargerSession(session *CompletedChargerSession, db *sql.DB
 	// Mark session as processed
 	if collector != nil {
 		collector.MarkSessionProcessed(sessionID)
+	}
+	
+	// Delete from active sessions (this also handles database cleanup internally)
+	if collector != nil {
+		collector.DeleteActiveSession(session.ChargerID)
 	}
 
 	// Update charger_stats table with last session info
