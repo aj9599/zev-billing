@@ -54,24 +54,21 @@ export default function ChargerCard({
         ? liveData?.state_description
         : undefined;
 
-    // Determine if charging based on connection type and state
+    // 🔧 FIX 1: Determine if charging based on connection type and state
     const isCharging = charger.connection_type === 'zaptec_api'
         ? stateValue === '3'  // Zaptec: state 3 = Charging
         : charger.connection_type === 'loxone_api'
-            ? (stateDescription === 'Charging' || stateValue === '1')  // Loxone: state 1 = Charging OR state_description = "Charging"
+            ? (stateDescription === 'Charging' || stateValue === '3')  // Loxone: state 3 = Charging
             : stateValue === '67'; // Weidmüller multi-UUID: state 67 = Charging
 
     const hasLiveSession = liveData?.live_session?.is_active || zaptecStatus?.live_session?.is_active;
 
-    // For Zaptec chargers, prefer zaptecStatus data over liveData
+    // 🔧 FIX 2: Get total energy from loxone_status or live_data
     const totalEnergy = charger.connection_type === 'zaptec_api'
         ? (zaptecStatus?.last_reading ?? liveData?.total_energy ?? 0)
-        : (liveData?.total_energy ?? 0);
-
-    // FIXED: Session energy logic based on state
-    const isUnknownOrDisconnected = charger.connection_type === 'loxone_api'
-        ? (stateValue === '0' || stateDescription === 'Disconnected')  // Loxone: 0 = disconnected
-        : (stateValue === '0' || stateValue === '1');  // Zaptec/Weidmüller states
+        : charger.connection_type === 'loxone_api'
+            ? (loxoneStatus?.last_reading ?? liveData?.total_energy ?? 0)
+            : (liveData?.total_energy ?? 0);
 
     // State checks - handle Zaptec and Loxone chargers differently
     const isAwaitingStart = charger.connection_type === 'zaptec_api'
@@ -80,17 +77,20 @@ export default function ChargerCard({
             ? false  // Loxone doesn't have this state
             : stateValue === '66'; // Weidmüller multi-UUID: state 66 = Awaiting Start
 
+    // 🔧 FIX 3: Add Loxone support for completed state
     const isCompleted = charger.connection_type === 'zaptec_api'
         ? stateValue === '5'  // Zaptec: state 5 = Completed
-        : false; // Loxone doesn't have explicit completed state
+        : charger.connection_type === 'loxone_api'
+            ? (stateValue === '5' || stateDescription === 'Complete')  // Loxone: state 5 = Complete
+            : false;
 
     const isDisconnected = charger.connection_type === 'zaptec_api'
         ? stateValue === '1'  // Zaptec: state 1 = Disconnected
         : charger.connection_type === 'loxone_api'
-            ? (stateDescription === 'Disconnected' || stateValue === '0')  // Loxone: state 0 = Disconnected
+            ? (stateDescription === 'Disconnected' || stateValue === '1')  // Loxone: state 1 = Disconnected
             : stateValue === '50'; // Weidmüller multi-UUID: state 50 = Idle
 
-    // CRITICAL FIX: Always get session energy from zaptecStatus for Zaptec chargers
+    // Get session energy
     const sessionEnergy = charger.connection_type === 'zaptec_api'
         ? (isAwaitingStart
             ? 0 // No session yet when waiting for auth
@@ -115,7 +115,7 @@ export default function ChargerCard({
         state: stateValue,
         state_description: stateDescription,
         isCharging,
-        isUnknownOrDisconnected,
+        isCompleted,
         isAwaitingStart,
         power: currentPowerKW,
         sessionEnergy,
@@ -126,17 +126,16 @@ export default function ChargerCard({
         liveData: liveData
     });
 
-    // Determine charger state for styling - use native Zaptec states
+    // Determine charger state for styling
     const stateDisplay = getStateDisplay(charger, stateValue, t);
 
-    // Calculate session duration properly - FIXED
+    // Calculate session duration properly
     const calculateDuration = (startTimeStr: string): string => {
         if (!startTimeStr || startTimeStr === '0001-01-01T00:00:00' || startTimeStr === '0001-01-01T00:00:00Z') {
             return '';
         }
 
         try {
-            // Add 'Z' if no timezone indicator to force UTC interpretation
             const timestamp = startTimeStr.endsWith('Z') ? startTimeStr : startTimeStr + 'Z';
             const startTime = new Date(timestamp);
 
@@ -146,7 +145,7 @@ export default function ChargerCard({
 
             const diffMs = Date.now() - startTime.getTime();
 
-            if (diffMs < 0) return ''; // Safety check
+            if (diffMs < 0) return '';
 
             const hours = Math.floor(diffMs / (1000 * 60 * 60));
             const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
@@ -161,7 +160,6 @@ export default function ChargerCard({
         }
     };
 
-    // Get duration from live session - FIXED: Show for active OR completed sessions
     const sessionDuration = liveSession?.start_time
         ? calculateDuration(liveSession.start_time)
         : liveSession?.duration || '';
@@ -174,19 +172,18 @@ export default function ChargerCard({
     const circumference = 2 * Math.PI * radius;
     const strokeDashoffset = circumference - (powerPercentage / 100) * circumference;
 
-    // Get the actual mode value for display - FIXED
     const modeValue = liveData?.mode ?? '1';
     const modeDisplay = getModeDisplay(charger, modeValue, t);
 
-    // NEW: Enhanced Loxone stats - UPDATED to show weekly, monthly, and yearly
+    // 🔧 FIX 4: Show enhanced stats even if values are 0 (December 1st reset)
     const hasEnhancedStats = charger.connection_type === 'loxone_api' && (
-        liveData?.weekly_energy ||
-        liveData?.monthly_energy ||
-        liveData?.yearly_energy
+        liveData?.weekly_energy !== undefined ||
+        liveData?.monthly_energy !== undefined ||
+        liveData?.yearly_energy !== undefined
     );
 
-    // NEW: Calculate comparisons
-    const monthComparison = liveData?.monthly_energy && liveData?.last_month_energy
+    // Calculate comparisons
+    const monthComparison = liveData?.monthly_energy !== undefined && liveData?.last_month_energy
         ? formatEnergyComparison(liveData.monthly_energy, liveData.last_month_energy)
         : null;
 
@@ -407,7 +404,7 @@ export default function ChargerCard({
                 </p>
             </div>
 
-            {/* Main Gauge Display - Always visible */}
+            {/* Main Gauge Display */}
             <div style={{
                 marginTop: '8px',
                 padding: '24px',
@@ -428,7 +425,6 @@ export default function ChargerCard({
                 transition: 'all 0.3s ease'
             }}>
 
-                {/* Main content with gauge and data */}
                 <div style={{
                     position: 'relative',
                     zIndex: 1,
@@ -448,7 +444,6 @@ export default function ChargerCard({
                         flexShrink: 0,
                         animation: isCharging ? 'gaugePulse 2s ease-in-out infinite' : 'none'
                     }}>
-                        {/* Pulsing ring when charging */}
                         {isCharging && (
                             <div style={{
                                 position: 'absolute',
@@ -459,9 +454,7 @@ export default function ChargerCard({
                             }} />
                         )}
 
-                        {/* SVG Gauge */}
                         <svg width={circleSize} height={circleSize} style={{ transform: 'rotate(-90deg)' }}>
-                            {/* Background circle */}
                             <circle
                                 cx={circleSize / 2}
                                 cy={circleSize / 2}
@@ -470,7 +463,6 @@ export default function ChargerCard({
                                 strokeWidth={strokeWidth}
                                 fill="transparent"
                             />
-                            {/* Progress circle - Green when charging */}
                             <circle
                                 cx={circleSize / 2}
                                 cy={circleSize / 2}
@@ -494,7 +486,6 @@ export default function ChargerCard({
                             />
                         </svg>
 
-                        {/* Center text */}
                         <div style={{
                             position: 'absolute',
                             display: 'flex',
@@ -615,7 +606,7 @@ export default function ChargerCard({
                             </div>
                         )}
 
-                        {/* Session Energy - Always show if > 0 */}
+                        {/* Session Energy - Show if > 0 */}
                         {sessionEnergy > 0 && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                 <div style={{
@@ -680,7 +671,7 @@ export default function ChargerCard({
                             </div>
                         )}
 
-                        {/* Status indicator with icon */}
+                        {/* Status indicator */}
                         <div style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -692,13 +683,11 @@ export default function ChargerCard({
                             {isOnline ? (
                                 <>
                                     <Wifi size={16} color="#22c55e" />
-                                    <span
-                                        style={{
-                                            fontSize: '12px',
-                                            fontWeight: '600',
-                                            color: '#22c55e'
-                                        }}
-                                    >
+                                    <span style={{
+                                        fontSize: '12px',
+                                        fontWeight: '600',
+                                        color: '#22c55e'
+                                    }}>
                                         {t('chargers.status.connected') || 'Connected'}
                                         <Dot size={12} style={{ margin: '0 4px' }} />
                                         {t('chargers.status.online')}
@@ -717,7 +706,7 @@ export default function ChargerCard({
                 </div>
             </div>
 
-            {/* NEW: Enhanced Loxone Energy Statistics Section - UPDATED */}
+            {/* Enhanced Loxone Energy Statistics - FIXED to show even when 0 */}
             {hasEnhancedStats && (
                 <div style={{
                     marginTop: '16px',
@@ -753,7 +742,7 @@ export default function ChargerCard({
                         gap: '12px'
                     }}>
                         {/* Weekly Energy */}
-                        {liveData?.weekly_energy && liveData.weekly_energy > 0 && (
+                        {liveData?.weekly_energy !== undefined && (
                             <div style={{
                                 padding: '12px',
                                 backgroundColor: 'rgba(255,255,255,0.8)',
@@ -787,8 +776,8 @@ export default function ChargerCard({
                             </div>
                         )}
 
-                        {/* Monthly Energy with Comparison */}
-                        {liveData?.monthly_energy && liveData.monthly_energy > 0 && (
+                        {/* Monthly Energy - FIXED: Show even if 0 */}
+                        {liveData?.monthly_energy !== undefined && (
                             <div style={{
                                 padding: '12px',
                                 backgroundColor: 'rgba(255,255,255,0.8)',
@@ -836,14 +825,14 @@ export default function ChargerCard({
                             </div>
                         )}
 
-                        {/* Yearly Energy with Comparison */}
-                        {liveData?.yearly_energy && liveData.yearly_energy > 0 && (
+                        {/* Yearly Energy */}
+                        {liveData?.yearly_energy !== undefined && (
                             <div style={{
                                 padding: '12px',
                                 backgroundColor: 'rgba(255,255,255,0.8)',
                                 borderRadius: '12px',
                                 border: '1px solid rgba(229,231,235,0.6)',
-                                gridColumn: liveData?.weekly_energy && liveData.weekly_energy > 0 ? 'auto' : '1 / -1'
+                                gridColumn: liveData?.weekly_energy !== undefined ? 'auto' : '1 / -1'
                             }}>
                                 <div style={{
                                     display: 'flex',
@@ -916,7 +905,7 @@ export default function ChargerCard({
                     </span>
                 </div>
 
-                {/* Voltage & Current Grid - Compact */}
+                {/* Voltage & Current Grid */}
                 {(liveData?.voltage || liveData?.current) && (
                     <div style={{
                         display: 'grid',
@@ -1029,14 +1018,13 @@ export default function ChargerCard({
                     </div>
                 )}
 
-                {/* Charging Mode & Active Status - Inline */}
+                {/* Charging Mode & Active Status */}
                 <div style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     gap: '12px'
                 }}>
-                    {/* Charging Mode */}
                     <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <span style={{ fontSize: '12px', color: '#9ca3af', fontWeight: '500' }}>
@@ -1055,7 +1043,6 @@ export default function ChargerCard({
                         </div>
                     </div>
 
-                    {/* Active Status */}
                     <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <span style={{ fontSize: '12px', color: '#9ca3af', fontWeight: '500' }}>

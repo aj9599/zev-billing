@@ -5,6 +5,18 @@ export const getStateDisplay = (charger: Charger, stateValue?: string, t?: (key:
 
   const stateStr = String(stateValue).trim();
 
+  // 🔧 FIX: Add Loxone charger state handling
+  // Loxone uses same state values as Zaptec: 1=Disconnected, 3=Charging, 5=Complete
+  if (charger.connection_type === 'loxone_api') {
+    switch (stateStr) {
+      case '0': return t?.('chargers.state.unknown') || 'Unknown';
+      case '1': return t?.('chargers.state.disconnected') || 'Disconnected';
+      case '3': return t?.('chargers.state.charging') || 'Charging';
+      case '5': return t?.('chargers.state.completed') || 'Completed';
+      default: return t?.('chargers.state.unknown') || 'Unknown';
+    }
+  }
+
   // For Zaptec chargers, use native API state values (0, 1, 2, 3, 5)
   if (charger.connection_type === 'zaptec_api') {
     switch (stateStr) {
@@ -17,7 +29,7 @@ export const getStateDisplay = (charger: Charger, stateValue?: string, t?: (key:
     }
   }
 
-  // For WeidmÃ¼ller chargers, check the UUID mode from config
+  // For Weidmüller chargers, check the UUID mode from config
   try {
     const config = JSON.parse(charger.connection_config);
     
@@ -30,7 +42,7 @@ export const getStateDisplay = (charger: Charger, stateValue?: string, t?: (key:
       }
     }
 
-    // For multi-UUID mode (original WeidmÃƒÂ¼ller), use config-based mapping
+    // For multi-UUID mode (original Weidmüller), use config-based mapping
     if (stateStr === String(config.state_cable_locked).trim()) {
       return t?.('chargers.state.cableLocked') || 'Cable Locked';
     }
@@ -55,7 +67,19 @@ export const getModeDisplay = (charger: Charger, modeValue?: string, t?: (key: s
 
   const modeStr = String(modeValue).trim();
 
-  // For WeidmÃƒÂ¼ller chargers, check the UUID mode from config
+  // 🔧 FIX: Add Loxone mode handling (M values: 1-5=Solar, 99=Priority)
+  if (charger.connection_type === 'loxone_api') {
+    const modeNum = parseInt(modeStr);
+    if (modeNum >= 1 && modeNum <= 5) {
+      return t?.('chargers.mode.solar') || `Solar Mode ${modeNum}`;
+    }
+    if (modeNum === 99) {
+      return t?.('chargers.mode.priority') || 'Priority Charging';
+    }
+    return t?.('chargers.mode.normal') || 'Normal';
+  }
+
+  // For Weidmüller chargers, check the UUID mode from config
   try {
     const config = JSON.parse(charger.connection_config);
     
@@ -68,7 +92,6 @@ export const getModeDisplay = (charger: Charger, modeValue?: string, t?: (key: s
       if (modeNum === 99) {
         return t?.('chargers.mode.priority') || 'Priority';
       }
-      // Default to normal mode for any other value
       return t?.('chargers.mode.normal') || 'Normal';
     }
 
