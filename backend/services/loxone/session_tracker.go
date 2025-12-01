@@ -9,8 +9,9 @@ import (
 
 // ProcessCompletedChargerSession writes all readings from a completed session to charger_sessions table
 // This matches how Zaptec works - using charger_sessions table, not charger_readings
+// CRITICAL FIX: All timestamps now use timezone-aware format (2006-01-02 15:04:05-07:00) to match Zaptec
 func ProcessCompletedChargerSession(session *CompletedChargerSession, db *sql.DB, collector LoxoneCollectorInterface) {
-	log.Printf("   🏁 [%s] Processing completed session...", session.ChargerName)
+	log.Printf("   🔵 [%s] Processing completed session...", session.ChargerName)
 	log.Printf("      User: %s, Energy: %.3f kWh, Readings: %d",
 		session.UserID, session.TotalEnergy_kWh, len(session.Readings))
 	log.Printf("      Actual Start: %s, Actual End: %s, Duration: %.0f seconds",
@@ -25,7 +26,7 @@ func ProcessCompletedChargerSession(session *CompletedChargerSession, db *sql.DB
 	if collector != nil {
 		processedSessions := collector.GetProcessedSessions()
 		if processedSessions[sessionID] {
-			log.Printf("   ⭐️ [%s] Session %s already processed, skipping", session.ChargerName, sessionID)
+			log.Printf("   ⏭️ [%s] Session %s already processed, skipping", session.ChargerName, sessionID)
 			return
 		}
 	}
@@ -53,19 +54,20 @@ func ProcessCompletedChargerSession(session *CompletedChargerSession, db *sql.DB
 	roundedEndTime := RoundToQuarterHour(session.EndTime)
 
 	// STEP 1: Write exact start reading (may not be on 15-min boundary)
-	log.Printf("   🏁 [%s] Writing start reading at %s (energy: %.3f kWh)",
+	// CRITICAL: Use timezone-aware format to match Zaptec and avoid UTC confusion
+	log.Printf("   🔵 [%s] Writing start reading at %s (energy: %.3f kWh)",
 		session.ChargerName, session.StartTime.Format("2006-01-02 15:04:05"), session.StartEnergy_kWh)
 
 	_, err = stmt.Exec(
 		session.ChargerID,
 		session.UserID,
-		session.StartTime.Format("2006-01-02 15:04:05"),
+		session.StartTime.Format("2006-01-02 15:04:05-07:00"), // Include timezone offset!
 		session.StartEnergy_kWh,
 		session.Mode,
 		"3", // state = 3 (charging, like Zaptec)
 	)
 	if err != nil {
-		log.Printf("   ⚠️ [%s] Failed to insert start reading: %v", session.ChargerName, err)
+		log.Printf("   ⚠️  [%s] Failed to insert start reading: %v", session.ChargerName, err)
 	}
 
 	// STEP 2: Write all 15-min interval readings that we captured during the session
@@ -79,13 +81,13 @@ func ProcessCompletedChargerSession(session *CompletedChargerSession, db *sql.DB
 		_, err := stmt.Exec(
 			session.ChargerID,
 			session.UserID,
-			reading.Timestamp.Format("2006-01-02 15:04:05"),
+			reading.Timestamp.Format("2006-01-02 15:04:05-07:00"), // Include timezone offset!
 			reading.Energy_kWh,
 			reading.Mode,
 			"3", // state = 3 (charging)
 		)
 		if err != nil {
-			log.Printf("   ⚠️ [%s] Failed to insert reading %d: %v", session.ChargerName, i, err)
+			log.Printf("   ⚠️  [%s] Failed to insert reading %d: %v", session.ChargerName, i, err)
 		} else {
 			writtenCount++
 		}
@@ -123,13 +125,13 @@ func ProcessCompletedChargerSession(session *CompletedChargerSession, db *sql.DB
 			_, err := stmt.Exec(
 				session.ChargerID,
 				session.UserID,
-				currentTime.Format("2006-01-02 15:04:05"),
+				currentTime.Format("2006-01-02 15:04:05-07:00"), // Include timezone offset!
 				interpolatedEnergy,
 				session.Mode,
 				"3", // state = 3 (charging)
 			)
 			if err != nil {
-				log.Printf("   ⚠️ [%s] Failed to insert backfilled reading: %v", session.ChargerName, err)
+				log.Printf("   ⚠️  [%s] Failed to insert backfilled reading: %v", session.ChargerName, err)
 			} else {
 				backfilledCount++
 			}
@@ -143,19 +145,19 @@ func ProcessCompletedChargerSession(session *CompletedChargerSession, db *sql.DB
 	}
 
 	// STEP 4: Write exact end reading (may not be on 15-min boundary)
-	log.Printf("   🏁 [%s] Writing end reading at %s (energy: %.3f kWh)",
+	log.Printf("   🔵 [%s] Writing end reading at %s (energy: %.3f kWh)",
 		session.ChargerName, session.EndTime.Format("2006-01-02 15:04:05"), session.EndEnergy_kWh)
 
 	_, err = stmt.Exec(
 		session.ChargerID,
 		session.UserID,
-		session.EndTime.Format("2006-01-02 15:04:05"),
+		session.EndTime.Format("2006-01-02 15:04:05-07:00"), // Include timezone offset!
 		session.EndEnergy_kWh,
 		session.Mode,
 		"3", // state = 3 (charging)
 	)
 	if err != nil {
-		log.Printf("   ⚠️ [%s] Failed to insert end reading: %v", session.ChargerName, err)
+		log.Printf("   ⚠️  [%s] Failed to insert end reading: %v", session.ChargerName, err)
 	}
 
 	// Commit transaction for charger_sessions
@@ -191,10 +193,10 @@ func ProcessCompletedChargerSession(session *CompletedChargerSession, db *sql.DB
 			last_session_end_time = excluded.last_session_end_time,
 			updated_at = CURRENT_TIMESTAMP
 	`, session.ChargerID, session.TotalEnergy_kWh, session.Duration_sec, 
-	   session.UserID, session.EndTime.Format("2006-01-02 15:04:05"))
+	   session.UserID, session.EndTime.Format("2006-01-02 15:04:05-07:00")) // Include timezone offset!
 	
 	if err != nil {
-		log.Printf("   ⚠️ [%s] Failed to update charger_stats: %v", session.ChargerName, err)
+		log.Printf("   ⚠️  [%s] Failed to update charger_stats: %v", session.ChargerName, err)
 	} else {
 		log.Printf("   💾 [%s] Updated charger_stats with last session info", session.ChargerName)
 	}
