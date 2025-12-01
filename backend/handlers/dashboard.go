@@ -674,8 +674,6 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					WHERE charger_id = ? 
 					AND session_time >= ?
 					AND session_time <= ?
-					AND user_id != ''
-					AND state = '3'
 					ORDER BY user_id
 				`, ci.id, startTime, now)
 
@@ -723,7 +721,6 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						AND user_id = ?
 						AND session_time >= ?
 						AND session_time <= ?
-						AND state = '3'
 						ORDER BY session_time ASC
 					`, ci.id, ui.userID, startTime, now)
 
@@ -794,7 +791,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 							Data:      consumptionData,
 						}
 
-						log.Printf("      âœ… Charger ID: %d has %d data points for user %s", ci.id, len(consumptionData), userName)
+						log.Printf("      ✅ Charger ID: %d has %d data points for user %s", ci.id, len(consumptionData), userName)
 						building.Meters = append(building.Meters, chargerData)
 					}
 				}
