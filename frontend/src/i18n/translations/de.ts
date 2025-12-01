@@ -1283,6 +1283,13 @@ export const de: Translations = {
   "chargers.loxoneUuidModeSingle": "Einzelner Block-UUID",
   "chargers.loxoneUuidModeMultiHelp": "Verwendet 4 separate UUIDs für Leistung, Status, Benutzer-ID und Modus. Traditionelle Konfigurationsmethode.",
   "chargers.loxoneUuidModeSingleHelp": "Verwendet eine einzelne Ladegerät-Block-UUID. Vereinfachte Konfigurationsmethode.",
+  'chargers.stats.energyStatistics': 'Energie-Statistiken',
+  'chargers.stats.lastSession': 'Letzte Sitzung',
+  'chargers.stats.thisWeek': 'Diese Woche',
+  'chargers.stats.thisMonth': 'Dieser Monat',
+  'chargers.stats.lastMonth': 'Letzter Monat',
+  'chargers.stats.thisYear': 'Dieses Jahr',
+  'chargers.stats.lastYear': 'Letztes Jahr',
 
   // ============================================================================
   // BILLING

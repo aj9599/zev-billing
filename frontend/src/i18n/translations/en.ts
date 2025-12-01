@@ -1283,6 +1283,13 @@ export const en: Translations = {
   "chargers.loxoneUuidModeSingle": "Single Block UUID",
   "chargers.loxoneUuidModeMultiHelp": "Uses 4 separate UUIDs for power, state, user ID, and mode. Traditional configuration method.",
   "chargers.loxoneUuidModeSingleHelp": "Uses a single Charger Block UUID. Simplified configuration method.",
+  'chargers.stats.energyStatistics': 'Energy Statistics',
+  'chargers.stats.lastSession': 'Last Session',
+  'chargers.stats.thisWeek': 'This Week',
+  'chargers.stats.thisMonth': 'This Month',
+  'chargers.stats.lastMonth': 'Last Month',
+  'chargers.stats.thisYear': 'This Year',
+  'chargers.stats.lastYear': 'Last Year',
 
   // ============================================================================
   // BILLING
