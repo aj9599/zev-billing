@@ -76,41 +76,41 @@ func (dc *DNSCache) Invalidate() {
 
 // ChargerLiveData holds live charger data for UI display (not persisted during charging)
 type ChargerLiveData struct {
-	ChargerID        int
-	ChargerName      string
-	IsOnline         bool
+	ChargerID        int       `json:"charger_id"`
+	ChargerName      string    `json:"charger_name"`
+	IsOnline         bool      `json:"is_online"`
 
 	// Current state
-	VehicleConnected bool
-	ChargingActive   bool
-	State            string // "0"=idle, "1"=charging
-	StateDescription string
+	VehicleConnected bool   `json:"vehicle_connected"`
+	ChargingActive   bool   `json:"charging_active"`
+	State            string `json:"state"`
+	StateDescription string `json:"state_description"`
 
 	// Live metrics (for UI display during charging)
-	CurrentPower_kW   float64 // Cp - output3 - Real-time charging power
-	TotalEnergy_kWh   float64 // Mr - output7 - Total meter reading
-	SessionEnergy_kWh float64 // Ccc - output8 - Current session energy
+	CurrentPower_kW   float64 `json:"current_power_kw"`   // Cp - output3 - Real-time charging power
+	TotalEnergy_kWh   float64 `json:"total_energy"`       // Mr - output7 - Total meter reading
+	SessionEnergy_kWh float64 `json:"session_energy"`     // Ccc - output8 - Current session energy
 
 	// Mode info
-	Mode            string
-	ModeDescription string
+	Mode            string `json:"mode"`
+	ModeDescription string `json:"mode_description"`
 
 	// User info (from Uid during charging, confirmed from Lcl after session)
-	UserID   string
-	UserName string
+	UserID   string `json:"user_id"`
+	UserName string `json:"user_name"`
 
 	// Session timing
-	SessionStart time.Time
-	Timestamp    time.Time
+	SessionStart time.Time `json:"session_start"`
+	Timestamp    time.Time `json:"timestamp"`
 
 	// Enhanced live data fields (from Loxone block outputs)
-	LastSessionEnergy_kWh    float64 // Clc - output9 - Last completed session energy
-	LastSessionDuration_sec  float64 // Cld - output11 - Last session duration (converted from hours to seconds)
-	WeeklyEnergy_kWh         float64 // Cw - output12 - Weekly total energy
-	MonthlyEnergy_kWh        float64 // Cm - output13 - Monthly total energy
-	LastMonthEnergy_kWh      float64 // Clm - output14 - Previous month total energy
-	YearlyEnergy_kWh         float64 // Cy - output15 - Yearly total energy
-	LastYearEnergy_kWh       float64 // Cly - output16 - Previous year total energy
+	LastSessionEnergy_kWh    float64 `json:"last_session_energy"`      // Clc - output9
+	LastSessionDuration_sec  float64 `json:"last_session_duration_sec"` // Cld - output11
+	WeeklyEnergy_kWh         float64 `json:"weekly_energy"`            // Cw - output12
+	MonthlyEnergy_kWh        float64 `json:"monthly_energy"`           // Cm - output13
+	LastMonthEnergy_kWh      float64 `json:"last_month_energy"`        // Clm - output14
+	YearlyEnergy_kWh         float64 `json:"yearly_energy"`            // Cy - output15
+	LastYearEnergy_kWh       float64 `json:"last_year_energy"`         // Cly - output16
 }
 
 // ChargerSessionReading represents a single 15-min interval reading during a session

@@ -15,19 +15,6 @@ interface ChargerCardProps {
     t: (key: string) => string;
 }
 
-// Helper function to format duration from seconds
-const formatDurationFromSeconds = (seconds?: number): string => {
-    if (!seconds || seconds === 0) return '';
-
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-
-    if (hours > 0) return `${hours}h ${minutes}m`;
-    if (minutes > 0) return `${minutes}m`;
-
-    return `${Math.floor(seconds)}s`;
-};
-
 // Helper function to format energy comparison
 const formatEnergyComparison = (current: number, previous: number): { percentage: number; isIncrease: boolean } => {
     if (previous === 0) return { percentage: 0, isIncrease: true };
@@ -72,7 +59,7 @@ export default function ChargerCard({
         ? stateValue === '3'  // Zaptec: state 3 = Charging
         : charger.connection_type === 'loxone_api'
             ? (stateDescription === 'Charging' || stateValue === '1')  // Loxone: state 1 = Charging OR state_description = "Charging"
-            : stateValue === '67'; // WeidmÃ¼ller multi-UUID: state 67 = Charging
+            : stateValue === '67'; // Weidmüller multi-UUID: state 67 = Charging
 
     const hasLiveSession = liveData?.live_session?.is_active || zaptecStatus?.live_session?.is_active;
 
@@ -84,14 +71,14 @@ export default function ChargerCard({
     // FIXED: Session energy logic based on state
     const isUnknownOrDisconnected = charger.connection_type === 'loxone_api'
         ? (stateValue === '0' || stateDescription === 'Disconnected')  // Loxone: 0 = disconnected
-        : (stateValue === '0' || stateValue === '1');  // Zaptec/WeidmÃ¼ller states
+        : (stateValue === '0' || stateValue === '1');  // Zaptec/Weidmüller states
 
     // State checks - handle Zaptec and Loxone chargers differently
     const isAwaitingStart = charger.connection_type === 'zaptec_api'
         ? stateValue === '2'  // Zaptec: state 2 = Awaiting Start
         : charger.connection_type === 'loxone_api'
             ? false  // Loxone doesn't have this state
-            : stateValue === '66'; // WeidmÃ¼ller multi-UUID: state 66 = Awaiting Start
+            : stateValue === '66'; // Weidmüller multi-UUID: state 66 = Awaiting Start
 
     const isCompleted = charger.connection_type === 'zaptec_api'
         ? stateValue === '5'  // Zaptec: state 5 = Completed
@@ -101,7 +88,7 @@ export default function ChargerCard({
         ? stateValue === '1'  // Zaptec: state 1 = Disconnected
         : charger.connection_type === 'loxone_api'
             ? (stateDescription === 'Disconnected' || stateValue === '0')  // Loxone: state 0 = Disconnected
-            : stateValue === '50'; // WeidmÃ¼ller multi-UUID: state 50 = Idle
+            : stateValue === '50'; // Weidmüller multi-UUID: state 50 = Idle
 
     // CRITICAL FIX: Always get session energy from zaptecStatus for Zaptec chargers
     const sessionEnergy = charger.connection_type === 'zaptec_api'
@@ -191,9 +178,8 @@ export default function ChargerCard({
     const modeValue = liveData?.mode ?? '1';
     const modeDisplay = getModeDisplay(charger, modeValue, t);
 
-    // NEW: Enhanced Loxone stats
+    // NEW: Enhanced Loxone stats - UPDATED to show weekly, monthly, and yearly
     const hasEnhancedStats = charger.connection_type === 'loxone_api' && (
-        liveData?.last_session_energy ||
         liveData?.weekly_energy ||
         liveData?.monthly_energy ||
         liveData?.yearly_energy
@@ -560,7 +546,7 @@ export default function ChargerCard({
                                     fontWeight: '600',
                                     color: '#2563eb'
                                 }}>
-                                    âœ“ {t('chargers.state.completed')}
+                                    ✓ {t('chargers.state.completed')}
                                 </div>
                             )}
                             {isAwaitingStart && (
@@ -573,7 +559,7 @@ export default function ChargerCard({
                                     fontWeight: '600',
                                     color: '#d97706'
                                 }}>
-                                    â³ {t('chargers.state.awaitingStart')}
+                                    ⏳ {t('chargers.state.awaitingStart')}
                                 </div>
                             )}
                             {isDisconnected && (
@@ -672,7 +658,7 @@ export default function ChargerCard({
                                 alignItems: 'center',
                                 gap: '8px'
                             }}>
-                                <span style={{ fontSize: '16px' }}>â³</span>
+                                <span style={{ fontSize: '16px' }}>⏳</span>
                                 <div style={{ flex: 1 }}>
                                     <div style={{
                                         fontSize: '11px',
@@ -731,7 +717,7 @@ export default function ChargerCard({
                 </div>
             </div>
 
-            {/* NEW: Enhanced Loxone Energy Statistics Section */}
+            {/* NEW: Enhanced Loxone Energy Statistics Section - UPDATED */}
             {hasEnhancedStats && (
                 <div style={{
                     marginTop: '16px',
@@ -766,54 +752,6 @@ export default function ChargerCard({
                         gridTemplateColumns: '1fr 1fr',
                         gap: '12px'
                     }}>
-                        {/* Last Session (if not currently charging) */}
-                        {!isCharging && liveData?.last_session_energy && liveData.last_session_energy > 0 && (
-                            <div style={{
-                                padding: '12px',
-                                backgroundColor: 'rgba(255,255,255,0.8)',
-                                borderRadius: '12px',
-                                border: '1px solid rgba(229,231,235,0.6)'
-                            }}>
-                                <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    marginBottom: '6px'
-                                }}>
-                                    <Clock size={14} style={{ color: '#8b5cf6' }} />
-                                    <span style={{
-                                        fontSize: '11px',
-                                        fontWeight: '700',
-                                        color: '#6d28d9',
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '0.5px'
-                                    }}>
-                                        {t('chargers.stats.lastSession') || 'Last Session'}
-                                    </span>
-                                </div>
-                                <div style={{
-                                    fontSize: '20px',
-                                    fontWeight: '700',
-                                    color: '#1f2937',
-                                    marginBottom: '2px'
-                                }}>
-                                    {liveData.last_session_energy.toFixed(2)} <span style={{ fontSize: '12px', color: '#6b7280' }}>kWh</span>
-                                </div>
-                                {liveData.last_session_duration_sec && liveData.last_session_duration_sec > 0 && (
-                                    <div style={{
-                                        fontSize: '11px',
-                                        color: '#6b7280',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '4px'
-                                    }}>
-                                        <Clock size={10} />
-                                        {formatDurationFromSeconds(liveData.last_session_duration_sec)}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
                         {/* Weekly Energy */}
                         {liveData?.weekly_energy && liveData.weekly_energy > 0 && (
                             <div style={{
@@ -904,7 +842,8 @@ export default function ChargerCard({
                                 padding: '12px',
                                 backgroundColor: 'rgba(255,255,255,0.8)',
                                 borderRadius: '12px',
-                                border: '1px solid rgba(229,231,235,0.6)'
+                                border: '1px solid rgba(229,231,235,0.6)',
+                                gridColumn: liveData?.weekly_energy && liveData.weekly_energy > 0 ? 'auto' : '1 / -1'
                             }}>
                                 <div style={{
                                     display: 'flex',
