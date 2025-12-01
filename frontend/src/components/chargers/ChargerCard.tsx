@@ -1,4 +1,4 @@
-import { Edit2, Trash2, Wifi, WifiOff, Activity, Battery, TrendingUp, Gauge, Clock, User, Zap, Calendar, BarChart3, TrendingDown } from 'lucide-react';
+import { Edit2, Trash2, Wifi, WifiOff, Activity, Battery, TrendingUp, Gauge, Clock, User, Zap, Calendar, BarChart3, TrendingDown, Dot } from 'lucide-react';
 import type { Charger } from '../../types';
 import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus } from './hooks/useChargerStatus';
 import { getPreset } from '../chargerPresets';
@@ -18,20 +18,20 @@ interface ChargerCardProps {
 // Helper function to format duration from seconds
 const formatDurationFromSeconds = (seconds?: number): string => {
     if (!seconds || seconds === 0) return '';
-    
+
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-    
+
     if (hours > 0) return `${hours}h ${minutes}m`;
     if (minutes > 0) return `${minutes}m`;
-    
+
     return `${Math.floor(seconds)}s`;
 };
 
 // Helper function to format energy comparison
 const formatEnergyComparison = (current: number, previous: number): { percentage: number; isIncrease: boolean } => {
     if (previous === 0) return { percentage: 0, isIncrease: true };
-    
+
     const percentage = ((current - previous) / previous) * 100;
     return {
         percentage: Math.abs(percentage),
@@ -96,7 +96,7 @@ export default function ChargerCard({
     const isCompleted = charger.connection_type === 'zaptec_api'
         ? stateValue === '5'  // Zaptec: state 5 = Completed
         : false; // Loxone doesn't have explicit completed state
-    
+
     const isDisconnected = charger.connection_type === 'zaptec_api'
         ? stateValue === '1'  // Zaptec: state 1 = Disconnected
         : charger.connection_type === 'loxone_api'
@@ -706,8 +706,16 @@ export default function ChargerCard({
                             {isOnline ? (
                                 <>
                                     <Wifi size={16} color="#22c55e" />
-                                    <span style={{ fontSize: '12px', fontWeight: '600', color: '#22c55e' }}>
-                                        {t('chargers.status.connected') || 'Connected'} â€¢ {t('chargers.status.online')}
+                                    <span
+                                        style={{
+                                            fontSize: '12px',
+                                            fontWeight: '600',
+                                            color: '#22c55e'
+                                        }}
+                                    >
+                                        {t('chargers.status.connected') || 'Connected'}
+                                        <Dot size={12} style={{ margin: '0 4px' }} />
+                                        {t('chargers.status.online')}
                                     </span>
                                 </>
                             ) : (
