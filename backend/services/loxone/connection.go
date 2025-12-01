@@ -28,6 +28,7 @@ type LoxoneCollectorInterface interface {
 	DeleteActiveSession(chargerID int)
 	MarkSessionProcessed(sessionID string)
 	LogToDatabase(action, details string)
+	SaveActiveSessionToDatabase(session *ActiveChargerSession) error
 }
 
 // NewWebSocketConnection creates a new WebSocket connection

@@ -13,8 +13,8 @@ import (
 // These functions save/load active sessions to/from database
 // so they survive backend restarts and page reloads
 
-// saveActiveSessionToDatabase persists an active session to database with retry logic
-func (lc *LoxoneCollector) saveActiveSessionToDatabase(session *loxone.ActiveChargerSession) error {
+// SaveActiveSessionToDatabase persists an active session to database with retry logic
+func (lc *LoxoneCollector) SaveActiveSessionToDatabase(session *loxone.ActiveChargerSession) error {
 	sessionKey := fmt.Sprintf("loxone-%d-%s", session.ChargerID, session.StartTime.Format("20060102150405"))
 
 	// Convert readings to JSON

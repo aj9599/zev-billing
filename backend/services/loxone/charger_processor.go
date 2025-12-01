@@ -11,18 +11,18 @@ import (
 
 // processChargerField processes individual charger UUID data (multi-UUID mode)
 func (conn *WebSocketConnection) processChargerField(device *Device, response LoxoneResponse, fieldName string, collection *ChargerDataCollection, db *sql.DB) {
-	log.Printf("   ðŸ”‹ [%s] Processing field '%s'", device.Name, fieldName)
-	log.Printf("   ðŸ“‹ Response Control: %s", response.LL.Control)
-	log.Printf("   ðŸ“‹ Response Code: %s", response.LL.Code)
-	log.Printf("   ðŸ“‹ Response Value: %s", response.LL.Value)
-	log.Printf("   ðŸ“‹ Number of outputs: %d", len(response.LL.Outputs))
+	log.Printf("   Ã°Å¸â€â€¹ [%s] Processing field '%s'", device.Name, fieldName)
+	log.Printf("   Ã°Å¸â€œâ€¹ Response Control: %s", response.LL.Control)
+	log.Printf("   Ã°Å¸â€œâ€¹ Response Code: %s", response.LL.Code)
+	log.Printf("   Ã°Å¸â€œâ€¹ Response Value: %s", response.LL.Value)
+	log.Printf("   Ã°Å¸â€œâ€¹ Number of outputs: %d", len(response.LL.Outputs))
 
 	for key := range response.LL.Outputs {
-		log.Printf("   ðŸ“‹ Found output key: %s", key)
+		log.Printf("   Ã°Å¸â€œâ€¹ Found output key: %s", key)
 	}
 
 	if output1, ok := response.LL.Outputs["output1"]; ok {
-		log.Printf("   ðŸ“‹ output1 found - Value type: %T, Value: %v", output1.Value, output1.Value)
+		log.Printf("   Ã°Å¸â€œâ€¹ output1 found - Value type: %T, Value: %v", output1.Value, output1.Value)
 		switch fieldName {
 		case "power":
 			var power float64
@@ -34,11 +34,11 @@ func (conn *WebSocketConnection) processChargerField(device *Device, response Lo
 				if f, err := strconv.ParseFloat(cleanValue, 64); err == nil {
 					power = f
 				} else {
-					log.Printf("   âš ï¸ [%s] Failed to parse power from output1: '%s' (err: %v)", device.Name, v, err)
+					log.Printf("   Ã¢Å¡Â Ã¯Â¸Â [%s] Failed to parse power from output1: '%s' (err: %v)", device.Name, v, err)
 				}
 			}
 			collection.Power = &power
-			log.Printf("   ðŸ“Š [%s] Received power: %.4f kWh", device.Name, power)
+			log.Printf("   Ã°Å¸â€œÅ  [%s] Received power: %.4f kWh", device.Name, power)
 
 		case "state":
 			var state string
@@ -49,7 +49,7 @@ func (conn *WebSocketConnection) processChargerField(device *Device, response Lo
 				state = fmt.Sprintf("%.0f", v)
 			}
 			collection.State = &state
-			log.Printf("   ðŸ”’ [%s] Received state: %s", device.Name, state)
+			log.Printf("   Ã°Å¸â€â€™ [%s] Received state: %s", device.Name, state)
 
 		case "user_id":
 			var userID string
@@ -60,7 +60,7 @@ func (conn *WebSocketConnection) processChargerField(device *Device, response Lo
 				userID = fmt.Sprintf("%.0f", v)
 			}
 			collection.UserID = &userID
-			log.Printf("   ðŸ‘©â€ðŸ”§ [%s] Received user_id: %s", device.Name, userID)
+			log.Printf("   Ã°Å¸â€˜Â©Ã¢â‚¬ÂÃ°Å¸â€Â§ [%s] Received user_id: %s", device.Name, userID)
 
 		case "mode":
 			var mode string
@@ -71,20 +71,20 @@ func (conn *WebSocketConnection) processChargerField(device *Device, response Lo
 				mode = fmt.Sprintf("%.0f", v)
 			}
 			collection.Mode = &mode
-			log.Printf("   âš™ï¸ [%s] Received mode: %s", device.Name, mode)
+			log.Printf("   Ã¢Å¡â„¢Ã¯Â¸Â [%s] Received mode: %s", device.Name, mode)
 		}
 
 		hasAll := collection.Power != nil && collection.State != nil &&
 			collection.UserID != nil && collection.Mode != nil
 
-		log.Printf("   ðŸ“¦ [%s] Collection status: Power=%v State=%v UserID=%v Mode=%v (Complete=%v)",
+		log.Printf("   Ã°Å¸â€œÂ¦ [%s] Collection status: Power=%v State=%v UserID=%v Mode=%v (Complete=%v)",
 			device.Name,
 			collection.Power != nil, collection.State != nil,
 			collection.UserID != nil, collection.Mode != nil,
 			hasAll)
 
 		if hasAll {
-			log.Printf("   âœ”ï¸ [%s] All fields collected, saving to database", device.Name)
+			log.Printf("   Ã¢Å“â€Ã¯Â¸Â [%s] All fields collected, saving to database", device.Name)
 			conn.saveChargerDataLegacy(device, collection, db)
 
 			collection.Power = nil
@@ -93,45 +93,45 @@ func (conn *WebSocketConnection) processChargerField(device *Device, response Lo
 			collection.Mode = nil
 		}
 	} else {
-		log.Printf("   âš ï¸ [%s] output1 not found in response for field '%s'", device.Name, fieldName)
+		log.Printf("   Ã¢Å¡Â Ã¯Â¸Â [%s] output1 not found in response for field '%s'", device.Name, fieldName)
 
 		if response.LL.Value != "" {
-			log.Printf("   ðŸ“‹ Trying to use response.LL.Value: %s", response.LL.Value)
+			log.Printf("   Ã°Å¸â€œâ€¹ Trying to use response.LL.Value: %s", response.LL.Value)
 
 			switch fieldName {
 			case "power":
 				cleanValue := StripUnitSuffix(response.LL.Value)
 				if f, err := strconv.ParseFloat(cleanValue, 64); err == nil {
 					collection.Power = &f
-					log.Printf("   ðŸ“Š [%s] Received power from Value: %.4f kWh (from '%s')", device.Name, f, response.LL.Value)
+					log.Printf("   Ã°Å¸â€œÅ  [%s] Received power from Value: %.4f kWh (from '%s')", device.Name, f, response.LL.Value)
 				} else {
-					log.Printf("   âŒ [%s] Failed to parse power from Value: '%s' (err: %v)", device.Name, response.LL.Value, err)
+					log.Printf("   Ã¢ÂÅ’ [%s] Failed to parse power from Value: '%s' (err: %v)", device.Name, response.LL.Value, err)
 				}
 			case "state":
 				state := response.LL.Value
 				collection.State = &state
-				log.Printf("   ðŸ”’ [%s] Received state from Value: %s", device.Name, state)
+				log.Printf("   Ã°Å¸â€â€™ [%s] Received state from Value: %s", device.Name, state)
 			case "user_id":
 				userID := response.LL.Value
 				collection.UserID = &userID
-				log.Printf("   ðŸ‘©â€ðŸ”§ [%s] Received user_id from Value: %s", device.Name, userID)
+				log.Printf("   Ã°Å¸â€˜Â©Ã¢â‚¬ÂÃ°Å¸â€Â§ [%s] Received user_id from Value: %s", device.Name, userID)
 			case "mode":
 				mode := response.LL.Value
 				collection.Mode = &mode
-				log.Printf("   âš™ï¸ [%s] Received mode from Value: %s", device.Name, mode)
+				log.Printf("   Ã¢Å¡â„¢Ã¯Â¸Â [%s] Received mode from Value: %s", device.Name, mode)
 			}
 
 			hasAll := collection.Power != nil && collection.State != nil &&
 				collection.UserID != nil && collection.Mode != nil
 
-			log.Printf("   ðŸ“¦ [%s] Collection status: Power=%v State=%v UserID=%v Mode=%v (Complete=%v)",
+			log.Printf("   Ã°Å¸â€œÂ¦ [%s] Collection status: Power=%v State=%v UserID=%v Mode=%v (Complete=%v)",
 				device.Name,
 				collection.Power != nil, collection.State != nil,
 				collection.UserID != nil, collection.Mode != nil,
 				hasAll)
 
 			if hasAll {
-				log.Printf("   âœ”ï¸ [%s] All fields collected, saving to database", device.Name)
+				log.Printf("   Ã¢Å“â€Ã¯Â¸Â [%s] All fields collected, saving to database", device.Name)
 				conn.saveChargerDataLegacy(device, collection, db)
 
 				collection.Power = nil
@@ -140,15 +140,15 @@ func (conn *WebSocketConnection) processChargerField(device *Device, response Lo
 				collection.Mode = nil
 			}
 		} else {
-			log.Printf("   âŒ [%s] No data found for field '%s' in response", device.Name, fieldName)
+			log.Printf("   Ã¢ÂÅ’ [%s] No data found for field '%s' in response", device.Name, fieldName)
 		}
 	}
 }
 
 // processChargerSingleBlock processes all charger data from a single Loxone response
 func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, response LoxoneResponse, db *sql.DB, collector LoxoneCollectorInterface) {
-	log.Printf("   ðŸ”‹ [%s] Processing single-block response (enhanced session tracking)", device.Name)
-	log.Printf("   ðŸ“¦ Number of outputs: %d", len(response.LL.Outputs))
+	log.Printf("   Ã°Å¸â€â€¹ [%s] Processing single-block response (enhanced session tracking)", device.Name)
+	log.Printf("   Ã°Å¸â€œÂ¦ Number of outputs: %d", len(response.LL.Outputs))
 
 	// Extract all values from the response outputs
 	var totalEnergyKWh float64          // Mr - output7
@@ -177,7 +177,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 				vehicleConnected = int(f)
 			}
 		}
-		log.Printf("      â”œâ”€ output1 (Vc - Vehicle Connected): %d", vehicleConnected)
+		log.Printf("      Ã¢â€Å“Ã¢â€â‚¬ output1 (Vc - Vehicle Connected): %d", vehicleConnected)
 	}
 
 	// Extract output2 (Cac) - Charging Active
@@ -190,7 +190,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 				chargingActive = int(f)
 			}
 		}
-		log.Printf("      â”œâ”€ output2 (Cac - Charging Active): %d", chargingActive)
+		log.Printf("      Ã¢â€Å“Ã¢â€â‚¬ output2 (Cac - Charging Active): %d", chargingActive)
 	}
 
 	// Extract output3 (Cp) - Charging Power
@@ -204,7 +204,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 				chargingPowerKW = f
 			}
 		}
-		log.Printf("      â”œâ”€ output3 (Cp - Charging Power): %.3f kW", chargingPowerKW)
+		log.Printf("      Ã¢â€Å“Ã¢â€â‚¬ output3 (Cp - Charging Power): %.3f kW", chargingPowerKW)
 	}
 
 	// Extract output4 (M) - Mode
@@ -215,7 +215,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 		case float64:
 			modeValue = fmt.Sprintf("%.0f", v)
 		}
-		log.Printf("      â”œâ”€ output4 (M - Mode): %s", modeValue)
+		log.Printf("      Ã¢â€Å“Ã¢â€â‚¬ output4 (M - Mode): %s", modeValue)
 	}
 
 	// Extract output7 (Mr) - Total Energy Meter
@@ -229,7 +229,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 				totalEnergyKWh = f
 			}
 		}
-		log.Printf("      â”œâ”€ output7 (Mr - Total Energy): %.3f kWh", totalEnergyKWh)
+		log.Printf("      Ã¢â€Å“Ã¢â€â‚¬ output7 (Mr - Total Energy): %.3f kWh", totalEnergyKWh)
 	}
 
 	// Extract output8 (Ccc) - Current Session Energy
@@ -243,7 +243,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 				currentSessionEnergyKWh = f
 			}
 		}
-		log.Printf("      â”œâ”€ output8 (Ccc - Current Session Energy): %.3f kWh", currentSessionEnergyKWh)
+		log.Printf("      Ã¢â€Å“Ã¢â€â‚¬ output8 (Ccc - Current Session Energy): %.3f kWh", currentSessionEnergyKWh)
 	}
 
 	// Extract output9 (Clc) - Last Session Energy
@@ -257,7 +257,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 				lastSessionEnergyKWh = f
 			}
 		}
-		log.Printf("      â”œâ”€ output9 (Clc - Last Session Energy): %.3f kWh", lastSessionEnergyKWh)
+		log.Printf("      Ã¢â€Å“Ã¢â€â‚¬ output9 (Clc - Last Session Energy): %.3f kWh", lastSessionEnergyKWh)
 	}
 
 	// Extract output11 (Cld) - Last Session Duration (in hours)
@@ -271,7 +271,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 				lastSessionDurationSec = f * 3600
 			}
 		}
-		log.Printf("      â”œâ”€ output11 (Cld - Last Session Duration): %.3f hours (%.0f seconds)", lastSessionDurationSec/3600, lastSessionDurationSec)
+		log.Printf("      Ã¢â€Å“Ã¢â€â‚¬ output11 (Cld - Last Session Duration): %.3f hours (%.0f seconds)", lastSessionDurationSec/3600, lastSessionDurationSec)
 	}
 
 	// Extract output12 (Cw) - Weekly Energy
@@ -285,7 +285,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 				weeklyEnergyKWh = f
 			}
 		}
-		log.Printf("      â”œâ”€ output12 (Cw - Weekly Energy): %.3f kWh", weeklyEnergyKWh)
+		log.Printf("      Ã¢â€Å“Ã¢â€â‚¬ output12 (Cw - Weekly Energy): %.3f kWh", weeklyEnergyKWh)
 	}
 
 	// Extract output13 (Cm) - Monthly Energy
@@ -299,7 +299,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 				monthlyEnergyKWh = f
 			}
 		}
-		log.Printf("      â”œâ”€ output13 (Cm - Monthly Energy): %.3f kWh", monthlyEnergyKWh)
+		log.Printf("      Ã¢â€Å“Ã¢â€â‚¬ output13 (Cm - Monthly Energy): %.3f kWh", monthlyEnergyKWh)
 	}
 
 	// Extract output14 (Clm) - Last Month Energy
@@ -313,7 +313,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 				lastMonthEnergyKWh = f
 			}
 		}
-		log.Printf("      â”œâ”€ output14 (Clm - Last Month Energy): %.3f kWh", lastMonthEnergyKWh)
+		log.Printf("      Ã¢â€Å“Ã¢â€â‚¬ output14 (Clm - Last Month Energy): %.3f kWh", lastMonthEnergyKWh)
 	}
 
 	// Extract output15 (Cy) - Yearly Energy
@@ -327,7 +327,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 				yearlyEnergyKWh = f
 			}
 		}
-		log.Printf("      â”œâ”€ output15 (Cy - Yearly Energy): %.3f kWh", yearlyEnergyKWh)
+		log.Printf("      Ã¢â€Å“Ã¢â€â‚¬ output15 (Cy - Yearly Energy): %.3f kWh", yearlyEnergyKWh)
 	}
 
 	// Extract output16 (Cly) - Last Year Energy
@@ -341,7 +341,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 				lastYearEnergyKWh = f
 			}
 		}
-		log.Printf("      â”œâ”€ output16 (Cly - Last Year Energy): %.3f kWh", lastYearEnergyKWh)
+		log.Printf("      Ã¢â€Å“Ã¢â€â‚¬ output16 (Cly - Last Year Energy): %.3f kWh", lastYearEnergyKWh)
 	}
 
 	// Extract output17 (Lcl) - Last Session Log
@@ -350,7 +350,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 		case string:
 			lastSessionLog = v
 		}
-		log.Printf("      â”œâ”€ output17 (Lcl - Last Session Log): %s", lastSessionLog)
+		log.Printf("      Ã¢â€Å“Ã¢â€â‚¬ output17 (Lcl - Last Session Log): %s", lastSessionLog)
 	}
 
 	// Extract output21 (Uid) - User ID
@@ -363,7 +363,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 				userID = fmt.Sprintf("%.0f", v)
 			}
 		}
-		log.Printf("      â””â”€ output21 (Uid - User ID): '%s'", userID)
+		log.Printf("      Ã¢â€â€Ã¢â€â‚¬ output21 (Uid - User ID): '%s'", userID)
 	}
 
 	// Determine state based on vehicle connection and charging status
@@ -436,7 +436,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 		if sessionActive {
 			if activeSession == nil {
 				// Session start detected
-				log.Printf("   âš¡ [%s] SESSION STARTED - Creating new session", device.Name)
+				log.Printf("   Ã¢Å¡Â¡ [%s] SESSION STARTED - Creating new session", device.Name)
 				newSession := &ActiveChargerSession{
 					ChargerID:       device.ID,
 					ChargerName:     device.Name,
@@ -461,8 +461,8 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 				collector.UpdateLiveChargerData(device.ID, liveData)
 
 				// Persist session to database
-				if err := conn.Collector.(*LoxoneCollector).saveActiveSessionToDatabase(newSession); err != nil {
-					log.Printf("   ⚠️  [%s] Failed to persist session: %v", device.Name, err)
+				if err := collector.SaveActiveSessionToDatabase(newSession); err != nil {
+					log.Printf("   âš ï¸  [%s] Failed to persist session: %v", device.Name, err)
 				}
 
 				collector.LogToDatabase("Loxone Charger Session Started",
@@ -486,11 +486,11 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 				collector.SetActiveSession(device.ID, activeSession)
 
 				// Update persisted session
-				if err := conn.Collector.(*LoxoneCollector).saveActiveSessionToDatabase(activeSession); err != nil {
-					log.Printf("   ⚠️  [%s] Failed to update persisted session: %v", device.Name, err)
+				if err := collector.SaveActiveSessionToDatabase(activeSession); err != nil {
+					log.Printf("   âš ï¸  [%s] Failed to update persisted session: %v", device.Name, err)
 				}
 
-				log.Printf("   âš¡ [%s] SESSION ONGOING: Reading added - Energy: %.3f kWh, Power: %.2f kW, Readings: %d",
+				log.Printf("   Ã¢Å¡Â¡ [%s] SESSION ONGOING: Reading added - Energy: %.3f kWh, Power: %.2f kW, Readings: %d",
 					device.Name, totalEnergyKWh, chargingPowerKW, len(activeSession.Readings))
 			}
 		} else {
@@ -500,7 +500,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 				lclChanged := lastSessionLog != activeSession.LastLclValue && lastSessionLog != ""
 
 				if lclChanged {
-					log.Printf("   ðŸ [%s] SESSION ENDED - Lcl changed, processing completed session", device.Name)
+					log.Printf("   Ã°Å¸ÂÂ [%s] SESSION ENDED - Lcl changed, processing completed session", device.Name)
 
 					// Parse Lcl to get exact session details
 					parsedUserID, parsedEnergy, parsedEndTime, parsedDuration := ParseLclString(lastSessionLog)
@@ -547,10 +547,10 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 					// Still waiting for Lcl update
 					energyDelta := totalEnergyKWh - activeSession.StartEnergy_kWh
 					if energyDelta > 0.1 {
-						log.Printf("   â³ [%s] Session paused (Î”%.3f kWh) - waiting for Lcl update", device.Name, energyDelta)
+						log.Printf("   Ã¢ÂÂ³ [%s] Session paused (ÃŽâ€%.3f kWh) - waiting for Lcl update", device.Name, energyDelta)
 					} else {
 						// Very small energy, discard session
-						log.Printf("   ðŸ—‘ï¸ [%s] Session discarded (Î”%.3f kWh too small)", device.Name, energyDelta)
+						log.Printf("   Ã°Å¸â€”â€˜Ã¯Â¸Â [%s] Session discarded (ÃŽâ€%.3f kWh too small)", device.Name, energyDelta)
 						collector.DeleteActiveSession(device.ID)
 					}
 				}
@@ -562,7 +562,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 		}
 	}
 
-	log.Printf("   âœ… [%s] Live data updated: Energy=%.3f kWh, Power=%.2f kW, State=%s (%s), Mode=%s",
+	log.Printf("   Ã¢Å“â€¦ [%s] Live data updated: Energy=%.3f kWh, Power=%.2f kW, State=%s (%s), Mode=%s",
 		device.Name, totalEnergyKWh, chargingPowerKW, stateValue, stateDescription, modeDescription)
 }
 
@@ -598,7 +598,7 @@ func UpdateChargerStatsInDatabase(db *sql.DB, chargerID int, lastSessionEnergy, 
 	if err != nil {
 		log.Printf("ERROR: Could not update charger stats: %v", err)
 	} else {
-		log.Printf("   ðŸ’¾ [Charger %d] Stats saved to charger_stats table", chargerID)
+		log.Printf("   Ã°Å¸â€™Â¾ [Charger %d] Stats saved to charger_stats table", chargerID)
 	}
 }
 
@@ -628,9 +628,9 @@ func WriteMaintenanceReading(chargerID int, chargerName string, totalEnergy floa
 		totalEnergy, mode, "1") // state = 1 (disconnected, like Zaptec)
 
 	if err != nil {
-		log.Printf("   âš ï¸ [%s] Failed to write maintenance reading: %v", chargerName, err)
+		log.Printf("   Ã¢Å¡Â Ã¯Â¸Â [%s] Failed to write maintenance reading: %v", chargerName, err)
 	} else {
-		log.Printf("   ðŸ“ [%s] Maintenance reading written: %.3f kWh at %s (disconnected, no user)",
+		log.Printf("   Ã°Å¸â€œÂ [%s] Maintenance reading written: %.3f kWh at %s (disconnected, no user)",
 			chargerName, totalEnergy, currentTime.Format("15:04:05"))
 	}
 }
@@ -668,7 +668,7 @@ func (conn *WebSocketConnection) saveChargerDataLegacy(device *Device, collectio
 
 		if len(interpolated) > 0 {
 			device.ReadingGaps += len(interpolated)
-			log.Printf("   âš ï¸ Filled %d reading gaps for charger %s", len(interpolated), device.Name)
+			log.Printf("   Ã¢Å¡Â Ã¯Â¸Â Filled %d reading gaps for charger %s", len(interpolated), device.Name)
 		}
 	}
 
@@ -678,19 +678,19 @@ func (conn *WebSocketConnection) saveChargerDataLegacy(device *Device, collectio
 	`, device.ID, userID, currentTime, power, mode, state)
 
 	if err != nil {
-		log.Printf("âŒ Failed to save charger session to database: %v", err)
+		log.Printf("Ã¢ÂÅ’ Failed to save charger session to database: %v", err)
 		conn.Mu.Lock()
 		conn.LastError = fmt.Sprintf("DB save failed: %v", err)
 		conn.Mu.Unlock()
 	} else {
-		log.Printf("âœ”ï¸ CHARGER [%s]: %.4f kWh (user: %s, mode: %s, state: %s)",
+		log.Printf("Ã¢Å“â€Ã¯Â¸Â CHARGER [%s]: %.4f kWh (user: %s, mode: %s, state: %s)",
 			device.Name, power, userID, mode, state)
 
 		db.Exec(`
 			UPDATE chargers 
 			SET notes = ?
 			WHERE id = ?
-		`, fmt.Sprintf("ðŸŸ¢ Last update: %s", time.Now().Format("2006-01-02 15:04:05")),
+		`, fmt.Sprintf("Ã°Å¸Å¸Â¢ Last update: %s", time.Now().Format("2006-01-02 15:04:05")),
 			device.ID)
 	}
 }
