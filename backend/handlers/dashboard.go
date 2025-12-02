@@ -706,7 +706,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						
 						log.Printf("      Looking up RFID/UserID: '%s'", rfidOrUserID)
 						
-						// STRATEGY 1: Try multiple patterns for charger_ids field
+						// Try multiple patterns for charger_ids field
 						patterns := []string{
 							rfidOrUserID,                    // Exact: "2"
 							"%" + rfidOrUserID + ",%",       // Start: "2,3"
@@ -730,24 +730,11 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 							}
 						}
 						
-						// STRATEGY 2: Try as direct user ID
+						// If not found in charger_ids, show as Unknown User
 						if !found {
-							err := h.db.QueryRowContext(ctx, `
-								SELECT id, first_name || ' ' || last_name 
-								FROM users 
-								WHERE CAST(id AS TEXT) = ?
-							`, rfidOrUserID).Scan(&actualUserID, &actualUserName)
-							
-							if err == nil {
-								found = true
-								log.Printf("      ✅ Found as user ID: %s", rfidOrUserID)
-							}
-						}
-						
-						// STRATEGY 3: Use fallback name
-						if !found {
-							actualUserName = fmt.Sprintf("User %s", rfidOrUserID)
-							log.Printf("      ⚠️  '%s' not found - using fallback", rfidOrUserID)
+							actualUserName = fmt.Sprintf("Unknown User (RFID %s)", rfidOrUserID)
+							actualUserID = 0 // No actual user
+							log.Printf("      ⚠️  RFID '%s' not found in any user's charger_ids - showing as Unknown User", rfidOrUserID)
 							
 							// DEBUG: Show what charger_ids exist in database to help diagnose
 							debugRows, debugErr := h.db.QueryContext(ctx, `
@@ -792,15 +779,21 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						MeterID:   ci.id,
 						MeterName: ci.name,
 						MeterType: "charger",
-						UserName:  "Idle",
+						UserName:  ci.name + " (Idle)",
 						Data: []models.ConsumptionData{
 							{
 								Timestamp: startTime,
 								Power:     0,
 								Source:    "charger",
 							},
+							{
+								Timestamp: now,
+								Power:     0,
+								Source:    "charger",
+							},
 						},
 					}
+					log.Printf("    📊 Added 0W baseline: start=%s, end=%s", startTime.Format("15:04"), now.Format("15:04"))
 					building.Meters = append(building.Meters, chargerData)
 					continue
 				}
