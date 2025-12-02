@@ -593,7 +593,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				MeterID:   mi.id,
 				MeterName: mi.name,
 				MeterType: mi.meterType,
-				UserName:  ui.userName,
+				UserName:  userName,
 				Data:      []models.ConsumptionData{},
 			}
 
@@ -764,7 +764,6 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					consumptionData := []models.ConsumptionData{}
 					var previousPower float64
 					var hasPrevious bool
-					var lastValidTimestamp time.Time
 					
 					for sessionRows.Next() {
 						var timestamp time.Time
@@ -778,7 +777,6 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						if !hasPrevious {
 							previousPower = powerKwh
 							hasPrevious = true
-							lastValidTimestamp = timestamp
 							// First point with zero power
 							consumptionData = append(consumptionData, models.ConsumptionData{
 								Timestamp: timestamp,
@@ -803,7 +801,6 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 							// Meter reset
 							log.Printf("      Meter reset detected at %s", timestamp.Format("15:04"))
 							previousPower = powerKwh
-							lastValidTimestamp = timestamp
 							continue
 						}
 
@@ -822,7 +819,6 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						})
 
 						previousPower = powerKwh
-						lastValidTimestamp = timestamp
 					}
 					sessionRows.Close()
 
