@@ -593,7 +593,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				MeterID:   mi.id,
 				MeterName: mi.name,
 				MeterType: mi.meterType,
-				UserName:  userName,
+				UserName:  ui.userName,
 				Data:      []models.ConsumptionData{},
 			}
 
@@ -668,12 +668,16 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				log.Printf("    Processing charger ID: %d, Name: %s", ci.id, ci.name)
 
 				var userRows *sql.Rows
+				// Exclude empty user_ids and disconnected states to avoid post-session spikes
 				userRows, err = h.db.QueryContext(ctx, `
 					SELECT DISTINCT user_id
 					FROM charger_sessions
 					WHERE charger_id = ? 
 					AND session_time >= ?
 					AND session_time <= ?
+					AND user_id != ''
+					AND COALESCE(user_id, '') != ''
+					AND state != '1'
 					ORDER BY user_id
 				`, ci.id, startTime, now)
 
@@ -683,36 +687,63 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				}
 
 				type userInfo struct {
-					userID string
+					userID     string
+					actualUser int
+					userName   string
 				}
 				userInfos := []userInfo{}
 				
 				for userRows.Next() {
-					var ui userInfo
-					if err := userRows.Scan(&ui.userID); err != nil {
+					var rfidOrUserID string
+					if err := userRows.Scan(&rfidOrUserID); err != nil {
 						continue
 					}
-					userInfos = append(userInfos, ui)
+					
+					// Try to map RFID tag to actual user
+					// First, check if this is a direct user ID
+					var actualUserID int
+					var actualUserName string
+					
+					// Try as direct user ID first
+					err := h.db.QueryRowContext(ctx, `
+						SELECT id, first_name || ' ' || last_name 
+						FROM users 
+						WHERE id = ?
+					`, rfidOrUserID).Scan(&actualUserID, &actualUserName)
+					
+					if err == sql.ErrNoRows {
+						// Not a direct user ID, try to find user by RFID tag in charger_ids
+						err = h.db.QueryRowContext(ctx, `
+							SELECT id, first_name || ' ' || last_name 
+							FROM users 
+							WHERE charger_ids LIKE '%' || ? || '%'
+							LIMIT 1
+						`, rfidOrUserID).Scan(&actualUserID, &actualUserName)
+						
+						if err != nil {
+							// Still not found, use the RFID as display name
+							actualUserName = fmt.Sprintf("User %s", rfidOrUserID)
+							log.Printf("      RFID tag %s not found in any user, using as-is", rfidOrUserID)
+						} else {
+							log.Printf("      Mapped RFID tag %s to user %d (%s)", rfidOrUserID, actualUserID, actualUserName)
+						}
+					}
+					
+					userInfos = append(userInfos, userInfo{
+						userID:     rfidOrUserID,
+						actualUser: actualUserID,
+						userName:   actualUserName,
+					})
 				}
 				userRows.Close()
 
 				log.Printf("    Found %d users with sessions for charger %d", len(userInfos), ci.id)
 
 				for _, ui := range userInfos {
-					log.Printf("      Processing user: %s", ui.userID)
-
-					userName := fmt.Sprintf("User %s", ui.userID)
-					err = h.db.QueryRowContext(ctx, `
-						SELECT first_name || ' ' || last_name 
-						FROM users 
-						WHERE id = ?
-					`, ui.userID).Scan(&userName)
-					
-					if err != nil && err != sql.ErrNoRows {
-						log.Printf("      Error getting user name for user %s: %v", ui.userID, err)
-					}
+					log.Printf("      Processing RFID/User: %s (Actual user: %d - %s)", ui.userID, ui.actualUser, ui.userName)
 
 					// Get charger data at 15-minute intervals
+					// Filter out maintenance readings (state=1) that create spikes after sessions
 					var sessionRows *sql.Rows
 					sessionRows, err = h.db.QueryContext(ctx, `
 						SELECT session_time, power_kwh, state
@@ -721,17 +752,19 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						AND user_id = ?
 						AND session_time >= ?
 						AND session_time <= ?
+						AND state != '1'
 						ORDER BY session_time ASC
 					`, ci.id, ui.userID, startTime, now)
 
 					if err != nil {
-						log.Printf("      Error querying sessions for charger %d, user %s: %v", ci.id, ui.userID, err)
+						log.Printf("      Error querying sessions for charger %d, RFID/user %s: %v", ci.id, ui.userID, err)
 						continue
 					}
 
 					consumptionData := []models.ConsumptionData{}
 					var previousPower float64
 					var hasPrevious bool
+					var lastValidTimestamp time.Time
 					
 					for sessionRows.Next() {
 						var timestamp time.Time
@@ -745,6 +778,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						if !hasPrevious {
 							previousPower = powerKwh
 							hasPrevious = true
+							lastValidTimestamp = timestamp
 							// First point with zero power
 							consumptionData = append(consumptionData, models.ConsumptionData{
 								Timestamp: timestamp,
@@ -757,10 +791,19 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						// Calculate consumption
 						consumptionKwh := powerKwh - previousPower
 						
+						// Check for unrealistic jumps that indicate post-session accumulation
+						// If the consumption is more than 10 kWh in 15 minutes (40 kW average), it's likely a spike
+						if consumptionKwh > 10.0 {
+							log.Printf("      Detected unrealistic consumption spike: %.2f kWh at %s, skipping", consumptionKwh, timestamp.Format("15:04"))
+							// Don't update previousPower, so next reading will be calculated from last valid point
+							continue
+						}
+						
 						if consumptionKwh < 0 {
 							// Meter reset
 							log.Printf("      Meter reset detected at %s", timestamp.Format("15:04"))
 							previousPower = powerKwh
+							lastValidTimestamp = timestamp
 							continue
 						}
 
@@ -779,6 +822,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						})
 
 						previousPower = powerKwh
+						lastValidTimestamp = timestamp
 					}
 					sessionRows.Close()
 
@@ -787,11 +831,11 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 							MeterID:   ci.id,
 							MeterName: ci.name,
 							MeterType: "charger",
-							UserName:  userName,
+							UserName:  ui.userName,
 							Data:      consumptionData,
 						}
 
-						log.Printf("      ✅ Charger ID: %d has %d data points for user %s", ci.id, len(consumptionData), userName)
+						log.Printf("      âœ… Charger ID: %d has %d data points for user %s", ci.id, len(consumptionData), ui.userName)
 						building.Meters = append(building.Meters, chargerData)
 					}
 				}
