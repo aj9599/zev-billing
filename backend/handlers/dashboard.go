@@ -700,33 +700,35 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					}
 					
 					// Try to map RFID tag to actual user
-					// First, check if this is a direct user ID
 					var actualUserID int
 					var actualUserName string
 					
-					// Try as direct user ID first
+					// First, try to find user by RFID tag in charger_ids field
+					// This is the primary method since RFIDs are stored there
 					err := h.db.QueryRowContext(ctx, `
 						SELECT id, first_name || ' ' || last_name 
 						FROM users 
-						WHERE id = ?
+						WHERE charger_ids LIKE '%' || ? || '%'
+						LIMIT 1
 					`, rfidOrUserID).Scan(&actualUserID, &actualUserName)
 					
 					if err == sql.ErrNoRows {
-						// Not a direct user ID, try to find user by RFID tag in charger_ids
+						// Not found as RFID, try as direct user ID
 						err = h.db.QueryRowContext(ctx, `
 							SELECT id, first_name || ' ' || last_name 
 							FROM users 
-							WHERE charger_ids LIKE '%' || ? || '%'
-							LIMIT 1
+							WHERE id = ?
 						`, rfidOrUserID).Scan(&actualUserID, &actualUserName)
 						
 						if err != nil {
-							// Still not found, use the RFID as display name
+							// Still not found, use the RFID/ID as display name
 							actualUserName = fmt.Sprintf("User %s", rfidOrUserID)
-							log.Printf("      RFID tag %s not found in any user, using as-is", rfidOrUserID)
+							log.Printf("      RFID/ID %s not found in any user, using as-is", rfidOrUserID)
 						} else {
-							log.Printf("      Mapped RFID tag %s to user %d (%s)", rfidOrUserID, actualUserID, actualUserName)
+							log.Printf("      Found as direct user ID %s: %s", rfidOrUserID, actualUserName)
 						}
+					} else {
+						log.Printf("      Mapped RFID tag %s to user %d (%s)", rfidOrUserID, actualUserID, actualUserName)
 					}
 					
 					userInfos = append(userInfos, userInfo{
@@ -764,6 +766,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					consumptionData := []models.ConsumptionData{}
 					var previousPower float64
 					var hasPrevious bool
+					var hasAnyData bool
 					
 					for sessionRows.Next() {
 						var timestamp time.Time
@@ -773,6 +776,8 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						if err := sessionRows.Scan(&timestamp, &powerKwh, &state); err != nil {
 							continue
 						}
+
+						hasAnyData = true
 
 						if !hasPrevious {
 							previousPower = powerKwh
@@ -821,6 +826,16 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						previousPower = powerKwh
 					}
 					sessionRows.Close()
+
+					// If no data was found, add a 0W point at the start of the period
+					// This shows the charger exists but has no activity
+					if !hasAnyData {
+						consumptionData = append(consumptionData, models.ConsumptionData{
+							Timestamp: startTime,
+							Power:     0,
+							Source:    "charger",
+						})
+					}
 
 					if len(consumptionData) > 0 {
 						chargerData := MeterData{
