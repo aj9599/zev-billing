@@ -693,53 +693,117 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				}
 				userInfos := []userInfo{}
 				
-				for userRows.Next() {
-					var rfidOrUserID string
-					if err := userRows.Scan(&rfidOrUserID); err != nil {
-						continue
-					}
-					
-					// Try to map RFID tag to actual user
-					var actualUserID int
-					var actualUserName string
-					
-					// First, try to find user by RFID tag in charger_ids field
-					// This is the primary method since RFIDs are stored there
-					err := h.db.QueryRowContext(ctx, `
-						SELECT id, first_name || ' ' || last_name 
-						FROM users 
-						WHERE charger_ids LIKE '%' || ? || '%'
-						LIMIT 1
-					`, rfidOrUserID).Scan(&actualUserID, &actualUserName)
-					
-					if err == sql.ErrNoRows {
-						// Not found as RFID, try as direct user ID
-						err = h.db.QueryRowContext(ctx, `
-							SELECT id, first_name || ' ' || last_name 
-							FROM users 
-							WHERE id = ?
-						`, rfidOrUserID).Scan(&actualUserID, &actualUserName)
-						
-						if err != nil {
-							// Still not found, use the RFID/ID as display name
-							actualUserName = fmt.Sprintf("User %s", rfidOrUserID)
-							log.Printf("      RFID/ID %s not found in any user, using as-is", rfidOrUserID)
-						} else {
-							log.Printf("      Found as direct user ID %s: %s", rfidOrUserID, actualUserName)
+					for userRows.Next() {
+						var rfidOrUserID string
+						if err := userRows.Scan(&rfidOrUserID); err != nil {
+							continue
 						}
-					} else {
-						log.Printf("      Mapped RFID tag %s to user %d (%s)", rfidOrUserID, actualUserID, actualUserName)
+						
+						// Try to map RFID tag to actual user
+						var actualUserID int
+						var actualUserName string
+						var found bool
+						
+						log.Printf("      Looking up RFID/UserID: '%s'", rfidOrUserID)
+						
+						// STRATEGY 1: Try multiple patterns for charger_ids field
+						patterns := []string{
+							rfidOrUserID,                    // Exact: "2"
+							"%" + rfidOrUserID + ",%",       // Start: "2,3"
+							"%," + rfidOrUserID + ",%",      // Middle: "1,2,3"
+							"%," + rfidOrUserID,             // End: "1,2"
+							"%\"" + rfidOrUserID + "\"%",    // JSON: ["2"]
+						}
+						
+						for _, pattern := range patterns {
+							err := h.db.QueryRowContext(ctx, `
+								SELECT id, first_name || ' ' || last_name 
+								FROM users 
+								WHERE charger_ids = ? OR charger_ids LIKE ?
+								LIMIT 1
+							`, rfidOrUserID, pattern).Scan(&actualUserID, &actualUserName)
+							
+							if err == nil {
+								found = true
+								log.Printf("      ✅ Mapped RFID '%s' to user %d (%s)", rfidOrUserID, actualUserID, actualUserName)
+								break
+							}
+						}
+						
+						// STRATEGY 2: Try as direct user ID
+						if !found {
+							err := h.db.QueryRowContext(ctx, `
+								SELECT id, first_name || ' ' || last_name 
+								FROM users 
+								WHERE CAST(id AS TEXT) = ?
+							`, rfidOrUserID).Scan(&actualUserID, &actualUserName)
+							
+							if err == nil {
+								found = true
+								log.Printf("      ✅ Found as user ID: %s", rfidOrUserID)
+							}
+						}
+						
+						// STRATEGY 3: Use fallback name
+						if !found {
+							actualUserName = fmt.Sprintf("User %s", rfidOrUserID)
+							log.Printf("      ⚠️  '%s' not found - using fallback", rfidOrUserID)
+							
+							// DEBUG: Show what charger_ids exist in database to help diagnose
+							debugRows, debugErr := h.db.QueryContext(ctx, `
+								SELECT id, first_name || ' ' || last_name, charger_ids 
+								FROM users 
+								WHERE charger_ids IS NOT NULL AND charger_ids != ''
+							`)
+							if debugErr == nil && debugRows != nil {
+								log.Printf("      🔍 DEBUG: All users with charger_ids:")
+								count := 0
+								for debugRows.Next() {
+									var debugID int
+									var debugName, debugChargerIDs string
+									if debugRows.Scan(&debugID, &debugName, &debugChargerIDs) == nil {
+										log.Printf("         User %d (%s): charger_ids='%s'", debugID, debugName, debugChargerIDs)
+										count++
+									}
+									if count >= 10 {
+										log.Printf("         ... (showing first 10)")
+										break
+									}
+								}
+								debugRows.Close()
+							}
+						}
+						
+						userInfos = append(userInfos, userInfo{
+							userID:     rfidOrUserID,
+							actualUser: actualUserID,
+							userName:   actualUserName,
+						})
 					}
-					
-					userInfos = append(userInfos, userInfo{
-						userID:     rfidOrUserID,
-						actualUser: actualUserID,
-						userName:   actualUserName,
-					})
-				}
 				userRows.Close()
 
 				log.Printf("    Found %d users with sessions for charger %d", len(userInfos), ci.id)
+
+				// If no users have sessions in this period, add a 0W baseline
+				// This shows the charger exists but is idle
+				if len(userInfos) == 0 {
+					log.Printf("    ⚠️  No sessions found - adding 0W baseline for charger %d", ci.id)
+					chargerData := MeterData{
+						MeterID:   ci.id,
+						MeterName: ci.name,
+						MeterType: "charger",
+						UserName:  "Idle",
+						Data: []models.ConsumptionData{
+							{
+								Timestamp: startTime,
+								Power:     0,
+								Source:    "charger",
+							},
+						},
+					}
+					building.Meters = append(building.Meters, chargerData)
+					continue
+				}
 
 				for _, ui := range userInfos {
 					log.Printf("      Processing RFID/User: %s (Actual user: %d - %s)", ui.userID, ui.actualUser, ui.userName)
