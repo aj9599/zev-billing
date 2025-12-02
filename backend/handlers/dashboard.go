@@ -667,6 +667,62 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			for _, ci := range chargerInfos {
 				log.Printf("    Processing charger ID: %d, Name: %s", ci.id, ci.name)
 
+				// First, collect all session times for this charger to know when to break the baseline
+				sessionTimes := make(map[time.Time]bool)
+				var allSessionRows *sql.Rows
+				allSessionRows, err = h.db.QueryContext(ctx, `
+					SELECT DISTINCT session_time
+					FROM charger_sessions
+					WHERE charger_id = ? 
+					AND session_time >= ?
+					AND session_time <= ?
+					AND user_id != ''
+					AND COALESCE(user_id, '') != ''
+					AND state != '1'
+					ORDER BY session_time ASC
+				`, ci.id, startTime, now)
+				
+				if err == nil {
+					for allSessionRows.Next() {
+						var sessionTime time.Time
+						if allSessionRows.Scan(&sessionTime) == nil {
+							// Round to 15-minute interval
+							rounded := roundTo15Min(sessionTime)
+							sessionTimes[rounded] = true
+						}
+					}
+					allSessionRows.Close()
+				}
+				
+				// Generate 0W baseline at 15-minute intervals, but SKIP times where sessions exist
+				baselineData := []models.ConsumptionData{}
+				currentTime := roundTo15Min(startTime)
+				roundedNow := roundTo15Min(now)
+				for currentTime.Before(roundedNow) || currentTime.Equal(roundedNow) {
+					// Only add baseline point if NO session at this time
+					if !sessionTimes[currentTime] {
+						baselineData = append(baselineData, models.ConsumptionData{
+							Timestamp: currentTime,
+							Power:     0,
+							Source:    "charger",
+						})
+					}
+					currentTime = currentTime.Add(15 * time.Minute)
+				}
+				
+				// Only add baseline if there are any 0W points
+				if len(baselineData) > 0 {
+					baselineMeter := MeterData{
+						MeterID:   ci.id,
+						MeterName: ci.name,
+						MeterType: "charger",
+						UserName:  ci.name + " (Baseline)",
+						Data:      baselineData,
+					}
+					log.Printf("    📊 Added 0W baseline with %d points (excluding %d session times)", len(baselineData), len(sessionTimes))
+					building.Meters = append(building.Meters, baselineMeter)
+				}
+
 				var userRows *sql.Rows
 				// Exclude empty user_ids and disconnected states to avoid post-session spikes
 				userRows, err = h.db.QueryContext(ctx, `
@@ -771,33 +827,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 
 				log.Printf("    Found %d users with sessions for charger %d", len(userInfos), ci.id)
 
-				// If no users have sessions in this period, add a 0W baseline
-				// This shows the charger exists but is idle
-				if len(userInfos) == 0 {
-					log.Printf("    ⚠️  No sessions found - adding 0W baseline for charger %d", ci.id)
-					chargerData := MeterData{
-						MeterID:   ci.id,
-						MeterName: ci.name,
-						MeterType: "charger",
-						UserName:  ci.name + " (Idle)",
-						Data: []models.ConsumptionData{
-							{
-								Timestamp: startTime,
-								Power:     0,
-								Source:    "charger",
-							},
-							{
-								Timestamp: now,
-								Power:     0,
-								Source:    "charger",
-							},
-						},
-					}
-					log.Printf("    📊 Added 0W baseline: start=%s, end=%s", startTime.Format("15:04"), now.Format("15:04"))
-					building.Meters = append(building.Meters, chargerData)
-					continue
-				}
-
+				// Process each user's sessions
 				for _, ui := range userInfos {
 					log.Printf("      Processing RFID/User: %s (Actual user: %d - %s)", ui.userID, ui.actualUser, ui.userName)
 
@@ -823,7 +853,6 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					consumptionData := []models.ConsumptionData{}
 					var previousPower float64
 					var hasPrevious bool
-					var hasAnyData bool
 					
 					for sessionRows.Next() {
 						var timestamp time.Time
@@ -833,8 +862,6 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						if err := sessionRows.Scan(&timestamp, &powerKwh, &state); err != nil {
 							continue
 						}
-
-						hasAnyData = true
 
 						if !hasPrevious {
 							previousPower = powerKwh
@@ -884,16 +911,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					}
 					sessionRows.Close()
 
-					// If no data was found, add a 0W point at the start of the period
-					// This shows the charger exists but has no activity
-					if !hasAnyData {
-						consumptionData = append(consumptionData, models.ConsumptionData{
-							Timestamp: startTime,
-							Power:     0,
-							Source:    "charger",
-						})
-					}
-
+					// Only add this user's data if they actually have charging data
 					if len(consumptionData) > 0 {
 						chargerData := MeterData{
 							MeterID:   ci.id,
