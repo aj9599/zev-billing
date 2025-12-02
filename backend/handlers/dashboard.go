@@ -683,22 +683,29 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				`, ci.id, startTime, now)
 				
 				if err == nil {
+					sessionCount := 0
 					for allSessionRows.Next() {
 						var sessionTime time.Time
 						if allSessionRows.Scan(&sessionTime) == nil {
 							// Round to 15-minute interval
 							rounded := roundTo15Min(sessionTime)
 							sessionTimes[rounded] = true
+							sessionCount++
+							if sessionCount <= 5 {
+								log.Printf("      🔍 Session at %s rounds to %s", sessionTime.Format("15:04:05"), rounded.Format("15:04:05"))
+							}
 						}
 					}
 					allSessionRows.Close()
+					log.Printf("      Found %d session times, %d unique 15-min intervals to exclude", sessionCount, len(sessionTimes))
 				}
 				
 				// Generate 0W baseline at 15-minute intervals, but SKIP times where sessions exist
 				baselineData := []models.ConsumptionData{}
 				currentTime := roundTo15Min(startTime)
 				roundedNow := roundTo15Min(now)
-				for currentTime.Before(roundedNow) || currentTime.Equal(roundedNow) {
+				excludedCount := 0
+				for currentTime.Before(roundedNow) {
 					// Only add baseline point if NO session at this time
 					if !sessionTimes[currentTime] {
 						baselineData = append(baselineData, models.ConsumptionData{
@@ -706,6 +713,11 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 							Power:     0,
 							Source:    "charger",
 						})
+					} else {
+						excludedCount++
+						if excludedCount <= 5 {
+							log.Printf("      ⏭️  Skipping baseline at %s (session exists)", currentTime.Format("15:04:05"))
+						}
 					}
 					currentTime = currentTime.Add(15 * time.Minute)
 				}
@@ -719,7 +731,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						UserName:  ci.name + " (Baseline)",
 						Data:      baselineData,
 					}
-					log.Printf("    📊 Added 0W baseline with %d points (excluding %d session times)", len(baselineData), len(sessionTimes))
+					log.Printf("    📊 Added 0W baseline with %d points (excluded %d intervals with sessions)", len(baselineData), len(sessionTimes))
 					building.Meters = append(building.Meters, baselineMeter)
 				}
 

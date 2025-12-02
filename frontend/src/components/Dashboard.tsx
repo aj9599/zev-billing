@@ -161,7 +161,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
           
           // Check if this is solar (negative value means export/generation)
           const isSolar = entry.value < 0;
-          const prefix = isSolar ? '⚡ ' : '';
+          const prefix = isSolar ? 'âš¡ ' : '';
           
           return (
             <p key={index} style={{ color: entry.color, margin: '3px 0' }}>
@@ -792,6 +792,7 @@ export default function Dashboard() {
                           const uniqueKey = getMeterUniqueKey(meter);
                           const isCharger = meter.meter_type === 'charger';
                           const isSolar = meter.meter_type === 'solar_meter';
+                          const isBaseline = meter.user_name?.includes('(Baseline)');
                           const color = getMeterColor(meter.meter_type, meter.meter_id, meter.user_name);
                           const isVisible = isMeterVisible(building.building_id, uniqueKey);
                           
@@ -809,7 +810,7 @@ export default function Dashboard() {
                               name={getMeterDisplayName(meter)}
                               dot={false}
                               activeDot={{ r: (isCharger || isSolar) ? 6 : 4 }}
-                              connectNulls={true}
+                              connectNulls={isBaseline ? false : true}
                             />
                           );
                         })}
