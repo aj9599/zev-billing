@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Upload, Database, AlertCircle, FileSpreadsheet, CheckCircle, Trash2, Download } from 'lucide-react';
+import { Upload, Database, AlertCircle, FileSpreadsheet, CheckCircle } from 'lucide-react';
 import { useTranslation } from '../i18n';
-import { api } from '../services/client';
 import type { Charger } from '../types';
 
 export default function CSVUpload() {
@@ -21,7 +20,17 @@ export default function CSVUpload() {
 
   const loadChargers = async () => {
     try {
-      const data = await api.getChargers();
+      const response = await fetch('/api/chargers', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch chargers');
+      }
+      
+      const data = await response.json();
       setChargers(data);
     } catch (err) {
       console.error('Failed to load chargers:', err);
