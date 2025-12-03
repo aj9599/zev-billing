@@ -1,1007 +1,970 @@
-package handlers
+import { useState, useEffect } from 'react';
+import * as React from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { Users, Building, Zap, Car, Activity, TrendingUp, TrendingDown, Sun, Battery, LayoutDashboard, Home, Eye, EyeOff } from 'lucide-react';
+import { api } from '../api/client';
+import type { DashboardStats } from '../types';
+import { useTranslation } from '../i18n';
 
-import (
-	"context"
-	"database/sql"
-	"encoding/json"
-	"fmt"
-	"log"
-	"net/http"
-	"strings"
-	"time"
-
-	"github.com/aj9599/zev-billing/backend/models"
-)
-
-type DashboardHandler struct {
-	db *sql.DB
+interface MeterData {
+  meter_id: number;
+  meter_name: string;
+  meter_type: string;
+  user_name?: string;
+  data: Array<{
+    timestamp: string;
+    power: number;
+    source: string;
+  }>;
 }
 
-func NewDashboardHandler(db *sql.DB) *DashboardHandler {
-	return &DashboardHandler{db: db}
+interface BuildingConsumption {
+  building_id: number;
+  building_name: string;
+  meters: MeterData[];
 }
 
-// Helper function to round time to nearest 15-minute interval
-func roundTo15Min(t time.Time) time.Time {
-	minutes := t.Minute()
-	var roundedMinutes int
-	
-	if minutes < 8 {
-		roundedMinutes = 0
-	} else if minutes < 23 {
-		roundedMinutes = 15
-	} else if minutes < 38 {
-		roundedMinutes = 30
-	} else if minutes < 53 {
-		roundedMinutes = 45
-	} else {
-		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour()+1, 0, 0, 0, t.Location())
-	}
-	
-	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), roundedMinutes, 0, 0, t.Location())
+const APARTMENT_COLORS = [
+  '#10b981', '#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6', '#6366f1',
+  '#a855f7', '#ef4444', '#84cc16', '#22c55e', '#0ea5e9',
+];
+
+const CHARGER_COLORS = [
+  '#ff3366', '#ff6b35', '#ff8c42', '#ffa94d', '#ffbd59',
+  '#f77f00', '#fcbf49', '#e63946', '#d62828', '#c1121f',
+  '#780000', '#9d4edd', '#7209b7', '#560bad', '#3a0ca3',
+];
+
+const FIXED_COLORS: Record<string, string> = {
+  'solar_meter': '#fbbf24',
+  'total_meter': '#3b82f6',
+  'default': '#6b7280'
+};
+
+const apartmentColorMap = new Map<number, string>();
+const chargerColorMap = new Map<string, string>();
+
+function getMeterColor(meterType: string, meterId?: number, userName?: string): string {
+  if (meterType === 'apartment_meter' && meterId !== undefined) {
+    if (!apartmentColorMap.has(meterId)) {
+      const colorIndex = apartmentColorMap.size % APARTMENT_COLORS.length;
+      apartmentColorMap.set(meterId, APARTMENT_COLORS[colorIndex]);
+    }
+    return apartmentColorMap.get(meterId)!;
+  }
+  
+  if (meterType === 'charger' && meterId !== undefined && userName) {
+    const key = `${meterId}_${userName}`;
+    if (!chargerColorMap.has(key)) {
+      const colorIndex = chargerColorMap.size % CHARGER_COLORS.length;
+      chargerColorMap.set(key, CHARGER_COLORS[colorIndex]);
+    }
+    return chargerColorMap.get(key)!;
+  }
+  
+  return FIXED_COLORS[meterType] || FIXED_COLORS.default;
 }
 
-func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
-	defer func() {
-		if rec := recover(); rec != nil {
-			log.Printf("PANIC in GetStats: %v", rec)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-		}
-	}()
-
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-
-	var stats models.DashboardStats
-
-	// Count all users
-	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users").Scan(&stats.TotalUsers); err != nil {
-		log.Printf("Error counting users: %v", err)
-		stats.TotalUsers = 0
-	}
-	
-	// Count regular users
-	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users WHERE COALESCE(user_type, 'regular') = 'regular'").Scan(&stats.RegularUsers); err != nil {
-		log.Printf("Error counting regular users: %v", err)
-		stats.RegularUsers = 0
-	}
-	
-	// Count admin users
-	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users WHERE user_type = 'administration'").Scan(&stats.AdminUsers); err != nil {
-		log.Printf("Error counting admin users: %v", err)
-		stats.AdminUsers = 0
-	}
-	
-	// Count buildings (excluding groups/complexes)
-	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM buildings WHERE COALESCE(is_group, 0) = 0").Scan(&stats.TotalBuildings); err != nil {
-		log.Printf("Error counting buildings: %v", err)
-		stats.TotalBuildings = 0
-	}
-	
-	// Count complexes (building groups)
-	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM buildings WHERE is_group = 1").Scan(&stats.TotalComplexes); err != nil {
-		log.Printf("Error counting complexes: %v", err)
-		stats.TotalComplexes = 0
-	}
-	
-	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM meters").Scan(&stats.TotalMeters); err != nil {
-		log.Printf("Error counting meters: %v", err)
-		stats.TotalMeters = 0
-	}
-	
-	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM chargers").Scan(&stats.TotalChargers); err != nil {
-		log.Printf("Error counting chargers: %v", err)
-		stats.TotalChargers = 0
-	}
-	
-	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM meters WHERE is_active = 1").Scan(&stats.ActiveMeters); err != nil {
-		log.Printf("Error counting active meters: %v", err)
-		stats.ActiveMeters = 0
-	}
-	
-	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM chargers WHERE is_active = 1").Scan(&stats.ActiveChargers); err != nil {
-		log.Printf("Error counting active chargers: %v", err)
-		stats.ActiveChargers = 0
-	}
-
-	now := time.Now()
-	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	todayEnd := todayStart.Add(24 * time.Hour)
-	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-
-	consumptionMeterTypes := []string{"apartment_meter"}
-	stats.TodayConsumption = calculateTotalConsumption(h.db, ctx, consumptionMeterTypes, todayStart, todayEnd)
-	stats.MonthConsumption = calculateTotalConsumption(h.db, ctx, consumptionMeterTypes, startOfMonth, now)
-
-	// For solar, we calculate export (generation) separately
-	solarMeterTypes := []string{"solar_meter"}
-	stats.TodaySolar = calculateTotalSolarExport(h.db, ctx, solarMeterTypes, todayStart, todayEnd)
-	stats.MonthSolar = calculateTotalSolarExport(h.db, ctx, solarMeterTypes, startOfMonth, now)
-
-	stats.TodayCharging = calculateTotalChargingConsumption(h.db, ctx, todayStart, todayEnd)
-	stats.MonthCharging = calculateTotalChargingConsumption(h.db, ctx, startOfMonth, now)
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+function getMeterDisplayName(meter: MeterData): string {
+  if (meter.meter_type === 'charger') {
+    const userName = meter.user_name || 'Unknown User';
+    const userMatch = userName.match(/^User (\d+)$/);
+    const displayUser = userMatch ? `User ${userMatch[1]}` : userName;
+    return `${meter.meter_name} - ${displayUser}`;
+  }
+  
+  if (meter.user_name) {
+    return `${meter.meter_name} (${meter.user_name})`;
+  }
+  return meter.meter_name;
 }
 
-func calculateTotalConsumption(db *sql.DB, ctx context.Context, meterTypes []string, periodStart, periodEnd time.Time) float64 {
-	if len(meterTypes) == 0 {
-		return 0
-	}
-
-	placeholders := make([]string, len(meterTypes))
-	args := make([]interface{}, len(meterTypes))
-	for i, mt := range meterTypes {
-		placeholders[i] = "?"
-		args[i] = mt
-	}
-	
-	meterTypeFilter := strings.Join(placeholders, ",")
-	
-	meterQuery := fmt.Sprintf(`
-		SELECT id FROM meters 
-		WHERE meter_type IN (%s) 
-		AND COALESCE(is_active, 1) = 1
-	`, meterTypeFilter)
-	
-	meterRows, err := db.QueryContext(ctx, meterQuery, args...)
-	if err != nil {
-		log.Printf("Error querying meters: %v", err)
-		return 0
-	}
-	defer meterRows.Close()
-
-	totalConsumption := 0.0
-	
-	for meterRows.Next() {
-		var meterID int
-		if err := meterRows.Scan(&meterID); err != nil {
-			continue
-		}
-
-		var firstReading sql.NullFloat64
-		db.QueryRowContext(ctx, `
-			SELECT power_kwh FROM meter_readings 
-			WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
-			ORDER BY reading_time ASC LIMIT 1
-		`, meterID, periodStart, periodEnd).Scan(&firstReading)
-
-		var latestReading sql.NullFloat64
-		db.QueryRowContext(ctx, `
-			SELECT power_kwh FROM meter_readings 
-			WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
-			ORDER BY reading_time DESC LIMIT 1
-		`, meterID, periodStart, periodEnd).Scan(&latestReading)
-
-		if firstReading.Valid && latestReading.Valid {
-			var baselineReading sql.NullFloat64
-			db.QueryRowContext(ctx, `
-				SELECT power_kwh FROM meter_readings 
-				WHERE meter_id = ? AND reading_time < ?
-				ORDER BY reading_time DESC LIMIT 1
-			`, meterID, periodStart).Scan(&baselineReading)
-
-			var baseline float64
-			if baselineReading.Valid {
-				baseline = baselineReading.Float64
-			} else {
-				baseline = firstReading.Float64
-			}
-
-			consumption := latestReading.Float64 - baseline
-			if consumption > 0 {
-				totalConsumption += consumption
-			}
-		}
-	}
-	
-	return totalConsumption
+function getMeterUniqueKey(meter: MeterData): string {
+  if (meter.meter_type === 'charger' && meter.user_name) {
+    return `charger_${meter.meter_id}_${meter.user_name}`;
+  }
+  return `meter_${meter.meter_id}`;
 }
 
-// New function specifically for solar export calculation
-func calculateTotalSolarExport(db *sql.DB, ctx context.Context, meterTypes []string, periodStart, periodEnd time.Time) float64 {
-	if len(meterTypes) == 0 {
-		return 0
-	}
-
-	placeholders := make([]string, len(meterTypes))
-	args := make([]interface{}, len(meterTypes))
-	for i, mt := range meterTypes {
-		placeholders[i] = "?"
-		args[i] = mt
-	}
-	
-	meterTypeFilter := strings.Join(placeholders, ",")
-	
-	meterQuery := fmt.Sprintf(`
-		SELECT id FROM meters 
-		WHERE meter_type IN (%s) 
-		AND COALESCE(is_active, 1) = 1
-	`, meterTypeFilter)
-	
-	meterRows, err := db.QueryContext(ctx, meterQuery, args...)
-	if err != nil {
-		log.Printf("Error querying solar meters: %v", err)
-		return 0
-	}
-	defer meterRows.Close()
-
-	totalExport := 0.0
-	
-	for meterRows.Next() {
-		var meterID int
-		if err := meterRows.Scan(&meterID); err != nil {
-			continue
-		}
-
-		// Get first export reading in period
-		var firstReading sql.NullFloat64
-		db.QueryRowContext(ctx, `
-			SELECT power_kwh_export FROM meter_readings 
-			WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
-			ORDER BY reading_time ASC LIMIT 1
-		`, meterID, periodStart, periodEnd).Scan(&firstReading)
-
-		// Get latest export reading in period
-		var latestReading sql.NullFloat64
-		db.QueryRowContext(ctx, `
-			SELECT power_kwh_export FROM meter_readings 
-			WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
-			ORDER BY reading_time DESC LIMIT 1
-		`, meterID, periodStart, periodEnd).Scan(&latestReading)
-
-		if firstReading.Valid && latestReading.Valid {
-			// Get baseline (reading before period)
-			var baselineReading sql.NullFloat64
-			db.QueryRowContext(ctx, `
-				SELECT power_kwh_export FROM meter_readings 
-				WHERE meter_id = ? AND reading_time < ?
-				ORDER BY reading_time DESC LIMIT 1
-			`, meterID, periodStart).Scan(&baselineReading)
-
-			var baseline float64
-			if baselineReading.Valid {
-				baseline = baselineReading.Float64
-			} else {
-				baseline = firstReading.Float64
-			}
-
-			// Calculate total export for the period
-			exportEnergy := latestReading.Float64 - baseline
-			if exportEnergy > 0 {
-				totalExport += exportEnergy
-			}
-		}
-	}
-	
-	return totalExport
+function getMeterTypeIcon(meterType: string): { Icon: any; label: string } {
+  switch (meterType) {
+    case 'charger':
+      return { Icon: Car, label: 'Charger' };
+    case 'solar_meter':
+      return { Icon: Sun, label: 'Solar' };
+    case 'apartment_meter':
+      return { Icon: Home, label: 'Apartment' };
+    case 'total_meter':
+      return { Icon: Zap, label: 'Total' };
+    default:
+      return { Icon: Zap, label: meterType.replace('_', ' ') };
+  }
 }
 
-func calculateTotalChargingConsumption(db *sql.DB, ctx context.Context, periodStart, periodEnd time.Time) float64 {
-	chargerRows, err := db.QueryContext(ctx, `
-		SELECT id FROM chargers 
-		WHERE COALESCE(is_active, 1) = 1
-	`)
-	if err != nil {
-		log.Printf("Error querying chargers: %v", err)
-		return 0
-	}
-	defer chargerRows.Close()
-
-	totalConsumption := 0.0
-	
-	for chargerRows.Next() {
-		var chargerID int
-		if err := chargerRows.Scan(&chargerID); err != nil {
-			continue
-		}
-
-		userRows, err := db.QueryContext(ctx, `
-			SELECT DISTINCT user_id 
-			FROM charger_sessions 
-			WHERE charger_id = ?
-			AND session_time >= ? AND session_time < ?
-		`, chargerID, periodStart, periodEnd)
-		
-		if err != nil {
-			continue
-		}
-
-		for userRows.Next() {
-			var userID string
-			if err := userRows.Scan(&userID); err != nil {
-				continue
-			}
-
-			var firstReading sql.NullFloat64
-			db.QueryRowContext(ctx, `
-				SELECT power_kwh FROM charger_sessions 
-				WHERE charger_id = ? AND user_id = ? 
-				AND session_time >= ? AND session_time < ?
-				ORDER BY session_time ASC LIMIT 1
-			`, chargerID, userID, periodStart, periodEnd).Scan(&firstReading)
-
-			var latestReading sql.NullFloat64
-			db.QueryRowContext(ctx, `
-				SELECT power_kwh FROM charger_sessions 
-				WHERE charger_id = ? AND user_id = ? 
-				AND session_time >= ? AND session_time < ?
-				ORDER BY session_time DESC LIMIT 1
-			`, chargerID, userID, periodStart, periodEnd).Scan(&latestReading)
-
-			if firstReading.Valid && latestReading.Valid {
-				var baselineReading sql.NullFloat64
-				db.QueryRowContext(ctx, `
-					SELECT power_kwh FROM charger_sessions 
-					WHERE charger_id = ? AND user_id = ? 
-					AND session_time < ?
-					ORDER BY session_time DESC LIMIT 1
-				`, chargerID, userID, periodStart).Scan(&baselineReading)
-
-				var baseline float64
-				if baselineReading.Valid {
-					baseline = baselineReading.Float64
-				} else {
-					baseline = firstReading.Float64
-				}
-
-				consumption := latestReading.Float64 - baseline
-				if consumption > 0 {
-					totalConsumption += consumption
-				}
-			}
-		}
-		userRows.Close()
-	}
-	
-	return totalConsumption
+function roundToNearest15Minutes(timestamp: string): Date {
+  const date = new Date(timestamp);
+  const minutes = date.getMinutes();
+  const roundedMinutes = Math.round(minutes / 15) * 15;
+  
+  const rounded = new Date(date);
+  rounded.setMinutes(roundedMinutes);
+  rounded.setSeconds(0);
+  rounded.setMilliseconds(0);
+  
+  return rounded;
 }
 
-func (h *DashboardHandler) GetConsumption(w http.ResponseWriter, r *http.Request) {
-	defer func() {
-		if rec := recover(); rec != nil {
-			log.Printf("PANIC in GetConsumption: %v", rec)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-		}
-	}()
-
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
-
-	period := r.URL.Query().Get("period")
-	if period == "" {
-		period = "24h"
-	}
-
-	now := time.Now()
-	var startTime time.Time
-	switch period {
-	case "1h":
-		startTime = now.Add(-1 * time.Hour)
-	case "24h":
-		startTime = now.Add(-24 * time.Hour)
-	case "7d":
-		startTime = now.Add(-7 * 24 * time.Hour)
-	case "30d":
-		startTime = now.Add(-30 * 24 * time.Hour)
-	default:
-		startTime = now.Add(-24 * time.Hour)
-	}
-
-	log.Printf("GetConsumption: period=%s, startTime=%s, endTime=%s", 
-		period, startTime.Format("2006-01-02 15:04:05"), now.Format("2006-01-02 15:04:05"))
-
-	rows, err := h.db.QueryContext(ctx, `
-		SELECT m.meter_type, mr.reading_time, mr.consumption_kwh
-		FROM meter_readings mr
-		JOIN meters m ON mr.meter_id = m.id
-		WHERE mr.reading_time >= ? AND mr.reading_time <= ?
-		ORDER BY mr.reading_time ASC
-	`, startTime, now)
-
-	if err != nil {
-		log.Printf("Error querying consumption: %v", err)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]interface{}{})
-		return
-	}
-	defer rows.Close()
-
-	consumption := []models.ConsumptionData{}
-	for rows.Next() {
-		var c models.ConsumptionData
-		if err := rows.Scan(&c.Source, &c.Timestamp, &c.Power); err == nil {
-			consumption = append(consumption, c)
-		}
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(consumption)
+function formatTimeForPeriod(date: Date, period: string): string {
+  if (period === '1h') {
+    return date.toLocaleTimeString('de-CH', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+  }
+  
+  if (period === '24h') {
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const time = date.toLocaleTimeString('de-CH', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+    return `${day}.${month} ${time}`;
+  }
+  
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const time = date.toLocaleTimeString('de-CH', { 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  });
+  return `${day}.${month} ${time}`;
 }
 
-func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *http.Request) {
-	defer func() {
-		if rec := recover(); rec != nil {
-			log.Printf("PANIC in GetConsumptionByBuilding: %v", rec)
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode([]interface{}{})
-		}
-	}()
+// Custom tooltip to show absolute values for solar
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div style={{
+        backgroundColor: 'white',
+        border: '1px solid #e5e7eb',
+        borderRadius: '6px',
+        padding: '10px',
+        fontSize: '12px'
+      }}>
+        <p style={{ fontWeight: 'bold', marginBottom: '5px' }}>{label}</p>
+        {payload.map((entry: any, index: number) => {
+          const value = Math.abs(entry.value);
+          const displayValue = value >= 1000 
+            ? `${(value / 1000).toFixed(2)} kW` 
+            : `${value.toFixed(0)} W`;
+          
+          // Check if this is solar (negative value means export/generation)
+          const isSolar = entry.value < 0;
+          const prefix = isSolar ? 'âš¡ ' : '';
+          
+          return (
+            <p key={index} style={{ color: entry.color, margin: '3px 0' }}>
+              {prefix}{entry.name}: {displayValue}
+            </p>
+          );
+        })}
+      </div>
+    );
+  }
+  return null;
+};
 
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-	defer cancel()
+export default function Dashboard() {
+  const { t } = useTranslation();
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [buildingData, setBuildingData] = useState<BuildingConsumption[]>([]);
+  const [period, setPeriod] = useState('24h');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Track visible meters for each building
+  const [visibleMetersByBuilding, setVisibleMetersByBuilding] = useState<Map<number, Set<string>>>(new Map());
 
-	period := r.URL.Query().Get("period")
-	if period == "" {
-		period = "24h"
-	}
+  const loadData = React.useCallback(async () => {
+    try {
+      setError(null);
+      const [statsData, buildingConsumption] = await Promise.all([
+        api.getDashboardStats(),
+        api.getConsumptionByBuilding(period)
+      ]);
+      setStats(statsData);
+      
+      // Log data for debugging
+      if (Array.isArray(buildingConsumption)) {
+        buildingConsumption.forEach(building => {
+          const solarMeters = building.meters?.filter(m => m.meter_type === 'solar_meter') || [];
+          const chargers = building.meters?.filter(m => m.meter_type === 'charger') || [];
+          
+          if (solarMeters.length > 0) {
+            console.log(`Building ${building.building_name} - Solar meters:`);
+            solarMeters.forEach(s => {
+              console.log(`  - ${s.meter_name}: ${s.data.length} data points`);
+              if (s.data.length > 0) {
+                const avgPower = s.data.reduce((sum, d) => sum + d.power, 0) / s.data.length;
+                const minPower = Math.min(...s.data.map(d => d.power));
+                console.log(`    Avg: ${avgPower.toFixed(0)}W, Min: ${minPower.toFixed(0)}W (negative = export)`);
+              }
+            });
+          }
+          
+          if (chargers.length > 0) {
+            console.log(`Building ${building.building_name} - Chargers:`);
+            chargers.forEach(c => {
+              console.log(`  - ${c.meter_name} (${c.user_name}): ${c.data.length} data points`);
+              if (c.data.length > 0) {
+                const avgPower = c.data.reduce((sum, d) => sum + d.power, 0) / c.data.length;
+                const maxPower = Math.max(...c.data.map(d => d.power));
+                console.log(`    Avg: ${avgPower.toFixed(0)}W, Max: ${maxPower.toFixed(0)}W`);
+              }
+            });
+          }
+        });
+      }
+      
+      setBuildingData(Array.isArray(buildingConsumption) ? buildingConsumption : []);
+      
+      // Initialize all meters as visible
+      const initialVisibility = new Map<number, Set<string>>();
+      if (Array.isArray(buildingConsumption)) {
+        buildingConsumption.forEach(building => {
+          const visibleSet = new Set<string>();
+          building.meters?.forEach(meter => {
+            visibleSet.add(getMeterUniqueKey(meter));
+          });
+          initialVisibility.set(building.building_id, visibleSet);
+        });
+      }
+      setVisibleMetersByBuilding(initialVisibility);
+      
+    } catch (err) {
+      console.error('Failed to load dashboard data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
+      setBuildingData([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [period]);
 
-	now := time.Now()
-	var startTime time.Time
-	switch period {
-	case "1h":
-		startTime = now.Add(-1 * time.Hour)
-	case "24h":
-		startTime = now.Add(-24 * time.Hour)
-	case "7d":
-		startTime = now.Add(-7 * 24 * time.Hour)
-	case "30d":
-		startTime = now.Add(-30 * 24 * time.Hour)
-	default:
-		startTime = now.Add(-24 * time.Hour)
-	}
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(loadData, 60000);
+    return () => clearInterval(interval);
+  }, [loadData]);
 
-	log.Printf("GetConsumptionByBuilding: period=%s, startTime=%s, endTime=%s", 
-		period, startTime.Format("2006-01-02 15:04:05"), now.Format("2006-01-02 15:04:05"))
+  // Toggle meter visibility
+  const toggleMeterVisibility = (buildingId: number, meterKey: string) => {
+    setVisibleMetersByBuilding(prev => {
+      const newMap = new Map(prev);
+      const buildingVisible = new Set(newMap.get(buildingId) || new Set<string>());
+      
+      if (buildingVisible.has(meterKey)) {
+        buildingVisible.delete(meterKey);
+      } else {
+        buildingVisible.add(meterKey);
+      }
+      
+      newMap.set(buildingId, buildingVisible);
+      return newMap;
+    });
+  };
 
-	buildingRows, err := h.db.QueryContext(ctx, `
-		SELECT id, name 
-		FROM buildings 
-		WHERE COALESCE(is_group, 0) = 0
-		ORDER BY name
-	`)
-	if err != nil {
-		log.Printf("Error querying buildings: %v", err)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]interface{}{})
-		return
-	}
+  // Check if meter is visible
+  const isMeterVisible = (buildingId: number, meterKey: string): boolean => {
+    const buildingVisible = visibleMetersByBuilding.get(buildingId);
+    return buildingVisible ? buildingVisible.has(meterKey) : true;
+  };
 
-	type buildingInfo struct {
-		id   int
-		name string
-	}
-	buildingInfos := []buildingInfo{}
-	
-	for buildingRows.Next() {
-		var bi buildingInfo
-		if err := buildingRows.Scan(&bi.id, &bi.name); err != nil {
-			log.Printf("Error scanning building row: %v", err)
-			continue
-		}
-		buildingInfos = append(buildingInfos, bi)
-	}
-	buildingRows.Close()
-	
-	log.Printf("Found %d buildings to process", len(buildingInfos))
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        minHeight: '400px',
+        fontSize: '18px',
+        color: '#666'
+      }}>
+        {t('common.loading')}
+      </div>
+    );
+  }
 
-	type MeterData struct {
-		MeterID   int                        `json:"meter_id"`
-		MeterName string                     `json:"meter_name"`
-		MeterType string                     `json:"meter_type"`
-		UserName  string                     `json:"user_name,omitempty"`
-		Data      []models.ConsumptionData   `json:"data"`
-	}
+  if (error) {
+    return (
+      <div style={{
+        padding: '30px',
+        backgroundColor: '#fee',
+        borderRadius: '8px',
+        color: '#c00',
+        marginBottom: '20px'
+      }}>
+        <h3 style={{ marginTop: 0 }}>Error loading dashboard</h3>
+        <p>{error}</p>
+        <button 
+          onClick={() => { setLoading(true); loadData(); }}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: '#007bff',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer'
+          }}
+        >
+          {t('logs.refresh')}
+        </button>
+      </div>
+    );
+  }
 
-	type BuildingConsumption struct {
-		BuildingID   int         `json:"building_id"`
-		BuildingName string      `json:"building_name"`
-		Meters       []MeterData `json:"meters"`
-	}
+  const statCards = [
+    { 
+      icon: Users, 
+      label: t('dashboard.totalUsers'), 
+      value: stats?.total_users || 0,
+      subValue: `${stats?.regular_users || 0} / ${stats?.admin_users || 0}`,
+      subLabel: t('dashboard.residentsAdmin'),
+      color: '#007bff' 
+    },
+    { 
+      icon: Building, 
+      label: t('dashboard.buildings'), 
+      value: stats?.total_buildings || 0,
+      subValue: stats?.total_complexes ? `${stats.total_complexes} ${stats.total_complexes === 1 ? t('dashboard.complex') : t('dashboard.complexes')}` : undefined,
+      color: '#28a745' 
+    },
+    { 
+      icon: Zap, 
+      label: t('dashboard.activeMeters'), 
+      value: `${stats?.active_meters}/${stats?.total_meters}`, 
+      color: '#ffc107' 
+    },
+    { 
+      icon: Car, 
+      label: t('dashboard.activeChargers'), 
+      value: `${stats?.active_chargers}/${stats?.total_chargers}`, 
+      color: '#6f42c1' 
+    },
+    { 
+      icon: Activity, 
+      label: t('dashboard.consumptionToday'), 
+      value: `${stats?.today_consumption.toFixed(2)} kWh`, 
+      color: '#dc3545' 
+    },
+    { 
+      icon: TrendingUp, 
+      label: t('dashboard.consumptionMonth'), 
+      value: `${stats?.month_consumption.toFixed(2)} kWh`, 
+      color: '#e74c3c' 
+    },
+    { 
+      icon: Sun, 
+      label: t('dashboard.solarToday'), 
+      value: `${stats?.today_solar.toFixed(2)} kWh`, 
+      color: '#f39c12' 
+    },
+    { 
+      icon: TrendingDown, 
+      label: t('dashboard.solarMonth'), 
+      value: `${stats?.month_solar.toFixed(2)} kWh`, 
+      color: '#e67e22' 
+    },
+    { 
+      icon: Battery, 
+      label: t('dashboard.chargingToday'), 
+      value: `${stats?.today_charging.toFixed(2)} kWh`, 
+      color: '#9b59b6' 
+    },
+    { 
+      icon: Zap, 
+      label: t('dashboard.chargingMonth'), 
+      value: `${stats?.month_charging.toFixed(2)} kWh`, 
+      color: '#8e44ad' 
+    },
+  ];
 
-	buildings := []BuildingConsumption{}
+  return (
+    <div className="dashboard-container">
+      <div className="dashboard-header" style={{ marginBottom: '30px' }}>
+        <h1 className="dashboard-title" style={{ 
+            fontSize: '36px', 
+            fontWeight: '800', 
+            marginBottom: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text'
+        }}>
+          <LayoutDashboard className="dashboard-icon" size={36} style={{ color: '#667eea' }} />
+          {t('dashboard.title')}
+        </h1>
+        <p className="dashboard-subtitle" style={{ color: '#6b7280', fontSize: '16px' }}>
+          {t('dashboard.subtitle')}
+        </p>
+      </div>
 
-	for _, bi := range buildingInfos {
-		log.Printf("Processing building ID: %d, Name: %s", bi.id, bi.name)
+      <div className="stats-grid" style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+        gap: '20px',
+        marginBottom: '30px'
+      }}>
+        {statCards.map((card, idx) => {
+          const Icon = card.icon;
+          return (
+            <div
+              key={idx}
+              className="stat-card"
+              style={{
+                backgroundColor: 'white',
+                padding: '24px',
+                borderRadius: '12px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '16px'
+              }}
+            >
+              <div style={{
+                width: '50px',
+                height: '50px',
+                borderRadius: '10px',
+                backgroundColor: card.color + '20',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}>
+                <Icon size={24} color={card.color} />
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div className="stat-label" style={{ fontSize: '14px', color: '#666', marginBottom: '4px' }}>
+                  {card.label}
+                </div>
+                <div className="stat-value" style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                  {card.value}
+                </div>
+                {card.subValue && (
+                  <div style={{ 
+                    fontSize: '12px', 
+                    color: '#9ca3af', 
+                    marginTop: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}>
+                    {card.subLabel && <span style={{ fontSize: '11px' }}>{card.subLabel}:</span>}
+                    <span style={{ fontWeight: '600', color: '#6b7280' }}>{card.subValue}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
-		building := BuildingConsumption{
-			BuildingID:   bi.id,
-			BuildingName: bi.name,
-			Meters:       []MeterData{},
-		}
+      <div className="consumption-controls" style={{
+        backgroundColor: 'white',
+        padding: '20px',
+        borderRadius: '12px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        marginBottom: '20px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '15px'
+      }}>
+        <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0 }}>
+          {t('dashboard.consumptionByBuilding')}
+        </h2>
+        <div className="controls-group" style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            type="text"
+            placeholder={t('dashboard.searchBuildings')}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="search-input"
+            style={{
+              padding: '8px 12px',
+              border: '1px solid #ddd',
+              borderRadius: '6px',
+              fontSize: '14px',
+              minWidth: '200px'
+            }}
+          />
+          <select
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            className="period-select"
+            style={{
+              padding: '8px 12px',
+              border: '1px solid #ddd',
+              borderRadius: '6px',
+              fontSize: '14px'
+            }}
+          >
+            <option value="1h">{t('dashboard.lastHour')}</option>
+            <option value="24h">{t('dashboard.last24Hours')}</option>
+            <option value="7d">{t('dashboard.last7Days')}</option>
+            <option value="30d">{t('dashboard.last30Days')}</option>
+          </select>
+        </div>
+      </div>
 
-		// Process meters with fixed 15-minute intervals
-		log.Printf("  Querying meters for building %d...", bi.id)
-		meterRows, err := h.db.QueryContext(ctx, `
-			SELECT m.id, m.name, m.meter_type, m.user_id
-			FROM meters m
-			WHERE m.building_id = ? 
-			AND COALESCE(m.is_active, 1) = 1
-			AND m.meter_type IN ('apartment_meter', 'solar_meter', 'total_meter')
-			ORDER BY m.meter_type, m.name
-		`, bi.id)
+      {buildingData.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
+          {(() => {
+            const filteredBuildings = buildingData.filter(building => 
+              building.building_name.toLowerCase().includes(searchQuery.toLowerCase())
+            );
 
-		if err != nil {
-			log.Printf("  Error querying meters for building %d: %v", bi.id, err)
-			buildings = append(buildings, building)
-			continue
-		}
+            if (filteredBuildings.length === 0 && searchQuery) {
+              return (
+                <div style={{
+                  backgroundColor: 'white',
+                  padding: '60px 20px',
+                  borderRadius: '12px',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                  textAlign: 'center',
+                  color: '#9ca3af'
+                }}>
+                  <h3 style={{ marginTop: 0, color: '#6b7280' }}>{t('dashboard.noBuildings')}</h3>
+                  <p>{t('dashboard.noBuildingsMatch').replace('{query}', searchQuery)}</p>
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: '#667eea',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      marginTop: '10px'
+                    }}
+                  >
+                    {t('dashboard.clearSearch')}
+                  </button>
+                </div>
+              );
+            }
 
-		type meterInfo struct {
-			id       int
-			name     string
-			meterType string
-			userID   sql.NullInt64
-		}
-		meterInfos := []meterInfo{}
-		
-		for meterRows.Next() {
-			var mi meterInfo
-			if err := meterRows.Scan(&mi.id, &mi.name, &mi.meterType, &mi.userID); err != nil {
-				log.Printf("  Error scanning meter row: %v", err)
-				continue
-			}
-			meterInfos = append(meterInfos, mi)
-		}
-		meterRows.Close()
-		
-		log.Printf("  Found %d meters for building %d", len(meterInfos), bi.id)
+            return (
+              <>
+                {searchQuery && (
+                  <div style={{
+                    padding: '12px 16px',
+                    backgroundColor: '#f0f9ff',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    color: '#0369a1',
+                    border: '1px solid #bae6fd'
+                  }}>
+                    {t('dashboard.showingBuildings')
+                      .replace('{count}', filteredBuildings.length.toString())
+                      .replace('{total}', buildingData.length.toString())}
+                  </div>
+                )}
+                {filteredBuildings.map((building) => {
+            const timeMap = new Map<string, any>();
+            const meters = building.meters || [];
+            
+            const solarMeters = meters.filter(m => m.meter_type === 'solar_meter');
+            const chargerMeters = meters.filter(m => m.meter_type === 'charger');
+            
+            if (solarMeters.length > 0) {
+              console.log(`Building ${building.building_name} - Processing ${solarMeters.length} solar meter(s)`);
+            }
+            if (chargerMeters.length > 0) {
+              console.log(`Building ${building.building_name} - Processing ${chargerMeters.length} charger(s)`);
+            }
+            
+            meters.forEach(meter => {
+              const readings = meter.data || [];
+              const isSolar = meter.meter_type === 'solar_meter';
+              const isCharger = meter.meter_type === 'charger';
+              
+              if (isSolar && readings.length > 0) {
+                console.log(`  Solar ${meter.meter_name}: ${readings.length} readings`);
+              }
+              if (isCharger && readings.length > 0) {
+                console.log(`  Charger ${meter.meter_name} (${meter.user_name}): ${readings.length} readings`);
+              }
+              
+              readings.forEach(reading => {
+                const roundedDate = roundToNearest15Minutes(reading.timestamp);
+                const timestampKey = roundedDate.toISOString();
+                const displayTime = formatTimeForPeriod(roundedDate, period);
+                
+                if (!timeMap.has(timestampKey)) {
+                  timeMap.set(timestampKey, { 
+                    time: displayTime,
+                    timestamp: timestampKey,
+                    sortKey: roundedDate.getTime()
+                  });
+                }
+                
+                const meterKey = getMeterUniqueKey(meter);
+                const current = timeMap.get(timestampKey);
+                
+                // For all meter types, use the power value directly
+                // Solar export is already negative from backend
+                if (isCharger || isSolar || reading.power !== 0) {
+                  current[meterKey] = reading.power;
+                }
+              });
+            });
 
-		for _, mi := range meterInfos {
-			log.Printf("    Processing meter ID: %d, Name: %s, Type: %s", mi.id, mi.name, mi.meterType)
+            const chartData = Array.from(timeMap.values()).sort((a, b) => {
+              return a.sortKey - b.sortKey;
+            });
+            
+            if (solarMeters.length > 0) {
+              const solarKeys = solarMeters.map(sm => getMeterUniqueKey(sm));
+              const pointsWithSolarData = chartData.filter(point => 
+                solarKeys.some(key => point[key] !== undefined)
+              );
+              console.log(`  Chart has ${chartData.length} time points, ${pointsWithSolarData.length} with solar data`);
+            }
+            if (chargerMeters.length > 0) {
+              const chargerKeys = chargerMeters.map(cm => getMeterUniqueKey(cm));
+              const pointsWithChargerData = chartData.filter(point => 
+                chargerKeys.some(key => point[key] !== undefined)
+              );
+              console.log(`  Chart has ${chartData.length} time points, ${pointsWithChargerData.length} with charger data`);
+            }
 
-			userName := ""
-			if mi.userID.Valid {
-				err = h.db.QueryRowContext(ctx, `
-					SELECT first_name || ' ' || last_name 
-					FROM users 
-					WHERE id = ?
-				`, mi.userID.Int64).Scan(&userName)
-				
-				if err != nil && err != sql.ErrNoRows {
-					log.Printf("    Error getting user name for user %d: %v", mi.userID.Int64, err)
-				}
-			}
+            return (
+              <div
+                key={building.building_id}
+                className="building-card"
+                style={{
+                  backgroundColor: 'white',
+                  padding: '24px',
+                  borderRadius: '12px',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }}
+              >
+                <h3 style={{ 
+                  fontSize: '20px', 
+                  fontWeight: 'bold', 
+                  marginBottom: '20px',
+                  color: '#1f2937'
+                }}>
+                  {building.building_name}
+                </h3>
 
-			// Get data at 15-minute intervals and convert consumption to power
-			// For solar meters, we use export data (negative values for display)
-			var dataRows *sql.Rows
-			if mi.meterType == "solar_meter" {
-				// For solar, get export consumption (will be displayed as negative)
-				dataRows, err = h.db.QueryContext(ctx, `
-					SELECT reading_time, power_kwh_export, consumption_export
-					FROM meter_readings
-					WHERE meter_id = ? 
-					AND reading_time >= ? 
-					AND reading_time <= ?
-					ORDER BY reading_time ASC
-				`, mi.id, startTime, now)
-			} else {
-				// For other meters, get import consumption
-				dataRows, err = h.db.QueryContext(ctx, `
-					SELECT reading_time, power_kwh, consumption_kwh
-					FROM meter_readings
-					WHERE meter_id = ? 
-					AND reading_time >= ? 
-					AND reading_time <= ?
-					ORDER BY reading_time ASC
-				`, mi.id, startTime, now)
-			}
+                {meters.length > 0 && (
+                  <div className="meter-legend" style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '12px',
+                    marginBottom: '20px',
+                    padding: '12px',
+                    backgroundColor: '#f9fafb',
+                    borderRadius: '8px'
+                  }}>
+                    {meters.map(meter => {
+                      const uniqueKey = getMeterUniqueKey(meter);
+                      const isCharger = meter.meter_type === 'charger';
+                      const isSolar = meter.meter_type === 'solar_meter';
+                      const { Icon: TypeIcon, label: typeLabel } = getMeterTypeIcon(meter.meter_type);
+                      const color = getMeterColor(meter.meter_type, meter.meter_id, meter.user_name);
+                      const isVisible = isMeterVisible(building.building_id, uniqueKey);
+                      
+                      return (
+                        <div
+                          key={uniqueKey}
+                          onClick={() => toggleMeterVisibility(building.building_id, uniqueKey)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '6px 10px',
+                            backgroundColor: 'white',
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            border: (isCharger || isSolar) ? `2px solid ${color}30` : '1px solid #e5e7eb',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            opacity: isVisible ? 1 : 0.5,
+                            textDecoration: isVisible ? 'none' : 'line-through',
+                            userSelect: 'none'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'translateY(-1px)';
+                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = 'none';
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {isVisible ? (
+                              <Eye size={14} color={color} style={{ flexShrink: 0 }} />
+                            ) : (
+                              <EyeOff size={14} color="#9ca3af" style={{ flexShrink: 0 }} />
+                            )}
+                            <div
+                              style={{
+                                width: '12px',
+                                height: '12px',
+                                borderRadius: '2px',
+                                backgroundColor: isVisible ? color : '#d1d5db',
+                                flexShrink: 0,
+                                border: (isCharger || isSolar) ? `2px solid ${isVisible ? color : '#9ca3af'}` : 'none'
+                              }}
+                            />
+                          </div>
+                          <span style={{ 
+                            fontWeight: (isCharger || isSolar) ? '600' : '500',
+                            color: isVisible ? '#1f2937' : '#9ca3af'
+                          }}>
+                            {getMeterDisplayName(meter)}
+                          </span>
+                          <span style={{ 
+                            color: isVisible ? '#6b7280' : '#9ca3af', 
+                            fontSize: '12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}>
+                            <TypeIcon size={12} />
+                            {typeLabel}
+                          </span>
+                          {meter.data.length > 0 && (
+                            <span style={{
+                              color: isVisible ? '#10b981' : '#9ca3af',
+                              fontSize: '11px',
+                              fontWeight: '600',
+                              marginLeft: '4px'
+                            }}>
+                              {meter.data.length} pts
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
-			meterData := MeterData{
-				MeterID:   mi.id,
-				MeterName: mi.name,
-				MeterType: mi.meterType,
-				UserName:  userName,
-				Data:      []models.ConsumptionData{},
-			}
+                {chartData.length > 0 ? (
+                  <div className="chart-container" style={{ width: '100%', height: '400px' }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis 
+                          dataKey="time" 
+                          style={{ fontSize: '12px' }}
+                          stroke="#6b7280"
+                          angle={period === '24h' || period === '7d' || period === '30d' ? -45 : 0}
+                          textAnchor={period === '24h' || period === '7d' || period === '30d' ? 'end' : 'middle'}
+                          height={period === '24h' || period === '7d' || period === '30d' ? 80 : 30}
+                        />
+                        <YAxis 
+                          label={{ 
+                            value: 'Power (W)', 
+                            angle: -90, 
+                            position: 'insideLeft',
+                            style: { fontSize: '12px' }
+                          }}
+                          style={{ fontSize: '12px' }}
+                          stroke="#6b7280"
+                        />
+                        <ReferenceLine y={0} stroke="#9ca3af" strokeDasharray="3 3" />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Legend 
+                          wrapperStyle={{ fontSize: '12px' }}
+                        />
+                        {meters.map(meter => {
+                          const uniqueKey = getMeterUniqueKey(meter);
+                          const isCharger = meter.meter_type === 'charger';
+                          const isSolar = meter.meter_type === 'solar_meter';
+                          const isBaseline = meter.user_name?.includes('(Baseline)');
+                          const color = getMeterColor(meter.meter_type, meter.meter_id, meter.user_name);
+                          const isVisible = isMeterVisible(building.building_id, uniqueKey);
+                          
+                          // Only render visible lines
+                          if (!isVisible) return null;
+                          
+                          return (
+                            <Line
+                              key={uniqueKey}
+                              type="monotone"
+                              dataKey={uniqueKey}
+                              stroke={color}
+                              strokeWidth={(isCharger || isSolar) ? 3 : 2}
+                              strokeDasharray={isCharger ? '8 4' : undefined}
+                              name={getMeterDisplayName(meter)}
+                              dot={false}
+                              activeDot={{ r: (isCharger || isSolar) ? 6 : 4 }}
+                              connectNulls={isBaseline ? false : true}
+                            />
+                          );
+                        })}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : meters.length > 0 ? (
+                  <div style={{ 
+                    textAlign: 'center', 
+                    padding: '60px 20px', 
+                    color: '#9ca3af' 
+                  }}>
+                    {t('dashboard.noConsumptionData')}
+                    <br />
+                    <small>{t('dashboard.metersConfigured')}</small>
+                  </div>
+                ) : (
+                  <div style={{ 
+                    textAlign: 'center', 
+                    padding: '60px 20px', 
+                    color: '#9ca3af' 
+                  }}>
+                    {t('dashboard.noMetersConfigured')}
+                    <br />
+                    <small>{t('dashboard.addMeters')}</small>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+              </>
+            );
+          })()}
+        </div>
+      ) : (
+        <div style={{
+          backgroundColor: 'white',
+          padding: '60px 20px',
+          borderRadius: '12px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          textAlign: 'center',
+          color: '#9ca3af'
+        }}>
+          <h3 style={{ marginTop: 0, color: '#6b7280' }}>{t('dashboard.noBuildings')}</h3>
+          <p>{t('dashboard.createBuildings')}</p>
+        </div>
+      )}
 
-			if err != nil {
-				log.Printf("    Error querying readings for meter %d: %v", mi.id, err)
-				building.Meters = append(building.Meters, meterData)
-				continue
-			}
-			
-			for dataRows.Next() {
-				var timestamp time.Time
-				var powerKwh, consumptionKwh float64
-				if err := dataRows.Scan(&timestamp, &powerKwh, &consumptionKwh); err != nil {
-					continue
-				}
+      <style>{`
+        @media (max-width: 768px) {
+          .dashboard-title {
+            font-size: 24px !important;
+          }
 
-				// Convert consumption (kWh over 15 min) to power (W)
-				// Power (W) = Energy (kWh) / Time (h) * 1000
-				// Time = 15 min = 0.25 h
-				powerW := (consumptionKwh / 0.25) * 1000
-				
-				// For solar meters, make power negative to show as generation/export
-				if mi.meterType == "solar_meter" {
-					powerW = -powerW
-				}
-				
-				meterData.Data = append(meterData.Data, models.ConsumptionData{
-					Timestamp: timestamp,
-					Power:     powerW,
-					Source:    mi.meterType,
-				})
-			}
-			dataRows.Close()
+          .dashboard-icon {
+            width: 24px !important;
+            height: 24px !important;
+          }
 
-			log.Printf("    Meter ID: %d has %d data points at 15-min intervals", mi.id, len(meterData.Data))
+          .dashboard-subtitle {
+            font-size: 14px !important;
+          }
 
-			building.Meters = append(building.Meters, meterData)
-		}
+          .stats-grid {
+            grid-template-columns: 1fr !important;
+            gap: 15px !important;
+          }
 
-		// Process chargers with fixed 15-minute intervals
-		log.Printf("  Querying chargers for building %d...", bi.id)
-		chargerRows, err := h.db.QueryContext(ctx, `
-			SELECT c.id, c.name
-			FROM chargers c
-			WHERE c.building_id = ? 
-			AND COALESCE(c.is_active, 1) = 1
-			ORDER BY c.name
-		`, bi.id)
+          .stat-card {
+            padding: 16px !important;
+          }
 
-		if err != nil {
-			log.Printf("  Error querying chargers for building %d: %v", bi.id, err)
-		} else {
-			type chargerInfo struct {
-				id   int
-				name string
-			}
-			chargerInfos := []chargerInfo{}
-			
-			for chargerRows.Next() {
-				var ci chargerInfo
-				if err := chargerRows.Scan(&ci.id, &ci.name); err != nil {
-					log.Printf("  Error scanning charger row: %v", err)
-					continue
-				}
-				chargerInfos = append(chargerInfos, ci)
-			}
-			chargerRows.Close()
-			
-			log.Printf("  Found %d chargers for building %d", len(chargerInfos), bi.id)
+          .stat-value {
+            font-size: 20px !important;
+          }
 
-			for _, ci := range chargerInfos {
-				log.Printf("    Processing charger ID: %d, Name: %s", ci.id, ci.name)
+          .consumption-controls {
+            flex-direction: column;
+            align-items: stretch !important;
+            padding: 15px !important;
+          }
 
-				// First, collect all session times for this charger to know when to break the baseline
-				// Use STRING keys to avoid timezone comparison issues
-				sessionTimes := make(map[string]bool)
-				var allSessionRows *sql.Rows
-				allSessionRows, err = h.db.QueryContext(ctx, `
-					SELECT DISTINCT session_time
-					FROM charger_sessions
-					WHERE charger_id = ? 
-					AND session_time >= ?
-					AND session_time <= ?
-					AND user_id != ''
-					AND COALESCE(user_id, '') != ''
-					AND state != '1'
-					ORDER BY session_time ASC
-				`, ci.id, startTime, now)
-				
-				if err == nil {
-					sessionCount := 0
-					for allSessionRows.Next() {
-						var sessionTime time.Time
-						if allSessionRows.Scan(&sessionTime) == nil {
-							// Round to 15-minute interval
-							rounded := roundTo15Min(sessionTime)
-							// Use formatted string as key to avoid timezone issues
-							timeKey := rounded.Format("2006-01-02T15:04:05")
-							sessionTimes[timeKey] = true
-							sessionCount++
-							if sessionCount <= 5 {
-								log.Printf("      🔍 Session at %s rounds to %s (key: %s)", 
-									sessionTime.Format("15:04:05"), 
-									rounded.Format("15:04:05"),
-									timeKey)
-							}
-						}
-					}
-					allSessionRows.Close()
-					log.Printf("      Found %d session times, %d unique 15-min intervals to exclude", sessionCount, len(sessionTimes))
-				}
-				
-				// Generate 0W baseline at 15-minute intervals, but SKIP times where sessions exist
-				baselineData := []models.ConsumptionData{}
-				currentTime := roundTo15Min(startTime)
-				roundedNow := roundTo15Min(now)
-				excludedCount := 0
-				for currentTime.Before(roundedNow) {
-					// Create time key for lookup (without timezone)
-					timeKey := currentTime.Format("2006-01-02T15:04:05")
-					
-					// Only add baseline point if NO session at this time
-					if !sessionTimes[timeKey] {
-						baselineData = append(baselineData, models.ConsumptionData{
-							Timestamp: currentTime,
-							Power:     0,
-							Source:    "charger",
-						})
-					} else {
-						excludedCount++
-						if excludedCount <= 5 {
-							log.Printf("      ⏭️  Skipping baseline at %s (key: %s - session exists)", 
-								currentTime.Format("15:04:05"),
-								timeKey)
-						}
-					}
-					currentTime = currentTime.Add(15 * time.Minute)
-				}
-				
-				// Only add baseline if there are any 0W points
-				if len(baselineData) > 0 {
-					baselineMeter := MeterData{
-						MeterID:   ci.id,
-						MeterName: ci.name,
-						MeterType: "charger",
-						UserName:  ci.name + " (Baseline)",
-						Data:      baselineData,
-					}
-					log.Printf("    📊 Added 0W baseline with %d points (excluded %d intervals with sessions)", len(baselineData), len(sessionTimes))
-					building.Meters = append(building.Meters, baselineMeter)
-				}
+          .consumption-controls h2 {
+            font-size: 18px !important;
+          }
 
-				var userRows *sql.Rows
-				// Exclude empty user_ids and disconnected states to avoid post-session spikes
-				userRows, err = h.db.QueryContext(ctx, `
-					SELECT DISTINCT user_id
-					FROM charger_sessions
-					WHERE charger_id = ? 
-					AND session_time >= ?
-					AND session_time <= ?
-					AND user_id != ''
-					AND COALESCE(user_id, '') != ''
-					AND state != '1'
-					ORDER BY user_id
-				`, ci.id, startTime, now)
+          .controls-group {
+            width: 100%;
+            flex-direction: column;
+          }
 
-				if err != nil {
-					log.Printf("    Error querying users for charger %d: %v", ci.id, err)
-					continue
-				}
+          .search-input,
+          .period-select {
+            width: 100% !important;
+            min-width: auto !important;
+          }
 
-				type userInfo struct {
-					userID     string
-					actualUser int
-					userName   string
-				}
-				userInfos := []userInfo{}
-				
-					for userRows.Next() {
-						var rfidOrUserID string
-						if err := userRows.Scan(&rfidOrUserID); err != nil {
-							continue
-						}
-						
-						// Try to map RFID tag to actual user
-						var actualUserID int
-						var actualUserName string
-						var found bool
-						
-						log.Printf("      Looking up RFID/UserID: '%s'", rfidOrUserID)
-						
-						// Try multiple patterns for charger_ids field
-						patterns := []string{
-							rfidOrUserID,                    // Exact: "2"
-							"%" + rfidOrUserID + ",%",       // Start: "2,3"
-							"%," + rfidOrUserID + ",%",      // Middle: "1,2,3"
-							"%," + rfidOrUserID,             // End: "1,2"
-							"%\"" + rfidOrUserID + "\"%",    // JSON: ["2"]
-						}
-						
-						for _, pattern := range patterns {
-							err := h.db.QueryRowContext(ctx, `
-								SELECT id, first_name || ' ' || last_name 
-								FROM users 
-								WHERE charger_ids = ? OR charger_ids LIKE ?
-								LIMIT 1
-							`, rfidOrUserID, pattern).Scan(&actualUserID, &actualUserName)
-							
-							if err == nil {
-								found = true
-								log.Printf("      ✅ Mapped RFID '%s' to user %d (%s)", rfidOrUserID, actualUserID, actualUserName)
-								break
-							}
-						}
-						
-						// If not found in charger_ids, show as Unknown User
-						if !found {
-							actualUserName = fmt.Sprintf("Unknown User (RFID %s)", rfidOrUserID)
-							actualUserID = 0 // No actual user
-							log.Printf("      ⚠️  RFID '%s' not found in any user's charger_ids - showing as Unknown User", rfidOrUserID)
-							
-							// DEBUG: Show what charger_ids exist in database to help diagnose
-							debugRows, debugErr := h.db.QueryContext(ctx, `
-								SELECT id, first_name || ' ' || last_name, charger_ids 
-								FROM users 
-								WHERE charger_ids IS NOT NULL AND charger_ids != ''
-							`)
-							if debugErr == nil && debugRows != nil {
-								log.Printf("      🔍 DEBUG: All users with charger_ids:")
-								count := 0
-								for debugRows.Next() {
-									var debugID int
-									var debugName, debugChargerIDs string
-									if debugRows.Scan(&debugID, &debugName, &debugChargerIDs) == nil {
-										log.Printf("         User %d (%s): charger_ids='%s'", debugID, debugName, debugChargerIDs)
-										count++
-									}
-									if count >= 10 {
-										log.Printf("         ... (showing first 10)")
-										break
-									}
-								}
-								debugRows.Close()
-							}
-						}
-						
-						userInfos = append(userInfos, userInfo{
-							userID:     rfidOrUserID,
-							actualUser: actualUserID,
-							userName:   actualUserName,
-						})
-					}
-				userRows.Close()
+          .building-card {
+            padding: 16px !important;
+          }
 
-				log.Printf("    Found %d users with sessions for charger %d", len(userInfos), ci.id)
+          .building-card h3 {
+            font-size: 18px !important;
+          }
 
-				// Process each user's sessions
-				for _, ui := range userInfos {
-					log.Printf("      Processing RFID/User: %s (Actual user: %d - %s)", ui.userID, ui.actualUser, ui.userName)
+          .meter-legend {
+            padding: 8px !important;
+            gap: 8px !important;
+          }
 
-					// Get charger data at 15-minute intervals
-					// Filter out maintenance readings (state=1) that create spikes after sessions
-					var sessionRows *sql.Rows
-					sessionRows, err = h.db.QueryContext(ctx, `
-						SELECT session_time, power_kwh, state
-						FROM charger_sessions
-						WHERE charger_id = ? 
-						AND user_id = ?
-						AND session_time >= ?
-						AND session_time <= ?
-						AND state != '1'
-						ORDER BY session_time ASC
-					`, ci.id, ui.userID, startTime, now)
+          .chart-container {
+            height: 300px !important;
+          }
+        }
 
-					if err != nil {
-						log.Printf("      Error querying sessions for charger %d, RFID/user %s: %v", ci.id, ui.userID, err)
-						continue
-					}
+        @media (max-width: 480px) {
+          .dashboard-title {
+            font-size: 20px !important;
+            gap: 8px !important;
+          }
 
-					consumptionData := []models.ConsumptionData{}
-					var previousPower float64
-					var hasPrevious bool
-					
-					for sessionRows.Next() {
-						var timestamp time.Time
-						var powerKwh float64
-						var state string
-						
-						if err := sessionRows.Scan(&timestamp, &powerKwh, &state); err != nil {
-							continue
-						}
+          .dashboard-icon {
+            width: 20px !important;
+            height: 20px !important;
+          }
 
-						if !hasPrevious {
-							previousPower = powerKwh
-							hasPrevious = true
-							// First point with zero power
-							consumptionData = append(consumptionData, models.ConsumptionData{
-								Timestamp: timestamp,
-								Power:     0,
-								Source:    "charger",
-							})
-							continue
-						}
+          .stat-card {
+            padding: 12px !important;
+            gap: 12px !important;
+          }
 
-						// Calculate consumption
-						consumptionKwh := powerKwh - previousPower
-						
-						// Check for unrealistic jumps that indicate post-session accumulation
-						// If the consumption is more than 10 kWh in 15 minutes (40 kW average), it's likely a spike
-						if consumptionKwh > 10.0 {
-							log.Printf("      Detected unrealistic consumption spike: %.2f kWh at %s, skipping", consumptionKwh, timestamp.Format("15:04"))
-							// Don't update previousPower, so next reading will be calculated from last valid point
-							continue
-						}
-						
-						if consumptionKwh < 0 {
-							// Meter reset
-							log.Printf("      Meter reset detected at %s", timestamp.Format("15:04"))
-							previousPower = powerKwh
-							continue
-						}
+          .stat-card > div:first-child {
+            width: 40px !important;
+            height: 40px !important;
+          }
 
-						// Convert consumption (kWh over 15 min) to power (W)
-						powerW := (consumptionKwh / 0.25) * 1000
-						
-						// Cap unrealistic values
-						if powerW > 50000 {
-							powerW = 50000
-						}
+          .stat-card > div:first-child svg {
+            width: 20px !important;
+            height: 20px !important;
+          }
 
-						consumptionData = append(consumptionData, models.ConsumptionData{
-							Timestamp: timestamp,
-							Power:     powerW,
-							Source:    "charger",
-						})
+          .stat-label {
+            font-size: 12px !important;
+          }
 
-						previousPower = powerKwh
-					}
-					sessionRows.Close()
+          .stat-value {
+            font-size: 18px !important;
+          }
 
-					// Only add this user's data if they actually have charging data
-					if len(consumptionData) > 0 {
-						chargerData := MeterData{
-							MeterID:   ci.id,
-							MeterName: ci.name,
-							MeterType: "charger",
-							UserName:  ui.userName,
-							Data:      consumptionData,
-						}
-
-						log.Printf("      âœ… Charger ID: %d has %d data points for user %s", ci.id, len(consumptionData), ui.userName)
-						building.Meters = append(building.Meters, chargerData)
-					}
-				}
-			}
-		}
-
-		log.Printf("  Building %d processed with %d meters/chargers total", bi.id, len(building.Meters))
-		buildings = append(buildings, building)
-	}
-
-	log.Printf("Returning %d buildings with consumption data", len(buildings))
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(buildings); err != nil {
-		log.Printf("Error encoding JSON response: %v", err)
-	}
-}
-
-func (h *DashboardHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
-	defer func() {
-		if rec := recover(); rec != nil {
-			log.Printf("PANIC in GetLogs: %v", rec)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-		}
-	}()
-
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-
-	limit := r.URL.Query().Get("limit")
-	if limit == "" {
-		limit = "100"
-	}
-
-	rows, err := h.db.QueryContext(ctx, `
-		SELECT id, action, details, user_id, ip_address, created_at
-		FROM admin_logs
-		ORDER BY created_at DESC
-		LIMIT ?
-	`, limit)
-
-	if err != nil {
-		log.Printf("Error querying logs: %v", err)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]interface{}{})
-		return
-	}
-	defer rows.Close()
-
-	logs := []models.AdminLog{}
-	for rows.Next() {
-		var l models.AdminLog
-		if err := rows.Scan(&l.ID, &l.Action, &l.Details, &l.UserID, &l.IPAddress, &l.CreatedAt); err == nil {
-			logs = append(logs, l)
-		}
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(logs)
+          .chart-container {
+            height: 250px !important;
+          }
+        }
+      `}</style>
+    </div>
+  );
 }

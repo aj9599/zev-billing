@@ -668,7 +668,8 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				log.Printf("    Processing charger ID: %d, Name: %s", ci.id, ci.name)
 
 				// First, collect all session times for this charger to know when to break the baseline
-				sessionTimes := make(map[time.Time]bool)
+				// Use STRING keys to avoid timezone comparison issues
+				sessionTimes := make(map[string]bool)
 				var allSessionRows *sql.Rows
 				allSessionRows, err = h.db.QueryContext(ctx, `
 					SELECT DISTINCT session_time
@@ -689,10 +690,15 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						if allSessionRows.Scan(&sessionTime) == nil {
 							// Round to 15-minute interval
 							rounded := roundTo15Min(sessionTime)
-							sessionTimes[rounded] = true
+							// Use formatted string as key to avoid timezone issues
+							timeKey := rounded.Format("2006-01-02T15:04:05")
+							sessionTimes[timeKey] = true
 							sessionCount++
 							if sessionCount <= 5 {
-								log.Printf("      🔍 Session at %s rounds to %s", sessionTime.Format("15:04:05"), rounded.Format("15:04:05"))
+								log.Printf("      🔍 Session at %s rounds to %s (key: %s)", 
+									sessionTime.Format("15:04:05"), 
+									rounded.Format("15:04:05"),
+									timeKey)
 							}
 						}
 					}
@@ -706,8 +712,11 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				roundedNow := roundTo15Min(now)
 				excludedCount := 0
 				for currentTime.Before(roundedNow) {
+					// Create time key for lookup (without timezone)
+					timeKey := currentTime.Format("2006-01-02T15:04:05")
+					
 					// Only add baseline point if NO session at this time
-					if !sessionTimes[currentTime] {
+					if !sessionTimes[timeKey] {
 						baselineData = append(baselineData, models.ConsumptionData{
 							Timestamp: currentTime,
 							Power:     0,
@@ -716,7 +725,9 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					} else {
 						excludedCount++
 						if excludedCount <= 5 {
-							log.Printf("      ⏭️  Skipping baseline at %s (session exists)", currentTime.Format("15:04:05"))
+							log.Printf("      ⏭️  Skipping baseline at %s (key: %s - session exists)", 
+								currentTime.Format("15:04:05"),
+								timeKey)
 						}
 					}
 					currentTime = currentTime.Add(15 * time.Minute)
