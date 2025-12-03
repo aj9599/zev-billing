@@ -132,7 +132,6 @@ func (h *ChargerHandler) ImportChargerSessionsFromCSV(w http.ResponseWriter, r *
 		// Handle both CSV formats
 		var sessionTimeStr, userID, mode, state string
 		var powerKWh float64
-		var err error
 
 		if isSimplifiedFormat {
 			// Simplified format: Session Time, User ID, Power (kWh), Mode, State
