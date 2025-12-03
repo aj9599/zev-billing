@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Upload, Database, AlertCircle, FileSpreadsheet, CheckCircle } from 'lucide-react';
+import { Upload, Database, AlertCircle, FileSpreadsheet, CheckCircle, Edit2, Save, X, Plus, Trash2, Download } from 'lucide-react';
 import { useTranslation } from '../i18n';
 import type { Charger } from '../types';
+
+interface CSVRow {
+  [key: string]: string;
+}
 
 export default function CSVUpload() {
   const { t } = useTranslation();
@@ -11,8 +15,11 @@ export default function CSVUpload() {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error' | 'info'>('info');
-  const [csvPreview, setCsvPreview] = useState<any[]>([]);
+  const [csvData, setCsvData] = useState<CSVRow[]>([]);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
+  const [editingRow, setEditingRow] = useState<number | null>(null);
+  const [editedData, setEditedData] = useState<CSVRow>({});
 
   useEffect(() => {
     loadChargers();
@@ -45,18 +52,19 @@ export default function CSVUpload() {
       if (file.name.endsWith('.csv')) {
         setSelectedFile(file);
         setMessage('');
-        await previewCSV(file);
+        await parseCSV(file);
       } else {
         setMessage(t('csvUpload.invalidFileType') || 'Please select a CSV file');
         setMessageType('error');
         setSelectedFile(null);
-        setCsvPreview([]);
+        setCsvData([]);
+        setCsvHeaders([]);
         setShowPreview(false);
       }
     }
   };
 
-  const previewCSV = async (file: File) => {
+  const parseCSV = async (file: File) => {
     try {
       const text = await file.text();
       const lines = text.split('\n').filter(line => line.trim());
@@ -69,31 +77,99 @@ export default function CSVUpload() {
 
       // Parse header
       const header = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+      setCsvHeaders(header);
       
-      // Parse first 5 data rows for preview
-      const preview = lines.slice(1, 6).map(line => {
+      // Parse all data rows
+      const data = lines.slice(1).map(line => {
         const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
-        const row: any = {};
+        const row: CSVRow = {};
         header.forEach((key, index) => {
           row[key] = values[index] || '';
         });
         return row;
       });
 
-      setCsvPreview(preview);
+      setCsvData(data);
       setShowPreview(true);
-      setMessage(`CSV loaded: ${lines.length - 1} sessions found`);
+      setMessage(`CSV loaded: ${data.length} sessions found`);
       setMessageType('info');
     } catch (err) {
-      console.error('Failed to preview CSV:', err);
+      console.error('Failed to parse CSV:', err);
       setMessage('Failed to read CSV file');
       setMessageType('error');
     }
   };
 
+  const startEditing = (index: number) => {
+    setEditingRow(index);
+    setEditedData({ ...csvData[index] });
+  };
+
+  const cancelEditing = () => {
+    setEditingRow(null);
+    setEditedData({});
+  };
+
+  const saveEdit = (index: number) => {
+    const newData = [...csvData];
+    newData[index] = editedData;
+    setCsvData(newData);
+    setEditingRow(null);
+    setEditedData({});
+    setMessage('Row updated successfully');
+    setMessageType('success');
+  };
+
+  const deleteRow = (index: number) => {
+    if (confirm('Are you sure you want to delete this row?')) {
+      const newData = csvData.filter((_, i) => i !== index);
+      setCsvData(newData);
+      setMessage(`Row deleted. ${newData.length} sessions remaining`);
+      setMessageType('info');
+    }
+  };
+
+  const addNewRow = () => {
+    const newRow: CSVRow = {};
+    csvHeaders.forEach(header => {
+      newRow[header] = '';
+    });
+    setCsvData([...csvData, newRow]);
+    setEditingRow(csvData.length);
+    setEditedData(newRow);
+    setMessage('New row added. Fill in the details.');
+    setMessageType('info');
+  };
+
+  const downloadEditedCSV = () => {
+    const csvContent = [
+      csvHeaders.join(','),
+      ...csvData.map(row => 
+        csvHeaders.map(header => {
+          const value = row[header] || '';
+          // Wrap in quotes if contains comma
+          return value.includes(',') ? `"${value}"` : value;
+        }).join(',')
+      )
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `edited_${selectedFile?.name || 'sessions.csv'}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    setMessage('CSV downloaded successfully');
+    setMessageType('success');
+  };
+
   const handleUpload = async () => {
-    if (!selectedFile) {
-      setMessage('Please select a CSV file');
+    if (csvData.length === 0) {
+      setMessage('No data to upload');
       setMessageType('error');
       return;
     }
@@ -109,8 +185,20 @@ export default function CSVUpload() {
     setMessageType('info');
 
     try {
+      // Convert csvData back to CSV format
+      const csvContent = [
+        csvHeaders.join(','),
+        ...csvData.map(row => 
+          csvHeaders.map(header => {
+            const value = row[header] || '';
+            return value.includes(',') ? `"${value}"` : value;
+          }).join(',')
+        )
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv' });
       const formData = new FormData();
-      formData.append('csv', selectedFile);
+      formData.append('csv', blob, selectedFile?.name || 'sessions.csv');
 
       const response = await fetch(`/api/chargers/${selectedCharger}/import-sessions`, {
         method: 'POST',
@@ -127,12 +215,13 @@ export default function CSVUpload() {
 
       const result = await response.json();
       
-      setMessage(`âœ… Import successful! Processed: ${result.processed}, Imported: ${result.imported}, Deleted: ${result.deleted_count} old sessions`);
+      setMessage(`✅ Import successful! Processed: ${result.processed}, Imported: ${result.imported}, Deleted: ${result.deleted_count} old sessions`);
       setMessageType('success');
       setUploading(false);
       setSelectedFile(null);
       setSelectedCharger(null);
-      setCsvPreview([]);
+      setCsvData([]);
+      setCsvHeaders([]);
       setShowPreview(false);
       
       // Reset file input
@@ -148,7 +237,7 @@ export default function CSVUpload() {
   const selectedChargerData = chargers.find(c => c.id === selectedCharger);
 
   return (
-    <div className="csv-upload-container" style={{ maxWidth: '1400px', margin: '0 auto', padding: '20px' }}>
+    <div className="csv-upload-container" style={{ maxWidth: '1600px', margin: '0 auto', padding: '20px' }}>
       <div className="csv-upload-header" style={{ marginBottom: '40px' }}>
         <h1 style={{ 
           fontSize: '36px', 
@@ -163,10 +252,10 @@ export default function CSVUpload() {
           backgroundClip: 'text'
         }}>
           <Database size={36} style={{ color: '#667eea' }} />
-          Charger Sessions Import
+          Charger Sessions Import & Editor
         </h1>
         <p style={{ color: '#6b7280', fontSize: '16px' }}>
-          Import charging sessions from CSV file for a specific charger
+          Import, edit, and manage charging sessions from CSV files
         </p>
       </div>
 
@@ -361,7 +450,7 @@ export default function CSVUpload() {
             if (file && file.name.endsWith('.csv')) {
               setSelectedFile(file);
               setMessage('');
-              previewCSV(file);
+              parseCSV(file);
             } else {
               setMessage('Please select a CSV file');
               setMessageType('error');
@@ -390,21 +479,70 @@ export default function CSVUpload() {
             />
           </div>
 
+          {showPreview && csvData.length > 0 && (
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+              <button
+                onClick={addNewRow}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                }}
+              >
+                <Plus size={18} />
+                Add Row
+              </button>
+              <button
+                onClick={downloadEditedCSV}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)'
+                }}
+              >
+                <Download size={18} />
+                Download
+              </button>
+            </div>
+          )}
+
           <button
             onClick={handleUpload}
-            disabled={!selectedFile || !selectedCharger || uploading}
+            disabled={csvData.length === 0 || !selectedCharger || uploading}
             style={{
               width: '100%', 
               padding: '16px', 
-              background: (!selectedFile || !selectedCharger || uploading) ? '#9ca3af' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: (csvData.length === 0 || !selectedCharger || uploading) ? '#9ca3af' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               color: 'white',
               border: 'none', 
               borderRadius: '12px', 
               fontSize: '16px', 
               fontWeight: '700',
-              cursor: (!selectedFile || !selectedCharger || uploading) ? 'not-allowed' : 'pointer',
+              cursor: (csvData.length === 0 || !selectedCharger || uploading) ? 'not-allowed' : 'pointer',
               transition: 'all 0.3s ease',
-              boxShadow: (!selectedFile || !selectedCharger || uploading) ? 'none' : '0 8px 20px rgba(102, 126, 234, 0.3)',
+              boxShadow: (csvData.length === 0 || !selectedCharger || uploading) ? 'none' : '0 8px 20px rgba(102, 126, 234, 0.3)',
               letterSpacing: '0.5px',
               display: 'flex',
               alignItems: 'center',
@@ -427,15 +565,15 @@ export default function CSVUpload() {
             ) : (
               <>
                 <Upload size={20} />
-                Import Sessions
+                Import {csvData.length} Sessions
               </>
             )}
           </button>
         </div>
       </div>
 
-      {/* CSV Preview */}
-      {showPreview && csvPreview.length > 0 && (
+      {/* CSV Editor */}
+      {showPreview && csvData.length > 0 && (
         <div style={{ 
           backgroundColor: 'white', 
           borderRadius: '20px', 
@@ -447,69 +585,195 @@ export default function CSVUpload() {
           <div style={{ 
             display: 'flex', 
             alignItems: 'center', 
-            gap: '16px', 
+            justifyContent: 'space-between',
             marginBottom: '24px',
             paddingBottom: '16px',
             borderBottom: '2px solid #f3f4f6'
           }}>
-            <div style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: '12px',
-              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 8px 20px rgba(245, 158, 11, 0.3)'
-            }}>
-              <FileSpreadsheet size={24} color="white" strokeWidth={2.5} />
-            </div>
-            <div>
-              <h2 style={{ 
-                fontSize: '20px', 
-                fontWeight: '700', 
-                marginBottom: '4px',
-                color: '#1f2937'
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 8px 20px rgba(102, 126, 234, 0.3)'
               }}>
-                CSV Preview (First 5 rows)
-              </h2>
-              <p style={{ fontSize: '13px', color: '#6b7280' }}>
-                Review the data before importing
-              </p>
+                <Edit2 size={24} color="white" strokeWidth={2.5} />
+              </div>
+              <div>
+                <h2 style={{ 
+                  fontSize: '20px', 
+                  fontWeight: '700', 
+                  marginBottom: '4px',
+                  color: '#1f2937'
+                }}>
+                  CSV Data Editor
+                </h2>
+                <p style={{ fontSize: '13px', color: '#6b7280' }}>
+                  {csvData.length} sessions loaded - Click edit to modify any row
+                </p>
+              </div>
             </div>
           </div>
 
-          <div style={{ overflowX: 'auto' }}>
+          <div style={{ overflowX: 'auto', maxHeight: '600px', overflowY: 'auto' }}>
             <table style={{ 
               width: '100%', 
               borderCollapse: 'collapse',
               fontSize: '13px'
             }}>
-              <thead>
-                <tr style={{ backgroundColor: '#f9fafb', borderBottom: '2px solid #e5e7eb' }}>
-                  {Object.keys(csvPreview[0]).map((key, idx) => (
+              <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f9fafb', zIndex: 10 }}>
+                <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+                  <th style={{ 
+                    padding: '12px', 
+                    textAlign: 'left',
+                    fontWeight: '600',
+                    color: '#374151',
+                    width: '50px'
+                  }}>
+                    #
+                  </th>
+                  {csvHeaders.map((header, idx) => (
                     <th key={idx} style={{ 
                       padding: '12px', 
                       textAlign: 'left',
                       fontWeight: '600',
                       color: '#374151'
                     }}>
-                      {key}
+                      {header}
                     </th>
                   ))}
+                  <th style={{ 
+                    padding: '12px', 
+                    textAlign: 'center',
+                    fontWeight: '600',
+                    color: '#374151',
+                    width: '120px'
+                  }}>
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {csvPreview.map((row, idx) => (
-                  <tr key={idx} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                    {Object.values(row).map((value: any, cellIdx) => (
-                      <td key={cellIdx} style={{ 
-                        padding: '12px',
-                        color: '#6b7280'
-                      }}>
-                        {value}
+                {csvData.map((row, rowIdx) => (
+                  <tr key={rowIdx} style={{ 
+                    borderBottom: '1px solid #f3f4f6',
+                    backgroundColor: editingRow === rowIdx ? '#f0f9ff' : 'white'
+                  }}>
+                    <td style={{ 
+                      padding: '12px',
+                      color: '#9ca3af',
+                      fontWeight: '600'
+                    }}>
+                      {rowIdx + 1}
+                    </td>
+                    {csvHeaders.map((header, cellIdx) => (
+                      <td key={cellIdx} style={{ padding: '12px' }}>
+                        {editingRow === rowIdx ? (
+                          <input
+                            type="text"
+                            value={editedData[header] || ''}
+                            onChange={(e) => setEditedData({ ...editedData, [header]: e.target.value })}
+                            style={{
+                              width: '100%',
+                              padding: '8px 12px',
+                              border: '2px solid #667eea',
+                              borderRadius: '8px',
+                              fontSize: '13px'
+                            }}
+                          />
+                        ) : (
+                          <span style={{ color: '#6b7280' }}>{row[header]}</span>
+                        )}
                       </td>
                     ))}
+                    <td style={{ padding: '12px' }}>
+                      {editingRow === rowIdx ? (
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                          <button
+                            onClick={() => saveEdit(rowIdx)}
+                            style={{
+                              padding: '6px 12px',
+                              background: '#10b981',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '12px',
+                              fontWeight: '600'
+                            }}
+                          >
+                            <Save size={14} />
+                            Save
+                          </button>
+                          <button
+                            onClick={cancelEditing}
+                            style={{
+                              padding: '6px 12px',
+                              background: '#6b7280',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '12px',
+                              fontWeight: '600'
+                            }}
+                          >
+                            <X size={14} />
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                          <button
+                            onClick={() => startEditing(rowIdx)}
+                            style={{
+                              padding: '6px 12px',
+                              background: '#667eea',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '12px',
+                              fontWeight: '600'
+                            }}
+                          >
+                            <Edit2 size={14} />
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => deleteRow(rowIdx)}
+                            style={{
+                              padding: '6px 12px',
+                              background: '#ef4444',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '12px',
+                              fontWeight: '600'
+                            }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -518,7 +782,7 @@ export default function CSVUpload() {
         </div>
       )}
 
-      {/* Instructions Card */}
+      {/* Instructions Card - keeping the existing one but shorter */}
       <div style={{ 
         backgroundColor: 'white', 
         borderRadius: '20px', 
@@ -530,60 +794,44 @@ export default function CSVUpload() {
           display: 'flex', 
           alignItems: 'center', 
           gap: '16px', 
-          marginBottom: '32px',
-          paddingBottom: '24px',
+          marginBottom: '24px',
+          paddingBottom: '16px',
           borderBottom: '2px solid #f3f4f6'
         }}>
           <div style={{
-            width: '56px',
-            height: '56px',
-            borderRadius: '16px',
+            width: '48px',
+            height: '48px',
+            borderRadius: '12px',
             background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             boxShadow: '0 8px 20px rgba(240, 147, 251, 0.3)'
           }}>
-            <AlertCircle size={28} color="white" strokeWidth={2.5} />
+            <AlertCircle size={24} color="white" strokeWidth={2.5} />
           </div>
           <div>
             <h2 style={{ 
-              fontSize: '24px', 
+              fontSize: '20px', 
               fontWeight: '700', 
               marginBottom: '4px',
               color: '#1f2937'
             }}>
-              Important Instructions
+              Quick Guide
             </h2>
-            <p style={{ fontSize: '14px', color: '#6b7280' }}>
-              Read before importing
+            <p style={{ fontSize: '13px', color: '#6b7280' }}>
+              How to use the CSV editor
             </p>
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           {[
-            { 
-              title: 'Select Target Charger', 
-              desc: 'Choose the charger you want to import sessions for. All existing sessions for this charger will be deleted.',
-              color: '#667eea' 
-            },
-            { 
-              title: 'CSV Format Options', 
-              desc: 'Simplified format (recommended): Session Time, User ID, Power (kWh), Mode, State. Or use full format: Charger ID, Charger Name, Brand, Building, Session Time, User ID, Power (kWh), Mode, State',
-              color: '#10b981' 
-            },
-            { 
-              title: 'Simplified Format Benefits', 
-              desc: 'Since you\'ve already selected the target charger, you only need to provide session data. Charger info, brand, and building are automatically taken from your selection.',
-              color: '#f59e0b' 
-            },
-            { 
-              title: 'Data Replacement', 
-              desc: 'This operation will DELETE all existing sessions for the selected charger and replace them with CSV data. This cannot be undone!',
-              color: '#ef4444' 
-            }
-          ].map((step, idx) => (
+            { icon: Upload, title: 'Upload CSV', desc: 'Select a CSV file to load sessions', color: '#667eea' },
+            { icon: Edit2, title: 'Edit Data', desc: 'Click edit button to modify any row', color: '#10b981' },
+            { icon: Plus, title: 'Add Rows', desc: 'Add new sessions with the Add Row button', color: '#f59e0b' },
+            { icon: Download, title: 'Download', desc: 'Save your edited CSV before importing', color: '#8b5cf6' },
+          ].map((item, idx) => (
             <div key={idx} style={{
               padding: '16px',
               backgroundColor: '#f9fafb',
@@ -591,35 +839,26 @@ export default function CSVUpload() {
               border: '1px solid #e5e7eb',
               display: 'flex',
               alignItems: 'start',
-              gap: '16px',
-              transition: 'all 0.3s ease'
+              gap: '12px'
             }}>
               <div style={{
                 width: '32px',
                 height: '32px',
                 borderRadius: '8px',
-                backgroundColor: step.color + '20',
+                backgroundColor: item.color + '20',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                flexShrink: 0,
-                fontWeight: '700',
-                fontSize: '16px',
-                color: step.color
+                flexShrink: 0
               }}>
-                {idx + 1}
+                <item.icon size={18} color={item.color} />
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <h3 style={{ 
-                  fontSize: '15px', 
-                  fontWeight: '600', 
-                  marginBottom: '4px',
-                  color: '#1f2937'
-                }}>
-                  {step.title}
+              <div>
+                <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px', color: '#1f2937' }}>
+                  {item.title}
                 </h3>
-                <p style={{ fontSize: '13px', color: '#6b7280', lineHeight: '1.5', margin: 0 }}>
-                  {step.desc}
+                <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
+                  {item.desc}
                 </p>
               </div>
             </div>
@@ -627,7 +866,7 @@ export default function CSVUpload() {
         </div>
 
         <div style={{
-          marginTop: '24px',
+          marginTop: '20px',
           padding: '16px',
           backgroundColor: '#fef3c7',
           border: '2px solid #fbbf24',
@@ -643,76 +882,8 @@ export default function CSVUpload() {
             gap: '8px'
           }}>
             <AlertCircle size={18} />
-            <strong>WARNING:</strong> This operation permanently deletes all sessions for the selected charger. Make sure you have a backup before proceeding!
+            <strong>WARNING:</strong> Importing will replace ALL existing sessions for the selected charger!
           </p>
-        </div>
-
-        <div style={{
-          marginTop: '24px',
-          padding: '20px',
-          backgroundColor: '#f0f9ff',
-          border: '2px solid #3b82f6',
-          borderRadius: '12px'
-        }}>
-          <h3 style={{ 
-            fontSize: '15px', 
-            fontWeight: '600', 
-            marginBottom: '12px',
-            color: '#1e40af',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <FileSpreadsheet size={18} />
-            CSV Format Examples
-          </h3>
-          
-          <div style={{ marginBottom: '16px' }}>
-            <p style={{ fontSize: '14px', fontWeight: '600', color: '#1f2937', marginBottom: '8px' }}>
-              Simplified Format (Recommended):
-            </p>
-            <pre style={{ 
-              backgroundColor: '#1f2937', 
-              color: '#10b981',
-              padding: '12px', 
-              borderRadius: '8px', 
-              fontSize: '12px',
-              overflowX: 'auto',
-              fontFamily: 'monospace',
-              margin: 0
-            }}>
-{`Session Time,User ID,Power (kWh),Mode,State
-2025-11-22 11:00:00,user123,15.5,normal,charging
-2025-11-22 14:30:00,user456,22.3,priority,charging
-2025-11-22 18:00:00,,10.2,normal,idle`}
-            </pre>
-            <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px', fontStyle: 'italic' }}>
-              Note: User ID can be empty. Charger info is automatically taken from your selection above.
-            </p>
-          </div>
-
-          <div>
-            <p style={{ fontSize: '14px', fontWeight: '600', color: '#1f2937', marginBottom: '8px' }}>
-              Full Format (Legacy):
-            </p>
-            <pre style={{ 
-              backgroundColor: '#1f2937', 
-              color: '#60a5fa',
-              padding: '12px', 
-              borderRadius: '8px', 
-              fontSize: '12px',
-              overflowX: 'auto',
-              fontFamily: 'monospace',
-              margin: 0
-            }}>
-{`Charger ID,Charger Name,Brand,Building,Session Time,User ID,Power (kWh),Mode,State
-5,Main Charger,Tesla,Building A,2025-11-22 11:00:00,user123,15.5,normal,charging
-5,Main Charger,Tesla,Building A,2025-11-22 14:30:00,user456,22.3,priority,charging`}
-            </pre>
-            <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px', fontStyle: 'italic' }}>
-              Note: Only rows matching the selected Charger ID will be imported.
-            </p>
-          </div>
         </div>
       </div>
 
