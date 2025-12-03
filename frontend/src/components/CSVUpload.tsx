@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Upload, Database, AlertCircle, FileSpreadsheet, CheckCircle, Edit2, Save, X, Plus, Trash2, Download } from 'lucide-react';
 import { useTranslation } from '../i18n';
+import { api } from '../api/client';
 import type { Charger } from '../types';
 
 interface CSVRow {
@@ -27,17 +28,27 @@ export default function CSVUpload() {
 
   const loadChargers = async () => {
     try {
-      const response = await fetch('/api/chargers', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
+      // Try using api client if getChargers method exists
+      let data: Charger[];
       
-      if (!response.ok) {
-        throw new Error('Failed to fetch chargers');
+      if (typeof api === 'object' && 'getChargers' in api && typeof api.getChargers === 'function') {
+        // Use api client method if available
+        data = await api.getChargers();
+      } else {
+        // Fallback to direct fetch
+        const response = await fetch('/api/chargers', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch chargers');
+        }
+        
+        data = await response.json();
       }
       
-      const data = await response.json();
       setChargers(data);
     } catch (err) {
       console.error('Failed to load chargers:', err);
