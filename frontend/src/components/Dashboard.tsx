@@ -65,9 +65,9 @@ function getMeterColor(meterType: string, meterId?: number, userName?: string): 
   return FIXED_COLORS[meterType] || FIXED_COLORS.default;
 }
 
-function getMeterDisplayName(meter: MeterData): string {
+function getMeterDisplayName(meter: MeterData, t: any): string {
   if (meter.meter_type === 'charger') {
-    const userName = meter.user_name || 'Unknown User';
+    const userName = meter.user_name || t('dashboard.unknownUser');
     const userMatch = userName.match(/^User (\d+)$/);
     const displayUser = userMatch ? `User ${userMatch[1]}` : userName;
     return `${meter.meter_name} - ${displayUser}`;
@@ -86,16 +86,16 @@ function getMeterUniqueKey(meter: MeterData): string {
   return `meter_${meter.meter_id}`;
 }
 
-function getMeterTypeIcon(meterType: string): { Icon: any; label: string } {
+function getMeterTypeIcon(meterType: string, t: any): { Icon: any; label: string } {
   switch (meterType) {
     case 'charger':
-      return { Icon: Car, label: 'Charger' };
+      return { Icon: Car, label: t('dashboard.meterTypes.charger') };
     case 'solar_meter':
-      return { Icon: Sun, label: 'Solar' };
+      return { Icon: Sun, label: t('dashboard.meterTypes.solar') };
     case 'apartment_meter':
-      return { Icon: Home, label: 'Apartment' };
+      return { Icon: Home, label: t('dashboard.meterTypes.apartment') };
     case 'total_meter':
-      return { Icon: Zap, label: 'Total' };
+      return { Icon: Zap, label: t('dashboard.meterTypes.total') };
     default:
       return { Icon: Zap, label: meterType.replace('_', ' ') };
   }
@@ -161,7 +161,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
           
           // Check if this is solar (negative value means export/generation)
           const isSolar = entry.value < 0;
-          const prefix = isSolar ? 'âš¡ ' : '';
+          const prefix = isSolar ? '☀ ' : '';
           
           return (
             <p key={index} style={{ color: entry.color, margin: '3px 0' }}>
@@ -305,7 +305,7 @@ export default function Dashboard() {
         color: '#c00',
         marginBottom: '20px'
       }}>
-        <h3 style={{ marginTop: 0 }}>Error loading dashboard</h3>
+        <h3 style={{ marginTop: 0 }}>{t('dashboard.errorLoading')}</h3>
         <p>{error}</p>
         <button 
           onClick={() => { setLoading(true); loadData(); }}
@@ -679,7 +679,7 @@ export default function Dashboard() {
                       const uniqueKey = getMeterUniqueKey(meter);
                       const isCharger = meter.meter_type === 'charger';
                       const isSolar = meter.meter_type === 'solar_meter';
-                      const { Icon: TypeIcon, label: typeLabel } = getMeterTypeIcon(meter.meter_type);
+                      const { Icon: TypeIcon, label: typeLabel } = getMeterTypeIcon(meter.meter_type, t);
                       const color = getMeterColor(meter.meter_type, meter.meter_id, meter.user_name);
                       const isVisible = isMeterVisible(building.building_id, uniqueKey);
                       
@@ -751,7 +751,7 @@ export default function Dashboard() {
                               fontWeight: '600',
                               marginLeft: '4px'
                             }}>
-                              {meter.data.length} pts
+                              {meter.data.length} {t('dashboard.dataPoints')}
                             </span>
                           )}
                         </div>
@@ -775,7 +775,7 @@ export default function Dashboard() {
                         />
                         <YAxis 
                           label={{ 
-                            value: 'Power (W)', 
+                            value: t('dashboard.powerUnit'), 
                             angle: -90, 
                             position: 'insideLeft',
                             style: { fontSize: '12px' }

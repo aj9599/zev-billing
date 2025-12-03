@@ -19,31 +19,80 @@ export const de: Translations = {
   'nav.passwordChange': 'Passwort ändern',
 
   // ============================================================================
-  // CSV Upload
+  // CSV Upload - Headers and Titles
   // ============================================================================
-  'csvUpload.title': 'CSV-Datenbank-Import',
-  'csvUpload.subtitle': 'CSV-Dateien hochladen, um Datenbankprobleme zu beheben',
-  'csvUpload.uploadFile': 'CSV-Datei hochladen',
-  'csvUpload.selectCSVFile': 'Wählen Sie eine CSV-Datei aus',
-  'csvUpload.dragDropFile': 'Ziehen Sie Ihre CSV-Datei hierher',
-  'csvUpload.orClickToSelect': 'oder klicken Sie zum Auswählen',
-  'csvUpload.upload': 'CSV hochladen',
-  'csvUpload.uploading': 'Wird hochgeladen...',
-  'csvUpload.instructions': 'Anweisungen',
-  'csvUpload.importantInfo': 'Bitte vor dem Hochladen lesen',
-  'csvUpload.step1Title': 'CSV-Datei vorbereiten',
-  'csvUpload.step1Desc': 'Stellen Sie sicher, dass Ihre CSV-Datei korrekt formatiert ist mit richtigen Headern und Datentypen',
-  'csvUpload.step2Title': 'Daten sichern',
-  'csvUpload.step2Desc': 'Erstellen Sie immer ein Backup vor dem Import, um Datenverlust zu vermeiden',
-  'csvUpload.step3Title': 'Daten validieren',
-  'csvUpload.step3Desc': 'Überprüfen Sie, dass alle erforderlichen Felder vorhanden und die Daten konsistent sind',
-  'csvUpload.step4Title': 'Import überwachen',
-  'csvUpload.step4Desc': 'Achten Sie auf Fehlermeldungen während des Upload-Prozesses',
-  'csvUpload.warning': 'Warnung: Das Hochladen falscher Daten kann zu Datenbankinkonsistenzen führen. Immer zuerst sichern!',
-  'csvUpload.noFileSelected': 'Bitte wählen Sie zuerst eine Datei aus',
-  'csvUpload.invalidFileType': 'Bitte wählen Sie eine gültige CSV-Datei aus',
-  'csvUpload.uploadSuccess': 'CSV-Datei erfolgreich hochgeladen',
-  'csvUpload.uploadFailed': 'Fehler beim Hochladen der CSV-Datei',
+  'csvUpload.pageTitle': 'Ladesitzungen Import & Editor',
+  'csvUpload.pageSubtitle': 'Ladesitzungen aus CSV-Dateien importieren, bearbeiten und verwalten',
+
+  // ============================================================================
+  // CSV Upload - Charger Selection
+  // ============================================================================
+  'csvUpload.selectCharger': 'Ladegerät auswählen',
+  'csvUpload.selectChargerDesc': 'Wählen Sie das Ladegerät für den Sitzungsimport',
+  'csvUpload.chargerLabel': 'Ladegerät',
+  'csvUpload.selectChargerPlaceholder': '-- Ladegerät auswählen --',
+  'csvUpload.selectedChargerDetails': 'Details des ausgewählten Ladegeräts:',
+  'csvUpload.chargerName': 'Name',
+  'csvUpload.chargerBrand': 'Marke',
+  'csvUpload.chargerType': 'Typ',
+
+  // ============================================================================
+  // CSV Upload - File Upload
+  // ============================================================================
+  'csvUpload.uploadCSVFile': 'CSV-Datei hochladen',
+  'csvUpload.uploadCSVFileDesc': 'Wählen Sie Ihre Ladesitzungs-CSV-Datei aus',
+  'csvUpload.dragDropFile': 'CSV-Datei hierher ziehen',
+  'csvUpload.orClickToSelect': 'oder zum Auswählen klicken',
+  'csvUpload.addRow': 'Zeile hinzufügen',
+  'csvUpload.download': 'Herunterladen',
+  'csvUpload.importSessions': '{{count}} Sitzungen importieren',
+  'csvUpload.processing': 'Wird verarbeitet...',
+
+  // ============================================================================
+  // CSV Upload - Editor
+  // ============================================================================
+  'csvUpload.csvDataEditor': 'CSV-Daten-Editor',
+  'csvUpload.csvDataEditorDesc': '{{count}} Sitzungen geladen - Klicken Sie auf Bearbeiten, um Zeilen zu ändern',
+  'csvUpload.rowNumber': 'Nr.',
+  'csvUpload.actions': 'Aktionen',
+  'csvUpload.edit': 'Bearbeiten',
+  'csvUpload.save': 'Speichern',
+  'csvUpload.cancel': 'Abbrechen',
+  'csvUpload.delete': 'Löschen',
+  'csvUpload.deleteConfirm': 'Sind Sie sicher, dass Sie diese Zeile löschen möchten?',
+
+  // ============================================================================
+  // CSV Upload - Guide
+  // ============================================================================
+  'csvUpload.quickGuide': 'Schnellanleitung',
+  'csvUpload.quickGuideDesc': 'So verwenden Sie den CSV-Editor',
+  'csvUpload.guideUploadTitle': 'CSV hochladen',
+  'csvUpload.guideUploadDesc': 'CSV-Datei auswählen, um Sitzungen zu laden',
+  'csvUpload.guideEditTitle': 'Daten bearbeiten',
+  'csvUpload.guideEditDesc': 'Auf Bearbeiten klicken, um Zeilen zu ändern',
+  'csvUpload.guideAddTitle': 'Zeilen hinzufügen',
+  'csvUpload.guideAddDesc': 'Neue Sitzungen mit der Schaltfläche hinzufügen',
+  'csvUpload.guideDownloadTitle': 'Herunterladen',
+  'csvUpload.guideDownloadDesc': 'Bearbeitete CSV vor dem Import speichern',
+  'csvUpload.warningMessage': 'WARNUNG: Der Import ersetzt ALLE vorhandenen Sitzungen für das ausgewählte Ladegerät!',
+
+  // ============================================================================
+  // CSV Upload - Messages
+  // ============================================================================
+  'csvUpload.invalidFileType': 'Bitte wählen Sie eine CSV-Datei aus',
+  'csvUpload.csvEmpty': 'CSV-Datei ist leer oder ungültig',
+  'csvUpload.csvLoaded': 'CSV geladen: {{count}} Sitzungen gefunden',
+  'csvUpload.failedToRead': 'Fehler beim Lesen der CSV-Datei',
+  'csvUpload.rowUpdated': 'Zeile erfolgreich aktualisiert',
+  'csvUpload.rowDeleted': 'Zeile gelöscht. {{count}} Sitzungen verbleibend',
+  'csvUpload.newRowAdded': 'Neue Zeile hinzugefügt. Füllen Sie die Details aus.',
+  'csvUpload.csvDownloaded': 'CSV erfolgreich heruntergeladen',
+  'csvUpload.noDataToUpload': 'Keine Daten zum Hochladen',
+  'csvUpload.pleaseSelectCharger': 'Bitte wählen Sie ein Ladegerät aus',
+  'csvUpload.uploadingProcessing': 'CSV wird hochgeladen und verarbeitet...',
+  'csvUpload.importSuccess': '✅ Import erfolgreich! Verarbeitet: {{processed}}, Importiert: {{imported}}, Gelöscht: {{deleted}} alte Sitzungen',
+  'csvUpload.importFailed': 'Import fehlgeschlagen: {{error}}',
+  'csvUpload.failedToLoadChargers': 'Fehler beim Laden der Ladegeräte',
 
   // ============================================================================
   // COMMON
@@ -117,6 +166,14 @@ export const de: Translations = {
   'dashboard.residentsAdmin': 'Bewohner / Admin',
   'dashboard.complex': 'Komplex',
   'dashboard.complexes': 'Komplexe',
+  'dashboard.powerUnit': 'Leistung (W)',
+  'dashboard.errorLoading': 'Fehler beim Laden des Dashboards',
+  'dashboard.dataPoints': 'Pkt',
+  'dashboard.meterTypes.charger': 'Ladestation',
+  'dashboard.meterTypes.solar': 'Solar',
+  'dashboard.meterTypes.apartment': 'Wohnung',
+  'dashboard.meterTypes.total': 'Gesamt',
+  'dashboard.unknownUser': 'Unbekannter Benutzer',
 
   // ============================================================================
   // EXPORT

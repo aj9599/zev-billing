@@ -41,7 +41,7 @@ export default function CSVUpload() {
       setChargers(data);
     } catch (err) {
       console.error('Failed to load chargers:', err);
-      setMessage('Failed to load chargers');
+      setMessage(t('csvUpload.failedToLoadChargers'));
       setMessageType('error');
     }
   };
@@ -54,7 +54,7 @@ export default function CSVUpload() {
         setMessage('');
         await parseCSV(file);
       } else {
-        setMessage(t('csvUpload.invalidFileType') || 'Please select a CSV file');
+        setMessage(t('csvUpload.invalidFileType'));
         setMessageType('error');
         setSelectedFile(null);
         setCsvData([]);
@@ -70,7 +70,7 @@ export default function CSVUpload() {
       const lines = text.split('\n').filter(line => line.trim());
       
       if (lines.length < 2) {
-        setMessage('CSV file is empty or invalid');
+        setMessage(t('csvUpload.csvEmpty'));
         setMessageType('error');
         return;
       }
@@ -91,11 +91,11 @@ export default function CSVUpload() {
 
       setCsvData(data);
       setShowPreview(true);
-      setMessage(`CSV loaded: ${data.length} sessions found`);
+      setMessage(t('csvUpload.csvLoaded', { count: data.length }));
       setMessageType('info');
     } catch (err) {
       console.error('Failed to parse CSV:', err);
-      setMessage('Failed to read CSV file');
+      setMessage(t('csvUpload.failedToRead'));
       setMessageType('error');
     }
   };
@@ -116,15 +116,15 @@ export default function CSVUpload() {
     setCsvData(newData);
     setEditingRow(null);
     setEditedData({});
-    setMessage('Row updated successfully');
+    setMessage(t('csvUpload.rowUpdated'));
     setMessageType('success');
   };
 
   const deleteRow = (index: number) => {
-    if (confirm('Are you sure you want to delete this row?')) {
+    if (confirm(t('csvUpload.deleteConfirm'))) {
       const newData = csvData.filter((_, i) => i !== index);
       setCsvData(newData);
-      setMessage(`Row deleted. ${newData.length} sessions remaining`);
+      setMessage(t('csvUpload.rowDeleted', { count: newData.length }));
       setMessageType('info');
     }
   };
@@ -137,7 +137,7 @@ export default function CSVUpload() {
     setCsvData([...csvData, newRow]);
     setEditingRow(csvData.length);
     setEditedData(newRow);
-    setMessage('New row added. Fill in the details.');
+    setMessage(t('csvUpload.newRowAdded'));
     setMessageType('info');
   };
 
@@ -163,25 +163,25 @@ export default function CSVUpload() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    setMessage('CSV downloaded successfully');
+    setMessage(t('csvUpload.csvDownloaded'));
     setMessageType('success');
   };
 
   const handleUpload = async () => {
     if (csvData.length === 0) {
-      setMessage('No data to upload');
+      setMessage(t('csvUpload.noDataToUpload'));
       setMessageType('error');
       return;
     }
 
     if (!selectedCharger) {
-      setMessage('Please select a charger');
+      setMessage(t('csvUpload.pleaseSelectCharger'));
       setMessageType('error');
       return;
     }
 
     setUploading(true);
-    setMessage('Uploading and processing CSV...');
+    setMessage(t('csvUpload.uploadingProcessing'));
     setMessageType('info');
 
     try {
@@ -215,7 +215,11 @@ export default function CSVUpload() {
 
       const result = await response.json();
       
-      setMessage(`✅ Import successful! Processed: ${result.processed}, Imported: ${result.imported}, Deleted: ${result.deleted_count} old sessions`);
+      setMessage(t('csvUpload.importSuccess', { 
+        processed: result.processed, 
+        imported: result.imported, 
+        deleted: result.deleted_count 
+      }));
       setMessageType('success');
       setUploading(false);
       setSelectedFile(null);
@@ -228,7 +232,7 @@ export default function CSVUpload() {
       const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
     } catch (err: any) {
-      setMessage(`Import failed: ${err.message}`);
+      setMessage(t('csvUpload.importFailed', { error: err.message }));
       setMessageType('error');
       setUploading(false);
     }
@@ -252,10 +256,10 @@ export default function CSVUpload() {
           backgroundClip: 'text'
         }}>
           <Database size={36} style={{ color: '#667eea' }} />
-          Charger Sessions Import & Editor
+          {t('csvUpload.pageTitle')}
         </h1>
         <p style={{ color: '#6b7280', fontSize: '16px' }}>
-          Import, edit, and manage charging sessions from CSV files
+          {t('csvUpload.pageSubtitle')}
         </p>
       </div>
 
@@ -318,10 +322,10 @@ export default function CSVUpload() {
                 marginBottom: '4px',
                 color: '#1f2937'
               }}>
-                Select Charger
+                {t('csvUpload.selectCharger')}
               </h2>
               <p style={{ fontSize: '14px', color: '#6b7280' }}>
-                Choose the charger to import sessions for
+                {t('csvUpload.selectChargerDesc')}
               </p>
             </div>
           </div>
@@ -334,7 +338,7 @@ export default function CSVUpload() {
               color: '#374151',
               fontSize: '14px'
             }}>
-              Charger *
+              {t('csvUpload.chargerLabel')} *
             </label>
             <select
               value={selectedCharger || ''}
@@ -352,7 +356,7 @@ export default function CSVUpload() {
               onFocus={(e) => e.currentTarget.style.borderColor = '#667eea'}
               onBlur={(e) => e.currentTarget.style.borderColor = '#e5e7eb'}
             >
-              <option value="">-- Select a charger --</option>
+              <option value="">{t('csvUpload.selectChargerPlaceholder')}</option>
               {chargers.map(charger => (
                 <option key={charger.id} value={charger.id}>
                   {charger.name} - {charger.brand}
@@ -369,12 +373,12 @@ export default function CSVUpload() {
               border: '2px solid #86efac'
             }}>
               <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px', color: '#065f46' }}>
-                Selected Charger Details:
+                {t('csvUpload.selectedChargerDetails')}
               </h3>
               <div style={{ fontSize: '13px', color: '#047857' }}>
-                <p><strong>Name:</strong> {selectedChargerData.name}</p>
-                <p><strong>Brand:</strong> {selectedChargerData.brand}</p>
-                <p><strong>Type:</strong> {selectedChargerData.connection_type}</p>
+                <p><strong>{t('csvUpload.chargerName')}:</strong> {selectedChargerData.name}</p>
+                <p><strong>{t('csvUpload.chargerBrand')}:</strong> {selectedChargerData.brand}</p>
+                <p><strong>{t('csvUpload.chargerType')}:</strong> {selectedChargerData.connection_type}</p>
               </div>
             </div>
           )}
@@ -415,10 +419,10 @@ export default function CSVUpload() {
                 marginBottom: '4px',
                 color: '#1f2937'
               }}>
-                Upload CSV File
+                {t('csvUpload.uploadCSVFile')}
               </h2>
               <p style={{ fontSize: '14px', color: '#6b7280' }}>
-                Select your charger sessions CSV file
+                {t('csvUpload.uploadCSVFileDesc')}
               </p>
             </div>
           </div>
@@ -452,16 +456,16 @@ export default function CSVUpload() {
               setMessage('');
               parseCSV(file);
             } else {
-              setMessage('Please select a CSV file');
+              setMessage(t('csvUpload.invalidFileType'));
               setMessageType('error');
             }
           }}>
             <FileSpreadsheet size={48} color="#9ca3af" style={{ margin: '0 auto 16px' }} />
             <p style={{ fontSize: '16px', color: '#4b5563', marginBottom: '8px', fontWeight: '500' }}>
-              {selectedFile ? selectedFile.name : 'Drag & drop CSV file here'}
+              {selectedFile ? selectedFile.name : t('csvUpload.dragDropFile')}
             </p>
             <p style={{ fontSize: '13px', color: '#9ca3af' }}>
-              or click to select file
+              {t('csvUpload.orClickToSelect')}
             </p>
             <input
               type="file"
@@ -501,7 +505,7 @@ export default function CSVUpload() {
                 }}
               >
                 <Plus size={18} />
-                Add Row
+                {t('csvUpload.addRow')}
               </button>
               <button
                 onClick={downloadEditedCSV}
@@ -523,7 +527,7 @@ export default function CSVUpload() {
                 }}
               >
                 <Download size={18} />
-                Download
+                {t('csvUpload.download')}
               </button>
             </div>
           )}
@@ -560,12 +564,12 @@ export default function CSVUpload() {
                   borderRadius: '50%',
                   animation: 'spin 1s linear infinite'
                 }} />
-                Processing...
+                {t('csvUpload.processing')}
               </>
             ) : (
               <>
                 <Upload size={20} />
-                Import {csvData.length} Sessions
+                {t('csvUpload.importSessions', { count: csvData.length })}
               </>
             )}
           </button>
@@ -610,10 +614,10 @@ export default function CSVUpload() {
                   marginBottom: '4px',
                   color: '#1f2937'
                 }}>
-                  CSV Data Editor
+                  {t('csvUpload.csvDataEditor')}
                 </h2>
                 <p style={{ fontSize: '13px', color: '#6b7280' }}>
-                  {csvData.length} sessions loaded - Click edit to modify any row
+                  {t('csvUpload.csvDataEditorDesc', { count: csvData.length })}
                 </p>
               </div>
             </div>
@@ -634,7 +638,7 @@ export default function CSVUpload() {
                     color: '#374151',
                     width: '50px'
                   }}>
-                    #
+                    {t('csvUpload.rowNumber')}
                   </th>
                   {csvHeaders.map((header, idx) => (
                     <th key={idx} style={{ 
@@ -653,7 +657,7 @@ export default function CSVUpload() {
                     color: '#374151',
                     width: '120px'
                   }}>
-                    Actions
+                    {t('csvUpload.actions')}
                   </th>
                 </tr>
               </thead>
@@ -710,7 +714,7 @@ export default function CSVUpload() {
                             }}
                           >
                             <Save size={14} />
-                            Save
+                            {t('csvUpload.save')}
                           </button>
                           <button
                             onClick={cancelEditing}
@@ -729,7 +733,7 @@ export default function CSVUpload() {
                             }}
                           >
                             <X size={14} />
-                            Cancel
+                            {t('csvUpload.cancel')}
                           </button>
                         </div>
                       ) : (
@@ -751,7 +755,7 @@ export default function CSVUpload() {
                             }}
                           >
                             <Edit2 size={14} />
-                            Edit
+                            {t('csvUpload.edit')}
                           </button>
                           <button
                             onClick={() => deleteRow(rowIdx)}
@@ -782,7 +786,7 @@ export default function CSVUpload() {
         </div>
       )}
 
-      {/* Instructions Card - keeping the existing one but shorter */}
+      {/* Instructions Card */}
       <div style={{ 
         backgroundColor: 'white', 
         borderRadius: '20px', 
@@ -817,20 +821,20 @@ export default function CSVUpload() {
               marginBottom: '4px',
               color: '#1f2937'
             }}>
-              Quick Guide
+              {t('csvUpload.quickGuide')}
             </h2>
             <p style={{ fontSize: '13px', color: '#6b7280' }}>
-              How to use the CSV editor
+              {t('csvUpload.quickGuideDesc')}
             </p>
           </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           {[
-            { icon: Upload, title: 'Upload CSV', desc: 'Select a CSV file to load sessions', color: '#667eea' },
-            { icon: Edit2, title: 'Edit Data', desc: 'Click edit button to modify any row', color: '#10b981' },
-            { icon: Plus, title: 'Add Rows', desc: 'Add new sessions with the Add Row button', color: '#f59e0b' },
-            { icon: Download, title: 'Download', desc: 'Save your edited CSV before importing', color: '#8b5cf6' },
+            { icon: Upload, title: t('csvUpload.guideUploadTitle'), desc: t('csvUpload.guideUploadDesc'), color: '#667eea' },
+            { icon: Edit2, title: t('csvUpload.guideEditTitle'), desc: t('csvUpload.guideEditDesc'), color: '#10b981' },
+            { icon: Plus, title: t('csvUpload.guideAddTitle'), desc: t('csvUpload.guideAddDesc'), color: '#f59e0b' },
+            { icon: Download, title: t('csvUpload.guideDownloadTitle'), desc: t('csvUpload.guideDownloadDesc'), color: '#8b5cf6' },
           ].map((item, idx) => (
             <div key={idx} style={{
               padding: '16px',
@@ -882,7 +886,7 @@ export default function CSVUpload() {
             gap: '8px'
           }}>
             <AlertCircle size={18} />
-            <strong>WARNING:</strong> Importing will replace ALL existing sessions for the selected charger!
+            <strong>{t('csvUpload.warningMessage')}</strong>
           </p>
         </div>
       </div>

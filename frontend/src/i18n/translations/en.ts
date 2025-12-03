@@ -19,31 +19,80 @@ export const en: Translations = {
   'nav.passwordChange': 'Password Change',
 
   // ============================================================================
-  // CSV Upload
+  // CSV Upload - Headers and Titles
   // ============================================================================
-  'csvUpload.title': 'CSV Database Import',
-  'csvUpload.subtitle': 'Upload CSV files to fix database issues',
-  'csvUpload.uploadFile': 'Upload CSV File',
-  'csvUpload.selectCSVFile': 'Select a CSV file to upload',
-  'csvUpload.dragDropFile': 'Drag and drop your CSV file here',
-  'csvUpload.orClickToSelect': 'or click to select',
-  'csvUpload.upload': 'Upload CSV',
-  'csvUpload.uploading': 'Uploading...',
-  'csvUpload.instructions': 'Instructions',
-  'csvUpload.importantInfo': 'Please read before uploading',
-  'csvUpload.step1Title': 'Prepare your CSV file',
-  'csvUpload.step1Desc': 'Ensure your CSV file is properly formatted with correct headers and data types',
-  'csvUpload.step2Title': 'Backup your data',
-  'csvUpload.step2Desc': 'Always create a backup before importing data to prevent data loss',
-  'csvUpload.step3Title': 'Validate the data',
-  'csvUpload.step3Desc': 'Check that all required fields are present and data is consistent',
-  'csvUpload.step4Title': 'Monitor the import',
-  'csvUpload.step4Desc': 'Watch for any error messages during the upload process',
-  'csvUpload.warning': 'Warning: Uploading incorrect data may cause database inconsistencies. Always backup first!',
-  'csvUpload.noFileSelected': 'Please select a file first',
-  'csvUpload.invalidFileType': 'Please select a valid CSV file',
-  'csvUpload.uploadSuccess': 'CSV file uploaded successfully',
-  'csvUpload.uploadFailed': 'Failed to upload CSV file',
+  'csvUpload.pageTitle': 'Charger Sessions Import & Editor',
+  'csvUpload.pageSubtitle': 'Import, edit, and manage charging sessions from CSV files',
+
+  // ============================================================================
+  // CSV Upload - Charger Selection
+  // ============================================================================
+  'csvUpload.selectCharger': 'Select Charger',
+  'csvUpload.selectChargerDesc': 'Choose the charger to import sessions for',
+  'csvUpload.chargerLabel': 'Charger',
+  'csvUpload.selectChargerPlaceholder': '-- Select a charger --',
+  'csvUpload.selectedChargerDetails': 'Selected Charger Details:',
+  'csvUpload.chargerName': 'Name',
+  'csvUpload.chargerBrand': 'Brand',
+  'csvUpload.chargerType': 'Type',
+
+  // ============================================================================
+  // CSV Upload - File Upload
+  // ============================================================================
+  'csvUpload.uploadCSVFile': 'Upload CSV File',
+  'csvUpload.uploadCSVFileDesc': 'Select your charger sessions CSV file',
+  'csvUpload.dragDropFile': 'Drag & drop CSV file here',
+  'csvUpload.orClickToSelect': 'or click to select file',
+  'csvUpload.addRow': 'Add Row',
+  'csvUpload.download': 'Download',
+  'csvUpload.importSessions': 'Import {{count}} Sessions',
+  'csvUpload.processing': 'Processing...',
+
+  // ============================================================================
+  // CSV Upload - Editor
+  // ============================================================================
+  'csvUpload.csvDataEditor': 'CSV Data Editor',
+  'csvUpload.csvDataEditorDesc': '{{count}} sessions loaded - Click edit to modify any row',
+  'csvUpload.rowNumber': '#',
+  'csvUpload.actions': 'Actions',
+  'csvUpload.edit': 'Edit',
+  'csvUpload.save': 'Save',
+  'csvUpload.cancel': 'Cancel',
+  'csvUpload.delete': 'Delete',
+  'csvUpload.deleteConfirm': 'Are you sure you want to delete this row?',
+
+  // ============================================================================
+  // CSV Upload - Guide
+  // ============================================================================
+  'csvUpload.quickGuide': 'Quick Guide',
+  'csvUpload.quickGuideDesc': 'How to use the CSV editor',
+  'csvUpload.guideUploadTitle': 'Upload CSV',
+  'csvUpload.guideUploadDesc': 'Select a CSV file to load sessions',
+  'csvUpload.guideEditTitle': 'Edit Data',
+  'csvUpload.guideEditDesc': 'Click edit button to modify any row',
+  'csvUpload.guideAddTitle': 'Add Rows',
+  'csvUpload.guideAddDesc': 'Add new sessions with the Add Row button',
+  'csvUpload.guideDownloadTitle': 'Download',
+  'csvUpload.guideDownloadDesc': 'Save your edited CSV before importing',
+  'csvUpload.warningMessage': 'WARNING: Importing will replace ALL existing sessions for the selected charger!',
+
+  // ============================================================================
+  // CSV Upload - Messages
+  // ============================================================================
+  'csvUpload.invalidFileType': 'Please select a CSV file',
+  'csvUpload.csvEmpty': 'CSV file is empty or invalid',
+  'csvUpload.csvLoaded': 'CSV loaded: {{count}} sessions found',
+  'csvUpload.failedToRead': 'Failed to read CSV file',
+  'csvUpload.rowUpdated': 'Row updated successfully',
+  'csvUpload.rowDeleted': 'Row deleted. {{count}} sessions remaining',
+  'csvUpload.newRowAdded': 'New row added. Fill in the details.',
+  'csvUpload.csvDownloaded': 'CSV downloaded successfully',
+  'csvUpload.noDataToUpload': 'No data to upload',
+  'csvUpload.pleaseSelectCharger': 'Please select a charger',
+  'csvUpload.uploadingProcessing': 'Uploading and processing CSV...',
+  'csvUpload.importSuccess': '✅ Import successful! Processed: {{processed}}, Imported: {{imported}}, Deleted: {{deleted}} old sessions',
+  'csvUpload.importFailed': 'Import failed: {{error}}',
+  'csvUpload.failedToLoadChargers': 'Failed to load chargers',
 
   // ============================================================================
   // COMMON
@@ -105,17 +154,25 @@ export const en: Translations = {
   'dashboard.last7Days': 'Last 7 Days',
   'dashboard.last30Days': 'Last 30 Days',
   'dashboard.noBuildings': 'No Buildings Found',
-  'dashboard.createBuildings': 'Create buildings in the Buildings page to start monitoring consumption.',
+  'dashboard.createBuildings': 'Create buildings on the Buildings page to start monitoring consumption.',
   'dashboard.showingBuildings': 'Showing {count} of {total} buildings',
   'dashboard.noBuildingsMatch': 'No buildings match your search "{query}"',
   'dashboard.clearSearch': 'Clear Search',
   'dashboard.noConsumptionData': 'No consumption data available for this building in the selected period.',
   'dashboard.metersConfigured': 'Meters are configured but haven\'t collected data yet.',
   'dashboard.noMetersConfigured': 'No meters configured for this building yet.',
-  'dashboard.addMeters': 'Add meters in the Meters page to start tracking consumption.',
+  'dashboard.addMeters': 'Add meters on the Meters page to start monitoring consumption.',
   'dashboard.residentsAdmin': 'Residents / Admin',
   'dashboard.complex': 'Complex',
   'dashboard.complexes': 'Complexes',
+  'dashboard.powerUnit': 'Power (W)',
+  'dashboard.errorLoading': 'Error loading dashboard',
+  'dashboard.dataPoints': 'pts',
+  'dashboard.meterTypes.charger': 'Charger',
+  'dashboard.meterTypes.solar': 'Solar',
+  'dashboard.meterTypes.apartment': 'Apartment',
+  'dashboard.meterTypes.total': 'Total',
+  'dashboard.unknownUser': 'Unknown User',
 
   // ============================================================================
   // EXPORT
