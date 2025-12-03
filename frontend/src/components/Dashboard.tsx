@@ -732,7 +732,7 @@ export default function Dashboard() {
                             fontWeight: (isCharger || isSolar) ? '600' : '500',
                             color: isVisible ? '#1f2937' : '#9ca3af'
                           }}>
-                            {getMeterDisplayName(meter)}
+                            {getMeterDisplayName(meter, t)}
                           </span>
                           <span style={{ 
                             color: isVisible ? '#6b7280' : '#9ca3af', 
@@ -807,7 +807,7 @@ export default function Dashboard() {
                               stroke={color}
                               strokeWidth={(isCharger || isSolar) ? 3 : 2}
                               strokeDasharray={isCharger ? '8 4' : undefined}
-                              name={getMeterDisplayName(meter)}
+                              name={getMeterDisplayName(meter, t)}
                               dot={false}
                               activeDot={{ r: (isCharger || isSolar) ? 6 : 4 }}
                               connectNulls={isBaseline ? false : true}

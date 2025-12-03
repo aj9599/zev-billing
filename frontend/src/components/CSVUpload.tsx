@@ -91,7 +91,7 @@ export default function CSVUpload() {
 
       setCsvData(data);
       setShowPreview(true);
-      setMessage(t('csvUpload.csvLoaded', { count: data.length }));
+      setMessage(t('csvUpload.csvLoaded').replace('{count}', data.length.toString()));
       setMessageType('info');
     } catch (err) {
       console.error('Failed to parse CSV:', err);
@@ -124,7 +124,7 @@ export default function CSVUpload() {
     if (confirm(t('csvUpload.deleteConfirm'))) {
       const newData = csvData.filter((_, i) => i !== index);
       setCsvData(newData);
-      setMessage(t('csvUpload.rowDeleted', { count: newData.length }));
+      setMessage(t('csvUpload.rowDeleted').replace('{count}', newData.length.toString()));
       setMessageType('info');
     }
   };
@@ -215,11 +215,10 @@ export default function CSVUpload() {
 
       const result = await response.json();
       
-      setMessage(t('csvUpload.importSuccess', { 
-        processed: result.processed, 
-        imported: result.imported, 
-        deleted: result.deleted_count 
-      }));
+      setMessage(t('csvUpload.importSuccess')
+        .replace('{processed}', result.processed.toString())
+        .replace('{imported}', result.imported.toString())
+        .replace('{deleted}', result.deleted_count.toString()));
       setMessageType('success');
       setUploading(false);
       setSelectedFile(null);
@@ -232,7 +231,7 @@ export default function CSVUpload() {
       const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
     } catch (err: any) {
-      setMessage(t('csvUpload.importFailed', { error: err.message }));
+      setMessage(t('csvUpload.importFailed').replace('{error}', err.message));
       setMessageType('error');
       setUploading(false);
     }
@@ -569,7 +568,7 @@ export default function CSVUpload() {
             ) : (
               <>
                 <Upload size={20} />
-                {t('csvUpload.importSessions', { count: csvData.length })}
+                {t('csvUpload.importSessions').replace('{count}', csvData.length.toString())}
               </>
             )}
           </button>
@@ -617,7 +616,7 @@ export default function CSVUpload() {
                   {t('csvUpload.csvDataEditor')}
                 </h2>
                 <p style={{ fontSize: '13px', color: '#6b7280' }}>
-                  {t('csvUpload.csvDataEditorDesc', { count: csvData.length })}
+                  {t('csvUpload.csvDataEditorDesc').replace('{count}', csvData.length.toString())}
                 </p>
               </div>
             </div>
