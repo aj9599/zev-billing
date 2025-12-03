@@ -127,7 +127,7 @@ export default function CSVUpload() {
 
       const result = await response.json();
       
-      setMessage(`✅ Import successful! Processed: ${result.processed}, Imported: ${result.imported}, Deleted: ${result.deleted_count} old sessions`);
+      setMessage(`âœ… Import successful! Processed: ${result.processed}, Imported: ${result.imported}, Deleted: ${result.deleted_count} old sessions`);
       setMessageType('success');
       setUploading(false);
       setSelectedFile(null);
@@ -569,13 +569,13 @@ export default function CSVUpload() {
               color: '#667eea' 
             },
             { 
-              title: 'CSV Format Required', 
-              desc: 'CSV must have columns: Charger ID, Charger Name, Brand, Building, Session Time, User ID, Power (kWh), Mode, State',
+              title: 'CSV Format Options', 
+              desc: 'Simplified format (recommended): Session Time, User ID, Power (kWh), Mode, State. Or use full format: Charger ID, Charger Name, Brand, Building, Session Time, User ID, Power (kWh), Mode, State',
               color: '#10b981' 
             },
             { 
-              title: 'Automatic Filtering', 
-              desc: 'Only sessions matching the selected Charger ID from the CSV will be imported. Other sessions in the CSV will be ignored.',
+              title: 'Simplified Format Benefits', 
+              desc: 'Since you\'ve already selected the target charger, you only need to provide session data. Charger info, brand, and building are automatically taken from your selection.',
               color: '#f59e0b' 
             },
             { 
@@ -645,6 +645,74 @@ export default function CSVUpload() {
             <AlertCircle size={18} />
             <strong>WARNING:</strong> This operation permanently deletes all sessions for the selected charger. Make sure you have a backup before proceeding!
           </p>
+        </div>
+
+        <div style={{
+          marginTop: '24px',
+          padding: '20px',
+          backgroundColor: '#f0f9ff',
+          border: '2px solid #3b82f6',
+          borderRadius: '12px'
+        }}>
+          <h3 style={{ 
+            fontSize: '15px', 
+            fontWeight: '600', 
+            marginBottom: '12px',
+            color: '#1e40af',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <FileSpreadsheet size={18} />
+            CSV Format Examples
+          </h3>
+          
+          <div style={{ marginBottom: '16px' }}>
+            <p style={{ fontSize: '14px', fontWeight: '600', color: '#1f2937', marginBottom: '8px' }}>
+              Simplified Format (Recommended):
+            </p>
+            <pre style={{ 
+              backgroundColor: '#1f2937', 
+              color: '#10b981',
+              padding: '12px', 
+              borderRadius: '8px', 
+              fontSize: '12px',
+              overflowX: 'auto',
+              fontFamily: 'monospace',
+              margin: 0
+            }}>
+{`Session Time,User ID,Power (kWh),Mode,State
+2025-11-22 11:00:00,user123,15.5,normal,charging
+2025-11-22 14:30:00,user456,22.3,priority,charging
+2025-11-22 18:00:00,,10.2,normal,idle`}
+            </pre>
+            <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px', fontStyle: 'italic' }}>
+              Note: User ID can be empty. Charger info is automatically taken from your selection above.
+            </p>
+          </div>
+
+          <div>
+            <p style={{ fontSize: '14px', fontWeight: '600', color: '#1f2937', marginBottom: '8px' }}>
+              Full Format (Legacy):
+            </p>
+            <pre style={{ 
+              backgroundColor: '#1f2937', 
+              color: '#60a5fa',
+              padding: '12px', 
+              borderRadius: '8px', 
+              fontSize: '12px',
+              overflowX: 'auto',
+              fontFamily: 'monospace',
+              margin: 0
+            }}>
+{`Charger ID,Charger Name,Brand,Building,Session Time,User ID,Power (kWh),Mode,State
+5,Main Charger,Tesla,Building A,2025-11-22 11:00:00,user123,15.5,normal,charging
+5,Main Charger,Tesla,Building A,2025-11-22 14:30:00,user456,22.3,priority,charging`}
+            </pre>
+            <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px', fontStyle: 'italic' }}>
+              Note: Only rows matching the selected Charger ID will be imported.
+            </p>
+          </div>
         </div>
       </div>
 

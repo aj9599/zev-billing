@@ -61,10 +61,15 @@ func (h *ChargerHandler) ImportChargerSessionsFromCSV(w http.ResponseWriter, r *
 		return
 	}
 
-	// Validate header format
-	expectedHeaders := []string{"Charger ID", "Charger Name", "Brand", "Building", "Session Time", "User ID", "Power (kWh)", "Mode", "State"}
-	if len(header) != len(expectedHeaders) {
-		http.Error(w, fmt.Sprintf("Invalid CSV format. Expected %d columns, got %d", len(expectedHeaders), len(header)), http.StatusBadRequest)
+	// Support two CSV formats:
+	// Format 1 (simplified): Session Time, User ID, Power (kWh), Mode, State
+	// Format 2 (full): Charger ID, Charger Name, Brand, Building, Session Time, User ID, Power (kWh), Mode, State
+	
+	isSimplifiedFormat := len(header) == 5
+	isFullFormat := len(header) == 9
+	
+	if !isSimplifiedFormat && !isFullFormat {
+		http.Error(w, fmt.Sprintf("Invalid CSV format. Expected 5 columns (Session Time, User ID, Power (kWh), Mode, State) or 9 columns (full format), got %d", len(header)), http.StatusBadRequest)
 		return
 	}
 
@@ -124,57 +129,86 @@ func (h *ChargerHandler) ImportChargerSessionsFromCSV(w http.ResponseWriter, r *
 
 		processedCount++
 
-		// Parse CSV fields
-		if len(record) != 9 {
-			log.Printf("Row %d: Invalid column count (expected 9, got %d)", processedCount, len(record))
-			errorCount++
-			if firstError == "" {
-				firstError = fmt.Sprintf("Row %d: Invalid column count", processedCount)
-			}
-			continue
-		}
+		// Handle both CSV formats
+		var sessionTimeStr, userID, mode, state string
+		var powerKWh float64
+		var err error
 
-		csvChargerID, err := strconv.Atoi(strings.TrimSpace(record[0]))
-		if err != nil {
-			log.Printf("Row %d: Invalid charger ID: %v", processedCount, err)
-			errorCount++
-			if firstError == "" {
-				firstError = fmt.Sprintf("Row %d: Invalid charger ID", processedCount)
+		if isSimplifiedFormat {
+			// Simplified format: Session Time, User ID, Power (kWh), Mode, State
+			if len(record) != 5 {
+				log.Printf("Row %d: Invalid column count (expected 5, got %d)", processedCount, len(record))
+				errorCount++
+				if firstError == "" {
+					firstError = fmt.Sprintf("Row %d: Invalid column count", processedCount)
+				}
+				continue
 			}
-			continue
-		}
 
-		// Only import sessions for the selected charger
-		if csvChargerID != chargerID {
-			continue
+			sessionTimeStr = strings.TrimSpace(record[0])
+			userID = strings.TrimSpace(record[1])
+			powerKWh, err = strconv.ParseFloat(strings.TrimSpace(record[2]), 64)
+			if err != nil {
+				log.Printf("Row %d: Invalid power value: %v", processedCount, err)
+				errorCount++
+				if firstError == "" {
+					firstError = fmt.Sprintf("Row %d: Invalid power value", processedCount)
+				}
+				continue
+			}
+			mode = strings.TrimSpace(record[3])
+			state = strings.TrimSpace(record[4])
+
+		} else {
+			// Full format: Charger ID, Charger Name, Brand, Building, Session Time, User ID, Power (kWh), Mode, State
+			if len(record) != 9 {
+				log.Printf("Row %d: Invalid column count (expected 9, got %d)", processedCount, len(record))
+				errorCount++
+				if firstError == "" {
+					firstError = fmt.Sprintf("Row %d: Invalid column count", processedCount)
+				}
+				continue
+			}
+
+			csvChargerID, err := strconv.Atoi(strings.TrimSpace(record[0]))
+			if err != nil {
+				log.Printf("Row %d: Invalid charger ID: %v", processedCount, err)
+				errorCount++
+				if firstError == "" {
+					firstError = fmt.Sprintf("Row %d: Invalid charger ID", processedCount)
+				}
+				continue
+			}
+
+			// Only import sessions for the selected charger
+			if csvChargerID != chargerID {
+				continue
+			}
+
+			sessionTimeStr = strings.TrimSpace(record[4])
+			userID = strings.TrimSpace(record[5])
+			powerKWh, err = strconv.ParseFloat(strings.TrimSpace(record[6]), 64)
+			if err != nil {
+				log.Printf("Row %d: Invalid power value: %v", processedCount, err)
+				errorCount++
+				if firstError == "" {
+					firstError = fmt.Sprintf("Row %d: Invalid power value", processedCount)
+				}
+				continue
+			}
+			mode = strings.TrimSpace(record[7])
+			state = strings.TrimSpace(record[8])
 		}
 
 		// Parse session time and convert format
-		// CSV format: 2025-11-22T11:00:00+01:00
+		// CSV format: 2025-11-22T11:00:00+01:00 or 2025-11-22 11:00:00
 		// DB format:  2025-11-22 11:00:00+01:00
-		sessionTimeStr := strings.TrimSpace(record[4])
 		sessionTimeStr = strings.Replace(sessionTimeStr, "T", " ", 1)
 
-		// Parse user_id (can be empty)
-		userID := strings.TrimSpace(record[5])
+		// Ensure user_id is empty string if not provided
 		if userID == "" {
 			userID = ""
 		}
-
-		// Parse power
-		powerKWh, err := strconv.ParseFloat(strings.TrimSpace(record[6]), 64)
-		if err != nil {
-			log.Printf("Row %d: Invalid power value: %v", processedCount, err)
-			errorCount++
-			if firstError == "" {
-				firstError = fmt.Sprintf("Row %d: Invalid power value", processedCount)
-			}
-			continue
-		}
-
-		// Parse mode and state
-		mode := strings.TrimSpace(record[7])
-		state := strings.TrimSpace(record[8])
 
 		// Insert session
 		_, err = stmt.Exec(chargerID, userID, sessionTimeStr, powerKWh, mode, state)
