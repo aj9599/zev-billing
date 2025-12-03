@@ -15,6 +15,35 @@ export const de: Translations = {
   'nav.settings': 'Einstellungen',
   'nav.logout': 'Abmelden',
   'nav.autoBilling': 'Auto-Abrechnung',
+  'nav.csvUpload': 'CSV-Upload',
+  'nav.passwordChange': 'Passwort ändern',
+
+  // ============================================================================
+  // CSV Upload
+  // ============================================================================
+  'csvUpload.title': 'CSV-Datenbank-Import',
+  'csvUpload.subtitle': 'CSV-Dateien hochladen, um Datenbankprobleme zu beheben',
+  'csvUpload.uploadFile': 'CSV-Datei hochladen',
+  'csvUpload.selectCSVFile': 'Wählen Sie eine CSV-Datei aus',
+  'csvUpload.dragDropFile': 'Ziehen Sie Ihre CSV-Datei hierher',
+  'csvUpload.orClickToSelect': 'oder klicken Sie zum Auswählen',
+  'csvUpload.upload': 'CSV hochladen',
+  'csvUpload.uploading': 'Wird hochgeladen...',
+  'csvUpload.instructions': 'Anweisungen',
+  'csvUpload.importantInfo': 'Bitte vor dem Hochladen lesen',
+  'csvUpload.step1Title': 'CSV-Datei vorbereiten',
+  'csvUpload.step1Desc': 'Stellen Sie sicher, dass Ihre CSV-Datei korrekt formatiert ist mit richtigen Headern und Datentypen',
+  'csvUpload.step2Title': 'Daten sichern',
+  'csvUpload.step2Desc': 'Erstellen Sie immer ein Backup vor dem Import, um Datenverlust zu vermeiden',
+  'csvUpload.step3Title': 'Daten validieren',
+  'csvUpload.step3Desc': 'Überprüfen Sie, dass alle erforderlichen Felder vorhanden und die Daten konsistent sind',
+  'csvUpload.step4Title': 'Import überwachen',
+  'csvUpload.step4Desc': 'Achten Sie auf Fehlermeldungen während des Upload-Prozesses',
+  'csvUpload.warning': 'Warnung: Das Hochladen falscher Daten kann zu Datenbankinkonsistenzen führen. Immer zuerst sichern!',
+  'csvUpload.noFileSelected': 'Bitte wählen Sie zuerst eine Datei aus',
+  'csvUpload.invalidFileType': 'Bitte wählen Sie eine gültige CSV-Datei aus',
+  'csvUpload.uploadSuccess': 'CSV-Datei erfolgreich hochgeladen',
+  'csvUpload.uploadFailed': 'Fehler beim Hochladen der CSV-Datei',
 
   // ============================================================================
   // COMMON
@@ -1773,10 +1802,10 @@ export const de: Translations = {
   'autoBilling.step.sender': 'Absender',
   'autoBilling.step.banking': 'Bankdaten',
   'autoBilling.step.review': 'Überprüfung',
-  
+
   // Empty State
   'autoBilling.noConfigsDescription': 'Klicken Sie auf "Konfiguration hinzufügen", um loszulegen.',
-  
+
   // Step 2 - Schedule
   'autoBilling.modal.billingSchedule': 'Abrechnungszeitplan',
   'autoBilling.scheduleInfo.title': 'Wann werden Rechnungen erstellt?',
@@ -1784,7 +1813,7 @@ export const de: Translations = {
   'autoBilling.scheduleInfo.quarterly': 'Vierteljährlich: Im Januar, April, Juli und Oktober',
   'autoBilling.scheduleInfo.half_yearly': 'Halbjährlich: Im Januar und Juli',
   'autoBilling.scheduleInfo.yearly': 'Jährlich: Einmal pro Jahr im Januar',
-  
+
   // Step 3 - Shared Meters
   'autoBilling.step3.title': 'Allgemeinzähler auswählen',
   'autoBilling.step3.description': 'Wählen Sie die Allgemeinzähler aus, deren Kosten auf die Mieter verteilt werden sollen.',
@@ -1799,7 +1828,7 @@ export const de: Translations = {
   'autoBilling.step3.optional': 'Optional',
   'autoBilling.step3.infoTitle': 'Hinweis zu Allgemeinzählern',
   'autoBilling.step3.infoDescription': 'Allgemeinzählerkosten werden automatisch gemäss der konfigurierten Aufteilungsmethode auf alle ausgewählten Wohnungen verteilt.',
-  
+
   // Step 4 - Custom Items
   'autoBilling.step4.title': 'Zusatzposten auswählen',
   'autoBilling.step4.description': 'Wählen Sie zusätzliche Positionen aus, die auf den Rechnungen erscheinen sollen.',
@@ -1818,19 +1847,19 @@ export const de: Translations = {
   'autoBilling.step4.optional': 'Optional',
   'autoBilling.step4.infoTitle': 'Hinweis zu Zusatzposten',
   'autoBilling.step4.infoDescription': 'Zusatzposten werden automatisch auf jeder Rechnung hinzugefügt, basierend auf ihrer konfigurierten Frequenz.',
-  
+
   // Step 5 - Sender
   'autoBilling.senderDescription': 'Diese Informationen erscheinen als Absender auf den generierten Rechnungen.',
   'autoBilling.senderInfoNote.title': 'Absenderinformationen',
   'autoBilling.senderInfoNote.description': 'Die Absenderdaten werden für alle automatisch generierten Rechnungen dieser Konfiguration verwendet.',
-  
+
   // Step 6 - Banking
   'autoBilling.bankingDescription': 'Diese Bankdaten werden für den QR-Einzahlungsschein auf den Rechnungen verwendet.',
   'autoBilling.ibanFormat': 'Schweizer IBAN-Format: CH00 0000 0000 0000 0000 0',
   'autoBilling.qrBillInfo.title': 'Swiss QR-Rechnung',
   'autoBilling.qrBillInfo.description': 'Die IBAN wird verwendet, um den QR-Code für die einfache Zahlung per Mobile Banking zu generieren.',
   'autoBilling.ibanRequired': 'IBAN ist erforderlich für die QR-Rechnung',
-  
+
   // Step 7 - Review
   'autoBilling.modal.reviewConfiguration': 'Konfiguration überprüfen',
   'autoBilling.modal.configurationSummary': 'Zusammenfassung der Konfiguration',
@@ -1840,14 +1869,14 @@ export const de: Translations = {
   'autoBilling.missingRequiredFields': 'Fehlende Pflichtfelder',
   'autoBilling.readyToCreate': 'Bereit zum Erstellen',
   'autoBilling.readyToCreateDescription': 'Alle erforderlichen Informationen sind vorhanden. Klicken Sie auf "Erstellen", um die automatische Abrechnung zu aktivieren.',
-  
+
   // Common (if missing)
   'common.selectAll': 'Alle auswählen',
   'common.deselectAll': 'Alle abwählen',
-  
+
   // Step 1
   "autoBilling.noBuildingsAvailable": "Keine Gebäude verfügbar",
-  
+
   // Placeholders
   "autoBilling.placeholder.companyName": "Firmen- oder Organisationsname",
   "autoBilling.placeholder.streetNumber": "Strasse und Nummer",
@@ -1855,7 +1884,7 @@ export const de: Translations = {
   "autoBilling.placeholder.city": "Ortsname",
   "autoBilling.placeholder.bankName": "Bankname",
   "autoBilling.placeholder.accountHolder": "Kontoinhaber",
-  
+
   // Countries
   "countries.switzerland": "Schweiz",
   "countries.germany": "Deutschland",

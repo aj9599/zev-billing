@@ -15,6 +15,35 @@ export const en: Translations = {
   'nav.settings': 'Settings',
   'nav.logout': 'Logout',
   'nav.autoBilling': 'Auto Billing',
+  'nav.csvUpload': 'CSV Upload',
+  'nav.passwordChange': 'Password Change',
+
+  // ============================================================================
+  // CSV Upload
+  // ============================================================================
+  'csvUpload.title': 'CSV Database Import',
+  'csvUpload.subtitle': 'Upload CSV files to fix database issues',
+  'csvUpload.uploadFile': 'Upload CSV File',
+  'csvUpload.selectCSVFile': 'Select a CSV file to upload',
+  'csvUpload.dragDropFile': 'Drag and drop your CSV file here',
+  'csvUpload.orClickToSelect': 'or click to select',
+  'csvUpload.upload': 'Upload CSV',
+  'csvUpload.uploading': 'Uploading...',
+  'csvUpload.instructions': 'Instructions',
+  'csvUpload.importantInfo': 'Please read before uploading',
+  'csvUpload.step1Title': 'Prepare your CSV file',
+  'csvUpload.step1Desc': 'Ensure your CSV file is properly formatted with correct headers and data types',
+  'csvUpload.step2Title': 'Backup your data',
+  'csvUpload.step2Desc': 'Always create a backup before importing data to prevent data loss',
+  'csvUpload.step3Title': 'Validate the data',
+  'csvUpload.step3Desc': 'Check that all required fields are present and data is consistent',
+  'csvUpload.step4Title': 'Monitor the import',
+  'csvUpload.step4Desc': 'Watch for any error messages during the upload process',
+  'csvUpload.warning': 'Warning: Uploading incorrect data may cause database inconsistencies. Always backup first!',
+  'csvUpload.noFileSelected': 'Please select a file first',
+  'csvUpload.invalidFileType': 'Please select a valid CSV file',
+  'csvUpload.uploadSuccess': 'CSV file uploaded successfully',
+  'csvUpload.uploadFailed': 'Failed to upload CSV file',
 
   // ============================================================================
   // COMMON
@@ -1772,10 +1801,10 @@ export const en: Translations = {
   'autoBilling.step.sender': 'Sender',
   'autoBilling.step.banking': 'Banking',
   'autoBilling.step.review': 'Review',
-  
+
   // Empty State
   'autoBilling.noConfigsDescription': 'Click "Add Configuration" to get started.',
-  
+
   // Step 2 - Schedule
   'autoBilling.modal.billingSchedule': 'Billing Schedule',
   'autoBilling.scheduleInfo.title': 'When will invoices be generated?',
@@ -1783,7 +1812,7 @@ export const en: Translations = {
   'autoBilling.scheduleInfo.quarterly': 'Quarterly: In January, April, July and October',
   'autoBilling.scheduleInfo.half_yearly': 'Half-yearly: In January and July',
   'autoBilling.scheduleInfo.yearly': 'Yearly: Once per year in January',
-  
+
   // Step 3 - Shared Meters
   'autoBilling.step3.title': 'Select Shared Meters',
   'autoBilling.step3.description': 'Select the shared meters whose costs should be distributed among tenants.',
@@ -1798,7 +1827,7 @@ export const en: Translations = {
   'autoBilling.step3.optional': 'Optional',
   'autoBilling.step3.infoTitle': 'Note about Shared Meters',
   'autoBilling.step3.infoDescription': 'Shared meter costs are automatically distributed to all selected apartments according to the configured split method.',
-  
+
   // Step 4 - Custom Items
   'autoBilling.step4.title': 'Select Custom Items',
   'autoBilling.step4.description': 'Select additional items that should appear on the invoices.',
@@ -1817,19 +1846,19 @@ export const en: Translations = {
   'autoBilling.step4.optional': 'Optional',
   'autoBilling.step4.infoTitle': 'Note about Custom Items',
   'autoBilling.step4.infoDescription': 'Custom items are automatically added to each invoice based on their configured frequency.',
-  
+
   // Step 5 - Sender
   'autoBilling.senderDescription': 'This information will appear as the sender on generated invoices.',
   'autoBilling.senderInfoNote.title': 'Sender Information',
   'autoBilling.senderInfoNote.description': 'The sender details will be used for all automatically generated invoices from this configuration.',
-  
+
   // Step 6 - Banking
   'autoBilling.bankingDescription': 'This banking information will be used for the QR payment slip on invoices.',
   'autoBilling.ibanFormat': 'Swiss IBAN format: CH00 0000 0000 0000 0000 0',
   'autoBilling.qrBillInfo.title': 'Swiss QR-Bill',
   'autoBilling.qrBillInfo.description': 'The IBAN is used to generate the QR code for easy payment via mobile banking.',
   'autoBilling.ibanRequired': 'IBAN is required for QR-Bill generation',
-  
+
   // Step 7 - Review
   'autoBilling.modal.reviewConfiguration': 'Review Configuration',
   'autoBilling.modal.configurationSummary': 'Configuration Summary',
@@ -1839,24 +1868,24 @@ export const en: Translations = {
   'autoBilling.missingRequiredFields': 'Missing Required Fields',
   'autoBilling.readyToCreate': 'Ready to Create',
   'autoBilling.readyToCreateDescription': 'All required information is complete. Click "Create" to activate automatic billing.',
-  
+
   // Common (if missing)
   'common.selectAll': 'Select All',
   'common.deselectAll': 'Deselect All',
 
   // Step 1 - Building Selection
   "autoBilling.noBuildingsAvailable": "No buildings available",
-  
+
   // Step 5 - Sender Placeholders
   "autoBilling.placeholder.companyName": "Company or Organization Name",
   "autoBilling.placeholder.streetNumber": "Street and Number",
   "autoBilling.placeholder.zip": "1234",
   "autoBilling.placeholder.city": "City Name",
-  
+
   // Step 6 - Banking Placeholders
   "autoBilling.placeholder.bankName": "Bank Name",
   "autoBilling.placeholder.accountHolder": "Account Holder Name",
-  
+
   // Countries (for dropdown)
   "countries.switzerland": "Switzerland",
   "countries.germany": "Germany",

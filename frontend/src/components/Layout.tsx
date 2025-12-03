@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useState } from 'react';
-import { LayoutDashboard, Users, Building, Car, FileText, Settings, LogOut, Activity, DollarSign, Menu, X, Calendar, Zap } from 'lucide-react';
+import { LayoutDashboard, Users, Building, Car, FileText, Settings as SettingsIcon, LogOut, Activity, DollarSign, Menu, X, Calendar, Zap, ChevronDown, ChevronRight, Lock, Database } from 'lucide-react';
 import { api } from '../api/client';
 import { useTranslation } from '../i18n';
 import Logo from './Logo';
@@ -13,6 +13,7 @@ export default function Layout({ onLogout }: LayoutProps) {
   const location = useLocation();
   const { t, language, setLanguage } = useTranslation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const handleLogout = () => {
     api.logout();
@@ -28,8 +29,12 @@ export default function Layout({ onLogout }: LayoutProps) {
     { path: '/pricing', icon: DollarSign, label: t('nav.pricing') },
     { path: '/billing', icon: FileText, label: t('nav.billing') },
     { path: '/auto-billing', icon: Calendar, label: t('nav.autoBilling') },
+  ];
+
+  const settingsNavItems = [
     { path: '/logs', icon: Activity, label: t('nav.logs') },
-    { path: '/settings', icon: Settings, label: t('nav.settings') },
+    { path: '/csv-upload', icon: Database, label: t('nav.csvUpload') },
+    { path: '/settings', icon: Lock, label: t('nav.passwordChange') },
   ];
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
@@ -155,6 +160,86 @@ export default function Layout({ onLogout }: LayoutProps) {
               </Link>
             );
           })}
+
+          {/* Settings Dropdown */}
+          <div style={{ marginTop: '4px' }}>
+            <button
+              onClick={() => setSettingsOpen(!settingsOpen)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+                gap: '12px',
+                padding: '12px 16px',
+                marginBottom: '4px',
+                borderRadius: '8px',
+                backgroundColor: settingsOpen || ['/logs', '/csv-upload', '/settings'].includes(location.pathname) ? '#333' : 'transparent',
+                color: 'white',
+                border: 'none',
+                textDecoration: 'none',
+                transition: 'background-color 0.2s',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+              onMouseEnter={(e) => {
+                if (!settingsOpen && !['/logs', '/csv-upload', '/settings'].includes(location.pathname)) {
+                  e.currentTarget.style.backgroundColor = '#2a2a2a';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!settingsOpen && !['/logs', '/csv-upload', '/settings'].includes(location.pathname)) {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <SettingsIcon size={20} />
+                <span>{t('nav.settings')}</span>
+              </div>
+              {settingsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            </button>
+
+            {/* Settings Submenu */}
+            {settingsOpen && (
+              <div style={{ paddingLeft: '16px', marginBottom: '8px' }}>
+                {settingsNavItems.map(item => {
+                  const Icon = item.icon;
+                  const isActive = location.pathname === item.path;
+                  
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      onClick={closeMobileMenu}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '10px 16px',
+                        marginBottom: '2px',
+                        borderRadius: '8px',
+                        backgroundColor: isActive ? '#444' : 'transparent',
+                        color: isActive ? '#fff' : '#d1d5db',
+                        textDecoration: 'none',
+                        transition: 'background-color 0.2s',
+                        fontSize: '13px'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isActive) e.currentTarget.style.backgroundColor = '#333';
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
+                    >
+                      <Icon size={18} />
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </nav>
 
         {/* Language Switcher */}

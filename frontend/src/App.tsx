@@ -13,6 +13,7 @@ import AutoBilling from './components/AutoBilling';
 import PricingSettings from './components/PricingSettings';
 import Settings from './components/Settings';
 import AdminLogs from './components/AdminLogs';
+import CSVUpload from './components/CSVUpload';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
@@ -52,6 +53,7 @@ function App() {
             <Route path="pricing" element={<PricingSettings />} />
             <Route path="settings" element={<Settings />} />
             <Route path="logs" element={<AdminLogs />} />
+            <Route path="csv-upload" element={<CSVUpload />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
