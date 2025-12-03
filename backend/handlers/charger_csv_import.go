@@ -25,7 +25,6 @@ func (h *ChargerHandler) ImportChargerSessionsFromCSV(w http.ResponseWriter, r *
 	}
 
 	// Verify charger exists
-	var exists bool
 	var chargerName string
 	err = h.db.QueryRow("SELECT name FROM chargers WHERE id = ?", chargerID).Scan(&chargerName)
 	if err == sql.ErrNoRows {
