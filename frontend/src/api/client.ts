@@ -263,6 +263,53 @@ class ApiClient {
     return this.request(`/chargers/${id}/deletion-impact`);
   }
 
+  // NEW: Import charger sessions from CSV
+  async importChargerSessionsFromCSV(chargerId: number, file: File): Promise<{
+    status: string;
+    charger_id: number;
+    charger_name: string;
+    processed: number;
+    imported: number;
+    errors: number;
+    deleted_count: number;
+    first_error?: string;
+  }> {
+    const formData = new FormData();
+    formData.append('csv', file);
+
+    const response = await fetch(`${this.getBaseUrl()}/chargers/${chargerId}/import-sessions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(error || 'Import failed');
+    }
+
+    return response.json();
+  }
+
+  // NEW: Get sessions for a charger
+  async getChargerSessions(chargerId: number, limit: number = 100): Promise<any[]> {
+    return this.request(`/chargers/${chargerId}/sessions?limit=${limit}`);
+  }
+
+  // NEW: Delete all sessions for a charger
+  async deleteChargerSessions(chargerId: number): Promise<{
+    status: string;
+    deleted_count: number;
+  }> {
+    return this.request(`/chargers/${chargerId}/sessions`, { method: 'DELETE' });
+  }
+
+  private getBaseUrl(): string {
+    return '/api';
+  }
+
   // Billing
   async getBillingSettings(building_id?: number): Promise<BillingSettings | BillingSettings[]> {
     const query = building_id ? `?building_id=${building_id}` : '';

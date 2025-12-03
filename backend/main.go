@@ -156,9 +156,12 @@ func main() {
 	api.HandleFunc("/meters/{id}", meterHandler.Delete).Methods("DELETE")
 
 	// Charger routes - IMPORTANT: Specific routes MUST come before {id} routes
-	api.HandleFunc("/chargers/live-data", chargerHandler.GetLiveData).Methods("GET")          // ✅ ADDED - Must be before {id}
+	api.HandleFunc("/chargers/live-data", chargerHandler.GetLiveData).Methods("GET")          // âœ… ADDED - Must be before {id}
 	api.HandleFunc("/chargers/sessions/latest", chargerHandler.GetLatestSessions).Methods("GET")
 	api.HandleFunc("/chargers/{id}/deletion-impact", chargerHandler.GetDeletionImpact).Methods("GET")
+	api.HandleFunc("/chargers/{id}/import-sessions", chargerHandler.ImportChargerSessionsFromCSV).Methods("POST")  // NEW: CSV Import
+	api.HandleFunc("/chargers/{id}/sessions", chargerHandler.GetChargerSessions).Methods("GET")                    // NEW: Get sessions
+	api.HandleFunc("/chargers/{id}/sessions", chargerHandler.DeleteChargerSessions).Methods("DELETE")              // NEW: Delete sessions
 	api.HandleFunc("/chargers", chargerHandler.List).Methods("GET")
 	api.HandleFunc("/chargers", chargerHandler.Create).Methods("POST")
 	api.HandleFunc("/chargers/{id}", chargerHandler.Get).Methods("GET")
@@ -703,7 +706,7 @@ func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 // NEW: Factory Reset handler
 func factoryResetHandler(dbPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log.Println("âš ï¸  FACTORY RESET REQUESTED âš ï¸ ")
+		log.Println("Ã¢Å¡ Ã¯Â¸  FACTORY RESET REQUESTED Ã¢Å¡ Ã¯Â¸ ")
 
 		// Create a pre-reset backup first
 		backupDir := "./backups"
@@ -728,7 +731,7 @@ func factoryResetHandler(dbPath string) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("âœ… Pre-reset backup created: %s", backupName)
+		log.Printf("Ã¢Å“â€¦ Pre-reset backup created: %s", backupName)
 
 		// Delete the current database
 		if err := os.Remove(dbPath); err != nil {
@@ -737,7 +740,7 @@ func factoryResetHandler(dbPath string) http.HandlerFunc {
 			return
 		}
 
-		log.Println("âœ… Database deleted")
+		log.Println("Ã¢Å“â€¦ Database deleted")
 
 		// Delete all invoices
 		invoicesDir := "./invoices"
@@ -748,14 +751,14 @@ func factoryResetHandler(dbPath string) http.HandlerFunc {
 		if err := os.RemoveAll(invoicesDir); err != nil {
 			log.Printf("Warning: Failed to delete invoices directory: %v", err)
 		} else {
-			log.Println("âœ… Invoices deleted")
+			log.Println("Ã¢Å“â€¦ Invoices deleted")
 		}
 
 		// Recreate invoices directory
 		os.MkdirAll(invoicesDir, 0755)
 
-		log.Println("âœ… Factory reset completed successfully")
-		log.Println("âš ¡ Service will restart with fresh database...")
+		log.Println("Ã¢Å“â€¦ Factory reset completed successfully")
+		log.Println("Ã¢Å¡ Â¡ Service will restart with fresh database...")
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{
