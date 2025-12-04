@@ -94,6 +94,34 @@ export const en: Translations = {
   'csvUpload.importFailed': 'Import failed: {{error}}',
   'csvUpload.failedToLoadChargers': 'Failed to load chargers',
 
+  // Instructions Section - Step Titles and Descriptions
+  'csvUpload.instructionsTitle': 'Important Instructions',
+  'csvUpload.instructionsSubtitle': 'Read before importing',
+  
+  'csvUpload.step1Title': 'Select Target Charger',
+  'csvUpload.step1Desc': 'Choose the charger you want to import sessions for. All existing sessions for this charger will be deleted.',
+  
+  'csvUpload.step2Title': 'CSV Format Options',
+  'csvUpload.step2Desc': 'Simplified format (recommended): Session Time, User ID, Power (kWh), Mode, State. Or use full format: Charger ID, Charger Name, Brand, Building, Session Time, User ID, Power (kWh), Mode, State',
+  
+  'csvUpload.step3Title': 'Simplified Format Benefits',
+  'csvUpload.step3Desc': 'Since you\'ve already selected the target charger, you only need to provide session data. Charger info, brand, and building are automatically taken from your selection.',
+  
+  'csvUpload.step4Title': 'Data Replacement',
+  'csvUpload.step4Desc': 'This operation will DELETE all existing sessions for the selected charger and replace them with CSV data. This cannot be undone!',
+  
+  // Warning Messages
+  'csvUpload.warningLabel': 'WARNING:',
+  'csvUpload.warningText': 'This operation permanently deletes all sessions for the selected charger. Make sure you have a backup before proceeding!',
+  
+  // CSV Format Examples Section
+  'csvUpload.formatExamplesTitle': 'CSV Format Examples',
+  'csvUpload.simplifiedFormatLabel': 'Simplified Format (Recommended):',
+  'csvUpload.simplifiedFormatNote': 'Note: User ID can be empty. Charger info is automatically taken from your selection above.',
+  
+  'csvUpload.fullFormatLabel': 'Full Format (Legacy):',
+  'csvUpload.fullFormatNote': 'Note: Only rows matching the selected Charger ID will be imported.',
+
   // ============================================================================
   // COMMON
   // ============================================================================

@@ -873,10 +873,10 @@ export default function CSVUpload() {
               marginBottom: '4px',
               color: '#1f2937'
             }}>
-              Important Instructions
+              {t('csvUpload.instructionsTitle')}
             </h2>
             <p style={{ fontSize: '14px', color: '#6b7280' }}>
-              Read before importing
+              {t('csvUpload.instructionsSubtitle')}
             </p>
           </div>
         </div>
@@ -884,23 +884,23 @@ export default function CSVUpload() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {[
             { 
-              title: 'Select Target Charger', 
-              desc: 'Choose the charger you want to import sessions for. All existing sessions for this charger will be deleted.',
+              title: t('csvUpload.step1Title'), 
+              desc: t('csvUpload.step1Desc'),
               color: '#667eea' 
             },
             { 
-              title: 'CSV Format Options', 
-              desc: 'Simplified format (recommended): Session Time, User ID, Power (kWh), Mode, State. Or use full format: Charger ID, Charger Name, Brand, Building, Session Time, User ID, Power (kWh), Mode, State',
+              title: t('csvUpload.step2Title'), 
+              desc: t('csvUpload.step2Desc'),
               color: '#10b981' 
             },
             { 
-              title: 'Simplified Format Benefits', 
-              desc: 'Since you\'ve already selected the target charger, you only need to provide session data. Charger info, brand, and building are automatically taken from your selection.',
+              title: t('csvUpload.step3Title'), 
+              desc: t('csvUpload.step3Desc'),
               color: '#f59e0b' 
             },
             { 
-              title: 'Data Replacement', 
-              desc: 'This operation will DELETE all existing sessions for the selected charger and replace them with CSV data. This cannot be undone!',
+              title: t('csvUpload.step4Title'), 
+              desc: t('csvUpload.step4Desc'),
               color: '#ef4444' 
             }
           ].map((step, idx) => (
@@ -963,7 +963,7 @@ export default function CSVUpload() {
             gap: '8px'
           }}>
             <AlertCircle size={18} />
-            <strong>WARNING:</strong> This operation permanently deletes all sessions for the selected charger. Make sure you have a backup before proceeding!
+            <strong>{t('csvUpload.warningLabel')}</strong> {t('csvUpload.warningText')}
           </p>
         </div>
 
@@ -984,12 +984,12 @@ export default function CSVUpload() {
             gap: '8px'
           }}>
             <FileSpreadsheet size={18} />
-            CSV Format Examples
+            {t('csvUpload.formatExamplesTitle')}
           </h3>
           
           <div style={{ marginBottom: '16px' }}>
             <p style={{ fontSize: '14px', fontWeight: '600', color: '#1f2937', marginBottom: '8px' }}>
-              Simplified Format (Recommended):
+              {t('csvUpload.simplifiedFormatLabel')}
             </p>
             <pre style={{ 
               backgroundColor: '#1f2937', 
@@ -1007,13 +1007,13 @@ export default function CSVUpload() {
 2025-11-22 18:00:00,,10.2,normal,idle`}
             </pre>
             <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px', fontStyle: 'italic' }}>
-              Note: User ID can be empty. Charger info is automatically taken from your selection above.
+              {t('csvUpload.simplifiedFormatNote')}
             </p>
           </div>
 
           <div>
             <p style={{ fontSize: '14px', fontWeight: '600', color: '#1f2937', marginBottom: '8px' }}>
-              Full Format (Legacy):
+              {t('csvUpload.fullFormatLabel')}
             </p>
             <pre style={{ 
               backgroundColor: '#1f2937', 
@@ -1030,7 +1030,7 @@ export default function CSVUpload() {
 5,Main Charger,Tesla,Building A,2025-11-22 14:30:00,user456,22.3,priority,charging`}
             </pre>
             <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px', fontStyle: 'italic' }}>
-              Note: Only rows matching the selected Charger ID will be imported.
+              {t('csvUpload.fullFormatNote')}
             </p>
           </div>
         </div>

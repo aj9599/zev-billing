@@ -94,6 +94,34 @@ export const de: Translations = {
   'csvUpload.importFailed': 'Import fehlgeschlagen: {{error}}',
   'csvUpload.failedToLoadChargers': 'Fehler beim Laden der Ladegeräte',
 
+  // Anweisungen Bereich - Schritt Titel und Beschreibungen
+  'csvUpload.instructionsTitle': 'Wichtige Anweisungen',
+  'csvUpload.instructionsSubtitle': 'Vor dem Import lesen',
+  
+  'csvUpload.step1Title': 'Ziel-Ladegerät auswählen',
+  'csvUpload.step1Desc': 'Wählen Sie das Ladegerät aus, für das Sie Sitzungen importieren möchten. Alle vorhandenen Sitzungen für dieses Ladegerät werden gelöscht.',
+  
+  'csvUpload.step2Title': 'CSV-Format-Optionen',
+  'csvUpload.step2Desc': 'Vereinfachtes Format (empfohlen): Session Time, User ID, Power (kWh), Mode, State. Oder verwenden Sie das vollständige Format: Charger ID, Charger Name, Brand, Building, Session Time, User ID, Power (kWh), Mode, State',
+  
+  'csvUpload.step3Title': 'Vorteile des vereinfachten Formats',
+  'csvUpload.step3Desc': 'Da Sie das Ziel-Ladegerät bereits ausgewählt haben, müssen Sie nur die Sitzungsdaten angeben. Ladegerät-Informationen, Marke und Gebäude werden automatisch aus Ihrer Auswahl übernommen.',
+  
+  'csvUpload.step4Title': 'Datenersetzung',
+  'csvUpload.step4Desc': 'Diese Operation wird ALLE vorhandenen Sitzungen für das ausgewählte Ladegerät LÖSCHEN und durch CSV-Daten ersetzen. Dies kann nicht rückgängig gemacht werden!',
+  
+  // Warnmeldungen
+  'csvUpload.warningLabel': 'WARNUNG:',
+  'csvUpload.warningText': 'Diese Operation löscht dauerhaft alle Sitzungen für das ausgewählte Ladegerät. Stellen Sie sicher, dass Sie ein Backup haben, bevor Sie fortfahren!',
+  
+  // CSV-Format-Beispiele Bereich
+  'csvUpload.formatExamplesTitle': 'CSV-Format-Beispiele',
+  'csvUpload.simplifiedFormatLabel': 'Vereinfachtes Format (Empfohlen):',
+  'csvUpload.simplifiedFormatNote': 'Hinweis: Benutzer-ID kann leer sein. Ladegerät-Informationen werden automatisch aus Ihrer obigen Auswahl übernommen.',
+  
+  'csvUpload.fullFormatLabel': 'Vollständiges Format (Legacy):',
+  'csvUpload.fullFormatNote': 'Hinweis: Nur Zeilen, die mit der ausgewählten Ladegerät-ID übereinstimmen, werden importiert.',
+
   // ============================================================================
   // COMMON
   // ============================================================================
