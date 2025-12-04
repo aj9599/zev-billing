@@ -2,10 +2,14 @@ import { useState, useEffect } from 'react';
 import { Upload, Database, AlertCircle, FileSpreadsheet, CheckCircle, Edit2, Save, X, Plus, Trash2, Download } from 'lucide-react';
 import { useTranslation } from '../i18n';
 import { api } from '../api/client';
-import type { Charger } from '../types';
+import type { Charger, Building } from '../types';
 
 interface CSVRow {
   [key: string]: string;
+}
+
+interface ChargersByBuilding {
+  [buildingName: string]: Charger[];
 }
 
 export default function CSVUpload() {
@@ -13,6 +17,7 @@ export default function CSVUpload() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedCharger, setSelectedCharger] = useState<number | null>(null);
   const [chargers, setChargers] = useState<Charger[]>([]);
+  const [buildings, setBuildings] = useState<Building[]>([]);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error' | 'info'>('info');
@@ -24,18 +29,42 @@ export default function CSVUpload() {
 
   useEffect(() => {
     loadChargers();
+    loadBuildings();
   }, []);
+
+  const loadBuildings = async () => {
+    try {
+      let data: Building[];
+      
+      if (typeof api === 'object' && 'getBuildings' in api && typeof api.getBuildings === 'function') {
+        data = await api.getBuildings();
+      } else {
+        const response = await fetch('/api/buildings', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch buildings');
+        }
+        
+        data = await response.json();
+      }
+      
+      setBuildings(data);
+    } catch (err) {
+      console.error('Failed to load buildings:', err);
+    }
+  };
 
   const loadChargers = async () => {
     try {
-      // Try using api client if getChargers method exists
       let data: Charger[];
       
       if (typeof api === 'object' && 'getChargers' in api && typeof api.getChargers === 'function') {
-        // Use api client method if available
         data = await api.getChargers();
       } else {
-        // Fallback to direct fetch
         const response = await fetch('/api/chargers', {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -56,6 +85,18 @@ export default function CSVUpload() {
       setMessageType('error');
     }
   };
+
+  // Group chargers by building
+  const chargersByBuilding: ChargersByBuilding = chargers.reduce((acc, charger) => {
+    const building = buildings.find(b => b.id === charger.building_id);
+    const buildingName = building ? building.name : 'Unknown Building';
+    
+    if (!acc[buildingName]) {
+      acc[buildingName] = [];
+    }
+    acc[buildingName].push(charger);
+    return acc;
+  }, {} as ChargersByBuilding);
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -158,7 +199,6 @@ export default function CSVUpload() {
       ...csvData.map(row => 
         csvHeaders.map(header => {
           const value = row[header] || '';
-          // Wrap in quotes if contains comma
           return value.includes(',') ? `"${value}"` : value;
         }).join(',')
       )
@@ -196,7 +236,6 @@ export default function CSVUpload() {
     setMessageType('info');
 
     try {
-      // Convert csvData back to CSV format
       const csvContent = [
         csvHeaders.join(','),
         ...csvData.map(row => 
@@ -238,7 +277,6 @@ export default function CSVUpload() {
       setCsvHeaders([]);
       setShowPreview(false);
       
-      // Reset file input
       const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
     } catch (err: any) {
@@ -280,7 +318,7 @@ export default function CSVUpload() {
           borderRadius: '16px',
           backgroundColor: messageType === 'success' ? '#d4edda' : messageType === 'error' ? '#f8d7da' : '#d1ecf1',
           color: messageType === 'success' ? '#155724' : messageType === 'error' ? '#721c24' : '#0c5460',
-          border: `2px solid ${messageType === 'success' ? '#c3e6cb' : messageType === 'error' ? '#f5c6cb' : '#bee5eb'}`,
+          border: `2px solid ${messageType === 'success' ? '#c3e6cb' : messageType === 'error' ? '#f5c6cb' : '#bee5eb'}',
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
@@ -367,10 +405,14 @@ export default function CSVUpload() {
               onBlur={(e) => e.currentTarget.style.borderColor = '#e5e7eb'}
             >
               <option value="">{t('csvUpload.selectChargerPlaceholder')}</option>
-              {chargers.map(charger => (
-                <option key={charger.id} value={charger.id}>
-                  {charger.name} - {charger.brand}
-                </option>
+              {Object.entries(chargersByBuilding).map(([buildingName, buildingChargers]) => (
+                <optgroup key={buildingName} label={buildingName}>
+                  {buildingChargers.map(charger => (
+                    <option key={charger.id} value={charger.id}>
+                      {charger.name} - {charger.brand}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </div>
@@ -808,44 +850,60 @@ export default function CSVUpload() {
           display: 'flex', 
           alignItems: 'center', 
           gap: '16px', 
-          marginBottom: '24px',
-          paddingBottom: '16px',
+          marginBottom: '32px',
+          paddingBottom: '24px',
           borderBottom: '2px solid #f3f4f6'
         }}>
           <div style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: '12px',
+            width: '56px',
+            height: '56px',
+            borderRadius: '16px',
             background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             boxShadow: '0 8px 20px rgba(240, 147, 251, 0.3)'
           }}>
-            <AlertCircle size={24} color="white" strokeWidth={2.5} />
+            <AlertCircle size={28} color="white" strokeWidth={2.5} />
           </div>
           <div>
             <h2 style={{ 
-              fontSize: '20px', 
+              fontSize: '24px', 
               fontWeight: '700', 
               marginBottom: '4px',
               color: '#1f2937'
             }}>
-              {t('csvUpload.quickGuide')}
+              Important Instructions
             </h2>
-            <p style={{ fontSize: '13px', color: '#6b7280' }}>
-              {t('csvUpload.quickGuideDesc')}
+            <p style={{ fontSize: '14px', color: '#6b7280' }}>
+              Read before importing
             </p>
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {[
-            { icon: Upload, title: t('csvUpload.guideUploadTitle'), desc: t('csvUpload.guideUploadDesc'), color: '#667eea' },
-            { icon: Edit2, title: t('csvUpload.guideEditTitle'), desc: t('csvUpload.guideEditDesc'), color: '#10b981' },
-            { icon: Plus, title: t('csvUpload.guideAddTitle'), desc: t('csvUpload.guideAddDesc'), color: '#f59e0b' },
-            { icon: Download, title: t('csvUpload.guideDownloadTitle'), desc: t('csvUpload.guideDownloadDesc'), color: '#8b5cf6' },
-          ].map((item, idx) => (
+            { 
+              title: 'Select Target Charger', 
+              desc: 'Choose the charger you want to import sessions for. All existing sessions for this charger will be deleted.',
+              color: '#667eea' 
+            },
+            { 
+              title: 'CSV Format Options', 
+              desc: 'Simplified format (recommended): Session Time, User ID, Power (kWh), Mode, State. Or use full format: Charger ID, Charger Name, Brand, Building, Session Time, User ID, Power (kWh), Mode, State',
+              color: '#10b981' 
+            },
+            { 
+              title: 'Simplified Format Benefits', 
+              desc: 'Since you\'ve already selected the target charger, you only need to provide session data. Charger info, brand, and building are automatically taken from your selection.',
+              color: '#f59e0b' 
+            },
+            { 
+              title: 'Data Replacement', 
+              desc: 'This operation will DELETE all existing sessions for the selected charger and replace them with CSV data. This cannot be undone!',
+              color: '#ef4444' 
+            }
+          ].map((step, idx) => (
             <div key={idx} style={{
               padding: '16px',
               backgroundColor: '#f9fafb',
@@ -853,26 +911,35 @@ export default function CSVUpload() {
               border: '1px solid #e5e7eb',
               display: 'flex',
               alignItems: 'start',
-              gap: '12px'
+              gap: '16px',
+              transition: 'all 0.3s ease'
             }}>
               <div style={{
                 width: '32px',
                 height: '32px',
                 borderRadius: '8px',
-                backgroundColor: item.color + '20',
+                backgroundColor: step.color + '20',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                flexShrink: 0
+                flexShrink: 0,
+                fontWeight: '700',
+                fontSize: '16px',
+                color: step.color
               }}>
-                <item.icon size={18} color={item.color} />
+                {idx + 1}
               </div>
-              <div>
-                <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px', color: '#1f2937' }}>
-                  {item.title}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h3 style={{ 
+                  fontSize: '15px', 
+                  fontWeight: '600', 
+                  marginBottom: '4px',
+                  color: '#1f2937'
+                }}>
+                  {step.title}
                 </h3>
-                <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
-                  {item.desc}
+                <p style={{ fontSize: '13px', color: '#6b7280', lineHeight: '1.5', margin: 0 }}>
+                  {step.desc}
                 </p>
               </div>
             </div>
@@ -880,7 +947,7 @@ export default function CSVUpload() {
         </div>
 
         <div style={{
-          marginTop: '20px',
+          marginTop: '24px',
           padding: '16px',
           backgroundColor: '#fef3c7',
           border: '2px solid #fbbf24',
@@ -896,8 +963,76 @@ export default function CSVUpload() {
             gap: '8px'
           }}>
             <AlertCircle size={18} />
-            <strong>{t('csvUpload.warningMessage')}</strong>
+            <strong>WARNING:</strong> This operation permanently deletes all sessions for the selected charger. Make sure you have a backup before proceeding!
           </p>
+        </div>
+
+        <div style={{
+          marginTop: '24px',
+          padding: '20px',
+          backgroundColor: '#f0f9ff',
+          border: '2px solid #3b82f6',
+          borderRadius: '12px'
+        }}>
+          <h3 style={{ 
+            fontSize: '15px', 
+            fontWeight: '600', 
+            marginBottom: '12px',
+            color: '#1e40af',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <FileSpreadsheet size={18} />
+            CSV Format Examples
+          </h3>
+          
+          <div style={{ marginBottom: '16px' }}>
+            <p style={{ fontSize: '14px', fontWeight: '600', color: '#1f2937', marginBottom: '8px' }}>
+              Simplified Format (Recommended):
+            </p>
+            <pre style={{ 
+              backgroundColor: '#1f2937', 
+              color: '#10b981',
+              padding: '12px', 
+              borderRadius: '8px', 
+              fontSize: '12px',
+              overflowX: 'auto',
+              fontFamily: 'monospace',
+              margin: 0
+            }}>
+{`Session Time,User ID,Power (kWh),Mode,State
+2025-11-22 11:00:00,user123,15.5,normal,charging
+2025-11-22 14:30:00,user456,22.3,priority,charging
+2025-11-22 18:00:00,,10.2,normal,idle`}
+            </pre>
+            <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px', fontStyle: 'italic' }}>
+              Note: User ID can be empty. Charger info is automatically taken from your selection above.
+            </p>
+          </div>
+
+          <div>
+            <p style={{ fontSize: '14px', fontWeight: '600', color: '#1f2937', marginBottom: '8px' }}>
+              Full Format (Legacy):
+            </p>
+            <pre style={{ 
+              backgroundColor: '#1f2937', 
+              color: '#60a5fa',
+              padding: '12px', 
+              borderRadius: '8px', 
+              fontSize: '12px',
+              overflowX: 'auto',
+              fontFamily: 'monospace',
+              margin: 0
+            }}>
+{`Charger ID,Charger Name,Brand,Building,Session Time,User ID,Power (kWh),Mode,State
+5,Main Charger,Tesla,Building A,2025-11-22 11:00:00,user123,15.5,normal,charging
+5,Main Charger,Tesla,Building A,2025-11-22 14:30:00,user456,22.3,priority,charging`}
+            </pre>
+            <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px', fontStyle: 'italic' }}>
+              Note: Only rows matching the selected Charger ID will be imported.
+            </p>
+          </div>
         </div>
       </div>
 
