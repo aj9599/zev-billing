@@ -318,7 +318,7 @@ export default function CSVUpload() {
           borderRadius: '16px',
           backgroundColor: messageType === 'success' ? '#d4edda' : messageType === 'error' ? '#f8d7da' : '#d1ecf1',
           color: messageType === 'success' ? '#155724' : messageType === 'error' ? '#721c24' : '#0c5460',
-          border: `2px solid ${messageType === 'success' ? '#c3e6cb' : messageType === 'error' ? '#f5c6cb' : '#bee5eb'}',
+          border: `2px solid ${messageType === 'success' ? '#c3e6cb' : messageType === 'error' ? '#f5c6cb' : '#bee5eb'}`,
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
