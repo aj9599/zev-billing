@@ -677,8 +677,6 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					WHERE charger_id = ? 
 					AND session_time >= ?
 					AND session_time <= ?
-					AND user_id != ''
-					AND COALESCE(user_id, '') != ''
 					AND state != '1'
 					ORDER BY session_time ASC
 				`, ci.id, startTime, now)
@@ -695,7 +693,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 							sessionTimes[timeKey] = true
 							sessionCount++
 							if sessionCount <= 5 {
-								log.Printf("      🔍 Session at %s rounds to %s (key: %s)", 
+								log.Printf("      ðŸ” Session at %s rounds to %s (key: %s)", 
 									sessionTime.Format("15:04:05"), 
 									rounded.Format("15:04:05"),
 									timeKey)
@@ -725,7 +723,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					} else {
 						excludedCount++
 						if excludedCount <= 5 {
-							log.Printf("      ⏭️  Skipping baseline at %s (key: %s - session exists)", 
+							log.Printf("      â­ï¸  Skipping baseline at %s (key: %s - session exists)", 
 								currentTime.Format("15:04:05"),
 								timeKey)
 						}
@@ -742,20 +740,19 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						UserName:  ci.name + " (Baseline)",
 						Data:      baselineData,
 					}
-					log.Printf("    📊 Added 0W baseline with %d points (excluded %d intervals with sessions)", len(baselineData), len(sessionTimes))
+					log.Printf("    ðŸ“Š Added 0W baseline with %d points (excluded %d intervals with sessions)", len(baselineData), len(sessionTimes))
 					building.Meters = append(building.Meters, baselineMeter)
 				}
 
 				var userRows *sql.Rows
-				// Exclude empty user_ids and disconnected states to avoid post-session spikes
+				// Exclude disconnected states (state=1) to avoid post-session spikes
+				// Allow empty user_ids for Zaptec chargers
 				userRows, err = h.db.QueryContext(ctx, `
-					SELECT DISTINCT user_id
+					SELECT DISTINCT COALESCE(user_id, '') as user_id
 					FROM charger_sessions
 					WHERE charger_id = ? 
 					AND session_time >= ?
 					AND session_time <= ?
-					AND user_id != ''
-					AND COALESCE(user_id, '') != ''
 					AND state != '1'
 					ORDER BY user_id
 				`, ci.id, startTime, now)
@@ -783,6 +780,13 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						var actualUserName string
 						var found bool
 						
+						// If user_id is empty (Zaptec), use charger name as display name
+						if rfidOrUserID == "" {
+							actualUserName = ci.name
+							actualUserID = 0
+							found = true
+							log.Printf("      Empty user_id (Zaptec charger) - using charger name: '%s'", actualUserName)
+						} else {
 						log.Printf("      Looking up RFID/UserID: '%s'", rfidOrUserID)
 						
 						// Try multiple patterns for charger_ids field
@@ -804,7 +808,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 							
 							if err == nil {
 								found = true
-								log.Printf("      ✅ Mapped RFID '%s' to user %d (%s)", rfidOrUserID, actualUserID, actualUserName)
+								log.Printf("      âœ… Mapped RFID '%s' to user %d (%s)", rfidOrUserID, actualUserID, actualUserName)
 								break
 							}
 						}
@@ -813,7 +817,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 						if !found {
 							actualUserName = fmt.Sprintf("Unknown User (RFID %s)", rfidOrUserID)
 							actualUserID = 0 // No actual user
-							log.Printf("      ⚠️  RFID '%s' not found in any user's charger_ids - showing as Unknown User", rfidOrUserID)
+							log.Printf("      âš ï¸  RFID '%s' not found in any user's charger_ids - showing as Unknown User", rfidOrUserID)
 							
 							// DEBUG: Show what charger_ids exist in database to help diagnose
 							debugRows, debugErr := h.db.QueryContext(ctx, `
@@ -822,7 +826,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 								WHERE charger_ids IS NOT NULL AND charger_ids != ''
 							`)
 							if debugErr == nil && debugRows != nil {
-								log.Printf("      🔍 DEBUG: All users with charger_ids:")
+								log.Printf("      ðŸ” DEBUG: All users with charger_ids:")
 								count := 0
 								for debugRows.Next() {
 									var debugID int
@@ -838,6 +842,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 								}
 								debugRows.Close()
 							}
+						}
 						}
 						
 						userInfos = append(userInfos, userInfo{
@@ -944,7 +949,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 							Data:      consumptionData,
 						}
 
-						log.Printf("      âœ… Charger ID: %d has %d data points for user %s", ci.id, len(consumptionData), ui.userName)
+						log.Printf("      Ã¢Å“â€¦ Charger ID: %d has %d data points for user %s", ci.id, len(consumptionData), ui.userName)
 						building.Meters = append(building.Meters, chargerData)
 					}
 				}
