@@ -1946,11 +1946,11 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 	args = append(args, start, end)
 
 	query := fmt.Sprintf(`
-		SELECT charger_id, user_id, session_time, power_kwh, mode, state
-		FROM charger_sessions
-		WHERE user_id IN (%s)
-		AND session_time >= ? AND session_time <= ?
-		ORDER BY charger_id, session_time ASC
+    	SELECT charger_id, user_id, session_time, power_kwh, mode, state
+    	FROM charger_sessions
+    	WHERE user_id IN (%s)
+    	AND session_time >= ? AND session_time <= ?
+    	ORDER BY charger_id, session_time ASC
 	`, inClause)
 
 	log.Printf("  [CHARGING] Querying sessions with IN clause for %d RFID cards", len(cleanedRfids))
