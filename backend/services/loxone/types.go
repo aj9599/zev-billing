@@ -150,6 +150,15 @@ type CompletedChargerSession struct {
 
 // ========== WEBSOCKET CONNECTION ==========
 
+// MeterReadingBuffer holds temporary readings for dual-UUID meters
+type MeterReadingBuffer struct {
+	ImportValue    float64
+	ExportValue    float64
+	HasImport      bool
+	HasExport      bool
+	LastUpdateTime time.Time
+}
+
 // WebSocketConnection represents a Loxone WebSocket connection
 type WebSocketConnection struct {
 	Host     string
@@ -193,6 +202,10 @@ type WebSocketConnection struct {
 	LastErrorType        ErrorType // Track type of last error
 	ConsecutiveDNSErrors int       // Track DNS-specific failures
 	DnsCache             *DNSCache // DNS resolution caching
+
+	// Meter reading buffer for virtual_output_dual mode (prevents duplicate saves)
+	MeterReadingBuffers map[int]*MeterReadingBuffer // meter_id -> buffer
+	MeterBufferMu       sync.Mutex
 
 	StopChan       chan bool
 	GoroutinesWg   sync.WaitGroup

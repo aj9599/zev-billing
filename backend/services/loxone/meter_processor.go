@@ -86,6 +86,8 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 
 	} else if device.LoxoneMode == "virtual_output_dual" {
 		// VIRTUAL OUTPUT DUAL MODE - Separate UUIDs for import and export
+		// CRITICAL FIX: Buffer readings and only save when BOTH are available
+
 		var currentValue float64
 		if output1, ok := response.LL.Outputs["output1"]; ok {
 			switch v := output1.Value.(type) {
@@ -102,78 +104,100 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 			}
 		}
 
+		// Get or create buffer for this meter
+		conn.MeterBufferMu.Lock()
+		buffer, exists := conn.MeterReadingBuffers[device.ID]
+		if !exists {
+			buffer = &MeterReadingBuffer{}
+			conn.MeterReadingBuffers[device.ID] = buffer
+		}
+
+		// Update buffer based on whether this is import or export reading
 		if isExport {
 			// Export reading
-			if currentValue <= 0 {
+			if currentValue <= 0 && !isSolarMeter {
 				log.Printf("   ⚠️ Export reading is 0 or negative, skipping")
+				conn.MeterBufferMu.Unlock()
 				return
 			}
 
-			device.LastReadingExport = currentValue
-			log.Printf("   📤 Export reading received: %.3f kWh", currentValue)
+			buffer.ExportValue = currentValue
+			buffer.HasExport = true
+			buffer.LastUpdateTime = time.Now()
+			log.Printf("   📤 Export reading buffered: %.3f kWh", currentValue)
 
-			if time.Since(device.LastUpdate) < 30*time.Second && device.LastReading > 0 {
-				log.Printf("   ✅ Both readings available (import: %.3f kWh), saving to database", device.LastReading)
-				reading = device.LastReading
-			} else if isSolarMeter {
-				var lastImportFromDB float64
-				err := db.QueryRow(`
-					SELECT power_kwh FROM meter_readings 
-					WHERE meter_id = ? 
-					ORDER BY reading_time DESC LIMIT 1
-				`, device.ID).Scan(&lastImportFromDB)
-
-				if err == nil && lastImportFromDB > 0 {
-					log.Printf("   ☀️ Solar meter: No recent import, using last DB value: %.3f kWh", lastImportFromDB)
-					device.LastReading = lastImportFromDB
-					reading = lastImportFromDB
-				} else {
-					log.Printf("   ☀️ Solar meter: No import value available, using 0")
-					device.LastReading = 0
-					reading = 0
-				}
-				device.LastUpdate = time.Now()
-			} else {
-				log.Printf("   ⏳ Waiting for import reading...")
-				return
+			// For solar meters, allow zero export
+			if isSolarMeter && currentValue == 0 {
+				buffer.ExportValue = 0
+				buffer.HasExport = true
 			}
 		} else {
 			// Import reading
 			if currentValue > 0 {
-				device.LastReading = currentValue
-				log.Printf("   📥 Import reading received: %.3f kWh", currentValue)
+				buffer.ImportValue = currentValue
+				buffer.HasImport = true
+				buffer.LastUpdateTime = time.Now()
+				log.Printf("   📥 Import reading buffered: %.3f kWh", currentValue)
 			} else if isSolarMeter {
+				// For solar meters, allow zero import and try to load last value from DB
 				var lastImportFromDB float64
 				err := db.QueryRow(`
-					SELECT power_kwh FROM meter_readings 
-					WHERE meter_id = ? 
-					ORDER BY reading_time DESC LIMIT 1
-				`, device.ID).Scan(&lastImportFromDB)
+						SELECT power_kwh FROM meter_readings 
+						WHERE meter_id = ? 
+						ORDER BY reading_time DESC LIMIT 1
+					`, device.ID).Scan(&lastImportFromDB)
 
 				if err == nil && lastImportFromDB > 0 {
 					log.Printf("   ☀️ Solar meter: Import is 0, using last DB value: %.3f kWh", lastImportFromDB)
-					device.LastReading = lastImportFromDB
+					buffer.ImportValue = lastImportFromDB
 				} else {
 					log.Printf("   ☀️ Solar meter: Import is 0, no previous value, using 0")
-					device.LastReading = 0
+					buffer.ImportValue = 0
 				}
+				buffer.HasImport = true
+				buffer.LastUpdateTime = time.Now()
 			} else {
 				log.Printf("   ⚠️ Import reading is 0 or negative, skipping")
-				return
-			}
-
-			device.LastUpdate = time.Now()
-
-			if device.LastReadingExport > 0 {
-				log.Printf("   ✅ Both readings available (export: %.3f kWh), saving to database", device.LastReadingExport)
-				reading = device.LastReading
-			} else {
-				log.Printf("   ⏳ Waiting for export reading...")
+				conn.MeterBufferMu.Unlock()
 				return
 			}
 		}
 
-		device.ReadingGaps = 0
+		// Check if we have BOTH readings and they're recent (within 2 seconds)
+		hasBothReadings := buffer.HasImport && buffer.HasExport
+		readingsAreRecent := time.Since(buffer.LastUpdateTime) < 2*time.Second
+
+		if hasBothReadings && readingsAreRecent {
+			// We have both readings! Save to database
+			importValue := buffer.ImportValue
+			exportValue := buffer.ExportValue
+
+			log.Printf("   ✅ Both readings available - Import: %.3f kWh, Export: %.3f kWh",
+				importValue, exportValue)
+
+			// Clear buffer BEFORE saving to prevent race conditions
+			buffer.HasImport = false
+			buffer.HasExport = false
+			conn.MeterBufferMu.Unlock()
+
+			// Update device state
+			device.LastReading = importValue
+			device.LastReadingExport = exportValue
+			device.LastUpdate = time.Now()
+			device.ReadingGaps = 0
+			reading = importValue
+
+			// Proceed to save (code below will handle this)
+		} else {
+			// Still waiting for the other reading
+			if buffer.HasImport && !buffer.HasExport {
+				log.Printf("   ⏳ Waiting for export reading...")
+			} else if buffer.HasExport && !buffer.HasImport {
+				log.Printf("   ⏳ Waiting for import reading...")
+			}
+			conn.MeterBufferMu.Unlock()
+			return
+		}
 
 	} else if device.LoxoneMode == "virtual_output_single" {
 		// VIRTUAL OUTPUT SINGLE MODE - Single UUID, single value
