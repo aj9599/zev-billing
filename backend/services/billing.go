@@ -1637,12 +1637,12 @@ func (bs *BillingService) getMeterReadings(userID int, start, end time.Time) (fl
 	var readingFromTime time.Time
 
 	err = bs.db.QueryRow(`
-    SELECT power_kwh, reading_time FROM meter_readings 
-    WHERE meter_id = ? 
-    AND reading_time <= ?
-    ORDER BY reading_time DESC 
-    LIMIT 1
-`, meterID, start).Scan(&readingFrom, &readingFromTime)
+    	SELECT power_kwh, reading_time FROM meter_readings 
+    	WHERE meter_id = ? 
+    	AND reading_time <= ?
+    	ORDER BY reading_time DESC 
+    	LIMIT 1
+	`, meterID, start).Scan(&readingFrom, &readingFromTime)
 
 	if err != nil {
 		log.Printf("WARNING: No reading found before start date for meter %d, will use 0", meterID)
@@ -1654,12 +1654,13 @@ func (bs *BillingService) getMeterReadings(userID int, start, end time.Time) (fl
 	var readingToTime time.Time
 
 	err = bs.db.QueryRow(`
-		SELECT power_kwh, reading_time FROM meter_readings 
-		WHERE meter_id = ? 
-		AND reading_time <= ?
-		ORDER BY reading_time DESC 
-		LIMIT 1
-	`, meterID, end).Scan(&readingTo, &readingToTime)
+    	SELECT power_kwh, reading_time FROM meter_readings 
+    	WHERE meter_id = ? 
+    	AND reading_time >= ?
+    	AND reading_time < ?
+    	ORDER BY reading_time ASC 
+    	LIMIT 1
+	`, meterID, end, end.Add(15*time.Minute)).Scan(&readingTo, &readingToTime)
 
 	if err != nil {
 		log.Printf("WARNING: No reading found before end date for meter %d", meterID)
