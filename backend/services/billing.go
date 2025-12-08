@@ -1703,14 +1703,13 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 
 	// FIXED: Now also fetch consumption_export for solar meters
 	rows, err := bs.db.Query(`
-    	SELECT m.id, m.meter_type, m.user_id, datetime(mr.reading_time) as reading_time, 
-           mr.consumption_kwh, mr.consumption_export
-    	FROM meter_readings mr
-    	JOIN meters m ON mr.meter_id = m.id
-    	WHERE m.building_id = ?
-    	AND m.meter_type IN ('apartment_meter', 'solar_meter')
-    	AND datetime(mr.reading_time) >= datetime(?) AND datetime(mr.reading_time) <= datetime(?)
-    	ORDER BY datetime(mr.reading_time), m.id
+		SELECT m.id, m.meter_type, m.user_id, mr.reading_time, mr.consumption_kwh, mr.consumption_export
+		FROM meter_readings mr
+		JOIN meters m ON mr.meter_id = m.id
+		WHERE m.building_id = ?
+		AND m.meter_type IN ('apartment_meter', 'solar_meter')
+		AND mr.reading_time >= ? AND mr.reading_time <= ?
+		ORDER BY mr.reading_time, m.id
 	`, buildingID, start, end)
 
 	if err != nil {
