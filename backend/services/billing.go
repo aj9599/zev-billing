@@ -118,13 +118,15 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 	if err != nil {
 		return nil, fmt.Errorf("invalid start date: %v", err)
 	}
+	// Set start to beginning of day (00:00:00)
+	start = time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, start.Location())
+
 	end, err := time.Parse("2006-01-02", endDate)
 	if err != nil {
 		return nil, fmt.Errorf("invalid end date: %v", err)
 	}
-
-	// Set end to end of day
-	end = end.Add(24 * time.Hour).Add(-1 * time.Second)
+	// Set end to 00:00:00 of the NEXT day (inclusive of full end date)
+	end = time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, end.Location()).Add(24 * time.Hour)
 
 	log.Printf("Parsed dates - Start: %s, End: %s", start, end)
 
@@ -788,10 +790,10 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptions(userPeriod Use
 				start.Format("02.01.2006"),
 				end.Format("02.01.2006"),
 				userPeriod.ProrationFactor*100),
-			Quantity:    0,
-			UnitPrice:   0,
-			TotalPrice:  0,
-			ItemType:    "proration_notice",
+			Quantity:   0,
+			UnitPrice:  0,
+			TotalPrice: 0,
+			ItemType:   "proration_notice",
 		})
 		items = append(items, models.InvoiceItem{
 			Description: "",
@@ -828,10 +830,10 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptions(userPeriod Use
 				tr.OldReading, meterReadingFrom,
 				tr.NewReading, meterReadingTo,
 				tr.Consumption, totalConsumption),
-			Quantity:    totalConsumption,
-			UnitPrice:   0,
-			TotalPrice:  0,
-			ItemType:    "meter_reading_compact",
+			Quantity:   totalConsumption,
+			UnitPrice:  0,
+			TotalPrice: 0,
+			ItemType:   "meter_reading_compact",
 		})
 
 		items = append(items, models.InvoiceItem{
@@ -902,10 +904,10 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptions(userPeriod Use
 						lastSession.Format("02.01 15:04"),
 						tr.Total,
 						totalCharged),
-					Quantity:    totalCharged,
-					UnitPrice:   0,
-					TotalPrice:  0,
-					ItemType:    "charging_session_compact",
+					Quantity:   totalCharged,
+					UnitPrice:  0,
+					TotalPrice: 0,
+					ItemType:   "charging_session_compact",
 				})
 
 				items = append(items, models.InvoiceItem{
@@ -1372,10 +1374,10 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 				start.Format("02.01.2006"),
 				end.Format("02.01.2006"),
 				userPeriod.ProrationFactor*100),
-			Quantity:    0,
-			UnitPrice:   0,
-			TotalPrice:  0,
-			ItemType:    "proration_notice",
+			Quantity:   0,
+			UnitPrice:  0,
+			TotalPrice: 0,
+			ItemType:   "proration_notice",
 		})
 	}
 
@@ -1404,10 +1406,10 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 			tr.OldReading, meterReadingFrom,
 			tr.NewReading, meterReadingTo,
 			tr.Consumption, energyResult.TotalConsumption),
-		Quantity:    energyResult.TotalConsumption,
-		UnitPrice:   0,
-		TotalPrice:  0,
-		ItemType:    "meter_reading_compact",
+		Quantity:   energyResult.TotalConsumption,
+		UnitPrice:  0,
+		TotalPrice: 0,
+		ItemType:   "meter_reading_compact",
 	})
 
 	items = append(items, models.InvoiceItem{
@@ -1434,10 +1436,10 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 		items = append(items, models.InvoiceItem{
 			Description: fmt.Sprintf("  ├─ Own Building Solar: %.3f kWh × %.3f %s/kWh",
 				energyResult.SelfConsumedSolar, settings.SolarPowerPrice, settings.Currency),
-			Quantity:    energyResult.SelfConsumedSolar,
-			UnitPrice:   settings.SolarPowerPrice,
-			TotalPrice:  selfConsumedCost,
-			ItemType:    "vzev_self_solar",
+			Quantity:   energyResult.SelfConsumedSolar,
+			UnitPrice:  settings.SolarPowerPrice,
+			TotalPrice: selfConsumedCost,
+			ItemType:   "vzev_self_solar",
 		})
 		log.Printf("  Self-Consumed Solar: %.3f kWh × %.3f = %.3f %s",
 			energyResult.SelfConsumedSolar, settings.SolarPowerPrice, selfConsumedCost, settings.Currency)
@@ -1450,10 +1452,10 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 		items = append(items, models.InvoiceItem{
 			Description: fmt.Sprintf("  ├─ Virtual PV (from vZEV): %.3f kWh × %.3f %s/kWh",
 				energyResult.VirtualPV, settings.VZEVExportPrice, settings.Currency),
-			Quantity:    energyResult.VirtualPV,
-			UnitPrice:   settings.VZEVExportPrice,
-			TotalPrice:  virtualPVCost,
-			ItemType:    "vzev_virtual_pv",
+			Quantity:   energyResult.VirtualPV,
+			UnitPrice:  settings.VZEVExportPrice,
+			TotalPrice: virtualPVCost,
+			ItemType:   "vzev_virtual_pv",
 		})
 		log.Printf("  Virtual PV: %.3f kWh × %.3f = %.3f %s",
 			energyResult.VirtualPV, settings.VZEVExportPrice, virtualPVCost, settings.Currency)
@@ -1466,10 +1468,10 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 		items = append(items, models.InvoiceItem{
 			Description: fmt.Sprintf("  └─ %s: %.3f kWh × %.3f %s/kWh",
 				tr.NormalPowerGrid, energyResult.GridEnergy, settings.NormalPowerPrice, settings.Currency),
-			Quantity:    energyResult.GridEnergy,
-			UnitPrice:   settings.NormalPowerPrice,
-			TotalPrice:  gridCost,
-			ItemType:    "normal_power",
+			Quantity:   energyResult.GridEnergy,
+			UnitPrice:  settings.NormalPowerPrice,
+			TotalPrice: gridCost,
+			ItemType:   "normal_power",
 		})
 		log.Printf("  Grid Energy: %.3f kWh × %.3f = %.3f %s",
 			energyResult.GridEnergy, settings.NormalPowerPrice, gridCost, settings.Currency)
@@ -1505,10 +1507,10 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 						lastSession.Format("02.01 15:04"),
 						tr.Total,
 						totalCharged),
-					Quantity:    totalCharged,
-					UnitPrice:   0,
-					TotalPrice:  0,
-					ItemType:    "charging_session_compact",
+					Quantity:   totalCharged,
+					UnitPrice:  0,
+					TotalPrice: 0,
+					ItemType:   "charging_session_compact",
 				})
 
 				items = append(items, models.InvoiceItem{
@@ -1526,10 +1528,10 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 				items = append(items, models.InvoiceItem{
 					Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh",
 						tr.SolarMode, normalCharging, settings.CarChargingNormalPrice, settings.Currency),
-					Quantity:    normalCharging,
-					UnitPrice:   settings.CarChargingNormalPrice,
-					TotalPrice:  normalChargingCost,
-					ItemType:    "car_charging_normal",
+					Quantity:   normalCharging,
+					UnitPrice:  settings.CarChargingNormalPrice,
+					TotalPrice: normalChargingCost,
+					ItemType:   "car_charging_normal",
 				})
 			}
 
@@ -1539,10 +1541,10 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 				items = append(items, models.InvoiceItem{
 					Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh",
 						tr.PriorityMode, priorityCharging, settings.CarChargingPriorityPrice, settings.Currency),
-					Quantity:    priorityCharging,
-					UnitPrice:   settings.CarChargingPriorityPrice,
-					TotalPrice:  priorityChargingCost,
-					ItemType:    "car_charging_priority",
+					Quantity:   priorityCharging,
+					UnitPrice:  settings.CarChargingPriorityPrice,
+					TotalPrice: priorityChargingCost,
+					ItemType:   "car_charging_priority",
 				})
 			}
 		}
@@ -1635,13 +1637,12 @@ func (bs *BillingService) getMeterReadings(userID int, start, end time.Time) (fl
 	var readingFromTime time.Time
 
 	err = bs.db.QueryRow(`
-		SELECT power_kwh, reading_time FROM meter_readings 
-		WHERE meter_id = ? 
-		AND reading_time <= ?
-		AND reading_time >= ?
-		ORDER BY reading_time DESC 
-		LIMIT 1
-	`, meterID, start, start.Add(-7*24*time.Hour)).Scan(&readingFrom, &readingFromTime)
+    SELECT power_kwh, reading_time FROM meter_readings 
+    WHERE meter_id = ? 
+    AND reading_time <= ?
+    ORDER BY reading_time DESC 
+    LIMIT 1
+`, meterID, start).Scan(&readingFrom, &readingFromTime)
 
 	if err != nil {
 		log.Printf("WARNING: No reading found before start date for meter %d, will use 0", meterID)
