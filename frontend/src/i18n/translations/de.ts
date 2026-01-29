@@ -2195,6 +2195,9 @@ export const de: Translations = {
   // Activity Log Toggle
   'logs.showLess': 'Weniger anzeigen',
   'logs.showAll24h': 'Alle anzeigen (24h)',
+  'logs.modeRecent': 'Letzte',
+  'logs.mode24h': 'Letzte 24h',
+  'logs.modeAll': 'Alle Logs',
 
   // ============================================================================
   // SETTINGS (User Account Settings)

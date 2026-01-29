@@ -78,6 +78,7 @@ func main() {
 
 	go dataCollector.Start()
 	go autoBillingScheduler.Start()
+	services.StartHealthHistoryCollector()
 
 	// Initialize all handlers
 	authHandler := handlers.NewAuthHandler(db, cfg.JWTSecret)
@@ -115,6 +116,7 @@ func main() {
 
 	api.HandleFunc("/auth/change-password", authHandler.ChangePassword).Methods("POST")
 	api.HandleFunc("/debug/status", debugStatusHandler).Methods("GET")
+	api.HandleFunc("/debug/health-history", healthHistoryHandler).Methods("GET")
 	api.HandleFunc("/system/reboot", rebootHandler).Methods("POST")
 
 	// Backup and Update endpoints
@@ -300,6 +302,12 @@ func debugStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(debugInfo)
+}
+
+func healthHistoryHandler(w http.ResponseWriter, r *http.Request) {
+	history := services.GetHealthHistory()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(history)
 }
 
 func rebootHandler(w http.ResponseWriter, r *http.Request) {

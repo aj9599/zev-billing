@@ -3,24 +3,112 @@ package services
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
 
 type SystemHealth struct {
-	CPUUsage       float64 `json:"cpu_usage"`
-	MemoryUsed     uint64  `json:"memory_used"`
-	MemoryTotal    uint64  `json:"memory_total"`
-	MemoryPercent  float64 `json:"memory_percent"`
-	DiskUsed       uint64  `json:"disk_used"`
-	DiskTotal      uint64  `json:"disk_total"`
-	DiskPercent    float64 `json:"disk_percent"`
-	Temperature    float64 `json:"temperature"`
-	Uptime         string  `json:"uptime"`
-	LastUpdated    time.Time `json:"last_updated"`
+	CPUUsage      float64   `json:"cpu_usage"`
+	MemoryUsed    uint64    `json:"memory_used"`
+	MemoryTotal   uint64    `json:"memory_total"`
+	MemoryPercent float64   `json:"memory_percent"`
+	DiskUsed      uint64    `json:"disk_used"`
+	DiskTotal     uint64    `json:"disk_total"`
+	DiskPercent   float64   `json:"disk_percent"`
+	Temperature   float64   `json:"temperature"`
+	Uptime        string    `json:"uptime"`
+	LastUpdated   time.Time `json:"last_updated"`
+}
+
+// HealthHistoryPoint is a compact snapshot for the history ring buffer
+type HealthHistoryPoint struct {
+	Timestamp     int64   `json:"timestamp"`
+	CPUUsage      float64 `json:"cpu_usage"`
+	MemoryPercent float64 `json:"memory_percent"`
+	DiskPercent   float64 `json:"disk_percent"`
+	Temperature   float64 `json:"temperature"`
+}
+
+// healthHistoryBuffer stores the last 24h of health snapshots (one every 5 min = 288 max)
+var (
+	healthHistory   []HealthHistoryPoint
+	healthHistoryMu sync.RWMutex
+	historyStarted  bool
+)
+
+const (
+	healthCollectInterval = 5 * time.Minute
+	healthMaxPoints       = 288 // 24h at 5-min intervals
+)
+
+// StartHealthHistoryCollector starts a background goroutine that samples system health every 5 minutes
+func StartHealthHistoryCollector() {
+	healthHistoryMu.Lock()
+	if historyStarted {
+		healthHistoryMu.Unlock()
+		return
+	}
+	historyStarted = true
+	healthHistoryMu.Unlock()
+
+	log.Println("[HEALTH] Starting system health history collector (5-min intervals)")
+
+	// Collect an initial point immediately
+	collectHealthPoint()
+
+	go func() {
+		ticker := time.NewTicker(healthCollectInterval)
+		defer ticker.Stop()
+		for range ticker.C {
+			collectHealthPoint()
+		}
+	}()
+}
+
+func collectHealthPoint() {
+	h := GetSystemHealth()
+	point := HealthHistoryPoint{
+		Timestamp:     time.Now().UnixMilli(),
+		CPUUsage:      h.CPUUsage,
+		MemoryPercent: h.MemoryPercent,
+		DiskPercent:   h.DiskPercent,
+		Temperature:   h.Temperature,
+	}
+
+	healthHistoryMu.Lock()
+	defer healthHistoryMu.Unlock()
+
+	healthHistory = append(healthHistory, point)
+
+	// Trim to keep only last 24h
+	cutoff := time.Now().Add(-24 * time.Hour).UnixMilli()
+	trimIdx := 0
+	for trimIdx < len(healthHistory) && healthHistory[trimIdx].Timestamp < cutoff {
+		trimIdx++
+	}
+	if trimIdx > 0 {
+		healthHistory = healthHistory[trimIdx:]
+	}
+
+	// Hard cap
+	if len(healthHistory) > healthMaxPoints {
+		healthHistory = healthHistory[len(healthHistory)-healthMaxPoints:]
+	}
+}
+
+// GetHealthHistory returns a copy of the health history buffer
+func GetHealthHistory() []HealthHistoryPoint {
+	healthHistoryMu.RLock()
+	defer healthHistoryMu.RUnlock()
+
+	result := make([]HealthHistoryPoint, len(healthHistory))
+	copy(result, healthHistory)
+	return result
 }
 
 type cpuStat struct {

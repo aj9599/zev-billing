@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { SystemHealth, DebugInfo } from '../types';
 import { useTranslation } from '../../../i18n';
+import { api } from '../../../api/client';
 
 interface HealthDataPoint {
   timestamp: number;
@@ -15,6 +16,7 @@ export const useSystemHealth = () => {
   const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
   const [healthHistory, setHealthHistory] = useState<HealthDataPoint[]>([]);
+  const serverHistoryLoaded = useRef(false);
 
   const loadDebugInfo = async () => {
     try {
@@ -25,11 +27,11 @@ export const useSystemHealth = () => {
       });
       const data = await response.json();
       setDebugInfo(data);
-      
+
       if (data.system_health) {
         setSystemHealth(data.system_health);
-        
-        // Add to history (keep last 24 hours of data, one point every 5 seconds = 17280 points max)
+
+        // Add live point to history
         setHealthHistory(prev => {
           const newPoint: HealthDataPoint = {
             timestamp: Date.now(),
@@ -38,12 +40,12 @@ export const useSystemHealth = () => {
             disk_percent: data.system_health.disk_percent || 0,
             temperature: data.system_health.temperature || 0
           };
-          
+
           const updated = [...prev, newPoint];
-          
-          // Keep only last 24 hours (288 points at 5-minute intervals)
+
+          // Keep only last 24 hours, cap at 500 points
           const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
-          return updated.filter(p => p.timestamp > twentyFourHoursAgo).slice(-288);
+          return updated.filter(p => p.timestamp > twentyFourHoursAgo).slice(-500);
         });
       }
     } catch (err) {
@@ -51,26 +53,39 @@ export const useSystemHealth = () => {
     }
   };
 
-  // Load initial history from localStorage if available
+  // Load server-side health history on mount (provides 24h coverage even when browser was closed)
   useEffect(() => {
-    const stored = localStorage.getItem('healthHistory');
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
-        setHealthHistory(parsed.filter((p: HealthDataPoint) => p.timestamp > twentyFourHoursAgo));
-      } catch (err) {
-        console.error('Failed to load health history:', err);
-      }
-    }
-  }, []);
+    if (serverHistoryLoaded.current) return;
+    serverHistoryLoaded.current = true;
 
-  // Save history to localStorage whenever it updates
-  useEffect(() => {
-    if (healthHistory.length > 0) {
-      localStorage.setItem('healthHistory', JSON.stringify(healthHistory));
-    }
-  }, [healthHistory]);
+    const loadServerHistory = async () => {
+      try {
+        const serverData = await api.getHealthHistory();
+        if (serverData && Array.isArray(serverData) && serverData.length > 0) {
+          setHealthHistory(prev => {
+            // Merge server history with any existing live points
+            const merged = [...serverData, ...prev];
+            // Deduplicate by keeping unique timestamps (within 10s tolerance)
+            const seen = new Set<number>();
+            const deduped = merged.filter(p => {
+              const bucket = Math.round(p.timestamp / 10000);
+              if (seen.has(bucket)) return false;
+              seen.add(bucket);
+              return true;
+            });
+            // Sort by timestamp and trim
+            deduped.sort((a, b) => a.timestamp - b.timestamp);
+            const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
+            return deduped.filter(p => p.timestamp > twentyFourHoursAgo).slice(-500);
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load server health history:', err);
+      }
+    };
+
+    loadServerHistory();
+  }, []);
 
   return {
     systemHealth,

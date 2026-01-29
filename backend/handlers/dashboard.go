@@ -984,12 +984,27 @@ func (h *DashboardHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 		limit = "100"
 	}
 
-	rows, err := h.db.QueryContext(ctx, `
-		SELECT id, action, details, user_id, ip_address, created_at
-		FROM admin_logs
-		ORDER BY created_at DESC
-		LIMIT ?
-	`, limit)
+	since := r.URL.Query().Get("since")
+
+	var rows *sql.Rows
+	var err error
+
+	if since != "" {
+		// Filter by time: return logs since the given ISO timestamp
+		rows, err = h.db.QueryContext(ctx, `
+			SELECT id, action, details, user_id, ip_address, created_at
+			FROM admin_logs
+			WHERE created_at >= ?
+			ORDER BY created_at DESC
+		`, since)
+	} else {
+		rows, err = h.db.QueryContext(ctx, `
+			SELECT id, action, details, user_id, ip_address, created_at
+			FROM admin_logs
+			ORDER BY created_at DESC
+			LIMIT ?
+		`, limit)
+	}
 
 	if err != nil {
 		log.Printf("Error querying logs: %v", err)

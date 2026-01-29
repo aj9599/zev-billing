@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../i18n';
 
 interface HealthDataPoint {
@@ -19,15 +19,25 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
   const memoryCanvasRef = useRef<HTMLCanvasElement>(null);
   const diskCanvasRef = useRef<HTMLCanvasElement>(null);
   const tempCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  // Track window resize for responsive canvas redraw
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     // Validate healthHistory exists and is an array
     if (!healthHistory || !Array.isArray(healthHistory) || healthHistory.length === 0) return;
 
     // Filter out any invalid data points
-    const validHistory = healthHistory.filter(d => 
-      d && 
-      typeof d === 'object' && 
+    const validHistory = healthHistory.filter(d =>
+      d &&
+      typeof d === 'object' &&
       typeof d.timestamp === 'number' &&
       typeof d.cpu_usage === 'number' &&
       typeof d.memory_percent === 'number' &&
@@ -36,22 +46,24 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
 
     if (validHistory.length === 0) return;
 
-    drawChart(cpuCanvasRef.current, validHistory, 'cpu_usage', '#667eea');
-    drawChart(memoryCanvasRef.current, validHistory, 'memory_percent', '#10b981');
-    drawChart(diskCanvasRef.current, validHistory, 'disk_percent', '#f59e0b');
-    
+    const mobile = window.innerWidth <= 768;
+    drawChart(cpuCanvasRef.current, validHistory, 'cpu_usage', '#667eea', mobile);
+    drawChart(memoryCanvasRef.current, validHistory, 'memory_percent', '#10b981', mobile);
+    drawChart(diskCanvasRef.current, validHistory, 'disk_percent', '#f59e0b', mobile);
+
     // Only draw temperature if we have temperature data
     const hasTempData = validHistory.some(d => d.temperature > 0);
     if (hasTempData) {
-      drawChart(tempCanvasRef.current, validHistory, 'temperature', '#ef4444');
+      drawChart(tempCanvasRef.current, validHistory, 'temperature', '#ef4444', mobile);
     }
-  }, [healthHistory, t]);
+  }, [healthHistory, t, isMobile]);
 
   const drawChart = (
     canvas: HTMLCanvasElement | null,
     data: HealthDataPoint[],
     key: keyof HealthDataPoint,
-    color: string
+    color: string,
+    mobile: boolean
   ) => {
     if (!canvas || data.length === 0) return;
 
@@ -60,17 +72,20 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
 
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
-    
+
     canvas.width = rect.width * dpr;
     canvas.height = rect.height * dpr;
-    
+
     ctx.scale(dpr, dpr);
-    
+
     const width = rect.width;
     const height = rect.height;
-    const padding = 40;
-    const chartWidth = width - padding * 2;
-    const chartHeight = height - padding * 2;
+    const paddingLeft = mobile ? 32 : 40;
+    const paddingRight = mobile ? 12 : 40;
+    const paddingTop = mobile ? 10 : 40;
+    const paddingBottom = mobile ? 28 : 40;
+    const chartWidth = width - paddingLeft - paddingRight;
+    const chartHeight = height - paddingTop - paddingBottom;
 
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
@@ -79,166 +94,169 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
     const values = data
       .filter(d => d && typeof d === 'object' && typeof d[key] === 'number')
       .map(d => d[key] as number);
-    
-    if (values.length === 0) return; // Exit if no valid data
-    
-    const maxValue = key === 'temperature' ? 100 : 100; // Max percentage or temp
+
+    if (values.length === 0) return;
+
+    const maxValue = key === 'temperature' ? 100 : 100;
+    const fontSize = mobile ? 10 : 12;
 
     // Draw grid lines
     ctx.strokeStyle = '#e5e7eb';
     ctx.lineWidth = 1;
-    for (let i = 0; i <= 4; i++) {
-      const y = padding + (chartHeight / 4) * i;
+    const gridLines = mobile ? 3 : 4;
+    for (let i = 0; i <= gridLines; i++) {
+      const y = paddingTop + (chartHeight / gridLines) * i;
       ctx.beginPath();
-      ctx.moveTo(padding, y);
-      ctx.lineTo(width - padding, y);
+      ctx.moveTo(paddingLeft, y);
+      ctx.lineTo(width - paddingRight, y);
       ctx.stroke();
-      
+
       // Draw y-axis labels
       ctx.fillStyle = '#9ca3af';
-      ctx.font = '12px sans-serif';
+      ctx.font = `${fontSize}px sans-serif`;
       ctx.textAlign = 'right';
-      const value = maxValue - (maxValue / 4) * i;
-      ctx.fillText(value.toFixed(0) + (key === 'temperature' ? '°C' : '%'), padding - 10, y + 4);
+      const value = maxValue - (maxValue / gridLines) * i;
+      ctx.fillText(value.toFixed(0) + (key === 'temperature' ? '°' : '%'), paddingLeft - 6, y + 4);
     }
 
     // Draw line chart
     if (values.length > 0) {
       ctx.beginPath();
       ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = mobile ? 1.5 : 2;
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
 
       values.forEach((value, index) => {
-        const x = padding + (chartWidth / (values.length - 1)) * index;
-        const y = padding + chartHeight - (value / maxValue) * chartHeight;
-        
+        const x = paddingLeft + (chartWidth / Math.max(values.length - 1, 1)) * index;
+        const y = paddingTop + chartHeight - (value / maxValue) * chartHeight;
+
         if (index === 0) {
           ctx.moveTo(x, y);
         } else {
           ctx.lineTo(x, y);
         }
       });
-      
+
       ctx.stroke();
 
       // Fill area under line
-      ctx.lineTo(width - padding, padding + chartHeight);
-      ctx.lineTo(padding, padding + chartHeight);
+      ctx.lineTo(width - paddingRight, paddingTop + chartHeight);
+      ctx.lineTo(paddingLeft, paddingTop + chartHeight);
       ctx.closePath();
-      
-      const gradient = ctx.createLinearGradient(0, padding, 0, height - padding);
+
+      const gradient = ctx.createLinearGradient(0, paddingTop, 0, height - paddingBottom);
       gradient.addColorStop(0, color + '40');
       gradient.addColorStop(1, color + '00');
       ctx.fillStyle = gradient;
       ctx.fill();
     }
 
-    // Draw x-axis time labels - with safety checks
+    // Draw x-axis time labels
     ctx.fillStyle = '#9ca3af';
-    ctx.font = '12px sans-serif';
+    ctx.font = `${fontSize}px sans-serif`;
     ctx.textAlign = 'center';
-    
-    // Filter valid data points for time labels
+
     const validData = data.filter(d => d && typeof d === 'object' && d.timestamp);
-    
+
     if (validData.length > 0) {
-      const timeSteps = Math.min(6, validData.length);
+      const timeSteps = mobile ? Math.min(4, validData.length) : Math.min(6, validData.length);
       for (let i = 0; i < timeSteps; i++) {
-        const index = Math.floor((validData.length - 1) * (i / (timeSteps - 1)));
+        const index = Math.floor((validData.length - 1) * (i / Math.max(timeSteps - 1, 1)));
         const point = validData[index];
-        
-        if (point && point.timestamp) { // Safety check
-          const x = padding + (chartWidth / (timeSteps - 1)) * i;
-          
+
+        if (point && point.timestamp) {
+          const x = paddingLeft + (chartWidth / Math.max(timeSteps - 1, 1)) * i;
+
           const date = new Date(point.timestamp);
-          const timeStr = date.getHours().toString().padStart(2, '0') + ':' + 
+          const timeStr = date.getHours().toString().padStart(2, '0') + ':' +
                           date.getMinutes().toString().padStart(2, '0');
-          ctx.fillText(timeStr, x, height - padding + 20);
+          ctx.fillText(timeStr, x, height - paddingBottom + (mobile ? 14 : 20));
         }
       }
     }
   };
 
   // Validate healthHistory before checking for temperature data
-  const hasTempData = healthHistory && Array.isArray(healthHistory) && 
+  const hasTempData = healthHistory && Array.isArray(healthHistory) &&
                       healthHistory.some(d => d && d.temperature > 0);
-  const gridCols = hasTempData ? 'repeat(auto-fit, minmax(500px, 1fr))' : 'repeat(auto-fit, minmax(500px, 1fr))';
+
+  const canvasHeight = isMobile ? '180px' : '300px';
+  const chartPadding = isMobile ? '14px' : '24px';
 
   return (
     <div style={{ marginBottom: '30px', width: '100%' }}>
       <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '16px', color: '#1f2937' }}>
         {t('logs.performance24h')}
       </h2>
-      <div style={{
+      <div className="health-charts-grid" style={{
         display: 'grid',
-        gridTemplateColumns: gridCols,
-        gap: '20px',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 500px), 1fr))',
+        gap: isMobile ? '12px' : '20px',
         width: '100%'
       }}>
         <div className="chart-container" style={{
           backgroundColor: 'white',
-          padding: '24px',
+          padding: chartPadding,
           borderRadius: '16px',
           boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
           border: '2px solid #667eea'
         }}>
-          <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#667eea' }}>
+          <h3 style={{ fontSize: isMobile ? '14px' : '16px', fontWeight: '600', marginBottom: isMobile ? '8px' : '16px', color: '#667eea' }}>
             {t('logs.cpuUsage')}
           </h3>
           <canvas
             ref={cpuCanvasRef}
-            style={{ width: '100%', height: '300px' }}
+            style={{ width: '100%', height: canvasHeight }}
           />
         </div>
 
         <div className="chart-container" style={{
           backgroundColor: 'white',
-          padding: '24px',
+          padding: chartPadding,
           borderRadius: '16px',
           boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
           border: '2px solid #10b981'
         }}>
-          <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#10b981' }}>
+          <h3 style={{ fontSize: isMobile ? '14px' : '16px', fontWeight: '600', marginBottom: isMobile ? '8px' : '16px', color: '#10b981' }}>
             {t('logs.memoryUsage')}
           </h3>
           <canvas
             ref={memoryCanvasRef}
-            style={{ width: '100%', height: '300px' }}
+            style={{ width: '100%', height: canvasHeight }}
           />
         </div>
 
         <div className="chart-container" style={{
           backgroundColor: 'white',
-          padding: '24px',
+          padding: chartPadding,
           borderRadius: '16px',
           boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
           border: '2px solid #f59e0b'
         }}>
-          <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#f59e0b' }}>
+          <h3 style={{ fontSize: isMobile ? '14px' : '16px', fontWeight: '600', marginBottom: isMobile ? '8px' : '16px', color: '#f59e0b' }}>
             {t('logs.diskUsage')}
           </h3>
           <canvas
             ref={diskCanvasRef}
-            style={{ width: '100%', height: '300px' }}
+            style={{ width: '100%', height: canvasHeight }}
           />
         </div>
 
         {hasTempData && (
           <div className="chart-container" style={{
             backgroundColor: 'white',
-            padding: '24px',
+            padding: chartPadding,
             borderRadius: '16px',
             boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
             border: '2px solid #ef4444'
           }}>
-            <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#ef4444' }}>
+            <h3 style={{ fontSize: isMobile ? '14px' : '16px', fontWeight: '600', marginBottom: isMobile ? '8px' : '16px', color: '#ef4444' }}>
               {t('logs.cpuTemperature')}
             </h3>
             <canvas
               ref={tempCanvasRef}
-              style={{ width: '100%', height: '300px' }}
+              style={{ width: '100%', height: canvasHeight }}
             />
           </div>
         )}

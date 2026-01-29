@@ -51,8 +51,7 @@ export default function AdminLogs() {
   const [logs, setLogs] = useState<AdminLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [isLive, setIsLive] = useState(true);
-  const [logLimit, setLogLimit] = useState(200);
-  const [showAllLogs, setShowAllLogs] = useState(false);
+  const [logMode, setLogMode] = useState<'recent' | '24h' | 'all'>('recent');
   const [logFilter, setLogFilter] = useState<LogCategory | 'all'>('all');
 
   // Count logs per category for filter badges
@@ -104,12 +103,20 @@ export default function AdminLogs() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [logLimit]);
+  }, [logMode]);
 
   const loadLogs = async () => {
     setLoading(true);
     try {
-      const data = await api.getLogs(logLimit);
+      let data: AdminLog[];
+      if (logMode === '24h') {
+        const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        data = await api.getLogs(200, since);
+      } else if (logMode === 'all') {
+        data = await api.getLogs(10000);
+      } else {
+        data = await api.getLogs(200);
+      }
       setLogs(data);
       setIsLive(true);
     } catch (err) {
@@ -117,16 +124,6 @@ export default function AdminLogs() {
       setIsLive(false);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleToggleAllLogs = () => {
-    if (showAllLogs) {
-      setLogLimit(200);
-      setShowAllLogs(false);
-    } else {
-      setLogLimit(10000); // Load up to 10000 logs (approximately 24h)
-      setShowAllLogs(true);
     }
   };
 
@@ -186,30 +183,31 @@ export default function AdminLogs() {
         <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1f2937', margin: 0 }}>
           {t('logs.activityLog')}
         </h2>
-        <button
-          onClick={handleToggleAllLogs}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: showAllLogs ? '#ef4444' : '#3b82f6',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            fontSize: '14px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = 'none';
-          }}
-        >
-          {showAllLogs ? t('logs.showLess') : t('logs.showAll24h')}
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {(['recent', '24h', 'all'] as const).map((mode) => {
+            const isActive = logMode === mode;
+            const labelKeys: Record<string, string> = { recent: 'logs.modeRecent', '24h': 'logs.mode24h', all: 'logs.modeAll' };
+            return (
+              <button
+                key={mode}
+                onClick={() => setLogMode(mode)}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: isActive ? '#3b82f6' : 'white',
+                  color: isActive ? 'white' : '#6b7280',
+                  border: isActive ? '2px solid #3b82f6' : '2px solid #e5e7eb',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {t(labelKeys[mode])}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Category filter bar */}

@@ -457,13 +457,20 @@ class ApiClient {
     return this.request(`/dashboard/consumption-by-building?period=${period}`);
   }
 
-  async getLogs(limit: number = 100): Promise<AdminLog[]> {
+  async getLogs(limit: number = 100, since?: string): Promise<AdminLog[]> {
+    if (since) {
+      return this.request(`/dashboard/logs?since=${encodeURIComponent(since)}`);
+    }
     return this.request(`/dashboard/logs?limit=${limit}`);
   }
 
   // Debug/System
   async getDebugStatus(): Promise<any> {
     return this.request('/debug/status');
+  }
+
+  async getHealthHistory(): Promise<{ timestamp: number; cpu_usage: number; memory_percent: number; disk_percent: number; temperature: number }[]> {
+    return this.request('/debug/health-history');
   }
 
   // Backup methods
