@@ -38,6 +38,32 @@ func ProcessCompletedChargerSession(session *CompletedChargerSession, db *sql.DB
 	}
 	defer tx.Rollback()
 
+	// STEP 0: Retroactively fix existing maintenance readings that fall within this session's time range.
+	// When a car plugs in at e.g. 12:01, the system only detects the state change at 12:15.
+	// Between 12:01-12:15, maintenance readings were written with state=1 (idle) and no user_id.
+	// Now that we know the exact session start/end from Lcl, update those readings with the correct user, state, and mode.
+	retroResult, retroErr := tx.Exec(`
+		UPDATE charger_sessions
+		SET user_id = ?, state = '3', mode = ?
+		WHERE charger_id = ?
+		  AND session_time >= ?
+		  AND session_time <= ?
+		  AND (user_id = '' OR user_id IS NULL OR state = '1')
+	`, session.UserID, session.Mode,
+		session.ChargerID,
+		session.StartTime.Format("2006-01-02 15:04:05-07:00"),
+		session.EndTime.Format("2006-01-02 15:04:05-07:00"))
+
+	if retroErr != nil {
+		log.Printf("   ⚠️  [%s] Failed to retroactively update maintenance readings: %v", session.ChargerName, retroErr)
+	} else {
+		retroCount, _ := retroResult.RowsAffected()
+		if retroCount > 0 {
+			log.Printf("   🔄 [%s] Retroactively updated %d maintenance readings (set user=%s, state=3, mode=%s)",
+				session.ChargerName, retroCount, session.UserID, session.Mode)
+		}
+	}
+
 	// Prepare statement for charger_sessions table (like Zaptec)
 	stmt, err := tx.Prepare(`
 		INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
@@ -49,39 +75,61 @@ func ProcessCompletedChargerSession(session *CompletedChargerSession, db *sql.DB
 	}
 	defer stmt.Close()
 
+	// Helper: check if a reading already exists for a given timestamp (already updated by retroactive fix above)
+	readingExists := func(sessionTime string) bool {
+		var count int
+		err := tx.QueryRow(`
+			SELECT COUNT(*) FROM charger_sessions
+			WHERE charger_id = ? AND session_time = ?
+		`, session.ChargerID, sessionTime).Scan(&count)
+		return err == nil && count > 0
+	}
+
 	// Round start and end times to quarter hours for alignment
 	roundedStartTime := RoundToQuarterHour(session.StartTime)
 	roundedEndTime := RoundToQuarterHour(session.EndTime)
 
 	// STEP 1: Write exact start reading (may not be on 15-min boundary)
 	// CRITICAL: Use timezone-aware format to match Zaptec and avoid UTC confusion
-	log.Printf("   🔵 [%s] Writing start reading at %s (energy: %.3f kWh)",
-		session.ChargerName, session.StartTime.Format("2006-01-02 15:04:05"), session.StartEnergy_kWh)
+	startTimeStr := session.StartTime.Format("2006-01-02 15:04:05-07:00")
+	if !readingExists(startTimeStr) {
+		log.Printf("   🔵 [%s] Writing start reading at %s (energy: %.3f kWh)",
+			session.ChargerName, session.StartTime.Format("2006-01-02 15:04:05"), session.StartEnergy_kWh)
 
-	_, err = stmt.Exec(
-		session.ChargerID,
-		session.UserID,
-		session.StartTime.Format("2006-01-02 15:04:05-07:00"), // Include timezone offset!
-		session.StartEnergy_kWh,
-		session.Mode,
-		"3", // state = 3 (charging, like Zaptec)
-	)
-	if err != nil {
-		log.Printf("   ⚠️  [%s] Failed to insert start reading: %v", session.ChargerName, err)
+		_, err = stmt.Exec(
+			session.ChargerID,
+			session.UserID,
+			startTimeStr,
+			session.StartEnergy_kWh,
+			session.Mode,
+			"3", // state = 3 (charging, like Zaptec)
+		)
+		if err != nil {
+			log.Printf("   ⚠️  [%s] Failed to insert start reading: %v", session.ChargerName, err)
+		}
+	} else {
+		log.Printf("   ✅ [%s] Start reading at %s already exists (retroactively updated)", session.ChargerName, session.StartTime.Format("15:04:05"))
 	}
 
 	// STEP 2: Write all 15-min interval readings that we captured during the session
 	writtenCount := 0
+	skippedCount := 0
 	for i, reading := range session.Readings {
 		// Skip if this reading is at the exact start or end time (already handled)
 		if reading.Timestamp.Equal(session.StartTime) || reading.Timestamp.Equal(session.EndTime) {
 			continue
 		}
 
+		readingTimeStr := reading.Timestamp.Format("2006-01-02 15:04:05-07:00")
+		if readingExists(readingTimeStr) {
+			skippedCount++
+			continue
+		}
+
 		_, err := stmt.Exec(
 			session.ChargerID,
 			session.UserID,
-			reading.Timestamp.Format("2006-01-02 15:04:05-07:00"), // Include timezone offset!
+			readingTimeStr,
 			reading.Energy_kWh,
 			reading.Mode,
 			"3", // state = 3 (charging)
@@ -93,7 +141,7 @@ func ProcessCompletedChargerSession(session *CompletedChargerSession, db *sql.DB
 		}
 	}
 
-	log.Printf("   ✅ [%s] Wrote %d intermediate readings", session.ChargerName, writtenCount)
+	log.Printf("   ✅ [%s] Wrote %d intermediate readings (%d already existed from retroactive update)", session.ChargerName, writtenCount, skippedCount)
 
 	// STEP 3: Backfill any missing 15-min intervals between rounded start and end
 	currentTime := roundedStartTime
@@ -103,12 +151,16 @@ func ProcessCompletedChargerSession(session *CompletedChargerSession, db *sql.DB
 
 	backfilledCount := 0
 	for currentTime.Before(roundedEndTime) {
-		// Check if we already have a reading for this timestamp
-		hasReading := false
-		for _, reading := range session.Readings {
-			if reading.Timestamp.Equal(currentTime) {
-				hasReading = true
-				break
+		backfillTimeStr := currentTime.Format("2006-01-02 15:04:05-07:00")
+
+		// Check if we already have a reading for this timestamp (in memory or in database)
+		hasReading := readingExists(backfillTimeStr)
+		if !hasReading {
+			for _, reading := range session.Readings {
+				if reading.Timestamp.Equal(currentTime) {
+					hasReading = true
+					break
+				}
 			}
 		}
 
@@ -125,7 +177,7 @@ func ProcessCompletedChargerSession(session *CompletedChargerSession, db *sql.DB
 			_, err := stmt.Exec(
 				session.ChargerID,
 				session.UserID,
-				currentTime.Format("2006-01-02 15:04:05-07:00"), // Include timezone offset!
+				backfillTimeStr,
 				interpolatedEnergy,
 				session.Mode,
 				"3", // state = 3 (charging)
@@ -145,19 +197,24 @@ func ProcessCompletedChargerSession(session *CompletedChargerSession, db *sql.DB
 	}
 
 	// STEP 4: Write exact end reading (may not be on 15-min boundary)
-	log.Printf("   🔵 [%s] Writing end reading at %s (energy: %.3f kWh)",
-		session.ChargerName, session.EndTime.Format("2006-01-02 15:04:05"), session.EndEnergy_kWh)
+	endTimeStr := session.EndTime.Format("2006-01-02 15:04:05-07:00")
+	if !readingExists(endTimeStr) {
+		log.Printf("   🔵 [%s] Writing end reading at %s (energy: %.3f kWh)",
+			session.ChargerName, session.EndTime.Format("2006-01-02 15:04:05"), session.EndEnergy_kWh)
 
-	_, err = stmt.Exec(
-		session.ChargerID,
-		session.UserID,
-		session.EndTime.Format("2006-01-02 15:04:05-07:00"), // Include timezone offset!
-		session.EndEnergy_kWh,
-		session.Mode,
-		"3", // state = 3 (charging)
-	)
-	if err != nil {
-		log.Printf("   ⚠️  [%s] Failed to insert end reading: %v", session.ChargerName, err)
+		_, err = stmt.Exec(
+			session.ChargerID,
+			session.UserID,
+			endTimeStr,
+			session.EndEnergy_kWh,
+			session.Mode,
+			"3", // state = 3 (charging)
+		)
+		if err != nil {
+			log.Printf("   ⚠️  [%s] Failed to insert end reading: %v", session.ChargerName, err)
+		}
+	} else {
+		log.Printf("   ✅ [%s] End reading at %s already exists (retroactively updated)", session.ChargerName, session.EndTime.Format("15:04:05"))
 	}
 
 	// Commit transaction for charger_sessions

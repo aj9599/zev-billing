@@ -386,6 +386,20 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 
 	modeDescription := GetModeDescription(modeValue)
 
+	// MONOTONIC VALIDATION: Total energy meter (Mr) must never decrease.
+	// If it does, the Loxone response contained a stale/corrupt value — reject it and keep the last known good value.
+	if device.LastReading > 0 && totalEnergyKWh < device.LastReading {
+		log.Printf("   ⚠️  [%s] REJECTED: Total energy decreased from %.3f to %.3f kWh (delta: %.3f) — using last known good value",
+			device.Name, device.LastReading, totalEnergyKWh, totalEnergyKWh-device.LastReading)
+		totalEnergyKWh = device.LastReading
+
+		if collector != nil {
+			collector.LogToDatabase("Loxone Bad Reading Rejected",
+				fmt.Sprintf("Charger '%s': Energy reading %.3f kWh rejected (less than previous %.3f kWh)",
+					device.Name, totalEnergyKWh, device.LastReading))
+		}
+	}
+
 	device.LastReading = totalEnergyKWh
 	device.LastUpdate = time.Now()
 	device.ReadingGaps = 0
