@@ -31,6 +31,16 @@ func NewBillingHandler(db *sql.DB, billingService *services.BillingService, pdfG
 	}
 }
 
+func (h *BillingHandler) logToDatabase(action, details, ip string) {
+	_, err := h.db.Exec(`
+		INSERT INTO admin_logs (action, details, ip_address)
+		VALUES (?, ?, ?)
+	`, action, details, ip)
+	if err != nil {
+		log.Printf("[BILLING] Failed to write admin log: %v", err)
+	}
+}
+
 type GenerateBillsRequest struct {
 	BuildingIDs []int  `json:"building_ids"`
 	UserIDs     []int  `json:"user_ids"`
@@ -274,6 +284,7 @@ func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		log.Printf("ERROR: Bill generation failed: %v", err)
+		h.logToDatabase("Bill Generation Failed", fmt.Sprintf("Period: %s to %s, Error: %v", req.StartDate, req.EndDate, err), getClientIP(r))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -327,6 +338,14 @@ func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("=== Bill generation completed successfully ===")
 	log.Printf("Generated %d invoices with %d PDFs", len(invoices), successCount)
+
+	mode := "ZEV"
+	if req.IsVZEV {
+		mode = "vZEV"
+	}
+	h.logToDatabase("Bills Generated",
+		fmt.Sprintf("%s mode: %d invoices, %d PDFs, period %s to %s", mode, len(invoices), successCount, req.StartDate, req.EndDate),
+		getClientIP(r))
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -568,6 +587,7 @@ func (h *BillingHandler) DeleteInvoice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("SUCCESS: Deleted invoice ID %d", id)
+	h.logToDatabase("Invoice Deleted", fmt.Sprintf("Invoice ID %d deleted", id), getClientIP(r))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -591,6 +611,7 @@ func (h *BillingHandler) BackupDatabase(w http.ResponseWriter, r *http.Request) 
 
 	w.Write(data)
 	log.Printf("SUCCESS: Database backup created: %s", backupName)
+	h.logToDatabase("Database Backup", fmt.Sprintf("Backup created: %s", backupName), getClientIP(r))
 }
 
 func (h *BillingHandler) ExportData(w http.ResponseWriter, r *http.Request) {
@@ -716,6 +737,7 @@ func (h *BillingHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(csv.String()))
 
 	log.Printf("SUCCESS: Exported data to %s", filename)
+	h.logToDatabase("Data Exported", fmt.Sprintf("Type: %s, File: %s", exportType, filename), getClientIP(r))
 }
 
 // DownloadPDF serves the generated PDF file for an invoice

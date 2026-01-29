@@ -3,6 +3,7 @@ package services
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -91,6 +92,16 @@ func NewZaptecCollector(db *sql.DB) *ZaptecCollector {
 	return zc
 }
 
+func (zc *ZaptecCollector) logToDatabase(action, details string) {
+	_, err := zc.db.Exec(`
+		INSERT INTO admin_logs (action, details, ip_address)
+		VALUES (?, ?, 'zaptec-system')
+	`, action, details)
+	if err != nil {
+		log.Printf("[ZAPTEC] Failed to write admin log: %v", err)
+	}
+}
+
 func (zc *ZaptecCollector) Start() {
 	log.Println("Starting Zaptec Collector (Optimized OCMF + Gap Filling)...")
 	log.Printf("  - Timezone: %s", zc.localTimezone.String())
@@ -98,21 +109,24 @@ func (zc *ZaptecCollector) Start() {
 	log.Println("  - OCMF meter readings written to charger_sessions after session completion")
 	log.Println("  - Idle readings written at 15-minute intervals for gap filling")
 	log.Println("  - Fallback detection for missed sessions on restart")
-	
+
+	zc.logToDatabase("Zaptec Collector Started", "OCMF + Gap Filling mode")
+
 	zc.loadChargers()
-	
+
 	// Load already processed sessions from database to avoid duplicates on restart
 	zc.loadProcessedSessions()
-	
+
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ticker.C:
 			zc.pollAllChargers()
 		case <-zc.stopChan:
 			log.Println("Zaptec Collector stopped")
+			zc.logToDatabase("Zaptec Collector Stopped", "")
 			return
 		}
 	}
@@ -224,6 +238,7 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 	token, err := zc.authHandler.GetAccessToken(chargerID, config)
 	if err != nil {
 		log.Printf("ERROR: Failed to get Zaptec token for charger %s: %v", chargerName, err)
+		zc.logToDatabase("Zaptec Auth Error", fmt.Sprintf("Charger '%s': %v", chargerName, err))
 		return
 	}
 	
@@ -443,9 +458,14 @@ func (zc *ZaptecCollector) processCompletedSession(chargerID int, chargerName st
 	zc.processedSessions[completedSession.SessionID] = true
 	zc.mu.Unlock()
 	
-	log.Printf("Zaptec: [%s] ✓ SESSION WRITTEN: ID=%s, User=%s, Energy=%.3f kWh, OCMF Readings=%d", 
-		chargerName, completedSession.SessionID, completedSession.UserID, 
+	log.Printf("Zaptec: [%s] SESSION WRITTEN: ID=%s, User=%s, Energy=%.3f kWh, OCMF Readings=%d",
+		chargerName, completedSession.SessionID, completedSession.UserID,
 		completedSession.TotalEnergy_kWh, len(completedSession.MeterReadings))
+
+	zc.logToDatabase("Zaptec Session Collected",
+		fmt.Sprintf("Charger '%s': Session %s, User=%s, %.3f kWh, %d OCMF readings",
+			chargerName, completedSession.SessionID, completedSession.UserID,
+			completedSession.TotalEnergy_kWh, len(completedSession.MeterReadings)))
 }
 
 func (zc *ZaptecCollector) writeSessionFallback(history *zaptec.ChargeHistory, chargerID int, chargerName string) {

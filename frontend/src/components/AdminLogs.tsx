@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { api } from '../api/client';
 import type { AdminLog } from '../types';
 import { useTranslation } from '../i18n';
@@ -15,6 +15,36 @@ import { FactoryResetModal } from './admin-logs/FactoryResetModal';
 import { useSystemHealth } from './admin-logs/hooks/useSystemHealth';
 import { useUpdateInfo } from './admin-logs/hooks/useUpdateInfo';
 import { useSystemActions } from './admin-logs/hooks/useSystemActions';
+import { categorizeAction, type LogCategory } from './admin-logs/LogIcon';
+import {
+  AlertCircle,
+  CheckCircle,
+  Wifi,
+  WifiOff,
+  RefreshCw,
+  Key,
+  Globe,
+  FileText,
+  Shield,
+  Database,
+  Info,
+  Filter
+} from 'lucide-react';
+
+const filterOptions: { key: LogCategory | 'all'; label: string; icon: typeof Info; color: string }[] = [
+  { key: 'all',        label: 'All',          icon: Filter,      color: '#374151' },
+  { key: 'error',      label: 'Errors',       icon: AlertCircle, color: '#dc3545' },
+  { key: 'connection', label: 'Connected',    icon: Wifi,        color: '#10b981' },
+  { key: 'disconnect', label: 'Disconnected', icon: WifiOff,     color: '#f59e0b' },
+  { key: 'reconnect',  label: 'Reconnects',   icon: RefreshCw,   color: '#f97316' },
+  { key: 'auth',       label: 'Auth',         icon: Key,         color: '#8b5cf6' },
+  { key: 'dns',        label: 'DNS',          icon: Globe,       color: '#6366f1' },
+  { key: 'collection', label: 'Collection',   icon: Database,    color: '#14b8a6' },
+  { key: 'billing',    label: 'Billing',      icon: FileText,    color: '#0ea5e9' },
+  { key: 'security',   label: 'Security',     icon: Shield,      color: '#ec4899' },
+  { key: 'success',    label: 'Success',      icon: CheckCircle, color: '#28a745' },
+  { key: 'info',       label: 'Info',         icon: Info,        color: '#6b7280' },
+];
 
 export default function AdminLogs() {
   const { t } = useTranslation();
@@ -23,6 +53,17 @@ export default function AdminLogs() {
   const [isLive, setIsLive] = useState(true);
   const [logLimit, setLogLimit] = useState(200);
   const [showAllLogs, setShowAllLogs] = useState(false);
+  const [logFilter, setLogFilter] = useState<LogCategory | 'all'>('all');
+
+  // Count logs per category for filter badges
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: logs.length };
+    for (const log of logs) {
+      const cat = categorizeAction(log.action);
+      counts[cat] = (counts[cat] || 0) + 1;
+    }
+    return counts;
+  }, [logs]);
 
   const { systemHealth, debugInfo, healthHistory, loadDebugInfo } = useSystemHealth();
   const { updateInfo, showUpdateCard, setShowUpdateCard, checkingUpdates, checkForUpdates } = useUpdateInfo();
@@ -141,7 +182,7 @@ export default function AdminLogs() {
 
       <DebugInfoCards debugInfo={debugInfo} />
 
-      <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
         <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1f2937', margin: 0 }}>
           {t('logs.activityLog')}
         </h2>
@@ -171,9 +212,58 @@ export default function AdminLogs() {
         </button>
       </div>
 
-      <LogsTable logs={logs} loading={loading} />
+      {/* Category filter bar */}
+      <div style={{
+        display: 'flex',
+        gap: '8px',
+        marginBottom: '16px',
+        flexWrap: 'wrap',
+      }}>
+        {filterOptions.map(opt => {
+          const count = categoryCounts[opt.key] || 0;
+          const isActive = logFilter === opt.key;
+          const Icon = opt.icon;
+          if (opt.key !== 'all' && count === 0) return null;
+          return (
+            <button
+              key={opt.key}
+              onClick={() => setLogFilter(opt.key)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '6px 12px',
+                border: isActive ? `2px solid ${opt.color}` : '2px solid #e5e7eb',
+                borderRadius: '20px',
+                backgroundColor: isActive ? opt.color + '14' : 'white',
+                color: isActive ? opt.color : '#6b7280',
+                fontSize: '13px',
+                fontWeight: isActive ? '600' : '400',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <Icon size={14} />
+              <span>{opt.label}</span>
+              <span style={{
+                fontSize: '11px',
+                backgroundColor: isActive ? opt.color + '22' : '#f3f4f6',
+                color: isActive ? opt.color : '#9ca3af',
+                padding: '0 5px',
+                borderRadius: '10px',
+                fontWeight: '600',
+              }}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
-      <LogsTableMobile logs={logs} loading={loading} />
+      <LogsTable logs={logs} loading={loading} filter={logFilter} />
+
+      <LogsTableMobile logs={logs} loading={loading} filter={logFilter} />
 
       <style>{`
         @keyframes spin {

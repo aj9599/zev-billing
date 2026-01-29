@@ -165,9 +165,10 @@ type WebSocketConnection struct {
 	Username string
 	Password string
 
-	MacAddress   string // For remote connections
-	IsRemote     bool   // Flag to know if this is a remote connection
-	ResolvedHost string // The actual resolved host:port (changes dynamically)
+	MacAddress         string // For remote connections (also used as serial number for CloudDNS)
+	IsRemote           bool   // Flag to know if this is a remote connection
+	ResolvedHost       string // The actual resolved host:port (changes dynamically)
+	UseTLSVerification bool   // true = proper TLS via CloudDNS hostname, false = InsecureSkipVerify (legacy)
 
 	Ws          *websocket.Conn
 	IsConnected bool
@@ -202,6 +203,7 @@ type WebSocketConnection struct {
 	LastErrorType        ErrorType // Track type of last error
 	ConsecutiveDNSErrors int       // Track DNS-specific failures
 	DnsCache             *DNSCache // DNS resolution caching
+	LastPongReceived     time.Time // Last WebSocket pong received (for dead connection detection)
 
 	// Meter reading buffer for virtual_output_dual mode (prevents duplicate saves)
 	MeterReadingBuffers map[int]*MeterReadingBuffer // meter_id -> buffer
@@ -282,6 +284,15 @@ type LoxoneTokenResponse struct {
 	ValidUntil int64  `json:"validUntil"`
 	Rights     int    `json:"rights"`
 	Unsecure   bool   `json:"unsecurePass"`
+}
+
+// ========== CLOUD DNS ==========
+
+// CloudDNSResponse represents the JSON response from the CloudDNS API
+type CloudDNSResponse struct {
+	IPHTTPS string `json:"IPHTTPS"`
+	IP      string `json:"IP"`
+	Cmd     string `json:"cmd"`
 }
 
 // ChargerDataCollection is used for collecting charger data from multiple UUIDs

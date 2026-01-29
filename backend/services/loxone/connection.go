@@ -3,7 +3,9 @@ package loxone
 import (
 	"crypto/tls"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"math/rand"
@@ -61,7 +63,7 @@ func NewWebSocketConnection(host, username, password, macAddress string, isRemot
 	if isRemote {
 		conn.DnsCache = &DNSCache{
 			macAddress: macAddress,
-			cacheTTL:   5 * time.Minute,
+			cacheTTL:   2 * time.Minute,
 		}
 	}
 
@@ -80,20 +82,20 @@ func (conn *WebSocketConnection) ConnectWithBackoff(db *sql.DB, collector Loxone
 	// Don't reconnect if shutting down
 	if conn.IsShuttingDown {
 		conn.Mu.Unlock()
-		log.Printf("â„¹ï¸  [%s] Skipping reconnect - connection is shutting down", conn.Host)
+		log.Printf("[INFO] [%s] Skipping reconnect - connection is shutting down", conn.Host)
 		return
 	}
 
 	// Prevent multiple simultaneous reconnection attempts
 	if conn.IsReconnecting {
 		conn.Mu.Unlock()
-		log.Printf("â„¹ï¸  [%s] Reconnection already in progress, skipping", conn.Host)
+		log.Printf("[INFO] [%s] Reconnection already in progress, skipping", conn.Host)
 		return
 	}
 
 	if conn.IsConnected {
 		conn.Mu.Unlock()
-		log.Printf("â„¹ï¸  [%s] Already connected, skipping", conn.Host)
+		log.Printf("[INFO] [%s] Already connected, skipping", conn.Host)
 		return
 	}
 
@@ -129,13 +131,13 @@ func (conn *WebSocketConnection) ConnectWithBackoff(db *sql.DB, collector Loxone
 		conn.Mu.Lock()
 		if conn.IsShuttingDown {
 			conn.Mu.Unlock()
-			log.Printf("â„¹ï¸  [%s] Stopping reconnection attempts - shutting down", conn.Host)
+			log.Printf("[INFO] [%s] Stopping reconnection attempts - shutting down", conn.Host)
 			return
 		}
 
 		if conn.IsConnected {
 			conn.Mu.Unlock()
-			log.Printf("â„¹ï¸  [%s] Already connected, stopping retry loop", conn.Host)
+			log.Printf("[INFO] [%s] Already connected, stopping retry loop", conn.Host)
 			return
 		}
 		conn.Mu.Unlock()
@@ -148,14 +150,14 @@ func (conn *WebSocketConnection) ConnectWithBackoff(db *sql.DB, collector Loxone
 
 			jitter := time.Duration(rand.Float64() * float64(backoff) * 0.3)
 			backoffWithJitter := backoff + jitter
-			log.Printf("â³ [%s] Waiting %.1fs (backoff with jitter) before retry attempt %d/%d...",
+			log.Printf("[WAIT] [%s] Waiting %.1fs (backoff with jitter) before retry attempt %d/%d...",
 				conn.Host, backoffWithJitter.Seconds(), attempt, maxRetries)
 			time.Sleep(backoffWithJitter)
 		}
 
-		log.Println("â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
-		log.Printf("â”‚ ðŸ’— CONNECTING: %s (attempt %d/%d)", conn.Host, attempt, maxRetries)
-		log.Println("â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
+		log.Println("------------------------------------------------------------")
+		log.Printf("| CONNECTING: %s (attempt %d/%d)", conn.Host, attempt, maxRetries)
+		log.Println("------------------------------------------------------------")
 
 		// CRITICAL FIX: Check if this is a remote connection and ALWAYS re-resolve DNS
 		var wsURL string
@@ -168,7 +170,7 @@ func (conn *WebSocketConnection) ConnectWithBackoff(db *sql.DB, collector Loxone
 
 			actualHost, err := conn.resolveLoxoneCloudDNS()
 			if err != nil {
-				log.Printf("âŒ Failed to resolve cloud DNS: %v", err)
+				log.Printf("[ERROR] Failed to resolve cloud DNS: %v", err)
 				conn.Mu.Lock()
 				conn.IsConnected = false
 				conn.LastError = fmt.Sprintf("Failed to resolve cloud DNS: %v", err)
@@ -186,7 +188,7 @@ func (conn *WebSocketConnection) ConnectWithBackoff(db *sql.DB, collector Loxone
 			}
 
 			wsURL = fmt.Sprintf("wss://%s/ws/rfc6455", actualHost)
-			log.Printf("   âœ… Using resolved host: %s", actualHost)
+			log.Printf("   [OK] Using resolved host: %s", actualHost)
 		} else {
 			conn.Mu.Lock()
 			wsURL = fmt.Sprintf("ws://%s/ws/rfc6455", conn.Host)
@@ -200,10 +202,24 @@ func (conn *WebSocketConnection) ConnectWithBackoff(db *sql.DB, collector Loxone
 			HandshakeTimeout: 15 * time.Second,
 		}
 
-		// For remote connections, skip TLS verification
+		// For remote connections, configure TLS
 		if isRemote {
-			dialer.TLSClientConfig = &tls.Config{
-				InsecureSkipVerify: true,
+			conn.Mu.Lock()
+			useTLS := conn.UseTLSVerification
+			conn.Mu.Unlock()
+
+			if useTLS {
+				// Proper TLS verification via CloudDNS dyndns hostname
+				dialer.TLSClientConfig = &tls.Config{
+					MinVersion: tls.VersionTLS12,
+				}
+				log.Printf("   Using proper TLS verification (CloudDNS hostname)")
+			} else {
+				// Legacy fallback: raw IP does not match certificate
+				dialer.TLSClientConfig = &tls.Config{
+					InsecureSkipVerify: true,
+				}
+				log.Printf("   Using InsecureSkipVerify (legacy MAC-based resolution)")
 			}
 		}
 
@@ -270,7 +286,7 @@ func (conn *WebSocketConnection) ConnectWithBackoff(db *sql.DB, collector Loxone
 	}
 
 	// All retries exhausted
-	log.Printf("âŒ [%s] All %d connection attempts failed, will retry later", conn.Host, maxRetries)
+	log.Printf("[ERROR] [%s] All %d connection attempts failed, will retry later", conn.Host, maxRetries)
 	conn.logToDatabase("Loxone Connection Exhausted",
 		fmt.Sprintf("Host '%s': All %d connection attempts failed", conn.Host, maxRetries))
 
@@ -287,7 +303,7 @@ func (conn *WebSocketConnection) ConnectWithBackoff(db *sql.DB, collector Loxone
 		conn.Mu.Unlock()
 
 		if !isShuttingDown {
-			log.Printf("ðŸ”„ [%s] Scheduling new reconnection attempt after cooldown", conn.Host)
+			log.Printf("[RETRY] [%s] Scheduling new reconnection attempt after cooldown", conn.Host)
 			go conn.ConnectWithBackoff(db, collector)
 		}
 	}()
@@ -295,18 +311,27 @@ func (conn *WebSocketConnection) ConnectWithBackoff(db *sql.DB, collector Loxone
 
 // performConnection handles the connection setup after websocket is established
 func (conn *WebSocketConnection) performConnection(ws *websocket.Conn, db *sql.DB, collector LoxoneCollectorInterface) bool {
+	// Set up WebSocket-level pong handler for dead connection detection
+	ws.SetPongHandler(func(appData string) error {
+		conn.Mu.Lock()
+		conn.LastPongReceived = time.Now()
+		conn.Mu.Unlock()
+		return nil
+	})
+
 	conn.Mu.Lock()
 	conn.Ws = ws
 	conn.ConsecutiveConnFails = 0
 	conn.LastConnectionTime = time.Now()
+	conn.LastPongReceived = time.Now() // Initialize to now
 	conn.Mu.Unlock()
 
-	log.Printf("âœ”ï¸ WebSocket connected successfully")
+	log.Printf("[OK] WebSocket connected successfully")
 	log.Printf("Step 2: Starting token-based authentication")
 
 	if err := conn.authenticateWithToken(); err != nil {
 		errMsg := fmt.Sprintf("Authentication failed: %v", err)
-		log.Printf("âŒ %s", errMsg)
+		log.Printf("[ERROR] %s", errMsg)
 		ws.Close()
 
 		conn.Mu.Lock()
@@ -323,7 +348,7 @@ func (conn *WebSocketConnection) performConnection(ws *websocket.Conn, db *sql.D
 		))
 		conn.Mu.Unlock()
 
-		conn.updateDeviceStatus(db, fmt.Sprintf("ðŸ”´ Auth failed: %v", err))
+		conn.updateDeviceStatus(db, fmt.Sprintf("[ERROR] Auth failed: %v", err))
 		conn.logToDatabase("Loxone Auth Failed",
 			fmt.Sprintf("Host '%s': %v (failures: %d)", conn.Host, err, conn.ConsecutiveAuthFails))
 		return false
@@ -340,37 +365,41 @@ func (conn *WebSocketConnection) performConnection(ws *websocket.Conn, db *sql.D
 	deviceCount := len(conn.Devices)
 	conn.Mu.Unlock()
 
-	log.Println("â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
-	log.Printf("â”‚ âœ”ï¸ CONNECTION ESTABLISHED!         â”‚")
-	log.Printf("â”‚ Host: %-27sâ”‚", conn.Host)
-	log.Printf("â”‚ Devices: %-24dâ”‚", deviceCount)
-	log.Println("â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
+	log.Println("------------------------------------------------------------")
+	log.Printf("| [OK] CONNECTION ESTABLISHED!                             |")
+	log.Printf("| Host: %-49s|", conn.Host)
+	log.Printf("| Devices: %-46d|", deviceCount)
+	log.Println("------------------------------------------------------------")
 
-	conn.updateDeviceStatus(db, fmt.Sprintf("ðŸŸ¢ Connected at %s", time.Now().Format("2006-01-02 15:04:05")))
+	conn.updateDeviceStatus(db, fmt.Sprintf("[OK] Connected at %s", time.Now().Format("2006-01-02 15:04:05")))
 	conn.logToDatabase("Loxone Connected",
 		fmt.Sprintf("Host '%s' connected with %d devices (lifetime reconnects: %d)",
 			conn.Host, deviceCount, conn.TotalReconnects))
 
-	log.Printf("ðŸŽ§ Starting data listener for %s...", conn.Host)
+	log.Printf("[START] Starting data listener for %s...", conn.Host)
 	conn.GoroutinesWg.Add(1)
 	go conn.readLoop(db, collector)
 
-	log.Printf("â° Starting data request scheduler for %s...", conn.Host)
+	log.Printf("[START] Starting data request scheduler for %s...", conn.Host)
 	conn.GoroutinesWg.Add(1)
 	go conn.requestData()
 
-	log.Printf("ðŸ”‘ Starting token expiry monitor for %s...", conn.Host)
+	log.Printf("[START] Starting token expiry monitor for %s...", conn.Host)
 	conn.GoroutinesWg.Add(1)
 	go conn.monitorTokenExpiry(db)
 
-	log.Printf("ðŸ’“ Starting keepalive for %s...", conn.Host)
+	log.Printf("[START] Starting keepalive for %s...", conn.Host)
 	conn.GoroutinesWg.Add(1)
 	go conn.keepalive()
 
 	if conn.IsRemote {
-		log.Printf("ðŸŒ Starting DNS change monitor for %s...", conn.Host)
+		log.Printf("[START] Starting DNS change monitor for %s...", conn.Host)
 		conn.GoroutinesWg.Add(1)
 		go conn.monitorDNSChanges()
+
+		log.Printf("[START] Starting WebSocket ping monitor for %s...", conn.Host)
+		conn.GoroutinesWg.Add(1)
+		go conn.monitorWebSocketPing()
 	}
 
 	return true
@@ -378,7 +407,7 @@ func (conn *WebSocketConnection) performConnection(ws *websocket.Conn, db *sql.D
 
 // Close gracefully closes the connection
 func (conn *WebSocketConnection) Close() {
-	log.Printf("ðŸ—‘ï¸ Closing connection for %s", conn.Host)
+	log.Printf("[CLOSE] Closing connection for %s", conn.Host)
 	conn.Mu.Lock()
 
 	// Set shutdown flag to prevent automatic reconnection
@@ -403,22 +432,152 @@ func (conn *WebSocketConnection) Close() {
 	conn.Mu.Unlock()
 
 	// Wait for all goroutines to finish
-	log.Printf("  â³ Waiting for goroutines to finish...")
+	log.Printf("  [WAIT] Waiting for goroutines to finish...")
 	conn.GoroutinesWg.Wait()
-	log.Printf("   âœ”ï¸ Connection closed")
+	log.Printf("  [OK] Connection closed")
 
 	conn.logToDatabase("Loxone Connection Closed",
 		fmt.Sprintf("Host '%s' connection closed", conn.Host))
 }
 
-// resolveLoxoneCloudDNS resolves the Loxone Cloud DNS and returns the actual server address
+// resolveLoxoneCloudDNS resolves the Loxone Cloud DNS and returns the actual server address.
+// It tries the serial-number-based CloudDNS API first (proper TLS with dyndns hostname),
+// then falls back to the legacy MAC-based redirect approach (requires InsecureSkipVerify).
 func (conn *WebSocketConnection) resolveLoxoneCloudDNS() (string, error) {
 	if !conn.IsRemote {
 		return conn.Host, nil
 	}
 
-	log.Printf("ðŸŒ [%s] Resolving Loxone Cloud DNS address", conn.MacAddress)
+	// Strategy 1: Try serial-number-based CloudDNS (proper TLS with dyndns hostname)
+	if conn.MacAddress != "" {
+		log.Printf("[DNS] [%s] Resolving via CloudDNS serial number API (TLS-safe)", conn.MacAddress)
+		host, err := conn.resolveCloudDNSWithSerial()
+		if err == nil {
+			conn.Mu.Lock()
+			conn.UseTLSVerification = true
+			oldHost := conn.ResolvedHost
+			conn.ResolvedHost = host
+			conn.Mu.Unlock()
 
+			if oldHost != "" && oldHost != host {
+				log.Printf("   [CHANGED] HOST CHANGED: %s -> %s", oldHost, host)
+				conn.logToDatabase("Loxone Cloud Host Changed",
+					fmt.Sprintf("SNR %s: Host changed from %s to %s", conn.MacAddress, oldHost, host))
+			}
+			return host, nil
+		}
+		log.Printf("   [WARN] Serial-based resolution failed: %v, falling back to legacy MAC approach", err)
+	}
+
+	// Strategy 2: Fall back to legacy MAC-based redirect approach
+	log.Printf("[DNS] [%s] Resolving via legacy MAC redirect (InsecureSkipVerify)", conn.MacAddress)
+	host, err := conn.resolveLoxoneCloudDNSLegacy()
+	if err != nil {
+		return "", err
+	}
+
+	conn.Mu.Lock()
+	conn.UseTLSVerification = false
+	conn.Mu.Unlock()
+
+	return host, nil
+}
+
+// resolveCloudDNSWithSerial uses the Loxone CloudDNS API with serial number to get a
+// proper TLS-compatible hostname (e.g., 200-12-14-24.{snr}.dyndns.loxonecloud.com:4523)
+func (conn *WebSocketConnection) resolveCloudDNSWithSerial() (string, error) {
+	if conn.MacAddress == "" {
+		return "", fmt.Errorf("no serial number (MAC address) configured")
+	}
+
+	apiURL := fmt.Sprintf("https://dns.loxonecloud.com/?getip&snr=%s&json=true", conn.MacAddress)
+	log.Printf("   Resolving via: %s", apiURL)
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Get(apiURL)
+	if err != nil {
+		return "", fmt.Errorf("CloudDNS API request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read CloudDNS response: %v", err)
+	}
+
+	var dnsResp CloudDNSResponse
+	if err := json.Unmarshal(body, &dnsResp); err != nil {
+		return "", fmt.Errorf("failed to parse CloudDNS response: %v (body: %s)", err, string(body[:min(len(body), 200)]))
+	}
+
+	if dnsResp.IPHTTPS == "" {
+		return "", fmt.Errorf("empty IPHTTPS in CloudDNS response")
+	}
+
+	log.Printf("   [OK] CloudDNS IPHTTPS: %s", dnsResp.IPHTTPS)
+
+	// Parse IP and port from IPHTTPS
+	ip, port, err := parseIPHTTPS(dnsResp.IPHTTPS)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse IPHTTPS '%s': %v", dnsResp.IPHTTPS, err)
+	}
+
+	// Construct proper hostname for TLS
+	cleanedIP := cleanIPForHostname(ip)
+	hostname := fmt.Sprintf("%s.%s.dyndns.loxonecloud.com:%s", cleanedIP, conn.MacAddress, port)
+
+	log.Printf("   [OK] Constructed TLS hostname: %s", hostname)
+	return hostname, nil
+}
+
+// parseIPHTTPS splits the IPHTTPS value (e.g., "200.12.14.24:4523") into IP and port
+func parseIPHTTPS(iphttps string) (ip string, port string, err error) {
+	iphttps = strings.TrimSpace(iphttps)
+
+	// Handle IPv6 with brackets: [::1]:port
+	if strings.HasPrefix(iphttps, "[") {
+		closeBracket := strings.LastIndex(iphttps, "]")
+		if closeBracket == -1 {
+			return "", "", fmt.Errorf("malformed IPv6 address: %s", iphttps)
+		}
+		ip = iphttps[1:closeBracket] // Remove brackets
+		rest := iphttps[closeBracket+1:]
+		if strings.HasPrefix(rest, ":") {
+			port = rest[1:]
+		} else {
+			port = "443"
+		}
+	} else {
+		// IPv4: ip:port
+		lastColon := strings.LastIndex(iphttps, ":")
+		if lastColon == -1 {
+			return iphttps, "443", nil // Default HTTPS port
+		}
+		ip = iphttps[:lastColon]
+		port = iphttps[lastColon+1:]
+	}
+
+	if ip == "" {
+		return "", "", fmt.Errorf("empty IP in IPHTTPS: %s", iphttps)
+	}
+	if port == "" {
+		port = "443"
+	}
+
+	return ip, port, nil
+}
+
+// cleanIPForHostname converts an IP address to a hostname-compatible format per Loxone CloudDNS spec:
+// IPv4: dots to dashes (e.g., "200.12.14.24" -> "200-12-14-24")
+// IPv6: colons to dashes (e.g., "2001:db8::1" -> "2001-db8--1")
+func cleanIPForHostname(ip string) string {
+	cleaned := strings.ReplaceAll(ip, ".", "-")
+	cleaned = strings.ReplaceAll(cleaned, ":", "-")
+	return cleaned
+}
+
+// resolveLoxoneCloudDNSLegacy resolves using the legacy MAC-based redirect approach
+func (conn *WebSocketConnection) resolveLoxoneCloudDNSLegacy() (string, error) {
 	testURL := fmt.Sprintf("http://dns.loxonecloud.com/%s/jdev/cfg/api", conn.MacAddress)
 	log.Printf("   Resolving via: %s", testURL)
 
@@ -431,7 +590,7 @@ func (conn *WebSocketConnection) resolveLoxoneCloudDNS() (string, error) {
 
 	resp, err := client.Get(testURL)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve cloud DNS: %v", err)
+		return "", fmt.Errorf("failed to resolve cloud DNS (legacy): %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -440,7 +599,7 @@ func (conn *WebSocketConnection) resolveLoxoneCloudDNS() (string, error) {
 		return "", fmt.Errorf("no redirect location from cloud DNS")
 	}
 
-	log.Printf("   âœ… Redirect location: %s", location)
+	log.Printf("   [OK] Redirect location: %s", location)
 
 	redirectURL, err := url.Parse(location)
 	if err != nil {
@@ -448,7 +607,7 @@ func (conn *WebSocketConnection) resolveLoxoneCloudDNS() (string, error) {
 	}
 
 	actualHost := redirectURL.Host
-	log.Printf("   âœ… Actual server: %s", actualHost)
+	log.Printf("   [OK] Actual server (legacy): %s", actualHost)
 
 	conn.Mu.Lock()
 	oldHost := conn.ResolvedHost
@@ -456,7 +615,7 @@ func (conn *WebSocketConnection) resolveLoxoneCloudDNS() (string, error) {
 	conn.Mu.Unlock()
 
 	if oldHost != "" && oldHost != actualHost {
-		log.Printf("   ðŸ”„ HOST CHANGED: %s â†’ %s", oldHost, actualHost)
+		log.Printf("   [CHANGED] HOST CHANGED: %s -> %s", oldHost, actualHost)
 		conn.logToDatabase("Loxone Cloud Host Changed",
 			fmt.Sprintf("MAC %s: Host changed from %s to %s", conn.MacAddress, oldHost, actualHost))
 	}

@@ -193,3 +193,5 @@ site/
 # Always review files before committing!
 # Use 'git status' to verify no sensitive files are tracked
 # Use 'git add -p' for careful staging of changes
+
+CLAUDE.md
