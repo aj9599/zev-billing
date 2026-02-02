@@ -57,10 +57,6 @@ export default function ChargerDetailModal({
         ? (zaptecStatus?.current_power_kw ?? liveData?.current_power_kw ?? 0)
         : (liveData?.current_power_kw ?? 0);
 
-    const isOnline = charger.connection_type === 'zaptec_api'
-        ? (zaptecStatus?.is_online ?? liveData?.is_online ?? true)
-        : (liveData?.is_online ?? true);
-
     const liveSession = charger.connection_type === 'zaptec_api'
         ? (zaptecStatus?.live_session ?? liveData?.live_session)
         : liveData?.live_session;
