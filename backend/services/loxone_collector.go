@@ -257,21 +257,47 @@ func (lc *LoxoneCollector) GetLiveChargerData(chargerID int) (*loxone.ChargerLiv
 	data, exists := lc.liveChargerData[chargerID]
 	lc.chargerMu.RUnlock()
 
-	// If data exists and is recent, return it
-	if exists && time.Since(data.Timestamp) < 2*time.Minute {
+	// Loxone collects data at 15-minute intervals, so live data remains valid for up to 20 minutes.
+	// After 20 minutes without an update, the connection is likely down.
+	if exists && time.Since(data.Timestamp) < 20*time.Minute {
 		return data, true
 	}
 
-	// Otherwise, try to load from database
+	// If we have in-memory data but it's older than 20 min, mark it as offline
+	// but still return it merged with DB stats so state info isn't lost
+	if exists {
+		data.IsOnline = false
+	}
+
+	// Try to load enhanced stats from database
 	var chargerName string
 	err := lc.db.QueryRow("SELECT name FROM chargers WHERE id = ?", chargerID).Scan(&chargerName)
 	if err != nil {
+		if exists {
+			return data, true
+		}
 		return nil, false
 	}
 
 	dbData := lc.loadChargerStatsFromDatabase(chargerID, chargerName)
 	if dbData == nil {
+		if exists {
+			return data, true
+		}
 		return nil, false
+	}
+
+	// If we have in-memory data, merge DB stats into it (keep live state, update stats)
+	if exists {
+		data.LastSessionEnergy_kWh = dbData.LastSessionEnergy_kWh
+		data.LastSessionDuration_sec = dbData.LastSessionDuration_sec
+		data.WeeklyEnergy_kWh = dbData.WeeklyEnergy_kWh
+		data.MonthlyEnergy_kWh = dbData.MonthlyEnergy_kWh
+		data.LastMonthEnergy_kWh = dbData.LastMonthEnergy_kWh
+		data.YearlyEnergy_kWh = dbData.YearlyEnergy_kWh
+		data.LastYearEnergy_kWh = dbData.LastYearEnergy_kWh
+		data.IsOnline = false
+		return data, true
 	}
 
 	return dbData, true

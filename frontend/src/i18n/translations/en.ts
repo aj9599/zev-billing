@@ -1404,6 +1404,7 @@ export const en: Translations = {
   'chargers.stats.lastMonth': 'Last Month',
   'chargers.stats.thisYear': 'This Year',
   'chargers.stats.lastYear': 'Last Year',
+  'chargers.details': 'Details',
 
   // ============================================================================
   // BILLING
