@@ -7,7 +7,20 @@ export function useUserDeletion(loadData: () => Promise<void>) {
         await api.deleteUser(id);
         await loadData();
       } catch (err) {
-        alert('Failed to delete user');
+        let message = 'Failed to delete user';
+        if (err instanceof Error) {
+          try {
+            const parsed = JSON.parse(err.message);
+            if (parsed.detail) {
+              message = parsed.detail;
+            }
+          } catch {
+            if (err.message) {
+              message = err.message;
+            }
+          }
+        }
+        alert(message);
       }
     }
   };

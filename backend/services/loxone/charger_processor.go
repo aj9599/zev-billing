@@ -533,10 +533,39 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 						exactStartTime = activeSession.StartTime
 					}
 
+					// Look up the last maintenance reading before session start to get the true start energy.
+					// The session detection happens at the next poll after the car connects, so the
+					// StartEnergy_kWh captured at detection time may already include some charging.
+					// The last idle reading before the session is the true baseline.
+					trueStartEnergy := activeSession.StartEnergy_kWh
+					var lastIdleEnergy float64
+					idleErr := db.QueryRow(`
+						SELECT power_kwh FROM charger_sessions
+						WHERE charger_id = ? AND session_time <= ? AND (state = '1' OR user_id = '' OR user_id IS NULL)
+						ORDER BY session_time DESC LIMIT 1
+					`, device.ID, exactStartTime.Format("2006-01-02 15:04:05-07:00")).Scan(&lastIdleEnergy)
+					if idleErr == nil && lastIdleEnergy > 0 && lastIdleEnergy < trueStartEnergy {
+						log.Printf("   \U0001f527 [%s] Corrected start energy: %.3f -> %.3f kWh (last idle reading before session)",
+							device.Name, trueStartEnergy, lastIdleEnergy)
+						trueStartEnergy = lastIdleEnergy
+					}
+
 					// Use parsed energy or calculate from readings
 					finalEnergy := parsedEnergy
 					if finalEnergy == 0 && len(activeSession.Readings) > 0 {
-						finalEnergy = activeSession.Readings[len(activeSession.Readings)-1].Energy_kWh - activeSession.StartEnergy_kWh
+						finalEnergy = activeSession.Readings[len(activeSession.Readings)-1].Energy_kWh - trueStartEnergy
+					}
+
+					// Calculate the true end energy from start + session energy
+					trueEndEnergy := totalEnergyKWh
+					if finalEnergy > 0 {
+						calculatedEnd := trueStartEnergy + finalEnergy
+						// Use the calculated end if it's reasonable (not more than current meter + small tolerance)
+						if calculatedEnd <= totalEnergyKWh+0.5 {
+							trueEndEnergy = calculatedEnd
+							log.Printf("   \U0001f527 [%s] Corrected end energy: %.3f -> %.3f kWh (start %.3f + session %.3f)",
+								device.Name, totalEnergyKWh, trueEndEnergy, trueStartEnergy, finalEnergy)
+						}
 					}
 
 					completedSession := &CompletedChargerSession{
@@ -545,8 +574,8 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 						UserID:          parsedUserID,
 						StartTime:       exactStartTime,
 						EndTime:         parsedEndTime,
-						StartEnergy_kWh: activeSession.StartEnergy_kWh,
-						EndEnergy_kWh:   totalEnergyKWh,
+						StartEnergy_kWh: trueStartEnergy,
+						EndEnergy_kWh:   trueEndEnergy,
 						TotalEnergy_kWh: finalEnergy,
 						Duration_sec:    parsedDuration,
 						Mode:            activeSession.Mode,

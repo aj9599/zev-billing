@@ -585,6 +585,72 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if the user exists
+	var firstName, lastName string
+	var rentEndDate sql.NullString
+	err = h.db.QueryRow("SELECT first_name, last_name, rent_end_date FROM users WHERE id = ?", id).Scan(&firstName, &lastName, &rentEndDate)
+	if err == sql.ErrNoRows {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		log.Printf("Error checking user: %v", err)
+		http.Error(w, "Failed to check user", http.StatusInternalServerError)
+		return
+	}
+
+	// Check if the user has an active rent period (rent_end_date is NULL or in the future)
+	if rentEndDate.Valid && rentEndDate.String != "" {
+		endDate, parseErr := time.Parse("2006-01-02", rentEndDate.String)
+		if parseErr == nil && endDate.After(time.Now()) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error":  "user_in_rent_period",
+				"detail": fmt.Sprintf("Cannot delete user '%s %s' because their rent period is still active (ends %s). Please set the rent end date to today or archive the user instead.", firstName, lastName, endDate.Format("02.01.2006")),
+			})
+			return
+		}
+	} else if !rentEndDate.Valid || rentEndDate.String == "" {
+		// rent_end_date is NULL = ongoing rent, check if rent_start_date is set
+		var rentStartDate sql.NullString
+		h.db.QueryRow("SELECT rent_start_date FROM users WHERE id = ?", id).Scan(&rentStartDate)
+		if rentStartDate.Valid && rentStartDate.String != "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error":  "user_in_rent_period",
+				"detail": fmt.Sprintf("Cannot delete user '%s %s' because their rent period has no end date (still active). Please set a rent end date or archive the user instead.", firstName, lastName),
+			})
+			return
+		}
+	}
+
+	// Check if user has assigned meters
+	var meterCount int
+	h.db.QueryRow("SELECT COUNT(*) FROM meters WHERE user_id = ?", id).Scan(&meterCount)
+	if meterCount > 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error":  "user_has_meters",
+			"detail": fmt.Sprintf("Cannot delete user '%s %s' because they have %d meter(s) assigned. Please reassign or remove the meters first.", firstName, lastName, meterCount),
+		})
+		return
+	}
+
+	// Check if user has invoices
+	var invoiceCount int
+	h.db.QueryRow("SELECT COUNT(*) FROM invoices WHERE user_id = ?", id).Scan(&invoiceCount)
+	if invoiceCount > 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error":  "user_has_invoices",
+			"detail": fmt.Sprintf("Cannot delete user '%s %s' because they have %d invoice(s). Please delete the invoices first or archive the user instead.", firstName, lastName, invoiceCount),
+		})
+		return
+	}
+
 	_, err = h.db.Exec("DELETE FROM users WHERE id = ?", id)
 	if err != nil {
 		log.Printf("Error deleting user: %v", err)

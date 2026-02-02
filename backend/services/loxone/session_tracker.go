@@ -223,6 +223,26 @@ func ProcessCompletedChargerSession(session *CompletedChargerSession, db *sql.DB
 		return
 	}
 
+	// STEP 5: Write post-session maintenance reading for the next quarter-hour after session end.
+	// This fills the gap between session end (e.g. 13:02) and the next regular poll (e.g. 13:30).
+	nextQuarter := GetNextQuarterHour(session.EndTime)
+	nextQuarterStr := nextQuarter.Format("2006-01-02 15:04:05-07:00")
+	var postExists int
+	db.QueryRow(`SELECT COUNT(*) FROM charger_sessions WHERE charger_id = ? AND session_time = ?`,
+		session.ChargerID, nextQuarterStr).Scan(&postExists)
+	if postExists == 0 {
+		_, postErr := db.Exec(`
+			INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
+			VALUES (?, ?, ?, ?, ?, ?)
+		`, session.ChargerID, "", nextQuarterStr, session.EndEnergy_kWh, session.Mode, "1")
+		if postErr != nil {
+			log.Printf("   ⚠️  [%s] Failed to write post-session maintenance reading: %v", session.ChargerName, postErr)
+		} else {
+			log.Printf("   📝 [%s] Post-session maintenance reading at %s (%.3f kWh)",
+				session.ChargerName, nextQuarter.Format("15:04:05"), session.EndEnergy_kWh)
+		}
+	}
+
 	// Mark session as processed
 	if collector != nil {
 		collector.MarkSessionProcessed(sessionID)

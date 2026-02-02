@@ -195,3 +195,5 @@ site/
 # Use 'git add -p' for careful staging of changes
 
 CLAUDE.md
+.DS_Store
+backend/go.sum
