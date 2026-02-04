@@ -218,6 +218,9 @@ func main() {
 	api.HandleFunc("/dashboard/consumption", dashboardHandler.GetConsumption).Methods("GET")
 	api.HandleFunc("/dashboard/consumption-by-building", dashboardHandler.GetConsumptionByBuilding).Methods("GET")
 	api.HandleFunc("/dashboard/logs", dashboardHandler.GetLogs).Methods("GET")
+	api.HandleFunc("/dashboard/self-consumption", dashboardHandler.GetSelfConsumption).Methods("GET")
+	api.HandleFunc("/dashboard/system-health", dashboardHandler.GetSystemHealth).Methods("GET")
+	api.HandleFunc("/dashboard/cost-overview", dashboardHandler.GetCostOverview).Methods("GET")
 
 	// Export route
 	api.HandleFunc("/export/data", exportHandler.ExportData).Methods("GET")

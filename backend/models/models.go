@@ -262,3 +262,46 @@ type ConsumptionData struct {
 	Power     float64   `json:"power"`
 	Source    string    `json:"source"`
 }
+
+type SelfConsumptionData struct {
+	TodaySolarProduced   float64 `json:"today_solar_produced"`
+	TodaySolarConsumed   float64 `json:"today_solar_consumed"`
+	TodaySelfConsumption float64 `json:"today_self_consumption_pct"`
+	MonthSolarProduced   float64 `json:"month_solar_produced"`
+	MonthSolarConsumed   float64 `json:"month_solar_consumed"`
+	MonthSelfConsumption float64 `json:"month_self_consumption_pct"`
+}
+
+type DeviceHealth struct {
+	ID           int        `json:"id"`
+	Name         string     `json:"name"`
+	Type         string     `json:"type"`
+	MeterType    string     `json:"meter_type,omitempty"`
+	BuildingName string     `json:"building_name"`
+	IsActive     bool       `json:"is_active"`
+	LastReading  *time.Time `json:"last_reading"`
+	Status       string     `json:"status"`
+}
+
+type SystemHealth struct {
+	Devices      []DeviceHealth `json:"devices"`
+	OnlineCount  int            `json:"online_count"`
+	StaleCount   int            `json:"stale_count"`
+	OfflineCount int            `json:"offline_count"`
+}
+
+type BuildingCostEstimate struct {
+	BuildingID   int     `json:"building_id"`
+	BuildingName string  `json:"building_name"`
+	GridCost     float64 `json:"grid_cost"`
+	SolarCost    float64 `json:"solar_cost"`
+	ChargingCost float64 `json:"charging_cost"`
+	TotalCost    float64 `json:"total_cost"`
+	Currency     string  `json:"currency"`
+}
+
+type CostOverview struct {
+	Buildings []BuildingCostEstimate `json:"buildings"`
+	TotalCost float64                `json:"total_cost"`
+	Currency  string                 `json:"currency"`
+}

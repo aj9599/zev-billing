@@ -203,6 +203,54 @@ export const de: Translations = {
   'dashboard.meterTypes.total': 'Gesamt',
   'dashboard.unknownUser': 'Unbekannter Benutzer',
 
+  // Eigenverbrauch
+  'dashboard.selfConsumptionRate': 'Eigenverbrauch',
+  'dashboard.selfConsumptionToday': 'Heute',
+  'dashboard.selfConsumptionMonth': 'Diesen Monat',
+  'dashboard.produced': 'Produziert',
+  'dashboard.consumed': 'Eigenverbraucht',
+  'dashboard.exported': 'Exportiert',
+  'dashboard.selfConsumptionGood': 'Gut',
+  'dashboard.selfConsumptionAverage': 'Mittel',
+  'dashboard.selfConsumptionLow': 'Niedrig',
+  'dashboard.gridConsumption': 'Netzverbrauch',
+
+  // Energiefluss
+  'dashboard.energyFlow': 'Energiefluss',
+  'dashboard.energyFlowSolar': 'Solar',
+  'dashboard.energyFlowBuilding': 'Gebäude',
+  'dashboard.energyFlowGrid': 'Netz',
+  'dashboard.energyFlowCharging': 'Elektrofahrzeug',
+  'dashboard.energyFlowSelfUse': 'Eigenverbrauch',
+  'dashboard.energyFlowExport': 'Export',
+
+  // Systemzustand
+  'dashboard.systemHealth': 'Systemzustand',
+  'dashboard.online': 'Online',
+  'dashboard.stale': 'Verzögert',
+  'dashboard.offline': 'Offline',
+  'dashboard.lastReading': 'Letzte Messung',
+  'dashboard.ago': 'her',
+  'dashboard.allDevicesOnline': 'Alle Geräte melden normal',
+  'dashboard.deviceIssues': 'Geräte benötigen Aufmerksamkeit',
+
+  // Kostenübersicht
+  'dashboard.costOverview': 'Kostenschätzung',
+  'dashboard.costOverviewSubtitle': 'Schätzung aktueller Monat',
+  'dashboard.estimatedCost': 'Geschätzte Kosten',
+  'dashboard.gridCost': 'Netz',
+  'dashboard.solarCost': 'Solar',
+  'dashboard.chargingCost': 'Laden',
+  'dashboard.totalCost': 'Total',
+  'dashboard.noPricing': 'Keine Preise konfiguriert',
+
+  // Systemübersicht
+  'dashboard.systemOverview': 'Systemübersicht',
+
+  // Auf-/Zuklappbar
+  'dashboard.collapse': 'Zuklappen',
+  'dashboard.expand': 'Aufklappen',
+
   // ============================================================================
   // EXPORT
   // ============================================================================

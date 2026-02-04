@@ -202,6 +202,54 @@ export const en: Translations = {
   'dashboard.meterTypes.total': 'Total',
   'dashboard.unknownUser': 'Unknown User',
 
+  // Self-consumption
+  'dashboard.selfConsumptionRate': 'Self-Consumption',
+  'dashboard.selfConsumptionToday': 'Today',
+  'dashboard.selfConsumptionMonth': 'This Month',
+  'dashboard.produced': 'Produced',
+  'dashboard.consumed': 'Self-Consumed',
+  'dashboard.exported': 'Exported',
+  'dashboard.selfConsumptionGood': 'Good',
+  'dashboard.selfConsumptionAverage': 'Average',
+  'dashboard.selfConsumptionLow': 'Low',
+  'dashboard.gridConsumption': 'Grid Consumption',
+
+  // Energy flow
+  'dashboard.energyFlow': 'Energy Flow',
+  'dashboard.energyFlowSolar': 'Solar',
+  'dashboard.energyFlowBuilding': 'Building',
+  'dashboard.energyFlowGrid': 'Grid',
+  'dashboard.energyFlowCharging': 'EV Charging',
+  'dashboard.energyFlowSelfUse': 'Self-Use',
+  'dashboard.energyFlowExport': 'Export',
+
+  // System health
+  'dashboard.systemHealth': 'System Health',
+  'dashboard.online': 'Online',
+  'dashboard.stale': 'Delayed',
+  'dashboard.offline': 'Offline',
+  'dashboard.lastReading': 'Last reading',
+  'dashboard.ago': 'ago',
+  'dashboard.allDevicesOnline': 'All devices reporting normally',
+  'dashboard.deviceIssues': 'devices need attention',
+
+  // Cost overview
+  'dashboard.costOverview': 'Cost Estimate',
+  'dashboard.costOverviewSubtitle': 'Current month estimate',
+  'dashboard.estimatedCost': 'Estimated Cost',
+  'dashboard.gridCost': 'Grid',
+  'dashboard.solarCost': 'Solar',
+  'dashboard.chargingCost': 'Charging',
+  'dashboard.totalCost': 'Total',
+  'dashboard.noPricing': 'No pricing configured',
+
+  // System overview
+  'dashboard.systemOverview': 'System Overview',
+
+  // Collapsible
+  'dashboard.collapse': 'Collapse',
+  'dashboard.expand': 'Expand',
+
   // ============================================================================
   // EXPORT
   // ============================================================================

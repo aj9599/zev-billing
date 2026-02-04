@@ -1037,3 +1037,332 @@ func (h *DashboardHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(logs)
 }
+
+func (h *DashboardHandler) GetSelfConsumption(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("PANIC in GetSelfConsumption: %v", rec)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	now := time.Now()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	todayEnd := todayStart.Add(24 * time.Hour)
+	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+
+	var data models.SelfConsumptionData
+
+	// Solar produced (export energy from solar meters)
+	solarTypes := []string{"solar_meter"}
+	data.TodaySolarProduced = calculateTotalSolarExport(h.db, ctx, solarTypes, todayStart, todayEnd)
+	data.MonthSolarProduced = calculateTotalSolarExport(h.db, ctx, solarTypes, startOfMonth, now)
+
+	// Total building consumption (apartment meters)
+	consumptionTypes := []string{"apartment_meter"}
+	todayConsumption := calculateTotalConsumption(h.db, ctx, consumptionTypes, todayStart, todayEnd)
+	monthConsumption := calculateTotalConsumption(h.db, ctx, consumptionTypes, startOfMonth, now)
+
+	// Self-consumed solar = min(solar produced, total consumption)
+	if data.TodaySolarProduced > 0 {
+		data.TodaySolarConsumed = data.TodaySolarProduced
+		if todayConsumption < data.TodaySolarProduced {
+			data.TodaySolarConsumed = todayConsumption
+		}
+		data.TodaySelfConsumption = (data.TodaySolarConsumed / data.TodaySolarProduced) * 100
+	}
+
+	if data.MonthSolarProduced > 0 {
+		data.MonthSolarConsumed = data.MonthSolarProduced
+		if monthConsumption < data.MonthSolarProduced {
+			data.MonthSolarConsumed = monthConsumption
+		}
+		data.MonthSelfConsumption = (data.MonthSolarConsumed / data.MonthSolarProduced) * 100
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(data)
+}
+
+func (h *DashboardHandler) GetSystemHealth(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("PANIC in GetSystemHealth: %v", rec)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	now := time.Now()
+	var health models.SystemHealth
+	health.Devices = []models.DeviceHealth{}
+
+	// Query meters with their latest reading time
+	meterRows, err := h.db.QueryContext(ctx, `
+		SELECT m.id, m.name, m.meter_type, COALESCE(b.name, ''), COALESCE(m.is_active, 1),
+			(SELECT MAX(reading_time) FROM meter_readings WHERE meter_id = m.id)
+		FROM meters m
+		LEFT JOIN buildings b ON m.building_id = b.id
+		ORDER BY m.name
+	`)
+	if err != nil {
+		log.Printf("Error querying meters for health: %v", err)
+	} else {
+		for meterRows.Next() {
+			var d models.DeviceHealth
+			var lastReading sql.NullTime
+			var isActive int
+			if err := meterRows.Scan(&d.ID, &d.Name, &d.MeterType, &d.BuildingName, &isActive, &lastReading); err != nil {
+				continue
+			}
+			d.Type = "meter"
+			d.IsActive = isActive == 1
+			if lastReading.Valid {
+				t := lastReading.Time
+				d.LastReading = &t
+			}
+
+			// Classify status
+			if !d.IsActive {
+				d.Status = "offline"
+			} else if d.LastReading == nil {
+				d.Status = "offline"
+			} else {
+				age := now.Sub(*d.LastReading)
+				if age < 30*time.Minute {
+					d.Status = "online"
+				} else if age < 2*time.Hour {
+					d.Status = "stale"
+				} else {
+					d.Status = "offline"
+				}
+			}
+
+			health.Devices = append(health.Devices, d)
+		}
+		meterRows.Close()
+	}
+
+	// Query chargers with their latest session time
+	chargerRows, err := h.db.QueryContext(ctx, `
+		SELECT c.id, c.name, COALESCE(b.name, ''), COALESCE(c.is_active, 1),
+			(SELECT MAX(session_time) FROM charger_sessions WHERE charger_id = c.id)
+		FROM chargers c
+		LEFT JOIN buildings b ON c.building_id = b.id
+		ORDER BY c.name
+	`)
+	if err != nil {
+		log.Printf("Error querying chargers for health: %v", err)
+	} else {
+		for chargerRows.Next() {
+			var d models.DeviceHealth
+			var lastReading sql.NullTime
+			var isActive int
+			if err := chargerRows.Scan(&d.ID, &d.Name, &d.BuildingName, &isActive, &lastReading); err != nil {
+				continue
+			}
+			d.Type = "charger"
+			d.MeterType = "charger"
+			d.IsActive = isActive == 1
+			if lastReading.Valid {
+				t := lastReading.Time
+				d.LastReading = &t
+			}
+
+			if !d.IsActive {
+				d.Status = "offline"
+			} else if d.LastReading == nil {
+				d.Status = "offline"
+			} else {
+				age := now.Sub(*d.LastReading)
+				if age < 30*time.Minute {
+					d.Status = "online"
+				} else if age < 2*time.Hour {
+					d.Status = "stale"
+				} else {
+					d.Status = "offline"
+				}
+			}
+
+			health.Devices = append(health.Devices, d)
+		}
+		chargerRows.Close()
+	}
+
+	// Count statuses
+	for _, d := range health.Devices {
+		switch d.Status {
+		case "online":
+			health.OnlineCount++
+		case "stale":
+			health.StaleCount++
+		case "offline":
+			health.OfflineCount++
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(health)
+}
+
+func (h *DashboardHandler) GetCostOverview(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("PANIC in GetCostOverview: %v", rec)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	now := time.Now()
+	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+
+	var overview models.CostOverview
+	overview.Buildings = []models.BuildingCostEstimate{}
+	overview.Currency = "CHF"
+
+	// Get buildings with active pricing
+	buildingRows, err := h.db.QueryContext(ctx, `
+		SELECT b.id, b.name, bs.normal_power_price, bs.solar_power_price,
+			bs.car_charging_normal_price, COALESCE(bs.currency, 'CHF')
+		FROM buildings b
+		JOIN billing_settings bs ON bs.building_id = b.id AND bs.is_active = 1
+		WHERE COALESCE(b.is_group, 0) = 0
+		ORDER BY b.name
+	`)
+	if err != nil {
+		log.Printf("Error querying buildings for cost overview: %v", err)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(overview)
+		return
+	}
+	defer buildingRows.Close()
+
+	for buildingRows.Next() {
+		var est models.BuildingCostEstimate
+		var gridPrice, solarPrice, chargingPrice float64
+		if err := buildingRows.Scan(&est.BuildingID, &est.BuildingName, &gridPrice, &solarPrice, &chargingPrice, &est.Currency); err != nil {
+			continue
+		}
+
+		// Get grid consumption for this building's apartment meters
+		var gridConsumption float64
+		meterRows, err := h.db.QueryContext(ctx, `
+			SELECT id FROM meters WHERE building_id = ? AND meter_type = 'apartment_meter' AND COALESCE(is_active, 1) = 1
+		`, est.BuildingID)
+		if err == nil {
+			for meterRows.Next() {
+				var meterID int
+				if meterRows.Scan(&meterID) != nil {
+					continue
+				}
+				gridConsumption += calcMeterConsumption(h.db, ctx, meterID, "power_kwh", startOfMonth, now)
+			}
+			meterRows.Close()
+		}
+
+		// Get solar consumption for this building
+		var solarConsumption float64
+		solarRows, err := h.db.QueryContext(ctx, `
+			SELECT id FROM meters WHERE building_id = ? AND meter_type = 'solar_meter' AND COALESCE(is_active, 1) = 1
+		`, est.BuildingID)
+		if err == nil {
+			for solarRows.Next() {
+				var meterID int
+				if solarRows.Scan(&meterID) != nil {
+					continue
+				}
+				solarConsumption += calcMeterConsumption(h.db, ctx, meterID, "power_kwh_export", startOfMonth, now)
+			}
+			solarRows.Close()
+		}
+
+		// Get charging consumption for this building
+		var chargingConsumption float64
+		chargerRows, err := h.db.QueryContext(ctx, `
+			SELECT id FROM chargers WHERE building_id = ? AND COALESCE(is_active, 1) = 1
+		`, est.BuildingID)
+		if err == nil {
+			for chargerRows.Next() {
+				var chargerID int
+				if chargerRows.Scan(&chargerID) != nil {
+					continue
+				}
+
+				var firstReading, latestReading, baselineReading sql.NullFloat64
+				h.db.QueryRowContext(ctx, `
+					SELECT power_kwh FROM charger_sessions WHERE charger_id = ? AND session_time >= ? AND session_time < ? ORDER BY session_time ASC LIMIT 1
+				`, chargerID, startOfMonth, now).Scan(&firstReading)
+				h.db.QueryRowContext(ctx, `
+					SELECT power_kwh FROM charger_sessions WHERE charger_id = ? AND session_time >= ? AND session_time < ? ORDER BY session_time DESC LIMIT 1
+				`, chargerID, startOfMonth, now).Scan(&latestReading)
+				h.db.QueryRowContext(ctx, `
+					SELECT power_kwh FROM charger_sessions WHERE charger_id = ? AND session_time < ? ORDER BY session_time DESC LIMIT 1
+				`, chargerID, startOfMonth).Scan(&baselineReading)
+
+				if firstReading.Valid && latestReading.Valid {
+					baseline := firstReading.Float64
+					if baselineReading.Valid {
+						baseline = baselineReading.Float64
+					}
+					consumption := latestReading.Float64 - baseline
+					if consumption > 0 {
+						chargingConsumption += consumption
+					}
+				}
+			}
+			chargerRows.Close()
+		}
+
+		est.GridCost = gridConsumption * gridPrice
+		est.SolarCost = solarConsumption * solarPrice
+		est.ChargingCost = chargingConsumption * chargingPrice
+		est.TotalCost = est.GridCost + est.SolarCost + est.ChargingCost
+
+		overview.Buildings = append(overview.Buildings, est)
+		overview.TotalCost += est.TotalCost
+		if est.Currency != "" {
+			overview.Currency = est.Currency
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(overview)
+}
+
+// calcMeterConsumption calculates the consumption delta for a single meter in a period
+func calcMeterConsumption(db *sql.DB, ctx context.Context, meterID int, column string, periodStart, periodEnd time.Time) float64 {
+	query := fmt.Sprintf(`SELECT %s FROM meter_readings WHERE meter_id = ? AND reading_time >= ? AND reading_time < ? ORDER BY reading_time`, column)
+
+	var firstReading sql.NullFloat64
+	db.QueryRowContext(ctx, query+" ASC LIMIT 1", meterID, periodStart, periodEnd).Scan(&firstReading)
+
+	var latestReading sql.NullFloat64
+	db.QueryRowContext(ctx, query+" DESC LIMIT 1", meterID, periodStart, periodEnd).Scan(&latestReading)
+
+	if !firstReading.Valid || !latestReading.Valid {
+		return 0
+	}
+
+	var baselineReading sql.NullFloat64
+	baseQuery := fmt.Sprintf(`SELECT %s FROM meter_readings WHERE meter_id = ? AND reading_time < ? ORDER BY reading_time DESC LIMIT 1`, column)
+	db.QueryRowContext(ctx, baseQuery, meterID, periodStart).Scan(&baselineReading)
+
+	baseline := firstReading.Float64
+	if baselineReading.Valid {
+		baseline = baselineReading.Float64
+	}
+
+	consumption := latestReading.Float64 - baseline
+	if consumption > 0 {
+		return consumption
+	}
+	return 0
+}

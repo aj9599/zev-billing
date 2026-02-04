@@ -2,7 +2,8 @@ import type {
   User, Building, Meter, Charger, BillingSettings,
   Invoice, DashboardStats, ConsumptionData, AdminLog,
   BuildingConsumption, SharedMeterConfig, CustomLineItem,
-  GenerateBillsRequest, MeterReplacement, MeterReplacementRequest
+  GenerateBillsRequest, MeterReplacement, MeterReplacementRequest,
+  SelfConsumptionData, SystemHealth, CostOverview
 } from '../types';
 
 const API_BASE = '/api';
@@ -455,6 +456,18 @@ class ApiClient {
 
   async getConsumptionByBuilding(period: string = '24h'): Promise<BuildingConsumption[]> {
     return this.request(`/dashboard/consumption-by-building?period=${period}`);
+  }
+
+  async getSelfConsumption(): Promise<SelfConsumptionData> {
+    return this.request('/dashboard/self-consumption');
+  }
+
+  async getSystemHealth(): Promise<SystemHealth> {
+    return this.request('/dashboard/system-health');
+  }
+
+  async getCostOverview(): Promise<CostOverview> {
+    return this.request('/dashboard/cost-overview');
   }
 
   async getLogs(limit: number = 100, since?: string): Promise<AdminLog[]> {

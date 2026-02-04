@@ -276,6 +276,49 @@ export interface ConsumptionData {
   source: string;
 }
 
+export interface SelfConsumptionData {
+  today_solar_produced: number;
+  today_solar_consumed: number;
+  today_self_consumption_pct: number;
+  month_solar_produced: number;
+  month_solar_consumed: number;
+  month_self_consumption_pct: number;
+}
+
+export interface DeviceHealth {
+  id: number;
+  name: string;
+  type: string;
+  meter_type: string;
+  building_name: string;
+  is_active: boolean;
+  last_reading: string | null;
+  status: string;
+}
+
+export interface SystemHealth {
+  devices: DeviceHealth[];
+  online_count: number;
+  stale_count: number;
+  offline_count: number;
+}
+
+export interface BuildingCostEstimate {
+  building_id: number;
+  building_name: string;
+  grid_cost: number;
+  solar_cost: number;
+  charging_cost: number;
+  total_cost: number;
+  currency: string;
+}
+
+export interface CostOverview {
+  buildings: BuildingCostEstimate[];
+  total_cost: number;
+  currency: string;
+}
+
 export interface MeterData {
   meter_id: number;
   meter_name: string;
