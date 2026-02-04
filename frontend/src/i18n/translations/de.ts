@@ -223,6 +223,13 @@ export const de: Translations = {
   'dashboard.energyFlowCharging': 'Elektrofahrzeug',
   'dashboard.energyFlowSelfUse': 'Eigenverbrauch',
   'dashboard.energyFlowExport': 'Export',
+  'dashboard.energyFlowGridImport': 'Netzbezug',
+  'dashboard.energyFlowGridExport': 'Netzeinspeisung',
+  'dashboard.energyFlowSelfConsumed': 'Eigenverbraucht',
+  'dashboard.energyFlowPeriodToday': 'Heute',
+  'dashboard.energyFlowPeriodWeek': 'Woche',
+  'dashboard.energyFlowPeriodMonth': 'Monat',
+  'dashboard.energyFlowAllBuildings': 'Alle Gebäude',
 
   // Systemzustand
   'dashboard.systemHealth': 'Systemzustand',

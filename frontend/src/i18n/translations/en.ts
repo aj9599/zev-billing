@@ -222,6 +222,13 @@ export const en: Translations = {
   'dashboard.energyFlowCharging': 'EV Charging',
   'dashboard.energyFlowSelfUse': 'Self-Use',
   'dashboard.energyFlowExport': 'Export',
+  'dashboard.energyFlowGridImport': 'Grid Import',
+  'dashboard.energyFlowGridExport': 'Grid Export',
+  'dashboard.energyFlowSelfConsumed': 'Self-Consumed',
+  'dashboard.energyFlowPeriodToday': 'Today',
+  'dashboard.energyFlowPeriodWeek': 'Week',
+  'dashboard.energyFlowPeriodMonth': 'Month',
+  'dashboard.energyFlowAllBuildings': 'All Buildings',
 
   // System health
   'dashboard.systemHealth': 'System Health',

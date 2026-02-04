@@ -319,6 +319,28 @@ export interface CostOverview {
   currency: string;
 }
 
+export interface EnergyFlowData {
+  period: string;
+  solar_produced_kwh: number;
+  solar_self_consumed_kwh: number;
+  solar_exported_kwh: number;
+  total_consumption_kwh: number;
+  grid_import_kwh: number;
+  ev_charging_kwh: number;
+  self_consumption_pct: number;
+  per_building?: BuildingEnergyFlow[];
+}
+
+export interface BuildingEnergyFlow {
+  building_id: number;
+  building_name: string;
+  solar_produced_kwh: number;
+  solar_self_consumed_kwh: number;
+  total_consumption_kwh: number;
+  grid_import_kwh: number;
+  ev_charging_kwh: number;
+}
+
 export interface MeterData {
   meter_id: number;
   meter_name: string;

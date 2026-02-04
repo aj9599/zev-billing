@@ -221,6 +221,7 @@ func main() {
 	api.HandleFunc("/dashboard/self-consumption", dashboardHandler.GetSelfConsumption).Methods("GET")
 	api.HandleFunc("/dashboard/system-health", dashboardHandler.GetSystemHealth).Methods("GET")
 	api.HandleFunc("/dashboard/cost-overview", dashboardHandler.GetCostOverview).Methods("GET")
+	api.HandleFunc("/dashboard/energy-flow", dashboardHandler.GetEnergyFlow).Methods("GET")
 
 	// Export route
 	api.HandleFunc("/export/data", exportHandler.ExportData).Methods("GET")

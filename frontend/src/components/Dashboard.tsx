@@ -3,7 +3,7 @@ import * as React from 'react';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Users, Building, Zap, Car, Sun, Battery, LayoutDashboard, Home, Eye, EyeOff, ChevronDown, ChevronRight, Activity, DollarSign, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 import { api } from '../api/client';
-import type { DashboardStats, SelfConsumptionData, SystemHealth, CostOverview } from '../types';
+import type { DashboardStats, SelfConsumptionData, SystemHealth, CostOverview, EnergyFlowData } from '../types';
 import { useTranslation } from '../i18n';
 
 // ─── Local interfaces ────────────────────────────────────────────────
@@ -220,6 +220,12 @@ export default function Dashboard() {
   const [expandedBuildings, setExpandedBuildings] = useState<Set<number>>(new Set());
   const [healthExpanded, setHealthExpanded] = useState(false);
 
+  // Energy flow interactive state
+  const [energyFlowPeriod, setEnergyFlowPeriod] = useState<'today' | 'week' | 'month'>('today');
+  const [energyFlowBuildingId, setEnergyFlowBuildingId] = useState<number>(0);
+  const [energyFlowData, setEnergyFlowData] = useState<EnergyFlowData | null>(null);
+  const [energyFlowLoading, setEnergyFlowLoading] = useState(false);
+
   const [visibleMetersByBuilding, setVisibleMetersByBuilding] = useState<Map<number, Set<string>>>(new Map());
   const visibilityInitialized = React.useRef(false);
   const buildingsInitialized = React.useRef(false);
@@ -275,6 +281,27 @@ export default function Dashboard() {
     const interval = setInterval(loadData, 60000);
     return () => clearInterval(interval);
   }, [loadData]);
+
+  // Load energy flow data independently
+  useEffect(() => {
+    let cancelled = false;
+    const loadEnergyFlow = async () => {
+      setEnergyFlowLoading(true);
+      try {
+        const data = await api.getEnergyFlow(energyFlowPeriod, energyFlowBuildingId);
+        if (!cancelled) setEnergyFlowData(data);
+      } catch (err) {
+        console.error('Failed to load energy flow:', err);
+        if (!cancelled) setEnergyFlowData(null);
+      } finally {
+        if (!cancelled) setEnergyFlowLoading(false);
+      }
+    };
+    loadEnergyFlow();
+    // Also refresh every 60s
+    const interval = setInterval(loadEnergyFlow, 60000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [energyFlowPeriod, energyFlowBuildingId]);
 
   const toggleMeterVisibility = (buildingId: number, meterKey: string) => {
     setVisibleMetersByBuilding(prev => {
@@ -503,7 +530,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ─── Energy Flow Diagram ──────────────────────────────────── */}
+      {/* ─── Energy Flow Diagram (Interactive) ─────────────────────── */}
       <div className="fade-in" style={{
         backgroundColor: 'white',
         borderRadius: '12px',
@@ -512,136 +539,337 @@ export default function Dashboard() {
         marginBottom: '24px',
         animationDelay: '0.2s'
       }}>
-        <h2 style={{ fontSize: '16px', fontWeight: '700', margin: '0 0 20px 0', color: '#374151' }}>
-          {t('dashboard.energyFlow')}
-        </h2>
-        <div className="energy-flow" style={{
+        {/* Header with controls */}
+        <div className="energy-flow-header" style={{
           display: 'flex',
+          justifyContent: 'space-between',
           alignItems: 'center',
-          justifyContent: 'center',
-          gap: '0',
+          marginBottom: '20px',
           flexWrap: 'wrap',
-          padding: '10px 0'
+          gap: '12px'
         }}>
-          {/* Solar Node */}
-          <div style={{ textAlign: 'center', minWidth: '100px' }}>
+          <h2 style={{ fontSize: '16px', fontWeight: '700', margin: 0, color: '#374151' }}>
+            {t('dashboard.energyFlow')}
+          </h2>
+          <div className="energy-flow-controls" style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Period pills */}
             <div style={{
-              width: '64px', height: '64px', borderRadius: '50%',
-              background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              margin: '0 auto 8px', boxShadow: '0 4px 12px rgba(245,158,11,0.3)'
+              display: 'flex',
+              backgroundColor: '#f3f4f6',
+              borderRadius: '8px',
+              padding: '3px',
+              gap: '2px'
             }}>
-              <Sun size={28} color="white" />
+              {(['today', 'week', 'month'] as const).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setEnergyFlowPeriod(p)}
+                  className="ef-pill"
+                  style={{
+                    padding: '5px 14px',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: energyFlowPeriod === p ? '700' : '500',
+                    backgroundColor: energyFlowPeriod === p ? 'white' : 'transparent',
+                    color: energyFlowPeriod === p ? '#667eea' : '#6b7280',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    boxShadow: energyFlowPeriod === p ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                  }}
+                >
+                  {t(`dashboard.energyFlowPeriod${p.charAt(0).toUpperCase() + p.slice(1)}` as any)}
+                </button>
+              ))}
             </div>
-            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowSolar')}</div>
-            <div style={{ fontSize: '15px', fontWeight: '700', color: '#f59e0b' }}>
-              {formatKwh(selfConsumption?.today_solar_produced ?? stats?.today_solar ?? 0)}
-            </div>
-          </div>
-
-          {/* Arrow Solar -> Building */}
-          <div className="flow-arrow" style={{
-            flex: '1',
-            maxWidth: '120px',
-            minWidth: '40px',
-            height: '3px',
-            background: 'linear-gradient(90deg, #fbbf24, #3b82f6)',
-            margin: '0 -4px',
-            position: 'relative',
-            marginBottom: '30px'
-          }}>
-            <div style={{
-              position: 'absolute', right: '-6px', top: '-4px',
-              width: 0, height: 0,
-              borderTop: '5px solid transparent',
-              borderBottom: '5px solid transparent',
-              borderLeft: '8px solid #3b82f6'
-            }} />
-            <div style={{
-              position: 'absolute', top: '8px', left: '50%', transform: 'translateX(-50%)',
-              fontSize: '11px', color: '#6b7280', whiteSpace: 'nowrap', fontWeight: '500'
-            }}>
-              {t('dashboard.energyFlowSelfUse')}
-            </div>
-          </div>
-
-          {/* Building Node */}
-          <div style={{ textAlign: 'center', minWidth: '100px' }}>
-            <div style={{
-              width: '64px', height: '64px', borderRadius: '50%',
-              background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              margin: '0 auto 8px', boxShadow: '0 4px 12px rgba(59,130,246,0.3)'
-            }}>
-              <Building size={28} color="white" />
-            </div>
-            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowBuilding')}</div>
-            <div style={{ fontSize: '15px', fontWeight: '700', color: '#3b82f6' }}>
-              {formatKwh(stats?.today_consumption ?? 0)}
-            </div>
-          </div>
-
-          {/* Arrow Building -> Grid */}
-          <div className="flow-arrow" style={{
-            flex: '1',
-            maxWidth: '120px',
-            minWidth: '40px',
-            height: '3px',
-            background: 'linear-gradient(90deg, #3b82f6, #6b7280)',
-            margin: '0 -4px',
-            position: 'relative',
-            marginBottom: '30px'
-          }}>
-            <div style={{
-              position: 'absolute', right: '-6px', top: '-4px',
-              width: 0, height: 0,
-              borderTop: '5px solid transparent',
-              borderBottom: '5px solid transparent',
-              borderLeft: '8px solid #6b7280'
-            }} />
-            <div style={{
-              position: 'absolute', top: '8px', left: '50%', transform: 'translateX(-50%)',
-              fontSize: '11px', color: '#6b7280', whiteSpace: 'nowrap', fontWeight: '500'
-            }}>
-              {t('dashboard.energyFlowExport')}
-            </div>
-          </div>
-
-          {/* Grid Node */}
-          <div style={{ textAlign: 'center', minWidth: '100px' }}>
-            <div style={{
-              width: '64px', height: '64px', borderRadius: '50%',
-              background: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              margin: '0 auto 8px', boxShadow: '0 4px 12px rgba(107,114,128,0.3)'
-            }}>
-              <Zap size={28} color="white" />
-            </div>
-            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowGrid')}</div>
-            <div style={{ fontSize: '15px', fontWeight: '700', color: '#6b7280' }}>
-              {formatKwh(Math.max(0, (selfConsumption?.today_solar_produced ?? 0) - (selfConsumption?.today_solar_consumed ?? 0)))}
-            </div>
+            {/* Building selector */}
+            <select
+              value={energyFlowBuildingId}
+              onChange={(e) => setEnergyFlowBuildingId(Number(e.target.value))}
+              style={{
+                padding: '5px 10px',
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                fontSize: '12px',
+                outline: 'none',
+                backgroundColor: 'white',
+                cursor: 'pointer',
+                color: '#374151',
+                fontWeight: '500'
+              }}
+            >
+              <option value={0}>{t('dashboard.energyFlowAllBuildings')}</option>
+              {buildingData.map(b => (
+                <option key={b.building_id} value={b.building_id}>{b.building_name}</option>
+              ))}
+            </select>
           </div>
         </div>
 
-        {/* EV Charging branch below building */}
-        {(stats?.today_charging ?? 0) > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '8px' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ width: '3px', height: '20px', backgroundColor: '#8b5cf6', margin: '0 auto' }} />
-              <div style={{
-                width: '48px', height: '48px', borderRadius: '50%',
-                background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                margin: '0 auto 6px', boxShadow: '0 4px 12px rgba(139,92,246,0.3)'
+        {/* Energy flow diagram */}
+        {energyFlowLoading && !energyFlowData ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
+            <div className="shimmer" style={{ width: '100%', height: '160px', borderRadius: '12px', background: '#f0f0f0' }} />
+          </div>
+        ) : energyFlowData ? (() => {
+          const ef = energyFlowData;
+          const solarVal = ef.solar_produced_kwh;
+          const consumptionVal = ef.total_consumption_kwh;
+          const gridImportVal = ef.grid_import_kwh;
+          const gridExportVal = ef.solar_exported_kwh;
+          const evVal = ef.ev_charging_kwh;
+          const selfConsPctVal = ef.self_consumption_pct;
+          const isImporting = gridImportVal > gridExportVal;
+          const gridMainVal = isImporting ? gridImportVal : gridExportVal;
+          const gridLabel = isImporting ? t('dashboard.energyFlowGridImport') : t('dashboard.energyFlowGridExport');
+          const hasSolar = solarVal > 0;
+          const hasEv = evVal > 0;
+          const hasGrid = gridMainVal > 0.01;
+
+          return (
+            <div style={{ position: 'relative' }}>
+              {/* Self-consumption badge */}
+              {hasSolar && (
+                <div style={{
+                  position: 'absolute', top: '0', right: '0',
+                  backgroundColor: selfConsPctVal >= 60 ? '#dcfce7' : selfConsPctVal >= 30 ? '#fef3c7' : '#fee2e2',
+                  color: selfConsPctVal >= 60 ? '#15803d' : selfConsPctVal >= 30 ? '#a16207' : '#b91c1c',
+                  padding: '4px 12px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  display: 'flex', alignItems: 'center', gap: '4px'
+                }}>
+                  <Activity size={13} />
+                  {selfConsPctVal.toFixed(0)}% {t('dashboard.energyFlowSelfConsumed')}
+                </div>
+              )}
+
+              {/* Main flow layout */}
+              <div className="energy-flow-diagram" style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '0',
+                padding: '10px 0 0'
               }}>
-                <Car size={22} color="white" />
+                {/* Solar at top */}
+                <div style={{
+                  textAlign: 'center',
+                  opacity: hasSolar ? 1 : 0.3,
+                  transition: 'opacity 0.3s'
+                }}>
+                  <div style={{
+                    width: '68px', height: '68px', borderRadius: '50%',
+                    background: hasSolar
+                      ? 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)'
+                      : 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    margin: '0 auto 8px',
+                    boxShadow: hasSolar ? '0 4px 14px rgba(245,158,11,0.3)' : 'none',
+                    transition: 'all 0.3s'
+                  }}>
+                    <Sun size={30} color="white" />
+                  </div>
+                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowSolar')}</div>
+                  <div style={{ fontSize: '16px', fontWeight: '700', color: hasSolar ? '#f59e0b' : '#9ca3af' }}>
+                    {formatKwh(solarVal)}
+                  </div>
+                </div>
+
+                {/* Arrow: Solar -> Building (vertical) */}
+                <div className="flow-connector-v" style={{
+                  width: '3px', height: '32px',
+                  background: hasSolar ? 'linear-gradient(180deg, #fbbf24, #3b82f6)' : '#e5e7eb',
+                  position: 'relative',
+                  transition: 'background 0.3s'
+                }}>
+                  {hasSolar && (
+                    <div style={{
+                      position: 'absolute', bottom: '-5px', left: '-4px',
+                      width: 0, height: 0,
+                      borderLeft: '5.5px solid transparent',
+                      borderRight: '5.5px solid transparent',
+                      borderTop: '8px solid #3b82f6'
+                    }} />
+                  )}
+                </div>
+
+                {/* Middle row: Grid ←→ Building → EV */}
+                <div className="energy-flow-middle" style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0',
+                  width: '100%',
+                  maxWidth: '600px'
+                }}>
+                  {/* Grid Node */}
+                  <div style={{
+                    textAlign: 'center', minWidth: '90px', flex: '0 0 auto',
+                    opacity: hasGrid ? 1 : 0.3, transition: 'opacity 0.3s'
+                  }}>
+                    <div style={{
+                      width: '56px', height: '56px', borderRadius: '50%',
+                      background: hasGrid
+                        ? (isImporting
+                          ? 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)'
+                          : 'linear-gradient(135deg, #10b981 0%, #059669 100%)')
+                        : 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      margin: '0 auto 6px',
+                      boxShadow: hasGrid ? '0 4px 12px rgba(107,114,128,0.25)' : 'none',
+                      transition: 'all 0.3s'
+                    }}>
+                      <Zap size={24} color="white" />
+                    </div>
+                    <div style={{ fontSize: '12px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowGrid')}</div>
+                    <div style={{
+                      fontSize: '14px', fontWeight: '700',
+                      color: hasGrid ? (isImporting ? '#6b7280' : '#10b981') : '#9ca3af'
+                    }}>
+                      {formatKwh(gridMainVal)}
+                    </div>
+                    <div style={{
+                      fontSize: '10px', fontWeight: '600',
+                      color: isImporting ? '#9ca3af' : '#6ee7b7',
+                      marginTop: '2px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
+                    }}>
+                      {gridLabel}
+                    </div>
+                  </div>
+
+                  {/* Arrow: Grid ↔ Building */}
+                  <div className="flow-connector-h" style={{
+                    flex: '1', maxWidth: '90px', minWidth: '30px', height: '3px',
+                    background: hasGrid
+                      ? (isImporting
+                        ? 'linear-gradient(90deg, #6b7280, #3b82f6)'
+                        : 'linear-gradient(90deg, #3b82f6, #10b981)')
+                      : '#e5e7eb',
+                    position: 'relative', transition: 'background 0.3s'
+                  }}>
+                    {hasGrid && isImporting && (
+                      <div style={{
+                        position: 'absolute', right: '-6px', top: '-4px',
+                        width: 0, height: 0,
+                        borderTop: '5.5px solid transparent',
+                        borderBottom: '5.5px solid transparent',
+                        borderLeft: '8px solid #3b82f6'
+                      }} />
+                    )}
+                    {hasGrid && !isImporting && (
+                      <div style={{
+                        position: 'absolute', left: '-6px', top: '-4px',
+                        width: 0, height: 0,
+                        borderTop: '5.5px solid transparent',
+                        borderBottom: '5.5px solid transparent',
+                        borderRight: '8px solid #10b981'
+                      }} />
+                    )}
+                  </div>
+
+                  {/* Building Node (center hub) */}
+                  <div style={{ textAlign: 'center', minWidth: '100px', flex: '0 0 auto' }}>
+                    <div style={{
+                      width: '72px', height: '72px', borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      margin: '0 auto 8px',
+                      boxShadow: '0 4px 14px rgba(59,130,246,0.3)',
+                      border: '3px solid rgba(59,130,246,0.15)'
+                    }}>
+                      <Building size={32} color="white" />
+                    </div>
+                    <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowBuilding')}</div>
+                    <div style={{ fontSize: '17px', fontWeight: '800', color: '#3b82f6' }}>
+                      {formatKwh(consumptionVal)}
+                    </div>
+                  </div>
+
+                  {/* Arrow: Building -> EV */}
+                  <div className="flow-connector-h" style={{
+                    flex: '1', maxWidth: '90px', minWidth: '30px', height: '3px',
+                    background: hasEv ? 'linear-gradient(90deg, #3b82f6, #8b5cf6)' : '#e5e7eb',
+                    position: 'relative', transition: 'background 0.3s'
+                  }}>
+                    {hasEv && (
+                      <div style={{
+                        position: 'absolute', right: '-6px', top: '-4px',
+                        width: 0, height: 0,
+                        borderTop: '5.5px solid transparent',
+                        borderBottom: '5.5px solid transparent',
+                        borderLeft: '8px solid #8b5cf6'
+                      }} />
+                    )}
+                  </div>
+
+                  {/* EV Charging Node */}
+                  <div style={{
+                    textAlign: 'center', minWidth: '90px', flex: '0 0 auto',
+                    opacity: hasEv ? 1 : 0.3, transition: 'opacity 0.3s'
+                  }}>
+                    <div style={{
+                      width: '56px', height: '56px', borderRadius: '50%',
+                      background: hasEv
+                        ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)'
+                        : 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      margin: '0 auto 6px',
+                      boxShadow: hasEv ? '0 4px 12px rgba(139,92,246,0.3)' : 'none',
+                      transition: 'all 0.3s'
+                    }}>
+                      <Car size={24} color="white" />
+                    </div>
+                    <div style={{ fontSize: '12px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowCharging')}</div>
+                    <div style={{ fontSize: '14px', fontWeight: '700', color: hasEv ? '#8b5cf6' : '#9ca3af' }}>
+                      {formatKwh(evVal)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Secondary info: if both import AND export exist, show the smaller one */}
+                {gridImportVal > 0.01 && gridExportVal > 0.01 && (
+                  <div style={{
+                    marginTop: '12px',
+                    padding: '6px 16px',
+                    backgroundColor: '#f9fafb',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    color: '#6b7280',
+                    display: 'flex', gap: '16px', justifyContent: 'center'
+                  }}>
+                    <span>
+                      {t('dashboard.energyFlowGridImport')}: <strong style={{ color: '#4b5563' }}>{formatKwh(gridImportVal)}</strong>
+                    </span>
+                    <span style={{ color: '#d1d5db' }}>|</span>
+                    <span>
+                      {t('dashboard.energyFlowGridExport')}: <strong style={{ color: '#10b981' }}>{formatKwh(gridExportVal)}</strong>
+                    </span>
+                  </div>
+                )}
               </div>
-              <div style={{ fontSize: '12px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowCharging')}</div>
-              <div style={{ fontSize: '14px', fontWeight: '700', color: '#8b5cf6' }}>
-                {formatKwh(stats?.today_charging ?? 0)}
-              </div>
+
+              {/* Loading overlay */}
+              {energyFlowLoading && (
+                <div style={{
+                  position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                  backgroundColor: 'rgba(255,255,255,0.6)',
+                  borderRadius: '12px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  backdropFilter: 'blur(2px)'
+                }}>
+                  <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '500' }}>...</div>
+                </div>
+              )}
             </div>
+          );
+        })() : (
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9ca3af' }}>
+            <Zap size={32} color="#d1d5db" style={{ marginBottom: '8px' }} />
+            <p style={{ margin: 0, fontSize: '13px' }}>{t('dashboard.noConsumptionData')}</p>
           </div>
         )}
       </div>
@@ -1297,6 +1525,10 @@ export default function Dashboard() {
           box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
+        .ef-pill:hover {
+          color: #374151 !important;
+        }
+
         @media (max-width: 768px) {
           .dashboard-title {
             font-size: 24px !important;
@@ -1318,32 +1550,26 @@ export default function Dashboard() {
           .hero-card .hero-value {
             font-size: 22px !important;
           }
-          .energy-flow {
+          .energy-flow-header {
             flex-direction: column !important;
-            gap: 8px !important;
+            align-items: flex-start !important;
           }
-          .flow-arrow {
+          .energy-flow-controls {
+            width: 100% !important;
+            justify-content: space-between !important;
+          }
+          .energy-flow-middle {
+            flex-direction: column !important;
+            gap: 0 !important;
+          }
+          .flow-connector-h {
             width: 3px !important;
-            height: 30px !important;
+            height: 24px !important;
             max-width: none !important;
             min-width: auto !important;
-            margin: 0 auto !important;
           }
-          .flow-arrow > div:first-child {
-            /* arrow tip - adjust for vertical */
-            right: auto !important;
-            bottom: -6px !important;
-            top: auto !important;
-            left: -4px !important;
-            border-left: 5px solid transparent !important;
-            border-right: 5px solid transparent !important;
-            border-top: 8px solid #6b7280 !important;
-            border-bottom: none !important;
-          }
-          .flow-arrow > div:last-child {
-            top: 50% !important;
-            left: 16px !important;
-            transform: translateY(-50%) !important;
+          .flow-connector-h > div {
+            display: none !important;
           }
           .consumption-controls {
             flex-direction: column;

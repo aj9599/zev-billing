@@ -1366,3 +1366,207 @@ func calcMeterConsumption(db *sql.DB, ctx context.Context, meterID int, column s
 	}
 	return 0
 }
+
+func (h *DashboardHandler) GetEnergyFlow(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("PANIC in GetEnergyFlow: %v", rec)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	period := r.URL.Query().Get("period")
+	if period == "" {
+		period = "today"
+	}
+	buildingIDStr := r.URL.Query().Get("building_id")
+
+	now := time.Now()
+	var startTime time.Time
+	switch period {
+	case "today":
+		startTime = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	case "week":
+		startTime = now.AddDate(0, 0, -7)
+	case "month":
+		startTime = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	default:
+		startTime = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		period = "today"
+	}
+
+	var flow models.EnergyFlowData
+	flow.Period = period
+
+	// Determine building filter
+	var buildingFilter string
+	var buildingArgs []interface{}
+	if buildingIDStr != "" && buildingIDStr != "0" {
+		buildingFilter = " AND m.building_id = ?"
+		var bid int
+		fmt.Sscanf(buildingIDStr, "%d", &bid)
+		buildingArgs = append(buildingArgs, bid)
+	}
+
+	// Calculate solar produced (from solar_meter export readings)
+	solarQuery := fmt.Sprintf(`SELECT id FROM meters WHERE meter_type = 'solar_meter' AND COALESCE(is_active, 1) = 1%s`,
+		strings.Replace(buildingFilter, "m.", "", 1))
+	solarRows, err := h.db.QueryContext(ctx, solarQuery, buildingArgs...)
+	if err == nil {
+		for solarRows.Next() {
+			var meterID int
+			if solarRows.Scan(&meterID) == nil {
+				flow.SolarProducedKwh += calcMeterConsumption(h.db, ctx, meterID, "power_kwh_export", startTime, now)
+			}
+		}
+		solarRows.Close()
+	}
+
+	// Calculate total consumption (from apartment_meter import readings)
+	consQuery := fmt.Sprintf(`SELECT id FROM meters WHERE meter_type = 'apartment_meter' AND COALESCE(is_active, 1) = 1%s`,
+		strings.Replace(buildingFilter, "m.", "", 1))
+	consRows, err := h.db.QueryContext(ctx, consQuery, buildingArgs...)
+	if err == nil {
+		for consRows.Next() {
+			var meterID int
+			if consRows.Scan(&meterID) == nil {
+				flow.TotalConsumptionKwh += calcMeterConsumption(h.db, ctx, meterID, "power_kwh", startTime, now)
+			}
+		}
+		consRows.Close()
+	}
+
+	// Calculate EV charging
+	chargerQuery := fmt.Sprintf(`SELECT id FROM chargers WHERE COALESCE(is_active, 1) = 1%s`,
+		strings.Replace(buildingFilter, "m.", "", 1))
+	chargerRows, err := h.db.QueryContext(ctx, chargerQuery, buildingArgs...)
+	if err == nil {
+		for chargerRows.Next() {
+			var chargerID int
+			if chargerRows.Scan(&chargerID) == nil {
+				var firstReading, latestReading, baselineReading sql.NullFloat64
+				h.db.QueryRowContext(ctx, `SELECT power_kwh FROM charger_sessions WHERE charger_id = ? AND session_time >= ? AND session_time < ? ORDER BY session_time ASC LIMIT 1`,
+					chargerID, startTime, now).Scan(&firstReading)
+				h.db.QueryRowContext(ctx, `SELECT power_kwh FROM charger_sessions WHERE charger_id = ? AND session_time >= ? AND session_time < ? ORDER BY session_time DESC LIMIT 1`,
+					chargerID, startTime, now).Scan(&latestReading)
+				h.db.QueryRowContext(ctx, `SELECT power_kwh FROM charger_sessions WHERE charger_id = ? AND session_time < ? ORDER BY session_time DESC LIMIT 1`,
+					chargerID, startTime).Scan(&baselineReading)
+				if firstReading.Valid && latestReading.Valid {
+					baseline := firstReading.Float64
+					if baselineReading.Valid {
+						baseline = baselineReading.Float64
+					}
+					consumption := latestReading.Float64 - baseline
+					if consumption > 0 {
+						flow.EvChargingKwh += consumption
+					}
+				}
+			}
+		}
+		chargerRows.Close()
+	}
+
+	// Derive self-consumption and grid import/export
+	if flow.SolarProducedKwh > 0 {
+		flow.SolarSelfConsumedKwh = flow.SolarProducedKwh
+		if flow.TotalConsumptionKwh < flow.SolarProducedKwh {
+			flow.SolarSelfConsumedKwh = flow.TotalConsumptionKwh
+		}
+		flow.SolarExportedKwh = flow.SolarProducedKwh - flow.SolarSelfConsumedKwh
+		flow.SelfConsumptionPct = (flow.SolarSelfConsumedKwh / flow.SolarProducedKwh) * 100
+	}
+	flow.GridImportKwh = flow.TotalConsumptionKwh - flow.SolarSelfConsumedKwh
+	if flow.GridImportKwh < 0 {
+		flow.GridImportKwh = 0
+	}
+
+	// Per-building breakdown (only if no specific building filter)
+	if buildingIDStr == "" || buildingIDStr == "0" {
+		buildingRows, err := h.db.QueryContext(ctx, `
+			SELECT id, name FROM buildings WHERE COALESCE(is_group, 0) = 0 ORDER BY name
+		`)
+		if err == nil {
+			for buildingRows.Next() {
+				var bid int
+				var bname string
+				if buildingRows.Scan(&bid, &bname) != nil {
+					continue
+				}
+
+				var bf models.BuildingEnergyFlow
+				bf.BuildingID = bid
+				bf.BuildingName = bname
+
+				// Solar for this building
+				sRows, err := h.db.QueryContext(ctx, `SELECT id FROM meters WHERE building_id = ? AND meter_type = 'solar_meter' AND COALESCE(is_active, 1) = 1`, bid)
+				if err == nil {
+					for sRows.Next() {
+						var mid int
+						if sRows.Scan(&mid) == nil {
+							bf.SolarProducedKwh += calcMeterConsumption(h.db, ctx, mid, "power_kwh_export", startTime, now)
+						}
+					}
+					sRows.Close()
+				}
+
+				// Consumption for this building
+				cRows, err := h.db.QueryContext(ctx, `SELECT id FROM meters WHERE building_id = ? AND meter_type = 'apartment_meter' AND COALESCE(is_active, 1) = 1`, bid)
+				if err == nil {
+					for cRows.Next() {
+						var mid int
+						if cRows.Scan(&mid) == nil {
+							bf.TotalConsumptionKwh += calcMeterConsumption(h.db, ctx, mid, "power_kwh", startTime, now)
+						}
+					}
+					cRows.Close()
+				}
+
+				// Charging for this building
+				chRows, err := h.db.QueryContext(ctx, `SELECT id FROM chargers WHERE building_id = ? AND COALESCE(is_active, 1) = 1`, bid)
+				if err == nil {
+					for chRows.Next() {
+						var cid int
+						if chRows.Scan(&cid) == nil {
+							var fr, lr, br sql.NullFloat64
+							h.db.QueryRowContext(ctx, `SELECT power_kwh FROM charger_sessions WHERE charger_id = ? AND session_time >= ? AND session_time < ? ORDER BY session_time ASC LIMIT 1`, cid, startTime, now).Scan(&fr)
+							h.db.QueryRowContext(ctx, `SELECT power_kwh FROM charger_sessions WHERE charger_id = ? AND session_time >= ? AND session_time < ? ORDER BY session_time DESC LIMIT 1`, cid, startTime, now).Scan(&lr)
+							h.db.QueryRowContext(ctx, `SELECT power_kwh FROM charger_sessions WHERE charger_id = ? AND session_time < ? ORDER BY session_time DESC LIMIT 1`, cid, startTime).Scan(&br)
+							if fr.Valid && lr.Valid {
+								bl := fr.Float64
+								if br.Valid {
+									bl = br.Float64
+								}
+								c := lr.Float64 - bl
+								if c > 0 {
+									bf.EvChargingKwh += c
+								}
+							}
+						}
+					}
+					chRows.Close()
+				}
+
+				// Derive self-consumption for this building
+				if bf.SolarProducedKwh > 0 {
+					bf.SolarSelfConsumedKwh = bf.SolarProducedKwh
+					if bf.TotalConsumptionKwh < bf.SolarProducedKwh {
+						bf.SolarSelfConsumedKwh = bf.TotalConsumptionKwh
+					}
+				}
+				bf.GridImportKwh = bf.TotalConsumptionKwh - bf.SolarSelfConsumedKwh
+				if bf.GridImportKwh < 0 {
+					bf.GridImportKwh = 0
+				}
+
+				flow.PerBuilding = append(flow.PerBuilding, bf)
+			}
+			buildingRows.Close()
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(flow)
+}

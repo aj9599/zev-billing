@@ -305,3 +305,25 @@ type CostOverview struct {
 	TotalCost float64                `json:"total_cost"`
 	Currency  string                 `json:"currency"`
 }
+
+type EnergyFlowData struct {
+	Period               string               `json:"period"`
+	SolarProducedKwh     float64              `json:"solar_produced_kwh"`
+	SolarSelfConsumedKwh float64              `json:"solar_self_consumed_kwh"`
+	SolarExportedKwh     float64              `json:"solar_exported_kwh"`
+	TotalConsumptionKwh  float64              `json:"total_consumption_kwh"`
+	GridImportKwh        float64              `json:"grid_import_kwh"`
+	EvChargingKwh        float64              `json:"ev_charging_kwh"`
+	SelfConsumptionPct   float64              `json:"self_consumption_pct"`
+	PerBuilding          []BuildingEnergyFlow `json:"per_building,omitempty"`
+}
+
+type BuildingEnergyFlow struct {
+	BuildingID           int     `json:"building_id"`
+	BuildingName         string  `json:"building_name"`
+	SolarProducedKwh     float64 `json:"solar_produced_kwh"`
+	SolarSelfConsumedKwh float64 `json:"solar_self_consumed_kwh"`
+	TotalConsumptionKwh  float64 `json:"total_consumption_kwh"`
+	GridImportKwh        float64 `json:"grid_import_kwh"`
+	EvChargingKwh        float64 `json:"ev_charging_kwh"`
+}
