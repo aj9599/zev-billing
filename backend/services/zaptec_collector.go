@@ -325,11 +325,11 @@ func (zc *ZaptecCollector) handleChargingState(chargerID int, chargerName string
 		zc.mu.Unlock()
 	}
 	
-	// Get session energy from StateId 553
+	// Get session energy from StateId 553 (value is already in kWh)
 	if sessionEnergyStr, ok := stateData[553]; ok {
 		if energyVal, err := zaptec.ParseStateValue(sessionEnergyStr); err == nil {
-			liveData.SessionEnergy_kWh = energyVal / 1000.0
-			liveData.SessionEnergy = energyVal / 1000.0
+			liveData.SessionEnergy_kWh = energyVal
+			liveData.SessionEnergy = energyVal
 		}
 	}
 	
@@ -634,7 +634,7 @@ func (zc *ZaptecCollector) GetConnectionStatus() map[string]interface{} {
 				status["live_session"] = map[string]interface{}{
 					"session_id":     data.SessionID,
 					"energy_kwh":     data.SessionEnergy_kWh,
-					"start_time":     data.SessionStart.Format("2006-01-02 15:04:05"),
+					"start_time":     data.SessionStart.Format(time.RFC3339),
 					"duration":       zaptec.FormatDuration(time.Since(data.SessionStart)),
 					"user_id":        data.UserID,
 					"power_kw":       data.CurrentPower_kW,

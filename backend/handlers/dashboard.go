@@ -939,6 +939,18 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					}
 					sessionRows.Close()
 
+					// Add trailing 0W point after last charging data to bring line back to zero
+					if len(consumptionData) > 1 {
+						lastPoint := consumptionData[len(consumptionData)-1]
+						if lastPoint.Power > 0 {
+							consumptionData = append(consumptionData, models.ConsumptionData{
+								Timestamp: lastPoint.Timestamp.Add(15 * time.Minute),
+								Power:     0,
+								Source:    "charger",
+							})
+						}
+					}
+
 					// Only add this user's data if they actually have charging data
 					if len(consumptionData) > 0 {
 						chargerData := MeterData{

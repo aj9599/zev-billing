@@ -104,13 +104,32 @@ function getMeterTypeIcon(meterType: string, t: any): { Icon: any; label: string
 function roundToNearest15Minutes(timestamp: string): Date {
   const date = new Date(timestamp);
   const minutes = date.getMinutes();
-  const roundedMinutes = Math.round(minutes / 15) * 15;
-  
+
+  // Match backend rounding logic exactly
+  let roundedMinutes: number;
+  if (minutes < 8) {
+    roundedMinutes = 0;
+  } else if (minutes < 23) {
+    roundedMinutes = 15;
+  } else if (minutes < 38) {
+    roundedMinutes = 30;
+  } else if (minutes < 53) {
+    roundedMinutes = 45;
+  } else {
+    // Round up to next hour
+    const rounded = new Date(date);
+    rounded.setHours(rounded.getHours() + 1);
+    rounded.setMinutes(0);
+    rounded.setSeconds(0);
+    rounded.setMilliseconds(0);
+    return rounded;
+  }
+
   const rounded = new Date(date);
   rounded.setMinutes(roundedMinutes);
   rounded.setSeconds(0);
   rounded.setMilliseconds(0);
-  
+
   return rounded;
 }
 
@@ -186,6 +205,7 @@ export default function Dashboard() {
   
   // Track visible meters for each building
   const [visibleMetersByBuilding, setVisibleMetersByBuilding] = useState<Map<number, Set<string>>>(new Map());
+  const visibilityInitialized = React.useRef(false);
 
   const loadData = React.useCallback(async () => {
     try {
@@ -196,52 +216,23 @@ export default function Dashboard() {
       ]);
       setStats(statsData);
       
-      // Log data for debugging
-      if (Array.isArray(buildingConsumption)) {
-        buildingConsumption.forEach(building => {
-          const solarMeters = building.meters?.filter(m => m.meter_type === 'solar_meter') || [];
-          const chargers = building.meters?.filter(m => m.meter_type === 'charger') || [];
-          
-          if (solarMeters.length > 0) {
-            console.log(`Building ${building.building_name} - Solar meters:`);
-            solarMeters.forEach(s => {
-              console.log(`  - ${s.meter_name}: ${s.data.length} data points`);
-              if (s.data.length > 0) {
-                const avgPower = s.data.reduce((sum, d) => sum + d.power, 0) / s.data.length;
-                const minPower = Math.min(...s.data.map(d => d.power));
-                console.log(`    Avg: ${avgPower.toFixed(0)}W, Min: ${minPower.toFixed(0)}W (negative = export)`);
-              }
-            });
-          }
-          
-          if (chargers.length > 0) {
-            console.log(`Building ${building.building_name} - Chargers:`);
-            chargers.forEach(c => {
-              console.log(`  - ${c.meter_name} (${c.user_name}): ${c.data.length} data points`);
-              if (c.data.length > 0) {
-                const avgPower = c.data.reduce((sum, d) => sum + d.power, 0) / c.data.length;
-                const maxPower = Math.max(...c.data.map(d => d.power));
-                console.log(`    Avg: ${avgPower.toFixed(0)}W, Max: ${maxPower.toFixed(0)}W`);
-              }
-            });
-          }
-        });
-      }
-      
       setBuildingData(Array.isArray(buildingConsumption) ? buildingConsumption : []);
       
-      // Initialize all meters as visible
-      const initialVisibility = new Map<number, Set<string>>();
-      if (Array.isArray(buildingConsumption)) {
-        buildingConsumption.forEach(building => {
-          const visibleSet = new Set<string>();
-          building.meters?.forEach(meter => {
-            visibleSet.add(getMeterUniqueKey(meter));
+      // Only initialize visibility on first load, preserve user toggles on refresh
+      if (!visibilityInitialized.current) {
+        const initialVisibility = new Map<number, Set<string>>();
+        if (Array.isArray(buildingConsumption)) {
+          buildingConsumption.forEach(building => {
+            const visibleSet = new Set<string>();
+            building.meters?.forEach(meter => {
+              visibleSet.add(getMeterUniqueKey(meter));
+            });
+            initialVisibility.set(building.building_id, visibleSet);
           });
-          initialVisibility.set(building.building_id, visibleSet);
-        });
+        }
+        setVisibleMetersByBuilding(initialVisibility);
+        visibilityInitialized.current = true;
       }
-      setVisibleMetersByBuilding(initialVisibility);
       
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
@@ -580,28 +571,11 @@ export default function Dashboard() {
             const timeMap = new Map<string, any>();
             const meters = building.meters || [];
             
-            const solarMeters = meters.filter(m => m.meter_type === 'solar_meter');
-            const chargerMeters = meters.filter(m => m.meter_type === 'charger');
-            
-            if (solarMeters.length > 0) {
-              console.log(`Building ${building.building_name} - Processing ${solarMeters.length} solar meter(s)`);
-            }
-            if (chargerMeters.length > 0) {
-              console.log(`Building ${building.building_name} - Processing ${chargerMeters.length} charger(s)`);
-            }
-            
             meters.forEach(meter => {
               const readings = meter.data || [];
               const isSolar = meter.meter_type === 'solar_meter';
               const isCharger = meter.meter_type === 'charger';
-              
-              if (isSolar && readings.length > 0) {
-                console.log(`  Solar ${meter.meter_name}: ${readings.length} readings`);
-              }
-              if (isCharger && readings.length > 0) {
-                console.log(`  Charger ${meter.meter_name} (${meter.user_name}): ${readings.length} readings`);
-              }
-              
+
               readings.forEach(reading => {
                 const roundedDate = roundToNearest15Minutes(reading.timestamp);
                 const timestampKey = roundedDate.toISOString();
@@ -630,21 +604,6 @@ export default function Dashboard() {
               return a.sortKey - b.sortKey;
             });
             
-            if (solarMeters.length > 0) {
-              const solarKeys = solarMeters.map(sm => getMeterUniqueKey(sm));
-              const pointsWithSolarData = chartData.filter(point => 
-                solarKeys.some(key => point[key] !== undefined)
-              );
-              console.log(`  Chart has ${chartData.length} time points, ${pointsWithSolarData.length} with solar data`);
-            }
-            if (chargerMeters.length > 0) {
-              const chargerKeys = chargerMeters.map(cm => getMeterUniqueKey(cm));
-              const pointsWithChargerData = chartData.filter(point => 
-                chargerKeys.some(key => point[key] !== undefined)
-              );
-              console.log(`  Chart has ${chartData.length} time points, ${pointsWithChargerData.length} with charger data`);
-            }
-
             return (
               <div
                 key={building.building_id}
@@ -760,23 +719,47 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                {chartData.length > 0 ? (
+                {chartData.length > 0 ? (() => {
+                  // Calculate Y-axis domain based on visible meters only
+                  const visibleKeys = meters
+                    .filter(m => isMeterVisible(building.building_id, getMeterUniqueKey(m)))
+                    .map(m => getMeterUniqueKey(m));
+
+                  let yMin = 0;
+                  let yMax = 0;
+                  chartData.forEach(point => {
+                    visibleKeys.forEach(key => {
+                      const val = point[key];
+                      if (typeof val === 'number') {
+                        if (val < yMin) yMin = val;
+                        if (val > yMax) yMax = val;
+                      }
+                    });
+                  });
+
+                  // Add 10% padding
+                  const padding = Math.max((yMax - yMin) * 0.1, 100);
+                  const domainMin = Math.floor((yMin - padding) / 100) * 100;
+                  const domainMax = Math.ceil((yMax + padding) / 100) * 100;
+
+                  return (
                   <div className="chart-container" style={{ width: '100%', height: '400px' }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={chartData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                        <XAxis 
-                          dataKey="time" 
+                        <XAxis
+                          dataKey="time"
                           style={{ fontSize: '12px' }}
                           stroke="#6b7280"
                           angle={period === '24h' || period === '7d' || period === '30d' ? -45 : 0}
                           textAnchor={period === '24h' || period === '7d' || period === '30d' ? 'end' : 'middle'}
                           height={period === '24h' || period === '7d' || period === '30d' ? 80 : 30}
                         />
-                        <YAxis 
-                          label={{ 
-                            value: t('dashboard.powerUnit'), 
-                            angle: -90, 
+                        <YAxis
+                          domain={[domainMin, domainMax]}
+                          label={{
+                            value: t('dashboard.powerUnit'),
+                            angle: -90,
                             position: 'insideLeft',
                             style: { fontSize: '12px' }
                           }}
@@ -817,7 +800,8 @@ export default function Dashboard() {
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
-                ) : meters.length > 0 ? (
+                  );
+                })() : meters.length > 0 ? (
                   <div style={{ 
                     textAlign: 'center', 
                     padding: '60px 20px', 
