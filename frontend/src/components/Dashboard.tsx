@@ -645,14 +645,8 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* Main flow layout */}
-              <div className="energy-flow-diagram" style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '0',
-                padding: '10px 0 0'
-              }}>
+              {/* ── Desktop layout: Grid ← Building → EV with Solar on top ── */}
+              <div className="ef-desktop" style={{ padding: '10px 0 0' }}>
                 {/* Solar at top */}
                 <div style={{
                   textAlign: 'center',
@@ -677,12 +671,11 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Arrow: Solar -> Building (vertical) */}
-                <div className="flow-connector-v" style={{
-                  width: '3px', height: '32px',
+                {/* Vertical connector: Solar -> Building */}
+                <div style={{
+                  width: '3px', height: '32px', margin: '0 auto',
                   background: hasSolar ? 'linear-gradient(180deg, #fbbf24, #3b82f6)' : '#e5e7eb',
-                  position: 'relative',
-                  transition: 'background 0.3s'
+                  position: 'relative', transition: 'background 0.3s'
                 }}>
                   {hasSolar && (
                     <div style={{
@@ -696,13 +689,9 @@ export default function Dashboard() {
                 </div>
 
                 {/* Middle row: Grid ←→ Building → EV */}
-                <div className="energy-flow-middle" style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0',
-                  width: '100%',
-                  maxWidth: '600px'
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  gap: '0', width: '100%', maxWidth: '600px', margin: '0 auto'
                 }}>
                   {/* Grid Node */}
                   <div style={{
@@ -724,50 +713,25 @@ export default function Dashboard() {
                       <Zap size={24} color="white" />
                     </div>
                     <div style={{ fontSize: '12px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowGrid')}</div>
-                    <div style={{
-                      fontSize: '14px', fontWeight: '700',
-                      color: hasGrid ? (isImporting ? '#6b7280' : '#10b981') : '#9ca3af'
-                    }}>
+                    <div style={{ fontSize: '14px', fontWeight: '700', color: hasGrid ? (isImporting ? '#6b7280' : '#10b981') : '#9ca3af' }}>
                       {formatKwh(gridMainVal)}
                     </div>
-                    <div style={{
-                      fontSize: '10px', fontWeight: '600',
-                      color: isImporting ? '#9ca3af' : '#6ee7b7',
-                      marginTop: '2px',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px'
-                    }}>
+                    <div style={{ fontSize: '10px', fontWeight: '600', color: isImporting ? '#9ca3af' : '#6ee7b7', marginTop: '2px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                       {gridLabel}
                     </div>
                   </div>
 
-                  {/* Arrow: Grid ↔ Building */}
-                  <div className="flow-connector-h" style={{
+                  {/* Horizontal connector: Grid ↔ Building */}
+                  <div style={{
                     flex: '1', maxWidth: '90px', minWidth: '30px', height: '3px',
-                    background: hasGrid
-                      ? (isImporting
-                        ? 'linear-gradient(90deg, #6b7280, #3b82f6)'
-                        : 'linear-gradient(90deg, #3b82f6, #10b981)')
-                      : '#e5e7eb',
+                    background: hasGrid ? (isImporting ? 'linear-gradient(90deg, #6b7280, #3b82f6)' : 'linear-gradient(90deg, #3b82f6, #10b981)') : '#e5e7eb',
                     position: 'relative', transition: 'background 0.3s'
                   }}>
                     {hasGrid && isImporting && (
-                      <div style={{
-                        position: 'absolute', right: '-6px', top: '-4px',
-                        width: 0, height: 0,
-                        borderTop: '5.5px solid transparent',
-                        borderBottom: '5.5px solid transparent',
-                        borderLeft: '8px solid #3b82f6'
-                      }} />
+                      <div style={{ position: 'absolute', right: '-6px', top: '-4px', width: 0, height: 0, borderTop: '5.5px solid transparent', borderBottom: '5.5px solid transparent', borderLeft: '8px solid #3b82f6' }} />
                     )}
                     {hasGrid && !isImporting && (
-                      <div style={{
-                        position: 'absolute', left: '-6px', top: '-4px',
-                        width: 0, height: 0,
-                        borderTop: '5.5px solid transparent',
-                        borderBottom: '5.5px solid transparent',
-                        borderRight: '8px solid #10b981'
-                      }} />
+                      <div style={{ position: 'absolute', left: '-6px', top: '-4px', width: 0, height: 0, borderTop: '5.5px solid transparent', borderBottom: '5.5px solid transparent', borderRight: '8px solid #10b981' }} />
                     )}
                   </div>
 
@@ -784,25 +748,17 @@ export default function Dashboard() {
                       <Building size={32} color="white" />
                     </div>
                     <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowBuilding')}</div>
-                    <div style={{ fontSize: '17px', fontWeight: '800', color: '#3b82f6' }}>
-                      {formatKwh(consumptionVal)}
-                    </div>
+                    <div style={{ fontSize: '17px', fontWeight: '800', color: '#3b82f6' }}>{formatKwh(consumptionVal)}</div>
                   </div>
 
-                  {/* Arrow: Building -> EV */}
-                  <div className="flow-connector-h" style={{
+                  {/* Horizontal connector: Building -> EV */}
+                  <div style={{
                     flex: '1', maxWidth: '90px', minWidth: '30px', height: '3px',
                     background: hasEv ? 'linear-gradient(90deg, #3b82f6, #8b5cf6)' : '#e5e7eb',
                     position: 'relative', transition: 'background 0.3s'
                   }}>
                     {hasEv && (
-                      <div style={{
-                        position: 'absolute', right: '-6px', top: '-4px',
-                        width: 0, height: 0,
-                        borderTop: '5.5px solid transparent',
-                        borderBottom: '5.5px solid transparent',
-                        borderLeft: '8px solid #8b5cf6'
-                      }} />
+                      <div style={{ position: 'absolute', right: '-6px', top: '-4px', width: 0, height: 0, borderTop: '5.5px solid transparent', borderBottom: '5.5px solid transparent', borderLeft: '8px solid #8b5cf6' }} />
                     )}
                   </div>
 
@@ -813,9 +769,7 @@ export default function Dashboard() {
                   }}>
                     <div style={{
                       width: '56px', height: '56px', borderRadius: '50%',
-                      background: hasEv
-                        ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)'
-                        : 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)',
+                      background: hasEv ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' : 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       margin: '0 auto 6px',
                       boxShadow: hasEv ? '0 4px 12px rgba(139,92,246,0.3)' : 'none',
@@ -824,30 +778,113 @@ export default function Dashboard() {
                       <Car size={24} color="white" />
                     </div>
                     <div style={{ fontSize: '12px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowCharging')}</div>
-                    <div style={{ fontSize: '14px', fontWeight: '700', color: hasEv ? '#8b5cf6' : '#9ca3af' }}>
-                      {formatKwh(evVal)}
-                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: '700', color: hasEv ? '#8b5cf6' : '#9ca3af' }}>{formatKwh(evVal)}</div>
                   </div>
                 </div>
 
-                {/* Secondary info: if both import AND export exist, show the smaller one */}
+                {/* Secondary info: if both import AND export exist */}
                 {gridImportVal > 0.01 && gridExportVal > 0.01 && (
                   <div style={{
-                    marginTop: '12px',
-                    padding: '6px 16px',
-                    backgroundColor: '#f9fafb',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                    color: '#6b7280',
+                    marginTop: '12px', padding: '6px 16px', backgroundColor: '#f9fafb',
+                    borderRadius: '8px', fontSize: '12px', color: '#6b7280',
                     display: 'flex', gap: '16px', justifyContent: 'center'
                   }}>
-                    <span>
-                      {t('dashboard.energyFlowGridImport')}: <strong style={{ color: '#4b5563' }}>{formatKwh(gridImportVal)}</strong>
-                    </span>
+                    <span>{t('dashboard.energyFlowGridImport')}: <strong style={{ color: '#4b5563' }}>{formatKwh(gridImportVal)}</strong></span>
                     <span style={{ color: '#d1d5db' }}>|</span>
-                    <span>
-                      {t('dashboard.energyFlowGridExport')}: <strong style={{ color: '#10b981' }}>{formatKwh(gridExportVal)}</strong>
-                    </span>
+                    <span>{t('dashboard.energyFlowGridExport')}: <strong style={{ color: '#10b981' }}>{formatKwh(gridExportVal)}</strong></span>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Mobile layout: vertical Solar → Building → Grid / EV side by side ── */}
+              <div className="ef-mobile" style={{ padding: '10px 0 0' }}>
+                {/* Solar */}
+                <div style={{ textAlign: 'center', opacity: hasSolar ? 1 : 0.3 }}>
+                  <div style={{
+                    width: '60px', height: '60px', borderRadius: '50%',
+                    background: hasSolar ? 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)' : 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    margin: '0 auto 6px',
+                    boxShadow: hasSolar ? '0 4px 12px rgba(245,158,11,0.3)' : 'none'
+                  }}>
+                    <Sun size={26} color="white" />
+                  </div>
+                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowSolar')}</div>
+                  <div style={{ fontSize: '15px', fontWeight: '700', color: hasSolar ? '#f59e0b' : '#9ca3af' }}>{formatKwh(solarVal)}</div>
+                </div>
+
+                {/* Vertical connector */}
+                <div style={{ width: '3px', height: '24px', margin: '0 auto', background: hasSolar ? 'linear-gradient(180deg, #fbbf24, #3b82f6)' : '#e5e7eb', position: 'relative' }}>
+                  {hasSolar && <div style={{ position: 'absolute', bottom: '-4px', left: '-3.5px', width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '7px solid #3b82f6' }} />}
+                </div>
+
+                {/* Building (center) */}
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{
+                    width: '68px', height: '68px', borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    margin: '0 auto 6px',
+                    boxShadow: '0 4px 14px rgba(59,130,246,0.3)',
+                    border: '3px solid rgba(59,130,246,0.15)'
+                  }}>
+                    <Building size={28} color="white" />
+                  </div>
+                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowBuilding')}</div>
+                  <div style={{ fontSize: '16px', fontWeight: '800', color: '#3b82f6' }}>{formatKwh(consumptionVal)}</div>
+                </div>
+
+                {/* Bottom row: Grid and EV side by side */}
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '32px', marginTop: '4px' }}>
+                  {/* Grid branch */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', opacity: hasGrid ? 1 : 0.3 }}>
+                    <div style={{ width: '3px', height: '20px', background: hasGrid ? (isImporting ? 'linear-gradient(180deg, #3b82f6, #6b7280)' : 'linear-gradient(180deg, #3b82f6, #10b981)') : '#e5e7eb', position: 'relative' }}>
+                      {hasGrid && isImporting && <div style={{ position: 'absolute', top: '-4px', left: '-3.5px', width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderBottom: '7px solid #3b82f6' }} />}
+                      {hasGrid && !isImporting && <div style={{ position: 'absolute', bottom: '-4px', left: '-3.5px', width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '7px solid #10b981' }} />}
+                    </div>
+                    <div style={{
+                      width: '50px', height: '50px', borderRadius: '50%',
+                      background: hasGrid ? (isImporting ? 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)') : 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      margin: '0 auto 4px',
+                      boxShadow: hasGrid ? '0 3px 10px rgba(107,114,128,0.25)' : 'none'
+                    }}>
+                      <Zap size={20} color="white" />
+                    </div>
+                    <div style={{ fontSize: '11px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowGrid')}</div>
+                    <div style={{ fontSize: '13px', fontWeight: '700', color: hasGrid ? (isImporting ? '#6b7280' : '#10b981') : '#9ca3af' }}>{formatKwh(gridMainVal)}</div>
+                    <div style={{ fontSize: '9px', fontWeight: '600', color: isImporting ? '#9ca3af' : '#6ee7b7', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{gridLabel}</div>
+                  </div>
+
+                  {/* EV branch */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', opacity: hasEv ? 1 : 0.3 }}>
+                    <div style={{ width: '3px', height: '20px', background: hasEv ? 'linear-gradient(180deg, #3b82f6, #8b5cf6)' : '#e5e7eb', position: 'relative' }}>
+                      {hasEv && <div style={{ position: 'absolute', bottom: '-4px', left: '-3.5px', width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '7px solid #8b5cf6' }} />}
+                    </div>
+                    <div style={{
+                      width: '50px', height: '50px', borderRadius: '50%',
+                      background: hasEv ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' : 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      margin: '0 auto 4px',
+                      boxShadow: hasEv ? '0 3px 10px rgba(139,92,246,0.3)' : 'none'
+                    }}>
+                      <Car size={20} color="white" />
+                    </div>
+                    <div style={{ fontSize: '11px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowCharging')}</div>
+                    <div style={{ fontSize: '13px', fontWeight: '700', color: hasEv ? '#8b5cf6' : '#9ca3af' }}>{formatKwh(evVal)}</div>
+                  </div>
+                </div>
+
+                {/* Secondary info */}
+                {gridImportVal > 0.01 && gridExportVal > 0.01 && (
+                  <div style={{
+                    marginTop: '12px', padding: '6px 12px', backgroundColor: '#f9fafb',
+                    borderRadius: '8px', fontSize: '11px', color: '#6b7280',
+                    display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap'
+                  }}>
+                    <span>{t('dashboard.energyFlowGridImport')}: <strong style={{ color: '#4b5563' }}>{formatKwh(gridImportVal)}</strong></span>
+                    <span style={{ color: '#d1d5db' }}>|</span>
+                    <span>{t('dashboard.energyFlowGridExport')}: <strong style={{ color: '#10b981' }}>{formatKwh(gridExportVal)}</strong></span>
                   </div>
                 )}
               </div>
@@ -1529,6 +1566,10 @@ export default function Dashboard() {
           color: #374151 !important;
         }
 
+        /* Energy flow: desktop visible, mobile hidden by default */
+        .ef-desktop { display: block; }
+        .ef-mobile { display: none; }
+
         @media (max-width: 768px) {
           .dashboard-title {
             font-size: 24px !important;
@@ -1558,19 +1599,9 @@ export default function Dashboard() {
             width: 100% !important;
             justify-content: space-between !important;
           }
-          .energy-flow-middle {
-            flex-direction: column !important;
-            gap: 0 !important;
-          }
-          .flow-connector-h {
-            width: 3px !important;
-            height: 24px !important;
-            max-width: none !important;
-            min-width: auto !important;
-          }
-          .flow-connector-h > div {
-            display: none !important;
-          }
+          /* Switch to mobile energy flow layout */
+          .ef-desktop { display: none !important; }
+          .ef-mobile { display: block !important; }
           .consumption-controls {
             flex-direction: column;
             align-items: stretch !important;
