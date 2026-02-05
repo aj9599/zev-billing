@@ -1748,26 +1748,14 @@ func (h *DashboardHandler) GetEnergyFlowLive(w http.ResponseWriter, r *http.Requ
 				var chargerPowerKw float64
 
 				// Try to get live charger data from data collector
+				// ONLY use live data - don't estimate from historical sessions
+				// because that would show power even when no car is connected
 				if h.dataCollector != nil {
 					if status, ok := h.dataCollector.GetChargerLiveStatus(chargerID); ok && status != nil {
-						chargerPowerKw = status.CurrentPower_kW
-					}
-				}
-
-				// If no live data, check recent charger sessions for power estimate
-				if chargerPowerKw == 0 {
-					var consumptionKwh sql.NullFloat64
-					h.db.QueryRowContext(ctx, `
-						SELECT (
-							SELECT power_kwh FROM charger_sessions
-							WHERE charger_id = ? ORDER BY session_time DESC LIMIT 1
-						) - (
-							SELECT power_kwh FROM charger_sessions
-							WHERE charger_id = ? ORDER BY session_time DESC LIMIT 1 OFFSET 1
-						)
-					`, chargerID, chargerID).Scan(&consumptionKwh)
-					if consumptionKwh.Valid && consumptionKwh.Float64 > 0 {
-						chargerPowerKw = consumptionKwh.Float64 / 0.25
+						// Only show power if the charger reports active charging
+						if status.SessionActive || status.CurrentPower_kW > 0.1 {
+							chargerPowerKw = status.CurrentPower_kW
+						}
 					}
 				}
 

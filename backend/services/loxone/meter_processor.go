@@ -68,13 +68,28 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 		device.LastUpdate = time.Now()
 		device.ReadingGaps = 0
 
-		// Update live power - positive = import/consumption, negative = export
-		if livePowerW >= 0 {
-			device.LivePowerW = livePowerW
-			device.LivePowerExpW = 0
+		// Update live power based on meter type
+		// For SOLAR meters: Pf represents production (always positive for generation)
+		// For GRID/TOTAL meters: Pf positive = import from grid, negative = export to grid
+		if isSolarMeter {
+			// Solar meter: Pf shows production power (always use as export/production)
+			if livePowerW >= 0 {
+				device.LivePowerW = 0
+				device.LivePowerExpW = livePowerW // Solar production
+			} else {
+				// Shouldn't happen for solar, but handle it
+				device.LivePowerW = -livePowerW
+				device.LivePowerExpW = 0
+			}
 		} else {
-			device.LivePowerW = 0
-			device.LivePowerExpW = -livePowerW // Make positive for export
+			// Grid/total meter: positive = import, negative = export
+			if livePowerW >= 0 {
+				device.LivePowerW = livePowerW
+				device.LivePowerExpW = 0
+			} else {
+				device.LivePowerW = 0
+				device.LivePowerExpW = -livePowerW // Make positive for export
+			}
 		}
 		device.LivePowerTime = time.Now()
 
