@@ -292,47 +292,78 @@ func (conn *WebSocketConnection) requestData() {
 	}
 }
 
-// requestLivePower polls meter power (Pf) values frequently for live dashboard display
-// This runs every 10 seconds and only requests data for meters, not chargers
-// It does NOT save to database - just updates the in-memory LivePowerW/LivePowerExpW values
+// requestLivePower polls ALL meters frequently for live dashboard display
+// This runs every 15 seconds and requests data for ALL meters (not just meter_block)
+// For meter_block mode: uses Pf (output0) for direct live power
+// For other modes: calculates power from energy delta between polls
+// Data is NOT saved to database here - only at :00, :15, :30, :45 by requestData()
 func (conn *WebSocketConnection) requestLivePower() {
 	defer conn.GoroutinesWg.Done()
 
-	log.Printf("⚡ LIVE POWER POLLING STARTED for %s (every 10 seconds)", conn.Host)
+	log.Printf("⚡ LIVE POWER POLLING STARTED for %s (every 15 seconds)", conn.Host)
 
 	// Wait a bit for initial connection to stabilize
 	time.Sleep(5 * time.Second)
 
-	ticker := time.NewTicker(10 * time.Second)
+	// Log which meters will be polled
+	conn.Mu.Lock()
+	var meterBlockCount, otherModeCount int
+	for _, device := range conn.Devices {
+		if device.Type == "meter" {
+			if device.LoxoneMode == "meter_block" {
+				meterBlockCount++
+				log.Printf("⚡ [%s] Meter '%s' (ID:%d) mode=%s - will use Pf for live power", conn.Host, device.Name, device.ID, device.LoxoneMode)
+			} else {
+				otherModeCount++
+				log.Printf("⚡ [%s] Meter '%s' (ID:%d) mode=%s - will calculate power from energy delta", conn.Host, device.Name, device.ID, device.LoxoneMode)
+			}
+		}
+	}
+	conn.Mu.Unlock()
+	log.Printf("⚡ [%s] Live power polling: %d meters with Pf support, %d meters using energy delta calculation", conn.Host, meterBlockCount, otherModeCount)
+
+	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 
+	pollCount := 0
 	for {
 		select {
 		case <-conn.StopChan:
 			log.Printf("🗑️ [%s] Live power polling stopping", conn.Host)
 			return
 		case <-ticker.C:
-			// Skip if not connected or collection is in progress (to avoid conflicts)
+			// Skip if not connected or collection is in progress (to avoid conflicts with 15-min billing cycle)
 			conn.Mu.Lock()
-			if !conn.IsConnected || conn.Ws == nil || conn.CollectionInProgress {
+			isConnected := conn.IsConnected
+			hasWs := conn.Ws != nil
+			collectionInProgress := conn.CollectionInProgress
+
+			if !isConnected || !hasWs || collectionInProgress {
 				conn.Mu.Unlock()
+				if pollCount%4 == 0 { // Log every minute
+					log.Printf("⚡ [%s] Live power poll skipped: connected=%v, hasWs=%v, collectionInProgress=%v",
+						conn.Host, isConnected, hasWs, collectionInProgress)
+				}
+				pollCount++
 				continue
 			}
 
-			// Get meters that use meter_block mode (they have Pf output)
+			// Get ALL meters for live power polling
 			var meters []*Device
 			for _, device := range conn.Devices {
-				if device.Type == "meter" && device.LoxoneMode == "meter_block" {
+				if device.Type == "meter" {
 					meters = append(meters, device)
 				}
 			}
 			conn.Mu.Unlock()
 
 			if len(meters) == 0 {
+				pollCount++
 				continue
 			}
 
 			// Request data for each meter
+			sentCount := 0
 			for _, device := range meters {
 				select {
 				case <-conn.StopChan:
@@ -344,12 +375,26 @@ func (conn *WebSocketConnection) requestLivePower() {
 
 				if err := conn.safeWriteMessage(websocket.TextMessage, []byte(cmd)); err != nil {
 					log.Printf("⚠️ Live power request failed for meter %s: %v", device.Name, err)
-					// Don't break the loop, try other meters
 					continue
+				}
+				sentCount++
+
+				// For virtual_output_dual mode, also request the export device
+				if device.LoxoneMode == "virtual_output_dual" && device.ExportDeviceID != "" {
+					cmdExport := fmt.Sprintf("jdev/sps/io/%s/all", device.ExportDeviceID)
+					if err := conn.safeWriteMessage(websocket.TextMessage, []byte(cmdExport)); err != nil {
+						log.Printf("⚠️ Live power export request failed for meter %s: %v", device.Name, err)
+					}
 				}
 
 				// Small delay between requests to not overwhelm the Miniserver
 				time.Sleep(50 * time.Millisecond)
+			}
+
+			pollCount++
+			// Log every poll for first 4, then every minute
+			if pollCount <= 4 || pollCount%4 == 0 {
+				log.Printf("⚡ [%s] Live power poll #%d: sent requests for %d meters", conn.Host, pollCount, sentCount)
 			}
 		}
 	}

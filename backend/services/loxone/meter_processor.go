@@ -118,6 +118,22 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 			return
 		}
 
+		// Calculate live power from energy delta (for live dashboard display)
+		// Power (W) = Energy delta (kWh) / Time delta (hours) * 1000
+		if device.LastReading > 0 && !device.LastUpdate.IsZero() {
+			timeDeltaHours := time.Since(device.LastUpdate).Hours()
+			if timeDeltaHours > 0 && timeDeltaHours < 1 { // Only calculate if reasonable time delta
+				energyDeltaKwh := reading - device.LastReading
+				if energyDeltaKwh >= 0 {
+					powerW := (energyDeltaKwh / timeDeltaHours) * 1000
+					device.LivePowerW = powerW
+					device.LivePowerExpW = 0
+					device.LivePowerTime = time.Now()
+					log.Printf("   ⚡ Calculated live power: %.1f W (delta: %.4f kWh in %.1f sec)", powerW, energyDeltaKwh, timeDeltaHours*3600)
+				}
+			}
+		}
+
 		device.LastReading = reading
 		device.LastUpdate = time.Now()
 		device.ReadingGaps = 0
@@ -214,6 +230,37 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 			log.Printf("   ✅ Both readings available - Import: %.3f kWh, Export: %.3f kWh",
 				importValue, exportValue)
 
+			// Calculate live power from energy delta (for live dashboard display)
+			// Power (W) = Energy delta (kWh) / Time delta (hours) * 1000
+			if device.LastReading > 0 && !device.LastUpdate.IsZero() {
+				timeDeltaHours := time.Since(device.LastUpdate).Hours()
+				if timeDeltaHours > 0 && timeDeltaHours < 1 { // Only calculate if reasonable time delta
+					if isSolarMeter {
+						// Solar meter: calculate power from export (production)
+						energyDeltaKwh := exportValue - device.LastReadingExport
+						if energyDeltaKwh >= 0 {
+							powerW := (energyDeltaKwh / timeDeltaHours) * 1000
+							device.LivePowerW = 0
+							device.LivePowerExpW = powerW // Solar production
+							device.LivePowerTime = time.Now()
+							log.Printf("   ⚡ Calculated solar live power: %.1f W (delta: %.4f kWh in %.1f sec)", powerW, energyDeltaKwh, timeDeltaHours*3600)
+						}
+					} else {
+						// Grid/total meter: calculate from import and export
+						importDeltaKwh := importValue - device.LastReading
+						exportDeltaKwh := exportValue - device.LastReadingExport
+						if importDeltaKwh >= 0 && exportDeltaKwh >= 0 {
+							importPowerW := (importDeltaKwh / timeDeltaHours) * 1000
+							exportPowerW := (exportDeltaKwh / timeDeltaHours) * 1000
+							device.LivePowerW = importPowerW
+							device.LivePowerExpW = exportPowerW
+							device.LivePowerTime = time.Now()
+							log.Printf("   ⚡ Calculated grid live power: import=%.1f W, export=%.1f W", importPowerW, exportPowerW)
+						}
+					}
+				}
+			}
+
 			// Clear buffer BEFORE saving to prevent race conditions
 			buffer.HasImport = false
 			buffer.HasExport = false
@@ -257,6 +304,22 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 
 		if reading <= 0 {
 			return
+		}
+
+		// Calculate live power from energy delta (for live dashboard display)
+		// Power (W) = Energy delta (kWh) / Time delta (hours) * 1000
+		if device.LastReading > 0 && !device.LastUpdate.IsZero() {
+			timeDeltaHours := time.Since(device.LastUpdate).Hours()
+			if timeDeltaHours > 0 && timeDeltaHours < 1 { // Only calculate if reasonable time delta
+				energyDeltaKwh := reading - device.LastReading
+				if energyDeltaKwh >= 0 {
+					powerW := (energyDeltaKwh / timeDeltaHours) * 1000
+					device.LivePowerW = powerW
+					device.LivePowerExpW = 0
+					device.LivePowerTime = time.Now()
+					log.Printf("   ⚡ Calculated live power: %.1f W (delta: %.4f kWh in %.1f sec)", powerW, energyDeltaKwh, timeDeltaHours*3600)
+				}
+			}
 		}
 
 		device.LastReading = reading

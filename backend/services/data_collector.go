@@ -974,19 +974,13 @@ func (dc *DataCollector) GetLiveMeterReadings(buildingID int) ([]MeterLiveReadin
 					reading.TotalImportKwh = device.LastReading
 					reading.TotalExportKwh = device.LastReadingExport
 					reading.LastUpdate = device.LastUpdate
-					reading.IsOnline = time.Since(device.LastUpdate) < 20*time.Minute // Energy readings every 15 min
+					reading.IsOnline = time.Since(device.LastUpdate) < 60*time.Second // Live polling every 15 sec
 
-					// Use direct live power if available (from Pf output)
-					// Live power is polled every 10 seconds, so we accept data up to 60 seconds old
+					// Use live power if available (from Pf output or calculated from energy delta)
+					// Live power is polled/calculated every 15 seconds, so we accept data up to 30 seconds old
 					livePowerAge := time.Since(device.LivePowerTime)
-					hasRecentLivePower := !device.LivePowerTime.IsZero() && livePowerAge < 60*time.Second
+					hasRecentLivePower := !device.LivePowerTime.IsZero() && livePowerAge < 30*time.Second
 					hasLivePowerValue := device.LivePowerW > 0 || device.LivePowerExpW > 0
-
-					// Debug logging
-					log.Printf("GetLiveMeterReadings: Loxone meter %d - LivePowerW=%.1f, LivePowerExpW=%.1f, LivePowerTime=%v (age: %.1fs), hasRecent=%v, hasValue=%v",
-						meterID, device.LivePowerW, device.LivePowerExpW,
-						device.LivePowerTime.Format("15:04:05"), livePowerAge.Seconds(),
-						hasRecentLivePower, hasLivePowerValue)
 
 					if hasRecentLivePower && hasLivePowerValue {
 						reading.CurrentPowerW = device.LivePowerW
@@ -999,20 +993,15 @@ func (dc *DataCollector) GetLiveMeterReadings(buildingID int) ([]MeterLiveReadin
 						reading.HasLivePower = true
 					}
 
-					// Fallback: estimate power from recent readings if no live power
+					// Fallback: estimate power from DB readings if no live power
 					if !reading.HasLivePower {
 						if isSolarMeter {
 							reading.CurrentPowerW = dc.estimatePowerFromRecentReadingsExport(meterID, device.LastReadingExport)
 						} else {
 							reading.CurrentPowerW = dc.estimatePowerFromRecentReadings(meterID, device.LastReading)
 						}
-						log.Printf("GetLiveMeterReadings: Loxone meter %d using ESTIMATED power: %.1f W (no recent live power)", meterID, reading.CurrentPowerW)
 					}
-				} else {
-					log.Printf("GetLiveMeterReadings: Loxone meter %d NOT FOUND in loxoneCollector", meterID)
 				}
-			} else {
-				log.Printf("GetLiveMeterReadings: loxoneCollector is nil for meter %d", meterID)
 			}
 
 		case "modbus_tcp":
