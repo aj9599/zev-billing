@@ -462,6 +462,30 @@ func (mc *MQTTCollector) subscribeToDevices(brokerURL string) {
 		// Note: If you need wildcard subscriptions, add # or + to the topic in the meter configuration
 		subscribeTopics := []string{topic}
 
+		// For Shelly 3EM, also subscribe to em:0 topic for live power data
+		// If the main topic contains emdata:0, add the corresponding em:0 topic for live power
+		if deviceTypeStr == "shelly-3em" {
+			if strings.Contains(topic, "/emdata:0") {
+				liveTopic := strings.Replace(topic, "/emdata:0", "/em:0", 1)
+				subscribeTopics = append(subscribeTopics, liveTopic)
+				log.Printf("  ⚡ Adding live power topic for Shelly 3EM: %s", liveTopic)
+			} else if strings.Contains(topic, "/em:0") {
+				// Main topic is em:0 (live), also subscribe to emdata:0 (energy)
+				energyTopic := strings.Replace(topic, "/em:0", "/emdata:0", 1)
+				subscribeTopics = append(subscribeTopics, energyTopic)
+				log.Printf("  📊 Adding energy topic for Shelly 3EM: %s", energyTopic)
+			} else {
+				// Topic doesn't match known patterns, try to derive both
+				// e.g., if topic is "meters/device/status", add both em:0 and emdata:0
+				baseTopic := strings.TrimSuffix(topic, "/status")
+				if baseTopic != topic {
+					subscribeTopics = append(subscribeTopics, baseTopic+"/status/em:0")
+					subscribeTopics = append(subscribeTopics, baseTopic+"/status/emdata:0")
+					log.Printf("  ⚡📊 Adding derived topics for Shelly 3EM: em:0 and emdata:0")
+				}
+			}
+		}
+
 		for _, subTopic := range subscribeTopics {
 			// Check if already subscribed to prevent duplicate subscriptions
 			alreadySubscribed := false
@@ -593,26 +617,29 @@ func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, devic
 
 		case "shelly-3em":
 			// First try to parse as live power data (em:0 topic)
-			var shellyLiveMsg Shelly3EMLiveMessage
-			if err := json.Unmarshal(payload, &shellyLiveMsg); err == nil && shellyLiveMsg.TotalActPower != 0 {
-				// This is live power data from em:0 topic
-				// Store live power in Watts (positive = import, negative = export)
-				mc.mu.Lock()
-				existing := mc.meterReadings[meterID]
-				if shellyLiveMsg.TotalActPower >= 0 {
-					existing.LivePowerW = shellyLiveMsg.TotalActPower
-					existing.LivePowerExpW = 0
-				} else {
-					existing.LivePowerW = 0
-					existing.LivePowerExpW = -shellyLiveMsg.TotalActPower // Make positive for export
+			// Check if this looks like em:0 data (has total_act_power field)
+			if strings.Contains(string(payload), "total_act_power") {
+				var shellyLiveMsg Shelly3EMLiveMessage
+				if err := json.Unmarshal(payload, &shellyLiveMsg); err == nil {
+					// This is live power data from em:0 topic
+					// Store live power in Watts (positive = import, negative = export)
+					mc.mu.Lock()
+					existing := mc.meterReadings[meterID]
+					if shellyLiveMsg.TotalActPower >= 0 {
+						existing.LivePowerW = shellyLiveMsg.TotalActPower
+						existing.LivePowerExpW = 0
+					} else {
+						existing.LivePowerW = 0
+						existing.LivePowerExpW = -shellyLiveMsg.TotalActPower // Make positive for export
+					}
+					existing.LastUpdated = time.Now()
+					existing.IsConnected = true
+					mc.meterReadings[meterID] = existing
+					mc.mu.Unlock()
+					log.Printf("✓ Parsed Shelly 3EM LIVE power: %.1f W (import: %.1f W, export: %.1f W)",
+						shellyLiveMsg.TotalActPower, existing.LivePowerW, existing.LivePowerExpW)
+					return // Don't continue to energy parsing for live data
 				}
-				existing.LastUpdated = time.Now()
-				existing.IsConnected = true
-				mc.meterReadings[meterID] = existing
-				mc.mu.Unlock()
-				log.Printf("✓ Parsed Shelly 3EM LIVE power: %.1f W (import: %.1f W, export: %.1f W)",
-					shellyLiveMsg.TotalActPower, existing.LivePowerW, existing.LivePowerExpW)
-				return // Don't continue to energy parsing for live data
 			}
 
 			// Try to parse as energy data (emdata:0 topic)
@@ -772,19 +799,21 @@ func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, devic
 
 		if found && importValue >= 0 {
 			mc.mu.Lock()
-			mc.meterReadings[meterID] = MQTTMeterReading{
-				Power:       importValue,
-				PowerExport: exportValue,
-				Timestamp:   timestamp,
-				LastUpdated: time.Now(),
-				IsConnected: true,
-			}
+			// IMPORTANT: Preserve existing live power values when updating energy data
+			existing := mc.meterReadings[meterID]
+			existing.Power = importValue
+			existing.PowerExport = exportValue
+			existing.Timestamp = timestamp
+			existing.LastUpdated = time.Now()
+			existing.IsConnected = true
+			// Keep LivePowerW and LivePowerExpW if they were set from em:0 topic
+			mc.meterReadings[meterID] = existing
 			mc.mu.Unlock()
-			
-			log.Printf("✓ MQTT: Saved reading for meter '%s': import=%.3f kWh, export=%.3f kWh", 
-				meterName, importValue, exportValue)
+
+			log.Printf("✓ MQTT: Saved reading for meter '%s': import=%.3f kWh, export=%.3f kWh (live power preserved: %.1f W)",
+				meterName, importValue, exportValue, existing.LivePowerW)
 		} else {
-			log.Printf("WARNING: Could not parse MQTT message for meter '%s' (device type: %s): %s", 
+			log.Printf("WARNING: Could not parse MQTT message for meter '%s' (device type: %s): %s",
 				meterName, deviceType, string(payload))
 		}
 	}
@@ -880,6 +909,7 @@ func (mc *MQTTCollector) GetMeterReading(meterID int) (float64, float64, bool) {
 
 // GetMeterLivePower returns the instantaneous power in Watts for a meter
 // Returns (importPowerW, exportPowerW, hasData)
+// hasData is true if we have received live power data recently (even if power is 0)
 func (mc *MQTTCollector) GetMeterLivePower(meterID int) (float64, float64, bool) {
 	mc.mu.RLock()
 	defer mc.mu.RUnlock()
@@ -894,9 +924,22 @@ func (mc *MQTTCollector) GetMeterLivePower(meterID int) (float64, float64, bool)
 		return 0, 0, false
 	}
 
-	// Return live power if available
+	// Return live power if we have any live power data
+	// Note: Both can be 0 if the power flow is exactly balanced
+	// We check if the values are non-negative (they should always be >= 0 after processing)
+	// A meter with live power will have at least one value set, or both are explicitly 0
 	if reading.LivePowerW > 0 || reading.LivePowerExpW > 0 {
 		return reading.LivePowerW, reading.LivePowerExpW, true
+	}
+
+	// If both are 0 but we have a recent reading, check if this meter has ever received live power
+	// by checking if the reading was updated recently (within 30 seconds)
+	// This handles the case where power flow is exactly 0
+	if reading.LivePowerW == 0 && reading.LivePowerExpW == 0 && time.Since(reading.LastUpdated) < 30*time.Second {
+		// Check if we have energy readings - if so, this meter is connected but just happens to have 0 power
+		if reading.Power > 0 || reading.PowerExport > 0 {
+			return 0, 0, true // Return 0 power as valid live data
+		}
 	}
 
 	return 0, 0, false
