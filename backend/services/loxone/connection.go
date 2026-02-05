@@ -384,6 +384,10 @@ func (conn *WebSocketConnection) performConnection(ws *websocket.Conn, db *sql.D
 	conn.GoroutinesWg.Add(1)
 	go conn.requestData()
 
+	log.Printf("[START] Starting live power polling for %s...", conn.Host)
+	conn.GoroutinesWg.Add(1)
+	go conn.requestLivePower()
+
 	log.Printf("[START] Starting token expiry monitor for %s...", conn.Host)
 	conn.GoroutinesWg.Add(1)
 	go conn.monitorTokenExpiry(db)

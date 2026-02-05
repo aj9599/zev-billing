@@ -974,15 +974,22 @@ func (dc *DataCollector) GetLiveMeterReadings(buildingID int) ([]MeterLiveReadin
 					reading.TotalImportKwh = device.LastReading
 					reading.TotalExportKwh = device.LastReadingExport
 					reading.LastUpdate = device.LastUpdate
-					reading.IsOnline = time.Since(device.LastUpdate) < 5*time.Minute
+					reading.IsOnline = time.Since(device.LastUpdate) < 20*time.Minute // Energy readings every 15 min
 
 					// Use direct live power if available (from Pf output)
-					if device.LivePowerW > 0 || device.LivePowerExpW > 0 {
-						if time.Since(device.LivePowerTime) < 2*time.Minute {
-							reading.CurrentPowerW = device.LivePowerW
-							reading.CurrentPowerExpW = device.LivePowerExpW
-							reading.HasLivePower = true
-						}
+					// Live power is polled every 10 seconds, so we accept data up to 30 seconds old
+					hasRecentLivePower := !device.LivePowerTime.IsZero() && time.Since(device.LivePowerTime) < 30*time.Second
+					hasLivePowerValue := device.LivePowerW > 0 || device.LivePowerExpW > 0
+
+					if hasRecentLivePower && hasLivePowerValue {
+						reading.CurrentPowerW = device.LivePowerW
+						reading.CurrentPowerExpW = device.LivePowerExpW
+						reading.HasLivePower = true
+					} else if hasRecentLivePower {
+						// Live power time is recent but values are 0 - this means power flow is actually 0
+						reading.CurrentPowerW = 0
+						reading.CurrentPowerExpW = 0
+						reading.HasLivePower = true
 					}
 
 					// Fallback: estimate power from recent readings if no live power

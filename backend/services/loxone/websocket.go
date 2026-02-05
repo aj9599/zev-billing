@@ -292,6 +292,69 @@ func (conn *WebSocketConnection) requestData() {
 	}
 }
 
+// requestLivePower polls meter power (Pf) values frequently for live dashboard display
+// This runs every 10 seconds and only requests data for meters, not chargers
+// It does NOT save to database - just updates the in-memory LivePowerW/LivePowerExpW values
+func (conn *WebSocketConnection) requestLivePower() {
+	defer conn.GoroutinesWg.Done()
+
+	log.Printf("⚡ LIVE POWER POLLING STARTED for %s (every 10 seconds)", conn.Host)
+
+	// Wait a bit for initial connection to stabilize
+	time.Sleep(5 * time.Second)
+
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-conn.StopChan:
+			log.Printf("🗑️ [%s] Live power polling stopping", conn.Host)
+			return
+		case <-ticker.C:
+			// Skip if not connected or collection is in progress (to avoid conflicts)
+			conn.Mu.Lock()
+			if !conn.IsConnected || conn.Ws == nil || conn.CollectionInProgress {
+				conn.Mu.Unlock()
+				continue
+			}
+
+			// Get meters that use meter_block mode (they have Pf output)
+			var meters []*Device
+			for _, device := range conn.Devices {
+				if device.Type == "meter" && device.LoxoneMode == "meter_block" {
+					meters = append(meters, device)
+				}
+			}
+			conn.Mu.Unlock()
+
+			if len(meters) == 0 {
+				continue
+			}
+
+			// Request data for each meter
+			for _, device := range meters {
+				select {
+				case <-conn.StopChan:
+					return
+				default:
+				}
+
+				cmd := fmt.Sprintf("jdev/sps/io/%s/all", device.DeviceID)
+
+				if err := conn.safeWriteMessage(websocket.TextMessage, []byte(cmd)); err != nil {
+					log.Printf("⚠️ Live power request failed for meter %s: %v", device.Name, err)
+					// Don't break the loop, try other meters
+					continue
+				}
+
+				// Small delay between requests to not overwhelm the Miniserver
+				time.Sleep(50 * time.Millisecond)
+			}
+		}
+	}
+}
+
 // readLoop continuously reads messages from the WebSocket
 func (conn *WebSocketConnection) readLoop(db *sql.DB, collector LoxoneCollectorInterface) {
 	defer conn.GoroutinesWg.Done()
