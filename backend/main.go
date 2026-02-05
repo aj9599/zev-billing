@@ -88,7 +88,7 @@ func main() {
 	chargerHandler := handlers.NewChargerHandler(db, dataCollector)
 	billingHandler := handlers.NewBillingHandler(db, billingService, pdfGenerator)
 	autoBillingHandler := handlers.NewAutoBillingHandler(db)
-	dashboardHandler := handlers.NewDashboardHandler(db)
+	dashboardHandler := handlers.NewDashboardHandler(db, dataCollector)
 	exportHandler := handlers.NewExportHandler(db)
 	webhookHandler := handlers.NewWebhookHandler(db)
 	sharedMeterHandler := handlers.NewSharedMeterHandler(db)
@@ -222,6 +222,7 @@ func main() {
 	api.HandleFunc("/dashboard/system-health", dashboardHandler.GetSystemHealth).Methods("GET")
 	api.HandleFunc("/dashboard/cost-overview", dashboardHandler.GetCostOverview).Methods("GET")
 	api.HandleFunc("/dashboard/energy-flow", dashboardHandler.GetEnergyFlow).Methods("GET")
+	api.HandleFunc("/dashboard/energy-flow-live", dashboardHandler.GetEnergyFlowLive).Methods("GET")
 
 	// Export route
 	api.HandleFunc("/export/data", exportHandler.ExportData).Methods("GET")

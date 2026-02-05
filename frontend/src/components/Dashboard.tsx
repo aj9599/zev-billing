@@ -3,7 +3,7 @@ import * as React from 'react';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Users, Building, Zap, Car, Sun, Battery, LayoutDashboard, Home, Eye, EyeOff, ChevronDown, ChevronRight, Activity, DollarSign, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 import { api } from '../api/client';
-import type { DashboardStats, SelfConsumptionData, SystemHealth, CostOverview, EnergyFlowData } from '../types';
+import type { DashboardStats, SelfConsumptionData, SystemHealth, CostOverview, EnergyFlowData, EnergyFlowLiveData } from '../types';
 import { useTranslation } from '../i18n';
 
 // ─── Local interfaces ────────────────────────────────────────────────
@@ -159,6 +159,12 @@ function formatKwh(value: number): string {
   return `${value.toFixed(1)} kWh`;
 }
 
+function formatKw(value: number): string {
+  if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(1)} MW`;
+  if (Math.abs(value) < 1) return `${(value * 1000).toFixed(0)} W`;
+  return `${value.toFixed(2)} kW`;
+}
+
 function timeAgo(dateStr: string | null): string {
   if (!dateStr) return '-';
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -224,6 +230,7 @@ export default function Dashboard() {
   const [energyFlowPeriod, setEnergyFlowPeriod] = useState<'live' | 'today' | 'week' | 'month'>('today');
   const [energyFlowBuildingId, setEnergyFlowBuildingId] = useState<number>(0);
   const [energyFlowData, setEnergyFlowData] = useState<EnergyFlowData | null>(null);
+  const [energyFlowLiveData, setEnergyFlowLiveData] = useState<EnergyFlowLiveData | null>(null);
   const [energyFlowLoading, setEnergyFlowLoading] = useState(false);
 
   const [visibleMetersByBuilding, setVisibleMetersByBuilding] = useState<Map<number, Set<string>>>(new Map());
@@ -288,11 +295,27 @@ export default function Dashboard() {
     const loadEnergyFlow = async () => {
       setEnergyFlowLoading(true);
       try {
-        const data = await api.getEnergyFlow(energyFlowPeriod, energyFlowBuildingId);
-        if (!cancelled) setEnergyFlowData(data);
+        if (energyFlowPeriod === 'live') {
+          // Use live endpoint for real-time power data
+          const data = await api.getEnergyFlowLive(energyFlowBuildingId);
+          if (!cancelled) {
+            setEnergyFlowLiveData(data);
+            setEnergyFlowData(null); // Clear non-live data
+          }
+        } else {
+          // Use regular endpoint for historical energy data
+          const data = await api.getEnergyFlow(energyFlowPeriod, energyFlowBuildingId);
+          if (!cancelled) {
+            setEnergyFlowData(data);
+            setEnergyFlowLiveData(null); // Clear live data
+          }
+        }
       } catch (err) {
         console.error('Failed to load energy flow:', err);
-        if (!cancelled) setEnergyFlowData(null);
+        if (!cancelled) {
+          setEnergyFlowData(null);
+          setEnergyFlowLiveData(null);
+        }
       } finally {
         if (!cancelled) setEnergyFlowLoading(false);
       }
@@ -617,27 +640,64 @@ export default function Dashboard() {
         </div>
 
         {/* Energy flow diagram */}
-        {energyFlowLoading && !energyFlowData ? (
+        {energyFlowLoading && !energyFlowData && !energyFlowLiveData ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
             <div className="shimmer" style={{ width: '100%', height: '160px', borderRadius: '12px', background: '#f0f0f0' }} />
           </div>
-        ) : energyFlowData ? (() => {
-          const ef = energyFlowData;
-          const solarVal = ef.solar_produced_kwh;
-          const consumptionVal = ef.total_consumption_kwh;
-          const gridImportVal = ef.grid_import_kwh;
-          const gridExportVal = ef.solar_exported_kwh;
-          const evVal = ef.ev_charging_kwh;
-          const selfConsPctVal = ef.self_consumption_pct;
-          const isImporting = gridImportVal > gridExportVal;
+        ) : (energyFlowData || energyFlowLiveData) ? (() => {
+          // Unified values - live mode uses kW (power), historical uses kWh (energy)
+          const isLiveMode = energyFlowPeriod === 'live' && energyFlowLiveData;
+          const formatValue = isLiveMode ? formatKw : formatKwh;
+
+          let solarVal: number, consumptionVal: number, gridImportVal: number, gridExportVal: number, evVal: number, selfConsPctVal: number;
+          let isImporting: boolean;
+
+          if (isLiveMode && energyFlowLiveData) {
+            const ef = energyFlowLiveData;
+            solarVal = ef.solar_power_kw;
+            consumptionVal = ef.consumption_power_kw;
+            evVal = ef.ev_charging_power_kw;
+            selfConsPctVal = ef.self_consumption_pct;
+            isImporting = ef.grid_power_kw > 0;
+            gridImportVal = ef.grid_power_kw > 0 ? ef.grid_power_kw : 0;
+            gridExportVal = ef.grid_power_kw < 0 ? Math.abs(ef.grid_power_kw) : 0;
+          } else if (energyFlowData) {
+            const ef = energyFlowData;
+            solarVal = ef.solar_produced_kwh;
+            consumptionVal = ef.total_consumption_kwh;
+            gridImportVal = ef.grid_import_kwh;
+            gridExportVal = ef.solar_exported_kwh;
+            evVal = ef.ev_charging_kwh;
+            selfConsPctVal = ef.self_consumption_pct;
+            isImporting = gridImportVal > gridExportVal;
+          } else {
+            return null;
+          }
+
           const gridMainVal = isImporting ? gridImportVal : gridExportVal;
           const gridLabel = isImporting ? t('dashboard.energyFlowGridImport') : t('dashboard.energyFlowGridExport');
-          const hasSolar = solarVal > 0;
-          const hasEv = evVal > 0;
-          const hasGrid = gridMainVal > 0.01;
+          const hasSolar = solarVal > 0.001;
+          const hasEv = evVal > 0.001;
+          const hasGrid = gridMainVal > 0.001;
 
           return (
             <div style={{ position: 'relative' }}>
+              {/* Live mode indicator */}
+              {isLiveMode && (
+                <div style={{
+                  position: 'absolute', top: '0', left: '0',
+                  backgroundColor: '#dcfce7',
+                  color: '#15803d',
+                  padding: '4px 10px',
+                  borderRadius: '20px',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  display: 'flex', alignItems: 'center', gap: '4px'
+                }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#22c55e', animation: 'pulse-dot 1.5s infinite' }} />
+                  {t('dashboard.energyFlowLiveUpdating')}
+                </div>
+              )}
               {/* Self-consumption badge */}
               {hasSolar && (
                 <div style={{
@@ -677,7 +737,7 @@ export default function Dashboard() {
                   </div>
                   <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowSolar')}</div>
                   <div style={{ fontSize: '16px', fontWeight: '700', color: hasSolar ? '#f59e0b' : '#9ca3af' }}>
-                    {formatKwh(solarVal)}
+                    {formatValue(solarVal)}
                   </div>
                 </div>
 
@@ -724,7 +784,7 @@ export default function Dashboard() {
                     </div>
                     <div style={{ fontSize: '12px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowGrid')}</div>
                     <div style={{ fontSize: '14px', fontWeight: '700', color: hasGrid ? (isImporting ? '#6b7280' : '#10b981') : '#9ca3af' }}>
-                      {formatKwh(gridMainVal)}
+                      {formatValue(gridMainVal)}
                     </div>
                     <div style={{ fontSize: '10px', fontWeight: '600', color: isImporting ? '#9ca3af' : '#6ee7b7', marginTop: '2px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                       {gridLabel}
@@ -758,7 +818,7 @@ export default function Dashboard() {
                       <Building size={32} color="white" />
                     </div>
                     <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowBuilding')}</div>
-                    <div style={{ fontSize: '17px', fontWeight: '800', color: '#3b82f6' }}>{formatKwh(consumptionVal)}</div>
+                    <div style={{ fontSize: '17px', fontWeight: '800', color: '#3b82f6' }}>{formatValue(consumptionVal)}</div>
                   </div>
 
                   {/* Horizontal connector: Building -> EV */}
@@ -788,7 +848,7 @@ export default function Dashboard() {
                       <Car size={24} color="white" />
                     </div>
                     <div style={{ fontSize: '12px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowCharging')}</div>
-                    <div style={{ fontSize: '14px', fontWeight: '700', color: hasEv ? '#8b5cf6' : '#9ca3af' }}>{formatKwh(evVal)}</div>
+                    <div style={{ fontSize: '14px', fontWeight: '700', color: hasEv ? '#8b5cf6' : '#9ca3af' }}>{formatValue(evVal)}</div>
                   </div>
                 </div>
 
@@ -799,9 +859,9 @@ export default function Dashboard() {
                     borderRadius: '8px', fontSize: '12px', color: '#6b7280',
                     display: 'flex', gap: '16px', justifyContent: 'center'
                   }}>
-                    <span>{t('dashboard.energyFlowGridImport')}: <strong style={{ color: '#4b5563' }}>{formatKwh(gridImportVal)}</strong></span>
+                    <span>{t('dashboard.energyFlowGridImport')}: <strong style={{ color: '#4b5563' }}>{formatValue(gridImportVal)}</strong></span>
                     <span style={{ color: '#d1d5db' }}>|</span>
-                    <span>{t('dashboard.energyFlowGridExport')}: <strong style={{ color: '#10b981' }}>{formatKwh(gridExportVal)}</strong></span>
+                    <span>{t('dashboard.energyFlowGridExport')}: <strong style={{ color: '#10b981' }}>{formatValue(gridExportVal)}</strong></span>
                   </div>
                 )}
               </div>
@@ -820,7 +880,7 @@ export default function Dashboard() {
                     <Sun size={26} color="white" />
                   </div>
                   <div style={{ fontSize: '12px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowSolar')}</div>
-                  <div style={{ fontSize: '15px', fontWeight: '700', color: hasSolar ? '#f59e0b' : '#9ca3af' }}>{formatKwh(solarVal)}</div>
+                  <div style={{ fontSize: '15px', fontWeight: '700', color: hasSolar ? '#f59e0b' : '#9ca3af' }}>{formatValue(solarVal)}</div>
                 </div>
 
                 {/* Vertical connector */}
@@ -841,7 +901,7 @@ export default function Dashboard() {
                     <Building size={28} color="white" />
                   </div>
                   <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowBuilding')}</div>
-                  <div style={{ fontSize: '16px', fontWeight: '800', color: '#3b82f6' }}>{formatKwh(consumptionVal)}</div>
+                  <div style={{ fontSize: '16px', fontWeight: '800', color: '#3b82f6' }}>{formatValue(consumptionVal)}</div>
                 </div>
 
                 {/* Bottom row: Grid and EV side by side */}
@@ -862,7 +922,7 @@ export default function Dashboard() {
                       <Zap size={20} color="white" />
                     </div>
                     <div style={{ fontSize: '11px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowGrid')}</div>
-                    <div style={{ fontSize: '13px', fontWeight: '700', color: hasGrid ? (isImporting ? '#6b7280' : '#10b981') : '#9ca3af' }}>{formatKwh(gridMainVal)}</div>
+                    <div style={{ fontSize: '13px', fontWeight: '700', color: hasGrid ? (isImporting ? '#6b7280' : '#10b981') : '#9ca3af' }}>{formatValue(gridMainVal)}</div>
                     <div style={{ fontSize: '9px', fontWeight: '600', color: isImporting ? '#9ca3af' : '#6ee7b7', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{gridLabel}</div>
                   </div>
 
@@ -881,7 +941,7 @@ export default function Dashboard() {
                       <Car size={20} color="white" />
                     </div>
                     <div style={{ fontSize: '11px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowCharging')}</div>
-                    <div style={{ fontSize: '13px', fontWeight: '700', color: hasEv ? '#8b5cf6' : '#9ca3af' }}>{formatKwh(evVal)}</div>
+                    <div style={{ fontSize: '13px', fontWeight: '700', color: hasEv ? '#8b5cf6' : '#9ca3af' }}>{formatValue(evVal)}</div>
                   </div>
                 </div>
 
@@ -892,9 +952,9 @@ export default function Dashboard() {
                     borderRadius: '8px', fontSize: '11px', color: '#6b7280',
                     display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap'
                   }}>
-                    <span>{t('dashboard.energyFlowGridImport')}: <strong style={{ color: '#4b5563' }}>{formatKwh(gridImportVal)}</strong></span>
+                    <span>{t('dashboard.energyFlowGridImport')}: <strong style={{ color: '#4b5563' }}>{formatValue(gridImportVal)}</strong></span>
                     <span style={{ color: '#d1d5db' }}>|</span>
-                    <span>{t('dashboard.energyFlowGridExport')}: <strong style={{ color: '#10b981' }}>{formatKwh(gridExportVal)}</strong></span>
+                    <span>{t('dashboard.energyFlowGridExport')}: <strong style={{ color: '#10b981' }}>{formatValue(gridExportVal)}</strong></span>
                   </div>
                 )}
               </div>

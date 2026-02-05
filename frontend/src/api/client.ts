@@ -3,7 +3,7 @@ import type {
   Invoice, DashboardStats, ConsumptionData, AdminLog,
   BuildingConsumption, SharedMeterConfig, CustomLineItem,
   GenerateBillsRequest, MeterReplacement, MeterReplacementRequest,
-  SelfConsumptionData, SystemHealth, CostOverview, EnergyFlowData
+  SelfConsumptionData, SystemHealth, CostOverview, EnergyFlowData, EnergyFlowLiveData
 } from '../types';
 
 const API_BASE = '/api';
@@ -472,6 +472,10 @@ class ApiClient {
 
   async getEnergyFlow(period: string = 'today', buildingId: number = 0): Promise<EnergyFlowData> {
     return this.request(`/dashboard/energy-flow?period=${period}&building_id=${buildingId}`);
+  }
+
+  async getEnergyFlowLive(buildingId: number = 0): Promise<EnergyFlowLiveData> {
+    return this.request(`/dashboard/energy-flow-live?building_id=${buildingId}`);
   }
 
   async getLogs(limit: number = 100, since?: string): Promise<AdminLog[]> {

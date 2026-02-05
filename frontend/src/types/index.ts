@@ -341,6 +341,28 @@ export interface BuildingEnergyFlow {
   ev_charging_kwh: number;
 }
 
+// Live energy flow - real-time power data (kW instead of kWh)
+export interface EnergyFlowLiveData {
+  period: string;
+  solar_power_kw: number;
+  consumption_power_kw: number;
+  grid_power_kw: number;
+  ev_charging_power_kw: number;
+  self_consumption_pct: number;
+  is_exporting: boolean;
+  timestamp: string;
+  per_building?: BuildingEnergyFlowLive[];
+}
+
+export interface BuildingEnergyFlowLive {
+  building_id: number;
+  building_name: string;
+  solar_power_kw: number;
+  consumption_power_kw: number;
+  grid_power_kw: number;
+  ev_charging_power_kw: number;
+}
+
 export interface MeterData {
   meter_id: number;
   meter_name: string;

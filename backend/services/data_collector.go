@@ -896,3 +896,166 @@ func (dc *DataCollector) logToDatabase(action, details string) {
 		VALUES (?, ?, 'system')
 	`, action, details)
 }
+
+// ========== LIVE METER READING API ==========
+
+// MeterLiveReading holds real-time meter data for live dashboard display
+type MeterLiveReading struct {
+	MeterID          int       `json:"meter_id"`
+	MeterName        string    `json:"meter_name"`
+	MeterType        string    `json:"meter_type"`
+	BuildingID       int       `json:"building_id"`
+	ConnectionType   string    `json:"connection_type"`
+	CurrentPowerW    float64   `json:"current_power_w"`    // Instantaneous power in Watts
+	TotalImportKwh   float64   `json:"total_import_kwh"`   // Cumulative import reading
+	TotalExportKwh   float64   `json:"total_export_kwh"`   // Cumulative export reading (solar)
+	IsOnline         bool      `json:"is_online"`
+	LastUpdate       time.Time `json:"last_update"`
+}
+
+// GetLiveMeterReadings returns real-time meter data without storing to database
+// This is for live dashboard display only, does not affect 15-minute billing cycle
+func (dc *DataCollector) GetLiveMeterReadings(buildingID int) ([]MeterLiveReading, error) {
+	var readings []MeterLiveReading
+
+	// Query all active meters (optionally filtered by building)
+	query := `
+		SELECT m.id, m.name, m.meter_type, m.building_id, m.connection_type, m.config_json
+		FROM meters m
+		WHERE m.is_active = 1
+	`
+	args := []interface{}{}
+	if buildingID > 0 {
+		query += " AND m.building_id = ?"
+		args = append(args, buildingID)
+	}
+
+	rows, err := dc.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query meters: %v", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var meterID, building int
+		var name, meterType, connectionType string
+		var configJSON sql.NullString
+
+		if err := rows.Scan(&meterID, &name, &meterType, &building, &connectionType, &configJSON); err != nil {
+			continue
+		}
+
+		reading := MeterLiveReading{
+			MeterID:        meterID,
+			MeterName:      name,
+			MeterType:      meterType,
+			BuildingID:     building,
+			ConnectionType: connectionType,
+			LastUpdate:     time.Now(),
+		}
+
+		// Get live reading based on connection type
+		switch connectionType {
+		case "loxone_api":
+			// Loxone: get from WebSocket-updated in-memory device data
+			if dc.loxoneCollector != nil {
+				if device := dc.loxoneCollector.GetDeviceByMeterID(meterID); device != nil {
+					reading.TotalImportKwh = device.LastReading
+					reading.TotalExportKwh = device.LastReadingExport
+					reading.LastUpdate = device.LastUpdate
+					reading.IsOnline = time.Since(device.LastUpdate) < 5*time.Minute
+
+					// Calculate power from recent readings if available
+					reading.CurrentPowerW = dc.estimatePowerFromRecentReadings(meterID, device.LastReading)
+				}
+			}
+
+		case "modbus_tcp":
+			// Modbus: read directly (this is fast, just a TCP read)
+			if dc.modbusCollector != nil {
+				importVal, exportVal, err := dc.modbusCollector.ReadMeter(meterID)
+				if err == nil {
+					reading.TotalImportKwh = importVal
+					reading.TotalExportKwh = exportVal
+					reading.IsOnline = true
+					reading.CurrentPowerW = dc.estimatePowerFromRecentReadings(meterID, importVal)
+				}
+			}
+
+		case "udp":
+			// UDP: get from buffered readings
+			if dc.udpCollector != nil {
+				if val, ok := dc.udpCollector.GetMeterReading(meterID); ok {
+					reading.TotalImportKwh = val
+					reading.IsOnline = true
+					reading.CurrentPowerW = dc.estimatePowerFromRecentReadings(meterID, val)
+				}
+			}
+
+		case "mqtt":
+			// MQTT: get from buffered readings
+			if dc.mqttCollector != nil {
+				importVal, exportVal, ok := dc.mqttCollector.GetMeterReading(meterID)
+				if ok {
+					reading.TotalImportKwh = importVal
+					reading.TotalExportKwh = exportVal
+					reading.IsOnline = true
+					reading.CurrentPowerW = dc.estimatePowerFromRecentReadings(meterID, importVal)
+				}
+			}
+
+		case "smartme":
+			// Smart-me: API call (cached if recent)
+			if dc.smartmeCollector != nil && configJSON.Valid {
+				importVal, exportVal, err := dc.smartmeCollector.CollectMeterNow(meterID, name, configJSON.String)
+				if err == nil {
+					reading.TotalImportKwh = importVal
+					reading.TotalExportKwh = exportVal
+					reading.IsOnline = true
+					reading.CurrentPowerW = dc.estimatePowerFromRecentReadings(meterID, importVal)
+				}
+			}
+		}
+
+		readings = append(readings, reading)
+	}
+
+	return readings, nil
+}
+
+// estimatePowerFromRecentReadings calculates instantaneous power by comparing current reading
+// with the most recent stored reading (power = energy delta / time delta)
+func (dc *DataCollector) estimatePowerFromRecentReadings(meterID int, currentReading float64) float64 {
+	// Get the last stored reading from the database
+	var lastReading float64
+	var lastTime time.Time
+
+	err := dc.db.QueryRow(`
+		SELECT power_kwh, timestamp
+		FROM meter_readings
+		WHERE meter_id = ?
+		ORDER BY timestamp DESC
+		LIMIT 1
+	`, meterID).Scan(&lastReading, &lastTime)
+
+	if err != nil {
+		return 0 // No previous reading available
+	}
+
+	// Calculate time delta in hours
+	timeDeltaHours := time.Since(lastTime).Hours()
+	if timeDeltaHours <= 0 || timeDeltaHours > 1 { // Max 1 hour lookback
+		return 0
+	}
+
+	// Calculate energy delta
+	energyDeltaKwh := currentReading - lastReading
+	if energyDeltaKwh < 0 {
+		return 0 // Meter reset or error
+	}
+
+	// Power (W) = Energy (kWh) / Time (hours) * 1000
+	powerW := (energyDeltaKwh / timeDeltaHours) * 1000
+
+	return powerW
+}

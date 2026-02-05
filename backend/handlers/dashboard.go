@@ -11,14 +11,16 @@ import (
 	"time"
 
 	"github.com/aj9599/zev-billing/backend/models"
+	"github.com/aj9599/zev-billing/backend/services"
 )
 
 type DashboardHandler struct {
-	db *sql.DB
+	db            *sql.DB
+	dataCollector *services.DataCollector
 }
 
-func NewDashboardHandler(db *sql.DB) *DashboardHandler {
-	return &DashboardHandler{db: db}
+func NewDashboardHandler(db *sql.DB, dataCollector *services.DataCollector) *DashboardHandler {
+	return &DashboardHandler{db: db, dataCollector: dataCollector}
 }
 
 // Helper function to round time to nearest 15-minute interval
@@ -1572,4 +1574,143 @@ func (h *DashboardHandler) GetEnergyFlow(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(flow)
+}
+
+// GetEnergyFlowLive returns real-time power data for live dashboard display
+// This reads meters directly without storing to database - purely for UI
+func (h *DashboardHandler) GetEnergyFlowLive(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("PANIC in GetEnergyFlowLive: %v", rec)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+	}()
+
+	buildingIDStr := r.URL.Query().Get("building_id")
+	var buildingID int
+	if buildingIDStr != "" && buildingIDStr != "0" {
+		fmt.Sscanf(buildingIDStr, "%d", &buildingID)
+	}
+
+	// Check if data collector is available
+	if h.dataCollector == nil {
+		http.Error(w, "Data collector not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Get live meter readings
+	readings, err := h.dataCollector.GetLiveMeterReadings(buildingID)
+	if err != nil {
+		log.Printf("GetEnergyFlowLive error: %v", err)
+		http.Error(w, "Failed to get live readings", http.StatusInternalServerError)
+		return
+	}
+
+	// Aggregate by building
+	buildingPower := make(map[int]*models.BuildingEnergyFlowLive)
+	buildingNames := make(map[int]string)
+
+	// Get building names
+	rows, _ := h.db.Query(`SELECT id, name FROM buildings WHERE COALESCE(is_group, 0) = 0`)
+	if rows != nil {
+		for rows.Next() {
+			var id int
+			var name string
+			if rows.Scan(&id, &name) == nil {
+				buildingNames[id] = name
+				buildingPower[id] = &models.BuildingEnergyFlowLive{
+					BuildingID:   id,
+					BuildingName: name,
+				}
+			}
+		}
+		rows.Close()
+	}
+
+	// Aggregate meter readings
+	var totalSolarW, totalConsumptionW, totalEvW float64
+	for _, reading := range readings {
+		powerKw := reading.CurrentPowerW / 1000.0
+
+		if bp, exists := buildingPower[reading.BuildingID]; exists {
+			switch reading.MeterType {
+			case "solar_meter":
+				bp.SolarPowerKw += powerKw
+				totalSolarW += reading.CurrentPowerW
+			case "apartment_meter":
+				bp.ConsumptionPowerKw += powerKw
+				totalConsumptionW += reading.CurrentPowerW
+			}
+		}
+	}
+
+	// Get live charger power (from existing charger live data)
+	chargerRows, _ := h.db.Query(`SELECT id, building_id, connection_type FROM chargers WHERE COALESCE(is_active, 1) = 1`)
+	if chargerRows != nil {
+		for chargerRows.Next() {
+			var chargerID, chBuildingID int
+			var connectionType string
+			if chargerRows.Scan(&chargerID, &chBuildingID, &connectionType) == nil {
+				var chargerPowerKw float64
+
+				// Get live charger data based on connection type
+				if status, ok := h.dataCollector.GetChargerLiveStatus(chargerID); ok && status != nil {
+					chargerPowerKw = status.CurrentPower_kW
+				}
+
+				if bp, exists := buildingPower[chBuildingID]; exists {
+					bp.EvChargingPowerKw += chargerPowerKw
+				}
+				totalEvW += chargerPowerKw * 1000
+			}
+		}
+		chargerRows.Close()
+	}
+
+	// Calculate grid power for each building and totals
+	for _, bp := range buildingPower {
+		// Grid power = consumption - solar (negative means exporting)
+		bp.GridPowerKw = bp.ConsumptionPowerKw - bp.SolarPowerKw
+	}
+
+	// Calculate totals
+	totalSolarKw := totalSolarW / 1000.0
+	totalConsumptionKw := totalConsumptionW / 1000.0
+	totalEvKw := totalEvW / 1000.0
+
+	// Self-consumption: min(solar, consumption) / solar
+	var selfConsumptionPct float64
+	if totalSolarKw > 0 {
+		selfConsumed := totalSolarKw
+		if totalConsumptionKw < totalSolarKw {
+			selfConsumed = totalConsumptionKw
+		}
+		selfConsumptionPct = (selfConsumed / totalSolarKw) * 100
+	}
+
+	// Grid power = consumption - solar (positive = import, negative = export)
+	gridPowerKw := totalConsumptionKw - totalSolarKw
+	isExporting := gridPowerKw < 0
+
+	// Build response
+	response := models.EnergyFlowLiveData{
+		Period:             "live",
+		SolarPowerKw:       totalSolarKw,
+		ConsumptionPowerKw: totalConsumptionKw,
+		GridPowerKw:        gridPowerKw,
+		EvChargingPowerKw:  totalEvKw,
+		SelfConsumptionPct: selfConsumptionPct,
+		IsExporting:        isExporting,
+		Timestamp:          time.Now().Format(time.RFC3339),
+	}
+
+	// Add per-building breakdown if not filtered to single building
+	if buildingID == 0 {
+		for _, bp := range buildingPower {
+			response.PerBuilding = append(response.PerBuilding, *bp)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }

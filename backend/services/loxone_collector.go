@@ -390,6 +390,38 @@ func (lc *LoxoneCollector) UpdateLiveChargerData(chargerID int, data *loxone.Cha
 	lc.liveChargerData[chargerID] = data
 }
 
+// GetDeviceByMeterID returns the live device data for a meter by its ID
+// This allows real-time access to LastReading and LastReadingExport values
+func (lc *LoxoneCollector) GetDeviceByMeterID(meterID int) *loxone.Device {
+	lc.mu.RLock()
+	defer lc.mu.RUnlock()
+
+	// Search through all connections and their devices
+	for _, conn := range lc.connections {
+		if conn == nil {
+			continue
+		}
+		conn.Mu.Lock()
+		for _, device := range conn.Devices {
+			if device != nil && device.ID == meterID && device.Type == "meter" {
+				// Return a copy to avoid race conditions
+				deviceCopy := &loxone.Device{
+					ID:                device.ID,
+					Name:              device.Name,
+					Type:              device.Type,
+					LastReading:       device.LastReading,
+					LastReadingExport: device.LastReadingExport,
+					LastUpdate:        device.LastUpdate,
+				}
+				conn.Mu.Unlock()
+				return deviceCopy
+			}
+		}
+		conn.Mu.Unlock()
+	}
+	return nil
+}
+
 // UpdateActiveSession updates the active session
 func (lc *LoxoneCollector) UpdateActiveSession(chargerID int, session *loxone.ActiveChargerSession) {
 	lc.chargerMu.Lock()

@@ -231,6 +231,8 @@ export const de: Translations = {
   'dashboard.energyFlowPeriodWeek': 'Woche',
   'dashboard.energyFlowPeriodMonth': 'Monat',
   'dashboard.energyFlowAllBuildings': 'Alle Gebäude',
+  'dashboard.energyFlowLiveUpdating': 'Aktualisiert alle 15s',
+  'dashboard.energyFlowNoPower': 'Keine Leistung',
 
   // Systemzustand
   'dashboard.systemHealth': 'Systemzustand',
