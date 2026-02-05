@@ -920,7 +920,7 @@ func (dc *DataCollector) GetLiveMeterReadings(buildingID int) ([]MeterLiveReadin
 
 	// Query all active meters (optionally filtered by building)
 	query := `
-		SELECT m.id, m.name, m.meter_type, m.building_id, m.connection_type, m.config_json
+		SELECT m.id, m.name, m.meter_type, m.building_id, m.connection_type, m.connection_config
 		FROM meters m
 		WHERE m.is_active = 1
 	`
@@ -1031,14 +1031,15 @@ func (dc *DataCollector) estimatePowerFromRecentReadings(meterID int, currentRea
 	var lastTime time.Time
 
 	err := dc.db.QueryRow(`
-		SELECT power_kwh, timestamp
+		SELECT power_kwh, reading_time
 		FROM meter_readings
 		WHERE meter_id = ?
-		ORDER BY timestamp DESC
+		ORDER BY reading_time DESC
 		LIMIT 1
 	`, meterID).Scan(&lastReading, &lastTime)
 
 	if err != nil {
+		log.Printf("estimatePowerFromRecentReadings: No previous reading for meter %d: %v", meterID, err)
 		return 0 // No previous reading available
 	}
 
