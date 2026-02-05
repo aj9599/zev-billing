@@ -221,7 +221,7 @@ export default function Dashboard() {
   const [healthExpanded, setHealthExpanded] = useState(false);
 
   // Energy flow interactive state
-  const [energyFlowPeriod, setEnergyFlowPeriod] = useState<'today' | 'week' | 'month'>('today');
+  const [energyFlowPeriod, setEnergyFlowPeriod] = useState<'live' | 'today' | 'week' | 'month'>('today');
   const [energyFlowBuildingId, setEnergyFlowBuildingId] = useState<number>(0);
   const [energyFlowData, setEnergyFlowData] = useState<EnergyFlowData | null>(null);
   const [energyFlowLoading, setEnergyFlowLoading] = useState(false);
@@ -298,8 +298,9 @@ export default function Dashboard() {
       }
     };
     loadEnergyFlow();
-    // Also refresh every 60s
-    const interval = setInterval(loadEnergyFlow, 60000);
+    // Live mode refreshes every 15s, otherwise every 60s
+    const refreshInterval = energyFlowPeriod === 'live' ? 15000 : 60000;
+    const interval = setInterval(loadEnergyFlow, refreshInterval);
     return () => { cancelled = true; clearInterval(interval); };
   }, [energyFlowPeriod, energyFlowBuildingId]);
 
@@ -560,24 +561,33 @@ export default function Dashboard() {
               padding: '3px',
               gap: '2px'
             }}>
-              {(['today', 'week', 'month'] as const).map(p => (
+              {(['live', 'today', 'week', 'month'] as const).map(p => (
                 <button
                   key={p}
                   onClick={() => setEnergyFlowPeriod(p)}
-                  className="ef-pill"
+                  className={`ef-pill ${p === 'live' && energyFlowPeriod === 'live' ? 'ef-pill-live' : ''}`}
                   style={{
                     padding: '5px 14px',
                     border: 'none',
                     borderRadius: '6px',
                     fontSize: '12px',
                     fontWeight: energyFlowPeriod === p ? '700' : '500',
-                    backgroundColor: energyFlowPeriod === p ? 'white' : 'transparent',
-                    color: energyFlowPeriod === p ? '#667eea' : '#6b7280',
+                    backgroundColor: energyFlowPeriod === p ? (p === 'live' ? '#dcfce7' : 'white') : 'transparent',
+                    color: energyFlowPeriod === p ? (p === 'live' ? '#15803d' : '#667eea') : '#6b7280',
                     cursor: 'pointer',
                     transition: 'all 0.2s ease',
-                    boxShadow: energyFlowPeriod === p ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                    boxShadow: energyFlowPeriod === p ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                    position: 'relative'
                   }}
                 >
+                  {p === 'live' && energyFlowPeriod === 'live' && (
+                    <span style={{
+                      position: 'absolute', top: '5px', right: '5px',
+                      width: '6px', height: '6px', borderRadius: '50%',
+                      backgroundColor: '#22c55e',
+                      animation: 'pulse-dot 1.5s infinite'
+                    }} />
+                  )}
                   {t(`dashboard.energyFlowPeriod${p.charAt(0).toUpperCase() + p.slice(1)}` as any)}
                 </button>
               ))}

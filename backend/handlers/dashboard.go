@@ -1387,6 +1387,9 @@ func (h *DashboardHandler) GetEnergyFlow(w http.ResponseWriter, r *http.Request)
 	now := time.Now()
 	var startTime time.Time
 	switch period {
+	case "live":
+		// Last 15 minutes for live data
+		startTime = now.Add(-15 * time.Minute)
 	case "today":
 		startTime = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	case "week":

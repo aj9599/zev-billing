@@ -225,6 +225,7 @@ export const en: Translations = {
   'dashboard.energyFlowGridImport': 'Grid Import',
   'dashboard.energyFlowGridExport': 'Grid Export',
   'dashboard.energyFlowSelfConsumed': 'Self-Consumed',
+  'dashboard.energyFlowPeriodLive': 'Live',
   'dashboard.energyFlowPeriodToday': 'Today',
   'dashboard.energyFlowPeriodWeek': 'Week',
   'dashboard.energyFlowPeriodMonth': 'Month',
