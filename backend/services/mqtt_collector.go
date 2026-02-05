@@ -29,8 +29,10 @@ type MQTTCollector struct {
 
 // MQTTMeterReading stores the latest reading from an MQTT meter
 type MQTTMeterReading struct {
-	Power         float64   // Current power in kWh (import)
-	PowerExport   float64   // Export/return energy in kWh
+	Power         float64   // Total energy in kWh (import) - cumulative meter reading
+	PowerExport   float64   // Export/return energy in kWh - cumulative meter reading
+	LivePowerW    float64   // Current instantaneous power in Watts (for live display)
+	LivePowerExpW float64   // Current instantaneous export power in Watts (for solar)
 	Timestamp     time.Time
 	LastUpdated   time.Time
 	IsConnected   bool      // Track if this specific meter's broker is connected
@@ -58,7 +60,7 @@ type WhatWattGoMessage struct {
 	PowerFactor float64 `json:"power_factor"`  // Power factor (0-1)
 }
 
-// Shelly3EMMessage represents the JSON structure from Shelly 3EM devices
+// Shelly3EMMessage represents the JSON structure from Shelly 3EM devices (emdata:0 topic - cumulative energy)
 type Shelly3EMMessage struct {
 	ID                  int     `json:"id"`
 	ATotalActEnergy     float64 `json:"a_total_act_energy"`      // Phase A import (Wh)
@@ -69,6 +71,30 @@ type Shelly3EMMessage struct {
 	CTotalActRetEnergy  float64 `json:"c_total_act_ret_energy"`  // Phase C export (Wh)
 	TotalAct            float64 `json:"total_act"`               // Total import (Wh)
 	TotalActRet         float64 `json:"total_act_ret"`           // Total export (Wh)
+}
+
+// Shelly3EMLiveMessage represents the JSON structure from Shelly 3EM em:0 topic (live power data)
+type Shelly3EMLiveMessage struct {
+	ID            int     `json:"id"`
+	ACurrent      float64 `json:"a_current"`       // Phase A current (A)
+	AVoltage      float64 `json:"a_voltage"`       // Phase A voltage (V)
+	AActPower     float64 `json:"a_act_power"`     // Phase A active power (W)
+	AAprtPower    float64 `json:"a_aprt_power"`    // Phase A apparent power (VA)
+	APF           float64 `json:"a_pf"`            // Phase A power factor
+	BCurrent      float64 `json:"b_current"`       // Phase B current (A)
+	BVoltage      float64 `json:"b_voltage"`       // Phase B voltage (V)
+	BActPower     float64 `json:"b_act_power"`     // Phase B active power (W)
+	BAprtPower    float64 `json:"b_aprt_power"`    // Phase B apparent power (VA)
+	BPF           float64 `json:"b_pf"`            // Phase B power factor
+	CCurrent      float64 `json:"c_current"`       // Phase C current (A)
+	CVoltage      float64 `json:"c_voltage"`       // Phase C voltage (V)
+	CActPower     float64 `json:"c_act_power"`     // Phase C active power (W)
+	CAprtPower    float64 `json:"c_aprt_power"`    // Phase C apparent power (VA)
+	CPF           float64 `json:"c_pf"`            // Phase C power factor
+	NCurrent      *float64 `json:"n_current"`      // Neutral current (A) - optional
+	TotalCurrent  float64 `json:"total_current"`   // Total current (A)
+	TotalActPower float64 `json:"total_act_power"` // Total active power (W) - THIS IS THE LIVE POWER
+	TotalAprtPower float64 `json:"total_aprt_power"` // Total apparent power (VA)
 }
 
 // ShellyEMMessage represents the JSON structure from Shelly EM devices (single phase)
@@ -566,6 +592,30 @@ func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, devic
 			}
 
 		case "shelly-3em":
+			// First try to parse as live power data (em:0 topic)
+			var shellyLiveMsg Shelly3EMLiveMessage
+			if err := json.Unmarshal(payload, &shellyLiveMsg); err == nil && shellyLiveMsg.TotalActPower != 0 {
+				// This is live power data from em:0 topic
+				// Store live power in Watts (positive = import, negative = export)
+				mc.mu.Lock()
+				existing := mc.meterReadings[meterID]
+				if shellyLiveMsg.TotalActPower >= 0 {
+					existing.LivePowerW = shellyLiveMsg.TotalActPower
+					existing.LivePowerExpW = 0
+				} else {
+					existing.LivePowerW = 0
+					existing.LivePowerExpW = -shellyLiveMsg.TotalActPower // Make positive for export
+				}
+				existing.LastUpdated = time.Now()
+				existing.IsConnected = true
+				mc.meterReadings[meterID] = existing
+				mc.mu.Unlock()
+				log.Printf("✓ Parsed Shelly 3EM LIVE power: %.1f W (import: %.1f W, export: %.1f W)",
+					shellyLiveMsg.TotalActPower, existing.LivePowerW, existing.LivePowerExpW)
+				return // Don't continue to energy parsing for live data
+			}
+
+			// Try to parse as energy data (emdata:0 topic)
 			var shellyMsg Shelly3EMMessage
 			if err := json.Unmarshal(payload, &shellyMsg); err == nil {
 				// Check if we have valid data (Wh values)
@@ -581,7 +631,7 @@ func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, devic
 					}
 					timestamp = time.Now()
 					found = true
-					log.Printf("✓ Parsed Shelly 3EM format: import=%.3f kWh, export=%.3f kWh", importValue, exportValue)
+					log.Printf("✓ Parsed Shelly 3EM energy: import=%.3f kWh, export=%.3f kWh", importValue, exportValue)
 				}
 			} else {
 				log.Printf("DEBUG: Failed to parse as Shelly 3EM: %v", err)
@@ -610,9 +660,19 @@ func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, devic
 		case "shelly-2pm":
 			var shelly2PMMsg Shelly2PMMessage
 			if err := json.Unmarshal(payload, &shelly2PMMsg); err == nil {
-				log.Printf("DEBUG: Shelly 2PM parsed - ID:%d, AEnergy.Total:%.3f, RetAEnergy.Total:%.3f", 
-					shelly2PMMsg.ID, shelly2PMMsg.AEnergy.Total, shelly2PMMsg.RetAEnergy.Total)
-				
+				log.Printf("DEBUG: Shelly 2PM parsed - ID:%d, AEnergy.Total:%.3f, RetAEnergy.Total:%.3f, APower:%.1f W",
+					shelly2PMMsg.ID, shelly2PMMsg.AEnergy.Total, shelly2PMMsg.RetAEnergy.Total, shelly2PMMsg.APower)
+
+				// Capture live power (APower) - always available
+				var livePowerW, livePowerExpW float64
+				if shelly2PMMsg.APower >= 0 {
+					livePowerW = shelly2PMMsg.APower
+					livePowerExpW = 0
+				} else {
+					livePowerW = 0
+					livePowerExpW = -shelly2PMMsg.APower // Make positive for export
+				}
+
 				// Check if we have valid energy data (Wh values)
 				// Note: Total can be very large (e.g., 170204.016 Wh), so just check >= 0
 				if shelly2PMMsg.AEnergy.Total >= 0 {
@@ -624,10 +684,29 @@ func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, devic
 					exportValue = shelly2PMMsg.RetAEnergy.Total / 1000.0
 					timestamp = time.Now()
 					found = true
-					log.Printf("✓ Parsed Shelly 2PM format: import=%.3f kWh (calculated from aenergy-ret_aenergy), export=%.3f kWh, power=%.1f W, voltage=%.1f V", 
-						importValue, exportValue, shelly2PMMsg.APower, shelly2PMMsg.Voltage)
+					log.Printf("✓ Parsed Shelly 2PM: import=%.3f kWh, export=%.3f kWh, LIVE power=%.1f W (export: %.1f W)",
+						importValue, exportValue, livePowerW, livePowerExpW)
 				} else {
 					log.Printf("DEBUG: Shelly 2PM AEnergy.Total is not valid: %.3f", shelly2PMMsg.AEnergy.Total)
+				}
+
+				// Always update live power even if energy data isn't valid yet
+				mc.mu.Lock()
+				existing := mc.meterReadings[meterID]
+				existing.LivePowerW = livePowerW
+				existing.LivePowerExpW = livePowerExpW
+				existing.LastUpdated = time.Now()
+				existing.IsConnected = true
+				if found {
+					existing.Power = importValue
+					existing.PowerExport = exportValue
+					existing.Timestamp = timestamp
+				}
+				mc.meterReadings[meterID] = existing
+				mc.mu.Unlock()
+
+				if found {
+					return // We've already stored everything
 				}
 			} else {
 				log.Printf("DEBUG: Failed to parse as Shelly 2PM: %v", err)
@@ -791,12 +870,36 @@ func (mc *MQTTCollector) GetMeterReading(meterID int) (float64, float64, bool) {
 
 	// Check if reading is too old (more than 30 minutes)
 	if time.Since(reading.LastUpdated) > 30*time.Minute {
-		log.Printf("WARNING: MQTT reading for meter %d is stale (%.0f minutes old)", 
+		log.Printf("WARNING: MQTT reading for meter %d is stale (%.0f minutes old)",
 			meterID, time.Since(reading.LastUpdated).Minutes())
 		return 0, 0, false
 	}
 
 	return reading.Power, reading.PowerExport, true
+}
+
+// GetMeterLivePower returns the instantaneous power in Watts for a meter
+// Returns (importPowerW, exportPowerW, hasData)
+func (mc *MQTTCollector) GetMeterLivePower(meterID int) (float64, float64, bool) {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+
+	reading, exists := mc.meterReadings[meterID]
+	if !exists {
+		return 0, 0, false
+	}
+
+	// Check if reading is too old (more than 2 minutes for live data)
+	if time.Since(reading.LastUpdated) > 2*time.Minute {
+		return 0, 0, false
+	}
+
+	// Return live power if available
+	if reading.LivePowerW > 0 || reading.LivePowerExpW > 0 {
+		return reading.LivePowerW, reading.LivePowerExpW, true
+	}
+
+	return 0, 0, false
 }
 
 func (mc *MQTTCollector) GetChargerData(chargerID int) (MQTTChargerData, bool) {

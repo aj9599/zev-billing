@@ -1612,7 +1612,8 @@ func (h *DashboardHandler) GetEnergyFlow(w http.ResponseWriter, r *http.Request)
 }
 
 // GetEnergyFlowLive returns real-time power data for live dashboard display
-// This reads meters directly without storing to database - purely for UI
+// Uses live power readings from data collectors (Loxone Pf, Shelly apower/total_act_power, etc.)
+// Falls back to database consumption readings if no live power is available
 //
 // ZEV Energy Flow Model:
 // - total_meter (grid): Measures what flows in/out from the public grid (import = positive, export = negative)
@@ -1638,80 +1639,101 @@ func (h *DashboardHandler) GetEnergyFlowLive(w http.ResponseWriter, r *http.Requ
 
 	// Check if data collector is available
 	if h.dataCollector == nil {
-		http.Error(w, "Data collector not available", http.StatusServiceUnavailable)
+		log.Printf("GetEnergyFlowLive: Data collector not available, falling back to database")
+		h.getEnergyFlowLiveFromDB(w, r, ctx, buildingID)
 		return
 	}
 
-	// Get live meter readings
+	// Get live meter readings from data collector
 	readings, err := h.dataCollector.GetLiveMeterReadings(buildingID)
 	if err != nil {
-		log.Printf("GetEnergyFlowLive error: %v", err)
-		http.Error(w, "Failed to get live readings", http.StatusInternalServerError)
+		log.Printf("GetEnergyFlowLive: Error getting live readings: %v, falling back to database", err)
+		h.getEnergyFlowLiveFromDB(w, r, ctx, buildingID)
 		return
 	}
 
 	// Structure to hold building power data
 	type buildingData struct {
-		id              int
-		name            string
-		solarPowerKw    float64 // From solar_meter
-		gridPowerKw     float64 // From total_meter (positive = import, negative = export)
-		hasGridMeter    bool    // True if building has a total_meter
-		hasSolarMeter   bool    // True if building has a solar_meter
-		evChargingKw    float64 // From chargers
+		id            int
+		name          string
+		solarPowerKw  float64 // From solar_meter (production)
+		gridImportKw  float64 // From total_meter import
+		gridExportKw  float64 // From total_meter export
+		hasGridMeter  bool
+		hasSolarMeter bool
+		hasLiveData   bool
+		evChargingKw  float64
 	}
 
 	buildingPower := make(map[int]*buildingData)
 
 	// Get building names
-	rows, _ := h.db.QueryContext(ctx, `SELECT id, name FROM buildings WHERE COALESCE(is_group, 0) = 0`)
-	if rows != nil {
-		for rows.Next() {
-			var id int
-			var name string
-			if rows.Scan(&id, &name) == nil {
-				buildingPower[id] = &buildingData{
-					id:   id,
-					name: name,
-				}
+	rows, err := h.db.QueryContext(ctx, `SELECT id, name FROM buildings WHERE COALESCE(is_group, 0) = 0`)
+	if err != nil {
+		log.Printf("GetEnergyFlowLive: Error querying buildings: %v", err)
+		http.Error(w, "Failed to query buildings", http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		var id int
+		var name string
+		if rows.Scan(&id, &name) == nil {
+			buildingPower[id] = &buildingData{
+				id:   id,
+				name: name,
 			}
 		}
-		rows.Close()
 	}
+	rows.Close()
 
-	// Aggregate meter readings by type
+	// Aggregate live meter readings by building
 	for _, reading := range readings {
 		bp, exists := buildingPower[reading.BuildingID]
 		if !exists {
 			continue
 		}
 
-		// For live power, we need to estimate from recent readings or use direct power if available
-		// CurrentPowerW is calculated by estimatePowerFromRecentReadings in data_collector
+		// Convert W to kW
 		powerKw := reading.CurrentPowerW / 1000.0
+		powerExpKw := reading.CurrentPowerExpW / 1000.0
 
 		switch reading.MeterType {
 		case "solar_meter":
-			// Solar production - always positive
-			// Use the export reading as that's what represents solar generation
-			bp.solarPowerKw += powerKw
+			// Solar production - use export power for solar meters
+			// If HasLivePower, the export power is in CurrentPowerExpW
+			// If not, CurrentPowerW might contain estimated power
+			if reading.HasLivePower && powerExpKw > 0 {
+				bp.solarPowerKw += powerExpKw
+			} else if powerKw > 0 {
+				// Fallback: use CurrentPowerW (estimated from export readings)
+				bp.solarPowerKw += powerKw
+			}
 			bp.hasSolarMeter = true
+			if reading.HasLivePower {
+				bp.hasLiveData = true
+			}
+			log.Printf("GetEnergyFlowLive: Solar meter %d (%s): power=%.3f kW, expPower=%.3f kW, hasLive=%v",
+				reading.MeterID, reading.MeterName, powerKw, powerExpKw, reading.HasLivePower)
 
 		case "total_meter":
-			// Grid meter - measures flow to/from grid
-			// Positive = importing from grid, Negative = exporting to grid
-			// The power is calculated from import readings, so positive means consumption from grid
-			bp.gridPowerKw += powerKw
+			// Grid meter - positive power = import, negative = export
+			// The collector returns CurrentPowerW for import and CurrentPowerExpW for export
+			if reading.HasLivePower {
+				bp.gridImportKw += powerKw
+				bp.gridExportKw += powerExpKw
+				bp.hasLiveData = true
+			} else {
+				// Fallback: CurrentPowerW is estimated from import readings
+				bp.gridImportKw += powerKw
+			}
 			bp.hasGridMeter = true
-
-		// apartment_meter is intentionally not used in the energy flow diagram
-		// It's used for billing individual apartments, not for the overall energy flow
+			log.Printf("GetEnergyFlowLive: Grid meter %d (%s): import=%.3f kW, export=%.3f kW, hasLive=%v",
+				reading.MeterID, reading.MeterName, powerKw, powerExpKw, reading.HasLivePower)
 		}
 	}
 
-	// Get live charger power (from existing charger live data)
-	// Only include chargers from the selected building if a building filter is applied
-	chargerQuery := `SELECT id, building_id, connection_type FROM chargers WHERE COALESCE(is_active, 1) = 1`
+	// Get live charger power
+	chargerQuery := `SELECT id, building_id FROM chargers WHERE COALESCE(is_active, 1) = 1`
 	chargerArgs := []interface{}{}
 	if buildingID > 0 {
 		chargerQuery += " AND building_id = ?"
@@ -1722,13 +1744,31 @@ func (h *DashboardHandler) GetEnergyFlowLive(w http.ResponseWriter, r *http.Requ
 	if chargerRows != nil {
 		for chargerRows.Next() {
 			var chargerID, chBuildingID int
-			var connectionType string
-			if chargerRows.Scan(&chargerID, &chBuildingID, &connectionType) == nil {
+			if chargerRows.Scan(&chargerID, &chBuildingID) == nil {
 				var chargerPowerKw float64
 
-				// Get live charger data based on connection type
-				if status, ok := h.dataCollector.GetChargerLiveStatus(chargerID); ok && status != nil {
-					chargerPowerKw = status.CurrentPower_kW
+				// Try to get live charger data from data collector
+				if h.dataCollector != nil {
+					if status, ok := h.dataCollector.GetChargerLiveStatus(chargerID); ok && status != nil {
+						chargerPowerKw = status.CurrentPower_kW
+					}
+				}
+
+				// If no live data, check recent charger sessions for power estimate
+				if chargerPowerKw == 0 {
+					var consumptionKwh sql.NullFloat64
+					h.db.QueryRowContext(ctx, `
+						SELECT (
+							SELECT power_kwh FROM charger_sessions
+							WHERE charger_id = ? ORDER BY session_time DESC LIMIT 1
+						) - (
+							SELECT power_kwh FROM charger_sessions
+							WHERE charger_id = ? ORDER BY session_time DESC LIMIT 1 OFFSET 1
+						)
+					`, chargerID, chargerID).Scan(&consumptionKwh)
+					if consumptionKwh.Valid && consumptionKwh.Float64 > 0 {
+						chargerPowerKw = consumptionKwh.Float64 / 0.25
+					}
 				}
 
 				if bp, exists := buildingPower[chBuildingID]; exists {
@@ -1739,18 +1779,18 @@ func (h *DashboardHandler) GetEnergyFlowLive(w http.ResponseWriter, r *http.Requ
 		chargerRows.Close()
 	}
 
-	// Calculate totals and build response
-	var totalSolarKw, totalGridKw, totalEvKw float64
+	// Calculate totals
+	var totalSolarKw, totalGridImportKw, totalGridExportKw, totalEvKw float64
 	var hasAnyGridMeter, hasAnySolarMeter bool
 
 	for _, bp := range buildingPower {
-		// Skip buildings that don't match the filter
 		if buildingID > 0 && bp.id != buildingID {
 			continue
 		}
 
 		totalSolarKw += bp.solarPowerKw
-		totalGridKw += bp.gridPowerKw
+		totalGridImportKw += bp.gridImportKw
+		totalGridExportKw += bp.gridExportKw
 		totalEvKw += bp.evChargingKw
 
 		if bp.hasGridMeter {
@@ -1761,54 +1801,41 @@ func (h *DashboardHandler) GetEnergyFlowLive(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	// Calculate building consumption and self-consumption
-	// Building consumption = Grid Import + Solar Self-Consumed
-	// If exporting: Grid is negative, so consumption = Solar + Grid (where Grid < 0)
-	// If importing: Grid is positive, so consumption = Solar + Grid
-	var consumptionKw float64
-	var selfConsumptionPct float64
+	// Calculate net grid power (positive = import, negative = export)
+	totalGridKw := totalGridImportKw - totalGridExportKw
 	isExporting := totalGridKw < 0
 
+	// Calculate building consumption and self-consumption
+	var consumptionKw float64
+	var selfConsumptionPct float64
+
 	if hasAnyGridMeter && hasAnySolarMeter {
-		// We have both meters - calculate properly
-		// Consumption = Solar production - Grid export (if exporting) or Solar + Grid import (if importing)
-		if isExporting {
-			// Exporting: consumption = solar - |grid export|
-			consumptionKw = totalSolarKw + totalGridKw // totalGridKw is negative
-		} else {
-			// Importing: consumption = solar + grid import
-			consumptionKw = totalSolarKw + totalGridKw
+		// Consumption = Solar + Grid Import - Grid Export = Solar + Net Grid
+		consumptionKw = totalSolarKw + totalGridKw
+		if consumptionKw < 0 {
+			consumptionKw = 0
 		}
 
 		// Self-consumption = solar used in building / solar produced
 		if totalSolarKw > 0.001 {
-			solarSelfConsumed := totalSolarKw
-			if isExporting {
-				// We're exporting, so self-consumed = solar - export
-				solarSelfConsumed = totalSolarKw + totalGridKw // totalGridKw is negative
-			}
+			solarSelfConsumed := totalSolarKw - totalGridExportKw
 			if solarSelfConsumed < 0 {
 				solarSelfConsumed = 0
 			}
-			selfConsumptionPct = (solarSelfConsumed / totalSolarKw) * 100
-			if selfConsumptionPct > 100 {
-				selfConsumptionPct = 100
+			if solarSelfConsumed > totalSolarKw {
+				solarSelfConsumed = totalSolarKw
 			}
+			selfConsumptionPct = (solarSelfConsumed / totalSolarKw) * 100
 		}
 	} else if hasAnyGridMeter {
-		// Only grid meter - consumption = grid import (no solar)
-		consumptionKw = totalGridKw
+		consumptionKw = totalGridImportKw
 	} else if hasAnySolarMeter {
-		// Only solar meter - can't determine consumption without grid meter
-		// Assume all solar is self-consumed
 		consumptionKw = totalSolarKw
 		selfConsumptionPct = 100
 	}
 
-	// Ensure consumption is not negative
-	if consumptionKw < 0 {
-		consumptionKw = 0
-	}
+	log.Printf("GetEnergyFlowLive: Totals - Solar=%.3f kW, GridImport=%.3f kW, GridExport=%.3f kW, NetGrid=%.3f kW, Consumption=%.3f kW, SelfConsumption=%.1f%%",
+		totalSolarKw, totalGridImportKw, totalGridExportKw, totalGridKw, consumptionKw, selfConsumptionPct)
 
 	// Build response
 	response := models.EnergyFlowLiveData{
@@ -1825,14 +1852,13 @@ func (h *DashboardHandler) GetEnergyFlowLive(w http.ResponseWriter, r *http.Requ
 	// Add per-building breakdown if not filtered to single building
 	if buildingID == 0 {
 		for _, bp := range buildingPower {
-			// Calculate per-building consumption
+			bpGridKw := bp.gridImportKw - bp.gridExportKw
 			var bpConsumption float64
-			bpIsExporting := bp.gridPowerKw < 0
 
 			if bp.hasGridMeter && bp.hasSolarMeter {
-				bpConsumption = bp.solarPowerKw + bp.gridPowerKw
+				bpConsumption = bp.solarPowerKw + bpGridKw
 			} else if bp.hasGridMeter {
-				bpConsumption = bp.gridPowerKw
+				bpConsumption = bp.gridImportKw
 			} else if bp.hasSolarMeter {
 				bpConsumption = bp.solarPowerKw
 			}
@@ -1846,15 +1872,165 @@ func (h *DashboardHandler) GetEnergyFlowLive(w http.ResponseWriter, r *http.Requ
 				BuildingName:       bp.name,
 				SolarPowerKw:       bp.solarPowerKw,
 				ConsumptionPowerKw: bpConsumption,
-				GridPowerKw:        bp.gridPowerKw,
+				GridPowerKw:        bpGridKw,
 				EvChargingPowerKw:  bp.evChargingKw,
 			}
 
-			// Only add buildings that have data or are the selected building
-			if bp.hasGridMeter || bp.hasSolarMeter || bp.evChargingKw > 0 || bpIsExporting {
+			if bp.hasGridMeter || bp.hasSolarMeter || bp.evChargingKw > 0 {
 				response.PerBuilding = append(response.PerBuilding, bpLive)
 			}
 		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// getEnergyFlowLiveFromDB is a fallback that uses database readings when live collector data is unavailable
+func (h *DashboardHandler) getEnergyFlowLiveFromDB(w http.ResponseWriter, r *http.Request, ctx context.Context, buildingID int) {
+	type buildingData struct {
+		id            int
+		name          string
+		solarPowerKw  float64
+		gridImportKw  float64
+		gridExportKw  float64
+		hasGridMeter  bool
+		hasSolarMeter bool
+		evChargingKw  float64
+	}
+
+	buildingPower := make(map[int]*buildingData)
+
+	// Get building names
+	rows, err := h.db.QueryContext(ctx, `SELECT id, name FROM buildings WHERE COALESCE(is_group, 0) = 0`)
+	if err != nil {
+		log.Printf("getEnergyFlowLiveFromDB: Error querying buildings: %v", err)
+		http.Error(w, "Failed to query buildings", http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		var id int
+		var name string
+		if rows.Scan(&id, &name) == nil {
+			buildingPower[id] = &buildingData{id: id, name: name}
+		}
+	}
+	rows.Close()
+
+	// Get the most recent meter readings from the database
+	meterQuery := `
+		SELECT m.id, m.building_id, m.meter_type,
+			COALESCE(mr.consumption_kwh, 0), COALESCE(mr.consumption_export, 0),
+			mr.reading_time
+		FROM meters m
+		LEFT JOIN (
+			SELECT meter_id, consumption_kwh, consumption_export, reading_time
+			FROM meter_readings mr1
+			WHERE reading_time = (
+				SELECT MAX(reading_time)
+				FROM meter_readings mr2
+				WHERE mr2.meter_id = mr1.meter_id
+			)
+		) mr ON m.id = mr.meter_id
+		WHERE m.is_active = 1
+		AND m.meter_type IN ('solar_meter', 'total_meter')
+	`
+	meterArgs := []interface{}{}
+	if buildingID > 0 {
+		meterQuery += " AND m.building_id = ?"
+		meterArgs = append(meterArgs, buildingID)
+	}
+
+	meterRows, err := h.db.QueryContext(ctx, meterQuery, meterArgs...)
+	if err != nil {
+		log.Printf("getEnergyFlowLiveFromDB: Error querying meters: %v", err)
+		http.Error(w, "Failed to query meters", http.StatusInternalServerError)
+		return
+	}
+	defer meterRows.Close()
+
+	for meterRows.Next() {
+		var meterID, bID int
+		var meterType string
+		var consumptionKwh, consumptionExport float64
+		var readingTime sql.NullTime
+
+		if err := meterRows.Scan(&meterID, &bID, &meterType, &consumptionKwh, &consumptionExport, &readingTime); err != nil {
+			continue
+		}
+
+		bp, exists := buildingPower[bID]
+		if !exists || !readingTime.Valid {
+			continue
+		}
+
+		// Convert consumption (kWh over 15 min) to power (kW)
+		switch meterType {
+		case "solar_meter":
+			powerKw := consumptionExport / 0.25
+			if powerKw < 0 {
+				powerKw = -powerKw
+			}
+			bp.solarPowerKw += powerKw
+			bp.hasSolarMeter = true
+
+		case "total_meter":
+			bp.gridImportKw += consumptionKwh / 0.25
+			bp.gridExportKw += consumptionExport / 0.25
+			bp.hasGridMeter = true
+		}
+	}
+
+	// Calculate totals
+	var totalSolarKw, totalGridImportKw, totalGridExportKw float64
+	var hasAnyGridMeter, hasAnySolarMeter bool
+
+	for _, bp := range buildingPower {
+		if buildingID > 0 && bp.id != buildingID {
+			continue
+		}
+		totalSolarKw += bp.solarPowerKw
+		totalGridImportKw += bp.gridImportKw
+		totalGridExportKw += bp.gridExportKw
+		if bp.hasGridMeter {
+			hasAnyGridMeter = true
+		}
+		if bp.hasSolarMeter {
+			hasAnySolarMeter = true
+		}
+	}
+
+	totalGridKw := totalGridImportKw - totalGridExportKw
+	isExporting := totalGridKw < 0
+
+	var consumptionKw, selfConsumptionPct float64
+	if hasAnyGridMeter && hasAnySolarMeter {
+		consumptionKw = totalSolarKw + totalGridKw
+		if consumptionKw < 0 {
+			consumptionKw = 0
+		}
+		if totalSolarKw > 0.001 {
+			solarSelfConsumed := totalSolarKw - totalGridExportKw
+			if solarSelfConsumed < 0 {
+				solarSelfConsumed = 0
+			}
+			selfConsumptionPct = (solarSelfConsumed / totalSolarKw) * 100
+		}
+	} else if hasAnyGridMeter {
+		consumptionKw = totalGridImportKw
+	} else if hasAnySolarMeter {
+		consumptionKw = totalSolarKw
+		selfConsumptionPct = 100
+	}
+
+	response := models.EnergyFlowLiveData{
+		Period:             "live",
+		SolarPowerKw:       totalSolarKw,
+		ConsumptionPowerKw: consumptionKw,
+		GridPowerKw:        totalGridKw,
+		SelfConsumptionPct: selfConsumptionPct,
+		IsExporting:        isExporting,
+		Timestamp:          time.Now().Format(time.RFC3339),
 	}
 
 	w.Header().Set("Content-Type", "application/json")

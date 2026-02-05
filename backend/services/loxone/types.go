@@ -246,6 +246,12 @@ type Device struct {
 	LastReadingExport float64
 	LastUpdate        time.Time
 	ReadingGaps       int
+
+	// Live power data (instantaneous, in Watts)
+	// For meters with meter_block mode, this comes from Pf (Power Flow) output
+	LivePowerW    float64   // Current power in Watts (positive = import/consumption)
+	LivePowerExpW float64   // Current export power in Watts (for solar meters)
+	LivePowerTime time.Time // When live power was last updated
 }
 
 // ========== LOXONE API RESPONSES ==========

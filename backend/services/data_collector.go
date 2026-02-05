@@ -906,15 +906,22 @@ type MeterLiveReading struct {
 	MeterType        string    `json:"meter_type"`
 	BuildingID       int       `json:"building_id"`
 	ConnectionType   string    `json:"connection_type"`
-	CurrentPowerW    float64   `json:"current_power_w"`    // Instantaneous power in Watts
-	TotalImportKwh   float64   `json:"total_import_kwh"`   // Cumulative import reading
-	TotalExportKwh   float64   `json:"total_export_kwh"`   // Cumulative export reading (solar)
+	CurrentPowerW    float64   `json:"current_power_w"`     // Instantaneous import power in Watts
+	CurrentPowerExpW float64   `json:"current_power_exp_w"` // Instantaneous export power in Watts (for solar)
+	HasLivePower     bool      `json:"has_live_power"`      // True if live power is from direct reading (not estimated)
+	TotalImportKwh   float64   `json:"total_import_kwh"`    // Cumulative import reading
+	TotalExportKwh   float64   `json:"total_export_kwh"`    // Cumulative export reading (solar)
 	IsOnline         bool      `json:"is_online"`
 	LastUpdate       time.Time `json:"last_update"`
 }
 
 // GetLiveMeterReadings returns real-time meter data without storing to database
 // This is for live dashboard display only, does not affect 15-minute billing cycle
+//
+// For different meter types, power is calculated differently:
+// - solar_meter: Power from EXPORT readings (solar production)
+// - total_meter: Power from IMPORT readings (grid consumption)
+// - apartment_meter: Power from IMPORT readings (apartment consumption)
 func (dc *DataCollector) GetLiveMeterReadings(buildingID int) ([]MeterLiveReading, error) {
 	var readings []MeterLiveReading
 
@@ -954,6 +961,10 @@ func (dc *DataCollector) GetLiveMeterReadings(buildingID int) ([]MeterLiveReadin
 			LastUpdate:     time.Now(),
 		}
 
+		// Determine which reading to use for power calculation based on meter type
+		// Solar meters measure production via export, others measure consumption via import
+		isSolarMeter := meterType == "solar_meter"
+
 		// Get live reading based on connection type
 		switch connectionType {
 		case "loxone_api":
@@ -965,8 +976,23 @@ func (dc *DataCollector) GetLiveMeterReadings(buildingID int) ([]MeterLiveReadin
 					reading.LastUpdate = device.LastUpdate
 					reading.IsOnline = time.Since(device.LastUpdate) < 5*time.Minute
 
-					// Calculate power from recent readings if available
-					reading.CurrentPowerW = dc.estimatePowerFromRecentReadings(meterID, device.LastReading)
+					// Use direct live power if available (from Pf output)
+					if device.LivePowerW > 0 || device.LivePowerExpW > 0 {
+						if time.Since(device.LivePowerTime) < 2*time.Minute {
+							reading.CurrentPowerW = device.LivePowerW
+							reading.CurrentPowerExpW = device.LivePowerExpW
+							reading.HasLivePower = true
+						}
+					}
+
+					// Fallback: estimate power from recent readings if no live power
+					if !reading.HasLivePower {
+						if isSolarMeter {
+							reading.CurrentPowerW = dc.estimatePowerFromRecentReadingsExport(meterID, device.LastReadingExport)
+						} else {
+							reading.CurrentPowerW = dc.estimatePowerFromRecentReadings(meterID, device.LastReading)
+						}
+					}
 				}
 			}
 
@@ -978,7 +1004,11 @@ func (dc *DataCollector) GetLiveMeterReadings(buildingID int) ([]MeterLiveReadin
 					reading.TotalImportKwh = importVal
 					reading.TotalExportKwh = exportVal
 					reading.IsOnline = true
-					reading.CurrentPowerW = dc.estimatePowerFromRecentReadings(meterID, importVal)
+					if isSolarMeter {
+						reading.CurrentPowerW = dc.estimatePowerFromRecentReadingsExport(meterID, exportVal)
+					} else {
+						reading.CurrentPowerW = dc.estimatePowerFromRecentReadings(meterID, importVal)
+					}
 				}
 			}
 
@@ -988,19 +1018,38 @@ func (dc *DataCollector) GetLiveMeterReadings(buildingID int) ([]MeterLiveReadin
 				if val, ok := dc.udpCollector.GetMeterReading(meterID); ok {
 					reading.TotalImportKwh = val
 					reading.IsOnline = true
+					// UDP doesn't provide separate export, use import for all
 					reading.CurrentPowerW = dc.estimatePowerFromRecentReadings(meterID, val)
 				}
 			}
 
 		case "mqtt":
-			// MQTT: get from buffered readings
+			// MQTT: get from buffered readings with live power support
 			if dc.mqttCollector != nil {
+				// First try to get live power directly
+				livePowerW, livePowerExpW, hasLive := dc.mqttCollector.GetMeterLivePower(meterID)
+				if hasLive {
+					reading.CurrentPowerW = livePowerW
+					reading.CurrentPowerExpW = livePowerExpW
+					reading.HasLivePower = true
+					reading.IsOnline = true
+				}
+
+				// Get cumulative energy readings
 				importVal, exportVal, ok := dc.mqttCollector.GetMeterReading(meterID)
 				if ok {
 					reading.TotalImportKwh = importVal
 					reading.TotalExportKwh = exportVal
 					reading.IsOnline = true
-					reading.CurrentPowerW = dc.estimatePowerFromRecentReadings(meterID, importVal)
+
+					// Fallback: estimate power if no live power available
+					if !reading.HasLivePower {
+						if isSolarMeter {
+							reading.CurrentPowerW = dc.estimatePowerFromRecentReadingsExport(meterID, exportVal)
+						} else {
+							reading.CurrentPowerW = dc.estimatePowerFromRecentReadings(meterID, importVal)
+						}
+					}
 				}
 			}
 
@@ -1012,7 +1061,11 @@ func (dc *DataCollector) GetLiveMeterReadings(buildingID int) ([]MeterLiveReadin
 					reading.TotalImportKwh = importVal
 					reading.TotalExportKwh = exportVal
 					reading.IsOnline = true
-					reading.CurrentPowerW = dc.estimatePowerFromRecentReadings(meterID, importVal)
+					if isSolarMeter {
+						reading.CurrentPowerW = dc.estimatePowerFromRecentReadingsExport(meterID, exportVal)
+					} else {
+						reading.CurrentPowerW = dc.estimatePowerFromRecentReadings(meterID, importVal)
+					}
 				}
 			}
 		}
@@ -1025,6 +1078,7 @@ func (dc *DataCollector) GetLiveMeterReadings(buildingID int) ([]MeterLiveReadin
 
 // estimatePowerFromRecentReadings calculates instantaneous power by comparing current reading
 // with the most recent stored reading (power = energy delta / time delta)
+// This uses power_kwh (import) column - for consumption meters (total_meter, apartment_meter)
 func (dc *DataCollector) estimatePowerFromRecentReadings(meterID int, currentReading float64) float64 {
 	// Get the last stored reading from the database
 	var lastReading float64
@@ -1040,6 +1094,44 @@ func (dc *DataCollector) estimatePowerFromRecentReadings(meterID int, currentRea
 
 	if err != nil {
 		log.Printf("estimatePowerFromRecentReadings: No previous reading for meter %d: %v", meterID, err)
+		return 0 // No previous reading available
+	}
+
+	// Calculate time delta in hours
+	timeDeltaHours := time.Since(lastTime).Hours()
+	if timeDeltaHours <= 0 || timeDeltaHours > 1 { // Max 1 hour lookback
+		return 0
+	}
+
+	// Calculate energy delta
+	energyDeltaKwh := currentReading - lastReading
+	if energyDeltaKwh < 0 {
+		return 0 // Meter reset or error
+	}
+
+	// Power (W) = Energy (kWh) / Time (hours) * 1000
+	powerW := (energyDeltaKwh / timeDeltaHours) * 1000
+
+	return powerW
+}
+
+// estimatePowerFromRecentReadingsExport calculates instantaneous power from EXPORT readings
+// This uses power_kwh_export column - for solar production meters
+func (dc *DataCollector) estimatePowerFromRecentReadingsExport(meterID int, currentReading float64) float64 {
+	// Get the last stored export reading from the database
+	var lastReading float64
+	var lastTime time.Time
+
+	err := dc.db.QueryRow(`
+		SELECT power_kwh_export, reading_time
+		FROM meter_readings
+		WHERE meter_id = ?
+		ORDER BY reading_time DESC
+		LIMIT 1
+	`, meterID).Scan(&lastReading, &lastTime)
+
+	if err != nil {
+		log.Printf("estimatePowerFromRecentReadingsExport: No previous export reading for meter %d: %v", meterID, err)
 		return 0 // No previous reading available
 	}
 

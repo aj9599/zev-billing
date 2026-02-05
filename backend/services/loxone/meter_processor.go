@@ -22,8 +22,9 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 	if device.LoxoneMode == "meter_block" {
 		// METER BLOCK MODE - Process BOTH import and export from the SAME response
 		var importReading, exportReading float64
+		var livePowerW float64
 
-		// Get import reading from output1
+		// Get import reading from output1 (Mrc)
 		if output1, ok := response.LL.Outputs["output1"]; ok {
 			switch v := output1.Value.(type) {
 			case float64:
@@ -35,7 +36,19 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 			}
 		}
 
-		// Get export reading from output8 (only for total/solar meters)
+		// Get live power from output0 (Pf - Power Flow in W)
+		if output0, ok := response.LL.Outputs["output0"]; ok {
+			switch v := output0.Value.(type) {
+			case float64:
+				livePowerW = v
+			case string:
+				if f, err := strconv.ParseFloat(v, 64); err == nil {
+					livePowerW = f
+				}
+			}
+		}
+
+		// Get export reading from output8 (Mrd) (only for total/solar meters)
 		if supportsExport {
 			if output8, ok := response.LL.Outputs["output8"]; ok {
 				switch v := output8.Value.(type) {
@@ -49,13 +62,24 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 			}
 		}
 
-		// Update device state with BOTH values
+		// Update device state with BOTH values AND live power
 		device.LastReading = importReading
 		device.LastReadingExport = exportReading
 		device.LastUpdate = time.Now()
 		device.ReadingGaps = 0
 
+		// Update live power - positive = import/consumption, negative = export
+		if livePowerW >= 0 {
+			device.LivePowerW = livePowerW
+			device.LivePowerExpW = 0
+		} else {
+			device.LivePowerW = 0
+			device.LivePowerExpW = -livePowerW // Make positive for export
+		}
+		device.LivePowerTime = time.Now()
+
 		log.Printf("   📥 Import reading (output1/Mrc): %.3f kWh", importReading)
+		log.Printf("   ⚡ Live power (output0/Pf): %.1f W", livePowerW)
 		if supportsExport {
 			log.Printf("   📤 Export reading (output8/Mrd): %.3f kWh", exportReading)
 		}
