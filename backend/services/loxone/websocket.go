@@ -293,14 +293,14 @@ func (conn *WebSocketConnection) requestData() {
 }
 
 // requestLivePower polls ALL meters frequently for live dashboard display
-// This runs every 15 seconds and requests data for ALL meters (not just meter_block)
+// This runs every 30 seconds and requests data for ALL meters (not just meter_block)
 // For meter_block mode: uses Pf (output0) for direct live power
 // For other modes: calculates power from energy delta between polls
 // Data is NOT saved to database here - only at :00, :15, :30, :45 by requestData()
 func (conn *WebSocketConnection) requestLivePower() {
 	defer conn.GoroutinesWg.Done()
 
-	log.Printf("⚡ LIVE POWER POLLING STARTED for %s (every 15 seconds)", conn.Host)
+	log.Printf("⚡ LIVE POWER POLLING STARTED for %s (every 30 seconds)", conn.Host)
 
 	// Wait a bit for initial connection to stabilize
 	time.Sleep(5 * time.Second)
@@ -322,7 +322,7 @@ func (conn *WebSocketConnection) requestLivePower() {
 	conn.Mu.Unlock()
 	log.Printf("⚡ [%s] Live power polling: %d meters with Pf support, %d meters using energy delta calculation", conn.Host, meterBlockCount, otherModeCount)
 
-	ticker := time.NewTicker(15 * time.Second)
+	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
 	pollCount := 0
@@ -340,10 +340,19 @@ func (conn *WebSocketConnection) requestLivePower() {
 
 			if !isConnected || !hasWs || collectionInProgress {
 				conn.Mu.Unlock()
-				if pollCount%4 == 0 { // Log every minute
+				if pollCount%2 == 0 { // Log every minute
 					log.Printf("⚡ [%s] Live power poll skipped: connected=%v, hasWs=%v, collectionInProgress=%v",
 						conn.Host, isConnected, hasWs, collectionInProgress)
 				}
+				pollCount++
+				continue
+			}
+
+			// Also skip near collection windows (±1 minute around :00, :15, :30, :45)
+			// to avoid overwhelming the Miniserver during billing data collection
+			minute := time.Now().Minute() % 15
+			if minute == 14 || minute == 0 || minute == 1 {
+				conn.Mu.Unlock()
 				pollCount++
 				continue
 			}
@@ -364,6 +373,7 @@ func (conn *WebSocketConnection) requestLivePower() {
 
 			// Request data for each meter
 			sentCount := 0
+			writeFailed := false
 			for _, device := range meters {
 				select {
 				case <-conn.StopChan:
@@ -375,7 +385,8 @@ func (conn *WebSocketConnection) requestLivePower() {
 
 				if err := conn.safeWriteMessage(websocket.TextMessage, []byte(cmd)); err != nil {
 					log.Printf("⚠️ Live power request failed for meter %s: %v", device.Name, err)
-					continue
+					writeFailed = true
+					break
 				}
 				sentCount++
 
@@ -384,16 +395,23 @@ func (conn *WebSocketConnection) requestLivePower() {
 					cmdExport := fmt.Sprintf("jdev/sps/io/%s/all", device.ExportDeviceID)
 					if err := conn.safeWriteMessage(websocket.TextMessage, []byte(cmdExport)); err != nil {
 						log.Printf("⚠️ Live power export request failed for meter %s: %v", device.Name, err)
+						writeFailed = true
+						break
 					}
 				}
 
-				// Small delay between requests to not overwhelm the Miniserver
-				time.Sleep(50 * time.Millisecond)
+				// Delay between requests to not overwhelm the Miniserver
+				time.Sleep(200 * time.Millisecond)
+			}
+
+			if writeFailed {
+				log.Printf("⚠️ [%s] Live power polling stopping due to write failure", conn.Host)
+				return
 			}
 
 			pollCount++
 			// Log every poll for first 4, then every minute
-			if pollCount <= 4 || pollCount%4 == 0 {
+			if pollCount <= 4 || pollCount%2 == 0 {
 				log.Printf("⚡ [%s] Live power poll #%d: sent requests for %d meters", conn.Host, pollCount, sentCount)
 			}
 		}
