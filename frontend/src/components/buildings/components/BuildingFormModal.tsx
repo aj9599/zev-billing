@@ -282,6 +282,17 @@ export default function BuildingFormModal({
                 }}>
                   {t('buildings.apartmentConfig.enableDescription')}
                 </p>
+                {!formData.has_apartments && (
+                  <p style={{
+                    fontSize: '11px',
+                    color: '#6b7280',
+                    marginTop: '4px',
+                    marginLeft: '28px',
+                    fontStyle: 'italic'
+                  }}>
+                    {t('buildings.apartmentConfig.singleFamilyHint')}
+                  </p>
+                )}
               </div>
 
               {/* LEGO-Style Apartment Builder */}

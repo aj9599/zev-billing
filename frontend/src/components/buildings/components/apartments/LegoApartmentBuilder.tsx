@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from '../../../../i18n';
 import ApartmentPalette from './ApartmentPalette';
 import BuildingLayout from './BuildingLayout';
-import type { Building as BuildingType } from '../../../../types';
+import type { Building as BuildingType, FloorType } from '../../../../types';
 
 interface LegoApartmentBuilderProps {
   formData: Partial<BuildingType>;
@@ -26,20 +26,46 @@ export default function LegoApartmentBuilder({
   const [dragType, setDragType] = useState<string | null>(null);
   const [dragData, setDragData] = useState<any>(null);
 
-  const addFloor = () => {
+  const addFloor = (floorType: FloorType = 'normal') => {
     const floors = formData.floors_config || [];
-    const newFloorNumber = floors.length + 1;
-    setFormData({
-      ...formData,
-      floors_config: [
-        {
-          floor_number: newFloorNumber,
-          floor_name: `${t('buildings.floor')} ${newFloorNumber}`,
-          apartments: []
-        },
-        ...floors
-      ]
-    });
+
+    let floorName: string;
+    if (floorType === 'attic') {
+      floorName = t('buildings.apartmentConfig.attic');
+    } else if (floorType === 'underground') {
+      const ugCount = floors.filter(f => f.floor_type === 'underground').length;
+      floorName = `${t('buildings.apartmentConfig.underground')} ${ugCount + 1}`;
+    } else {
+      const normalCount = floors.filter(f => f.floor_type === 'normal' || !f.floor_type).length;
+      floorName = `${t('buildings.floor')} ${normalCount + 1}`;
+    }
+
+    const newFloor = {
+      floor_number: floors.length + 1,
+      floor_name: floorName,
+      floor_type: floorType,
+      apartments: [] as string[]
+    };
+
+    // Insert in correct position: underground at bottom, normal in middle, attic on top
+    const newFloors = [...floors];
+    if (floorType === 'underground') {
+      // Insert at beginning (bottom of building)
+      newFloors.unshift(newFloor);
+    } else if (floorType === 'attic') {
+      // Insert at end (top of building)
+      newFloors.push(newFloor);
+    } else {
+      // Insert after underground floors but before attic floors
+      const firstAtticIdx = newFloors.findIndex(f => f.floor_type === 'attic');
+      if (firstAtticIdx >= 0) {
+        newFloors.splice(firstAtticIdx, 0, newFloor);
+      } else {
+        newFloors.push(newFloor);
+      }
+    }
+
+    setFormData({ ...formData, floors_config: newFloors });
   };
 
   const removeFloor = (index: number) => {
@@ -58,7 +84,15 @@ export default function LegoApartmentBuilder({
 
   const addApartmentToFloor = (floorIndex: number) => {
     const floors = [...(formData.floors_config || [])];
-    const newAptName = `Apt ${Math.floor(Math.random() * 90) + 10}`;
+    const allApartments = floors.flatMap(f => f.apartments);
+    const existingNumbers = allApartments
+      .map(name => {
+        const match = name.match(/^Apt\s+(\d+)$/);
+        return match ? parseInt(match[1], 10) : 0;
+      })
+      .filter(n => n > 0);
+    const nextNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
+    const newAptName = `Apt ${nextNumber}`;
     floors[floorIndex].apartments = [...floors[floorIndex].apartments, newAptName];
     setFormData({ ...formData, floors_config: floors });
   };
@@ -94,9 +128,10 @@ export default function LegoApartmentBuilder({
     setFormData({ ...formData, floors_config: floors });
   };
 
-  const onPaletteDragStart = (e: React.DragEvent, type: string) => {
+  const onPaletteDragStart = (e: React.DragEvent, type: string, floorType?: FloorType) => {
     e.dataTransfer.effectAllowed = 'copy';
     setDragType(type);
+    if (floorType) setDragData({ floorType });
   };
 
   const onFloorDragStart = (e: React.DragEvent, floorIdx: number) => {
@@ -119,7 +154,8 @@ export default function LegoApartmentBuilder({
   const onBuildingDrop = (e: React.DragEvent) => {
     e.preventDefault();
     if (dragType === DRAG_TYPES.PALETTE_FLOOR) {
-      addFloor();
+      const ft = dragData?.floorType || 'normal';
+      addFloor(ft);
     }
     onDragEndGlobal();
   };

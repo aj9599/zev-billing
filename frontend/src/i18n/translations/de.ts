@@ -509,6 +509,16 @@ export const de: Translations = {
   'buildings.apartmentConfig.useFloorButton': 'Verwenden Sie die Etagen-Schaltfläche zum Hinzufügen',
   'buildings.apartmentConfig.addApt': 'Wohnung hinzufügen',
   'buildings.apartmentConfig.tapAddApt': 'Tippen Sie auf die Schaltfläche "Wohnung hinzufügen" oben, um Wohnungen zu dieser Etage hinzuzufügen',
+  'buildings.apartmentConfig.attic': 'Dachgeschoss',
+  'buildings.apartmentConfig.normalFloor': 'Stockwerk',
+  'buildings.apartmentConfig.underground': 'Untergeschoss',
+  'buildings.apartmentConfig.dragAttic': 'Ziehen zum Hinzufügen',
+  'buildings.apartmentConfig.dragNormal': 'Ziehen zum Hinzufügen',
+  'buildings.apartmentConfig.dragUnderground': 'Ziehen zum Hinzufügen',
+  'buildings.apartmentConfig.singleFamilyHint': 'Für Einfamilienhäuser können Zähler direkt ohne Wohnungsverwaltung zugewiesen werden.',
+
+  // Gebäude-Visualisierung
+  'buildings.visualization.groundLevel': 'Bodenniveau',
 
   // Instructions
   'buildings.instructions.title': 'Gebäude & Komplexe Anleitung',

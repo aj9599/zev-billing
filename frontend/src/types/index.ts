@@ -25,9 +25,12 @@ export interface User {
   updated_at: string;
 }
 
+export type FloorType = 'attic' | 'normal' | 'underground';
+
 export interface FloorConfig {
   floor_number: number;
   floor_name: string;
+  floor_type: FloorType;
   apartments: string[];
 }
 

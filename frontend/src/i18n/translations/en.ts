@@ -508,6 +508,16 @@ export const en: Translations = {
   'buildings.apartmentConfig.useFloorButton': 'Use floor button to add',
   'buildings.apartmentConfig.addApt': 'Add Apt',
   'buildings.apartmentConfig.tapAddApt': 'Tap "Add Apt" button above to add apartments to this floor',
+  'buildings.apartmentConfig.attic': 'Attic',
+  'buildings.apartmentConfig.normalFloor': 'Floor',
+  'buildings.apartmentConfig.underground': 'Underground',
+  'buildings.apartmentConfig.dragAttic': 'Drag to add attic',
+  'buildings.apartmentConfig.dragNormal': 'Drag to add floor',
+  'buildings.apartmentConfig.dragUnderground': 'Drag to add underground',
+  'buildings.apartmentConfig.singleFamilyHint': 'For single-family homes, meters can be assigned directly without apartment management.',
+
+  // Building Visualization
+  'buildings.visualization.groundLevel': 'Ground Level',
 
   // Instructions
   'buildings.instructions.title': 'Buildings & Complexes Guide',

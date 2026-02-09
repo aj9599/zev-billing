@@ -76,6 +76,11 @@ func (h *BuildingHandler) List(w http.ResponseWriter, r *http.Request) {
 		if floorsConfigStr != "" && b.HasApartments {
 			var floorsConfig []models.FloorConfig
 			if err := json.Unmarshal([]byte(floorsConfigStr), &floorsConfig); err == nil {
+				for i := range floorsConfig {
+					if floorsConfig[i].FloorType == "" {
+						floorsConfig[i].FloorType = "normal"
+					}
+				}
 				b.FloorsConfig = floorsConfig
 			} else {
 				log.Printf("Error parsing floors config for building %d: %v", b.ID, err)
@@ -131,6 +136,11 @@ func (h *BuildingHandler) Get(w http.ResponseWriter, r *http.Request) {
 	if floorsConfigStr != "" && b.HasApartments {
 		var floorsConfig []models.FloorConfig
 		if err := json.Unmarshal([]byte(floorsConfigStr), &floorsConfig); err == nil {
+			for i := range floorsConfig {
+				if floorsConfig[i].FloorType == "" {
+					floorsConfig[i].FloorType = "normal"
+				}
+			}
 			b.FloorsConfig = floorsConfig
 		} else {
 			log.Printf("Error parsing floors config: %v", err)

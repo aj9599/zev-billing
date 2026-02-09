@@ -6,6 +6,7 @@ import { getBuildingMeters, getBuildingChargers, hasSolarMeter } from '../utils/
 import EnergyFlowDiagram from './energy/EnergyFlowDiagram';
 import EnergySharingInfo from './energy/EnergySharingInfo';
 import EnergyStatsGrid from './energy/EnergyStatsGrid';
+import BuildingVisualization from './visualization/BuildingVisualization';
 import type { Building, Meter, Charger, BuildingConsumption } from '../../../types';
 
 interface EnergyFlowCardProps {
@@ -127,7 +128,7 @@ export default function EnergyFlowCard({
 
       {/* Header with building name */}
       <div style={{
-        marginBottom: isMobile ? '20px' : '32px',
+        marginBottom: isMobile ? '20px' : '28px',
         textAlign: 'center',
         paddingRight: isMobile ? '90px' : '100px'
       }}>
@@ -190,12 +191,32 @@ export default function EnergyFlowCard({
         isMobile={isMobile}
       />
 
-      {/* Energy Flow Diagram */}
-      <EnergyFlowDiagram
-        consumption={consumption}
-        hasSolarMeter={hasSolarMeter(building.id, meters)}
-        isMobile={isMobile}
-      />
+      {/* Main content: Building Visualization + Energy Flow Diagram */}
+      <div style={{
+        display: 'flex',
+        flexDirection: isMobile ? 'column' : 'row',
+        gap: isMobile ? '20px' : '32px',
+        alignItems: isMobile ? 'center' : 'flex-start',
+        justifyContent: 'center',
+        marginBottom: isMobile ? '20px' : '32px'
+      }}>
+        {/* Building Visualization */}
+        <BuildingVisualization
+          building={building}
+          meters={meters}
+          consumption={consumption}
+          isMobile={isMobile}
+        />
+
+        {/* Energy Flow Diagram */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <EnergyFlowDiagram
+            consumption={consumption}
+            hasSolarMeter={hasSolarMeter(building.id, meters)}
+            isMobile={isMobile}
+          />
+        </div>
+      </div>
 
       {/* Stats Row */}
       <EnergyStatsGrid

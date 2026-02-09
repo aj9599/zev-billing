@@ -56,6 +56,7 @@ type Building struct {
 type FloorConfig struct {
 	FloorNumber int      `json:"floor_number"`
 	FloorName   string   `json:"floor_name"`
+	FloorType   string   `json:"floor_type"`
 	Apartments  []string `json:"apartments"`
 }
 

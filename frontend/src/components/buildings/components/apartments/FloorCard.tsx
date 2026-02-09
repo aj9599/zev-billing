@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Layers, Edit2, Trash2, Plus, Check, X, GripVertical } from 'lucide-react';
+import { Layers, Edit2, Trash2, Plus, Check, X, GripVertical, Triangle, ArrowDownCircle } from 'lucide-react';
 import { useTranslation } from '../../../../i18n';
 import ApartmentChip from './ApartmentChip';
 import type { FloorConfig } from '../../../../types';
@@ -25,6 +25,36 @@ interface FloorCardProps {
   };
 }
 
+const FLOOR_TYPE_STYLES = {
+  attic: {
+    bg: '#fffbeb',
+    border: '#f59e0b',
+    activeBg: '#fef3c7',
+    iconColor: '#d97706',
+    Icon: Triangle,
+    badgeColor: '#92400e',
+    badgeBg: '#fef3c7'
+  },
+  normal: {
+    bg: '#f8fafc',
+    border: '#e2e8f0',
+    activeBg: '#f0f9ff',
+    iconColor: '#3b82f6',
+    Icon: Layers,
+    badgeColor: '#1e40af',
+    badgeBg: '#dbeafe'
+  },
+  underground: {
+    bg: '#f3f4f6',
+    border: '#d1d5db',
+    activeBg: '#e5e7eb',
+    iconColor: '#6b7280',
+    Icon: ArrowDownCircle,
+    badgeColor: '#374151',
+    badgeBg: '#e5e7eb'
+  }
+};
+
 export default function FloorCard({
   floor,
   floorIdx,
@@ -46,6 +76,10 @@ export default function FloorCard({
   const [editingFloor, setEditingFloor] = useState(false);
   const [editValue, setEditValue] = useState('');
 
+  const floorType = floor.floor_type || 'normal';
+  const styles = FLOOR_TYPE_STYLES[floorType] || FLOOR_TYPE_STYLES.normal;
+  const FloorIcon = styles.Icon;
+
   const startEditing = () => {
     setEditingFloor(true);
     setEditValue(floor.floor_name);
@@ -60,6 +94,12 @@ export default function FloorCard({
     setEditingFloor(false);
   };
 
+  const floorTypeLabel = floorType === 'attic'
+    ? t('buildings.apartmentConfig.attic')
+    : floorType === 'underground'
+      ? t('buildings.apartmentConfig.underground')
+      : '';
+
   return (
     <div
       draggable={!isMobile}
@@ -69,12 +109,12 @@ export default function FloorCard({
       onDrop={(e) => onFloorDrop(floorIdx, e)}
       style={{
         padding: isMobile ? '16px' : '20px',
-        backgroundColor: dragType ? '#f0f9ff' : '#f8fafc',
-        borderRadius: '16px',
+        backgroundColor: dragType ? styles.activeBg : styles.bg,
+        borderRadius: floorType === 'attic' ? '16px 16px 8px 8px' : floorType === 'underground' ? '8px 8px 16px 16px' : '16px',
         border: `2px solid ${
           dragType === dragTypes.PALETTE_APT || dragType === dragTypes.EXISTING_FLOOR
-            ? '#3b82f6'
-            : '#e2e8f0'
+            ? styles.iconColor
+            : styles.border
         }`,
         boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
         transition: 'all 0.2s',
@@ -88,7 +128,7 @@ export default function FloorCard({
         alignItems: 'center',
         marginBottom: '16px',
         paddingBottom: '12px',
-        borderBottom: '2px solid #e2e8f0',
+        borderBottom: `2px solid ${styles.border}`,
         flexWrap: 'wrap',
         gap: '8px'
       }}>
@@ -115,7 +155,7 @@ export default function FloorCard({
               style={{
                 flex: 1,
                 padding: '8px 12px',
-                border: '2px solid #3b82f6',
+                border: `2px solid ${styles.iconColor}`,
                 borderRadius: '8px',
                 fontSize: '15px',
                 fontWeight: '600'
@@ -162,7 +202,7 @@ export default function FloorCard({
               {!isMobile && (
                 <GripVertical size={20} color="#9ca3af" style={{ cursor: 'grab' }} />
               )}
-              <Layers size={18} color="#3b82f6" />
+              <FloorIcon size={18} color={styles.iconColor} />
               <span style={{
                 fontSize: isMobile ? '14px' : '16px',
                 fontWeight: '700',
@@ -171,19 +211,33 @@ export default function FloorCard({
               }}>
                 {floor.floor_name}
               </span>
+              {floorTypeLabel && (
+                <span style={{
+                  fontSize: '10px',
+                  padding: '2px 8px',
+                  backgroundColor: styles.badgeBg,
+                  color: styles.badgeColor,
+                  borderRadius: '4px',
+                  fontWeight: '600',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}>
+                  {floorTypeLabel}
+                </span>
+              )}
               <button
                 onClick={startEditing}
                 style={{
                   padding: '6px',
                   border: 'none',
-                  background: 'rgba(59, 130, 246, 0.1)',
+                  background: `${styles.iconColor}15`,
                   borderRadius: '6px',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center'
                 }}
               >
-                <Edit2 size={14} color="#3b82f6" />
+                <Edit2 size={14} color={styles.iconColor} />
               </button>
             </div>
             <div style={{
@@ -214,11 +268,11 @@ export default function FloorCard({
               )}
               <div style={{
                 padding: '4px 12px',
-                backgroundColor: '#f3f4f6',
+                backgroundColor: styles.badgeBg,
                 borderRadius: '12px',
                 fontSize: '12px',
                 fontWeight: '600',
-                color: '#6b7280'
+                color: styles.badgeColor
               }}>
                 {floor.apartments.length} {t('buildings.apartmentConfig.unitsLabel')}
               </div>
@@ -268,9 +322,9 @@ export default function FloorCard({
             color: '#94a3b8',
             fontSize: '13px',
             fontStyle: 'italic',
-            backgroundColor: '#f8fafc',
+            backgroundColor: styles.bg,
             borderRadius: '8px',
-            border: '2px dashed #e2e8f0'
+            border: `2px dashed ${styles.border}`
           }}>
             {isMobile
               ? t('buildings.apartmentConfig.tapAddApt')
