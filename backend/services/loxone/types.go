@@ -193,6 +193,7 @@ type WebSocketConnection struct {
 	PortChangeInProgress bool
 	WriteMu              sync.Mutex
 	CollectionInProgress bool
+	LivePollActive       bool // true when live poll responses are expected (don't save to DB)
 
 	// Backoff for reconnection
 	ReconnectBackoff time.Duration

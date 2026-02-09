@@ -27,38 +27,35 @@ func (conn *WebSocketConnection) keepalive() {
 		case <-ticker.C:
 			conn.Mu.Lock()
 			if !conn.IsConnected || conn.Ws == nil {
-				log.Printf("[WARN] [%s] Not connected, keepalive stopping", conn.Host)
+				// FIX: Don't exit - just skip this cycle. Previously this would
+				// permanently kill the keepalive goroutine.
 				conn.Mu.Unlock()
-				return
+				continue
 			}
 
 			// Skip keepalive if collection is in progress
 			if conn.CollectionInProgress {
-				log.Printf("[KEEPALIVE] [%s] Collection in progress, skipping", conn.Host)
 				conn.Mu.Unlock()
 				continue
 			}
 			conn.Mu.Unlock()
 
-			keepaliveCmd := "keepalive"
-			log.Printf("[KEEPALIVE] [%s] Sending...", conn.Host)
-
-			if err := conn.safeWriteMessage(websocket.TextMessage, []byte(keepaliveCmd)); err != nil {
+			if err := conn.safeWriteMessage(websocket.TextMessage, []byte("keepalive")); err != nil {
 				log.Printf("[ERROR] [%s] Failed to send keepalive: %v", conn.Host, err)
 				conn.Mu.Lock()
 				conn.IsConnected = false
 				conn.TokenValid = false
 				conn.LastError = fmt.Sprintf("Keepalive failed: %v", err)
+				if conn.Ws != nil {
+					conn.Ws.Close()
+				}
 				conn.Mu.Unlock()
 
 				conn.logToDatabase("Loxone Keepalive Failed",
-					fmt.Sprintf("Host '%s': %v - triggering reconnect", conn.Host, err))
-
-				go conn.ConnectWithBackoff(conn.Db, conn.Collector)
+					fmt.Sprintf("Host '%s': %v", conn.Host, err))
+				// readLoop's defer will trigger reconnect
 				return
 			}
-
-			log.Printf("[KEEPALIVE] [%s] Sent successfully", conn.Host)
 		}
 	}
 }
@@ -87,13 +84,13 @@ func (conn *WebSocketConnection) monitorTokenExpiry(db *sql.DB) {
 			conn.Mu.Unlock()
 
 			if !isConnected {
-				log.Printf("[WARN] [%s] Not connected, token monitor stopping", conn.Host)
-				return
+				// FIX: Don't exit - just keep waiting. The connection may come back
+				// via reconnect. Previously this would exit permanently.
+				continue
 			}
 
 			// Skip token operations during collection
 			if collectionInProgress {
-				log.Printf("[TOKEN] [%s] Collection in progress, skipping token check", conn.Host)
 				continue
 			}
 
@@ -104,48 +101,40 @@ func (conn *WebSocketConnection) monitorTokenExpiry(db *sql.DB) {
 				(minute >= 28 && minute <= 32) ||
 				(minute >= 43 && minute <= 47)
 			if nearCollection {
-				log.Printf("[TOKEN] [%s] Near collection window (minute=%d), deferring token check", conn.Host, minute)
 				continue
 			}
 
 			// Check token with 2-minute safety margin
 			if !tokenValid || time.Now().After(tokenExpiry.Add(-2*time.Minute)) {
 				timeUntilExpiry := time.Until(tokenExpiry)
-				log.Printf("[WARN] [%s] Token invalid or expiring soon (%.1f min), refreshing...",
+				log.Printf("[WARN] [%s] Token invalid or expiring soon (%.1f min), triggering reconnect for fresh auth...",
 					conn.Host, timeUntilExpiry.Minutes())
 
 				conn.logToDatabase("Loxone Token Expiring",
-					fmt.Sprintf("Host '%s' token expiring, refreshing...", conn.Host))
+					fmt.Sprintf("Host '%s' token expiring (%.1f min left), reconnecting for fresh auth",
+						conn.Host, timeUntilExpiry.Minutes()))
 
-				if err := conn.ensureAuth(); err != nil {
-					log.Printf("[ERROR] [%s] Failed to ensure auth: %v", conn.Host, err)
-					log.Printf("   Triggering full reconnect...")
-					conn.logToDatabase("Loxone Auth Check Failed",
-						fmt.Sprintf("Host '%s': %v - reconnecting", conn.Host, err))
-
-					conn.Mu.Lock()
-					conn.IsConnected = false
-					conn.TokenValid = false
-					if conn.Ws != nil {
-						conn.Ws.Close()
-					}
-					isShuttingDown := conn.IsShuttingDown
-					conn.Mu.Unlock()
-
-					conn.updateDeviceStatus(db, "[RECONNECT] Auth failed, reconnecting...")
-
-					if !isShuttingDown {
-						log.Printf("[RECONNECT] [%s] Triggering automatic reconnect", conn.Host)
-						go conn.ConnectWithBackoff(db, conn.Collector)
-					}
-					return
+				// FIX: Instead of calling ensureAuth() which reads from WebSocket
+				// (racing with the reader goroutine), trigger a full reconnect.
+				// performConnection() authenticates BEFORE starting the reader goroutine,
+				// which is the only safe way to do it.
+				conn.Mu.Lock()
+				conn.IsConnected = false
+				conn.TokenValid = false
+				conn.LastError = "Token expiring, reconnecting"
+				if conn.Ws != nil {
+					conn.Ws.Close()
 				}
+				conn.Mu.Unlock()
 
-				conn.updateDeviceStatus(db,
-					fmt.Sprintf("[OK] Token refreshed at %s", time.Now().Format("2006-01-02 15:04:05")))
+				conn.updateDeviceStatus(db, "[RECONNECT] Token expiring, reconnecting...")
+				// readLoop's defer will trigger reconnect
+				return
 			} else {
 				timeUntilExpiry := time.Until(tokenExpiry)
-				log.Printf("[TOKEN] [%s] Token valid for %.1f hours", conn.Host, timeUntilExpiry.Hours())
+				if timeUntilExpiry.Hours() < 1 {
+					log.Printf("[TOKEN] [%s] Token valid for %.1f minutes", conn.Host, timeUntilExpiry.Minutes())
+				}
 			}
 		}
 	}
@@ -176,7 +165,8 @@ func (conn *WebSocketConnection) monitorDNSChanges() {
 			conn.Mu.Unlock()
 
 			if !isConnected {
-				return
+				// FIX: Don't exit - wait for reconnect
+				continue
 			}
 
 			// Try to resolve DNS
@@ -228,13 +218,13 @@ func (conn *WebSocketConnection) monitorDNSChanges() {
 				// Reset backoff for fast reconnect after DNS change
 				conn.Mu.Lock()
 				conn.ReconnectBackoff = 2 * time.Second
+				conn.IsConnected = false
+				conn.LastError = "DNS change detected, reconnecting"
 				if conn.Ws != nil {
 					conn.Ws.Close()
 				}
-				conn.IsConnected = false
 				conn.Mu.Unlock()
-
-				go conn.ConnectWithBackoff(conn.Db, conn.Collector)
+				// readLoop's defer will trigger reconnect
 				return
 			}
 
@@ -263,8 +253,8 @@ func (conn *WebSocketConnection) monitorWebSocketPing() {
 			conn.Mu.Lock()
 			if !conn.IsConnected || conn.Ws == nil {
 				conn.Mu.Unlock()
-				log.Printf("[PING] [%s] Not connected, stopping", conn.Host)
-				return
+				// FIX: Don't exit - wait for reconnect
+				continue
 			}
 
 			// Skip during collection to avoid interfering
@@ -278,11 +268,11 @@ func (conn *WebSocketConnection) monitorWebSocketPing() {
 
 			// If no pong received within 90 seconds, connection is likely dead
 			if !lastPong.IsZero() && time.Since(lastPong) > 90*time.Second {
-				log.Printf("[PING] [%s] No pong received in %.0fs, connection likely dead - reconnecting",
+				log.Printf("[PING] [%s] No pong received in %.0fs, connection likely dead",
 					conn.Host, time.Since(lastPong).Seconds())
 
 				conn.logToDatabase("Loxone Ping Timeout",
-					fmt.Sprintf("Host '%s': No pong in %.0fs, triggering reconnect",
+					fmt.Sprintf("Host '%s': No pong in %.0fs",
 						conn.Host, time.Since(lastPong).Seconds()))
 
 				conn.Mu.Lock()
@@ -292,8 +282,7 @@ func (conn *WebSocketConnection) monitorWebSocketPing() {
 					conn.Ws.Close()
 				}
 				conn.Mu.Unlock()
-
-				go conn.ConnectWithBackoff(conn.Db, conn.Collector)
+				// readLoop's defer will trigger reconnect
 				return
 			}
 
@@ -304,9 +293,11 @@ func (conn *WebSocketConnection) monitorWebSocketPing() {
 				conn.Mu.Lock()
 				conn.IsConnected = false
 				conn.LastError = fmt.Sprintf("Ping failed: %v", err)
+				if conn.Ws != nil {
+					conn.Ws.Close()
+				}
 				conn.Mu.Unlock()
-
-				go conn.ConnectWithBackoff(conn.Db, conn.Collector)
+				// readLoop's defer will trigger reconnect
 				return
 			}
 		}

@@ -328,7 +328,20 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 		log.Printf("   📊 Reading: %.3f kWh", reading)
 	}
 
-	// Save to database
+	// FIX: When LivePollActive is true, we only update in-memory live power data.
+	// Do NOT write to the database - only the 15-minute billing cycle (requestData) does that.
+	// This prevents live polling responses from being incorrectly saved as billing readings.
+	conn.Mu.Lock()
+	isLivePoll := conn.LivePollActive
+	conn.Mu.Unlock()
+
+	if isLivePoll {
+		// Live power data has already been updated in device fields above.
+		// Skip database write entirely.
+		return
+	}
+
+	// Save to database (only during 15-minute billing collection)
 	if reading < 0 {
 		return
 	}

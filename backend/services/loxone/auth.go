@@ -234,7 +234,11 @@ func (conn *WebSocketConnection) refreshToken() error {
 	return nil
 }
 
-// ensureAuth checks auth health before any operation
+// ensureAuth checks auth health before any operation.
+// WARNING: This function calls readLoxoneMessage() directly on the WebSocket.
+// It must ONLY be called when no reader goroutine is active (e.g., during
+// initial connection in performConnection). Never call this while readLoop
+// is running, as concurrent reads on the same WebSocket cause data corruption.
 func (conn *WebSocketConnection) ensureAuth() error {
 	conn.Mu.Lock()
 

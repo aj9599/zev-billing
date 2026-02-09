@@ -37,33 +37,28 @@ func (conn *WebSocketConnection) readLoxoneMessage() (messageType byte, jsonData
 
 	if wsMessageType == websocket.BinaryMessage && len(message) >= 8 {
 		headerType := message[0]
-		headerInfo := message[1]
+		_ = message[1]
 		payloadLength := binary.LittleEndian.Uint32(message[4:8])
-
-		log.Printf("   📦 Binary header: Type=0x%02X (Info=0x%02X), PayloadLen=%d", headerType, headerInfo, payloadLength)
 
 		// Handle keepalive response (identifier 6) - header only, no payload
 		if headerType == LoxoneMsgTypeKeepalive {
-			log.Printf("   💓 Keepalive response received (header-only message)")
 			return headerType, nil, nil
 		}
 
 		// Handle out-of-service indicator (identifier 5) - header only
 		if headerType == LoxoneMsgTypeOutOfService {
-			log.Printf("   ⚠️  Out-of-service indicator received")
+			log.Printf("⚠️ [%s] Out-of-service indicator received from Miniserver", conn.Host)
 			return headerType, nil, nil
 		}
 
 		// Handle event table and daytimer events - these are binary data, not JSON
 		if headerType == LoxoneMsgTypeEventTable || headerType == LoxoneMsgTypeDaytimerEvent || headerType == LoxoneMsgTypeWeather {
-			log.Printf("   ℹ️  Binary event message (type %d) - ignoring", headerType)
 			return headerType, nil, nil
 		}
 
 		// Handle text event (identifier 3) - has a JSON payload
 		if headerType == LoxoneMsgTypeTextEvent {
 			if payloadLength == 0 {
-				log.Printf("   ℹ️  Text event with no payload (header-only)")
 				return headerType, nil, nil
 			}
 
@@ -71,17 +66,11 @@ func (conn *WebSocketConnection) readLoxoneMessage() (messageType byte, jsonData
 			if err != nil {
 				return 0, nil, fmt.Errorf("failed to read JSON payload: %v", err)
 			}
-			log.Printf("   ⬇️ JSON payload received: %d bytes", len(message))
-
-			if len(message) < 50 {
-				log.Printf("   🔍 Hex dump: % X", message)
-				log.Printf("   🔍 String: %q", string(message))
-			}
 
 			jsonData = ExtractJSON(message)
 			if jsonData == nil {
-				log.Printf("   ⚠️  Could not extract JSON from text event")
-				log.Printf("   🔍 Raw message (first 200 bytes): %q", string(message[:Min(len(message), 200)]))
+				log.Printf("⚠️ [%s] Could not extract JSON from text event (first 200 bytes): %q",
+					conn.Host, string(message[:Min(len(message), 200)]))
 				return headerType, nil, nil
 			}
 			return headerType, jsonData, nil
@@ -89,27 +78,18 @@ func (conn *WebSocketConnection) readLoxoneMessage() (messageType byte, jsonData
 
 		// Handle binary file (identifier 1)
 		if headerType == LoxoneMsgTypeBinary {
-			log.Printf("   ℹ️  Binary file message - ignoring")
 			return headerType, nil, nil
 		}
 
-		log.Printf("   ⚠️  Unknown binary message type: 0x%02X", headerType)
 		return headerType, nil, nil
 	}
 
 	// Handle text messages (no binary header)
 	if wsMessageType == websocket.TextMessage {
-		log.Printf("   ⬇️ Text message received: %d bytes", len(message))
-
-		if len(message) < 50 {
-			log.Printf("   🔍 Hex dump: % X", message)
-			log.Printf("   🔍 String: %q", string(message))
-		}
-
 		jsonData = ExtractJSON(message)
 		if jsonData == nil {
-			log.Printf("   ⚠️  Could not extract JSON from text message")
-			log.Printf("   🔍 Raw message: %q", string(message))
+			log.Printf("⚠️ [%s] Could not extract JSON from text message: %q",
+				conn.Host, string(message[:Min(len(message), 200)]))
 			return LoxoneMsgTypeText, nil, nil
 		}
 		return LoxoneMsgTypeText, jsonData, nil
@@ -141,31 +121,42 @@ func (conn *WebSocketConnection) requestData() {
 			// Continue to data request
 		}
 
-		// Mark collection as in progress BEFORE any operations
+		// Mark collection as in progress BEFORE any operations.
+		// Also ensure LivePollActive is false so responses are saved to DB.
 		conn.Mu.Lock()
 		conn.CollectionInProgress = true
+		conn.LivePollActive = false
 		conn.Mu.Unlock()
 
-		// Ensure auth before sending requests
-		if err := conn.ensureAuth(); err != nil {
-			log.Printf("❌ [%s] Auth check failed before data request: %v", conn.Host, err)
-			log.Printf("   Skipping this collection cycle, will trigger reconnect")
+		// FIX: Wait briefly for any in-flight live poll responses to be processed
+		// before sending billing requests. This prevents live poll responses
+		// from being mixed with billing responses.
+		time.Sleep(2 * time.Second)
 
-			conn.Mu.Lock()
+		// FIX: Check auth status without calling readLoxoneMessage.
+		// Previously ensureAuth() would try to re-authenticate inline, which
+		// called readLoxoneMessage() while the reader goroutine was also reading
+		// from the same WebSocket - causing data corruption and crashes.
+		// Now we just check if auth is still valid. If not, trigger a full
+		// reconnect which authenticates BEFORE starting the reader goroutine.
+		conn.Mu.Lock()
+		if !conn.IsConnected || conn.Ws == nil {
+			log.Printf("⚠️  [%s] Not connected, stopping scheduler for reconnect", conn.Host)
+			conn.CollectionInProgress = false
+			conn.Mu.Unlock()
+			return
+		}
+		if !conn.TokenValid || time.Now().After(conn.TokenExpiry.Add(-30*time.Second)) {
+			log.Printf("❌ [%s] Token expired or invalid before data request, triggering reconnect", conn.Host)
 			conn.IsConnected = false
 			conn.TokenValid = false
 			conn.CollectionInProgress = false
+			conn.LastError = "Token expired before billing collection"
+			if conn.Ws != nil {
+				conn.Ws.Close()
+			}
 			conn.Mu.Unlock()
-
-			go conn.ConnectWithBackoff(conn.Db, conn.Collector)
-			return
-		}
-
-		conn.Mu.Lock()
-		if !conn.IsConnected || conn.Ws == nil {
-			log.Printf("⚠️  [%s] Not connected after auth check, stopping scheduler", conn.Host)
-			conn.CollectionInProgress = false
-			conn.Mu.Unlock()
+			// readLoop's defer will trigger reconnect
 			return
 		}
 
@@ -326,6 +317,9 @@ func (conn *WebSocketConnection) requestLivePower() {
 	defer ticker.Stop()
 
 	pollCount := 0
+	consecutiveFailures := 0
+	maxConsecutiveFailures := 3
+
 	for {
 		select {
 		case <-conn.StopChan:
@@ -338,12 +332,16 @@ func (conn *WebSocketConnection) requestLivePower() {
 			hasWs := conn.Ws != nil
 			collectionInProgress := conn.CollectionInProgress
 
-			if !isConnected || !hasWs || collectionInProgress {
+			if !isConnected || !hasWs {
 				conn.Mu.Unlock()
-				if pollCount%2 == 0 { // Log every minute
-					log.Printf("⚡ [%s] Live power poll skipped: connected=%v, hasWs=%v, collectionInProgress=%v",
-						conn.Host, isConnected, hasWs, collectionInProgress)
-				}
+				// FIX: Don't exit - just wait. The connection may come back.
+				// Previously this would exit permanently, killing live polling forever.
+				pollCount++
+				continue
+			}
+
+			if collectionInProgress {
+				conn.Mu.Unlock()
 				pollCount++
 				continue
 			}
@@ -371,12 +369,22 @@ func (conn *WebSocketConnection) requestLivePower() {
 				continue
 			}
 
+			// FIX: Set LivePollActive flag BEFORE sending requests.
+			// This tells processMessage to update live power data in memory
+			// but NOT write to the database. Only the 15-min billing cycle writes to DB.
+			conn.Mu.Lock()
+			conn.LivePollActive = true
+			conn.Mu.Unlock()
+
 			// Request data for each meter
 			sentCount := 0
 			writeFailed := false
 			for _, device := range meters {
 				select {
 				case <-conn.StopChan:
+					conn.Mu.Lock()
+					conn.LivePollActive = false
+					conn.Mu.Unlock()
 					return
 				default:
 				}
@@ -404,14 +412,45 @@ func (conn *WebSocketConnection) requestLivePower() {
 				time.Sleep(200 * time.Millisecond)
 			}
 
+			// FIX: Clear LivePollActive after a delay to allow responses to arrive.
+			// The Miniserver takes time to respond; we keep the flag active for a few seconds.
+			go func() {
+				time.Sleep(10 * time.Second)
+				conn.Mu.Lock()
+				conn.LivePollActive = false
+				conn.Mu.Unlock()
+			}()
+
 			if writeFailed {
-				log.Printf("⚠️ [%s] Live power polling stopping due to write failure", conn.Host)
-				return
+				consecutiveFailures++
+				log.Printf("⚠️ [%s] Live power poll write failure (%d/%d consecutive)",
+					conn.Host, consecutiveFailures, maxConsecutiveFailures)
+
+				if consecutiveFailures >= maxConsecutiveFailures {
+					// FIX: Instead of just exiting silently, trigger a reconnect
+					// so the entire connection is rebuilt and all goroutines restart.
+					log.Printf("❌ [%s] Live power polling: %d consecutive write failures, triggering reconnect",
+						conn.Host, consecutiveFailures)
+
+					conn.Mu.Lock()
+					conn.IsConnected = false
+					conn.TokenValid = false
+					conn.LastError = "Live power polling: repeated write failures"
+					if conn.Ws != nil {
+						conn.Ws.Close()
+					}
+					conn.Mu.Unlock()
+
+					// Don't call ConnectWithBackoff here - readLoop's defer will handle it
+					return
+				}
+				continue
 			}
 
+			consecutiveFailures = 0
 			pollCount++
-			// Log every poll for first 4, then every minute
-			if pollCount <= 4 || pollCount%2 == 0 {
+			// Log every poll for first 4, then every 5 minutes
+			if pollCount <= 4 || pollCount%10 == 0 {
 				log.Printf("⚡ [%s] Live power poll #%d: sent requests for %d meters", conn.Host, pollCount, sentCount)
 			}
 		}
@@ -470,9 +509,18 @@ func (conn *WebSocketConnection) readLoop(db *sql.DB, collector LoxoneCollectorI
 		jsonData []byte
 		err      error
 	}
-	readChan := make(chan readResult, 10)
+	// FIX: Increased buffer from 10 to 100 to handle 30-second live polling load
+	// without dropping messages. With multiple meters + dual exports + keepalives,
+	// 10 was far too small and caused silent message drops.
+	readChan := make(chan readResult, 100)
+
+	// FIX: Use a done channel so readLoop detects when the reader goroutine dies.
+	// Previously, if the reader goroutine exited (e.g. due to a transient error),
+	// readLoop would block forever on readChan - a zombie connection.
+	readerDone := make(chan struct{})
 
 	go func() {
+		defer close(readerDone)
 		for {
 			conn.Mu.Lock()
 			ws := conn.Ws
@@ -493,9 +541,8 @@ func (conn *WebSocketConnection) readLoop(db *sql.DB, collector LoxoneCollectorI
 
 			select {
 			case readChan <- readResult{msgType, jsonData, err}:
-				time.Sleep(10 * time.Millisecond)
-			default:
-				log.Printf("⚠️  [%s] Read channel full, dropping message", conn.Host)
+			case <-conn.StopChan:
+				return
 			}
 
 			if err != nil {
@@ -509,6 +556,33 @@ func (conn *WebSocketConnection) readLoop(db *sql.DB, collector LoxoneCollectorI
 		case <-conn.StopChan:
 			log.Printf("🗑️ [%s] Received stop signal, closing listener", conn.Host)
 			return
+
+		case <-readerDone:
+			// FIX: Reader goroutine died - drain any remaining messages then exit
+			// to trigger reconnect via the defer above.
+			for {
+				select {
+				case result := <-readChan:
+					if result.err != nil {
+						if !strings.Contains(result.err.Error(), "i/o timeout") &&
+							!strings.Contains(result.err.Error(), "deadline") {
+							log.Printf("❌ [%s] Read error (from reader): %v", conn.Host, result.err)
+							conn.Mu.Lock()
+							conn.LastError = fmt.Sprintf("Read error: %v", result.err)
+							conn.Mu.Unlock()
+							conn.logToDatabase("Loxone Read Error",
+								fmt.Sprintf("Host '%s': %v", conn.Host, result.err))
+						}
+						return
+					}
+					if result.jsonData != nil {
+						conn.processMessage(result.jsonData, chargerData, db, collector)
+					}
+				default:
+					log.Printf("⚠️ [%s] Reader goroutine exited unexpectedly, triggering reconnect", conn.Host)
+					return
+				}
+			}
 
 		case result := <-readChan:
 			if result.err != nil {
@@ -532,12 +606,10 @@ func (conn *WebSocketConnection) readLoop(db *sql.DB, collector LoxoneCollectorI
 			}
 
 			if result.jsonData == nil {
-				log.Printf("  ℹ️  [%s] Empty response received (likely keepalive ACK or status message)", conn.Host)
 				continue
 			}
 
 			messageCount++
-
 			conn.processMessage(result.jsonData, chargerData, db, collector)
 		}
 	}
