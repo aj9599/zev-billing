@@ -26,6 +26,7 @@ type SmartMeCollector struct {
 	lastAPICall      map[string]time.Time // Rate limiting tracker
 	apiCallMu        sync.Mutex
 	failureCount     map[int]int          // Track consecutive failures per meter
+	failureTime      map[int]time.Time    // Track when meter first hit max failures
 	failureCountMu   sync.Mutex
 }
 
@@ -87,6 +88,7 @@ func NewSmartMeCollector(db *sql.DB) *SmartMeCollector {
 		authCache:     make(map[string]*SmartMeAuth),
 		lastAPICall:   make(map[string]time.Time),
 		failureCount:  make(map[int]int),
+		failureTime:   make(map[int]time.Time),
 		stopChan:      make(chan struct{}),
 	}
 }
@@ -134,9 +136,10 @@ func (smc *SmartMeCollector) RestartConnections() {
 	smc.authCache = make(map[string]*SmartMeAuth)
 	smc.authCacheMu.Unlock()
 	
-	// Reset failure counts
+	// Reset failure counts and timers
 	smc.failureCountMu.Lock()
 	smc.failureCount = make(map[int]int)
+	smc.failureTime = make(map[int]time.Time)
 	smc.failureCountMu.Unlock()
 	
 	log.Println("[Smart-me Collector] Smart-me connections restarted")
@@ -204,29 +207,38 @@ func (smc *SmartMeCollector) CollectMeterNow(meterID int, meterName, configJSON 
 func (smc *SmartMeCollector) ShouldSkipMeter(meterID int) bool {
 	smc.failureCountMu.Lock()
 	defer smc.failureCountMu.Unlock()
-	
+
 	count, exists := smc.failureCount[meterID]
-	return exists && count >= maxConsecutiveFailures
+	if !exists || count < maxConsecutiveFailures {
+		return false
+	}
+
+	// Check if enough time has passed to auto-reset (no goroutine needed)
+	if failTime, ok := smc.failureTime[meterID]; ok {
+		if time.Since(failTime) >= failureResetDuration {
+			delete(smc.failureCount, meterID)
+			delete(smc.failureTime, meterID)
+			log.Printf("[Smart-me Collector] Auto-reset failure count for meter %d after %v", meterID, failureResetDuration)
+			return false
+		}
+	}
+
+	return true
 }
 
 func (smc *SmartMeCollector) recordFailure(meterID int) {
 	smc.failureCountMu.Lock()
 	defer smc.failureCountMu.Unlock()
-	
+
 	smc.failureCount[meterID]++
-	
+
 	if smc.failureCount[meterID] >= maxConsecutiveFailures {
-		log.Printf("[Smart-me Collector] ERROR: Meter %d has reached maximum consecutive failures (%d). Will retry after %v", 
+		// Record when max failures was hit (for time-based auto-reset, no goroutine leak)
+		if _, exists := smc.failureTime[meterID]; !exists {
+			smc.failureTime[meterID] = time.Now()
+		}
+		log.Printf("[Smart-me Collector] ERROR: Meter %d has reached maximum consecutive failures (%d). Will auto-retry after %v",
 			meterID, maxConsecutiveFailures, failureResetDuration)
-		
-		// Schedule reset
-		go func(id int) {
-			time.Sleep(failureResetDuration)
-			smc.failureCountMu.Lock()
-			delete(smc.failureCount, id)
-			smc.failureCountMu.Unlock()
-			log.Printf("[Smart-me Collector] Reset failure count for meter %d", id)
-		}(meterID)
 	}
 }
 

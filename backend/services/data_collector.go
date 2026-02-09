@@ -668,20 +668,26 @@ func (dc *DataCollector) saveMeterReading(meterID int, meterName string, current
 			if intervalConsumption < 0 {
 				intervalConsumption = 0
 			}
-			
+
 			intervalExport := float64(0)
+			exportValue := lastReadingExport
 			if i < len(interpolatedExport) {
-				intervalExport = interpolatedExport[i].value - lastReadingExport
+				exportValue = interpolatedExport[i].value
+				intervalExport = exportValue - lastReadingExport
 				if intervalExport < 0 {
 					intervalExport = 0
 				}
 			}
-			
-			dc.db.Exec(`
+
+			_, interpErr := dc.db.Exec(`
 				INSERT INTO meter_readings (meter_id, reading_time, power_kwh, power_kwh_export, consumption_kwh, consumption_export)
 				VALUES (?, ?, ?, ?, ?, ?)
-			`, meterID, point.time, point.value, interpolatedExport[i].value, intervalConsumption, intervalExport)
-			
+			`, meterID, point.time, point.value, exportValue, intervalConsumption, intervalExport)
+			if interpErr != nil {
+				log.Printf("ERROR: Failed to insert interpolated reading for meter '%s' at %s: %v",
+					meterName, point.time.Format("15:04:05"), interpErr)
+			}
+
 			lastReading = point.value
 			if i < len(interpolatedExport) {
 				lastReadingExport = interpolatedExport[i].value
@@ -717,11 +723,13 @@ func (dc *DataCollector) saveMeterReading(meterID int, meterName string, current
 	}
 
 	// Update meter table
-	dc.db.Exec(`
-		UPDATE meters 
+	if _, updateErr := dc.db.Exec(`
+		UPDATE meters
 		SET last_reading = ?, last_reading_export = ?, last_reading_time = ?
 		WHERE id = ?
-	`, reading, readingExport, currentTime, meterID)
+	`, reading, readingExport, currentTime, meterID); updateErr != nil {
+		log.Printf("WARNING: Failed to update meters table for '%s': %v", meterName, updateErr)
+	}
 
 	if isFirstReading {
 		log.Printf("SUCCESS: First reading for meter '%s' = %.3f kWh import, %.3f kWh export (consumption: 0 kWh)", 
@@ -864,10 +872,13 @@ func (dc *DataCollector) saveChargerSession(chargerID int, chargerName string, c
 		}
 		
 		for _, point := range interpolated {
-			dc.db.Exec(`
+			if _, interpErr := dc.db.Exec(`
 				INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
 				VALUES (?, ?, ?, ?, ?, ?)
-			`, chargerID, userID, point.time, point.value, mode, state)
+			`, chargerID, userID, point.time, point.value, mode, state); interpErr != nil {
+				log.Printf("ERROR: Failed to insert interpolated charger reading for '%s': %v",
+					chargerName, interpErr)
+			}
 		}
 	} else {
 		// First reading for this charger/user combination
@@ -977,9 +988,10 @@ func (dc *DataCollector) GetLiveMeterReadings(buildingID int) ([]MeterLiveReadin
 					reading.IsOnline = time.Since(device.LastUpdate) < 60*time.Second // Live polling every 15 sec
 
 					// Use live power if available (from Pf output or calculated from energy delta)
-					// Live power is polled/calculated every 15 seconds, so we accept data up to 30 seconds old
+					// Live power is polled every 30 seconds, so we accept data up to 45 seconds old
+					// to account for response delays
 					livePowerAge := time.Since(device.LivePowerTime)
-					hasRecentLivePower := !device.LivePowerTime.IsZero() && livePowerAge < 30*time.Second
+					hasRecentLivePower := !device.LivePowerTime.IsZero() && livePowerAge < 45*time.Second
 					hasLivePowerValue := device.LivePowerW > 0 || device.LivePowerExpW > 0
 
 					if hasRecentLivePower && hasLivePowerValue {

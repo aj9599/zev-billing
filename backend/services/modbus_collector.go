@@ -19,6 +19,7 @@ type ModbusCollector struct {
 	mu              sync.RWMutex
 	reconnectTicker *time.Ticker
 	stopChan        chan bool
+	stopOnce        sync.Once
 }
 
 type ModbusClient struct {
@@ -196,7 +197,11 @@ func (mc *ModbusCollector) reconnectionRoutine() {
 
 func (mc *ModbusCollector) RestartConnections() {
 	log.Println("Restarting Modbus TCP connections...")
+	// Reset stopOnce and recreate channel for fresh lifecycle
+	mc.stopOnce = sync.Once{}
+	mc.stopChan = make(chan bool)
 	mc.initializeModbusConnections()
+	go mc.reconnectionRoutine()
 }
 
 // ReadMeter reads import and export energy for a single meter
@@ -301,23 +306,29 @@ func (mc *ModbusCollector) GetConnectionStatus() map[string]interface{} {
 
 func (mc *ModbusCollector) Stop() {
 	log.Println("Stopping Modbus TCP Collector...")
-	
-	// Signal reconnection routine to stop
-	close(mc.stopChan)
-	
+
+	// Use sync.Once to safely close stopChan exactly once (prevents double-close panic)
+	mc.stopOnce.Do(func() {
+		close(mc.stopChan)
+	})
+
 	if mc.reconnectTicker != nil {
 		mc.reconnectTicker.Stop()
 	}
-	
+
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
-	
-	for _, client := range mc.clients {
+
+	for id, client := range mc.clients {
 		if client.handler != nil {
 			client.handler.Close()
+			client.handler = nil
+			client.client = nil
+			client.isConnected = false
 		}
+		mc.clients[id] = client
 	}
-	
+
 	log.Println("Modbus TCP Collector stopped")
 }
 

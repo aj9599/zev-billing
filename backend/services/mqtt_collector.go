@@ -17,7 +17,6 @@ type MQTTCollector struct {
 	db             *sql.DB
 	clients        map[string]mqtt.Client    // broker URL -> MQTT client
 	isRunning      bool
-	isStopped      bool                      // track if stopChan has been closed
 	mu             sync.RWMutex
 	meterReadings  map[int]MQTTMeterReading  // meter_id -> last reading
 	chargerData    map[int]MQTTChargerData   // charger_id -> last data
@@ -25,6 +24,7 @@ type MQTTCollector struct {
 	meterTopics    map[int]string            // meter_id -> topic
 	subscriptions  map[string][]string       // broker URL -> list of topics
 	stopChan       chan bool
+	stopOnce       sync.Once                 // Prevents double-close panic on stopChan
 }
 
 // MQTTMeterReading stores the latest reading from an MQTT meter
@@ -201,11 +201,10 @@ func (mc *MQTTCollector) Stop() {
 		}
 	}
 	
-	// Only close the channel if it hasn't been closed already
-	if !mc.isStopped {
+	// Use sync.Once to safely close stopChan exactly once (prevents double-close panic)
+	mc.stopOnce.Do(func() {
 		close(mc.stopChan)
-		mc.isStopped = true
-	}
+	})
 	
 	log.Println("MQTT Collector stopped")
 }
@@ -594,9 +593,16 @@ func (mc *MQTTCollector) subscribeToDevices(brokerURL string) {
 
 func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, deviceType string, brokerURL string) mqtt.MessageHandler {
 	return func(client mqtt.Client, msg mqtt.Message) {
+		// Recover from panics in message handlers to prevent crashing the MQTT connection
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("ERROR: MQTT meter handler panic for '%s': %v", meterName, r)
+			}
+		}()
+
 		payload := msg.Payload()
 		topic := msg.Topic()
-		
+
 		log.Printf("MQTT: Received message for meter '%s' (type: %s) on topic '%s': %s", meterName, deviceType, topic, string(payload))
 
 		var importValue, exportValue float64
@@ -821,9 +827,16 @@ func (mc *MQTTCollector) createMeterHandler(meterID int, meterName string, devic
 
 func (mc *MQTTCollector) createChargerHandler(chargerID int, chargerName string) mqtt.MessageHandler {
 	return func(client mqtt.Client, msg mqtt.Message) {
+		// Recover from panics in message handlers to prevent crashing the MQTT connection
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("ERROR: MQTT charger handler panic for '%s': %v", chargerName, r)
+			}
+		}()
+
 		payload := msg.Payload()
 		topic := msg.Topic()
-		
+
 		log.Printf("MQTT: Received message for charger '%s' on topic '%s': %s", chargerName, topic, string(payload))
 
 		// Parse charger data (simplified, adjust based on your charger's format)
@@ -964,18 +977,18 @@ func (mc *MQTTCollector) GetChargerData(chargerID int) (MQTTChargerData, bool) {
 
 func (mc *MQTTCollector) RestartConnections() {
 	log.Println("=== Restarting MQTT Collector ===")
-	
+
 	mc.Stop()
-	
-	// Reset the stopped flag and create a new channel
+
+	// Reset stopOnce and create a new channel for the fresh lifecycle
 	mc.mu.Lock()
-	mc.isStopped = false
+	mc.stopOnce = sync.Once{}
 	mc.stopChan = make(chan bool)
 	mc.mu.Unlock()
-	
+
 	time.Sleep(2 * time.Second)
 	mc.Start()
-	
+
 	log.Println("=== MQTT Collector Restarted ===")
 }
 
