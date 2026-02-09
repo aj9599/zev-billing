@@ -1,4 +1,4 @@
-import type { FloorConfig } from '../../../../types';
+import type { FloorConfig, FloorType } from '../../../../types';
 
 interface FloorSectionProps {
   floor: FloorConfig;
