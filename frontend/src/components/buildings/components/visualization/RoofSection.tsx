@@ -1,4 +1,4 @@
-import { Sun, Triangle } from 'lucide-react';
+import { Sun, Triangle, Home } from 'lucide-react';
 import { useTranslation } from '../../../../i18n';
 
 interface RoofSectionProps {
@@ -15,11 +15,8 @@ export default function RoofSection({ hasSolar, atticApartments, isMobile }: Roo
     <div style={{
       width: '100%',
       padding: isMobile ? '12px' : '16px',
-      background: hasSolar
-        ? 'linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%)'
-        : 'linear-gradient(135deg, #78350f 0%, #92400e 100%)',
-      borderRadius: '16px 16px 0 0',
-      position: 'relative',
+      backgroundColor: '#fffbeb',
+      borderBottom: '2px solid #f59e0b',
       display: 'flex',
       flexDirection: 'column',
       gap: '10px'
@@ -36,11 +33,22 @@ export default function RoofSection({ hasSolar, atticApartments, isMobile }: Roo
           alignItems: 'center',
           gap: '8px'
         }}>
-          <Triangle size={isMobile ? 14 : 16} color="rgba(255,255,255,0.8)" />
+          <div style={{
+            width: '28px',
+            height: '28px',
+            borderRadius: '8px',
+            backgroundColor: '#fef3c7',
+            border: '1px solid #fbbf24',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <Triangle size={14} color="#d97706" />
+          </div>
           <span style={{
             fontSize: isMobile ? '11px' : '12px',
-            fontWeight: '600',
-            color: 'rgba(255,255,255,0.9)',
+            fontWeight: '700',
+            color: '#92400e',
             textTransform: 'uppercase',
             letterSpacing: '0.5px'
           }}>
@@ -55,9 +63,10 @@ export default function RoofSection({ hasSolar, atticApartments, isMobile }: Roo
             alignItems: 'center',
             gap: '6px',
             padding: '4px 10px',
-            backgroundColor: 'rgba(251, 191, 36, 0.2)',
+            backgroundColor: 'white',
             borderRadius: '20px',
-            border: '1px solid rgba(251, 191, 36, 0.4)'
+            border: '1px solid #fbbf24',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
           }}>
             <div style={{
               width: isMobile ? '20px' : '24px',
@@ -67,7 +76,7 @@ export default function RoofSection({ hasSolar, atticApartments, isMobile }: Roo
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 0 12px rgba(251, 191, 36, 0.6)',
+              boxShadow: '0 0 12px rgba(251, 191, 36, 0.5)',
               animation: 'sunPulse 3s ease-in-out infinite'
             }}>
               <Sun size={isMobile ? 12 : 14} color="#fff" />
@@ -75,7 +84,7 @@ export default function RoofSection({ hasSolar, atticApartments, isMobile }: Roo
             <span style={{
               fontSize: isMobile ? '10px' : '11px',
               fontWeight: '700',
-              color: '#fbbf24'
+              color: '#d97706'
             }}>
               Solar
             </span>
@@ -89,20 +98,23 @@ export default function RoofSection({ hasSolar, atticApartments, isMobile }: Roo
           display: 'grid',
           gridTemplateColumns: `repeat(${isMobile ? 4 : 6}, 1fr)`,
           gap: '3px',
-          padding: '4px'
+          padding: '6px',
+          backgroundColor: 'rgba(217, 119, 6, 0.08)',
+          borderRadius: '8px',
+          border: '1px dashed #fbbf24'
         }}>
           {Array.from({ length: isMobile ? 8 : 12 }).map((_, i) => (
             <div key={i} style={{
               height: isMobile ? '8px' : '10px',
-              backgroundColor: 'rgba(96, 165, 250, 0.4)',
+              backgroundColor: '#3b82f6',
               borderRadius: '2px',
-              border: '1px solid rgba(147, 197, 253, 0.3)'
+              opacity: 0.3
             }} />
           ))}
         </div>
       )}
 
-      {/* Attic apartments */}
+      {/* Attic apartments as chips (same style as builder) */}
       {hasAttic && (
         <div style={{
           display: 'flex',
@@ -112,24 +124,35 @@ export default function RoofSection({ hasSolar, atticApartments, isMobile }: Roo
           {atticApartments.slice(0, isMobile ? 3 : 5).map((apt, i) => (
             <div key={i} style={{
               padding: '4px 10px',
-              backgroundColor: 'rgba(255, 255, 255, 0.15)',
+              backgroundColor: '#fef3c7',
               borderRadius: '8px',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              fontSize: isMobile ? '10px' : '11px',
-              fontWeight: '600',
-              color: 'rgba(255, 255, 255, 0.9)',
-              whiteSpace: 'nowrap'
+              border: '1px solid #fbbf24',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
             }}>
-              {apt}
+              <Home size={isMobile ? 9 : 10} color="#92400e" />
+              <span style={{
+                fontSize: isMobile ? '10px' : '11px',
+                fontWeight: '700',
+                color: '#92400e',
+                whiteSpace: 'nowrap'
+              }}>
+                {apt}
+              </span>
             </div>
           ))}
           {atticApartments.length > (isMobile ? 3 : 5) && (
             <div style={{
               padding: '4px 10px',
-              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              backgroundColor: '#fef3c780',
               borderRadius: '8px',
               fontSize: isMobile ? '10px' : '11px',
-              color: 'rgba(255, 255, 255, 0.6)'
+              color: '#92400e',
+              fontWeight: '600',
+              display: 'flex',
+              alignItems: 'center'
             }}>
               +{atticApartments.length - (isMobile ? 3 : 5)}
             </div>
@@ -139,8 +162,8 @@ export default function RoofSection({ hasSolar, atticApartments, isMobile }: Roo
 
       <style>{`
         @keyframes sunPulse {
-          0%, 100% { box-shadow: 0 0 12px rgba(251, 191, 36, 0.6); }
-          50% { box-shadow: 0 0 20px rgba(251, 191, 36, 0.9); }
+          0%, 100% { box-shadow: 0 0 12px rgba(251, 191, 36, 0.5); }
+          50% { box-shadow: 0 0 20px rgba(251, 191, 36, 0.8); }
         }
       `}</style>
     </div>

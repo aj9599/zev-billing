@@ -170,12 +170,11 @@ export default function BuildingVisualization({
         ) : (
           /* Simple building card for non-apartment buildings */
           <>
-            {/* Roof area */}
+            {/* Top area - matches blue normal floor style */}
             <div style={{
-              padding: isMobile ? '16px' : '24px',
-              background: hasSolar
-                ? 'linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%)'
-                : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              padding: isMobile ? '20px 16px' : '28px 20px',
+              backgroundColor: '#f0f9ff',
+              borderBottom: '2px solid #e2e8f0',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
@@ -185,29 +184,42 @@ export default function BuildingVisualization({
                 width: isMobile ? '48px' : '56px',
                 height: isMobile ? '48px' : '56px',
                 borderRadius: '16px',
-                backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                backgroundColor: '#dbeafe',
+                border: '2px solid #93c5fd',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                border: '2px solid rgba(255, 255, 255, 0.2)'
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
               }}>
-                <Home size={isMobile ? 24 : 28} color="rgba(255, 255, 255, 0.9)" />
+                <Home size={isMobile ? 24 : 28} color="#3b82f6" />
               </div>
 
               {hasSolar && (
                 <div style={{
                   display: 'flex',
-                  gap: '3px'
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '4px 12px',
+                  backgroundColor: 'white',
+                  borderRadius: '20px',
+                  border: '1px solid #fbbf24',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
                 }}>
-                  {Array.from({ length: isMobile ? 4 : 6 }).map((_, i) => (
-                    <div key={i} style={{
-                      width: isMobile ? '16px' : '20px',
-                      height: isMobile ? '8px' : '10px',
-                      backgroundColor: 'rgba(96, 165, 250, 0.5)',
-                      borderRadius: '2px',
-                      border: '1px solid rgba(147, 197, 253, 0.3)'
-                    }} />
-                  ))}
+                  <div style={{
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '50%',
+                    backgroundColor: '#fbbf24',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 0 10px rgba(251, 191, 36, 0.4)'
+                  }}>
+                    <Zap size={11} color="#fff" />
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: '#d97706' }}>
+                    Solar
+                  </span>
                 </div>
               )}
             </div>
@@ -225,7 +237,17 @@ export default function BuildingVisualization({
                 alignItems: 'center',
                 gap: '4px'
               }}>
-                <Zap size={16} color="#3b82f6" />
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  backgroundColor: '#dbeafe',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Zap size={16} color="#3b82f6" />
+                </div>
                 <span style={{ fontSize: '16px', fontWeight: '800', color: '#1e40af' }}>
                   {buildingMeters.length}
                 </span>
@@ -240,7 +262,17 @@ export default function BuildingVisualization({
                   alignItems: 'center',
                   gap: '4px'
                 }}>
-                  <Zap size={16} color="#f59e0b" />
+                  <div style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    backgroundColor: '#fef3c7',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <Zap size={16} color="#f59e0b" />
+                  </div>
                   <span style={{ fontSize: '16px', fontWeight: '800', color: '#92400e' }}>
                     {buildingMeters.filter(m => m.meter_type === 'solar_meter').length}
                   </span>
