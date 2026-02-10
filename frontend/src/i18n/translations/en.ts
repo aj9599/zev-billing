@@ -144,6 +144,7 @@ export const en: Translations = {
   'common.phone': 'Phone',
   'common.address': 'Address',
   'common.notes': 'Notes',
+  'common.options': 'Options',
   'common.yes': 'Yes',
   'common.no': 'No',
   'common.close': 'Close',
@@ -271,8 +272,15 @@ export const en: Translations = {
   'export.subtitle': 'Export {type} data to CSV',
   'export.filterByBuilding': 'Filter {type} by building',
   'export.exportingAll': 'All {type}',
+  'export.exportingAllFrom': 'All {type} from {building}',
   'export.from': 'from',
   'export.allBuildings': 'all Buildings',
+  'export.selectAll': 'Select All',
+  'export.selectNone': 'None',
+  'export.selected': 'selected',
+  'export.allSelected': 'All items will be exported',
+  'export.noItems': 'No items found',
+  'export.dateRange': 'Date Range',
 
   // ============================================================================
   // MATH CAPTCHA
@@ -556,6 +564,8 @@ export const en: Translations = {
   // General
   'meters.title': 'Meters',
   'meters.subtitle': 'Manage your energy meters and monitor consumption',
+  'meters.totalMeters': 'Total Meters',
+  'meters.connected': 'Connected',
   'meters.addMeter': 'Add Meter',
   'meters.editMeter': 'Edit Meter',
   'meters.setupInstructions': 'Setup Instructions',

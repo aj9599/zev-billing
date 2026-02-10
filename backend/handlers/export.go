@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -23,10 +24,11 @@ func (h *ExportHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 	startDate := r.URL.Query().Get("start_date")
 	endDate := r.URL.Query().Get("end_date")
 	meterIDStr := r.URL.Query().Get("meter_id")
+	meterIDsStr := r.URL.Query().Get("meter_ids")
 	chargerIDStr := r.URL.Query().Get("charger_id")
 
-	log.Printf("Export request: type=%s, start=%s, end=%s, meter_id=%s, charger_id=%s", 
-		exportType, startDate, endDate, meterIDStr, chargerIDStr)
+	log.Printf("Export request: type=%s, start=%s, end=%s, meter_id=%s, meter_ids=%s, charger_id=%s",
+		exportType, startDate, endDate, meterIDStr, meterIDsStr, chargerIDStr)
 
 	if exportType == "" || startDate == "" || endDate == "" {
 		log.Printf("Missing required parameters")
@@ -51,7 +53,12 @@ func (h *ExportHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 
 	switch exportType {
 	case "meters":
-		data, err = h.exportMeterData(startDate, endDate, meterIDStr)
+		// Support both single meter_id and comma-separated meter_ids
+		effectiveMeterIDs := meterIDStr
+		if meterIDsStr != "" {
+			effectiveMeterIDs = meterIDsStr
+		}
+		data, err = h.exportMeterData(startDate, endDate, effectiveMeterIDs)
 	case "chargers":
 		data, err = h.exportChargerData(startDate, endDate, chargerIDStr)
 	default:
@@ -115,13 +122,29 @@ func (h *ExportHandler) exportMeterData(startDate, endDate, meterIDStr string) (
 	`
 
 	if meterIDStr != "" {
-		meterID, err := strconv.Atoi(meterIDStr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid meter_id: %v", err)
+		// Support comma-separated meter IDs (e.g., "1,2,3")
+		idParts := strings.Split(meterIDStr, ",")
+		var meterIDs []interface{}
+		meterIDs = append(meterIDs, startDate, endDate)
+		placeholders := make([]string, 0, len(idParts))
+		for _, part := range idParts {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			id, parseErr := strconv.Atoi(part)
+			if parseErr != nil {
+				return nil, fmt.Errorf("invalid meter_id '%s': %v", part, parseErr)
+			}
+			meterIDs = append(meterIDs, id)
+			placeholders = append(placeholders, "?")
 		}
-		baseQuery += " AND m.id = ?"
-		baseQuery += " ORDER BY mr.reading_time"
-		rows, err = h.db.Query(baseQuery, startDate, endDate, meterID)
+		if len(placeholders) == 0 {
+			return nil, fmt.Errorf("no valid meter IDs provided")
+		}
+		baseQuery += " AND m.id IN (" + strings.Join(placeholders, ",") + ")"
+		baseQuery += " ORDER BY m.id, mr.reading_time"
+		rows, err = h.db.Query(baseQuery, meterIDs...)
 		if err != nil {
 			return nil, fmt.Errorf("query failed: %v", err)
 		}

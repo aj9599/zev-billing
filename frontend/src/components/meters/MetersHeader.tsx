@@ -7,6 +7,7 @@ interface MetersHeaderProps {
     onShowExport: () => void;
     showArchived: boolean;
     onToggleArchived: (show: boolean) => void;
+    isMobile: boolean;
 }
 
 export default function MetersHeader({
@@ -14,118 +15,129 @@ export default function MetersHeader({
     onShowInstructions,
     onShowExport,
     showArchived,
-    onToggleArchived
+    onToggleArchived,
+    isMobile
 }: MetersHeaderProps) {
     const { t } = useTranslation();
 
     return (
-        <div className="meters-header" style={{
+        <div style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '30px',
+            marginBottom: isMobile ? '20px' : '28px',
             gap: '15px',
             flexWrap: 'wrap'
         }}>
             <div>
                 <h1 style={{
-                    fontSize: '36px',
+                    fontSize: isMobile ? '24px' : '32px',
                     fontWeight: '800',
-                    marginBottom: '8px',
+                    marginBottom: '6px',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '12px',
+                    gap: isMobile ? '8px' : '12px',
                     background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                     backgroundClip: 'text'
                 }}>
-                    <Zap size={36} style={{ color: '#667eea' }} />
+                    <Zap size={isMobile ? 24 : 32} style={{ color: '#667eea' }} />
                     {t('meters.title')}
                 </h1>
-                <p style={{ color: '#6b7280', fontSize: '16px' }}>
-                    {t('meters.subtitle')}
+                <p style={{ color: '#6b7280', fontSize: isMobile ? '13px' : '15px', margin: 0 }}>
+                    {showArchived ? (t('meters.archivedSubtitle') || t('meters.subtitle')) : t('meters.subtitle')}
                 </p>
             </div>
-            
-            <div className="header-actions" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                <label style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '10px 16px',
-                    backgroundColor: 'white',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    border: '1px solid #e5e7eb'
-                }}>
-                    <input
-                        type="checkbox"
-                        checked={showArchived}
-                        onChange={(e) => onToggleArchived(e.target.checked)}
-                        style={{ cursor: 'pointer' }}
-                    />
-                    <Archive size={16} />
-                    <span style={{ fontSize: '14px', fontWeight: '500' }}>
-                        {t('meters.showArchived') || 'Show Archived'}
-                    </span>
-                </label>
 
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                 <button
-                    onClick={onShowExport}
+                    onClick={() => onToggleArchived(!showArchived)}
+                    className="m-btn-secondary"
                     style={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: '8px',
-                        padding: '10px 20px',
-                        backgroundColor: '#28a745',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '6px',
-                        fontSize: '14px',
-                        cursor: 'pointer'
+                        padding: isMobile ? '8px 14px' : '8px 16px',
+                        backgroundColor: showArchived ? '#6b7280' : 'white',
+                        color: showArchived ? 'white' : '#667eea',
+                        border: showArchived ? 'none' : '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
                     }}
                 >
-                    <Download size={18} />
-                    <span className="button-text">{t('meters.exportData')}</span>
+                    <Archive size={16} />
+                    {!isMobile && (showArchived ? (t('meters.showActive') || t('users.showActive')) : (t('meters.showArchived') || t('users.showArchive')))}
+                </button>
+
+                <button
+                    onClick={onShowExport}
+                    className="m-btn-secondary"
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: isMobile ? '8px 14px' : '8px 16px',
+                        backgroundColor: 'white',
+                        color: '#10b981',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    <Download size={16} />
+                    {!isMobile && t('meters.exportData')}
                 </button>
 
                 <button
                     onClick={onShowInstructions}
+                    className="m-btn-secondary"
                     style={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: '8px',
-                        padding: '10px 20px',
-                        backgroundColor: '#17a2b8',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '6px',
-                        fontSize: '14px',
-                        cursor: 'pointer'
+                        padding: isMobile ? '8px 14px' : '8px 16px',
+                        backgroundColor: 'white',
+                        color: '#667eea',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
                     }}
                 >
-                    <HelpCircle size={18} />
-                    <span className="button-text">{t('meters.setupInstructions')}</span>
+                    <HelpCircle size={16} />
+                    {!isMobile && t('meters.setupInstructions')}
                 </button>
 
                 <button
                     onClick={onAddMeter}
+                    className="m-btn-primary"
                     style={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: '8px',
-                        padding: '10px 20px',
-                        backgroundColor: '#007bff',
+                        padding: isMobile ? '8px 14px' : '8px 16px',
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                         color: 'white',
                         border: 'none',
-                        borderRadius: '6px',
-                        fontSize: '14px',
-                        cursor: 'pointer'
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)'
                     }}
                 >
-                    <Plus size={18} />
-                    <span className="button-text">{t('meters.addMeter')}</span>
+                    <Plus size={16} />
+                    {isMobile ? '+' : t('meters.addMeter')}
                 </button>
             </div>
         </div>

@@ -144,6 +144,7 @@ export const de: Translations = {
   'common.phone': 'Telefon',
   'common.address': 'Adresse',
   'common.notes': 'Notizen',
+  'common.options': 'Optionen',
   'common.yes': 'Ja',
   'common.no': 'Nein',
   'common.close': 'Schliessen',
@@ -274,6 +275,12 @@ export const de: Translations = {
   'export.exportingAllFrom': 'Alle {type} von {building}',
   'export.exportingAll': 'Alle {type}',
   'export.allBuildings': 'allen Gebäuden',
+  'export.selectAll': 'Alle auswählen',
+  'export.selectNone': 'Keine',
+  'export.selected': 'ausgewählt',
+  'export.allSelected': 'Alle Einträge werden exportiert',
+  'export.noItems': 'Keine Einträge gefunden',
+  'export.dateRange': 'Zeitraum',
 
   // ============================================================================
   // MATH CAPTCHA
@@ -561,6 +568,10 @@ export const de: Translations = {
   'meters.editMeter': 'Zähler bearbeiten',
   'meters.setupInstructions': 'Einrichtungsanleitung',
   'meters.exportData': 'Daten exportieren',
+  'meters.totalMeters': 'Zähler gesamt',
+  'meters.connected': 'Verbunden',
+  'meters.archivedSubtitle': 'Archivierte Zähler anzeigen und verwalten',
+  'meters.showActive': 'Aktive anzeigen',
   'meters.metersCount': 'Zähler',
   'meters.noMeters': 'Keine Zähler gefunden',
   'meters.saveFailed': 'Speichern des Zählers fehlgeschlagen',
