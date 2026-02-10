@@ -434,6 +434,8 @@ export const de: Translations = {
   'buildings.metersCount': 'Zähler',
   'buildings.chargersCount': 'Ladestationen',
   'buildings.apartmentsCount': 'Wohnungen',
+  'buildings.withSolar': 'mit Solar',
+  'buildings.results': 'Ergebnisse',
   'buildings.apartmentBuilding': 'WOHNUNGEN',
   'buildings.consumption': 'Verbrauch',
   'buildings.solarProduction': 'Solarproduktion',

@@ -7,6 +7,7 @@ export function useBuildingData() {
   const [meters, setMeters] = useState<Meter[]>([]);
   const [chargers, setChargers] = useState<Charger[]>([]);
   const [consumptionData, setConsumptionData] = useState<BuildingConsumption[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
     try {
@@ -22,6 +23,8 @@ export function useBuildingData() {
       setConsumptionData(consumptionData);
     } catch (err) {
       console.error('Failed to load data:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -67,6 +70,7 @@ export function useBuildingData() {
     meters,
     chargers,
     consumptionData,
+    loading,
     loadData
   };
 }

@@ -433,6 +433,8 @@ export const en: Translations = {
   'buildings.metersCount': 'Meters',
   'buildings.chargersCount': 'Chargers',
   'buildings.apartmentsCount': 'Apartments',
+  'buildings.withSolar': 'with Solar',
+  'buildings.results': 'results',
   'buildings.apartmentBuilding': 'APARTMENTS',
   'buildings.consumption': 'Consumption',
   'buildings.solarProduction': 'Solar Production',
