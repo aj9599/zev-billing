@@ -519,6 +519,8 @@ export const de: Translations = {
 
   // Gebäude-Visualisierung
   'buildings.visualization.groundLevel': 'Bodenniveau',
+  'buildings.visualization.roof': 'Dach',
+  'buildings.visualization.solarRoof': 'Solardach',
 
   // Instructions
   'buildings.instructions.title': 'Gebäude & Komplexe Anleitung',

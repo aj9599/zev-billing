@@ -1,4 +1,5 @@
-import { Sun } from 'lucide-react';
+import { Sun, Triangle } from 'lucide-react';
+import { useTranslation } from '../../../../i18n';
 
 interface RoofSectionProps {
   hasSolar: boolean;
@@ -7,107 +8,141 @@ interface RoofSectionProps {
 }
 
 export default function RoofSection({ hasSolar, atticApartments, isMobile }: RoofSectionProps) {
-  const roofHeight = isMobile ? 60 : 80;
+  const { t } = useTranslation();
   const hasAttic = atticApartments.length > 0;
 
   return (
-    <div style={{ position: 'relative', width: '100%' }}>
-      {/* Sun icon - only if solar */}
-      {hasSolar && (
-        <div style={{
-          position: 'absolute',
-          top: isMobile ? '-18px' : '-24px',
-          right: isMobile ? '8px' : '16px',
-          zIndex: 2
-        }}>
-          <div style={{
-            width: isMobile ? '36px' : '48px',
-            height: isMobile ? '36px' : '48px',
-            borderRadius: '50%',
-            backgroundColor: '#fbbf24',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 0 20px rgba(251, 191, 36, 0.5)',
-            animation: 'pulse 3s ease-in-out infinite'
-          }}>
-            <Sun size={isMobile ? 20 : 28} color="#fff" />
-          </div>
-        </div>
-      )}
-
-      {/* Roof triangle */}
+    <div style={{
+      width: '100%',
+      padding: isMobile ? '12px' : '16px',
+      background: hasSolar
+        ? 'linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%)'
+        : 'linear-gradient(135deg, #78350f 0%, #92400e 100%)',
+      borderRadius: '16px 16px 0 0',
+      position: 'relative',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '10px'
+    }}>
+      {/* Roof header */}
       <div style={{
-        width: '100%',
-        height: `${roofHeight}px`,
-        background: hasSolar
-          ? 'linear-gradient(135deg, #1e3a5f 0%, #2563eb 50%, #1e3a5f 100%)'
-          : 'linear-gradient(135deg, #92400e 0%, #b45309 50%, #78350f 100%)',
-        clipPath: 'polygon(50% 0%, 5% 100%, 95% 100%)',
-        position: 'relative',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'space-between',
+        gap: '8px'
       }}>
-        {/* Solar panels grid */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <Triangle size={isMobile ? 14 : 16} color="rgba(255,255,255,0.8)" />
+          <span style={{
+            fontSize: isMobile ? '11px' : '12px',
+            fontWeight: '600',
+            color: 'rgba(255,255,255,0.9)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px'
+          }}>
+            {hasAttic ? t('buildings.apartmentConfig.attic') : (hasSolar ? t('buildings.visualization.solarRoof') : t('buildings.visualization.roof'))}
+          </span>
+        </div>
+
+        {/* Sun badge */}
         {hasSolar && (
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: `repeat(${isMobile ? 3 : 4}, 1fr)`,
-            gap: '2px',
-            padding: `${isMobile ? 20 : 28}px ${isMobile ? 24 : 36}px 8px`,
-            width: '60%'
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '4px 10px',
+            backgroundColor: 'rgba(251, 191, 36, 0.2)',
+            borderRadius: '20px',
+            border: '1px solid rgba(251, 191, 36, 0.4)'
           }}>
-            {Array.from({ length: isMobile ? 6 : 8 }).map((_, i) => (
-              <div key={i} style={{
-                height: isMobile ? '8px' : '10px',
-                backgroundColor: 'rgba(96, 165, 250, 0.7)',
-                borderRadius: '1px',
-                border: '1px solid rgba(147, 197, 253, 0.5)'
-              }} />
-            ))}
+            <div style={{
+              width: isMobile ? '20px' : '24px',
+              height: isMobile ? '20px' : '24px',
+              borderRadius: '50%',
+              backgroundColor: '#fbbf24',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 0 12px rgba(251, 191, 36, 0.6)',
+              animation: 'sunPulse 3s ease-in-out infinite'
+            }}>
+              <Sun size={isMobile ? 12 : 14} color="#fff" />
+            </div>
+            <span style={{
+              fontSize: isMobile ? '10px' : '11px',
+              fontWeight: '700',
+              color: '#fbbf24'
+            }}>
+              Solar
+            </span>
           </div>
         )}
       </div>
 
-      {/* Attic floor content */}
+      {/* Solar panel grid */}
+      {hasSolar && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${isMobile ? 4 : 6}, 1fr)`,
+          gap: '3px',
+          padding: '4px'
+        }}>
+          {Array.from({ length: isMobile ? 8 : 12 }).map((_, i) => (
+            <div key={i} style={{
+              height: isMobile ? '8px' : '10px',
+              backgroundColor: 'rgba(96, 165, 250, 0.4)',
+              borderRadius: '2px',
+              border: '1px solid rgba(147, 197, 253, 0.3)'
+            }} />
+          ))}
+        </div>
+      )}
+
+      {/* Attic apartments */}
       {hasAttic && (
         <div style={{
-          position: 'absolute',
-          bottom: '4px',
-          left: '20%',
-          right: '20%',
           display: 'flex',
-          justifyContent: 'center',
-          gap: '4px',
+          gap: '6px',
           flexWrap: 'wrap'
         }}>
-          {atticApartments.slice(0, isMobile ? 2 : 4).map((apt, i) => (
+          {atticApartments.slice(0, isMobile ? 3 : 5).map((apt, i) => (
             <div key={i} style={{
-              padding: '2px 6px',
-              backgroundColor: 'rgba(255, 255, 255, 0.85)',
-              borderRadius: '3px',
-              fontSize: '9px',
+              padding: '4px 10px',
+              backgroundColor: 'rgba(255, 255, 255, 0.15)',
+              borderRadius: '8px',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              fontSize: isMobile ? '10px' : '11px',
               fontWeight: '600',
-              color: '#1f2937',
+              color: 'rgba(255, 255, 255, 0.9)',
               whiteSpace: 'nowrap'
             }}>
               {apt}
             </div>
           ))}
-          {atticApartments.length > (isMobile ? 2 : 4) && (
+          {atticApartments.length > (isMobile ? 3 : 5) && (
             <div style={{
-              padding: '2px 6px',
-              backgroundColor: 'rgba(255, 255, 255, 0.6)',
-              borderRadius: '3px',
-              fontSize: '9px',
-              color: '#6b7280'
+              padding: '4px 10px',
+              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              borderRadius: '8px',
+              fontSize: isMobile ? '10px' : '11px',
+              color: 'rgba(255, 255, 255, 0.6)'
             }}>
-              +{atticApartments.length - (isMobile ? 2 : 4)}
+              +{atticApartments.length - (isMobile ? 3 : 5)}
             </div>
           )}
         </div>
       )}
+
+      <style>{`
+        @keyframes sunPulse {
+          0%, 100% { box-shadow: 0 0 12px rgba(251, 191, 36, 0.6); }
+          50% { box-shadow: 0 0 20px rgba(251, 191, 36, 0.9); }
+        }
+      `}</style>
     </div>
   );
 }

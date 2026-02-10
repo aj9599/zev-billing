@@ -518,6 +518,8 @@ export const en: Translations = {
 
   // Building Visualization
   'buildings.visualization.groundLevel': 'Ground Level',
+  'buildings.visualization.roof': 'Roof',
+  'buildings.visualization.solarRoof': 'Solar Roof',
 
   // Instructions
   'buildings.instructions.title': 'Buildings & Complexes Guide',

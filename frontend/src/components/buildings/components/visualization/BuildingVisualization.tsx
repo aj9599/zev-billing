@@ -1,4 +1,4 @@
-import { Home, Zap } from 'lucide-react';
+import { Home, Zap, Layers } from 'lucide-react';
 import { useTranslation } from '../../../../i18n';
 import RoofSection from './RoofSection';
 import FloorSection from './FloorSection';
@@ -38,197 +38,223 @@ export default function BuildingVisualization({
   const { atticFloors, normalFloors, undergroundFloors } = getFloorsByType(floors);
   const atticApartments = atticFloors.flatMap(f => f.apartments);
 
-  // Render order: attic in roof, normal top-to-bottom, underground at bottom
   const aboveGroundFloors = normalFloors;
   const belowGroundFloors = undergroundFloors;
+
+  const totalApartments = floors.reduce((sum, f) => sum + f.apartments.length, 0);
 
   return (
     <div style={{
       display: 'flex',
       flexDirection: 'column',
-      alignItems: 'center',
-      width: isMobile ? '100%' : '280px',
-      minHeight: isMobile ? '200px' : '280px',
-      position: 'relative',
+      width: isMobile ? '100%' : '300px',
       flexShrink: 0
     }}>
-      {hasFloors ? (
-        <>
-          {/* Roof */}
-          <RoofSection
-            hasSolar={hasSolar}
-            atticApartments={atticApartments}
-            isMobile={isMobile}
-          />
+      {/* Building card wrapper */}
+      <div style={{
+        borderRadius: '16px',
+        border: '2px solid #e2e8f0',
+        overflow: 'hidden',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
+        backgroundColor: 'white'
+      }}>
+        {hasFloors ? (
+          <>
+            {/* Roof section - always shown for apartment buildings */}
+            <RoofSection
+              hasSolar={hasSolar}
+              atticApartments={atticApartments}
+              isMobile={isMobile}
+            />
 
-          {/* Above-ground floors */}
-          {aboveGroundFloors.length > 0 && (
-            <div style={{ width: '100%' }}>
-              {[...aboveGroundFloors].reverse().map((floor, idx) => (
-                <FloorSection
-                  key={`normal-${idx}`}
-                  floor={floor}
-                  isFirst={idx === 0}
-                  isLast={idx === aboveGroundFloors.length - 1 && belowGroundFloors.length === 0}
-                  isMobile={isMobile}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* Ground line */}
-          {belowGroundFloors.length > 0 && (
-            <div style={{
-              width: '90%',
-              height: '4px',
-              background: 'linear-gradient(90deg, transparent 0%, #059669 10%, #059669 90%, transparent 100%)',
-              borderRadius: '2px',
-              position: 'relative'
-            }}>
-              <span style={{
-                position: 'absolute',
-                top: '-8px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                fontSize: '8px',
-                fontWeight: '600',
-                color: '#059669',
-                backgroundColor: 'white',
-                padding: '0 6px',
-                whiteSpace: 'nowrap'
-              }}>
-                {t('buildings.visualization.groundLevel')}
-              </span>
-            </div>
-          )}
-
-          {/* Underground floors */}
-          {belowGroundFloors.length > 0 && (
-            <div style={{ width: '100%' }}>
-              {belowGroundFloors.map((floor, idx) => (
-                <FloorSection
-                  key={`ug-${idx}`}
-                  floor={floor}
-                  isFirst={idx === 0 && aboveGroundFloors.length === 0}
-                  isLast={idx === belowGroundFloors.length - 1}
-                  isMobile={isMobile}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* No above-ground floors but we have underground - still show a mini roof */}
-          {aboveGroundFloors.length === 0 && belowGroundFloors.length > 0 && !atticFloors.length && (
-            <div style={{
-              width: '90%',
-              height: '20px',
-              backgroundColor: '#92400e',
-              borderRadius: '4px 4px 0 0'
-            }} />
-          )}
-        </>
-      ) : (
-        /* Simple house for non-apartment buildings */
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          width: '100%'
-        }}>
-          {/* Simple roof */}
-          <div style={{
-            width: '100%',
-            height: isMobile ? '50px' : '70px',
-            background: hasSolar
-              ? 'linear-gradient(135deg, #1e3a5f 0%, #2563eb 50%, #1e3a5f 100%)'
-              : 'linear-gradient(135deg, #92400e 0%, #b45309 50%, #78350f 100%)',
-            clipPath: 'polygon(50% 0%, 5% 100%, 95% 100%)',
-            position: 'relative',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            {hasSolar && (
-              <div style={{
-                position: 'absolute',
-                top: isMobile ? '-14px' : '-20px',
-                right: isMobile ? '8px' : '16px',
-                width: isMobile ? '28px' : '36px',
-                height: isMobile ? '28px' : '36px',
-                borderRadius: '50%',
-                backgroundColor: '#fbbf24',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 0 16px rgba(251, 191, 36, 0.4)'
-              }}>
-                <Zap size={isMobile ? 14 : 18} color="#fff" />
+            {/* Above-ground floors */}
+            {aboveGroundFloors.length > 0 && (
+              <div>
+                {[...aboveGroundFloors].reverse().map((floor, idx) => (
+                  <FloorSection
+                    key={`normal-${idx}`}
+                    floor={floor}
+                    isLast={idx === aboveGroundFloors.length - 1 && belowGroundFloors.length === 0}
+                    isMobile={isMobile}
+                  />
+                ))}
               </div>
             )}
-          </div>
 
-          {/* House body */}
-          <div style={{
-            width: '90%',
-            padding: isMobile ? '16px 12px' : '24px 16px',
-            backgroundColor: '#fefce8',
-            borderLeft: '3px solid #d97706',
-            borderRight: '3px solid #d97706',
-            borderBottom: '4px solid #92400e',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <Home size={isMobile ? 28 : 36} color="#92400e" />
+            {/* Ground level divider */}
+            {belowGroundFloors.length > 0 && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '0 12px'
+              }}>
+                <div style={{ flex: 1, height: '2px', backgroundColor: '#059669', borderRadius: '1px' }} />
+                <span style={{
+                  fontSize: '9px',
+                  fontWeight: '700',
+                  color: '#059669',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  whiteSpace: 'nowrap'
+                }}>
+                  {t('buildings.visualization.groundLevel')}
+                </span>
+                <div style={{ flex: 1, height: '2px', backgroundColor: '#059669', borderRadius: '1px' }} />
+              </div>
+            )}
+
+            {/* Underground floors */}
+            {belowGroundFloors.length > 0 && (
+              <div>
+                {belowGroundFloors.map((floor, idx) => (
+                  <FloorSection
+                    key={`ug-${idx}`}
+                    floor={floor}
+                    isLast={idx === belowGroundFloors.length - 1}
+                    isMobile={isMobile}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Bottom stats bar */}
             <div style={{
               display: 'flex',
-              gap: '8px',
-              alignItems: 'center'
+              justifyContent: 'space-around',
+              padding: isMobile ? '10px 12px' : '12px 16px',
+              backgroundColor: '#f8fafc',
+              borderTop: '1px solid #e2e8f0'
             }}>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
-                padding: '3px 8px',
-                backgroundColor: 'rgba(217, 119, 6, 0.1)',
-                borderRadius: '8px'
+                gap: '4px'
               }}>
-                <Zap size={12} color="#d97706" />
-                <span style={{
-                  fontSize: isMobile ? '10px' : '12px',
-                  fontWeight: '700',
-                  color: '#92400e'
-                }}>
-                  {buildingMeters.length} {t('buildings.metersCount')}
+                <Layers size={12} color="#3b82f6" />
+                <span style={{ fontSize: '11px', fontWeight: '700', color: '#1e40af' }}>
+                  {floors.length}
+                </span>
+                <span style={{ fontSize: '10px', color: '#64748b' }}>
+                  {t('buildings.apartmentConfig.floors')}
+                </span>
+              </div>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                <Home size={12} color="#f59e0b" />
+                <span style={{ fontSize: '11px', fontWeight: '700', color: '#92400e' }}>
+                  {totalApartments}
+                </span>
+                <span style={{ fontSize: '10px', color: '#64748b' }}>
+                  {t('buildings.apartmentConfig.totalApartments')}
+                </span>
+              </div>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                <Zap size={12} color="#3b82f6" />
+                <span style={{ fontSize: '11px', fontWeight: '700', color: '#1e40af' }}>
+                  {buildingMeters.length}
+                </span>
+                <span style={{ fontSize: '10px', color: '#64748b' }}>
+                  {t('buildings.metersCount')}
                 </span>
               </div>
             </div>
-
-            {/* Door */}
+          </>
+        ) : (
+          /* Simple building card for non-apartment buildings */
+          <>
+            {/* Roof area */}
             <div style={{
-              width: isMobile ? '24px' : '30px',
-              height: isMobile ? '36px' : '44px',
-              backgroundColor: '#92400e',
-              borderRadius: '4px 4px 0 0',
-              position: 'relative',
-              marginTop: '4px'
+              padding: isMobile ? '16px' : '24px',
+              background: hasSolar
+                ? 'linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%)'
+                : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '12px'
             }}>
               <div style={{
-                position: 'absolute',
-                right: '4px',
-                top: '50%',
-                width: '4px',
-                height: '4px',
-                borderRadius: '50%',
-                backgroundColor: '#d97706'
-              }} />
-            </div>
-          </div>
-        </div>
-      )}
+                width: isMobile ? '48px' : '56px',
+                height: isMobile ? '48px' : '56px',
+                borderRadius: '16px',
+                backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '2px solid rgba(255, 255, 255, 0.2)'
+              }}>
+                <Home size={isMobile ? 24 : 28} color="rgba(255, 255, 255, 0.9)" />
+              </div>
 
-      {/* Energy badges */}
+              {hasSolar && (
+                <div style={{
+                  display: 'flex',
+                  gap: '3px'
+                }}>
+                  {Array.from({ length: isMobile ? 4 : 6 }).map((_, i) => (
+                    <div key={i} style={{
+                      width: isMobile ? '16px' : '20px',
+                      height: isMobile ? '8px' : '10px',
+                      backgroundColor: 'rgba(96, 165, 250, 0.5)',
+                      borderRadius: '2px',
+                      border: '1px solid rgba(147, 197, 253, 0.3)'
+                    }} />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Stats for simple building */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-around',
+              padding: isMobile ? '14px 12px' : '16px',
+              backgroundColor: '#f8fafc'
+            }}>
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                <Zap size={16} color="#3b82f6" />
+                <span style={{ fontSize: '16px', fontWeight: '800', color: '#1e40af' }}>
+                  {buildingMeters.length}
+                </span>
+                <span style={{ fontSize: '10px', color: '#64748b' }}>
+                  {t('buildings.metersCount')}
+                </span>
+              </div>
+              {hasSolar && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}>
+                  <Zap size={16} color="#f59e0b" />
+                  <span style={{ fontSize: '16px', fontWeight: '800', color: '#92400e' }}>
+                    {buildingMeters.filter(m => m.meter_type === 'solar_meter').length}
+                  </span>
+                  <span style={{ fontSize: '10px', color: '#64748b' }}>
+                    Solar
+                  </span>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Energy badges below the card */}
       <EnergyBadges
         consumption={consumption.actualHouseConsumption}
         solarProduction={consumption.solarProduction}
@@ -236,14 +262,6 @@ export default function BuildingVisualization({
         hasSolar={hasSolar}
         isMobile={isMobile}
       />
-
-      {/* Pulse animation for sun */}
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { box-shadow: 0 0 20px rgba(251, 191, 36, 0.5); }
-          50% { box-shadow: 0 0 30px rgba(251, 191, 36, 0.8); }
-        }
-      `}</style>
     </div>
   );
 }

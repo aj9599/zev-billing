@@ -23,25 +23,26 @@ export default function EnergyBadges({
   return (
     <div style={{
       display: 'flex',
-      gap: isMobile ? '4px' : '6px',
+      gap: isMobile ? '6px' : '8px',
       justifyContent: 'center',
       flexWrap: 'wrap',
-      padding: isMobile ? '6px 0' : '8px 0'
+      padding: isMobile ? '10px 0 4px' : '12px 0 4px'
     }}>
       {/* Consumption badge */}
       {consumption > 0 && (
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '4px',
-          padding: isMobile ? '3px 8px' : '4px 10px',
+          gap: '5px',
+          padding: isMobile ? '5px 10px' : '6px 12px',
           backgroundColor: '#dbeafe',
-          borderRadius: '12px',
-          border: '1px solid #93c5fd'
+          borderRadius: '20px',
+          border: '1px solid #93c5fd',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
         }}>
-          <Zap size={isMobile ? 10 : 12} color="#3b82f6" />
+          <Zap size={isMobile ? 11 : 13} color="#3b82f6" />
           <span style={{
-            fontSize: isMobile ? '9px' : '11px',
+            fontSize: isMobile ? '10px' : '12px',
             fontWeight: '700',
             color: '#1e40af'
           }}>
@@ -55,15 +56,16 @@ export default function EnergyBadges({
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '4px',
-          padding: isMobile ? '3px 8px' : '4px 10px',
+          gap: '5px',
+          padding: isMobile ? '5px 10px' : '6px 12px',
           backgroundColor: '#fef3c7',
-          borderRadius: '12px',
-          border: '1px solid #fbbf24'
+          borderRadius: '20px',
+          border: '1px solid #fbbf24',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
         }}>
-          <Sun size={isMobile ? 10 : 12} color="#d97706" />
+          <Sun size={isMobile ? 11 : 13} color="#d97706" />
           <span style={{
-            fontSize: isMobile ? '9px' : '11px',
+            fontSize: isMobile ? '10px' : '12px',
             fontWeight: '700',
             color: '#92400e'
           }}>
@@ -77,15 +79,16 @@ export default function EnergyBadges({
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '4px',
-          padding: isMobile ? '3px 8px' : '4px 10px',
+          gap: '5px',
+          padding: isMobile ? '5px 10px' : '6px 12px',
           backgroundColor: isExporting ? '#ecfdf5' : '#fee2e2',
-          borderRadius: '12px',
-          border: `1px solid ${isExporting ? '#6ee7b7' : '#fca5a5'}`
+          borderRadius: '20px',
+          border: `1px solid ${isExporting ? '#6ee7b7' : '#fca5a5'}`,
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
         }}>
-          <Grid size={isMobile ? 10 : 12} color={isExporting ? '#059669' : '#dc2626'} />
+          <Grid size={isMobile ? 11 : 13} color={isExporting ? '#059669' : '#dc2626'} />
           <span style={{
-            fontSize: isMobile ? '9px' : '11px',
+            fontSize: isMobile ? '10px' : '12px',
             fontWeight: '700',
             color: isExporting ? '#065f46' : '#991b1b'
           }}>
