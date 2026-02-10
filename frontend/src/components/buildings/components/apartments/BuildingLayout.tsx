@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Building } from 'lucide-react';
 import { useTranslation } from '../../../../i18n';
 import FloorCard from './FloorCard';
@@ -23,6 +24,8 @@ interface BuildingLayoutProps {
     PALETTE_APT: string;
     EXISTING_FLOOR: string;
   };
+  onFloorReorder: (fromIndex: number, toIndex: number) => void;
+  draggedFloorIdx: number | null;
 }
 
 const StudRow = ({ isMobile }: { isMobile: boolean }) => (
@@ -48,6 +51,70 @@ const StudRow = ({ isMobile }: { isMobile: boolean }) => (
   </div>
 );
 
+function FloorDropZone({
+  isActive,
+  onDragOver,
+  onDrop,
+  isMobile
+}: {
+  isActive: boolean;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+  isMobile: boolean;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  if (!isActive || isMobile) return null;
+
+  return (
+    <div
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'move';
+        setIsHovered(true);
+        onDragOver(e);
+      }}
+      onDragLeave={() => setIsHovered(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsHovered(false);
+        onDrop(e);
+      }}
+      style={{
+        height: isHovered ? '8px' : '4px',
+        margin: '2px 0',
+        borderRadius: '4px',
+        backgroundColor: isHovered ? '#667eea' : 'transparent',
+        border: `2px dashed ${isHovered ? '#667eea' : '#667eea50'}`,
+        transition: 'all 0.15s ease',
+        position: 'relative'
+      }}
+    >
+      {isHovered && (
+        <div style={{
+          position: 'absolute',
+          left: '50%',
+          top: '50%',
+          transform: 'translate(-50%, -50%)',
+          backgroundColor: '#667eea',
+          color: 'white',
+          padding: '2px 10px',
+          borderRadius: '10px',
+          fontSize: '10px',
+          fontWeight: '700',
+          whiteSpace: 'nowrap',
+          zIndex: 10,
+          pointerEvents: 'none'
+        }}>
+          ↕
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function BuildingLayout({
   floors,
   dragType,
@@ -63,9 +130,12 @@ export default function BuildingLayout({
   removeApartment,
   updateApartmentName,
   isMobile,
-  dragTypes
+  dragTypes,
+  onFloorReorder,
+  draggedFloorIdx
 }: BuildingLayoutProps) {
   const { t } = useTranslation();
+  const isDraggingFloor = dragType === dragTypes.EXISTING_FLOOR;
 
   return (
     <div
@@ -102,7 +172,6 @@ export default function BuildingLayout({
         }}>
           {t('buildings.apartmentConfig.buildingLayout')}
         </h3>
-        {/* Mobile stats */}
         {isMobile && (
           <div style={{
             display: 'flex',
@@ -159,10 +228,21 @@ export default function BuildingLayout({
           <div style={{
             display: 'flex',
             flexDirection: 'column-reverse',
-            gap: isMobile ? '16px' : '20px'
+            gap: isDraggingFloor ? '0px' : (isMobile ? '16px' : '20px')
           }}>
             {floors.map((floor, floorIdx) => (
               <div key={floorIdx} style={{ position: 'relative' }}>
+                {/* Drop zone ABOVE this floor (since column-reverse, this appears below visually) */}
+                <FloorDropZone
+                  isActive={isDraggingFloor && draggedFloorIdx !== null && draggedFloorIdx !== floorIdx && draggedFloorIdx !== floorIdx - 1}
+                  onDragOver={(e) => { e.preventDefault(); }}
+                  onDrop={() => {
+                    if (draggedFloorIdx !== null) {
+                      onFloorReorder(draggedFloorIdx, floorIdx);
+                    }
+                  }}
+                  isMobile={isMobile}
+                />
                 <StudRow isMobile={isMobile} />
                 <FloorCard
                   floor={floor}
@@ -180,7 +260,21 @@ export default function BuildingLayout({
                   updateApartmentName={updateApartmentName}
                   isMobile={isMobile}
                   dragTypes={dragTypes}
+                  isDragged={draggedFloorIdx === floorIdx}
                 />
+                {/* Drop zone BELOW the last floor (at the top of the building visually) */}
+                {floorIdx === floors.length - 1 && (
+                  <FloorDropZone
+                    isActive={isDraggingFloor && draggedFloorIdx !== null && draggedFloorIdx !== floors.length - 1}
+                    onDragOver={(e) => { e.preventDefault(); }}
+                    onDrop={() => {
+                      if (draggedFloorIdx !== null) {
+                        onFloorReorder(draggedFloorIdx, floors.length - 1);
+                      }
+                    }}
+                    isMobile={isMobile}
+                  />
+                )}
               </div>
             ))}
           </div>

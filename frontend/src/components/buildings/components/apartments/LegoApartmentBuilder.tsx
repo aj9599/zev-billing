@@ -124,7 +124,9 @@ export default function LegoApartmentBuilder({
   const reorderFloors = (fromIndex: number, toIndex: number) => {
     const floors = [...(formData.floors_config || [])];
     const [movedFloor] = floors.splice(fromIndex, 1);
-    floors.splice(toIndex, 0, movedFloor);
+    // Adjust toIndex if needed after removal
+    const adjustedTo = toIndex > fromIndex ? toIndex - 1 : toIndex;
+    floors.splice(adjustedTo, 0, movedFloor);
     setFormData({ ...formData, floors_config: floors });
   };
 
@@ -170,18 +172,23 @@ export default function LegoApartmentBuilder({
       if (dragData.floorIdx !== floorIdx) {
         moveApartment(dragData.floorIdx, dragData.aptIdx, floorIdx);
       }
-    } else if (dragType === DRAG_TYPES.EXISTING_FLOOR && dragData) {
-      if (dragData.floorIdx !== floorIdx) {
-        reorderFloors(dragData.floorIdx, floorIdx);
-      }
     }
+    // Floor reorder is now handled by FloorDropZone via onFloorReorder
+    onDragEndGlobal();
+  };
+
+  const onFloorReorder = (fromIndex: number, toIndex: number) => {
+    reorderFloors(fromIndex, toIndex);
     onDragEndGlobal();
   };
 
   const allowDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
+    e.dataTransfer.dropEffect = dragType === DRAG_TYPES.EXISTING_FLOOR ? 'move' : 'copy';
   };
+
+  // Extract the dragged floor index for BuildingLayout
+  const draggedFloorIdx = dragType === DRAG_TYPES.EXISTING_FLOOR && dragData ? dragData.floorIdx : null;
 
   return (
     <div style={{
@@ -222,6 +229,8 @@ export default function LegoApartmentBuilder({
         updateApartmentName={updateApartmentName}
         isMobile={isMobile}
         dragTypes={DRAG_TYPES}
+        onFloorReorder={onFloorReorder}
+        draggedFloorIdx={draggedFloorIdx}
       />
     </div>
   );

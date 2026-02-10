@@ -23,6 +23,7 @@ interface FloorCardProps {
     PALETTE_APT: string;
     EXISTING_FLOOR: string;
   };
+  isDragged?: boolean;
 }
 
 const FLOOR_TYPE_STYLES = {
@@ -70,7 +71,8 @@ export default function FloorCard({
   removeApartment,
   updateApartmentName,
   isMobile,
-  dragTypes
+  dragTypes,
+  isDragged = false
 }: FloorCardProps) {
   const { t } = useTranslation();
   const [editingFloor, setEditingFloor] = useState(false);
@@ -79,6 +81,10 @@ export default function FloorCard({
   const floorType = floor.floor_type || 'normal';
   const styles = FLOOR_TYPE_STYLES[floorType] || FLOOR_TYPE_STYLES.normal;
   const FloorIcon = styles.Icon;
+
+  // Only accept apartment drops on the floor card, not floor reorder drops
+  const isApartmentDrop = dragType === dragTypes.PALETTE_APT || (dragType !== dragTypes.EXISTING_FLOOR && dragType !== null);
+  const isFloorDrag = dragType === dragTypes.EXISTING_FLOOR;
 
   const startEditing = () => {
     setEditingFloor(true);
@@ -105,20 +111,31 @@ export default function FloorCard({
       draggable={!isMobile}
       onDragStart={(e) => !isMobile && onFloorDragStart(e, floorIdx)}
       onDragEnd={onDragEnd}
-      onDragOver={allowDrop}
-      onDrop={(e) => onFloorDrop(floorIdx, e)}
+      onDragOver={(e) => {
+        // Only allow apartment drops on the floor card itself
+        if (!isFloorDrag) {
+          allowDrop(e);
+        }
+      }}
+      onDrop={(e) => {
+        // Only handle apartment drops here; floor reorder is handled by FloorDropZone
+        if (!isFloorDrag) {
+          onFloorDrop(floorIdx, e);
+        }
+      }}
       style={{
         padding: isMobile ? '16px' : '20px',
-        backgroundColor: dragType ? styles.activeBg : styles.bg,
+        backgroundColor: isDragged ? '#e5e7eb' : (isApartmentDrop ? styles.activeBg : styles.bg),
         borderRadius: floorType === 'attic' ? '16px 16px 8px 8px' : floorType === 'underground' ? '8px 8px 16px 16px' : '16px',
         border: `2px solid ${
-          dragType === dragTypes.PALETTE_APT || dragType === dragTypes.EXISTING_FLOOR
-            ? styles.iconColor
-            : styles.border
+          isDragged ? '#667eea' : (
+            isApartmentDrop ? styles.iconColor : styles.border
+          )
         }`,
-        boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
+        boxShadow: isDragged ? '0 0 0 2px #667eea40' : '0 4px 6px rgba(0,0,0,0.05)',
         transition: 'all 0.2s',
-        cursor: isMobile ? 'default' : 'move'
+        cursor: isMobile ? 'default' : 'grab',
+        opacity: isDragged ? 0.5 : 1
       }}
     >
       {/* Floor Header */}
@@ -200,7 +217,7 @@ export default function FloorCard({
               minWidth: '150px'
             }}>
               {!isMobile && (
-                <GripVertical size={20} color="#9ca3af" style={{ cursor: 'grab' }} />
+                <GripVertical size={20} color="#9ca3af" style={{ cursor: 'grab', flexShrink: 0 }} />
               )}
               <FloorIcon size={18} color={styles.iconColor} />
               <span style={{
