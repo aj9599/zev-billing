@@ -1,4 +1,4 @@
-import { Edit2, Trash2, MapPin, Home } from 'lucide-react';
+import { Edit2, Trash2 } from 'lucide-react';
 import { useTranslation } from '../../../i18n';
 import { api } from '../../../api/client';
 import { useBuildingConsumption } from '../hooks/useBuildingConsumption';
