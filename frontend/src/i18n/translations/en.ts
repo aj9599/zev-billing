@@ -293,6 +293,8 @@ export const en: Translations = {
   'users.title': 'Users',
   'users.subtitle': 'Manage regular users and administrators',
   'users.archivedUsersSubtitle': 'Archived and inactive users',
+  'users.totalUsers': 'Total Users',
+  'users.archived': 'Archived',
   'users.addUser': 'Add User',
   'users.editUser': 'Edit User',
   'users.showActive': 'Show Active',

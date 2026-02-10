@@ -294,6 +294,8 @@ export const de: Translations = {
   'users.title': 'Benutzer',
   'users.subtitle': 'Verwalten Sie reguläre Benutzer und Administratoren',
   'users.archivedUsersSubtitle': 'Archivierte und inaktive Benutzer',
+  'users.totalUsers': 'Benutzer gesamt',
+  'users.archived': 'Archiviert',
   'users.addUser': 'Benutzer hinzufügen',
   'users.editUser': 'Benutzer bearbeiten',
   'users.showActive': 'Aktive anzeigen',

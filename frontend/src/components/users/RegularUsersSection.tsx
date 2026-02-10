@@ -2,6 +2,7 @@ import { UsersIcon, CheckCircle, XCircle, Archive, Edit2, Trash2, Mail, Phone, M
 import type { User as UserType, Building as BuildingType } from '../../types';
 import { filterUsers, getBuildingName } from './utils/userUtils';
 import { formatRentPeriod } from './utils/dateUtils';
+import { ActionBtn, UserMobileCard } from './AdminUsersSection';
 
 interface RegularUsersSectionProps {
   users: UserType[];
@@ -12,6 +13,7 @@ interface RegularUsersSectionProps {
   handleToggleActive: (user: UserType) => void;
   handleEdit: (user: UserType) => void;
   handleDelete: (id: number) => void;
+  isMobile: boolean;
   t: (key: string) => string;
 }
 
@@ -24,6 +26,7 @@ export default function RegularUsersSection({
   handleToggleActive,
   handleEdit,
   handleDelete,
+  isMobile,
   t
 }: RegularUsersSectionProps) {
   const filteredUsers = filterUsers(users, buildings, selectedBuildingId, searchQuery, showArchive);
@@ -31,126 +34,150 @@ export default function RegularUsersSection({
 
   return (
     <div>
-      <div style={{
+      {/* Section header */}
+      <h2 style={{
+        fontSize: isMobile ? '14px' : '15px',
+        fontWeight: '700',
+        marginBottom: '12px',
+        color: '#374151',
         display: 'flex',
         alignItems: 'center',
-        gap: '10px',
-        marginBottom: '15px',
-        padding: '12px 16px',
-        backgroundColor: '#f0fdf4',
-        borderRadius: '8px',
-        border: '1px solid #bbf7d0'
+        gap: '8px',
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px'
       }}>
-        <UsersIcon size={20} style={{ color: '#15803d' }} />
-        <div>
-          <h2 style={{ fontSize: '18px', fontWeight: '600', color: '#15803d', margin: 0 }}>
-            {t('users.regularUsers')}
-          </h2>
-          <p style={{ fontSize: '13px', color: '#166534', margin: '2px 0 0 0' }}>
-            {t('users.regularDescription')}
-          </p>
-        </div>
-      </div>
+        <UsersIcon size={16} color="#10b981" />
+        {t('users.regularUsers')}
+        <span style={{
+          fontSize: '11px',
+          fontWeight: '600',
+          padding: '2px 8px',
+          backgroundColor: '#f3f4f6',
+          borderRadius: '10px',
+          color: '#6b7280',
+          textTransform: 'none',
+          letterSpacing: '0'
+        }}>
+          {regularUsers.length}
+        </span>
+      </h2>
 
       {/* Desktop Table */}
-      <div className="desktop-table" style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
-        <table style={{ width: '100%' }}>
+      <div className="desktop-table" style={{
+        backgroundColor: 'white',
+        borderRadius: '12px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+        overflow: 'hidden'
+      }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee' }}>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.status')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.name')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.email')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.apartment')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.rentPeriod')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.rfidCards')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('users.building')}</th>
-              <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600' }}>{t('common.actions')}</th>
+            <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
+              <th style={thStyle}>{t('users.status')}</th>
+              <th style={thStyle}>{t('common.name')}</th>
+              <th style={thStyle}>{t('common.email')}</th>
+              <th style={thStyle}>{t('users.apartment')}</th>
+              <th style={thStyle}>{t('users.rentPeriod')}</th>
+              <th style={thStyle}>{t('users.rfidCards')}</th>
+              <th style={thStyle}>{t('users.building')}</th>
+              <th style={{ ...thStyle, textAlign: 'right' }}>{t('common.actions')}</th>
             </tr>
           </thead>
           <tbody>
             {regularUsers.map(user => (
-              <tr key={user.id} style={{ borderBottom: '1px solid #eee', opacity: user.is_active ? 1 : 0.5 }}>
-                <td style={{ padding: '16px' }}>
-                  <span title={user.is_active ? t('users.activeStatus') : t('users.inactiveStatus')}>
-                    {user.is_active ? (
-                      <CheckCircle size={20} color="#22c55e" />
-                    ) : (
-                      <XCircle size={20} color="#ef4444" />
-                    )}
+              <tr
+                key={user.id}
+                className="u-table-row"
+                style={{
+                  borderBottom: '1px solid #f9fafb',
+                  opacity: user.is_active ? 1 : 0.5,
+                  transition: 'background-color 0.15s'
+                }}
+              >
+                <td style={tdStyle}>
+                  {user.is_active ? (
+                    <CheckCircle size={18} color="#22c55e" />
+                  ) : (
+                    <XCircle size={18} color="#ef4444" />
+                  )}
+                </td>
+                <td style={tdStyle}>
+                  <span style={{ fontWeight: '600', color: '#1f2937' }}>
+                    {user.first_name} {user.last_name}
                   </span>
                 </td>
-                <td style={{ padding: '16px' }}>{user.first_name} {user.last_name}</td>
-                <td style={{ padding: '16px' }}>{user.email}</td>
-                <td style={{ padding: '16px' }}>
+                <td style={{ ...tdStyle, color: '#6b7280', fontSize: '13px' }}>{user.email}</td>
+                <td style={tdStyle}>
                   {user.apartment_unit ? (
                     <span style={{
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: '4px',
-                      padding: '4px 8px',
+                      padding: '3px 8px',
                       backgroundColor: '#f0fdf4',
                       color: '#15803d',
-                      borderRadius: '4px',
-                      fontSize: '13px'
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: '600'
                     }}>
-                      <Home size={14} />
+                      <Home size={12} />
                       {user.apartment_unit}
                     </span>
-                  ) : '-'}
+                  ) : <span style={{ color: '#d1d5db' }}>—</span>}
                 </td>
-                <td style={{ padding: '16px', fontSize: '13px' }}>
+                <td style={{ ...tdStyle, fontSize: '12px' }}>
                   {user.rent_start_date ? (
                     <span style={{
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: '4px',
-                      padding: '4px 8px',
+                      padding: '3px 8px',
                       backgroundColor: '#fef3c7',
                       color: '#92400e',
-                      borderRadius: '4px',
-                      fontSize: '12px'
+                      borderRadius: '6px',
+                      fontSize: '11px',
+                      fontWeight: '600'
                     }}>
-                      <Calendar size={14} />
+                      <Calendar size={11} />
                       {formatRentPeriod(user.rent_start_date, user.rent_end_date)}
                     </span>
                   ) : (
-                    <span style={{ color: '#ef4444', fontSize: '12px' }}>⚠️ {t('users.notSet')}</span>
+                    <span style={{ color: '#ef4444', fontSize: '11px', fontWeight: '600' }}>
+                      {t('users.notSet')}
+                    </span>
                   )}
                 </td>
-                <td style={{ padding: '16px' }}>
+                <td style={tdStyle}>
                   {user.charger_ids ? (
                     <span style={{
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: '4px',
-                      padding: '4px 8px',
-                      backgroundColor: '#f0f9ff',
-                      color: '#0369a1',
-                      borderRadius: '4px',
-                      fontSize: '13px',
+                      padding: '3px 8px',
+                      backgroundColor: '#eef2ff',
+                      color: '#4338ca',
+                      borderRadius: '6px',
+                      fontSize: '11px',
+                      fontWeight: '600',
                       fontFamily: 'monospace'
                     }}>
-                      <CreditCard size={14} />
+                      <CreditCard size={11} />
                       {user.charger_ids}
                     </span>
-                  ) : '-'}
+                  ) : <span style={{ color: '#d1d5db' }}>—</span>}
                 </td>
-                <td style={{ padding: '16px' }}>{getBuildingName(user.building_id, buildings)}</td>
-                <td style={{ padding: '16px' }}>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
+                <td style={{ ...tdStyle, fontSize: '13px', color: '#6b7280' }}>
+                  {getBuildingName(user.building_id, buildings)}
+                </td>
+                <td style={{ ...tdStyle, textAlign: 'right' }}>
+                  <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                    <ActionBtn
+                      icon={Archive}
+                      color="#8b5cf6"
                       onClick={() => handleToggleActive(user)}
-                      style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}
                       title={user.is_active ? t('users.deactivate') : t('users.activate')}
-                    >
-                      <Archive size={16} color="#8b5cf6" />
-                    </button>
-                    <button onClick={() => handleEdit(user)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}>
-                      <Edit2 size={16} color="#007bff" />
-                    </button>
-                    <button onClick={() => handleDelete(user.id)} style={{ padding: '6px', border: 'none', background: 'none', cursor: 'pointer' }}>
-                      <Trash2 size={16} color="#dc3545" />
-                    </button>
+                    />
+                    <ActionBtn icon={Edit2} color="#3b82f6" onClick={() => handleEdit(user)} title={t('common.edit')} />
+                    <ActionBtn icon={Trash2} color="#ef4444" onClick={() => handleDelete(user.id)} title={t('common.delete')} />
                   </div>
                 </td>
               </tr>
@@ -158,8 +185,9 @@ export default function RegularUsersSection({
           </tbody>
         </table>
         {regularUsers.length === 0 && (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>
-            {showArchive ? t('users.noArchivedRegularUsers') : t('users.noRegularUsers')}
+          <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af', fontSize: '14px' }}>
+            <UsersIcon size={24} color="#d1d5db" style={{ marginBottom: '8px' }} />
+            <p style={{ margin: 0 }}>{showArchive ? t('users.noArchivedRegularUsers') : t('users.noRegularUsers')}</p>
           </div>
         )}
       </div>
@@ -167,88 +195,44 @@ export default function RegularUsersSection({
       {/* Mobile Cards */}
       <div className="mobile-cards">
         {regularUsers.map(user => (
-          <div key={user.id} style={{
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            padding: '16px',
-            marginBottom: '16px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            opacity: user.is_active ? 1 : 0.5
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                  {user.is_active ? (
-                    <CheckCircle size={18} color="#22c55e" />
-                  ) : (
-                    <XCircle size={18} color="#ef4444" />
-                  )}
-                  <div style={{
-                    display: 'inline-block',
-                    padding: '2px 8px',
-                    backgroundColor: '#f0fdf4',
-                    color: '#15803d',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    fontWeight: '600'
-                  }}>
-                    {t('users.regular')}
-                  </div>
-                </div>
-                <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '4px', color: '#1f2937' }}>
-                  {user.first_name} {user.last_name}
-                </h3>
-                <div style={{ fontSize: '13px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                  <Mail size={14} />
-                  {user.email}
-                </div>
-                {user.phone && (
-                  <div style={{ fontSize: '13px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                    <Phone size={14} />
-                    {user.phone}
-                  </div>
-                )}
+          <UserMobileCard
+            key={user.id}
+            user={user}
+            typeBadge={t('users.regular')}
+            typeBadgeColor="#15803d"
+            typeBadgeBg="#f0fdf4"
+            extra={
+              <>
                 {user.apartment_unit && (
-                  <div style={{ fontSize: '13px', color: '#15803d', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                    <Home size={14} />
-                    {t('users.apartment')}: {user.apartment_unit}
+                  <div style={{ fontSize: '12px', color: '#15803d', display: 'flex', alignItems: 'center', gap: '5px', marginTop: '4px' }}>
+                    <Home size={12} /> {user.apartment_unit}
                   </div>
                 )}
                 {user.rent_start_date && (
-                  <div style={{ fontSize: '13px', color: '#92400e', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                    <Calendar size={14} />
-                    {formatRentPeriod(user.rent_start_date, user.rent_end_date)}
+                  <div style={{ fontSize: '12px', color: '#92400e', display: 'flex', alignItems: 'center', gap: '5px', marginTop: '3px' }}>
+                    <Calendar size={12} /> {formatRentPeriod(user.rent_start_date, user.rent_end_date)}
                   </div>
                 )}
                 {user.charger_ids && (
-                  <div style={{ fontSize: '13px', color: '#0369a1', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                    <CreditCard size={14} />
-                    RFID: {user.charger_ids}
+                  <div style={{ fontSize: '12px', color: '#4338ca', display: 'flex', alignItems: 'center', gap: '5px', marginTop: '3px' }}>
+                    <CreditCard size={12} /> {user.charger_ids}
                   </div>
                 )}
                 {user.building_id && (
-                  <div style={{ fontSize: '13px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <MapPin size={14} />
-                    {getBuildingName(user.building_id, buildings)}
+                  <div style={{ fontSize: '12px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '5px', marginTop: '3px' }}>
+                    <MapPin size={12} /> {getBuildingName(user.building_id, buildings)}
                   </div>
                 )}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <button onClick={() => handleToggleActive(user)} style={{ padding: '8px', border: 'none', background: 'rgba(139, 92, 246, 0.1)', borderRadius: '6px', cursor: 'pointer' }}>
-                  <Archive size={16} color="#8b5cf6" />
-                </button>
-                <button onClick={() => handleEdit(user)} style={{ padding: '8px', border: 'none', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '6px', cursor: 'pointer' }}>
-                  <Edit2 size={16} color="#3b82f6" />
-                </button>
-                <button onClick={() => handleDelete(user.id)} style={{ padding: '8px', border: 'none', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '6px', cursor: 'pointer' }}>
-                  <Trash2 size={16} color="#ef4444" />
-                </button>
-              </div>
-            </div>
-          </div>
+              </>
+            }
+            handleToggleActive={handleToggleActive}
+            handleEdit={handleEdit}
+            handleDelete={handleDelete}
+            t={t}
+          />
         ))}
         {regularUsers.length === 0 && (
-          <div style={{ backgroundColor: 'white', padding: '40px 20px', textAlign: 'center', color: '#999', borderRadius: '12px' }}>
+          <div style={{ backgroundColor: 'white', padding: '40px 20px', textAlign: 'center', color: '#9ca3af', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
             {showArchive ? t('users.noArchivedRegularUsers') : t('users.noRegularUsers')}
           </div>
         )}
@@ -256,3 +240,19 @@ export default function RegularUsersSection({
     </div>
   );
 }
+
+// ─── Table styles ──────────────────────────────────────────────────
+
+const thStyle: React.CSSProperties = {
+  padding: '12px 16px',
+  textAlign: 'left',
+  fontWeight: '600',
+  fontSize: '12px',
+  color: '#6b7280',
+  textTransform: 'uppercase',
+  letterSpacing: '0.5px'
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: '12px 16px'
+};
