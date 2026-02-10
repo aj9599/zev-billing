@@ -1,4 +1,4 @@
-import { UsersIcon, CheckCircle, XCircle, MapPin, CreditCard, Home, Calendar } from 'lucide-react';
+import { UsersIcon, CheckCircle, XCircle, Archive, Edit2, Trash2, MapPin, CreditCard, Home, Calendar } from 'lucide-react';
 import type { User as UserType, Building as BuildingType } from '../../types';
 import { filterUsers, getBuildingName } from './utils/userUtils';
 import { formatRentPeriod } from './utils/dateUtils';
