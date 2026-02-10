@@ -182,7 +182,6 @@ export default function ComplexCard({
             >
               <EnergyFlowCard
                 building={building}
-                buildings={buildings}
                 meters={meters}
                 chargers={chargers}
                 consumptionData={consumptionData}

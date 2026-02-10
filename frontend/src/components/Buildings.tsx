@@ -460,7 +460,6 @@ export default function Buildings() {
                     <div style={{ padding: 0 }}>
                       <EnergyFlowCard
                         building={building}
-                        buildings={buildings}
                         meters={meters}
                         chargers={chargers}
                         consumptionData={consumptionData}

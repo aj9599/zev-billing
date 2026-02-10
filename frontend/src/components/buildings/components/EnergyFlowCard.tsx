@@ -1,13 +1,12 @@
-import { Edit2, Trash2, Sun, Zap, Building2, Car, ArrowRight } from 'lucide-react';
+import { Edit2, Trash2, Sun, Zap, Building2, Car, ArrowRight, Layers, Home } from 'lucide-react';
 import { useTranslation } from '../../../i18n';
 import { api } from '../../../api/client';
 import { useBuildingConsumption } from '../hooks/useBuildingConsumption';
 import { getBuildingMeters, getBuildingChargers, hasSolarMeter, getTotalApartments } from '../utils/buildingUtils';
-import type { Building, Meter, Charger, BuildingConsumption } from '../../../types';
+import type { Building, Meter, Charger, BuildingConsumption, FloorConfig } from '../../../types';
 
 interface EnergyFlowCardProps {
   building: Building;
-  buildings: Building[];
   meters: Meter[];
   chargers: Charger[];
   consumptionData: BuildingConsumption[];
@@ -24,7 +23,6 @@ function formatPower(kw: number): string {
 
 export default function EnergyFlowCard({
   building,
-  buildings,
   meters,
   chargers,
   consumptionData,
@@ -243,6 +241,11 @@ export default function EnergyFlowCard({
           <StatChip icon={Sun} label="Solar" value={buildingMeters.filter(m => m.meter_type === 'solar_meter').length} color="#f59e0b" />
         )}
       </div>
+
+      {/* ─── Floor map (apartment buildings only) ─── */}
+      {building.has_apartments && building.floors_config && building.floors_config.length > 0 && (
+        <FloorMap floors={building.floors_config} isMobile={isMobile} />
+      )}
     </div>
   );
 }
@@ -340,6 +343,101 @@ function StatChip({ icon: Icon, label, value, color }: {
       <Icon size={13} color={color} />
       <span style={{ color: '#6b7280', fontWeight: '500' }}>{label}</span>
       <span style={{ fontWeight: '700', color: '#1f2937' }}>{value}</span>
+    </div>
+  );
+}
+
+// ─── Floor map ─────────────────────────────────────────────────────
+
+function FloorMap({ floors, isMobile }: { floors: FloorConfig[]; isMobile: boolean }) {
+  // Sort: attic first, then normal (high to low), then underground
+  const sorted = [...floors].sort((a, b) => {
+    const order = { attic: 0, normal: 1, underground: 2 };
+    const aType = order[a.floor_type || 'normal'] ?? 1;
+    const bType = order[b.floor_type || 'normal'] ?? 1;
+    if (aType !== bType) return aType - bType;
+    return b.floor_number - a.floor_number;
+  });
+
+  return (
+    <div style={{
+      marginTop: '12px',
+      borderTop: '1px solid #f3f4f6',
+      paddingTop: '12px'
+    }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        marginBottom: '8px'
+      }}>
+        <Layers size={13} color="#667eea" />
+        <span style={{ fontSize: '12px', fontWeight: '600', color: '#374151' }}>
+          Apartments
+        </span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+        {sorted.map((floor, idx) => {
+          const isUnderground = floor.floor_type === 'underground';
+          const isAttic = floor.floor_type === 'attic';
+
+          return (
+            <div key={idx} style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: isMobile ? '6px 8px' : '6px 10px',
+              backgroundColor: isAttic ? '#fffbeb' : isUnderground ? '#f3f4f6' : '#f8fafc',
+              borderRadius: '6px',
+              borderLeft: `3px solid ${isAttic ? '#f59e0b' : isUnderground ? '#9ca3af' : '#667eea'}`
+            }}>
+              {/* Floor label */}
+              <span style={{
+                fontSize: '11px',
+                fontWeight: '600',
+                color: isAttic ? '#92400e' : isUnderground ? '#6b7280' : '#374151',
+                minWidth: isMobile ? '50px' : '60px',
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+              }}>
+                {floor.floor_name}
+              </span>
+
+              {/* Apartment chips */}
+              <div style={{
+                display: 'flex',
+                gap: '4px',
+                flexWrap: 'wrap',
+                flex: 1
+              }}>
+                {floor.apartments.length > 0 ? (
+                  floor.apartments.map((apt, i) => (
+                    <span key={i} style={{
+                      fontSize: '10px',
+                      fontWeight: '600',
+                      padding: '2px 6px',
+                      backgroundColor: 'white',
+                      borderRadius: '4px',
+                      color: '#374151',
+                      border: '1px solid #e5e7eb',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '3px'
+                    }}>
+                      <Home size={8} color="#9ca3af" />
+                      {apt}
+                    </span>
+                  ))
+                ) : (
+                  <span style={{ fontSize: '10px', color: '#9ca3af', fontStyle: 'italic' }}>—</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
