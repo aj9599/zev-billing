@@ -443,6 +443,7 @@ export const de: Translations = {
   'buildings.searchPlaceholder': 'Gebäude, Komplexe oder Adressen suchen...',
   'buildings.setupInstructions': 'Setup-Anleitung',
   'buildings.noResults': 'Keine Ergebnisse gefunden',
+  'buildings.noConsumptionData': 'Keine Verbrauchsdaten verfügbar',
   'buildings.floor': 'Stockwerk',
 
   // Energy Flow

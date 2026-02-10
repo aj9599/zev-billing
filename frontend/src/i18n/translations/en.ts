@@ -442,6 +442,7 @@ export const en: Translations = {
   'buildings.searchPlaceholder': 'Search buildings, complexes, or addresses...',
   'buildings.setupInstructions': 'Setup Instructions',
   'buildings.noResults': 'No results found',
+  'buildings.noConsumptionData': 'No consumption data available',
   'buildings.floor': 'Floor',
 
   // Energy Flow
