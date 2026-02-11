@@ -1751,4 +1751,4 @@ const heroIconStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   flexShrink: 0,
-}
+};
