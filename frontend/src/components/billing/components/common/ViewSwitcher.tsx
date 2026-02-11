@@ -18,9 +18,9 @@ export default function ViewSwitcher({ currentView, onViewChange }: ViewSwitcher
   return (
     <div style={{
       display: 'flex',
-      backgroundColor: '#f0f0f0',
-      borderRadius: '6px',
-      padding: '4px'
+      backgroundColor: '#f3f4f6',
+      borderRadius: '10px',
+      padding: '3px'
     }}>
       {views.map(({ id, icon: Icon, label }) => (
         <button
@@ -28,17 +28,18 @@ export default function ViewSwitcher({ currentView, onViewChange }: ViewSwitcher
           onClick={() => onViewChange(id)}
           style={{
             padding: '8px 16px',
-            backgroundColor: currentView === id ? '#667EEA' : 'transparent',
-            color: currentView === id ? 'white' : '#666',
+            background: currentView === id ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
+            color: currentView === id ? 'white' : '#6b7280',
             border: 'none',
-            borderRadius: '4px',
+            borderRadius: '8px',
             cursor: 'pointer',
             fontSize: '13px',
-            fontWeight: '500',
+            fontWeight: currentView === id ? '600' : '500',
             transition: 'all 0.2s',
             display: 'flex',
             alignItems: 'center',
-            gap: '6px'
+            gap: '6px',
+            boxShadow: currentView === id ? '0 2px 6px rgba(102, 126, 234, 0.3)' : 'none'
           }}
         >
           <Icon size={14} />

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { ExternalLink, X } from 'lucide-react';
+import { ExternalLink, X, Zap, Sun, Car } from 'lucide-react';
 import type { Invoice } from '../../../../types';
 import { useTranslation } from '../../../../i18n';
 import { formatDate, getStatusColor } from '../../utils/billingUtils';
@@ -10,15 +10,6 @@ interface InvoiceDetailModalProps {
   onOpenPDF: (invoice: Invoice) => void;
 }
 
-/**
- * Invoice Detail Modal
- * Displays full invoice details with line items
- * Features:
- * - ESC key to close
- * - Focus trap
- * - Keyboard navigation
- * - Accessible ARIA labels
- */
 export default function InvoiceDetailModal({
   invoice,
   onClose,
@@ -27,42 +18,29 @@ export default function InvoiceDetailModal({
   const { t } = useTranslation();
   const statusColors = getStatusColor(invoice.status);
   const modalRef = useRef<HTMLDivElement>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
-  // ESC key handler
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
+      if (e.key === 'Escape') onClose();
     };
-
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
   }, [onClose]);
 
-  // Focus management - focus modal on mount
   useEffect(() => {
-    if (modalRef.current) {
-      modalRef.current.focus();
-    }
+    if (modalRef.current) modalRef.current.focus();
   }, []);
 
-  // Trap focus within modal
   useEffect(() => {
     const handleTab = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return;
-
       const modal = modalRef.current;
       if (!modal) return;
-
       const focusableElements = modal.querySelectorAll(
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
       );
-      
       const firstElement = focusableElements[0] as HTMLElement;
       const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
-
       if (e.shiftKey && document.activeElement === firstElement) {
         e.preventDefault();
         lastElement.focus();
@@ -71,7 +49,6 @@ export default function InvoiceDetailModal({
         firstElement.focus();
       }
     };
-
     window.addEventListener('keydown', handleTab);
     return () => window.removeEventListener('keydown', handleTab);
   }, []);
@@ -83,11 +60,8 @@ export default function InvoiceDetailModal({
       aria-labelledby="invoice-modal-title"
       style={{
         position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.15)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -98,302 +72,262 @@ export default function InvoiceDetailModal({
     >
       <div
         ref={modalRef}
-        className="modal-content"
         tabIndex={-1}
         style={{
           backgroundColor: 'white',
-          borderRadius: '12px',
-          padding: '40px',
+          borderRadius: '20px',
           width: '90%',
           maxWidth: '800px',
           maxHeight: '90vh',
-          overflow: 'auto',
-          outline: 'none'
+          outline: 'none',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+          animation: 'bl-slideUp 0.3s ease-out'
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Close button */}
-        <button
-          ref={closeButtonRef}
-          onClick={onClose}
-          aria-label="Close invoice details"
-          title="Close (ESC)"
-          style={{
-            position: 'absolute',
-            top: '20px',
-            right: '20px',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: '6px',
-            transition: 'background-color 0.2s'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-        >
-          <X size={24} aria-hidden="true" />
-        </button>
-
         {/* Header */}
         <div style={{
-          borderBottom: '2px solid #007bff',
-          paddingBottom: '20px',
-          marginBottom: '30px'
+          padding: '24px 28px 18px',
+          borderBottom: '1px solid #f3f4f6',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          flexShrink: 0
         }}>
-          <h2 id="invoice-modal-title" style={{
-            fontSize: '28px',
-            fontWeight: 'bold',
-            marginBottom: '8px'
-          }}>
-            {t('billing.invoice')}
-          </h2>
-          <p style={{ fontSize: '14px', color: '#666' }}>
-            #{invoice.invoice_number}
-          </p>
-          <span
-            role="status"
-            aria-label={`Invoice status: ${invoice.status}`}
-            style={{
-              display: 'inline-block',
-              padding: '6px 16px',
-              borderRadius: '20px',
-              fontSize: '13px',
-              fontWeight: '600',
-              marginTop: '10px',
-              backgroundColor: statusColors.bg,
-              color: statusColors.color
-            }}
-          >
-            {invoice.status.toUpperCase()}
-          </span>
-        </div>
-
-        {/* Bill To */}
-        {invoice.user && (
-          <div style={{ marginBottom: '30px' }}>
-            <h3 style={{
-              fontSize: '16px',
-              fontWeight: '600',
-              marginBottom: '12px'
-            }}>
-              {t('billing.billTo')}
-            </h3>
-            <address style={{ fontSize: '15px', lineHeight: '1.6', fontStyle: 'normal' }}>
-              {invoice.user.first_name} {invoice.user.last_name}
-              {!invoice.user.is_active && (
-                <span style={{
-                  color: '#999',
-                  fontSize: '13px',
-                  marginLeft: '8px'
-                }}>
-                  ({t('billing.archived')})
-                </span>
-              )}
-              <br />
-              {invoice.user.address_street}<br />
-              {invoice.user.address_zip} {invoice.user.address_city}<br />
-              {invoice.user.email}
-            </address>
-          </div>
-        )}
-
-        {/* Period */}
-        <div style={{ marginBottom: '30px' }}>
-          <p style={{ fontSize: '14px', color: '#666' }}>
-            <strong>{t('billing.periodLabel')}</strong>{' '}
-            {formatDate(invoice.period_start)} {t('pricing.to')}{' '}
-            {formatDate(invoice.period_end)}
-          </p>
-        </div>
-
-        {/* Line Items */}
-        <div style={{ overflowX: 'auto' }}>
-          <table
-            role="table"
-            aria-label="Invoice line items"
-            style={{
-              width: '100%',
-              marginBottom: '30px',
-              minWidth: '400px'
-            }}
-          >
-            <thead>
-              <tr style={{
-                backgroundColor: '#f9f9f9',
-                borderBottom: '2px solid #ddd'
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+              <h2 id="invoice-modal-title" style={{ fontSize: '20px', fontWeight: '700', margin: 0, color: '#1f2937' }}>
+                {t('billing.invoice')}
+              </h2>
+              <span style={{
+                padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: '700',
+                backgroundColor: statusColors.bg, color: statusColors.color
               }}>
-                <th scope="col" style={{
-                  padding: '12px',
-                  textAlign: 'left',
-                  fontWeight: '600'
-                }}>
-                  {t('billing.description')}
-                </th>
-                <th scope="col" style={{
-                  padding: '12px',
-                  textAlign: 'right',
-                  fontWeight: '600'
-                }}>
-                  {t('billing.amount')}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoice.items?.map(item => {
-                const isHeader = item.item_type === 'meter_info' || item.item_type === 'charging_header';
-                const isInfo = item.item_type === 'meter_reading_from' ||
-                  item.item_type === 'meter_reading_to' ||
-                  item.item_type === 'total_consumption' ||
-                  item.item_type === 'charging_session_from' ||
-                  item.item_type === 'charging_session_to' ||
-                  item.item_type === 'total_charged';
-                const isSeparator = item.item_type === 'separator';
-                const isSolar = item.item_type === 'solar_power';
-                const isNormal = item.item_type === 'normal_power';
-                const isChargingNormal = item.item_type === 'car_charging_normal';
-                const isChargingPriority = item.item_type === 'car_charging_priority';
+                {invoice.status.toUpperCase()}
+              </span>
+            </div>
+            <p style={{ fontSize: '13px', color: '#9ca3af', margin: 0, fontFamily: 'monospace' }}>
+              #{invoice.invoice_number}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              width: '36px', height: '36px', borderRadius: '10px', border: 'none',
+              backgroundColor: '#f3f4f6', color: '#6b7280',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', transition: 'all 0.15s', flexShrink: 0
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#e5e7eb'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#f3f4f6'; }}
+          >
+            <X size={18} />
+          </button>
+        </div>
 
-                if (isSeparator) {
+        {/* Body */}
+        <div style={{
+          padding: '20px 28px',
+          overflowY: 'auto',
+          flex: 1,
+          backgroundColor: '#f9fafb'
+        }}>
+          {/* Bill To + Period */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: invoice.user ? '1fr 1fr' : '1fr',
+            gap: '14px',
+            marginBottom: '18px'
+          }}>
+            {invoice.user && (
+              <div style={{
+                backgroundColor: 'white', padding: '16px', borderRadius: '12px', border: '1px solid #e5e7eb'
+              }}>
+                <h3 style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+                  {t('billing.billTo')}
+                </h3>
+                <address style={{ fontSize: '14px', lineHeight: '1.6', fontStyle: 'normal', color: '#1f2937' }}>
+                  <strong>{invoice.user.first_name} {invoice.user.last_name}</strong>
+                  {!invoice.user.is_active && (
+                    <span style={{ color: '#9ca3af', fontSize: '11px', marginLeft: '6px' }}>
+                      ({t('billing.archived')})
+                    </span>
+                  )}
+                  <br />
+                  {invoice.user.address_street}<br />
+                  {invoice.user.address_zip} {invoice.user.address_city}<br />
+                  <span style={{ color: '#6b7280' }}>{invoice.user.email}</span>
+                </address>
+              </div>
+            )}
+            <div style={{
+              backgroundColor: 'white', padding: '16px', borderRadius: '12px', border: '1px solid #e5e7eb'
+            }}>
+              <h3 style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+                {t('billing.periodLabel')}
+              </h3>
+              <p style={{ fontSize: '14px', color: '#1f2937', margin: 0 }}>
+                {formatDate(invoice.period_start)} {t('pricing.to')} {formatDate(invoice.period_end)}
+              </p>
+            </div>
+          </div>
+
+          {/* Line Items */}
+          <div style={{
+            backgroundColor: 'white', borderRadius: '12px', border: '1px solid #e5e7eb', overflow: 'hidden'
+          }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f9fafb' }}>
+                  <th style={{
+                    padding: '12px 16px', textAlign: 'left', fontWeight: '600',
+                    fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px'
+                  }}>
+                    {t('billing.description')}
+                  </th>
+                  <th style={{
+                    padding: '12px 16px', textAlign: 'right', fontWeight: '600',
+                    fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px'
+                  }}>
+                    {t('billing.amount')}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {invoice.items?.map(item => {
+                  const isHeader = item.item_type === 'meter_info' || item.item_type === 'charging_header';
+                  const isInfo = item.item_type === 'meter_reading_from' ||
+                    item.item_type === 'meter_reading_to' ||
+                    item.item_type === 'total_consumption' ||
+                    item.item_type === 'charging_session_from' ||
+                    item.item_type === 'charging_session_to' ||
+                    item.item_type === 'total_charged';
+                  const isSeparator = item.item_type === 'separator';
+                  const isSolar = item.item_type === 'solar_power';
+                  const isNormal = item.item_type === 'normal_power';
+                  const isChargingNormal = item.item_type === 'car_charging_normal';
+                  const isChargingPriority = item.item_type === 'car_charging_priority';
+
+                  if (isSeparator) {
+                    return (
+                      <tr key={item.id}>
+                        <td colSpan={2} style={{ padding: '4px', borderTop: '1px solid #f3f4f6' }}></td>
+                      </tr>
+                    );
+                  }
+
+                  let backgroundColor = 'transparent';
+                  if (isSolar) backgroundColor = '#fefce815';
+                  else if (isNormal) backgroundColor = '#eff6ff15';
+                  else if (isChargingNormal || isChargingPriority) backgroundColor = '#f0fdf415';
+
                   return (
-                    <tr key={item.id}>
-                      <td colSpan={2} style={{ padding: '8px' }}></td>
+                    <tr
+                      key={item.id}
+                      style={{ borderTop: '1px solid #f3f4f6', backgroundColor }}
+                    >
+                      <td style={{
+                        padding: '12px 16px',
+                        fontWeight: isHeader || isSolar || isNormal || isChargingNormal || isChargingPriority ? '600' : 'normal',
+                        color: isInfo ? '#9ca3af' : '#1f2937',
+                        fontSize: isInfo ? '13px' : '14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}>
+                        {isSolar && <Sun size={14} color="#f59e0b" />}
+                        {isNormal && <Zap size={14} color="#3b82f6" />}
+                        {(isChargingNormal || isChargingPriority) && <Car size={14} color="#10b981" />}
+                        {item.description}
+                      </td>
+                      <td style={{
+                        padding: '12px 16px',
+                        textAlign: 'right',
+                        fontWeight: item.total_price > 0 ? '700' : 'normal',
+                        color: item.total_price > 0 ? '#1f2937' : '#9ca3af',
+                        fontSize: '14px'
+                      }}>
+                        {item.total_price > 0 ? `${invoice.currency} ${item.total_price.toFixed(2)}` : ''}
+                      </td>
                     </tr>
                   );
-                }
+                })}
+              </tbody>
+            </table>
 
-                let backgroundColor = 'transparent';
-                if (isSolar) backgroundColor = '#fffbea';
-                else if (isNormal) backgroundColor = '#f0f4ff';
-                else if (isChargingNormal || isChargingPriority) backgroundColor = '#f0fff4';
-
-                return (
-                  <tr
-                    key={item.id}
-                    style={{
-                      borderBottom: '1px solid #eee',
-                      backgroundColor
-                    }}
-                  >
-                    <td style={{
-                      padding: '12px',
-                      fontWeight: isHeader || isSolar || isNormal || isChargingNormal || isChargingPriority ? '600' : 'normal',
-                      color: isInfo ? '#666' : 'inherit',
-                      fontSize: isInfo ? '14px' : '15px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px'
-                    }}>
-                      {isSolar && (
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <circle cx="12" cy="12" r="4" />
-                          <path d="M12 2v2" />
-                          <path d="M12 20v2" />
-                          <path d="m4.93 4.93 1.41 1.41" />
-                          <path d="m17.66 17.66 1.41 1.41" />
-                          <path d="M2 12h2" />
-                          <path d="M20 12h2" />
-                          <path d="m6.34 17.66-1.41 1.41" />
-                          <path d="m19.07 4.93-1.41 1.41" />
-                        </svg>
-                      )}
-                      {isNormal && (
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
-                        </svg>
-                      )}
-                      {(isChargingNormal || isChargingPriority) && (
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
-                          <circle cx="7" cy="17" r="2" />
-                          <path d="M9 17h6" />
-                          <circle cx="17" cy="17" r="2" />
-                        </svg>
-                      )}
-                      {item.description}
-                    </td>
-                    <td style={{
-                      padding: '12px',
-                      textAlign: 'right',
-                      fontWeight: item.total_price > 0 ? '600' : 'normal'
-                    }}>
-                      {item.total_price > 0 ? `${invoice.currency} ${item.total_price.toFixed(2)}` : ''}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+            {/* Total */}
+            <div style={{
+              textAlign: 'right',
+              padding: '16px 20px',
+              background: 'linear-gradient(135deg, #667eea08, #764ba208)',
+              borderTop: '2px solid #667eea20'
+            }}>
+              <p style={{ fontSize: '20px', fontWeight: '800', margin: 0, color: '#1f2937' }}>
+                {t('billing.total')} {invoice.currency} {invoice.total_amount.toFixed(2)}
+              </p>
+            </div>
+          </div>
         </div>
 
-        {/* Total */}
+        {/* Footer */}
         <div style={{
-          textAlign: 'right',
-          padding: '20px',
-          backgroundColor: '#f9f9f9',
-          borderRadius: '8px'
-        }}>
-          <p style={{ fontSize: '24px', fontWeight: 'bold' }}>
-            {t('billing.total')} {invoice.currency} {invoice.total_amount.toFixed(2)}
-          </p>
-        </div>
-
-        {/* Buttons */}
-        <div className="button-group" style={{
+          padding: '16px 28px 20px',
+          borderTop: '1px solid #f3f4f6',
           display: 'flex',
           gap: '12px',
-          marginTop: '30px'
+          flexShrink: 0
         }}>
           <button
             onClick={() => onOpenPDF(invoice)}
-            aria-label="Open invoice PDF in new tab"
             style={{
               flex: 1,
               padding: '12px',
-              backgroundColor: '#28a745',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
+              backgroundColor: 'rgba(16,185,129,0.1)',
+              color: '#059669',
+              border: '1px solid rgba(16,185,129,0.2)',
+              borderRadius: '10px',
               fontSize: '14px',
-              fontWeight: '500',
+              fontWeight: '600',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '8px',
-              transition: 'background-color 0.2s'
+              transition: 'all 0.15s'
             }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#218838'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#28a745'}
           >
-            <ExternalLink size={18} aria-hidden="true" />
+            <ExternalLink size={16} />
             {t('billing.openPdf')}
           </button>
           <button
             onClick={onClose}
-            aria-label="Close modal"
             style={{
               flex: 1,
               padding: '12px',
-              backgroundColor: '#007bff',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               color: 'white',
               border: 'none',
-              borderRadius: '6px',
+              borderRadius: '10px',
               fontSize: '14px',
-              fontWeight: '500',
+              fontWeight: '600',
               cursor: 'pointer',
-              transition: 'background-color 0.2s'
+              transition: 'all 0.15s',
+              boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)'
             }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0056b3'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#007bff'}
           >
             {t('common.close')}
           </button>
         </div>
       </div>
+
+      <style>{`
+        @keyframes bl-slideUp {
+          from { opacity: 0; transform: translateY(12px) scale(0.97); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+      `}</style>
     </div>
   );
 }

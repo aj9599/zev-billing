@@ -1,4 +1,4 @@
-import { Building as BuildingIcon } from 'lucide-react';
+import { Building as BuildingIcon, Layers } from 'lucide-react';
 import type { Building } from '../../../../types';
 import { useTranslation } from '../../../../i18n';
 
@@ -36,64 +36,72 @@ export default function BuildingSelector({
     }
   };
 
+  const isSelected = (id: number | null) => selectedBuildingId === id;
+
   return (
     <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
-      gap: '16px',
-      marginBottom: '30px'
+      display: 'flex',
+      gap: '10px',
+      flexWrap: 'wrap',
+      marginBottom: '24px'
     }}>
-      {/* All Buildings Option */}
-      <div
+      {/* All Buildings Pill */}
+      <button
         onClick={() => onSelect(null)}
         style={{
-          padding: '20px',
-          backgroundColor: selectedBuildingId === null ? '#667EEA' : 'white',
-          color: selectedBuildingId === null ? 'white' : '#1f2937',
-          borderRadius: '12px',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          padding: '8px 18px',
+          background: isSelected(null) ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'white',
+          color: isSelected(null) ? 'white' : '#374151',
+          borderRadius: '20px',
+          border: isSelected(null) ? 'none' : '1px solid #e5e7eb',
           cursor: 'pointer',
           transition: 'all 0.2s',
-          border: selectedBuildingId === null ? '2px solid #667EEA' : '2px solid transparent'
+          fontSize: '13px',
+          fontWeight: isSelected(null) ? '600' : '500',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          boxShadow: isSelected(null) ? '0 2px 8px rgba(102, 126, 234, 0.3)' : '0 1px 3px rgba(0,0,0,0.06)'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-          <BuildingIcon size={24} />
-          <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>
-            {t('billing.allBuildings')}
-          </h3>
-        </div>
-        <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
-          {getAllBuildingsDescription()}
-        </p>
-      </div>
+        <Layers size={14} />
+        {t('billing.allBuildings')}
+        <span style={{
+          backgroundColor: isSelected(null) ? 'rgba(255,255,255,0.25)' : '#f3f4f6',
+          color: isSelected(null) ? 'white' : '#6b7280',
+          padding: '1px 8px',
+          borderRadius: '10px',
+          fontSize: '11px',
+          fontWeight: '700'
+        }}>
+          {buildings.length}
+        </span>
+      </button>
 
-      {/* Individual Buildings */}
+      {/* Individual Building Pills */}
       {filteredBuildings.map(building => (
-        <div
+        <button
           key={building.id}
           onClick={() => onSelect(building.id)}
           style={{
-            padding: '20px',
-            backgroundColor: selectedBuildingId === building.id ? '#667EEA' : 'white',
-            color: selectedBuildingId === building.id ? 'white' : '#1f2937',
-            borderRadius: '12px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            padding: '8px 18px',
+            background: isSelected(building.id) ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'white',
+            color: isSelected(building.id) ? 'white' : '#374151',
+            borderRadius: '20px',
+            border: isSelected(building.id) ? 'none' : '1px solid #e5e7eb',
             cursor: 'pointer',
             transition: 'all 0.2s',
-            border: selectedBuildingId === building.id ? '2px solid #667EEA' : '2px solid transparent'
+            fontSize: '13px',
+            fontWeight: isSelected(building.id) ? '600' : '500',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            boxShadow: isSelected(building.id) ? '0 2px 8px rgba(102, 126, 234, 0.3)' : '0 1px 3px rgba(0,0,0,0.06)'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-            <BuildingIcon size={24} />
-            <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>
-              {building.name}
-            </h3>
-          </div>
-          <p style={{ fontSize: '14px', margin: 0, opacity: 0.9 }}>
-            {building.address_street || ''}
-          </p>
-        </div>
+          <BuildingIcon size={14} />
+          {building.name}
+        </button>
       ))}
     </div>
   );

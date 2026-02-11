@@ -13,23 +13,23 @@ export default function BillsHeader({ onCreateBill }: BillsHeaderProps) {
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: '24px',
+      marginBottom: '20px',
       gap: '16px',
       flexWrap: 'wrap'
     }}>
       <div>
         <h2 style={{
-          fontSize: '24px',
+          fontSize: '20px',
           fontWeight: '700',
           margin: 0,
-          marginBottom: '8px',
+          marginBottom: '4px',
           color: '#1f2937'
         }}>
           {t('billing.invoices')}
         </h2>
         <p style={{
-          fontSize: '14px',
-          color: '#6b7280',
+          fontSize: '13px',
+          color: '#9ca3af',
           margin: 0
         }}>
           {t('billing.subtitle')}
@@ -37,34 +37,25 @@ export default function BillsHeader({ onCreateBill }: BillsHeaderProps) {
       </div>
 
       <button
+        className="bl-btn-create"
         onClick={onCreateBill}
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
-          padding: '12px 20px',
-          backgroundColor: '#28a745',
+          padding: '10px 18px',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
           color: 'white',
           border: 'none',
-          borderRadius: '8px',
-          fontSize: '15px',
+          borderRadius: '10px',
+          fontSize: '14px',
           fontWeight: '600',
           cursor: 'pointer',
           transition: 'all 0.2s',
-          boxShadow: '0 2px 4px rgba(40, 167, 69, 0.3)'
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = '#218838';
-          e.currentTarget.style.transform = 'translateY(-2px)';
-          e.currentTarget.style.boxShadow = '0 4px 8px rgba(40, 167, 69, 0.4)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = '#28a745';
-          e.currentTarget.style.transform = 'translateY(0)';
-          e.currentTarget.style.boxShadow = '0 2px 4px rgba(40, 167, 69, 0.3)';
+          boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)'
         }}
       >
-        <Plus size={20} />
+        <Plus size={18} />
         <span>{t('billing.createBill')}</span>
       </button>
     </div>

@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Invoice, User } from '../../../../types';
 import { useTranslation } from '../../../../i18n';
 import InvoiceTable from './InvoiceTable';
@@ -29,37 +29,46 @@ export default function YearGroup({
     const { t } = useTranslation();
 
     return (
-        <div style={{ marginBottom: '20px' }}>
+        <div style={{ marginBottom: '14px' }}>
             <div
                 onClick={onToggle}
                 style={{
-                    backgroundColor: '#e7f3ff',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    marginBottom: '8px',
+                    backgroundColor: '#667eea08',
+                    padding: '10px 14px',
+                    borderRadius: '10px',
+                    marginBottom: isExpanded ? '10px' : '0',
                     cursor: 'pointer',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    border: '1px solid #3b82f6'
+                    border: '1px solid #667eea20',
+                    transition: 'all 0.2s'
                 }}
             >
-                <h3 style={{
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    margin: 0,
-                    color: '#1f2937'
-                }}>
-                    {year} ({invoices.length}{' '}
-                    {invoices.length === 1 ? t('billing.invoice') : t('billing.invoices')})
-                </h3>
-                <span style={{ fontSize: '18px', color: '#666' }}>
-                    {isExpanded ? (
-                        <ChevronDown size={24} color="#666" />
-                    ) : (
-                        <ChevronRight size={24} color="#666" />
-                    )}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Calendar size={16} color="#667eea" />
+                    <h3 style={{
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        margin: 0,
+                        color: '#1f2937'
+                    }}>
+                        {year}
+                    </h3>
+                    <span style={{
+                        backgroundColor: '#667eea15',
+                        color: '#667eea',
+                        padding: '1px 8px',
+                        borderRadius: '10px',
+                        fontSize: '11px',
+                        fontWeight: '700'
+                    }}>
+                        {invoices.length}
+                    </span>
+                </div>
+                <div style={{ color: '#667eea' }}>
+                    {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                </div>
             </div>
 
             {isExpanded && (

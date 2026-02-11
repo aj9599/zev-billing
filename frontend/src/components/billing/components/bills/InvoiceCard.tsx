@@ -11,11 +11,6 @@ interface InvoiceCardProps {
   onDelete: (id: number) => void;
 }
 
-/**
- * Invoice Card Component
- * Displays invoice information in card format for mobile view
- * Fully accessible with ARIA labels and semantic HTML
- */
 export default function InvoiceCard({
   invoice,
   user,
@@ -32,25 +27,26 @@ export default function InvoiceCard({
     <article
       aria-label={`Invoice ${invoice.invoice_number}`}
       style={{
-        backgroundColor: isArchived ? '#f8f9fa' : 'white',
+        backgroundColor: isArchived ? '#f9fafb' : 'white',
         borderRadius: '12px',
         padding: '16px',
-        marginBottom: '12px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        marginBottom: '10px',
+        border: '1px solid #e5e7eb',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
         width: '100%',
         boxSizing: 'border-box'
       }}
     >
       <div style={{ marginBottom: '12px' }}>
         <div style={{
-          fontSize: '13px',
+          fontSize: '12px',
           fontFamily: 'monospace',
-          color: '#6b7280',
+          color: '#9ca3af',
           marginBottom: '4px'
         }}>
           {invoice.invoice_number}
         </div>
-        
+
         <h3 style={{
           fontSize: '16px',
           fontWeight: '600',
@@ -59,20 +55,16 @@ export default function InvoiceCard({
         }}>
           {userName}
           {isArchived && (
-            <span
-              role="status"
-              aria-label="Archived user"
-              style={{
-                color: '#999',
-                fontSize: '12px',
-                marginLeft: '8px'
-              }}
-            >
+            <span style={{
+              color: '#9ca3af',
+              fontSize: '11px',
+              marginLeft: '6px'
+            }}>
               ({t('billing.archived')})
             </span>
           )}
         </h3>
-        
+
         <div style={{
           fontSize: '13px',
           color: '#6b7280',
@@ -81,12 +73,12 @@ export default function InvoiceCard({
           <time dateTime={invoice.period_start}>
             {formatDate(invoice.period_start)}
           </time>
-          {' - '}
+          {' – '}
           <time dateTime={invoice.period_end}>
             {formatDate(invoice.period_end)}
           </time>
         </div>
-        
+
         <div style={{
           fontSize: '18px',
           fontWeight: '700',
@@ -95,118 +87,103 @@ export default function InvoiceCard({
         }}>
           {invoice.currency} {invoice.total_amount.toFixed(2)}
         </div>
-        
-        <span
-          role="status"
-          aria-label={`Status: ${invoice.status}`}
-          style={{
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+          <span style={{
             display: 'inline-block',
-            padding: '4px 12px',
-            borderRadius: '12px',
-            fontSize: '12px',
-            fontWeight: '600',
+            padding: '3px 12px',
+            borderRadius: '20px',
+            fontSize: '11px',
+            fontWeight: '700',
             backgroundColor: statusColors.bg,
-            color: statusColors.color,
-            marginBottom: '8px'
-          }}
-        >
-          {invoice.status.toUpperCase()}
-        </span>
-        
+            color: statusColors.color
+          }}>
+            {invoice.status.toUpperCase()}
+          </span>
+        </div>
+
         <div style={{ fontSize: '12px', color: '#9ca3af' }}>
           {t('billing.generated')}: <time dateTime={invoice.generated_at}>
             {formatDate(invoice.generated_at)}
           </time>
         </div>
       </div>
-      
-      <div
-        role="group"
-        aria-label={`Actions for invoice ${invoice.invoice_number}`}
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr 1fr',
-          gap: '8px',
-          borderTop: '1px solid #f3f4f6',
-          paddingTop: '12px'
-        }}
-      >
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr 1fr',
+        gap: '8px',
+        borderTop: '1px solid #f3f4f6',
+        paddingTop: '12px'
+      }}>
         <button
           onClick={() => onView(invoice.id)}
-          aria-label={`View details for invoice ${invoice.invoice_number}`}
           title={t('billing.viewBtn')}
           style={{
             padding: '10px',
-            backgroundColor: '#667EEA',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             color: 'white',
             border: 'none',
-            borderRadius: '6px',
-            fontSize: '13px',
+            borderRadius: '8px',
+            fontSize: '12px',
             fontWeight: '600',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             gap: '4px',
-            transition: 'background-color 0.2s'
+            transition: 'all 0.2s',
+            boxShadow: '0 1px 4px rgba(102,126,234,0.3)'
           }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#5568d3'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#667EEA'}
         >
-          <Eye size={14} aria-hidden="true" />
-          <span style={{ fontSize: '11px' }}>{t('billing.viewBtn')}</span>
+          <Eye size={13} />
+          <span>{t('billing.viewBtn')}</span>
         </button>
-        
+
         <button
           onClick={() => onDownload(invoice)}
-          aria-label={`Download PDF for invoice ${invoice.invoice_number}`}
           title={t('billing.pdfBtn')}
           style={{
             padding: '10px',
-            backgroundColor: '#28a745',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            fontSize: '13px',
+            backgroundColor: 'rgba(16,185,129,0.1)',
+            color: '#059669',
+            border: '1px solid rgba(16,185,129,0.2)',
+            borderRadius: '8px',
+            fontSize: '12px',
             fontWeight: '600',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             gap: '4px',
-            transition: 'background-color 0.2s'
+            transition: 'all 0.2s'
           }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#218838'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#28a745'}
         >
-          <Download size={14} aria-hidden="true" />
-          <span style={{ fontSize: '11px' }}>{t('billing.pdfBtn')}</span>
+          <Download size={13} />
+          <span>{t('billing.pdfBtn')}</span>
         </button>
-        
+
         <button
           onClick={() => onDelete(invoice.id)}
-          aria-label={`Delete invoice ${invoice.invoice_number}`}
           title={t('billing.deleteBtn')}
           style={{
             padding: '10px',
-            backgroundColor: '#dc3545',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            fontSize: '13px',
+            backgroundColor: 'rgba(239,68,68,0.08)',
+            color: '#ef4444',
+            border: '1px solid rgba(239,68,68,0.15)',
+            borderRadius: '8px',
+            fontSize: '12px',
             fontWeight: '600',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             gap: '4px',
-            transition: 'background-color 0.2s'
+            transition: 'all 0.2s'
           }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#c82333'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#dc3545'}
         >
-          <Trash2 size={14} aria-hidden="true" />
-          <span style={{ fontSize: '11px' }}>{t('billing.deleteBtn')}</span>
+          <Trash2 size={13} />
+          <span>{t('billing.deleteBtn')}</span>
         </button>
       </div>
     </article>
