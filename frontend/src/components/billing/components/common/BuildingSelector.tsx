@@ -14,27 +14,13 @@ export default function BuildingSelector({
   buildings,
   selectedBuildingId,
   onSelect,
-  searchQuery,
-  currentView
+  searchQuery
 }: BuildingSelectorProps) {
   const { t } = useTranslation();
 
   const filteredBuildings = buildings.filter(b =>
     b.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  const getAllBuildingsDescription = () => {
-    switch (currentView) {
-      case 'invoices':
-        return t('billing.allBuildingsDesc');
-      case 'shared-meters':
-        return t('billing.allBuildingsDescSharedMeters');
-      case 'custom-items':
-        return t('billing.allBuildingsDescCustomItems');
-      default:
-        return t('billing.allBuildingsDesc');
-    }
-  };
 
   const isSelected = (id: number | null) => selectedBuildingId === id;
 

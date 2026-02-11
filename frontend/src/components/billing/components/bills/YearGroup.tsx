@@ -1,6 +1,5 @@
 import { Calendar, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Invoice, User } from '../../../../types';
-import { useTranslation } from '../../../../i18n';
 import InvoiceTable from './InvoiceTable';
 import InvoiceCard from './InvoiceCard';
 
@@ -26,8 +25,6 @@ export default function YearGroup({
     onDownload,
     onDelete
 }: YearGroupProps) {
-    const { t } = useTranslation();
-
     return (
         <div style={{ marginBottom: '14px' }}>
             <div
