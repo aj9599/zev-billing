@@ -372,11 +372,13 @@ export default function Chargers() {
       )}
 
       {/* Charger Groups */}
-      {Object.entries(groupedChargers).map(([buildingId, buildingChargers], groupIdx) => {
+      {Object.entries(groupedChargers).map(([buildingId, buildingChargers], groupIdx, arr) => {
         const building = buildings.find(b => b.id === parseInt(buildingId));
         return (
           <div key={buildingId} style={{
             marginBottom: '30px',
+            position: 'relative',
+            zIndex: arr.length - groupIdx,
             animation: 'ch-fadeSlideIn 0.4s ease-out both',
             animationDelay: `${0.2 + groupIdx * 0.1}s`
           }}>

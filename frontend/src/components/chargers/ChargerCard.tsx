@@ -125,10 +125,12 @@ export default function ChargerCard({
                 onMouseEnter={(e) => {
                     e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.1)';
                     e.currentTarget.style.transform = 'translateY(-1px)';
+                    e.currentTarget.style.zIndex = '10';
                 }}
                 onMouseLeave={(e) => {
                     e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)';
                     e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.zIndex = '1';
                 }}
             >
                 {isCharging && (
