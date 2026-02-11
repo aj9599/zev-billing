@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Zap, Wifi, Activity } from 'lucide-react';
+import { Search, Zap, Wifi, WifiOff, Activity } from 'lucide-react';
 import { api } from '../api/client';
 import type { Meter, Building as BuildingType, User } from '../types';
 import { useTranslation } from '../i18n';
@@ -205,6 +205,7 @@ export default function Meters() {
         if (m.connection_type === 'modbus_tcp') return modbusStatus[id]?.is_connected;
         return false;
     }).length;
+    const offlineCount = totalCount - connectedCount;
     const archivedCount = meters.filter(m => m.is_archived).length;
 
     // Loading skeleton
@@ -214,7 +215,7 @@ export default function Meters() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                     <div className="m-shimmer" style={{ height: '60px', borderRadius: '12px' }} />
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
-                        {[1,2,3].map(i => (
+                        {[1,2,3,4].map(i => (
                             <div key={i} className="m-shimmer" style={{ height: '80px', borderRadius: '12px' }} />
                         ))}
                     </div>
@@ -251,6 +252,9 @@ export default function Meters() {
             }}>
                 <StatsCard icon={Zap} label={t('meters.totalMeters') || 'Total Meters'} value={totalCount} color="#3b82f6" />
                 <StatsCard icon={Wifi} label={t('meters.connected') || 'Connected'} value={connectedCount} color="#10b981" />
+                {offlineCount > 0 && (
+                    <StatsCard icon={WifiOff} label={t('meters.offline') || 'Offline'} value={offlineCount} color="#ef4444" />
+                )}
                 <StatsCard icon={Activity} label={t('users.archived')} value={archivedCount} color="#6b7280" />
             </div>
 

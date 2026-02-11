@@ -480,7 +480,9 @@ func (uc *UDPCollector) GetConnectionStatus() map[string]interface{} {
 	
 	// Build per-meter connection status for the UI
 	udpConnections := make(map[string]interface{})
+	trackedMeterIDs := make(map[int]bool)
 	for meterID, reading := range uc.meterBuffers {
+		trackedMeterIDs[meterID] = true
 		lastUpdate := uc.meterLastUpdate[meterID]
 		isConnected := reading > 0 && !lastUpdate.IsZero() && time.Since(lastUpdate) < 30*time.Minute
 		lastUpdateStr := ""
@@ -493,6 +495,49 @@ func (uc *UDPCollector) GetConnectionStatus() map[string]interface{} {
 			"is_connected": isConnected,
 			"last_reading": reading,
 			"last_update":  lastUpdateStr,
+		}
+	}
+
+	// For UDP meters not yet tracked at runtime (e.g. after server restart before data arrives),
+	// check the database for recent readings
+	rows, err := uc.db.Query(`
+		SELECT m.id, m.name,
+			COALESCE(MAX(mr.reading_time), '') as last_reading_time,
+			COALESCE(mr.reading_import, 0) as last_import
+		FROM meters m
+		LEFT JOIN meter_readings mr ON mr.meter_id = m.id
+		WHERE m.connection_type = 'udp' AND m.is_active = 1
+		GROUP BY m.id
+	`)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var meterID int
+			var name, lastReadingTime string
+			var lastImport float64
+			if err := rows.Scan(&meterID, &name, &lastReadingTime, &lastImport); err != nil {
+				continue
+			}
+			if trackedMeterIDs[meterID] {
+				continue
+			}
+			isConnected := false
+			lastUpdateStr := ""
+			if lastReadingTime != "" {
+				if t, err := time.Parse("2006-01-02 15:04:05", lastReadingTime); err == nil {
+					isConnected = time.Since(t) < 30*time.Minute
+					lastUpdateStr = t.Format(time.RFC3339)
+				} else if t, err := time.Parse(time.RFC3339, lastReadingTime); err == nil {
+					isConnected = time.Since(t) < 30*time.Minute
+					lastUpdateStr = t.Format(time.RFC3339)
+				}
+			}
+			udpConnections[fmt.Sprintf("%d", meterID)] = map[string]interface{}{
+				"meter_name":   name,
+				"is_connected": isConnected,
+				"last_reading": lastImport,
+				"last_update":  lastUpdateStr,
+			}
 		}
 	}
 

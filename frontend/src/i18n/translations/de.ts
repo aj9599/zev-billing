@@ -570,6 +570,7 @@ export const de: Translations = {
   'meters.exportData': 'Daten exportieren',
   'meters.totalMeters': 'Zähler gesamt',
   'meters.connected': 'Verbunden',
+  'meters.offline': 'Offline',
   'meters.archivedSubtitle': 'Archivierte Zähler anzeigen und verwalten',
   'meters.showActive': 'Aktive anzeigen',
   'meters.metersCount': 'Zähler',

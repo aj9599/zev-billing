@@ -522,10 +522,12 @@ func (smc *SmartMeCollector) GetConnectionStatus() map[string]interface{} {
 	failedCount := len(smc.failureCount)
 	smc.failureCountMu.Unlock()
 
-	// Build per-meter connection status
+	// Build per-meter connection status from runtime tracking
 	smc.meterStatusMu.RLock()
 	connections := make(map[string]interface{})
+	trackedMeterIDs := make(map[int]bool)
 	for meterID, status := range smc.meterStatus {
+		trackedMeterIDs[meterID] = true
 		// Consider connected if last successful update was within 30 minutes
 		isConnected := status.IsConnected && time.Since(status.LastUpdate) < 30*time.Minute
 		lastUpdateStr := ""
@@ -541,6 +543,51 @@ func (smc *SmartMeCollector) GetConnectionStatus() map[string]interface{} {
 		}
 	}
 	smc.meterStatusMu.RUnlock()
+
+	// For Smart-me meters not yet tracked at runtime (e.g. after server restart),
+	// check the database for recent readings to determine connection status
+	rows, err := smc.db.Query(`
+		SELECT m.id, m.name,
+			COALESCE(MAX(mr.reading_time), '') as last_reading_time,
+			COALESCE(mr.reading_import, 0) as last_import
+		FROM meters m
+		LEFT JOIN meter_readings mr ON mr.meter_id = m.id
+		WHERE m.connection_type = 'smartme' AND m.is_active = 1
+		GROUP BY m.id
+	`)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var meterID int
+			var name, lastReadingTime string
+			var lastImport float64
+			if err := rows.Scan(&meterID, &name, &lastReadingTime, &lastImport); err != nil {
+				continue
+			}
+			// Skip meters already tracked at runtime
+			if trackedMeterIDs[meterID] {
+				continue
+			}
+			isConnected := false
+			lastUpdateStr := ""
+			if lastReadingTime != "" {
+				if t, err := time.Parse("2006-01-02 15:04:05", lastReadingTime); err == nil {
+					isConnected = time.Since(t) < 30*time.Minute
+					lastUpdateStr = t.Format(time.RFC3339)
+				} else if t, err := time.Parse(time.RFC3339, lastReadingTime); err == nil {
+					isConnected = time.Since(t) < 30*time.Minute
+					lastUpdateStr = t.Format(time.RFC3339)
+				}
+			}
+			connections[fmt.Sprintf("%d", meterID)] = map[string]interface{}{
+				"meter_name":   name,
+				"is_connected": isConnected,
+				"last_reading": lastImport,
+				"last_update":  lastUpdateStr,
+				"last_error":   "",
+			}
+		}
+	}
 
 	return map[string]interface{}{
 		"smartme_collector_running": smc.isRunning,

@@ -566,6 +566,7 @@ export const en: Translations = {
   'meters.subtitle': 'Manage your energy meters and monitor consumption',
   'meters.totalMeters': 'Total Meters',
   'meters.connected': 'Connected',
+  'meters.offline': 'Offline',
   'meters.addMeter': 'Add Meter',
   'meters.editMeter': 'Edit Meter',
   'meters.setupInstructions': 'Setup Instructions',
