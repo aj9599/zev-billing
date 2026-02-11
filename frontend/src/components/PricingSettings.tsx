@@ -558,18 +558,29 @@ export default function PricingSettings() {
                   boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
                 }}>
                   {/* Desktop Table */}
-                  <div className="desktop-table">
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <div className="desktop-table" style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                      <colgroup>
+                        <col style={{ width: '7%' }} />
+                        <col style={{ width: building.is_group ? '11%' : '13%' }} />
+                        <col style={{ width: building.is_group ? '11%' : '13%' }} />
+                        {building.is_group && <col style={{ width: '11%' }} />}
+                        <col style={{ width: building.is_group ? '12%' : '14%' }} />
+                        <col style={{ width: building.is_group ? '12%' : '14%' }} />
+                        <col style={{ width: '20%' }} />
+                        <col style={{ width: '8%' }} />
+                        <col style={{ width: '8%' }} />
+                      </colgroup>
                       <thead>
                         <tr style={{ backgroundColor: '#f9fafb' }}>
-                          <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('pricing.form.type')}</th>
+                          <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>{t('pricing.form.type')}</th>
                           <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('pricing.normalKwh')}</th>
                           <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('pricing.solarKwh')}</th>
                           {building.is_group && <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('pricing.vzevExportPrice')}</th>}
                           <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('pricing.chargingNormal')}</th>
                           <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('pricing.chargingPriority')}</th>
                           <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('pricing.validPeriod')}</th>
-                          <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('common.status')}</th>
+                          <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('common.status')}</th>
                           <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('common.actions')}</th>
                         </tr>
                       </thead>
@@ -609,10 +620,10 @@ export default function PricingSettings() {
                             <td style={{ padding: '14px 16px', fontWeight: '600', fontSize: '14px', color: '#1f2937' }}>
                               {setting.currency} {setting.car_charging_priority_price.toFixed(2)}
                             </td>
-                            <td style={{ padding: '14px 16px', fontSize: '13px', color: '#6b7280' }}>
-                              {formatDate(setting.valid_from)} {setting.valid_to ? `– ${formatDate(setting.valid_to)}` : `(${t('pricing.ongoing')})`}
+                            <td style={{ padding: '14px 16px', fontSize: '13px', color: '#6b7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {formatDate(setting.valid_from)} – {setting.valid_to ? formatDate(setting.valid_to) : t('pricing.ongoing')}
                             </td>
-                            <td style={{ padding: '14px 16px' }}>
+                            <td style={{ padding: '14px 16px', textAlign: 'center' }}>
                               <span style={{
                                 padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: '700',
                                 backgroundColor: setting.is_active ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
@@ -1149,6 +1160,19 @@ export default function PricingSettings() {
         .ps-btn-add:hover {
           box-shadow: 0 4px 14px rgba(102, 126, 234, 0.45) !important;
           transform: translateY(-1px);
+        }
+
+        .desktop-table {
+          width: 100%;
+        }
+
+        .desktop-table table {
+          min-width: 100%;
+        }
+
+        .desktop-table td {
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         @media (min-width: 769px) {
