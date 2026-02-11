@@ -200,6 +200,8 @@ func GetHealthHistory() []HealthHistoryPoint {
 	return result
 }
 
+// ── CPU tracking ──
+
 type cpuStat struct {
 	user   uint64
 	nice   uint64
@@ -208,18 +210,20 @@ type cpuStat struct {
 	iowait uint64
 }
 
-var lastCPUStat cpuStat
-var lastCPUTime time.Time
+// Mutex protects the shared CPU state from concurrent reads
+var (
+	cpuMu       sync.Mutex
+	lastCPUStat cpuStat
+	lastCPUTime time.Time
+)
 
 func GetSystemHealth() SystemHealth {
 	health := SystemHealth{
 		LastUpdated: time.Now(),
 	}
 
-	// Get CPU usage
 	health.CPUUsage = getCPUUsage()
 
-	// Get memory info
 	memInfo := getMemoryInfo()
 	health.MemoryUsed = memInfo["used"]
 	health.MemoryTotal = memInfo["total"]
@@ -227,7 +231,6 @@ func GetSystemHealth() SystemHealth {
 		health.MemoryPercent = float64(health.MemoryUsed) / float64(health.MemoryTotal) * 100
 	}
 
-	// Get disk usage
 	diskInfo := getDiskUsage("/")
 	health.DiskUsed = diskInfo["used"]
 	health.DiskTotal = diskInfo["total"]
@@ -235,10 +238,7 @@ func GetSystemHealth() SystemHealth {
 		health.DiskPercent = float64(health.DiskUsed) / float64(health.DiskTotal) * 100
 	}
 
-	// Get CPU temperature (Raspberry Pi specific)
 	health.Temperature = getCPUTemperature()
-
-	// Get system uptime
 	health.Uptime = getSystemUptime()
 
 	return health
@@ -276,28 +276,28 @@ func getCPUUsage() float64 {
 		current.iowait = parseUint64(fields[5])
 	}
 
-	now := time.Now()
+	cpuMu.Lock()
+	defer cpuMu.Unlock()
+
 	if lastCPUTime.IsZero() {
 		lastCPUStat = current
-		lastCPUTime = now
+		lastCPUTime = time.Now()
 		return 0
 	}
 
-	// Calculate CPU usage
 	totalDelta := (current.user + current.nice + current.system + current.idle + current.iowait) -
 		(lastCPUStat.user + lastCPUStat.nice + lastCPUStat.system + lastCPUStat.idle + lastCPUStat.iowait)
 
 	idleDelta := current.idle - lastCPUStat.idle
 
 	lastCPUStat = current
-	lastCPUTime = now
+	lastCPUTime = time.Now()
 
 	if totalDelta == 0 {
 		return 0
 	}
 
-	usage := 100.0 * float64(totalDelta-idleDelta) / float64(totalDelta)
-	return usage
+	return 100.0 * float64(totalDelta-idleDelta) / float64(totalDelta)
 }
 
 func getMemoryInfo() map[string]uint64 {
@@ -359,7 +359,6 @@ func getDiskUsage(path string) map[string]uint64 {
 		return info
 	}
 
-	// Available blocks * block size
 	info["total"] = stat.Blocks * uint64(stat.Bsize)
 	info["free"] = stat.Bavail * uint64(stat.Bsize)
 	info["used"] = info["total"] - (stat.Bfree * uint64(stat.Bsize))
@@ -368,7 +367,6 @@ func getDiskUsage(path string) map[string]uint64 {
 }
 
 func getCPUTemperature() float64 {
-	// Try Raspberry Pi thermal zone
 	data, err := os.ReadFile("/sys/class/thermal/thermal_zone0/temp")
 	if err != nil {
 		return 0
@@ -380,7 +378,6 @@ func getCPUTemperature() float64 {
 		return 0
 	}
 
-	// Convert from millidegrees to degrees Celsius
 	return tempMilliC / 1000.0
 }
 
