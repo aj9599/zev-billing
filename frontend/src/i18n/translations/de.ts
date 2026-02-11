@@ -1240,6 +1240,9 @@ export const de: Translations = {
   // General
   'chargers.title': 'Ladestationen',
   'chargers.subtitle': 'EV-Ladeinfrastruktur verwalten',
+  'chargers.totalChargers': 'Ladestationen gesamt',
+  'chargers.online': 'Online',
+  'chargers.chargingNow': 'Laden aktiv',
   'chargers.addCharger': 'Ladestation hinzufügen',
   'chargers.editCharger': 'Ladestation bearbeiten',
   'chargers.setupInstructions': 'Einrichtungsanleitung',

@@ -1239,6 +1239,9 @@ export const en: Translations = {
   // General
   'chargers.title': 'Car Chargers',
   'chargers.subtitle': 'Manage EV charging infrastructure',
+  'chargers.totalChargers': 'Total Chargers',
+  'chargers.online': 'Online',
+  'chargers.chargingNow': 'Charging Now',
   'chargers.addCharger': 'Add Charger',
   'chargers.editCharger': 'Edit Charger',
   'chargers.setupInstructions': 'Setup Instructions',

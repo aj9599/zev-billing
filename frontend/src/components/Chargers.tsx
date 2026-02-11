@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
+import { Search, Car, Wifi, Zap } from 'lucide-react';
 import { api } from '../api/client';
 import type { Charger, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
-import ExportModal from '../components/ExportModal';
+import ExportModal from './ExportModal';
 import ChargersHeader from './chargers/ChargersHeader';
 import BuildingFilter from './chargers/BuildingFilter';
 import ChargerCard from './chargers/ChargerCard';
@@ -22,10 +23,12 @@ export default function Chargers() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showInstructions, setShowInstructions] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
   // Custom hooks
   const { liveData, loxoneStatus, zaptecStatus, fetchStatusData } = useChargerStatus();
-  
+
   const {
     showDeleteConfirmation,
     deletionImpact,
@@ -61,10 +64,15 @@ export default function Chargers() {
   });
 
   useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
     loadData();
     fetchStatusData();
 
-    // Poll for live data every 5 seconds for real-time updates
     const interval = setInterval(() => {
       fetchStatusData();
     }, 5000);
@@ -72,15 +80,19 @@ export default function Chargers() {
   }, []);
 
   const loadData = async () => {
-    const [chargersData, buildingsData] = await Promise.all([
-      api.getChargers(),
-      api.getBuildings()
-    ]);
-    setChargers(chargersData);
-    setBuildings(buildingsData.filter(b => !b.is_group));
+    try {
+      const [chargersData, buildingsData] = await Promise.all([
+        api.getChargers(),
+        api.getBuildings()
+      ]);
+      setChargers(chargersData);
+      setBuildings(buildingsData.filter(b => !b.is_group));
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleExport = async (startDate: string, endDate: string, chargerId?: number) => {
+  const handleExport = async (startDate: string, endDate: string, chargerId?: number, chargerIds?: number[]) => {
     try {
       const params = new URLSearchParams({
         type: 'chargers',
@@ -88,7 +100,9 @@ export default function Chargers() {
         end_date: endDate
       });
 
-      if (chargerId) {
+      if (chargerIds && chargerIds.length > 0) {
+        params.append('charger_ids', chargerIds.join(','));
+      } else if (chargerId) {
         params.append('charger_id', chargerId.toString());
       }
 
@@ -108,7 +122,9 @@ export default function Chargers() {
       const a = document.createElement('a');
       a.href = url;
 
-      const chargerName = chargerId ? chargers.find(c => c.id === chargerId)?.name.replace(/\s+/g, '-') : 'all';
+      const chargerName = chargerIds && chargerIds.length > 0
+        ? `${chargerIds.length}-selected`
+        : chargerId ? chargers.find(c => c.id === chargerId)?.name.replace(/\s+/g, '-') : 'all';
       a.download = `chargers-${chargerName}-${startDate}-to-${endDate}.csv`;
 
       document.body.appendChild(a);
@@ -142,48 +158,275 @@ export default function Chargers() {
     };
   });
 
+  // Stats
+  const totalChargers = chargers.length;
+  const onlineChargers = chargers.filter(c => {
+    if (c.connection_type === 'zaptec_api') return zaptecStatus[c.id]?.is_connected;
+    return loxoneStatus[c.id]?.is_connected;
+  }).length;
+  const chargingNow = chargers.filter(c => {
+    const live = liveData[c.id];
+    if (!live) return false;
+    if (c.connection_type === 'zaptec_api') {
+      const zs = zaptecStatus[c.id];
+      return zs?.state_description === 'Charging';
+    }
+    return live.state_description === 'Charging' || live.state === '3' || live.state === '67';
+  }).length;
+
+  const statsCards = [
+    {
+      label: t('chargers.totalChargers') || 'Total Chargers',
+      value: totalChargers,
+      color: '#3b82f6',
+      icon: <Car size={20} />
+    },
+    {
+      label: t('chargers.online') || 'Online',
+      value: onlineChargers,
+      color: '#10b981',
+      icon: <Wifi size={20} />
+    },
+    {
+      label: t('chargers.chargingNow') || 'Charging Now',
+      value: chargingNow,
+      color: '#f59e0b',
+      icon: <Zap size={20} />
+    }
+  ];
+
+  // Loading skeleton
+  if (loading) {
+    return (
+      <div className="chargers-container">
+        <ChargersHeader
+          onAddCharger={handleAddCharger}
+          onShowInstructions={() => setShowInstructions(true)}
+          onShowExport={() => setShowExportModal(true)}
+          isMobile={isMobile}
+          t={t}
+        />
+        {/* Stats skeleton */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+          gap: '16px',
+          marginBottom: '24px'
+        }}>
+          {[1, 2, 3].map(i => (
+            <div key={i} style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '20px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+              animation: 'ch-shimmer 1.5s ease-in-out infinite',
+              animationDelay: `${i * 0.15}s`
+            }}>
+              <div style={{ width: '60%', height: '14px', backgroundColor: '#f3f4f6', borderRadius: '6px', marginBottom: '10px' }} />
+              <div style={{ width: '40%', height: '28px', backgroundColor: '#f3f4f6', borderRadius: '6px' }} />
+            </div>
+          ))}
+        </div>
+        {/* Cards skeleton */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(380px, 1fr))',
+          gap: '20px'
+        }}>
+          {[1, 2, 3].map(i => (
+            <div key={i} style={{
+              backgroundColor: 'white',
+              borderRadius: '20px',
+              padding: '20px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+              animation: 'ch-shimmer 1.5s ease-in-out infinite',
+              animationDelay: `${i * 0.2}s`
+            }}>
+              <div style={{ width: '50%', height: '18px', backgroundColor: '#f3f4f6', borderRadius: '6px', marginBottom: '8px' }} />
+              <div style={{ width: '30%', height: '12px', backgroundColor: '#f3f4f6', borderRadius: '6px', marginBottom: '16px' }} />
+              <div style={{ height: '100px', backgroundColor: '#f9fafb', borderRadius: '14px' }} />
+            </div>
+          ))}
+        </div>
+        <style>{`
+          @keyframes ch-shimmer {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
   return (
     <div className="chargers-container">
       <ChargersHeader
         onAddCharger={handleAddCharger}
         onShowInstructions={() => setShowInstructions(true)}
         onShowExport={() => setShowExportModal(true)}
+        isMobile={isMobile}
         t={t}
       />
 
-      <BuildingFilter
-        buildings={filteredBuildings}
-        chargers={chargers}
-        selectedBuildingId={selectedBuildingId}
-        searchQuery={searchQuery}
-        onBuildingSelect={setSelectedBuildingId}
-        onSearchChange={setSearchQuery}
-        t={t}
-      />
+      {/* Stats Row */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+        gap: '16px',
+        marginBottom: '24px'
+      }}>
+        {statsCards.map((stat, idx) => (
+          <div key={idx} style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '16px 20px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+            borderLeft: `4px solid ${stat.color}`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px',
+            animation: 'ch-fadeSlideIn 0.4s ease-out both',
+            animationDelay: `${idx * 0.1}s`
+          }}>
+            <div style={{
+              width: '42px',
+              height: '42px',
+              borderRadius: '10px',
+              backgroundColor: stat.color + '15',
+              color: stat.color,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              {stat.icon}
+            </div>
+            <div>
+              <div style={{ fontSize: '12px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                {stat.label}
+              </div>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: '#1f2937' }}>
+                {stat.value}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
 
-      {Object.entries(groupedChargers).map(([buildingId, buildingChargers]) => {
+      {/* Search + Filter */}
+      {buildings.length > 1 && (
+        <>
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{
+              position: 'relative',
+              maxWidth: '400px',
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+            }}>
+              <Search
+                size={18}
+                style={{
+                  position: 'absolute',
+                  left: '14px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: '#9ca3af'
+                }}
+              />
+              <input
+                type="text"
+                placeholder={t('dashboard.searchBuildings')}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px 10px 42px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '12px',
+                  fontSize: '14px',
+                  outline: 'none',
+                  transition: 'border-color 0.2s, box-shadow 0.2s'
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = '#667eea';
+                  e.target.style.boxShadow = '0 0 0 3px rgba(102,126,234,0.1)';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = '#e5e7eb';
+                  e.target.style.boxShadow = 'none';
+                }}
+              />
+            </div>
+          </div>
+
+          <BuildingFilter
+            buildings={filteredBuildings}
+            chargers={chargers}
+            selectedBuildingId={selectedBuildingId}
+            onBuildingSelect={setSelectedBuildingId}
+            isMobile={isMobile}
+            t={t}
+          />
+        </>
+      )}
+
+      {/* Charger Groups */}
+      {Object.entries(groupedChargers).map(([buildingId, buildingChargers], groupIdx) => {
         const building = buildings.find(b => b.id === parseInt(buildingId));
         return (
-          <div key={buildingId} style={{ marginBottom: '30px' }}>
-            <h2 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '16px', color: '#1f2937' }}>
-              {building?.name || t('common.unknownBuilding')}
-            </h2>
+          <div key={buildingId} style={{
+            marginBottom: '30px',
+            animation: 'ch-fadeSlideIn 0.4s ease-out both',
+            animationDelay: `${0.2 + groupIdx * 0.1}s`
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              marginBottom: '14px'
+            }}>
+              <h2 style={{
+                fontSize: '15px',
+                fontWeight: '700',
+                color: '#6b7280',
+                margin: 0,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px'
+              }}>
+                {building?.name || t('common.unknownBuilding')}
+              </h2>
+              <span style={{
+                backgroundColor: '#f3f4f6',
+                color: '#9ca3af',
+                fontSize: '12px',
+                fontWeight: '600',
+                padding: '2px 10px',
+                borderRadius: '10px'
+              }}>
+                {buildingChargers.length}
+              </span>
+            </div>
             <div className="chargers-grid" style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
               gap: '20px'
             }}>
-              {buildingChargers.map(charger => (
-                <ChargerCard
-                  key={charger.id}
-                  charger={charger}
-                  liveData={liveData[charger.id]}
-                  loxoneStatus={loxoneStatus[charger.id]}
-                  zaptecStatus={zaptecStatus[charger.id]}
-                  onEdit={() => handleEdit(charger)}
-                  onDelete={() => handleDeleteClick(charger)}
-                  t={t}
-                />
+              {buildingChargers.map((charger, cardIdx) => (
+                <div key={charger.id} style={{
+                  animation: 'ch-fadeSlideIn 0.4s ease-out both',
+                  animationDelay: `${0.3 + cardIdx * 0.05}s`
+                }}>
+                  <ChargerCard
+                    charger={charger}
+                    liveData={liveData[charger.id]}
+                    loxoneStatus={loxoneStatus[charger.id]}
+                    zaptecStatus={zaptecStatus[charger.id]}
+                    onEdit={() => handleEdit(charger)}
+                    onDelete={() => handleDeleteClick(charger)}
+                    t={t}
+                  />
+                </div>
               ))}
             </div>
           </div>
@@ -193,13 +436,17 @@ export default function Chargers() {
       {filteredChargers.length === 0 && (
         <div style={{
           backgroundColor: 'white',
-          borderRadius: '12px',
+          borderRadius: '16px',
           padding: '60px 20px',
           textAlign: 'center',
-          color: '#999',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+          color: '#9ca3af',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+          animation: 'ch-fadeSlideIn 0.4s ease-out'
         }}>
-          {t('chargers.noChargers')}
+          <Car size={48} style={{ color: '#e5e7eb', marginBottom: '12px' }} />
+          <p style={{ fontSize: '16px', fontWeight: '500' }}>
+            {t('chargers.noChargers')}
+          </p>
         </div>
       )}
 
@@ -253,30 +500,32 @@ export default function Chargers() {
 
       <style>{`
         @keyframes pulse {
-          0%, 100% {
-            opacity: 1;
-          }
-          50% {
-            opacity: 0.5;
-          }
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
         }
 
         .live-indicator {
           animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
 
+        @keyframes ch-fadeSlideIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes ch-shimmer {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+
         @media (max-width: 768px) {
-          .chargers-container .chargers-header h1 {
-            font-size: 24px !important;
+          .chargers-grid {
+            grid-template-columns: 1fr !important;
+            gap: 16px !important;
           }
 
-          .chargers-container .chargers-header h1 svg {
-            width: 24px !important;
-            height: 24px !important;
-          }
-
-          .chargers-container .chargers-header p {
-            font-size: 14px !important;
+          .charger-card {
+            padding: 16px !important;
           }
 
           .button-group-header {
@@ -289,98 +538,18 @@ export default function Chargers() {
             justify-content: center;
           }
 
-          .building-cards-grid {
-            grid-template-columns: 1fr !important;
-            gap: 12px !important;
-          }
-
-          .chargers-grid {
-            grid-template-columns: 1fr !important;
-            gap: 16px !important;
-          }
-
-          .charger-card {
-            padding: 20px !important;
-          }
-
-          .charger-card h3 {
-            font-size: 18px !important;
-          }
-
-          .modal-content h2 {
-            font-size: 20px !important;
-          }
-
-          .instructions-modal {
-            padding: 20px !important;
-          }
-
-          .instructions-modal h2 {
-            font-size: 20px !important;
-          }
-
-          .instructions-modal h3 {
-            font-size: 16px !important;
-          }
-
           .form-row {
             grid-template-columns: 1fr !important;
           }
         }
 
         @media (max-width: 480px) {
-          .chargers-container .chargers-header h1 {
-            font-size: 20px !important;
-            gap: 8px !important;
-          }
-
-          .chargers-container .chargers-header h1 svg {
-            width: 20px !important;
-            height: 20px !important;
-          }
-
           .button-group-header {
             flex-direction: column;
           }
 
           .button-group-header button {
             width: 100%;
-          }
-
-          .building-cards-grid > div {
-            padding: 16px !important;
-          }
-
-          .building-cards-grid h3 {
-            font-size: 16px !important;
-          }
-
-          .charger-card {
-            padding: 16px !important;
-          }
-
-          .charger-card h3 {
-            font-size: 16px !important;
-          }
-
-          .modal-content {
-            padding: 20px !important;
-          }
-
-          .instructions-modal {
-            padding: 16px !important;
-          }
-
-          .instructions-modal h2 {
-            font-size: 18px !important;
-          }
-
-          .instructions-modal h3 {
-            font-size: 15px !important;
-          }
-
-          .instructions-modal div {
-            font-size: 13px !important;
           }
         }
       `}</style>
