@@ -2167,6 +2167,11 @@ export const de: Translations = {
   'pricing.chargingPricesSection': 'Ladepreise',
   'pricing.validitySection': 'Gültigkeit',
   'pricing.optionsSection': 'Optionen',
+  'pricing.status.current': 'Aktuell',
+  'pricing.status.scheduled': 'Geplant',
+  'pricing.status.expired': 'Abgelaufen',
+  'pricing.status.billing': 'Abrechnung',
+  'pricing.billingHint': 'Aktiviert lassen für Abrechnungszeiträume, die über Preiskonfigurationen hinausgehen (z.B. eine Rechnung von Dez. bis Jan. benötigt alte und neue Preise).',
 
   // ============================================================================
   // LOGS (System Logs & Monitoring)

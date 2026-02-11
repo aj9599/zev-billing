@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, DollarSign, Search, Building, HelpCircle, Layers, Check, ChevronDown, ChevronRight, Zap, Sun, Car } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, DollarSign, Search, Building, HelpCircle, Layers, Check, ChevronDown, ChevronRight, Zap, Sun, Car, Clock, CalendarCheck, CalendarX } from 'lucide-react';
 import { api } from '../api/client';
 import type { BillingSettings, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
@@ -210,6 +210,24 @@ export default function PricingSettings() {
     if (!dateStr) return '';
     const date = new Date(dateStr);
     return date.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+
+  // Compute time-based status for a pricing setting
+  const getTimeStatus = (setting: BillingSettings): { key: 'current' | 'scheduled' | 'expired'; label: string; color: string; bgColor: string; icon: React.ReactNode } => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const from = new Date(setting.valid_from);
+    from.setHours(0, 0, 0, 0);
+    const to = setting.valid_to ? new Date(setting.valid_to) : null;
+    if (to) to.setHours(23, 59, 59, 999);
+
+    if (today < from) {
+      return { key: 'scheduled', label: t('pricing.status.scheduled'), color: '#3b82f6', bgColor: 'rgba(59,130,246,0.1)', icon: <Clock size={10} /> };
+    }
+    if (to && today > to) {
+      return { key: 'expired', label: t('pricing.status.expired'), color: '#6b7280', bgColor: 'rgba(107,114,128,0.1)', icon: <CalendarX size={10} /> };
+    }
+    return { key: 'current', label: t('pricing.status.current'), color: '#059669', bgColor: 'rgba(16,185,129,0.1)', icon: <CalendarCheck size={10} /> };
   };
 
   const toggleBuildingExpand = (id: number) => {
@@ -561,14 +579,14 @@ export default function PricingSettings() {
                   <div className="desktop-table" style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                       <colgroup>
-                        <col style={{ width: '7%' }} />
+                        <col style={{ width: '6%' }} />
+                        <col style={{ width: building.is_group ? '10%' : '12%' }} />
+                        <col style={{ width: building.is_group ? '10%' : '12%' }} />
+                        {building.is_group && <col style={{ width: '10%' }} />}
                         <col style={{ width: building.is_group ? '11%' : '13%' }} />
                         <col style={{ width: building.is_group ? '11%' : '13%' }} />
-                        {building.is_group && <col style={{ width: '11%' }} />}
-                        <col style={{ width: building.is_group ? '12%' : '14%' }} />
-                        <col style={{ width: building.is_group ? '12%' : '14%' }} />
-                        <col style={{ width: '20%' }} />
-                        <col style={{ width: '8%' }} />
+                        <col style={{ width: '18%' }} />
+                        <col style={{ width: '12%' }} />
                         <col style={{ width: '8%' }} />
                       </colgroup>
                       <thead>
@@ -624,13 +642,29 @@ export default function PricingSettings() {
                               {formatDate(setting.valid_from)} – {setting.valid_to ? formatDate(setting.valid_to) : t('pricing.ongoing')}
                             </td>
                             <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                              <span style={{
-                                padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: '700',
-                                backgroundColor: setting.is_active ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-                                color: setting.is_active ? '#059669' : '#ef4444'
-                              }}>
-                                {setting.is_active ? t('common.active') : t('common.inactive')}
-                              </span>
+                              {(() => {
+                                const ts = getTimeStatus(setting);
+                                return (
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                    <span style={{
+                                      padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700',
+                                      backgroundColor: ts.bgColor, color: ts.color,
+                                      display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap'
+                                    }}>
+                                      {ts.icon} {ts.label}
+                                    </span>
+                                    {setting.is_active && (
+                                      <span style={{
+                                        padding: '2px 8px', borderRadius: '20px', fontSize: '10px', fontWeight: '600',
+                                        backgroundColor: 'rgba(102,126,234,0.1)', color: '#667eea',
+                                        display: 'inline-flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap'
+                                      }}>
+                                        <Check size={8} /> {t('pricing.status.billing')}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </td>
                             <td style={{ padding: '14px 16px' }}>
                               <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
@@ -675,14 +709,28 @@ export default function PricingSettings() {
                         border: '1px solid #e5e7eb'
                       }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '14px' }}>
-                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                            <span style={{
-                              padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700',
-                              backgroundColor: setting.is_active ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-                              color: setting.is_active ? '#059669' : '#ef4444'
-                            }}>
-                              {setting.is_active ? t('common.active') : t('common.inactive')}
-                            </span>
+                          <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
+                            {(() => {
+                              const ts = getTimeStatus(setting);
+                              return (
+                                <span style={{
+                                  padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700',
+                                  backgroundColor: ts.bgColor, color: ts.color,
+                                  display: 'inline-flex', alignItems: 'center', gap: '4px'
+                                }}>
+                                  {ts.icon} {ts.label}
+                                </span>
+                              );
+                            })()}
+                            {setting.is_active && (
+                              <span style={{
+                                padding: '3px 8px', borderRadius: '20px', fontSize: '10px', fontWeight: '600',
+                                backgroundColor: 'rgba(102,126,234,0.1)', color: '#667eea',
+                                display: 'inline-flex', alignItems: 'center', gap: '3px'
+                              }}>
+                                <Check size={8} /> {t('pricing.status.billing')}
+                              </span>
+                            )}
                             <span style={{
                               padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '700',
                               backgroundColor: setting.is_complex ? '#8b5cf615' : '#f3f4f6',
@@ -1088,6 +1136,9 @@ export default function PricingSettings() {
                     onChange={(v) => setFormData({ ...formData, is_active: v })}
                     label={t('pricing.activeUseForBilling')}
                   />
+                  <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px', marginLeft: '30px', lineHeight: '1.4' }}>
+                    {t('pricing.billingHint')}
+                  </p>
                 </div>
 
                 {/* Error Message in Form */}

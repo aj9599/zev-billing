@@ -2167,6 +2167,11 @@ export const en: Translations = {
   'pricing.chargingPricesSection': 'Charging Prices',
   'pricing.validitySection': 'Validity',
   'pricing.optionsSection': 'Options',
+  'pricing.status.current': 'Current',
+  'pricing.status.scheduled': 'Scheduled',
+  'pricing.status.expired': 'Expired',
+  'pricing.status.billing': 'Billing',
+  'pricing.billingHint': 'Keep enabled for billing periods that span across pricing configurations (e.g. a bill from Dec to Jan needs both old and new pricing).',
 
   // ============================================================================
   // LOGS (System Logs & Monitoring)
