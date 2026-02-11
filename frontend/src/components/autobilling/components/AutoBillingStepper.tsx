@@ -23,12 +23,15 @@ export default function AutoBillingStepper({ currentStep }: AutoBillingStepperPr
   return (
     <div style={{
       padding: '20px 30px',
-      borderBottom: '1px solid #dee2e6',
-      backgroundColor: '#f8f9fa'
+      borderBottom: '1px solid #f3f4f6',
+      backgroundColor: '#f9fafb'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative' }}>
         {steps.map((label, index) => {
           const stepNumber = index + 1;
+          const isCompleted = currentStep > stepNumber;
+          const isCurrent = currentStep === stepNumber;
+
           return (
             <div
               key={stepNumber}
@@ -44,33 +47,38 @@ export default function AutoBillingStepper({ currentStep }: AutoBillingStepperPr
               {stepNumber < totalSteps && (
                 <div style={{
                   position: 'absolute',
-                  top: '20px',
+                  top: '18px',
                   left: '50%',
                   right: '-50%',
                   height: '2px',
-                  backgroundColor: currentStep > stepNumber ? '#28a745' : '#dee2e6',
-                  zIndex: 0
+                  backgroundColor: isCompleted ? '#667eea' : '#e5e7eb',
+                  zIndex: 0,
+                  transition: 'background-color 0.3s'
                 }} />
               )}
 
               {/* Step Circle */}
               <div style={{
-                width: '40px',
-                height: '40px',
+                width: '36px',
+                height: '36px',
                 borderRadius: '50%',
-                backgroundColor: currentStep >= stepNumber
-                  ? (currentStep > stepNumber ? '#28a745' : '#667EEA')
-                  : '#dee2e6',
+                background: isCompleted
+                  ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                  : isCurrent
+                    ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                    : '#e5e7eb',
                 color: 'white',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontWeight: 'bold',
+                fontWeight: '700',
                 position: 'relative',
                 zIndex: 1,
-                fontSize: '14px'
+                fontSize: '13px',
+                boxShadow: isCurrent ? '0 0 0 4px rgba(102, 126, 234, 0.2)' : 'none',
+                transition: 'all 0.3s'
               }}>
-                {currentStep > stepNumber ? <Check size={18} /> : stepNumber}
+                {isCompleted ? <Check size={16} /> : stepNumber}
               </div>
 
               {/* Step Label */}
@@ -78,10 +86,11 @@ export default function AutoBillingStepper({ currentStep }: AutoBillingStepperPr
                 marginTop: '8px',
                 fontSize: '10px',
                 textAlign: 'center',
-                fontWeight: currentStep === stepNumber ? '600' : 'normal',
-                color: currentStep === stepNumber ? '#667EEA' : '#6c757d',
+                fontWeight: isCurrent ? '700' : '500',
+                color: isCurrent ? '#667eea' : isCompleted ? '#667eea' : '#9ca3af',
                 lineHeight: '1.3',
-                maxWidth: '80px'
+                maxWidth: '80px',
+                transition: 'all 0.3s'
               }}>
                 {label}
               </div>

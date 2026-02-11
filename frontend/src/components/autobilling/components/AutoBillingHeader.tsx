@@ -13,15 +13,15 @@ export default function AutoBillingHeader({
   const { t } = useTranslation();
 
   return (
-    <div 
-      className="auto-billing-header" 
-      style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        marginBottom: '30px', 
-        gap: '15px', 
-        flexWrap: 'wrap' 
+    <div
+      className="ab-header"
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '30px',
+        gap: '15px',
+        flexWrap: 'wrap'
       }}
     >
       <div style={{ flex: 1 }}>
@@ -40,54 +40,66 @@ export default function AutoBillingHeader({
           <Calendar size={36} style={{ color: '#667eea' }} />
           {t('autoBilling.title')}
         </h1>
-        <p style={{ color: '#6b7280', fontSize: '16px' }}>
+        <p style={{ color: '#6b7280', fontSize: '16px', margin: 0 }}>
           {t('autoBilling.subtitle')}
         </p>
       </div>
       <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
         <button
           onClick={onShowInstructions}
+          className="ab-btn-instructions"
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            padding: '10px 20px',
-            backgroundColor: 'rgba(23, 162, 184, 0.9)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
+            padding: '10px 18px',
+            backgroundColor: 'white',
+            color: '#667eea',
+            border: '1px solid #e5e7eb',
+            borderRadius: '10px',
             fontSize: '14px',
+            fontWeight: '600',
             cursor: 'pointer',
             transition: 'all 0.2s'
           }}
-          onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(23, 162, 184, 1)'}
-          onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(23, 162, 184, 0.9)'}
         >
           <HelpCircle size={18} />
           {t('autoBilling.setupInstructions')}
         </button>
         <button
           onClick={onAddConfig}
+          className="ab-btn-create"
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            padding: '10px 20px',
-            backgroundColor: 'rgba(40, 167, 69, 0.9)',
+            padding: '10px 18px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             color: 'white',
             border: 'none',
-            borderRadius: '6px',
+            borderRadius: '10px',
             fontSize: '14px',
+            fontWeight: '600',
             cursor: 'pointer',
-            transition: 'all 0.2s'
+            transition: 'all 0.2s',
+            boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)'
           }}
-          onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(40, 167, 69, 1)'}
-          onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(40, 167, 69, 0.9)'}
         >
           <Plus size={18} />
           {t('autoBilling.addConfig')}
         </button>
       </div>
+
+      <style>{`
+        .ab-btn-instructions:hover {
+          border-color: #667eea;
+          background-color: #667eea08 !important;
+        }
+        .ab-btn-create:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.45) !important;
+        }
+      `}</style>
     </div>
   );
 }

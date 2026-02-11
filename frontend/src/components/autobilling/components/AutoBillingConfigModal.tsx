@@ -1,4 +1,4 @@
-import { X, ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Check, Calendar } from 'lucide-react';
 import { useTranslation } from '../../../i18n';
 import AutoBillingStepper from './AutoBillingStepper';
 import AutoBillingStep1Selection from './steps/AutoBillingStep1Selection';
@@ -96,55 +96,70 @@ export default function AutoBillingConfigModal({
       left: 0,
       right: 0,
       bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.5)',
+      backgroundColor: 'rgba(0,0,0,0.15)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 1000,
-      padding: '20px'
+      padding: '20px',
+      animation: 'ab-modalFadeIn 0.2s ease-out'
     }}>
       <div style={{
         backgroundColor: 'white',
-        borderRadius: '12px',
+        borderRadius: '20px',
         maxWidth: '900px',
         width: '100%',
         maxHeight: '90vh',
         display: 'flex',
         flexDirection: 'column',
-        boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
+        animation: 'ab-modalSlideUp 0.3s ease-out',
+        overflow: 'hidden'
       }}>
         {/* Header */}
         <div style={{
-          padding: '24px 30px',
-          borderBottom: '1px solid #dee2e6',
+          padding: '20px 24px',
+          borderBottom: '1px solid #f3f4f6',
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center'
+          alignItems: 'center',
+          flexShrink: 0
         }}>
-          <h2 style={{
-            fontSize: '24px',
-            fontWeight: 'bold',
-            margin: 0,
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text'
-          }}>
-            {editingConfig ? t('autoBilling.editConfig') : t('autoBilling.addConfig')}
-          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{
+              width: '36px', height: '36px', borderRadius: '10px',
+              backgroundColor: '#667eea15',
+              color: '#667eea',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+              <Calendar size={18} />
+            </div>
+            <div>
+              <h2 style={{
+                fontSize: '18px',
+                fontWeight: '700',
+                margin: 0,
+                color: '#1f2937'
+              }}>
+                {editingConfig ? t('autoBilling.editConfig') : t('autoBilling.addConfig')}
+              </h2>
+              <p style={{ fontSize: '13px', color: '#9ca3af', margin: '2px 0 0 0' }}>
+                Step {step} / {TOTAL_STEPS}
+              </p>
+            </div>
+          </div>
           <button
             onClick={onClose}
             style={{
-              padding: '8px',
-              backgroundColor: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              borderRadius: '6px',
-              display: 'flex',
-              alignItems: 'center'
+              width: '32px', height: '32px', borderRadius: '8px',
+              border: 'none', backgroundColor: '#f3f4f6', color: '#6b7280',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'all 0.2s'
             }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#e5e7eb'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#f3f4f6'; }}
           >
-            <X size={24} />
+            <X size={16} />
           </button>
         </div>
 
@@ -155,147 +170,160 @@ export default function AutoBillingConfigModal({
         <div style={{
           padding: '30px',
           flex: 1,
-          overflowY: 'auto'
+          overflowY: 'auto',
+          backgroundColor: '#f9fafb'
         }}>
-          {step === 1 && (
-            <AutoBillingStep1Selection
-              buildings={buildings}
-              selectedBuildingIds={formData.building_ids}
-              selectedApartments={selectedApartments}
-              apartmentsWithUsers={apartmentsWithUsers}
-              isVZEVMode={isVZEVMode}
-              onBuildingToggle={onBuildingToggle}
-              onApartmentToggle={onApartmentToggle}
-              onSelectAllActive={onSelectAllActive}
-              onMixingWarning={handleMixingWarning}
-            />
-          )}
-          {step === 2 && (
-            <AutoBillingStep2Schedule
-              name={formData.name}
-              frequency={formData.frequency}
-              generationDay={formData.generation_day}
-              firstExecutionDate={formData.first_execution_date}
-              onNameChange={(value) => onFormDataChange({ name: value })}
-              onFrequencyChange={(value) => onFormDataChange({ frequency: value })}
-              onGenerationDayChange={(value) => onFormDataChange({ generation_day: value })}
-              onFirstExecutionDateChange={(value) => onFormDataChange({ first_execution_date: value })}
-            />
-          )}
-          {step === 3 && (
-            <AutoBillingStep3SharedMeters
-              buildings={buildings}
-              selectedBuildingIds={formData.building_ids}
-              sharedMeters={sharedMeters}
-              selectedSharedMeters={selectedSharedMeters}
-              onToggle={onSharedMeterToggle}
-              onSelectAll={onSelectAllSharedMeters}
-              onDeselectAll={onDeselectAllSharedMeters}
-            />
-          )}
-          {step === 4 && (
-            <AutoBillingStep4CustomItems
-              buildings={buildings}
-              selectedBuildingIds={formData.building_ids}
-              customItems={customItems}
-              selectedCustomItems={selectedCustomItems}
-              onToggle={onCustomItemToggle}
-              onSelectAll={onSelectAllCustomItems}
-              onDeselectAll={onDeselectAllCustomItems}
-            />
-          )}
-          {step === 5 && (
-            <AutoBillingStep5Sender
-              senderName={formData.sender_name}
-              senderAddress={formData.sender_address}
-              senderCity={formData.sender_city}
-              senderZip={formData.sender_zip}
-              senderCountry={formData.sender_country}
-              onSenderNameChange={(value) => onFormDataChange({ sender_name: value })}
-              onSenderAddressChange={(value) => onFormDataChange({ sender_address: value })}
-              onSenderCityChange={(value) => onFormDataChange({ sender_city: value })}
-              onSenderZipChange={(value) => onFormDataChange({ sender_zip: value })}
-              onSenderCountryChange={(value) => onFormDataChange({ sender_country: value })}
-            />
-          )}
-          {step === 6 && (
-            <AutoBillingStep6Banking
-              bankName={formData.bank_name}
-              bankIban={formData.bank_iban}
-              bankAccountHolder={formData.bank_account_holder}
-              onBankNameChange={(value) => onFormDataChange({ bank_name: value })}
-              onBankIbanChange={(value) => onFormDataChange({ bank_iban: value })}
-              onBankAccountHolderChange={(value) => onFormDataChange({ bank_account_holder: value })}
-            />
-          )}
-          {step === 7 && (
-            <AutoBillingStep7Review
-              name={formData.name}
-              isVZEVMode={isVZEVMode}
-              frequency={formData.frequency}
-              generationDay={formData.generation_day}
-              firstExecutionDate={formData.first_execution_date}
-              buildingIds={formData.building_ids}
-              buildings={buildings}
-              apartmentCount={selectedApartments.size}
-              userCount={getActiveUsersCount()}
-              sharedMeterCount={selectedSharedMeters.length}
-              customItemCount={selectedCustomItems.length}
-              senderName={formData.sender_name}
-              senderAddress={formData.sender_address}
-              senderCity={formData.sender_city}
-              senderZip={formData.sender_zip}
-              bankName={formData.bank_name}
-              bankIban={formData.bank_iban}
-              bankAccountHolder={formData.bank_account_holder}
-            />
-          )}
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            border: '1px solid #e5e7eb',
+            padding: '24px'
+          }}>
+            {step === 1 && (
+              <AutoBillingStep1Selection
+                buildings={buildings}
+                selectedBuildingIds={formData.building_ids}
+                selectedApartments={selectedApartments}
+                apartmentsWithUsers={apartmentsWithUsers}
+                isVZEVMode={isVZEVMode}
+                onBuildingToggle={onBuildingToggle}
+                onApartmentToggle={onApartmentToggle}
+                onSelectAllActive={onSelectAllActive}
+                onMixingWarning={handleMixingWarning}
+              />
+            )}
+            {step === 2 && (
+              <AutoBillingStep2Schedule
+                name={formData.name}
+                frequency={formData.frequency}
+                generationDay={formData.generation_day}
+                firstExecutionDate={formData.first_execution_date}
+                onNameChange={(value) => onFormDataChange({ name: value })}
+                onFrequencyChange={(value) => onFormDataChange({ frequency: value })}
+                onGenerationDayChange={(value) => onFormDataChange({ generation_day: value })}
+                onFirstExecutionDateChange={(value) => onFormDataChange({ first_execution_date: value })}
+              />
+            )}
+            {step === 3 && (
+              <AutoBillingStep3SharedMeters
+                buildings={buildings}
+                selectedBuildingIds={formData.building_ids}
+                sharedMeters={sharedMeters}
+                selectedSharedMeters={selectedSharedMeters}
+                onToggle={onSharedMeterToggle}
+                onSelectAll={onSelectAllSharedMeters}
+                onDeselectAll={onDeselectAllSharedMeters}
+              />
+            )}
+            {step === 4 && (
+              <AutoBillingStep4CustomItems
+                buildings={buildings}
+                selectedBuildingIds={formData.building_ids}
+                customItems={customItems}
+                selectedCustomItems={selectedCustomItems}
+                onToggle={onCustomItemToggle}
+                onSelectAll={onSelectAllCustomItems}
+                onDeselectAll={onDeselectAllCustomItems}
+              />
+            )}
+            {step === 5 && (
+              <AutoBillingStep5Sender
+                senderName={formData.sender_name}
+                senderAddress={formData.sender_address}
+                senderCity={formData.sender_city}
+                senderZip={formData.sender_zip}
+                senderCountry={formData.sender_country}
+                onSenderNameChange={(value) => onFormDataChange({ sender_name: value })}
+                onSenderAddressChange={(value) => onFormDataChange({ sender_address: value })}
+                onSenderCityChange={(value) => onFormDataChange({ sender_city: value })}
+                onSenderZipChange={(value) => onFormDataChange({ sender_zip: value })}
+                onSenderCountryChange={(value) => onFormDataChange({ sender_country: value })}
+              />
+            )}
+            {step === 6 && (
+              <AutoBillingStep6Banking
+                bankName={formData.bank_name}
+                bankIban={formData.bank_iban}
+                bankAccountHolder={formData.bank_account_holder}
+                onBankNameChange={(value) => onFormDataChange({ bank_name: value })}
+                onBankIbanChange={(value) => onFormDataChange({ bank_iban: value })}
+                onBankAccountHolderChange={(value) => onFormDataChange({ bank_account_holder: value })}
+              />
+            )}
+            {step === 7 && (
+              <AutoBillingStep7Review
+                name={formData.name}
+                isVZEVMode={isVZEVMode}
+                frequency={formData.frequency}
+                generationDay={formData.generation_day}
+                firstExecutionDate={formData.first_execution_date}
+                buildingIds={formData.building_ids}
+                buildings={buildings}
+                apartmentCount={selectedApartments.size}
+                userCount={getActiveUsersCount()}
+                sharedMeterCount={selectedSharedMeters.length}
+                customItemCount={selectedCustomItems.length}
+                senderName={formData.sender_name}
+                senderAddress={formData.sender_address}
+                senderCity={formData.sender_city}
+                senderZip={formData.sender_zip}
+                bankName={formData.bank_name}
+                bankIban={formData.bank_iban}
+                bankAccountHolder={formData.bank_account_holder}
+              />
+            )}
+          </div>
         </div>
 
         {/* Footer */}
         <div style={{
-          padding: '20px 30px',
-          borderTop: '1px solid #dee2e6',
+          padding: '16px 24px',
+          borderTop: '1px solid #f3f4f6',
           display: 'flex',
           justifyContent: 'space-between',
           gap: '12px',
-          backgroundColor: '#f8f9fa'
+          backgroundColor: 'white',
+          flexShrink: 0
         }}>
           <button
             onClick={onClose}
             style={{
-              padding: '12px 24px',
-              backgroundColor: '#6c757d',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
+              padding: '10px 20px',
+              backgroundColor: 'white',
+              color: '#374151',
+              border: '1px solid #e5e7eb',
+              borderRadius: '10px',
               cursor: 'pointer',
-              fontSize: '15px',
-              fontWeight: '500'
+              fontSize: '14px',
+              fontWeight: '600',
+              transition: 'all 0.2s'
             }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
           >
             {t('common.cancel')}
           </button>
 
-          <div style={{ display: 'flex', gap: '12px' }}>
+          <div style={{ display: 'flex', gap: '10px' }}>
             {step > 1 && (
               <button
                 onClick={() => onStepChange(step - 1)}
                 style={{
-                  padding: '12px 24px',
+                  padding: '10px 20px',
                   backgroundColor: 'white',
-                  color: '#667EEA',
-                  border: '1px solid #667EEA',
-                  borderRadius: '6px',
+                  color: '#667eea',
+                  border: '1px solid #667eea',
+                  borderRadius: '10px',
                   cursor: 'pointer',
-                  fontSize: '15px',
-                  fontWeight: '500',
+                  fontSize: '14px',
+                  fontWeight: '600',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px'
+                  gap: '6px',
+                  transition: 'all 0.2s'
                 }}
               >
-                <ChevronLeft size={18} />
+                <ChevronLeft size={16} />
                 {t('billConfig.navigation.previous')}
               </button>
             )}
@@ -305,47 +333,62 @@ export default function AutoBillingConfigModal({
                 onClick={() => onStepChange(step + 1)}
                 disabled={!canProceed}
                 style={{
-                  padding: '12px 24px',
-                  backgroundColor: canProceed ? '#667EEA' : '#ced4da',
+                  padding: '10px 20px',
+                  background: canProceed ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#d1d5db',
                   color: 'white',
                   border: 'none',
-                  borderRadius: '6px',
+                  borderRadius: '10px',
                   cursor: canProceed ? 'pointer' : 'not-allowed',
-                  fontSize: '15px',
-                  fontWeight: '500',
+                  fontSize: '14px',
+                  fontWeight: '600',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px'
+                  gap: '6px',
+                  transition: 'all 0.2s',
+                  boxShadow: canProceed ? '0 2px 8px rgba(102, 126, 234, 0.35)' : 'none'
                 }}
               >
                 {t('billConfig.navigation.next')}
-                <ChevronRight size={18} />
+                <ChevronRight size={16} />
               </button>
             ) : (
               <button
                 onClick={handleSubmit}
                 disabled={!canProceed}
                 style={{
-                  padding: '12px 24px',
-                  backgroundColor: canProceed ? '#28a745' : '#ced4da',
+                  padding: '10px 20px',
+                  background: canProceed ? 'linear-gradient(135deg, #059669, #10b981)' : '#d1d5db',
                   color: 'white',
                   border: 'none',
-                  borderRadius: '6px',
+                  borderRadius: '10px',
                   cursor: canProceed ? 'pointer' : 'not-allowed',
-                  fontSize: '15px',
-                  fontWeight: '500',
+                  fontSize: '14px',
+                  fontWeight: '600',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px'
+                  gap: '6px',
+                  transition: 'all 0.2s',
+                  boxShadow: canProceed ? '0 2px 8px rgba(5, 150, 105, 0.35)' : 'none'
                 }}
               >
-                <Check size={18} />
+                <Check size={16} />
                 {editingConfig ? t('common.update') : t('common.create')}
               </button>
             )}
           </div>
         </div>
       </div>
+
+      <style>{`
+        @keyframes ab-modalFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes ab-modalSlideUp {
+          from { opacity: 0; transform: translateY(20px) scale(0.98); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+      `}</style>
     </div>
   );
 }

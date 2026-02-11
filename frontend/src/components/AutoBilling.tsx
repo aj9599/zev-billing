@@ -78,27 +78,39 @@ export default function AutoBilling() {
 
   if (loading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '400px' 
-      }}>
-        <div style={{ textAlign: 'center', color: '#6b7280' }}>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            border: '3px solid #e5e7eb',
-            borderTopColor: '#667EEA',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            margin: '0 auto 16px'
-          }} />
-          <p>{t('common.loading')}...</p>
+      <div style={{ width: '100%', maxWidth: '100%' }}>
+        {/* Shimmer header */}
+        <div style={{
+          height: '40px', width: '320px', borderRadius: '10px',
+          background: 'linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%)',
+          backgroundSize: '200% 100%',
+          animation: 'ab-shimmer 1.5s infinite',
+          marginBottom: '8px'
+        }} />
+        <div style={{
+          height: '16px', width: '250px', borderRadius: '6px',
+          background: 'linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%)',
+          backgroundSize: '200% 100%',
+          animation: 'ab-shimmer 1.5s infinite',
+          marginBottom: '30px'
+        }} />
+        {/* Shimmer cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: '20px' }}>
+          {[1, 2, 3].map(i => (
+            <div key={i} style={{
+              height: '240px', borderRadius: '14px',
+              background: 'linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%)',
+              backgroundSize: '200% 100%',
+              animation: 'ab-shimmer 1.5s infinite',
+              animationDelay: `${i * 0.15}s`,
+              border: '1px solid #e5e7eb'
+            }} />
+          ))}
         </div>
         <style>{`
-          @keyframes spin {
-            to { transform: rotate(360deg); }
+          @keyframes ab-shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
           }
         `}</style>
       </div>
@@ -106,7 +118,7 @@ export default function AutoBilling() {
   }
 
   return (
-    <div className="auto-billing-container" style={{ width: '100%', maxWidth: '100%' }}>
+    <div className="ab-container" style={{ width: '100%', maxWidth: '100%' }}>
       <AutoBillingHeader
         onShowInstructions={() => setShowInstructions(true)}
         onAddConfig={openCreateModal}
@@ -120,7 +132,7 @@ export default function AutoBilling() {
           gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
           gap: '20px'
         }}>
-          {configs.map(config => (
+          {configs.map((config, i) => (
             <AutoBillingConfigCard
               key={config.id}
               config={config}
@@ -128,6 +140,7 @@ export default function AutoBilling() {
               onEdit={openEditModal}
               onDelete={handleDelete}
               onToggleActive={handleToggleActive}
+              index={i}
             />
           ))}
         </div>
@@ -170,25 +183,21 @@ export default function AutoBilling() {
 
       <style>{`
         @media (max-width: 768px) {
-          .auto-billing-container h1 {
+          .ab-container h1 {
             font-size: 24px !important;
           }
-
-          .auto-billing-container h1 svg {
+          .ab-container h1 svg {
             width: 24px !important;
             height: 24px !important;
           }
-
-          .auto-billing-header {
+          .ab-header {
             flex-direction: column !important;
             align-items: stretch !important;
           }
-
-          .auto-billing-header > div:last-child {
+          .ab-header > div:last-child {
             width: 100%;
           }
-
-          .auto-billing-header button {
+          .ab-header button {
             width: 100% !important;
             justify-content: center !important;
           }
