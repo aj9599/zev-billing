@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../i18n';
+import { Activity } from 'lucide-react';
 
 interface HealthDataPoint {
   timestamp: number;
@@ -97,11 +98,11 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
 
     if (values.length === 0) return;
 
-    const maxValue = key === 'temperature' ? 100 : 100;
+    const maxValue = 100;
     const fontSize = mobile ? 10 : 12;
 
     // Draw grid lines
-    ctx.strokeStyle = '#e5e7eb';
+    ctx.strokeStyle = '#f3f4f6';
     ctx.lineWidth = 1;
     const gridLines = mobile ? 3 : 4;
     for (let i = 0; i <= gridLines; i++) {
@@ -113,7 +114,7 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
 
       // Draw y-axis labels
       ctx.fillStyle = '#9ca3af';
-      ctx.font = `${fontSize}px sans-serif`;
+      ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
       ctx.textAlign = 'right';
       const value = maxValue - (maxValue / gridLines) * i;
       ctx.fillText(value.toFixed(0) + (key === 'temperature' ? '°' : '%'), paddingLeft - 6, y + 4);
@@ -146,15 +147,15 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
       ctx.closePath();
 
       const gradient = ctx.createLinearGradient(0, paddingTop, 0, height - paddingBottom);
-      gradient.addColorStop(0, color + '40');
-      gradient.addColorStop(1, color + '00');
+      gradient.addColorStop(0, color + '30');
+      gradient.addColorStop(1, color + '05');
       ctx.fillStyle = gradient;
       ctx.fill();
     }
 
     // Draw x-axis time labels
     ctx.fillStyle = '#9ca3af';
-    ctx.font = `${fontSize}px sans-serif`;
+    ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
     ctx.textAlign = 'center';
 
     const validData = data.filter(d => d && typeof d === 'object' && d.timestamp);
@@ -182,85 +183,136 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
                       healthHistory.some(d => d && d.temperature > 0);
 
   const canvasHeight = isMobile ? '180px' : '300px';
-  const chartPadding = isMobile ? '14px' : '24px';
+  const chartPadding = isMobile ? '14px' : '20px';
+
+  const chartColors: Record<string, { border: string; bg: string; label: string }> = {
+    cpu: { border: '#667eea', bg: '#667eea08', label: t('logs.cpuUsage') },
+    memory: { border: '#10b981', bg: '#10b98108', label: t('logs.memoryUsage') },
+    disk: { border: '#f59e0b', bg: '#f59e0b08', label: t('logs.diskUsage') },
+    temp: { border: '#ef4444', bg: '#ef444408', label: t('logs.cpuTemperature') }
+  };
+
+  const renderChartCard = (
+    chartKey: string,
+    canvasRef: React.RefObject<HTMLCanvasElement | null>,
+    index: number
+  ) => {
+    const colors = chartColors[chartKey];
+    return (
+      <div
+        className="shc-chart-card"
+        style={{
+          backgroundColor: 'white',
+          borderRadius: '14px',
+          border: '1px solid #e5e7eb',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          overflow: 'hidden',
+          animation: `shc-fadeSlideIn 0.4s ease-out ${index * 0.08}s both`
+        }}
+      >
+        {/* Color indicator bar */}
+        <div style={{
+          height: '3px',
+          background: `linear-gradient(90deg, ${colors.border}, ${colors.border}88)`
+        }} />
+
+        {/* Chart header */}
+        <div style={{
+          padding: `${isMobile ? '12px 14px 0' : '16px 20px 0'}`,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <div style={{
+            width: '28px',
+            height: '28px',
+            borderRadius: '8px',
+            backgroundColor: colors.bg,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            <div style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: colors.border
+            }} />
+          </div>
+          <h3 style={{
+            fontSize: isMobile ? '13px' : '14px',
+            fontWeight: '600',
+            margin: 0,
+            color: '#374151'
+          }}>
+            {colors.label}
+          </h3>
+        </div>
+
+        {/* Canvas */}
+        <div style={{ padding: chartPadding }}>
+          <canvas
+            ref={canvasRef}
+            style={{ width: '100%', height: canvasHeight }}
+          />
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div style={{ marginBottom: '30px', width: '100%' }}>
-      <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '16px', color: '#1f2937' }}>
-        {t('logs.performance24h')}
-      </h2>
+      {/* Section header */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        marginBottom: '16px'
+      }}>
+        <div style={{
+          width: '32px',
+          height: '32px',
+          borderRadius: '10px',
+          backgroundColor: '#667eea12',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <Activity size={16} style={{ color: '#667eea' }} />
+        </div>
+        <h2 style={{
+          fontSize: '18px',
+          fontWeight: '700',
+          margin: 0,
+          color: '#1f2937'
+        }}>
+          {t('logs.performance24h')}
+        </h2>
+      </div>
+
+      {/* Charts grid */}
       <div className="health-charts-grid" style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 500px), 1fr))',
-        gap: isMobile ? '12px' : '20px',
+        gap: isMobile ? '12px' : '16px',
         width: '100%'
       }}>
-        <div className="chart-container" style={{
-          backgroundColor: 'white',
-          padding: chartPadding,
-          borderRadius: '16px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-          border: '2px solid #667eea'
-        }}>
-          <h3 style={{ fontSize: isMobile ? '14px' : '16px', fontWeight: '600', marginBottom: isMobile ? '8px' : '16px', color: '#667eea' }}>
-            {t('logs.cpuUsage')}
-          </h3>
-          <canvas
-            ref={cpuCanvasRef}
-            style={{ width: '100%', height: canvasHeight }}
-          />
-        </div>
-
-        <div className="chart-container" style={{
-          backgroundColor: 'white',
-          padding: chartPadding,
-          borderRadius: '16px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-          border: '2px solid #10b981'
-        }}>
-          <h3 style={{ fontSize: isMobile ? '14px' : '16px', fontWeight: '600', marginBottom: isMobile ? '8px' : '16px', color: '#10b981' }}>
-            {t('logs.memoryUsage')}
-          </h3>
-          <canvas
-            ref={memoryCanvasRef}
-            style={{ width: '100%', height: canvasHeight }}
-          />
-        </div>
-
-        <div className="chart-container" style={{
-          backgroundColor: 'white',
-          padding: chartPadding,
-          borderRadius: '16px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-          border: '2px solid #f59e0b'
-        }}>
-          <h3 style={{ fontSize: isMobile ? '14px' : '16px', fontWeight: '600', marginBottom: isMobile ? '8px' : '16px', color: '#f59e0b' }}>
-            {t('logs.diskUsage')}
-          </h3>
-          <canvas
-            ref={diskCanvasRef}
-            style={{ width: '100%', height: canvasHeight }}
-          />
-        </div>
-
-        {hasTempData && (
-          <div className="chart-container" style={{
-            backgroundColor: 'white',
-            padding: chartPadding,
-            borderRadius: '16px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-            border: '2px solid #ef4444'
-          }}>
-            <h3 style={{ fontSize: isMobile ? '14px' : '16px', fontWeight: '600', marginBottom: isMobile ? '8px' : '16px', color: '#ef4444' }}>
-              {t('logs.cpuTemperature')}
-            </h3>
-            <canvas
-              ref={tempCanvasRef}
-              style={{ width: '100%', height: canvasHeight }}
-            />
-          </div>
-        )}
+        {renderChartCard('cpu', cpuCanvasRef, 0)}
+        {renderChartCard('memory', memoryCanvasRef, 1)}
+        {renderChartCard('disk', diskCanvasRef, 2)}
+        {hasTempData && renderChartCard('temp', tempCanvasRef, 3)}
       </div>
+
+      <style>{`
+        @keyframes shc-fadeSlideIn {
+          from { opacity: 0; transform: translateY(12px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .shc-chart-card:hover {
+          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+      `}</style>
     </div>
   );
 };

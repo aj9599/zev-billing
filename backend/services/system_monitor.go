@@ -2,6 +2,7 @@ package services
 
 import (
 	"bufio"
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
@@ -39,6 +40,7 @@ var (
 	healthHistory   []HealthHistoryPoint
 	healthHistoryMu sync.RWMutex
 	historyStarted  bool
+	healthDB        *sql.DB
 )
 
 const (
@@ -47,16 +49,21 @@ const (
 )
 
 // StartHealthHistoryCollector starts a background goroutine that samples system health every 5 minutes
-func StartHealthHistoryCollector() {
+// It persists data to the database so history survives server restarts
+func StartHealthHistoryCollector(db *sql.DB) {
 	healthHistoryMu.Lock()
 	if historyStarted {
 		healthHistoryMu.Unlock()
 		return
 	}
 	historyStarted = true
+	healthDB = db
 	healthHistoryMu.Unlock()
 
 	log.Println("[HEALTH] Starting system health history collector (5-min intervals)")
+
+	// Load existing history from database (survives restarts)
+	loadHistoryFromDB()
 
 	// Collect an initial point immediately
 	collectHealthPoint()
@@ -68,6 +75,86 @@ func StartHealthHistoryCollector() {
 			collectHealthPoint()
 		}
 	}()
+
+	// Periodically clean old entries from DB (every hour)
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			cleanOldHistoryFromDB()
+		}
+	}()
+}
+
+func loadHistoryFromDB() {
+	if healthDB == nil {
+		return
+	}
+
+	cutoff := time.Now().Add(-24 * time.Hour).UnixMilli()
+
+	rows, err := healthDB.Query(`
+		SELECT timestamp, cpu_usage, memory_percent, disk_percent, temperature
+		FROM health_history
+		WHERE timestamp > ?
+		ORDER BY timestamp ASC
+	`, cutoff)
+	if err != nil {
+		log.Printf("[HEALTH] Failed to load history from DB: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	var loaded []HealthHistoryPoint
+	for rows.Next() {
+		var p HealthHistoryPoint
+		if err := rows.Scan(&p.Timestamp, &p.CPUUsage, &p.MemoryPercent, &p.DiskPercent, &p.Temperature); err != nil {
+			log.Printf("[HEALTH] Failed to scan history row: %v", err)
+			continue
+		}
+		loaded = append(loaded, p)
+	}
+
+	if len(loaded) > healthMaxPoints {
+		loaded = loaded[len(loaded)-healthMaxPoints:]
+	}
+
+	healthHistoryMu.Lock()
+	healthHistory = loaded
+	healthHistoryMu.Unlock()
+
+	log.Printf("[HEALTH] Loaded %d history points from database (24h)", len(loaded))
+}
+
+func cleanOldHistoryFromDB() {
+	if healthDB == nil {
+		return
+	}
+
+	cutoff := time.Now().Add(-24 * time.Hour).UnixMilli()
+	result, err := healthDB.Exec(`DELETE FROM health_history WHERE timestamp < ?`, cutoff)
+	if err != nil {
+		log.Printf("[HEALTH] Failed to clean old history: %v", err)
+		return
+	}
+
+	if affected, _ := result.RowsAffected(); affected > 0 {
+		log.Printf("[HEALTH] Cleaned %d old health history entries", affected)
+	}
+}
+
+func savePointToDB(point HealthHistoryPoint) {
+	if healthDB == nil {
+		return
+	}
+
+	_, err := healthDB.Exec(`
+		INSERT INTO health_history (timestamp, cpu_usage, memory_percent, disk_percent, temperature)
+		VALUES (?, ?, ?, ?, ?)
+	`, point.Timestamp, point.CPUUsage, point.MemoryPercent, point.DiskPercent, point.Temperature)
+	if err != nil {
+		log.Printf("[HEALTH] Failed to save health point to DB: %v", err)
+	}
 }
 
 func collectHealthPoint() {
@@ -81,8 +168,6 @@ func collectHealthPoint() {
 	}
 
 	healthHistoryMu.Lock()
-	defer healthHistoryMu.Unlock()
-
 	healthHistory = append(healthHistory, point)
 
 	// Trim to keep only last 24h
@@ -99,6 +184,10 @@ func collectHealthPoint() {
 	if len(healthHistory) > healthMaxPoints {
 		healthHistory = healthHistory[len(healthHistory)-healthMaxPoints:]
 	}
+	healthHistoryMu.Unlock()
+
+	// Persist to database (outside the lock)
+	savePointToDB(point)
 }
 
 // GetHealthHistory returns a copy of the health history buffer
@@ -213,7 +302,7 @@ func getCPUUsage() float64 {
 
 func getMemoryInfo() map[string]uint64 {
 	info := make(map[string]uint64)
-	
+
 	file, err := os.Open("/proc/meminfo")
 	if err != nil {
 		return info
@@ -263,7 +352,7 @@ func getMemoryInfo() map[string]uint64 {
 
 func getDiskUsage(path string) map[string]uint64 {
 	info := make(map[string]uint64)
-	
+
 	var stat syscall.Statfs_t
 	err := syscall.Statfs(path, &stat)
 	if err != nil {

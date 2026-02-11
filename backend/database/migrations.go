@@ -313,6 +313,15 @@ func RunMigrations(db *sql.DB) error {
 			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
 			UNIQUE(config_id, user_id)
 		)`,
+
+		`CREATE TABLE IF NOT EXISTS health_history (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			timestamp INTEGER NOT NULL,
+			cpu_usage REAL NOT NULL DEFAULT 0,
+			memory_percent REAL NOT NULL DEFAULT 0,
+			disk_percent REAL NOT NULL DEFAULT 0,
+			temperature REAL NOT NULL DEFAULT 0
+		)`,
 	}
 
 	for _, migration := range migrations {
@@ -329,6 +338,7 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_meters_building ON meters(building_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_invoices_building ON invoices(building_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_health_history_timestamp ON health_history(timestamp)`,
 	}
 
 	for _, index := range indexes {

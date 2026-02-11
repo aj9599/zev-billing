@@ -78,7 +78,7 @@ func main() {
 
 	go dataCollector.Start()
 	go autoBillingScheduler.Start()
-	services.StartHealthHistoryCollector()
+	services.StartHealthHistoryCollector(db)
 
 	// Initialize all handlers
 	authHandler := handlers.NewAuthHandler(db, cfg.JWTSecret)
