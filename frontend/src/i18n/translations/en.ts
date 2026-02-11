@@ -2160,6 +2160,13 @@ export const en: Translations = {
   'pricing.instructions.vzevStep': 'For vZEV: Select a complex and set the vZEV export price',
   'pricing.instructions.vzevImportant': 'vZEV: Can only bill complexes, not individual buildings within the complex',
   'pricing.form.type': 'Type',
+  'pricing.totalConfigs': 'Configurations',
+  'pricing.activeConfigs': 'Active',
+  'pricing.buildingsConfigured': 'Buildings',
+  'pricing.powerPricesSection': 'Power Prices',
+  'pricing.chargingPricesSection': 'Charging Prices',
+  'pricing.validitySection': 'Validity',
+  'pricing.optionsSection': 'Options',
 
   // ============================================================================
   // LOGS (System Logs & Monitoring)
