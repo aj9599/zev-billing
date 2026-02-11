@@ -194,7 +194,7 @@ export const SystemHealthCharts = ({ healthHistory }: SystemHealthChartsProps) =
 
   const renderChartCard = (
     chartKey: string,
-    canvasRef: React.RefObject<HTMLCanvasElement | null>,
+    canvasRef: React.RefObject<HTMLCanvasElement>,
     index: number
   ) => {
     const colors = chartColors[chartKey];
