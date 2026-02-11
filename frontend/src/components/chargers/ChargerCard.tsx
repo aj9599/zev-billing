@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Edit2, Trash2, Wifi, WifiOff, Battery, TrendingUp, Info } from 'lucide-react';
 import type { Charger } from '../../types';
 import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus } from './hooks/useChargerStatus';
@@ -13,6 +12,8 @@ interface ChargerCardProps {
     zaptecStatus?: ZaptecConnectionStatus[number];
     onEdit: () => void;
     onDelete: () => void;
+    isDetailOpen: boolean;
+    onShowDetail: (show: boolean) => void;
     t: (key: string) => string;
 }
 
@@ -23,9 +24,10 @@ export default function ChargerCard({
     zaptecStatus,
     onEdit,
     onDelete,
+    isDetailOpen,
+    onShowDetail,
     t
 }: ChargerCardProps) {
-    const [showDetail, setShowDetail] = useState(false);
     const chargerPreset = getPreset(charger.preset);
 
     // Determine state
@@ -298,7 +300,7 @@ export default function ChargerCard({
                     </div>
 
                     <button
-                        onClick={() => setShowDetail(true)}
+                        onClick={() => onShowDetail(!isDetailOpen)}
                         style={{
                             display: 'flex', alignItems: 'center', gap: '5px',
                             padding: '5px 12px', borderRadius: '8px',
@@ -323,13 +325,13 @@ export default function ChargerCard({
                 </div>
             </div>
 
-            {showDetail && (
+            {isDetailOpen && (
                 <ChargerDetailModal
                     charger={charger}
                     liveData={liveData}
                     loxoneStatus={loxoneStatus}
                     zaptecStatus={zaptecStatus}
-                    onClose={() => setShowDetail(false)}
+                    onClose={() => onShowDetail(false)}
                     t={t}
                 />
             )}

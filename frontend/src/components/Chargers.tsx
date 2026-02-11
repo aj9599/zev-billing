@@ -25,6 +25,7 @@ export default function Chargers() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [openDetailId, setOpenDetailId] = useState<number | null>(null);
 
   // Custom hooks
   const { liveData, loxoneStatus, zaptecStatus, fetchStatusData } = useChargerStatus();
@@ -426,6 +427,8 @@ export default function Chargers() {
                     zaptecStatus={zaptecStatus[charger.id]}
                     onEdit={() => handleEdit(charger)}
                     onDelete={() => handleDeleteClick(charger)}
+                    isDetailOpen={openDetailId === charger.id}
+                    onShowDetail={(show) => setOpenDetailId(show ? charger.id : null)}
                     t={t}
                   />
                 </div>
