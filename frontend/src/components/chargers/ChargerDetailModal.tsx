@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Battery, TrendingUp, TrendingDown, Gauge, Activity, Calendar, BarChart3, Clock, User, Zap, Wifi, WifiOff } from 'lucide-react';
 import type { Charger } from '../../types';
 import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus } from './hooks/useChargerStatus';
@@ -26,6 +28,34 @@ export default function ChargerDetailModal({
     onClose,
     t
 }: ChargerDetailModalProps) {
+    const panelRef = useRef<HTMLDivElement>(null);
+
+    // Close on click outside
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+                onClose();
+            }
+        };
+        // Delay adding listener so the opening click doesn't immediately close
+        const timer = setTimeout(() => {
+            document.addEventListener('mousedown', handleClickOutside);
+        }, 10);
+        return () => {
+            clearTimeout(timer);
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [onClose]);
+
+    // Close on Escape
+    useEffect(() => {
+        const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        document.addEventListener('keydown', handleEscape);
+        return () => document.removeEventListener('keydown', handleEscape);
+    }, [onClose]);
+
     const stateValue = charger.connection_type === 'zaptec_api'
         ? (zaptecStatus?.state_description ?
             (zaptecStatus.state_description === 'Unknown' ? '0' :
@@ -115,7 +145,7 @@ export default function ChargerDetailModal({
             ? zaptecStatus?.last_update
             : liveData?.last_update;
 
-    return (
+    const modalContent = (
         <div style={{
             position: 'fixed',
             top: 0,
@@ -128,8 +158,8 @@ export default function ChargerDetailModal({
             justifyContent: 'center',
             zIndex: 1000,
             padding: '20px'
-        }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-            <div style={{
+        }}>
+            <div ref={panelRef} style={{
                 backgroundColor: 'white',
                 borderRadius: '24px',
                 padding: '28px',
@@ -138,7 +168,8 @@ export default function ChargerDetailModal({
                 maxHeight: '85vh',
                 overflowY: 'auto',
                 position: 'relative',
-                boxShadow: '0 20px 60px rgba(0,0,0,0.2)'
+                boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+                animation: 'cdm-slideUp 0.25s ease-out'
             }}>
                 {/* Close Button */}
                 <button onClick={onClose} style={{
@@ -146,8 +177,12 @@ export default function ChargerDetailModal({
                     width: '32px', height: '32px', borderRadius: '50%',
                     border: 'none', backgroundColor: '#f3f4f6',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: 'pointer', color: '#6b7280'
-                }}>
+                    cursor: 'pointer', color: '#6b7280',
+                    transition: 'background-color 0.15s'
+                }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#e5e7eb'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#f3f4f6'; }}
+                >
                     <X size={18} />
                 </button>
 
@@ -396,6 +431,15 @@ export default function ChargerDetailModal({
                     )}
                 </div>
             </div>
+
+            <style>{`
+                @keyframes cdm-slideUp {
+                    from { opacity: 0; transform: translateY(12px) scale(0.97); }
+                    to { opacity: 1; transform: translateY(0) scale(1); }
+                }
+            `}</style>
         </div>
     );
+
+    return createPortal(modalContent, document.body);
 }
