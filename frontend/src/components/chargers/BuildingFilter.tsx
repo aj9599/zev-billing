@@ -34,7 +34,7 @@ export default function BuildingFilter({
     boxShadow: isActive ? '0 2px 8px rgba(102, 126, 234, 0.3)' : '0 1px 3px rgba(0,0,0,0.04)'
   });
 
-  const countBadge = (count: number, isActive: boolean): React.CSSProperties => ({
+  const countBadge = (_count: number, isActive: boolean): React.CSSProperties => ({
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
