@@ -25,110 +25,108 @@ export default function SharedMeterCard({
 
   return (
     <tr
+      className="sm-table-row"
       style={{
-        borderBottom: '1px solid #e9ecef',
+        borderBottom: '1px solid #f3f4f6',
         transition: 'background-color 0.2s'
       }}
-      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-      onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'white'}
     >
-      <td style={{ padding: '16px', fontSize: '15px' }}>
+      <td style={{ padding: '12px', fontSize: '14px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
-            width: '36px',
-            height: '36px',
-            backgroundColor: '#fbbf24',
+            width: '32px',
+            height: '32px',
+            backgroundColor: 'rgba(251, 191, 36, 0.1)',
             borderRadius: '8px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
           }}>
-            <Zap size={18} color="white" />
+            <Zap size={15} color="#f59e0b" />
           </div>
-          <strong>{config.meter_name}</strong>
+          <span style={{ fontWeight: '600', color: '#1f2937' }}>{config.meter_name}</span>
         </div>
       </td>
-      <td style={{ padding: '16px', fontSize: '14px' }}>
+      <td style={{ padding: '12px', fontSize: '13px' }}>
         <span style={{
           display: 'inline-block',
-          padding: '6px 14px',
-          borderRadius: '20px',
-          backgroundColor: '#667EEA',
-          color: 'white',
-          fontSize: '13px',
+          padding: '4px 10px',
+          borderRadius: '12px',
+          backgroundColor: '#667eea15',
+          color: '#667eea',
+          fontSize: '12px',
           fontWeight: '600'
         }}>
           {getSplitTypeLabel(config.split_type)}
         </span>
       </td>
       <td style={{
-        padding: '16px',
+        padding: '12px',
         textAlign: 'right',
-        fontSize: '15px',
-        fontWeight: '600'
+        fontSize: '14px',
+        fontWeight: '600',
+        color: '#1f2937'
       }}>
         CHF {config.unit_price.toFixed(3)}/kWh
       </td>
-      <td style={{ padding: '16px', textAlign: 'right' }}>
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+      <td style={{ padding: '12px', textAlign: 'right' }}>
+        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
           <button
             onClick={() => onEdit(config)}
+            title={t('common.edit')}
+            className="sm-btn-edit"
             style={{
-              padding: '8px 14px',
-              backgroundColor: '#10b981',
-              color: 'white',
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
               border: 'none',
-              borderRadius: '6px',
               cursor: 'pointer',
-              fontSize: '13px',
-              fontWeight: '600',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              transition: 'all 0.2s'
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.backgroundColor = '#059669';
-              e.currentTarget.style.transform = 'translateY(-1px)';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.backgroundColor = '#10b981';
-              e.currentTarget.style.transform = 'translateY(0)';
+              justifyContent: 'center',
+              transition: 'all 0.2s',
+              backgroundColor: 'rgba(102, 126, 234, 0.1)',
+              color: '#667eea'
             }}
           >
             <Edit2 size={14} />
-            {t('common.edit')}
           </button>
           <button
             onClick={() => onDelete(config.id)}
+            title={t('common.delete')}
+            className="sm-btn-delete"
             style={{
-              padding: '8px 14px',
-              backgroundColor: '#ef4444',
-              color: 'white',
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
               border: 'none',
-              borderRadius: '6px',
               cursor: 'pointer',
-              fontSize: '13px',
-              fontWeight: '600',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              transition: 'all 0.2s'
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.backgroundColor = '#dc2626';
-              e.currentTarget.style.transform = 'translateY(-1px)';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.backgroundColor = '#ef4444';
-              e.currentTarget.style.transform = 'translateY(0)';
+              justifyContent: 'center',
+              transition: 'all 0.2s',
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              color: '#ef4444'
             }}
           >
             <Trash2 size={14} />
-            {t('common.delete')}
           </button>
         </div>
       </td>
+
+      <style>{`
+        .sm-table-row:hover {
+          background-color: #f9fafb;
+        }
+        .sm-btn-edit:hover {
+          background-color: rgba(102, 126, 234, 0.2) !important;
+          transform: translateY(-1px);
+        }
+        .sm-btn-delete:hover {
+          background-color: rgba(239, 68, 68, 0.2) !important;
+          transform: translateY(-1px);
+        }
+      `}</style>
     </tr>
   );
 }

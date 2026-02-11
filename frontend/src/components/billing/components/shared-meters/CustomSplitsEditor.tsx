@@ -23,21 +23,23 @@ export default function CustomSplitsEditor({
 
   return (
     <div style={{
-      marginBottom: '20px',
+      backgroundColor: 'white',
+      borderRadius: '12px',
+      border: '1px solid #e5e7eb',
       padding: '16px',
-      backgroundColor: '#f8f9fa',
-      borderRadius: '8px',
-      border: '2px solid #e5e7eb'
+      marginBottom: '16px'
     }}>
       <h4 style={{
-        fontSize: '15px',
+        fontSize: '13px',
         fontWeight: '600',
-        marginBottom: '12px',
-        color: '#1f2937'
+        marginBottom: '10px',
+        color: '#374151',
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px'
       }}>
         {t('sharedMeters.percentagePerApartment')}
       </h4>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {users.map(user => (
           <div
             key={user.id}
@@ -45,21 +47,21 @@ export default function CustomSplitsEditor({
               display: 'flex',
               alignItems: 'center',
               gap: '12px',
-              padding: '10px',
-              backgroundColor: 'white',
-              borderRadius: '6px',
-              border: '1px solid #e5e7eb'
+              padding: '10px 12px',
+              backgroundColor: '#f9fafb',
+              borderRadius: '8px',
+              border: '1px solid #f3f4f6'
             }}
           >
             <label style={{
               flex: 1,
-              fontSize: '14px',
+              fontSize: '13px',
               fontWeight: '500',
               color: '#374151'
             }}>
               {user.first_name} {user.last_name}
               {user.apartment_unit && (
-                <span style={{ color: '#6b7280', marginLeft: '6px' }}>
+                <span style={{ color: '#9ca3af', marginLeft: '6px', fontSize: '12px' }}>
                   (Apt {user.apartment_unit})
                 </span>
               )}
@@ -73,15 +75,18 @@ export default function CustomSplitsEditor({
                 value={customSplits[user.id] || ''}
                 onChange={(e) => onChange(user.id, e.target.value)}
                 style={{
-                  width: '80px',
+                  width: '75px',
                   padding: '6px 10px',
-                  border: '2px solid #d1d5db',
+                  border: '1px solid #e5e7eb',
                   borderRadius: '6px',
-                  fontSize: '14px',
-                  textAlign: 'right'
+                  fontSize: '13px',
+                  textAlign: 'right',
+                  transition: 'border-color 0.2s'
                 }}
+                onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
               />
-              <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280' }}>
+              <span style={{ fontSize: '13px', fontWeight: '600', color: '#9ca3af' }}>
                 %
               </span>
             </div>
@@ -89,31 +94,31 @@ export default function CustomSplitsEditor({
         ))}
       </div>
       <div style={{
-        marginTop: '12px',
-        padding: '10px',
-        backgroundColor: isValid ? '#ecfdf5' : '#fef2f2',
-        borderRadius: '6px',
+        marginTop: '10px',
+        padding: '10px 12px',
+        backgroundColor: isValid ? 'rgba(16, 185, 129, 0.06)' : 'rgba(239, 68, 68, 0.06)',
+        borderRadius: '8px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        border: `2px solid ${isValid ? '#10b981' : '#ef4444'}`
+        border: `1px solid ${isValid ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`
       }}>
-        <span style={{ fontSize: '14px', fontWeight: '600', color: '#1f2937' }}>
+        <span style={{ fontSize: '13px', fontWeight: '600', color: '#1f2937' }}>
           {t('common.total')}:
         </span>
         <span style={{
-          fontSize: '16px',
+          fontSize: '14px',
           fontWeight: '700',
-          color: isValid ? '#10b981' : '#ef4444'
+          color: isValid ? '#059669' : '#ef4444'
         }}>
           {total.toFixed(2)}%
         </span>
       </div>
       {!isValid && (
         <p style={{
-          fontSize: '12px',
+          fontSize: '11px',
           color: '#ef4444',
-          marginTop: '8px',
+          marginTop: '6px',
           fontWeight: '500'
         }}>
           {t('sharedMeters.totalMustBe100')}

@@ -36,51 +36,48 @@ export default function CustomItemCard({
     return labels[frequency] || frequency;
   };
 
+  const catColor = getCategoryColor(item.category);
+
   return (
     <div
+      className="ci-card"
       style={{
-        padding: '18px',
-        border: '2px solid #e5e7eb',
-        borderRadius: '12px',
-        backgroundColor: item.is_active ? 'white' : '#f9fafb',
+        padding: '14px 16px',
+        border: '1px solid #e5e7eb',
+        borderRadius: '10px',
+        backgroundColor: item.is_active ? 'white' : '#fafafa',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        borderLeft: `4px solid ${getCategoryColor(item.category)}`,
+        borderLeft: `3px solid ${catColor}`,
         transition: 'all 0.2s',
-        cursor: 'default'
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
-        e.currentTarget.style.transform = 'translateY(-2px)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = 'none';
-        e.currentTarget.style.transform = 'translateY(0)';
+        cursor: 'default',
+        gap: '12px'
       }}
     >
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '10px',
-          marginBottom: '8px'
+          gap: '8px',
+          marginBottom: '6px',
+          flexWrap: 'wrap'
         }}>
           <h5 style={{
-            fontSize: '16px',
+            fontSize: '14px',
             fontWeight: '700',
             margin: 0,
-            color: '#111827'
+            color: '#1f2937'
           }}>
             {item.description}
           </h5>
           {!item.is_active && (
             <span style={{
-              fontSize: '12px',
-              padding: '3px 10px',
+              fontSize: '10px',
+              padding: '2px 8px',
               backgroundColor: '#fef3c7',
               color: '#92400e',
-              borderRadius: '12px',
+              borderRadius: '10px',
               fontWeight: '600'
             }}>
               {t('customItems.inactiveLabel')}
@@ -89,89 +86,90 @@ export default function CustomItemCard({
         </div>
         <div style={{
           display: 'flex',
-          gap: '20px',
-          fontSize: '14px',
+          gap: '12px',
+          fontSize: '12px',
           color: '#6b7280',
-          flexWrap: 'wrap'
+          flexWrap: 'wrap',
+          alignItems: 'center'
         }}>
           <span style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
+            gap: '5px',
             fontWeight: '600'
           }}>
             <span style={{
-              width: '8px',
-              height: '8px',
+              width: '7px',
+              height: '7px',
               borderRadius: '50%',
-              backgroundColor: getCategoryColor(item.category)
+              backgroundColor: catColor
             }} />
             {getCategoryLabel(item.category)}
           </span>
+          <span style={{ color: '#d1d5db' }}>|</span>
           <span>{getFrequencyLabel(item.frequency)}</span>
-          <span style={{ fontWeight: '700', color: '#111827' }}>
+          <span style={{ color: '#d1d5db' }}>|</span>
+          <span style={{ fontWeight: '700', color: '#1f2937', fontSize: '13px' }}>
             CHF {item.amount.toFixed(2)}
           </span>
         </div>
       </div>
-      <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+      <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
         <button
           onClick={() => onEdit(item)}
+          title={t('common.edit')}
+          className="ci-btn-edit"
           style={{
-            padding: '10px 14px',
-            backgroundColor: '#667EEA',
-            color: 'white',
+            width: '32px',
+            height: '32px',
+            borderRadius: '8px',
             border: 'none',
-            borderRadius: '6px',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
-            fontSize: '13px',
-            fontWeight: '600',
-            transition: 'all 0.2s'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#0056b3';
-            e.currentTarget.style.transform = 'translateY(-1px)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = '#667EEA';
-            e.currentTarget.style.transform = 'translateY(0)';
+            justifyContent: 'center',
+            transition: 'all 0.2s',
+            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+            color: '#667eea'
           }}
         >
           <Edit2 size={14} />
-          {t('common.edit')}
         </button>
         <button
           onClick={() => onDelete(item.id)}
+          title={t('common.delete')}
+          className="ci-btn-delete"
           style={{
-            padding: '10px 14px',
-            backgroundColor: '#ef4444',
-            color: 'white',
+            width: '32px',
+            height: '32px',
+            borderRadius: '8px',
             border: 'none',
-            borderRadius: '6px',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
-            fontSize: '13px',
-            fontWeight: '600',
-            transition: 'all 0.2s'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#dc2626';
-            e.currentTarget.style.transform = 'translateY(-1px)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = '#ef4444';
-            e.currentTarget.style.transform = 'translateY(0)';
+            justifyContent: 'center',
+            transition: 'all 0.2s',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            color: '#ef4444'
           }}
         >
           <Trash2 size={14} />
-          {t('common.delete')}
         </button>
       </div>
+
+      <style>{`
+        .ci-card:hover {
+          box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .ci-btn-edit:hover {
+          background-color: rgba(102, 126, 234, 0.2) !important;
+          transform: translateY(-1px);
+        }
+        .ci-btn-delete:hover {
+          background-color: rgba(239, 68, 68, 0.2) !important;
+          transform: translateY(-1px);
+        }
+      `}</style>
     </div>
   );
 }

@@ -14,64 +14,68 @@ export default function SharedMetersHeader({ onAddNew, configCount }: SharedMete
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: '24px',
+      marginBottom: '20px',
       gap: '16px',
       flexWrap: 'wrap'
     }}>
-      <div>
-        <h2 style={{
-          fontSize: '24px',
-          fontWeight: '700',
-          margin: 0,
-          marginBottom: '8px',
-          color: '#1f2937',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px'
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{
+          width: '36px', height: '36px', borderRadius: '10px',
+          backgroundColor: 'rgba(251, 191, 36, 0.1)',
+          color: '#f59e0b',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
         }}>
-          <Zap size={28} style={{ color: '#fbbf24' }} />
-          {t('sharedMeters.title')}
-        </h2>
-        <p style={{
-          fontSize: '14px',
-          color: '#6b7280',
-          margin: 0
-        }}>
-          {configCount} {configCount === 1 ? t('sharedMeters.config') : t('sharedMeters.configs')} {t('sharedMeters.configured')}
-        </p>
+          <Zap size={18} />
+        </div>
+        <div>
+          <h2 style={{
+            fontSize: '20px',
+            fontWeight: '700',
+            margin: 0,
+            marginBottom: '2px',
+            color: '#1f2937'
+          }}>
+            {t('sharedMeters.title')}
+          </h2>
+          <p style={{
+            fontSize: '13px',
+            color: '#9ca3af',
+            margin: 0
+          }}>
+            {configCount} {configCount === 1 ? t('sharedMeters.config') : t('sharedMeters.configs')} {t('sharedMeters.configured')}
+          </p>
+        </div>
       </div>
 
       <button
+        className="sm-btn-create"
         onClick={onAddNew}
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
-          padding: '12px 20px',
-          backgroundColor: '#667EEA',
+          padding: '10px 18px',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
           color: 'white',
           border: 'none',
-          borderRadius: '8px',
-          fontSize: '15px',
+          borderRadius: '10px',
+          fontSize: '14px',
           fontWeight: '600',
           cursor: 'pointer',
           transition: 'all 0.2s',
-          boxShadow: '0 2px 4px rgba(102, 126, 234, 0.3)'
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = '#5568d3';
-          e.currentTarget.style.transform = 'translateY(-2px)';
-          e.currentTarget.style.boxShadow = '0 4px 8px rgba(102, 126, 234, 0.4)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = '#667EEA';
-          e.currentTarget.style.transform = 'translateY(0)';
-          e.currentTarget.style.boxShadow = '0 2px 4px rgba(102, 126, 234, 0.3)';
+          boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)'
         }}
       >
-        <Plus size={20} />
+        <Plus size={18} />
         <span>{t('sharedMeters.addNew')}</span>
       </button>
+
+      <style>{`
+        .sm-btn-create:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.45) !important;
+        }
+      `}</style>
     </div>
   );
 }
