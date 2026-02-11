@@ -502,26 +502,18 @@ func (dc *DataCollector) IsCollecting() bool {
 
 // IsCollectionWindow returns true if we're within 2 minutes before or 1 minute after a quarter-hour mark
 func IsCollectionWindow() bool {
-	now := time.Now()
-	minute := now.Minute()
-	second := now.Second()
+	minute := time.Now().Minute()
 
 	// Check each quarter-hour boundary: :00, :15, :30, :45
 	for _, boundary := range []int{0, 15, 30, 45} {
-		// Minutes before boundary (with wrap for :00)
-		minutesBefore := minute - boundary
+		diff := minute - boundary
+		// Handle wrap-around for :00 boundary (58, 59 are before next hour's :00)
 		if boundary == 0 && minute >= 58 {
-			minutesBefore = minute - 60 // e.g. minute=59 -> -1 (1 min before next hour's :00)
+			diff = minute - 60
 		}
-
-		if minutesBefore >= -2 && minutesBefore < 0 {
-			return true // within 2 minutes before
-		}
-		if minutesBefore == 0 && second <= 59 {
-			return true // at the boundary minute
-		}
-		if minutesBefore == 1 && second == 0 {
-			return true // 1 minute after (first second)
+		// Block from 2 min before through 1 min after each boundary
+		if diff >= -2 && diff <= 1 {
+			return true
 		}
 	}
 	return false
