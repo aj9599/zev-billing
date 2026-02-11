@@ -10,6 +10,9 @@ interface MeterCardProps {
     loxoneStatus: any;
     mqttStatus: any;
     mqttBrokerConnected?: boolean;
+    smartmeStatus: any;
+    udpStatus: any;
+    modbusStatus: any;
     onEdit: (meter: Meter) => void;
     onReplace: (meter: Meter) => void;
     onDelete: (meter: Meter) => void;
@@ -21,6 +24,9 @@ export default function MeterCard({
     loxoneStatus,
     mqttStatus,
     mqttBrokerConnected,
+    smartmeStatus,
+    udpStatus,
+    modbusStatus,
     onEdit,
     onReplace,
     onDelete
@@ -349,6 +355,9 @@ export default function MeterCard({
                 loxoneStatus={loxoneStatus}
                 mqttStatus={mqttStatus}
                 mqttBrokerConnected={mqttBrokerConnected}
+                smartmeStatus={smartmeStatus}
+                udpStatus={udpStatus}
+                modbusStatus={modbusStatus}
             />
         </div>
     );

@@ -33,7 +33,7 @@ export default function Meters() {
     const [meterToReplace, setMeterToReplace] = useState<Meter | null>(null);
 
     // Custom hooks for form and status management
-    const { loxoneStatus, mqttStatus, fetchConnectionStatus } = useMeterStatus();
+    const { loxoneStatus, mqttStatus, mqttBrokerConnected, smartmeStatus, udpStatus, modbusStatus, fetchConnectionStatus } = useMeterStatus();
     const {
         showModal,
         editingMeter,
@@ -196,7 +196,15 @@ export default function Meters() {
     // Stats
     const activeMeters = meters.filter(m => m.is_active && !m.is_archived);
     const totalCount = activeMeters.length;
-    const connectedCount = activeMeters.filter(m => m.connection_type === 'loxone_api' || m.connection_type === 'mqtt').length;
+    const connectedCount = activeMeters.filter(m => {
+        const id = m.id;
+        if (m.connection_type === 'loxone_api') return loxoneStatus[id]?.is_connected;
+        if (m.connection_type === 'mqtt') return mqttStatus[id]?.is_connected;
+        if (m.connection_type === 'smartme') return smartmeStatus[id]?.is_connected;
+        if (m.connection_type === 'udp') return udpStatus[id]?.is_connected;
+        if (m.connection_type === 'modbus_tcp') return modbusStatus[id]?.is_connected;
+        return false;
+    }).length;
     const archivedCount = meters.filter(m => m.is_archived).length;
 
     // Loading skeleton
@@ -344,6 +352,10 @@ export default function Meters() {
                                     users={users}
                                     loxoneStatus={loxoneStatus}
                                     mqttStatus={mqttStatus}
+                                    mqttBrokerConnected={mqttBrokerConnected}
+                                    smartmeStatus={smartmeStatus}
+                                    udpStatus={udpStatus}
+                                    modbusStatus={modbusStatus}
                                     onEdit={handleEdit}
                                     onReplace={handleReplaceClick}
                                     onDelete={handleDeleteClick}

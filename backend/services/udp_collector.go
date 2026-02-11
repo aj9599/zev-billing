@@ -16,6 +16,8 @@ type UDPCollector struct {
 	db                 *sql.DB
 	listeners          map[int]*net.UDPConn
 	meterBuffers       map[int]float64
+	meterLastUpdate    map[int]time.Time
+	meterNames         map[int]string
 	chargerBuffers     map[int]UDPChargerData
 	partialChargerData map[int]*PartialUDPChargerData
 	mu                 sync.Mutex
@@ -57,6 +59,8 @@ func NewUDPCollector(db *sql.DB) *UDPCollector {
 		db:                 db,
 		listeners:          make(map[int]*net.UDPConn),
 		meterBuffers:       make(map[int]float64),
+		meterLastUpdate:    make(map[int]time.Time),
+		meterNames:         make(map[int]string),
 		chargerBuffers:     make(map[int]UDPChargerData),
 		partialChargerData: make(map[int]*PartialUDPChargerData),
 		activePorts:        []int{},
@@ -236,6 +240,7 @@ func (uc *UDPCollector) startListener(port int, meters []UDPMeterConfig, charger
 	uc.activePorts = append(uc.activePorts, port)
 	for _, m := range meters {
 		uc.meterBuffers[m.MeterID] = 0
+		uc.meterNames[m.MeterID] = m.Name
 	}
 	for _, c := range chargers {
 		uc.chargerBuffers[c.ChargerID] = UDPChargerData{}
@@ -288,6 +293,7 @@ func (uc *UDPCollector) startListener(port int, meters []UDPMeterConfig, charger
 				if reading > 0 {
 					uc.mu.Lock()
 					uc.meterBuffers[meter.MeterID] = reading
+					uc.meterLastUpdate[meter.MeterID] = time.Now()
 					uc.mu.Unlock()
 					log.Printf("DEBUG: UDP data for meter '%s': %.3f kWh from %s", 
 						meter.Name, reading, remoteAddr.IP)
@@ -472,11 +478,30 @@ func (uc *UDPCollector) GetConnectionStatus() map[string]interface{} {
 		partialStatus[chargerID] = status
 	}
 	
+	// Build per-meter connection status for the UI
+	udpConnections := make(map[string]interface{})
+	for meterID, reading := range uc.meterBuffers {
+		lastUpdate := uc.meterLastUpdate[meterID]
+		isConnected := reading > 0 && !lastUpdate.IsZero() && time.Since(lastUpdate) < 30*time.Minute
+		lastUpdateStr := ""
+		if !lastUpdate.IsZero() {
+			lastUpdateStr = lastUpdate.Format(time.RFC3339)
+		}
+		name := uc.meterNames[meterID]
+		udpConnections[fmt.Sprintf("%d", meterID)] = map[string]interface{}{
+			"meter_name":   name,
+			"is_connected": isConnected,
+			"last_reading": reading,
+			"last_update":  lastUpdateStr,
+		}
+	}
+
 	return map[string]interface{}{
-		"active_ports":        uc.activePorts,
-		"udp_meter_buffers":   meterStatus,
-		"udp_charger_buffers": chargerStatus,
+		"active_ports":         uc.activePorts,
+		"udp_meter_buffers":    meterStatus,
+		"udp_charger_buffers":  chargerStatus,
 		"partial_charger_data": partialStatus,
+		"udp_connections":      udpConnections,
 	}
 }
 

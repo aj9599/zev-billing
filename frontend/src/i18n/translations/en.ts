@@ -635,6 +635,20 @@ export const en: Translations = {
   'meters.loxoneDisconnected': 'Disconnected',
   'meters.loxoneConnecting': 'Connecting...',
 
+  // Smart-me connection status
+  'meters.smartmeConnected': 'Smart-me Connected',
+  'meters.smartmeDisconnected': 'Smart-me Disconnected',
+  'meters.smartmeWaiting': 'Waiting for Smart-me data...',
+
+  // UDP connection status
+  'meters.udpConnected': 'UDP Receiving',
+  'meters.udpWaiting': 'Waiting for UDP data...',
+
+  // Modbus connection status
+  'meters.modbusConnected': 'Modbus Connected',
+  'meters.modbusDisconnected': 'Modbus Disconnected',
+  'meters.modbusConnecting': 'Modbus Connecting...',
+
   // Loxone Setup Guide
   'meters.loxoneSetupGuide': 'Quick Setup:',
   'meters.loxoneSetupStep1': '1. Enter Loxone IP address',

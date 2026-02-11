@@ -637,6 +637,20 @@ export const de: Translations = {
   'meters.loxoneDisconnected': 'Getrennt',
   'meters.loxoneConnecting': 'Verbinde...',
 
+  // Smart-me Verbindungsstatus
+  'meters.smartmeConnected': 'Smart-me Verbunden',
+  'meters.smartmeDisconnected': 'Smart-me Getrennt',
+  'meters.smartmeWaiting': 'Warte auf Smart-me Daten...',
+
+  // UDP Verbindungsstatus
+  'meters.udpConnected': 'UDP Empfang',
+  'meters.udpWaiting': 'Warte auf UDP Daten...',
+
+  // Modbus Verbindungsstatus
+  'meters.modbusConnected': 'Modbus Verbunden',
+  'meters.modbusDisconnected': 'Modbus Getrennt',
+  'meters.modbusConnecting': 'Modbus Verbinde...',
+
   // Loxone Setup Guide
   'meters.loxoneSetupGuide': 'Schnelleinrichtung:',
   'meters.loxoneSetupStep1': '1. Loxone-IP-Adresse eingeben',

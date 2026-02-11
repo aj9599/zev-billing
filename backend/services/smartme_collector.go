@@ -28,6 +28,17 @@ type SmartMeCollector struct {
 	failureCount     map[int]int          // Track consecutive failures per meter
 	failureTime      map[int]time.Time    // Track when meter first hit max failures
 	failureCountMu   sync.Mutex
+	meterStatus      map[int]*SmartMeMeterStatus // Per-meter connection status
+	meterStatusMu    sync.RWMutex
+}
+
+// SmartMeMeterStatus tracks per-meter connection state for the status display
+type SmartMeMeterStatus struct {
+	MeterName   string
+	IsConnected bool
+	LastReading float64
+	LastUpdate  time.Time
+	LastError   string
 }
 
 // SmartMeReading holds the latest reading from a Smart-me device
@@ -89,6 +100,7 @@ func NewSmartMeCollector(db *sql.DB) *SmartMeCollector {
 		lastAPICall:   make(map[string]time.Time),
 		failureCount:  make(map[int]int),
 		failureTime:   make(map[int]time.Time),
+		meterStatus:   make(map[int]*SmartMeMeterStatus),
 		stopChan:      make(chan struct{}),
 	}
 }
@@ -197,6 +209,17 @@ func (smc *SmartMeCollector) CollectMeterNow(meterID int, meterName, configJSON 
 	// Record success
 	smc.recordSuccess(meterID)
 
+	// Update per-meter connection status
+	smc.meterStatusMu.Lock()
+	smc.meterStatus[meterID] = &SmartMeMeterStatus{
+		MeterName:   meterName,
+		IsConnected: true,
+		LastReading: importKWh,
+		LastUpdate:  time.Now(),
+		LastError:   "",
+	}
+	smc.meterStatusMu.Unlock()
+
 	log.Printf("[Smart-me Collector] ✓ FETCHED: Meter '%s' - Import: %.3f kWh, Export: %.3f kWh (Power: %.2f %s)",
 		meterName, importKWh, exportKWh, device.ActivePower, device.ActivePowerUnit)
 
@@ -239,6 +262,14 @@ func (smc *SmartMeCollector) recordFailure(meterID int) {
 		}
 		log.Printf("[Smart-me Collector] ERROR: Meter %d has reached maximum consecutive failures (%d). Will auto-retry after %v",
 			meterID, maxConsecutiveFailures, failureResetDuration)
+
+		// Mark meter as disconnected after max failures
+		smc.meterStatusMu.Lock()
+		if status, exists := smc.meterStatus[meterID]; exists {
+			status.IsConnected = false
+			status.LastError = fmt.Sprintf("Failed %d consecutive times", maxConsecutiveFailures)
+		}
+		smc.meterStatusMu.Unlock()
 	}
 }
 
@@ -491,10 +522,31 @@ func (smc *SmartMeCollector) GetConnectionStatus() map[string]interface{} {
 	failedCount := len(smc.failureCount)
 	smc.failureCountMu.Unlock()
 
+	// Build per-meter connection status
+	smc.meterStatusMu.RLock()
+	connections := make(map[string]interface{})
+	for meterID, status := range smc.meterStatus {
+		// Consider connected if last successful update was within 30 minutes
+		isConnected := status.IsConnected && time.Since(status.LastUpdate) < 30*time.Minute
+		lastUpdateStr := ""
+		if !status.LastUpdate.IsZero() {
+			lastUpdateStr = status.LastUpdate.Format(time.RFC3339)
+		}
+		connections[fmt.Sprintf("%d", meterID)] = map[string]interface{}{
+			"meter_name":   status.MeterName,
+			"is_connected": isConnected,
+			"last_reading": status.LastReading,
+			"last_update":  lastUpdateStr,
+			"last_error":   status.LastError,
+		}
+	}
+	smc.meterStatusMu.RUnlock()
+
 	return map[string]interface{}{
 		"smartme_collector_running": smc.isRunning,
 		"smartme_meters_failed":     failedCount,
 		"smartme_collection_mode":   "aligned_15min",
+		"smartme_connections":       connections,
 	}
 }
 

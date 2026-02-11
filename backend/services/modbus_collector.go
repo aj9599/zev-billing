@@ -284,7 +284,7 @@ func (mc *ModbusCollector) GetConnectionStatus() map[string]interface{} {
 			"is_connected":       client.isConnected,
 			"last_reading":       client.lastReadingImport,
 			"last_reading_export": client.lastReadingExport,
-			"last_update":        client.lastReadTime.Format("2006-01-02 15:04:05"),
+			"last_update":        client.lastReadTime.Format(time.RFC3339),
 			"last_error":         client.lastError,
 			"unit_id":            client.unitID,
 			"function_code":      client.functionCode,
@@ -295,7 +295,7 @@ func (mc *ModbusCollector) GetConnectionStatus() map[string]interface{} {
 		if client.hasExportRegister {
 			clientStatus["export_register_addr"] = client.exportRegisterAddr
 		}
-		status[fmt.Sprintf("meter_%d", meterID)] = clientStatus
+		status[fmt.Sprintf("%d", meterID)] = clientStatus
 		client.mu.Unlock()
 	}
 	
