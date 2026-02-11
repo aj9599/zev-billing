@@ -2272,9 +2272,10 @@ export const de: Translations = {
   'logs.updateConfirm': 'Sind Sie sicher, dass Sie das System aktualisieren möchten? Dieser Vorgang wird:\n\n1. Den Dienst stoppen\n2. Neuesten Code von GitHub herunterladen\n3. Backend und Frontend neu erstellen\n4. Den Dienst neu starten\n\nDies kann 2-5 Minuten dauern. Fortfahren?',
   'logs.updateStarted': 'Update gestartet! Das System wird neu erstellt und neu gestartet. Dies kann einige Minuten dauern. Die Seite wird automatisch neu geladen.',
   'logs.updateCompleteReload': 'Update abgeschlossen! Seite wird jetzt neu geladen...',
-  'logs.updateFailed': 'Update fehlgeschlagen. Bitte überprüfen Sie die Systemprotokolle oder versuchen Sie, manuell zu aktualisieren.',
+  'logs.updateFailed': 'Update fehlgeschlagen',
+  'logs.updateStarting': 'Update wird gestartet...',
   'logs.updatingSystem': 'System wird aktualisiert',
-  'logs.updateInProgress': 'Bitte warten Sie, während das System aktualisiert wird. Dies dauert ungefähr 40 Sekunden.',
+  'logs.updateInProgress': 'Bitte warten Sie, während das System aktualisiert wird...',
   'logs.doNotCloseWindow': 'Bitte schliessen Sie dieses Fenster nicht oder navigieren Sie nicht weg.',
 
   // NEW: Factory Reset translations

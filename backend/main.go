@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -27,6 +28,47 @@ import (
 
 var dataCollector *services.DataCollector
 var autoBillingScheduler *services.AutoBillingScheduler
+
+// Update status tracking
+type UpdateStatus struct {
+	mu       sync.RWMutex
+	Phase    string `json:"phase"`    // "idle", "queued", "waiting", "updating", "error", "done"
+	Message  string `json:"message"`
+	Progress int    `json:"progress"` // 0-100
+	Error    string `json:"error"`
+}
+
+var updateStatus = &UpdateStatus{Phase: "idle"}
+
+func (us *UpdateStatus) set(phase, message string, progress int) {
+	us.mu.Lock()
+	defer us.mu.Unlock()
+	us.Phase = phase
+	us.Message = message
+	us.Progress = progress
+	if phase != "error" {
+		us.Error = ""
+	}
+}
+
+func (us *UpdateStatus) setError(message string) {
+	us.mu.Lock()
+	defer us.mu.Unlock()
+	us.Phase = "error"
+	us.Error = message
+	us.Message = "Update failed"
+}
+
+func (us *UpdateStatus) toJSON() map[string]interface{} {
+	us.mu.RLock()
+	defer us.mu.RUnlock()
+	return map[string]interface{}{
+		"phase":    us.Phase,
+		"message":  us.Message,
+		"progress": us.Progress,
+		"error":    us.Error,
+	}
+}
 
 func recoverMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -125,6 +167,7 @@ func main() {
 	api.HandleFunc("/system/backup/restore", restoreBackupHandler(cfg.DatabasePath)).Methods("POST")
 	api.HandleFunc("/system/update/check", checkUpdateHandler).Methods("GET")
 	api.HandleFunc("/system/update/apply", applyUpdateHandler).Methods("POST")
+	api.HandleFunc("/system/update/status", updateStatusHandler).Methods("GET")
 	
 	// NEW: Factory Reset endpoint
 	api.HandleFunc("/system/factory-reset", factoryResetHandler(cfg.DatabasePath)).Methods("POST")
@@ -584,40 +627,71 @@ func checkUpdateHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // Apply update handler
+func updateStatusHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(updateStatus.toJSON())
+}
+
 func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("Applying system update...")
+	log.Println("Update requested...")
+
+	// Check if already updating
+	updateStatus.mu.RLock()
+	currentPhase := updateStatus.Phase
+	updateStatus.mu.RUnlock()
+	if currentPhase == "updating" || currentPhase == "queued" || currentPhase == "waiting" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":  "already_running",
+			"message": "An update is already in progress.",
+		})
+		return
+	}
+
+	// Check if we're in a collection window — if so, queue it
+	if dataCollector != nil && (dataCollector.IsCollecting() || services.IsCollectionWindow()) {
+		updateStatus.set("queued", "Update queued — waiting for data collection to finish...", 0)
+	} else {
+		updateStatus.set("updating", "Starting update...", 0)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
-		"status":  "updating",
-		"message": "Update process started. This may take a few minutes.",
-	})
+	json.NewEncoder(w).Encode(updateStatus.toJSON())
 
 	go func() {
+		// Wait for safe window if needed
+		if dataCollector != nil && (dataCollector.IsCollecting() || services.IsCollectionWindow()) {
+			updateStatus.set("waiting", "Waiting for data collection to complete...", 0)
+			if !dataCollector.WaitForSafeUpdateWindow(func(msg string) {
+				updateStatus.set("waiting", msg, 0)
+			}) {
+				updateStatus.setError("Timeout waiting for safe update window. Try again later.")
+				return
+			}
+		}
+
+		updateStatus.set("updating", "Stopping data collector...", 5)
+
 		// Gracefully stop data collector before update
 		if dataCollector != nil {
 			log.Println("Stopping data collector before update...")
 			dataCollector.Stop()
 		}
-		
+
 		time.Sleep(1 * time.Second)
 
 		// Try to detect repository path
 		repoPath := "/home/pi/zev-billing"
 		if _, err := os.Stat(repoPath); os.IsNotExist(err) {
-			// Try to find the repository root by looking for .git directory
 			if cwd, err := os.Getwd(); err == nil {
-				// If we're in the backend directory, go up one level
 				if filepath.Base(cwd) == "backend" {
 					repoPath = filepath.Dir(cwd)
 				} else {
 					repoPath = cwd
 				}
-
-				// Verify we found the right directory by checking for .git
 				if _, err := os.Stat(filepath.Join(repoPath, ".git")); os.IsNotExist(err) {
-					// Try going up one more level
 					repoPath = filepath.Dir(repoPath)
 				}
 			}
@@ -637,6 +711,7 @@ func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		f, err := os.Create(logFile)
 		if err != nil {
 			log.Printf("Failed to create log file: %v", err)
+			updateStatus.setError(fmt.Sprintf("Failed to create log file: %v", err))
 			return
 		}
 		defer f.Close()
@@ -648,9 +723,33 @@ func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 			f.WriteString(logMsg)
 		}
 
+		// Helper to run a command and capture stderr for error reporting
+		runCmd := func(name string, dir string, env []string, args ...string) error {
+			cmd := exec.Command(args[0], args[1:]...)
+			if dir != "" {
+				cmd.Dir = dir
+			}
+			if env != nil {
+				cmd.Env = env
+			}
+			cmd.Stdout = f
+			// Capture stderr separately for error messages
+			var stderrBuf strings.Builder
+			cmd.Stderr = io.MultiWriter(f, &stderrBuf)
+			if err := cmd.Run(); err != nil {
+				errDetail := stderrBuf.String()
+				if len(errDetail) > 500 {
+					errDetail = errDetail[len(errDetail)-500:]
+				}
+				return fmt.Errorf("%s failed: %v\n%s", name, err, strings.TrimSpace(errDetail))
+			}
+			return nil
+		}
+
 		writeLog(fmt.Sprintf("Repository path: %s", repoPath))
 
 		// Stash local changes
+		updateStatus.set("updating", "Stashing local changes...", 10)
 		writeLog("Stashing local changes...")
 		stashCmd := exec.Command("git", "-C", repoPath, "stash")
 		stashCmd.Stdout = f
@@ -658,60 +757,56 @@ func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		stashCmd.Run() // Don't fail if nothing to stash
 
 		// Pull latest changes
+		updateStatus.set("updating", "Pulling latest changes from GitHub...", 20)
 		writeLog("Pulling latest changes from GitHub...")
-		pullCmd := exec.Command("git", "-C", repoPath, "pull", "origin", "main")
-		pullCmd.Stdout = f
-		pullCmd.Stderr = f
-		if err := pullCmd.Run(); err != nil {
-			writeLog(fmt.Sprintf("Failed to pull changes: %v", err))
+		if err := runCmd("Git pull", "", nil, "git", "-C", repoPath, "pull", "origin", "main"); err != nil {
+			writeLog(err.Error())
+			updateStatus.setError(err.Error())
 			return
 		}
 
 		// Build backend
+		updateStatus.set("updating", "Building backend...", 40)
 		writeLog("Building backend...")
 		backendPath := filepath.Join(repoPath, "backend")
-		buildCmd := exec.Command("go", "build", "-o", "zev-billing")
-		buildCmd.Dir = backendPath
-		buildCmd.Env = append(os.Environ(), "CGO_ENABLED=1")
-		buildCmd.Stdout = f
-		buildCmd.Stderr = f
-		if err := buildCmd.Run(); err != nil {
-			writeLog(fmt.Sprintf("Failed to build backend: %v", err))
+		if err := runCmd("Backend build", backendPath, append(os.Environ(), "CGO_ENABLED=1"), "go", "build", "-o", "zev-billing"); err != nil {
+			writeLog(err.Error())
+			updateStatus.setError(err.Error())
 			return
 		}
 
 		// Build frontend
+		updateStatus.set("updating", "Installing frontend dependencies...", 60)
 		writeLog("Installing frontend dependencies...")
 		frontendPath := filepath.Join(repoPath, "frontend")
-		npmInstallCmd := exec.Command("npm", "install")
-		npmInstallCmd.Dir = frontendPath
-		npmInstallCmd.Stdout = f
-		npmInstallCmd.Stderr = f
-		if err := npmInstallCmd.Run(); err != nil {
-			writeLog(fmt.Sprintf("Failed to install npm packages: %v", err))
+		if err := runCmd("npm install", frontendPath, nil, "npm", "install"); err != nil {
+			writeLog(err.Error())
+			updateStatus.setError(err.Error())
+			return
 		}
 
+		updateStatus.set("updating", "Building frontend...", 75)
 		writeLog("Building frontend...")
-		npmBuildCmd := exec.Command("npm", "run", "build")
-		npmBuildCmd.Dir = frontendPath
-		npmBuildCmd.Stdout = f
-		npmBuildCmd.Stderr = f
-		if err := npmBuildCmd.Run(); err != nil {
-			writeLog(fmt.Sprintf("Failed to build frontend: %v", err))
+		if err := runCmd("Frontend build", frontendPath, nil, "npm", "run", "build"); err != nil {
+			writeLog(err.Error())
+			updateStatus.setError(err.Error())
+			return
 		}
 
 		// Restart nginx
+		updateStatus.set("updating", "Restarting nginx...", 90)
 		writeLog("Restarting nginx...")
 		nginxCmd := exec.Command("systemctl", "restart", "nginx")
 		if err := nginxCmd.Run(); err != nil {
 			writeLog(fmt.Sprintf("Warning: Failed to restart nginx: %v", err))
 		}
 
+		updateStatus.set("done", "Update completed! Restarting...", 100)
 		writeLog("Update completed successfully!")
 		writeLog("Exiting process - systemd will restart the service automatically...")
 
 		// Exit the process - systemd will restart it automatically with the new binary
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(1 * time.Second)
 		os.Exit(0)
 	}()
 }

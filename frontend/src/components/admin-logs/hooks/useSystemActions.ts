@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { api } from '../../../api/client';
 import type { UpdateInfo } from '../types';
 
@@ -10,9 +10,19 @@ export const useSystemActions = (updateInfo: UpdateInfo | null, t: any) => {
   const [factoryResetting, setFactoryResetting] = useState(false);
   const [showUpdateOverlay, setShowUpdateOverlay] = useState(false);
   const [updateProgress, setUpdateProgress] = useState(0);
+  const [updateMessage, setUpdateMessage] = useState('');
+  const [updateError, setUpdateError] = useState('');
   const [showFactoryResetModal, setShowFactoryResetModal] = useState(false);
   const [factoryCaptchaValid, setFactoryCaptchaValid] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  }, []);
 
   const handleReboot = async () => {
     if (!confirm(t('logs.rebootConfirm'))) {
@@ -48,7 +58,7 @@ export const useSystemActions = (updateInfo: UpdateInfo | null, t: any) => {
     try {
       const result = await api.createBackup();
       alert(t('logs.backupSuccess'));
-      
+
       const downloadUrl = api.downloadBackup(result.backup_name);
       const link = document.createElement('a');
       link.href = downloadUrl;
@@ -110,27 +120,41 @@ export const useSystemActions = (updateInfo: UpdateInfo | null, t: any) => {
     setUpdating(true);
     setShowUpdateOverlay(true);
     setUpdateProgress(0);
+    setUpdateMessage(t('logs.updateStarting') || 'Starting update...');
+    setUpdateError('');
 
     try {
       await api.applyUpdate();
-      
-      const duration = 40000;
-      const steps = 100;
-      const interval = duration / steps;
-      
-      let currentProgress = 0;
-      const progressInterval = setInterval(() => {
-        currentProgress += 1;
-        setUpdateProgress(currentProgress);
-        
-        if (currentProgress >= 100) {
-          clearInterval(progressInterval);
+
+      // Poll backend for real status
+      pollIntervalRef.current = setInterval(async () => {
+        try {
+          const status = await api.getUpdateStatus();
+          setUpdateProgress(status.progress);
+          setUpdateMessage(status.message);
+
+          if (status.phase === 'error') {
+            stopPolling();
+            setUpdateError(status.error);
+            setUpdateProgress(0);
+            return;
+          }
+
+          if (status.phase === 'done') {
+            stopPolling();
+            // Server will restart, try to reconnect
+            setTimeout(() => {
+              window.location.reload();
+            }, 3000);
+          }
+        } catch {
+          // Server might have restarted (os.Exit), try to reload
+          stopPolling();
+          setTimeout(() => {
+            window.location.reload();
+          }, 5000);
         }
-      }, interval);
-      
-      setTimeout(() => {
-        window.location.reload();
-      }, duration);
+      }, 1500);
     } catch (err) {
       setShowUpdateOverlay(false);
       setUpdating(false);
@@ -138,6 +162,13 @@ export const useSystemActions = (updateInfo: UpdateInfo | null, t: any) => {
       console.error('Update failed:', err);
     }
   };
+
+  const dismissUpdateError = useCallback(() => {
+    setUpdateError('');
+    setShowUpdateOverlay(false);
+    setUpdating(false);
+    stopPolling();
+  }, [stopPolling]);
 
   const handleFactoryResetClick = () => {
     setShowFactoryResetModal(true);
@@ -154,9 +185,9 @@ export const useSystemActions = (updateInfo: UpdateInfo | null, t: any) => {
     try {
       const result = await api.factoryReset();
       alert(`${t('logs.factoryResetSuccess')} ${result.backup_name}`);
-      
+
       setShowFactoryResetModal(false);
-      
+
       setTimeout(() => {
         window.location.reload();
       }, 3000);
@@ -175,6 +206,8 @@ export const useSystemActions = (updateInfo: UpdateInfo | null, t: any) => {
     factoryResetting,
     showUpdateOverlay,
     updateProgress,
+    updateMessage,
+    updateError,
     showFactoryResetModal,
     setShowFactoryResetModal,
     factoryCaptchaValid,
@@ -186,6 +219,7 @@ export const useSystemActions = (updateInfo: UpdateInfo | null, t: any) => {
     handleRestoreFile,
     handleUpdate,
     handleFactoryResetClick,
-    handleFactoryResetConfirm
+    handleFactoryResetConfirm,
+    dismissUpdateError
   };
 };

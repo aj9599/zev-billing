@@ -533,8 +533,12 @@ class ApiClient {
     return this.request('/system/update/check');
   }
 
-  async applyUpdate(): Promise<{ status: string; message: string }> {
+  async applyUpdate(): Promise<{ phase: string; message: string }> {
     return this.request('/system/update/apply', { method: 'POST' });
+  }
+
+  async getUpdateStatus(): Promise<{ phase: string; message: string; progress: number; error: string }> {
+    return this.request('/system/update/status');
   }
 
   // NEW: Factory Reset method

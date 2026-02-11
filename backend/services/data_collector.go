@@ -23,6 +23,8 @@ type DataCollector struct {
 	zaptecCollector    *ZaptecCollector
 	mu                 sync.Mutex
 	lastCollection     time.Time
+	isCollecting       bool
+	collectingMu       sync.RWMutex
 }
 
 // Helper function to round time to nearest 15-minute interval
@@ -450,36 +452,106 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 }
 
 func (dc *DataCollector) collectAndSaveAllData() {
+	dc.collectingMu.Lock()
+	dc.isCollecting = true
+	dc.collectingMu.Unlock()
+	defer func() {
+		dc.collectingMu.Lock()
+		dc.isCollecting = false
+		dc.collectingMu.Unlock()
+	}()
+
 	dc.lastCollection = time.Now()
 	log.Println("========================================")
 	log.Printf("Starting coordinated data collection at %s", dc.lastCollection.Format("2006-01-02 15:04:05"))
 	log.Println("========================================")
-	
+
 	dc.logToDatabase("Data Collection Started", "15-minute collection cycle initiated")
 
 	// Collect meters and chargers in parallel using goroutines
 	wg := sync.WaitGroup{}
-	
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		dc.collectAndSaveMeters()
 	}()
-	
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		dc.collectAndSaveChargers()
 	}()
-	
+
 	// Wait for both to complete
 	wg.Wait()
 
 	log.Println("========================================")
 	log.Println("Data collection cycle completed")
 	log.Println("========================================")
-	
+
 	dc.logToDatabase("Data Collection Completed", "All active devices collected and saved")
+}
+
+// IsCollecting returns true if data collection is currently in progress
+func (dc *DataCollector) IsCollecting() bool {
+	dc.collectingMu.RLock()
+	defer dc.collectingMu.RUnlock()
+	return dc.isCollecting
+}
+
+// IsCollectionWindow returns true if we're within 2 minutes before or 1 minute after a quarter-hour mark
+func IsCollectionWindow() bool {
+	now := time.Now()
+	minute := now.Minute()
+	second := now.Second()
+
+	// Check each quarter-hour boundary: :00, :15, :30, :45
+	for _, boundary := range []int{0, 15, 30, 45} {
+		// Minutes before boundary (with wrap for :00)
+		minutesBefore := minute - boundary
+		if boundary == 0 && minute >= 58 {
+			minutesBefore = minute - 60 // e.g. minute=59 -> -1 (1 min before next hour's :00)
+		}
+
+		if minutesBefore >= -2 && minutesBefore < 0 {
+			return true // within 2 minutes before
+		}
+		if minutesBefore == 0 && second <= 59 {
+			return true // at the boundary minute
+		}
+		if minutesBefore == 1 && second == 0 {
+			return true // 1 minute after (first second)
+		}
+	}
+	return false
+}
+
+// WaitForSafeUpdateWindow blocks until collection is done and we're outside the collection window.
+// Returns a log function for status updates. Times out after 5 minutes.
+func (dc *DataCollector) WaitForSafeUpdateWindow(statusFn func(string)) bool {
+	deadline := time.After(5 * time.Minute)
+	for {
+		select {
+		case <-deadline:
+			statusFn("Timeout waiting for safe update window")
+			return false
+		default:
+		}
+
+		if dc.IsCollecting() {
+			statusFn("Waiting for data collection to finish...")
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		if IsCollectionWindow() {
+			next := getNextQuarterHour(time.Now())
+			statusFn(fmt.Sprintf("Collection window active, waiting until after %s...", next.Add(1*time.Minute).Format("15:04")))
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		return true
+	}
 }
 
 func (dc *DataCollector) collectAndSaveMeters() {

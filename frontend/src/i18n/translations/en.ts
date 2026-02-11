@@ -2272,9 +2272,10 @@ export const en: Translations = {
   'logs.updateConfirm': 'Are you sure you want to update the system? This process will:\n\n1. Stop the service\n2. Download latest code from GitHub\n3. Rebuild backend and frontend\n4. Restart the service\n\nThis may take 2-5 minutes. Continue?',
   'logs.updateStarted': 'Update started! The system will rebuild and restart. This may take a few minutes. The page will reload automatically.',
   'logs.updateCompleteReload': 'Update complete! Reloading the page now...',
-  'logs.updateFailed': 'Update failed. Please check the system logs or try updating manually.',
+  'logs.updateFailed': 'Update Failed',
+  'logs.updateStarting': 'Starting update...',
   'logs.updatingSystem': 'Updating System',
-  'logs.updateInProgress': 'Please wait while the system is being updated. This will take approximately 40 seconds.',
+  'logs.updateInProgress': 'Please wait while the system is being updated...',
   'logs.doNotCloseWindow': 'Please do not close this window or navigate away.',
 
   // NEW: Factory Reset translations

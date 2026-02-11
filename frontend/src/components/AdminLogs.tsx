@@ -74,6 +74,8 @@ export default function AdminLogs() {
     factoryResetting,
     showUpdateOverlay,
     updateProgress,
+    updateMessage,
+    updateError,
     showFactoryResetModal,
     setShowFactoryResetModal,
     factoryCaptchaValid,
@@ -85,7 +87,8 @@ export default function AdminLogs() {
     handleRestoreFile,
     handleUpdate,
     handleFactoryResetClick,
-    handleFactoryResetConfirm
+    handleFactoryResetConfirm,
+    dismissUpdateError
   } = useSystemActions(updateInfo, t);
 
   // Initial load
@@ -144,6 +147,9 @@ export default function AdminLogs() {
       <UpdateOverlay
         show={showUpdateOverlay}
         progress={updateProgress}
+        message={updateMessage}
+        error={updateError}
+        onDismissError={dismissUpdateError}
       />
 
       <AdminLogsHeader
