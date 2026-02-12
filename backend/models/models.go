@@ -238,6 +238,24 @@ type AdminLog struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type EmailAlertSettings struct {
+	ID                    int        `json:"id"`
+	SMTPHost              string     `json:"smtp_host"`
+	SMTPPort              int        `json:"smtp_port"`
+	SMTPUser              string     `json:"smtp_user"`
+	SMTPPassword          string     `json:"smtp_password"`
+	SMTPFrom              string     `json:"smtp_from"`
+	AlertRecipient        string     `json:"alert_recipient"`
+	IsEnabled             bool       `json:"is_enabled"`
+	RateLimitMinutes      int        `json:"rate_limit_minutes"`
+	LastAlertSent         *time.Time `json:"last_alert_sent"`
+	HealthReportEnabled   bool       `json:"health_report_enabled"`
+	HealthReportFrequency string     `json:"health_report_frequency"`
+	HealthReportDay       int        `json:"health_report_day"`
+	HealthReportHour      int        `json:"health_report_hour"`
+	LastHealthReportSent  *time.Time `json:"last_health_report_sent"`
+}
+
 type DashboardStats struct {
 	TotalUsers       int     `json:"total_users"`
 	RegularUsers     int     `json:"regular_users"`

@@ -117,9 +117,11 @@ func main() {
 	billingService := services.NewBillingService(db)
 	pdfGenerator := services.NewPDFGenerator(db)
 	autoBillingScheduler = services.NewAutoBillingScheduler(db, billingService, pdfGenerator)
+	emailAlerter := services.NewEmailAlerter(db)
 
 	go dataCollector.Start()
 	go autoBillingScheduler.Start()
+	go emailAlerter.Start()
 	services.StartHealthHistoryCollector(db)
 
 	// Initialize all handlers
@@ -135,6 +137,7 @@ func main() {
 	webhookHandler := handlers.NewWebhookHandler(db)
 	sharedMeterHandler := handlers.NewSharedMeterHandler(db)
 	customItemHandler := handlers.NewCustomItemHandler(db)
+	emailAlertHandler := handlers.NewEmailAlertHandler(db, emailAlerter)
 
 	r := mux.NewRouter()
 
@@ -172,6 +175,12 @@ func main() {
 	
 	// NEW: Factory Reset endpoint
 	api.HandleFunc("/system/factory-reset", factoryResetHandler(cfg.DatabasePath)).Methods("POST")
+
+	// Email Alert Settings routes
+	api.HandleFunc("/settings/email-alerts", emailAlertHandler.GetSettings).Methods("GET")
+	api.HandleFunc("/settings/email-alerts", emailAlertHandler.UpdateSettings).Methods("PUT")
+	api.HandleFunc("/settings/email-alerts/test", emailAlertHandler.TestEmail).Methods("POST")
+	api.HandleFunc("/settings/email-alerts/test-health", emailAlertHandler.TestHealthReport).Methods("POST")
 
 	// User routes
 	api.HandleFunc("/users", userHandler.List).Methods("GET")
@@ -300,6 +309,11 @@ func main() {
 		// Stop data collector (which will stop Loxone and Modbus collectors)
 		if dataCollector != nil {
 			dataCollector.Stop()
+		}
+
+		// Stop email alerter
+		if emailAlerter != nil {
+			emailAlerter.Stop()
 		}
 		
 		// Create a deadline for shutdown

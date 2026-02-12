@@ -322,6 +322,26 @@ func RunMigrations(db *sql.DB) error {
 			disk_percent REAL NOT NULL DEFAULT 0,
 			temperature REAL NOT NULL DEFAULT 0
 		)`,
+
+		`CREATE TABLE IF NOT EXISTS email_alert_settings (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			smtp_host TEXT NOT NULL DEFAULT '',
+			smtp_port INTEGER NOT NULL DEFAULT 587,
+			smtp_user TEXT NOT NULL DEFAULT '',
+			smtp_password TEXT NOT NULL DEFAULT '',
+			smtp_from TEXT NOT NULL DEFAULT '',
+			alert_recipient TEXT NOT NULL DEFAULT '',
+			is_enabled INTEGER NOT NULL DEFAULT 0,
+			rate_limit_minutes INTEGER NOT NULL DEFAULT 60,
+			last_alert_sent DATETIME,
+			health_report_enabled INTEGER NOT NULL DEFAULT 0,
+			health_report_frequency TEXT NOT NULL DEFAULT 'weekly',
+			health_report_day INTEGER NOT NULL DEFAULT 1,
+			health_report_hour INTEGER NOT NULL DEFAULT 8,
+			last_health_report_sent DATETIME,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
 	}
 
 	for _, migration := range migrations {
@@ -378,6 +398,10 @@ func RunMigrations(db *sql.DB) error {
 	}
 
 	if err := createTriggers(db); err != nil {
+		return err
+	}
+
+	if err := ensureEmailAlertSettingsRow(db); err != nil {
 		return err
 	}
 
@@ -668,6 +692,22 @@ func containsHelper(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func ensureEmailAlertSettingsRow(db *sql.DB) error {
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM email_alert_settings").Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		_, err = db.Exec(`INSERT INTO email_alert_settings (id) VALUES (1)`)
+		if err != nil {
+			return fmt.Errorf("failed to seed email_alert_settings: %v", err)
+		}
+		log.Println("email_alert_settings default row created")
+	}
+	return nil
 }
 
 func createDefaultAdmin(db *sql.DB) error {

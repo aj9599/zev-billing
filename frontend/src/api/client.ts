@@ -3,7 +3,8 @@ import type {
   Invoice, DashboardStats, ConsumptionData, AdminLog,
   BuildingConsumption, SharedMeterConfig, CustomLineItem,
   GenerateBillsRequest, MeterReplacement, MeterReplacementRequest,
-  SelfConsumptionData, SystemHealth, CostOverview, EnergyFlowData, EnergyFlowLiveData
+  SelfConsumptionData, SystemHealth, CostOverview, EnergyFlowData, EnergyFlowLiveData,
+  EmailAlertSettings
 } from '../types';
 
 const API_BASE = '/api';
@@ -605,13 +606,33 @@ class ApiClient {
   }
 
   // NEW: Factory Reset method
-  async factoryReset(): Promise<{ 
-    status: string; 
-    message: string; 
-    backup_name: string; 
-    backup_path: string 
+  async factoryReset(): Promise<{
+    status: string;
+    message: string;
+    backup_name: string;
+    backup_path: string
   }> {
     return this.request('/system/factory-reset', { method: 'POST' });
+  }
+
+  // Email Alert Settings
+  async getEmailAlertSettings(): Promise<EmailAlertSettings> {
+    return this.request('/settings/email-alerts');
+  }
+
+  async updateEmailAlertSettings(settings: Partial<EmailAlertSettings>): Promise<{ message: string }> {
+    return this.request('/settings/email-alerts', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    });
+  }
+
+  async testEmailAlert(): Promise<{ status: string; message: string }> {
+    return this.request('/settings/email-alerts/test', { method: 'POST' });
+  }
+
+  async testHealthReport(): Promise<{ status: string; message: string }> {
+    return this.request('/settings/email-alerts/test-health', { method: 'POST' });
   }
 }
 

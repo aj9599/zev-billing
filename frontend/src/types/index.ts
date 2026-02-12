@@ -388,3 +388,20 @@ export interface AdminLog {
   ip_address: string;
   created_at: string;
 }
+
+export interface EmailAlertSettings {
+  smtp_host: string;
+  smtp_port: number;
+  smtp_user: string;
+  smtp_password: string;
+  smtp_from: string;
+  alert_recipient: string;
+  is_enabled: boolean;
+  rate_limit_minutes: number;
+  last_alert_sent?: string;
+  health_report_enabled: boolean;
+  health_report_frequency: string;
+  health_report_day: number;
+  health_report_hour: number;
+  last_health_report_sent?: string;
+}
