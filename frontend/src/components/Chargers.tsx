@@ -219,18 +219,18 @@ export default function Chargers() {
       color: '#ef4444',
       icon: <WifiOff size={20} />
     }] : []),
-    ...(carConnected > 0 ? [{
+    {
       label: t('chargers.carConnected') || 'Car Connected',
       value: carConnected,
       color: '#8b5cf6',
       icon: <PlugZap size={20} />
-    }] : []),
-    {
+    },
+    ...(chargingNow > 0 ? [{
       label: t('chargers.chargingNow') || 'Charging Now',
       value: chargingNow,
       color: '#f59e0b',
       icon: <Zap size={20} />
-    }
+    }] : [])
   ];
 
   // Loading skeleton

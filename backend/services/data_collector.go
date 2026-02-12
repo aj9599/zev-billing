@@ -537,8 +537,26 @@ func (dc *DataCollector) WaitForSafeUpdateWindow(statusFn func(string)) bool {
 			continue
 		}
 		if IsCollectionWindow() {
-			next := getNextQuarterHour(time.Now())
-			statusFn(fmt.Sprintf("Collection window active, waiting until after %s...", next.Add(1*time.Minute).Format("15:04")))
+			// Find which quarter-hour boundary we're near and compute when the window ends
+			now := time.Now()
+			minute := now.Minute()
+			var nearestBoundary int
+			if minute >= 58 || minute <= 1 {
+				nearestBoundary = 0
+			} else if minute >= 13 && minute <= 16 {
+				nearestBoundary = 15
+			} else if minute >= 28 && minute <= 31 {
+				nearestBoundary = 30
+			} else {
+				nearestBoundary = 45
+			}
+			// Window ends at boundary + 2 minutes (1 minute after = boundary+1, so safe at boundary+2)
+			windowEnd := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), nearestBoundary, 0, 0, now.Location())
+			if nearestBoundary == 0 && minute >= 58 {
+				windowEnd = windowEnd.Add(1 * time.Hour)
+			}
+			windowEnd = windowEnd.Add(2 * time.Minute)
+			statusFn(fmt.Sprintf("Collection window active, starting update at %s...", windowEnd.Format("15:04")))
 			time.Sleep(5 * time.Second)
 			continue
 		}

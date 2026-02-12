@@ -24,6 +24,36 @@ export const useSystemActions = (updateInfo: UpdateInfo | null, t: any) => {
     }
   }, []);
 
+  // Wait for server to be fully ready before reloading
+  const waitForServerAndReload = useCallback((message: string) => {
+    setUpdateMessage(message);
+    let attempts = 0;
+    const maxAttempts = 30; // 30 * 2s = 60s max wait
+    const checkServer = () => {
+      attempts++;
+      fetch('/api/health', { method: 'GET' })
+        .then(res => {
+          if (res.ok) {
+            // Server is back — reload the page
+            window.location.reload();
+          } else if (attempts < maxAttempts) {
+            setTimeout(checkServer, 2000);
+          } else {
+            window.location.reload(); // Give up waiting, reload anyway
+          }
+        })
+        .catch(() => {
+          if (attempts < maxAttempts) {
+            setTimeout(checkServer, 2000);
+          } else {
+            window.location.reload();
+          }
+        });
+    };
+    // Wait a moment for the old server to shut down, then start checking
+    setTimeout(checkServer, 3000);
+  }, []);
+
   const handleReboot = async () => {
     if (!confirm(t('logs.rebootConfirm'))) {
       return;
@@ -142,17 +172,13 @@ export const useSystemActions = (updateInfo: UpdateInfo | null, t: any) => {
 
           if (status.phase === 'done') {
             stopPolling();
-            // Server will restart, try to reconnect
-            setTimeout(() => {
-              window.location.reload();
-            }, 3000);
+            // Server will restart — wait until it's back up before reloading
+            waitForServerAndReload('Update complete! Waiting for server to restart...');
           }
         } catch {
-          // Server might have restarted (os.Exit), try to reload
+          // Server might have restarted (os.Exit) — wait until it's back up
           stopPolling();
-          setTimeout(() => {
-            window.location.reload();
-          }, 5000);
+          waitForServerAndReload('Server restarting...');
         }
       }, 1500);
     } catch (err) {
