@@ -12,7 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// safeWriteMessage writes a message to WebSocket with mutex protection
+// safeWriteMessage writes a message to WebSocket with mutex protection and write deadline
 func (conn *WebSocketConnection) safeWriteMessage(messageType int, data []byte) error {
 	conn.WriteMu.Lock()
 	defer conn.WriteMu.Unlock()
@@ -25,7 +25,19 @@ func (conn *WebSocketConnection) safeWriteMessage(messageType int, data []byte) 
 		return fmt.Errorf("not connected")
 	}
 
-	return ws.WriteMessage(messageType, data)
+	// Set write deadline to detect dead connections faster instead of hanging
+	ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	err := ws.WriteMessage(messageType, data)
+	if err != nil {
+		return err
+	}
+
+	// Track successful write as liveness signal
+	conn.Mu.Lock()
+	conn.LastSuccessfulWrite = time.Now()
+	conn.Mu.Unlock()
+
+	return nil
 }
 
 // readLoxoneMessage reads and parses a Loxone message
@@ -123,9 +135,12 @@ func (conn *WebSocketConnection) requestData() {
 
 		// Mark collection as in progress BEFORE any operations.
 		// Also ensure LivePollActive is false so responses are saved to DB.
+		// Reset LastPongReceived to prevent ping monitor from declaring
+		// the connection dead during a long collection window.
 		conn.Mu.Lock()
 		conn.CollectionInProgress = true
 		conn.LivePollActive = false
+		conn.LastPongReceived = time.Now()
 		conn.Mu.Unlock()
 
 		// FIX: Wait briefly for any in-flight live poll responses to be processed
@@ -269,9 +284,10 @@ func (conn *WebSocketConnection) requestData() {
 			}
 		}
 
-		// Clear collection flag
+		// Clear collection flag and reset pong timer (collection proves connection is alive)
 		conn.Mu.Lock()
 		conn.CollectionInProgress = false
+		conn.LastPongReceived = time.Now()
 		conn.Mu.Unlock()
 
 		if requestFailed {
@@ -449,6 +465,12 @@ func (conn *WebSocketConnection) requestLivePower() {
 
 			consecutiveFailures = 0
 			pollCount++
+
+			// Successful writes prove the connection is alive — reset pong timer
+			conn.Mu.Lock()
+			conn.LastPongReceived = time.Now()
+			conn.Mu.Unlock()
+
 			// Log every poll for first 4, then every 5 minutes
 			if pollCount <= 4 || pollCount%10 == 0 {
 				log.Printf("⚡ [%s] Live power poll #%d: sent requests for %d meters", conn.Host, pollCount, sentCount)

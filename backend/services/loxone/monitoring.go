@@ -56,6 +56,11 @@ func (conn *WebSocketConnection) keepalive() {
 				// readLoop's defer will trigger reconnect
 				return
 			}
+
+			// Successful keepalive write proves connection is alive
+			conn.Mu.Lock()
+			conn.LastPongReceived = time.Now()
+			conn.Mu.Unlock()
 		}
 	}
 }
@@ -235,11 +240,12 @@ func (conn *WebSocketConnection) monitorDNSChanges() {
 
 // monitorWebSocketPing sends WebSocket-level pings for fast dead connection detection.
 // This runs every 30 seconds and declares the connection dead if no pong is received
-// within 90 seconds. Much faster than the 20-minute read deadline.
+// within 150 seconds. Uses multiple liveness signals (pong, successful writes, collection
+// activity) to avoid false positives during long collection windows.
 func (conn *WebSocketConnection) monitorWebSocketPing() {
 	defer conn.GoroutinesWg.Done()
 
-	log.Printf("[PING] MONITOR STARTED for %s (interval: 30s, timeout: 90s)", conn.Host)
+	log.Printf("[PING] MONITOR STARTED for %s (interval: 30s, timeout: 150s)", conn.Host)
 
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -253,23 +259,34 @@ func (conn *WebSocketConnection) monitorWebSocketPing() {
 			conn.Mu.Lock()
 			if !conn.IsConnected || conn.Ws == nil {
 				conn.Mu.Unlock()
-				// FIX: Don't exit - wait for reconnect
 				continue
 			}
 
-			// Skip during collection to avoid interfering
+			// Skip entirely during collection — both sending and checking.
+			// Collection involves many writes/reads which prove liveness,
+			// and LastPongReceived is reset at collection start/end.
 			if conn.CollectionInProgress {
 				conn.Mu.Unlock()
 				continue
 			}
 
 			lastPong := conn.LastPongReceived
+			lastWrite := conn.LastSuccessfulWrite
 			conn.Mu.Unlock()
 
-			// If no pong received within 90 seconds, connection is likely dead
-			if !lastPong.IsZero() && time.Since(lastPong) > 90*time.Second {
-				log.Printf("[PING] [%s] No pong received in %.0fs, connection likely dead",
-					conn.Host, time.Since(lastPong).Seconds())
+			// Check connection liveness using multiple signals:
+			// 1. Last pong received (WebSocket-level proof)
+			// 2. Last successful write (application-level proof)
+			// Use the most recent of either as the liveness indicator.
+			lastAlive := lastPong
+			if lastWrite.After(lastAlive) {
+				lastAlive = lastWrite
+			}
+
+			if !lastAlive.IsZero() && time.Since(lastAlive) > 150*time.Second {
+				log.Printf("[PING] [%s] No liveness signal in %.0fs (last pong: %.0fs ago, last write: %.0fs ago), connection likely dead",
+					conn.Host, time.Since(lastAlive).Seconds(),
+					time.Since(lastPong).Seconds(), time.Since(lastWrite).Seconds())
 
 				conn.logToDatabase("Loxone Ping Timeout",
 					fmt.Sprintf("Host '%s': No pong in %.0fs",

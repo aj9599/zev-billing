@@ -205,6 +205,7 @@ type WebSocketConnection struct {
 	ConsecutiveDNSErrors int       // Track DNS-specific failures
 	DnsCache             *DNSCache // DNS resolution caching
 	LastPongReceived     time.Time // Last WebSocket pong received (for dead connection detection)
+	LastSuccessfulWrite  time.Time // Last successful WebSocket write (additional liveness signal)
 
 	// Meter reading buffer for virtual_output_dual mode (prevents duplicate saves)
 	MeterReadingBuffers map[int]*MeterReadingBuffer // meter_id -> buffer

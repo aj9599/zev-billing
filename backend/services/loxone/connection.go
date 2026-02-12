@@ -396,14 +396,16 @@ func (conn *WebSocketConnection) performConnection(ws *websocket.Conn, db *sql.D
 	conn.GoroutinesWg.Add(1)
 	go conn.keepalive()
 
+	// WebSocket ping monitor runs for ALL connections (local and remote)
+	// to detect dead connections faster than the 20-minute read deadline
+	log.Printf("[START] Starting WebSocket ping monitor for %s...", conn.Host)
+	conn.GoroutinesWg.Add(1)
+	go conn.monitorWebSocketPing()
+
 	if conn.IsRemote {
 		log.Printf("[START] Starting DNS change monitor for %s...", conn.Host)
 		conn.GoroutinesWg.Add(1)
 		go conn.monitorDNSChanges()
-
-		log.Printf("[START] Starting WebSocket ping monitor for %s...", conn.Host)
-		conn.GoroutinesWg.Add(1)
-		go conn.monitorWebSocketPing()
 	}
 
 	return true
