@@ -106,7 +106,10 @@ func RoundToQuarterHour(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), roundedMinute, 0, 0, t.Location())
 }
 
-// InterpolateReadings fills in missing readings between two timestamps
+// InterpolateReadings fills in missing 15-minute readings between two timestamps.
+// It starts at the next quarter-hour after startTime and steps in 15-minute intervals
+// up to (but not including) endTime. Uses linear interpolation based on actual elapsed
+// time proportions. Works correctly across multi-day gaps.
 func InterpolateReadings(startTime time.Time, startValue float64, endTime time.Time, endValue float64) []struct {
 	time  time.Time
 	value float64
@@ -116,34 +119,28 @@ func InterpolateReadings(startTime time.Time, startValue float64, endTime time.T
 		value float64
 	}
 
-	startRounded := RoundToQuarterHour(startTime)
-	endRounded := RoundToQuarterHour(endTime)
-
-	// If the times are the same quarter-hour, no interpolation needed
-	if startRounded.Equal(endRounded) {
+	if endTime.Before(startTime) || endTime.Equal(startTime) {
 		return interpolated
 	}
 
-	// Calculate how many intervals we need
-	intervals := int(endRounded.Sub(startRounded).Minutes() / 15)
-	if intervals <= 1 {
-		return interpolated
-	}
+	currentTime := GetNextQuarterHour(startTime)
+	totalDuration := endTime.Sub(startTime).Seconds()
+	totalValueChange := endValue - startValue
 
-	// Linear interpolation
-	valueIncrement := (endValue - startValue) / float64(intervals)
-
-	for i := 1; i < intervals; i++ {
-		interpolatedTime := startRounded.Add(time.Duration(i*15) * time.Minute)
-		interpolatedValue := startValue + (valueIncrement * float64(i))
+	for currentTime.Before(endTime) {
+		elapsed := currentTime.Sub(startTime).Seconds()
+		ratio := elapsed / totalDuration
+		interpolatedValue := startValue + (totalValueChange * ratio)
 
 		interpolated = append(interpolated, struct {
 			time  time.Time
 			value float64
 		}{
-			time:  interpolatedTime,
+			time:  currentTime,
 			value: interpolatedValue,
 		})
+
+		currentTime = currentTime.Add(15 * time.Minute)
 	}
 
 	return interpolated
