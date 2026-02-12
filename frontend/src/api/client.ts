@@ -10,8 +10,71 @@ const API_BASE = '/api';
 
 class ApiClient {
   private token: string | null = localStorage.getItem('token');
+  private refreshingToken: Promise<void> | null = null;
+
+  // Decode JWT payload to check expiration (no verification needed, just reading claims)
+  private getTokenExpiry(): number | null {
+    if (!this.token) return null;
+    try {
+      const parts = this.token.split('.');
+      if (parts.length !== 3) return null;
+      const payload = JSON.parse(atob(parts[1]));
+      return payload.exp || null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Check if token expires within the next 24 hours
+  private isTokenExpiringSoon(): boolean {
+    const exp = this.getTokenExpiry();
+    if (!exp) return false;
+    const oneDayFromNow = Math.floor(Date.now() / 1000) + 86400;
+    return exp < oneDayFromNow;
+  }
+
+  // Silently refresh the token if it's expiring soon
+  private async ensureFreshToken(): Promise<void> {
+    if (!this.token || !this.isTokenExpiringSoon()) return;
+
+    // Prevent multiple concurrent refresh calls
+    if (this.refreshingToken) {
+      await this.refreshingToken;
+      return;
+    }
+
+    this.refreshingToken = (async () => {
+      try {
+        const response = await fetch(`${API_BASE}/auth/refresh`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          this.token = data.token;
+          localStorage.setItem('token', data.token);
+        }
+        // If refresh fails silently, the current token may still be valid
+      } catch {
+        // Network error during refresh — ignore, retry on next request
+      } finally {
+        this.refreshingToken = null;
+      }
+    })();
+
+    await this.refreshingToken;
+  }
 
   private async request(endpoint: string, options: RequestInit = {}) {
+    // Silently refresh token if expiring soon (before making the actual request)
+    if (endpoint !== '/auth/refresh') {
+      await this.ensureFreshToken();
+    }
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };

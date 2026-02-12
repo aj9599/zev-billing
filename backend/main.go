@@ -157,6 +157,7 @@ func main() {
 	api.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 
 	api.HandleFunc("/auth/change-password", authHandler.ChangePassword).Methods("POST")
+	api.HandleFunc("/auth/refresh", authHandler.RefreshToken).Methods("POST")
 	api.HandleFunc("/debug/status", debugStatusHandler).Methods("GET")
 	api.HandleFunc("/debug/health-history", healthHistoryHandler).Methods("GET")
 	api.HandleFunc("/system/reboot", rebootHandler).Methods("POST")
