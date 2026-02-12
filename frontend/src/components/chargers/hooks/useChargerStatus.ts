@@ -64,10 +64,20 @@ export interface ZaptecConnectionStatus {
   };
 }
 
+export interface GenericChargerConnectionStatus {
+  [chargerId: number]: {
+    charger_name: string;
+    is_connected: boolean;
+    last_update: string;
+  };
+}
+
 export const useChargerStatus = () => {
   const [liveData, setLiveData] = useState<Record<number, LiveChargerData>>({});
   const [loxoneStatus, setLoxoneStatus] = useState<LoxoneConnectionStatus>({});
   const [zaptecStatus, setZaptecStatus] = useState<ZaptecConnectionStatus>({});
+  const [udpChargerStatus, setUdpChargerStatus] = useState<GenericChargerConnectionStatus>({});
+  const [mqttChargerStatus, setMqttChargerStatus] = useState<GenericChargerConnectionStatus>({});
   const [error, setError] = useState<string | null>(null);
 
   const fetchStatusData = async () => {
@@ -90,7 +100,21 @@ export const useChargerStatus = () => {
           }
           if (debugData.zaptec_charger_connections) {
             setZaptecStatus(debugData.zaptec_charger_connections);
-            console.log('[useChargerStatus] Zaptec status:', debugData.zaptec_charger_connections);
+          }
+          if (debugData.udp_charger_connections) {
+            // Convert string-keyed to number-keyed
+            const parsed: GenericChargerConnectionStatus = {};
+            for (const [key, value] of Object.entries(debugData.udp_charger_connections)) {
+              parsed[parseInt(key)] = value as GenericChargerConnectionStatus[number];
+            }
+            setUdpChargerStatus(parsed);
+          }
+          if (debugData.mqtt_charger_connections) {
+            const parsed: GenericChargerConnectionStatus = {};
+            for (const [key, value] of Object.entries(debugData.mqtt_charger_connections)) {
+              parsed[parseInt(key)] = value as GenericChargerConnectionStatus[number];
+            }
+            setMqttChargerStatus(parsed);
           }
         } else if (debugResponse.status === 401) {
           // Token expired or invalid - ignore silently as the auth layer will handle it
@@ -158,6 +182,8 @@ export const useChargerStatus = () => {
     liveData,
     loxoneStatus,
     zaptecStatus,
+    udpChargerStatus,
+    mqttChargerStatus,
     error,
     fetchStatusData
   };

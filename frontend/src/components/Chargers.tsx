@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Car, Wifi, Zap } from 'lucide-react';
+import { Search, Car, Wifi, WifiOff, Zap, PlugZap } from 'lucide-react';
 import { api } from '../api/client';
 import type { Charger, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
@@ -28,7 +28,7 @@ export default function Chargers() {
   const [openDetailId, setOpenDetailId] = useState<number | null>(null);
 
   // Custom hooks
-  const { liveData, loxoneStatus, zaptecStatus, fetchStatusData } = useChargerStatus();
+  const { liveData, loxoneStatus, zaptecStatus, udpChargerStatus, mqttChargerStatus, fetchStatusData } = useChargerStatus();
 
   const {
     showDeleteConfirmation,
@@ -163,8 +163,12 @@ export default function Chargers() {
   const totalChargers = chargers.length;
   const onlineChargers = chargers.filter(c => {
     if (c.connection_type === 'zaptec_api') return zaptecStatus[c.id]?.is_connected;
-    return loxoneStatus[c.id]?.is_connected;
+    if (c.connection_type === 'loxone_api') return loxoneStatus[c.id]?.is_connected;
+    if (c.connection_type === 'udp') return udpChargerStatus[c.id]?.is_connected;
+    if (c.connection_type === 'mqtt') return mqttChargerStatus[c.id]?.is_connected;
+    return false;
   }).length;
+  const offlineChargers = totalChargers - onlineChargers;
   const chargingNow = chargers.filter(c => {
     const live = liveData[c.id];
     if (!live) return false;
@@ -173,6 +177,27 @@ export default function Chargers() {
       return zs?.state_description === 'Charging';
     }
     return live.state_description === 'Charging' || live.state === '3' || live.state === '67';
+  }).length;
+
+  // Car connected = any state that isn't disconnected/unknown (charging, completed, awaiting auth, cable locked)
+  const carConnected = chargers.filter(c => {
+    const live = liveData[c.id];
+    if (c.connection_type === 'zaptec_api') {
+      const zs = zaptecStatus[c.id];
+      const desc = zs?.state_description;
+      return desc === 'Charging' || desc === 'Finished Charging' || desc === 'Waiting for Authorization';
+    }
+    if (c.connection_type === 'loxone_api') {
+      const desc = live?.state_description;
+      const state = live?.state;
+      return desc === 'Charging' || desc === 'Complete' || state === '3' || state === '5' || state === '2';
+    }
+    // UDP/MQTT (Weidmüller style): 66=awaiting start, 67=charging, cable locked states
+    if (live) {
+      const state = live.state;
+      return state === '66' || state === '67' || state === '3' || state === '5' || state === '2';
+    }
+    return false;
   }).length;
 
   const statsCards = [
@@ -188,6 +213,18 @@ export default function Chargers() {
       color: '#10b981',
       icon: <Wifi size={20} />
     },
+    ...(offlineChargers > 0 ? [{
+      label: t('chargers.offline') || 'Offline',
+      value: offlineChargers,
+      color: '#ef4444',
+      icon: <WifiOff size={20} />
+    }] : []),
+    ...(carConnected > 0 ? [{
+      label: t('chargers.carConnected') || 'Car Connected',
+      value: carConnected,
+      color: '#8b5cf6',
+      icon: <PlugZap size={20} />
+    }] : []),
     {
       label: t('chargers.chargingNow') || 'Charging Now',
       value: chargingNow,
@@ -272,7 +309,7 @@ export default function Chargers() {
       {/* Stats Row */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+        gridTemplateColumns: isMobile ? '1fr' : `repeat(${statsCards.length}, 1fr)`,
         gap: '16px',
         marginBottom: '24px'
       }}>
@@ -425,6 +462,8 @@ export default function Chargers() {
                     liveData={liveData[charger.id]}
                     loxoneStatus={loxoneStatus[charger.id]}
                     zaptecStatus={zaptecStatus[charger.id]}
+                    udpChargerStatus={udpChargerStatus[charger.id]}
+                    mqttChargerStatus={mqttChargerStatus[charger.id]}
                     onEdit={() => handleEdit(charger)}
                     onDelete={() => handleDeleteClick(charger)}
                     isDetailOpen={openDetailId === charger.id}

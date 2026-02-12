@@ -19,6 +19,7 @@ type UDPCollector struct {
 	meterLastUpdate    map[int]time.Time
 	meterNames         map[int]string
 	chargerBuffers     map[int]UDPChargerData
+	chargerNames       map[int]string
 	partialChargerData map[int]*PartialUDPChargerData
 	mu                 sync.Mutex
 	activePorts        []int
@@ -62,6 +63,7 @@ func NewUDPCollector(db *sql.DB) *UDPCollector {
 		meterLastUpdate:    make(map[int]time.Time),
 		meterNames:         make(map[int]string),
 		chargerBuffers:     make(map[int]UDPChargerData),
+		chargerNames:       make(map[int]string),
 		partialChargerData: make(map[int]*PartialUDPChargerData),
 		activePorts:        []int{},
 	}
@@ -244,6 +246,7 @@ func (uc *UDPCollector) startListener(port int, meters []UDPMeterConfig, charger
 	}
 	for _, c := range chargers {
 		uc.chargerBuffers[c.ChargerID] = UDPChargerData{}
+		uc.chargerNames[c.ChargerID] = c.Name
 		uc.partialChargerData[c.ChargerID] = &PartialUDPChargerData{
 			LastUpdate: time.Now(),
 		}
@@ -541,12 +544,58 @@ func (uc *UDPCollector) GetConnectionStatus() map[string]interface{} {
 		}
 	}
 
+	// Build per-charger connection status for the UI
+	udpChargerConnections := make(map[string]interface{})
+	trackedChargerIDs := make(map[int]bool)
+	for chargerID := range uc.chargerBuffers {
+		trackedChargerIDs[chargerID] = true
+		partial := uc.partialChargerData[chargerID]
+		isConnected := false
+		lastUpdateStr := ""
+		if partial != nil && !partial.LastUpdate.IsZero() {
+			isConnected = time.Since(partial.LastUpdate) < 30*time.Minute
+			lastUpdateStr = partial.LastUpdate.Format(time.RFC3339)
+		}
+		name := uc.chargerNames[chargerID]
+		udpChargerConnections[fmt.Sprintf("%d", chargerID)] = map[string]interface{}{
+			"charger_name": name,
+			"is_connected": isConnected,
+			"last_update":  lastUpdateStr,
+		}
+	}
+
+	// For UDP chargers not yet tracked at runtime, check the database
+	chargerRows, err := uc.db.Query(`
+		SELECT c.id, c.name
+		FROM chargers c
+		WHERE c.connection_type = 'udp' AND c.is_active = 1
+	`)
+	if err == nil {
+		defer chargerRows.Close()
+		for chargerRows.Next() {
+			var chargerID int
+			var name string
+			if err := chargerRows.Scan(&chargerID, &name); err != nil {
+				continue
+			}
+			if trackedChargerIDs[chargerID] {
+				continue
+			}
+			udpChargerConnections[fmt.Sprintf("%d", chargerID)] = map[string]interface{}{
+				"charger_name": name,
+				"is_connected": false,
+				"last_update":  "",
+			}
+		}
+	}
+
 	return map[string]interface{}{
-		"active_ports":         uc.activePorts,
-		"udp_meter_buffers":    meterStatus,
-		"udp_charger_buffers":  chargerStatus,
-		"partial_charger_data": partialStatus,
-		"udp_connections":      udpConnections,
+		"active_ports":             uc.activePorts,
+		"udp_meter_buffers":        meterStatus,
+		"udp_charger_buffers":      chargerStatus,
+		"partial_charger_data":     partialStatus,
+		"udp_connections":          udpConnections,
+		"udp_charger_connections":  udpChargerConnections,
 	}
 }
 

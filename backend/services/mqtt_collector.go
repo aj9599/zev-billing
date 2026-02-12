@@ -1046,15 +1046,55 @@ func (mc *MQTTCollector) GetConnectionStatus() map[string]interface{} {
 		}
 	}
 
+	// Build per-charger connection status
+	mqttChargerConnections := make(map[string]interface{})
+	for chargerID, data := range mc.chargerData {
+		isConnected := !data.LastUpdated.IsZero() && time.Since(data.LastUpdated) < 30*time.Minute
+		mqttChargerConnections[fmt.Sprintf("%d", chargerID)] = map[string]interface{}{
+			"charger_name": chargerID, // Will be overridden below from DB
+			"is_connected": isConnected,
+			"last_update":  data.LastUpdated.Format(time.RFC3339),
+		}
+	}
+
+	// For MQTT chargers not yet tracked at runtime, check the database
+	chargerNameRows, err := mc.db.Query(`
+		SELECT id, name FROM chargers WHERE connection_type = 'mqtt' AND is_active = 1
+	`)
+	if err == nil {
+		defer chargerNameRows.Close()
+		for chargerNameRows.Next() {
+			var cID int
+			var cName string
+			if err := chargerNameRows.Scan(&cID, &cName); err != nil {
+				continue
+			}
+			key := fmt.Sprintf("%d", cID)
+			if existing, ok := mqttChargerConnections[key]; ok {
+				// Update the name from DB
+				if m, ok := existing.(map[string]interface{}); ok {
+					m["charger_name"] = cName
+				}
+			} else {
+				mqttChargerConnections[key] = map[string]interface{}{
+					"charger_name": cName,
+					"is_connected": false,
+					"last_update":  "",
+				}
+			}
+		}
+	}
+
 	return map[string]interface{}{
-		"mqtt_broker_connected":  anyBrokerConnected,
-		"mqtt_brokers_total":     totalBrokers,
-		"mqtt_brokers_connected": len(connectedBrokers),
-		"mqtt_connected_brokers": connectedBrokers,
-		"mqtt_meters_count":      mqttMeterCount,
-		"mqtt_chargers_count":    mqttChargerCount,
-		"mqtt_recent_readings":   recentReadings,
-		"mqtt_connected_meters":  connectedMeters,
-		"mqtt_connections":       mqttConnections,
+		"mqtt_broker_connected":     anyBrokerConnected,
+		"mqtt_brokers_total":        totalBrokers,
+		"mqtt_brokers_connected":    len(connectedBrokers),
+		"mqtt_connected_brokers":    connectedBrokers,
+		"mqtt_meters_count":         mqttMeterCount,
+		"mqtt_chargers_count":       mqttChargerCount,
+		"mqtt_recent_readings":      recentReadings,
+		"mqtt_connected_meters":     connectedMeters,
+		"mqtt_connections":          mqttConnections,
+		"mqtt_charger_connections":  mqttChargerConnections,
 	}
 }

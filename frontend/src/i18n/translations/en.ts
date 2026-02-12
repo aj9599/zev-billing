@@ -1256,6 +1256,8 @@ export const en: Translations = {
   'chargers.subtitle': 'Manage EV charging infrastructure',
   'chargers.totalChargers': 'Total Chargers',
   'chargers.online': 'Online',
+  'chargers.offline': 'Offline',
+  'chargers.carConnected': 'Car Connected',
   'chargers.chargingNow': 'Charging Now',
   'chargers.addCharger': 'Add Charger',
   'chargers.editCharger': 'Edit Charger',

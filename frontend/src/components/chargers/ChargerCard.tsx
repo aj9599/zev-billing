@@ -1,6 +1,6 @@
 import { Edit2, Trash2, Wifi, WifiOff, Battery, TrendingUp, Info } from 'lucide-react';
 import type { Charger } from '../../types';
-import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus } from './hooks/useChargerStatus';
+import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus, GenericChargerConnectionStatus } from './hooks/useChargerStatus';
 import { getPreset } from '../chargerPresets';
 import { getStateDisplay } from './utils/chargerUtils';
 import ChargerDetailModal from './ChargerDetailModal';
@@ -10,6 +10,8 @@ interface ChargerCardProps {
     liveData?: LiveChargerData;
     loxoneStatus?: LoxoneConnectionStatus[number];
     zaptecStatus?: ZaptecConnectionStatus[number];
+    udpChargerStatus?: GenericChargerConnectionStatus[number];
+    mqttChargerStatus?: GenericChargerConnectionStatus[number];
     onEdit: () => void;
     onDelete: () => void;
     isDetailOpen: boolean;
@@ -22,6 +24,8 @@ export default function ChargerCard({
     liveData,
     loxoneStatus,
     zaptecStatus,
+    udpChargerStatus,
+    mqttChargerStatus,
     onEdit,
     onDelete,
     isDetailOpen,
@@ -82,8 +86,14 @@ export default function ChargerCard({
         : (liveData?.current_power_kw ?? 0);
 
     const isOnline = charger.connection_type === 'zaptec_api'
-        ? (zaptecStatus?.is_online ?? liveData?.is_online ?? true)
-        : (liveData?.is_online ?? true);
+        ? (zaptecStatus?.is_online ?? liveData?.is_online ?? false)
+        : charger.connection_type === 'loxone_api'
+            ? (loxoneStatus?.is_connected ?? liveData?.is_online ?? false)
+            : charger.connection_type === 'udp'
+                ? (udpChargerStatus?.is_connected ?? false)
+                : charger.connection_type === 'mqtt'
+                    ? (mqttChargerStatus?.is_connected ?? false)
+                    : false;
 
     const stateDisplay = getStateDisplay(charger, stateValue, t);
 
