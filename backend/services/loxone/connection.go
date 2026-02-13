@@ -75,7 +75,10 @@ func (conn *WebSocketConnection) Connect(db *sql.DB, collector LoxoneCollectorIn
 	conn.ConnectWithBackoff(db, collector)
 }
 
-// ConnectWithBackoff attempts to connect with exponential backoff and jitter
+// ConnectWithBackoff attempts to connect with exponential backoff and jitter.
+// It retries in rounds of 10 attempts each. After each round, it waits with
+// increasing cooldown (1min, 2min, 5min, 10min, capped at 10min) before the
+// next round. This continues indefinitely until connected or shutdown.
 func (conn *WebSocketConnection) ConnectWithBackoff(db *sql.DB, collector LoxoneCollectorInterface) {
 	conn.Mu.Lock()
 
@@ -124,189 +127,223 @@ func (conn *WebSocketConnection) ConnectWithBackoff(db *sql.DB, collector Loxone
 	// Wait for existing goroutines to finish
 	conn.GoroutinesWg.Wait()
 
-	// Retry loop for connection attempts
-	maxRetries := 10
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		// Check if we should stop
+	// Retry indefinitely in rounds of 10 attempts each
+	// After each failed round, wait with increasing cooldown before next round
+	attemptsPerRound := 10
+	roundCooldowns := []time.Duration{
+		1 * time.Minute,
+		2 * time.Minute,
+		5 * time.Minute,
+		10 * time.Minute, // max cooldown, stays at this
+	}
+
+	for round := 0; ; round++ {
+		// Check shutdown before each round
 		conn.Mu.Lock()
 		if conn.IsShuttingDown {
 			conn.Mu.Unlock()
-			log.Printf("[INFO] [%s] Stopping reconnection attempts - shutting down", conn.Host)
-			return
-		}
-
-		if conn.IsConnected {
-			conn.Mu.Unlock()
-			log.Printf("[INFO] [%s] Already connected, stopping retry loop", conn.Host)
+			log.Printf("[INFO] [%s] Stopping reconnection - shutting down", conn.Host)
 			return
 		}
 		conn.Mu.Unlock()
 
-		// Apply backoff with jitter (except on first attempt)
-		if attempt > 1 {
+		// Wait between rounds (not before the first round)
+		if round > 0 {
+			cooldownIdx := round - 1
+			if cooldownIdx >= len(roundCooldowns) {
+				cooldownIdx = len(roundCooldowns) - 1
+			}
+			cooldown := roundCooldowns[cooldownIdx]
+
+			log.Printf("[RETRY] [%s] Round %d failed, waiting %v before next round...",
+				conn.Host, round, cooldown)
+
+			// Only log to DB once per round (not per attempt) to reduce spam
+			conn.logToDatabase("Loxone Connection Exhausted",
+				fmt.Sprintf("Host '%s': Round %d (%d attempts) failed, next retry in %v",
+					conn.Host, round, attemptsPerRound, cooldown))
+
+			// Sleep with shutdown check
+			timer := time.NewTimer(cooldown)
+			select {
+			case <-timer.C:
+				// Continue to next round
+			case <-conn.StopChan:
+				timer.Stop()
+				log.Printf("[INFO] [%s] Reconnection cancelled during cooldown", conn.Host)
+				return
+			}
+		}
+
+		// Inner retry loop: 10 attempts with backoff
+		for attempt := 1; attempt <= attemptsPerRound; attempt++ {
+			// Check if we should stop
 			conn.Mu.Lock()
-			backoff := conn.ReconnectBackoff
+			if conn.IsShuttingDown {
+				conn.Mu.Unlock()
+				log.Printf("[INFO] [%s] Stopping reconnection attempts - shutting down", conn.Host)
+				return
+			}
+
+			if conn.IsConnected {
+				conn.Mu.Unlock()
+				log.Printf("[INFO] [%s] Already connected, stopping retry loop", conn.Host)
+				return
+			}
 			conn.Mu.Unlock()
 
-			jitter := time.Duration(rand.Float64() * float64(backoff) * 0.3)
-			backoffWithJitter := backoff + jitter
-			log.Printf("[WAIT] [%s] Waiting %.1fs (backoff with jitter) before retry attempt %d/%d...",
-				conn.Host, backoffWithJitter.Seconds(), attempt, maxRetries)
-			time.Sleep(backoffWithJitter)
-		}
-
-		log.Println("------------------------------------------------------------")
-		log.Printf("| CONNECTING: %s (attempt %d/%d)", conn.Host, attempt, maxRetries)
-		log.Println("------------------------------------------------------------")
-
-		// CRITICAL FIX: Check if this is a remote connection and ALWAYS re-resolve DNS
-		var wsURL string
-		conn.Mu.Lock()
-		isRemote := conn.IsRemote
-		conn.Mu.Unlock()
-
-		if isRemote {
-			log.Printf("Step 1a: Re-resolving Loxone Cloud DNS address (ALWAYS on reconnect)")
-
-			actualHost, err := conn.resolveLoxoneCloudDNS()
-			if err != nil {
-				log.Printf("[ERROR] Failed to resolve cloud DNS: %v", err)
+			// Apply backoff with jitter (except on first attempt of first round)
+			if round > 0 || attempt > 1 {
 				conn.Mu.Lock()
-				conn.IsConnected = false
-				conn.LastError = fmt.Sprintf("Failed to resolve cloud DNS: %v", err)
-				conn.ConsecutiveConnFails++
-				if conn.ReconnectBackoff < 2*time.Second {
-					conn.ReconnectBackoff = 2 * time.Second
-				} else {
-					conn.ReconnectBackoff = time.Duration(math.Min(
-						float64(conn.ReconnectBackoff*2),
-						float64(conn.MaxBackoff),
-					))
-				}
+				backoff := conn.ReconnectBackoff
 				conn.Mu.Unlock()
+
+				jitter := time.Duration(rand.Float64() * float64(backoff) * 0.3)
+				backoffWithJitter := backoff + jitter
+				log.Printf("[WAIT] [%s] Waiting %.1fs before attempt %d/%d (round %d)...",
+					conn.Host, backoffWithJitter.Seconds(), attempt, attemptsPerRound, round+1)
+				time.Sleep(backoffWithJitter)
+			}
+
+			log.Println("------------------------------------------------------------")
+			log.Printf("| CONNECTING: %s (attempt %d/%d, round %d)", conn.Host, attempt, attemptsPerRound, round+1)
+			log.Println("------------------------------------------------------------")
+
+			// CRITICAL FIX: Check if this is a remote connection and ALWAYS re-resolve DNS
+			var wsURL string
+			conn.Mu.Lock()
+			isRemote := conn.IsRemote
+			conn.Mu.Unlock()
+
+			if isRemote {
+				log.Printf("Step 1a: Re-resolving Loxone Cloud DNS address (ALWAYS on reconnect)")
+
+				actualHost, err := conn.resolveLoxoneCloudDNS()
+				if err != nil {
+					log.Printf("[ERROR] Failed to resolve cloud DNS: %v", err)
+					conn.Mu.Lock()
+					conn.IsConnected = false
+					conn.LastError = fmt.Sprintf("Failed to resolve cloud DNS: %v", err)
+					conn.ConsecutiveConnFails++
+					if conn.ReconnectBackoff < 2*time.Second {
+						conn.ReconnectBackoff = 2 * time.Second
+					} else {
+						conn.ReconnectBackoff = time.Duration(math.Min(
+							float64(conn.ReconnectBackoff*2),
+							float64(conn.MaxBackoff),
+						))
+					}
+					conn.Mu.Unlock()
+					continue
+				}
+
+				wsURL = fmt.Sprintf("wss://%s/ws/rfc6455", actualHost)
+				log.Printf("   [OK] Using resolved host: %s", actualHost)
+			} else {
+				conn.Mu.Lock()
+				wsURL = fmt.Sprintf("ws://%s/ws/rfc6455", conn.Host)
+				conn.Mu.Unlock()
+			}
+
+			log.Printf("Step 1: Establishing WebSocket connection")
+			log.Printf("   URL: %s", wsURL)
+
+			dialer := websocket.Dialer{
+				HandshakeTimeout: 15 * time.Second,
+			}
+
+			// For remote connections, configure TLS
+			if isRemote {
+				conn.Mu.Lock()
+				useTLS := conn.UseTLSVerification
+				conn.Mu.Unlock()
+
+				if useTLS {
+					// Proper TLS verification via CloudDNS dyndns hostname
+					dialer.TLSClientConfig = &tls.Config{
+						MinVersion: tls.VersionTLS12,
+					}
+					log.Printf("   Using proper TLS verification (CloudDNS hostname)")
+				} else {
+					// Legacy fallback: raw IP does not match certificate
+					dialer.TLSClientConfig = &tls.Config{
+						InsecureSkipVerify: true,
+					}
+					log.Printf("   Using InsecureSkipVerify (legacy MAC-based resolution)")
+				}
+			}
+
+			ws, _, err := dialer.Dial(wsURL, nil)
+			if err != nil {
+				errorType := ClassifyError(err)
+
+				// Check if this is expected during port change
+				if conn.isExpectedDuringPortChange(err) {
+					errMsg := fmt.Sprintf("Reconnecting after port change: %v", err)
+					log.Printf("[INFO] [%s] %s (attempt %d/%d)", conn.Host, errMsg, attempt, attemptsPerRound)
+
+					conn.Mu.Lock()
+					conn.PortChangeInProgress = true
+					conn.LastError = "Port change in progress"
+					conn.Mu.Unlock()
+
+					if attempt == 1 && round == 0 {
+						conn.logToDatabase("Loxone Port Change",
+							fmt.Sprintf("Host '%s': Port rotation detected, reconnecting", conn.Host))
+					}
+				} else {
+					errMsg := fmt.Sprintf("Connection failed: %v", err)
+					log.Printf("[ERROR] [%s] %s", conn.Host, errMsg)
+
+					conn.Mu.Lock()
+					conn.IsConnected = false
+					conn.LastError = errMsg
+					conn.LastErrorType = errorType
+					conn.ConsecutiveConnFails++
+					conn.PortChangeInProgress = false
+					conn.Mu.Unlock()
+
+					conn.updateDeviceStatus(db, fmt.Sprintf("[ERROR] Connection failed (round %d, attempt %d): %v", round+1, attempt, err))
+					// Only log first and last attempt per round to DB to reduce spam
+					if attempt == 1 || attempt == attemptsPerRound {
+						conn.logToDatabase("Loxone Connection Failed",
+							fmt.Sprintf("Host '%s': %v (round %d, attempt %d/%d, type: %d)",
+								conn.Host, err, round+1, attempt, attemptsPerRound, errorType))
+					}
+				}
+
 				continue
 			}
 
-			wsURL = fmt.Sprintf("wss://%s/ws/rfc6455", actualHost)
-			log.Printf("   [OK] Using resolved host: %s", actualHost)
-		} else {
-			conn.Mu.Lock()
-			wsURL = fmt.Sprintf("ws://%s/ws/rfc6455", conn.Host)
-			conn.Mu.Unlock()
-		}
-
-		log.Printf("Step 1: Establishing WebSocket connection")
-		log.Printf("   URL: %s", wsURL)
-
-		dialer := websocket.Dialer{
-			HandshakeTimeout: 15 * time.Second,
-		}
-
-		// For remote connections, configure TLS
-		if isRemote {
-			conn.Mu.Lock()
-			useTLS := conn.UseTLSVerification
-			conn.Mu.Unlock()
-
-			if useTLS {
-				// Proper TLS verification via CloudDNS dyndns hostname
-				dialer.TLSClientConfig = &tls.Config{
-					MinVersion: tls.VersionTLS12,
-				}
-				log.Printf("   Using proper TLS verification (CloudDNS hostname)")
-			} else {
-				// Legacy fallback: raw IP does not match certificate
-				dialer.TLSClientConfig = &tls.Config{
-					InsecureSkipVerify: true,
-				}
-				log.Printf("   Using InsecureSkipVerify (legacy MAC-based resolution)")
-			}
-		}
-
-		ws, _, err := dialer.Dial(wsURL, nil)
-		if err != nil {
-			errorType := ClassifyError(err)
-
-			// Check if this is expected during port change
-			if conn.isExpectedDuringPortChange(err) {
-				errMsg := fmt.Sprintf("Reconnecting after port change: %v", err)
-				log.Printf("[INFO] [%s] %s (attempt %d/%d)", conn.Host, errMsg, attempt, maxRetries)
-
+			// Connection successful, proceed with authentication
+			if conn.performConnection(ws, db, collector) {
 				conn.Mu.Lock()
-				conn.PortChangeInProgress = true
-				conn.LastError = "Port change in progress"
-				conn.Mu.Unlock()
-
-				if attempt == 1 {
-					conn.logToDatabase("Loxone Port Change",
-						fmt.Sprintf("Host '%s': Port rotation detected, reconnecting", conn.Host))
-				}
-			} else {
-				errMsg := fmt.Sprintf("Connection failed: %v", err)
-				log.Printf("[ERROR] [%s] %s", conn.Host, errMsg)
-
-				conn.Mu.Lock()
-				conn.IsConnected = false
-				conn.LastError = errMsg
-				conn.LastErrorType = errorType
-				conn.ConsecutiveConnFails++
+				wasPortChange := conn.PortChangeInProgress
 				conn.PortChangeInProgress = false
+				deviceCount := len(conn.Devices)
 				conn.Mu.Unlock()
 
-				conn.updateDeviceStatus(db, fmt.Sprintf("[ERROR] Connection failed (attempt %d): %v", attempt, err))
-				conn.logToDatabase("Loxone Connection Failed",
-					fmt.Sprintf("Host '%s': %v (attempt %d, type: %d)", conn.Host, err, attempt, errorType))
-			}
+				if wasPortChange {
+					log.Println("[OK] Port change completed successfully")
+					conn.logToDatabase("Loxone Port Change Complete",
+						fmt.Sprintf("Host '%s' reconnected after port rotation (lifetime reconnects: %d)",
+							conn.Host, conn.TotalReconnects))
+				} else {
+					log.Println("[OK] CONNECTION ESTABLISHED!")
+					conn.logToDatabase("Loxone Connected",
+						fmt.Sprintf("Host '%s' connected with %d devices (lifetime reconnects: %d, rounds: %d)",
+							conn.Host, deviceCount, conn.TotalReconnects, round+1))
+				}
 
-			continue
+				return
+			}
 		}
 
-		// Connection successful, proceed with authentication
-		if conn.performConnection(ws, db, collector) {
-			conn.Mu.Lock()
-			wasPortChange := conn.PortChangeInProgress
-			conn.PortChangeInProgress = false
-			deviceCount := len(conn.Devices)
-			conn.Mu.Unlock()
-
-			if wasPortChange {
-				log.Println("[OK] Port change completed successfully")
-				conn.logToDatabase("Loxone Port Change Complete",
-					fmt.Sprintf("Host '%s' reconnected after port rotation (lifetime reconnects: %d)",
-						conn.Host, conn.TotalReconnects))
-			} else {
-				log.Println("[OK] CONNECTION ESTABLISHED!")
-				conn.logToDatabase("Loxone Connected",
-					fmt.Sprintf("Host '%s' connected with %d devices (lifetime reconnects: %d)",
-						conn.Host, deviceCount, conn.TotalReconnects))
-			}
-
-			return
-		}
+		// End of round - increase backoff for next round's inner attempts
+		conn.Mu.Lock()
+		conn.ReconnectBackoff = conn.MaxBackoff
+		conn.Mu.Unlock()
 	}
-
-	// All retries exhausted
-	log.Printf("[ERROR] [%s] All %d connection attempts failed, will retry later", conn.Host, maxRetries)
-	conn.logToDatabase("Loxone Connection Exhausted",
-		fmt.Sprintf("Host '%s': All %d connection attempts failed", conn.Host, maxRetries))
-
-	// Schedule another reconnection attempt after max backoff
-	go func() {
-		conn.Mu.Lock()
-		backoff := conn.MaxBackoff
-		conn.Mu.Unlock()
-
-		time.Sleep(backoff)
-
-		conn.Mu.Lock()
-		isShuttingDown := conn.IsShuttingDown
-		conn.Mu.Unlock()
-
-		if !isShuttingDown {
-			log.Printf("[RETRY] [%s] Scheduling new reconnection attempt after cooldown", conn.Host)
-			go conn.ConnectWithBackoff(db, collector)
-		}
-	}()
 }
 
 // performConnection handles the connection setup after websocket is established

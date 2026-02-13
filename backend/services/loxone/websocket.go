@@ -497,21 +497,19 @@ func (conn *WebSocketConnection) readLoop(db *sql.DB, collector LoxoneCollectorI
 		isShuttingDown := conn.IsShuttingDown
 		conn.Mu.Unlock()
 
+		// Single log entry per disconnect (was previously logging 2-3 times)
 		if conn.IsRemote {
 			log.Printf("[INFO] [%s] Connection closed (possible port rotation)", conn.Host)
-			conn.logToDatabase("Loxone Connection Closed",
-				fmt.Sprintf("Host '%s' disconnected (checking for port change)", conn.Host))
+			conn.logToDatabase("Loxone Disconnected",
+				fmt.Sprintf("Host '%s' disconnected (remote, checking for port change)", conn.Host))
 		} else {
 			log.Printf("[WARN] [%s] DISCONNECTED from Loxone", conn.Host)
 			conn.logToDatabase("Loxone Disconnected",
 				fmt.Sprintf("Host '%s' disconnected unexpectedly", conn.Host))
 		}
 
-		log.Printf("🔴 [%s] DISCONNECTED from Loxone", conn.Host)
-
 		conn.updateDeviceStatus(db,
-			fmt.Sprintf("🔴 Offline since %s", time.Now().Format("2006-01-02 15:04:05")))
-		conn.logToDatabase("Loxone Disconnected", fmt.Sprintf("Host '%s' disconnected", conn.Host))
+			fmt.Sprintf("[OFFLINE] Since %s", time.Now().Format("2006-01-02 15:04:05")))
 
 		if !isShuttingDown {
 			log.Printf("Triggering automatic reconnect for %s", conn.Host)

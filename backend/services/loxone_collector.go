@@ -875,12 +875,15 @@ func (lc *LoxoneCollector) loadChargers(connectionDevices map[string]*loxone.Web
 	log.Printf("âœ… Loaded %d Loxone chargers", chargerCount)
 }
 
-// monitorConnections periodically checks connection health
+// monitorConnections periodically checks connection health and auto-recovers stuck connections
 func (lc *LoxoneCollector) monitorConnections() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
-	log.Println("ðŸ‘€ LOXONE CONNECTION MONITOR STARTED (enhanced with metrics)")
+	log.Println("[MONITOR] LOXONE CONNECTION MONITOR STARTED (with auto-recovery)")
+
+	// Track how long each connection has been dead (for escalating recovery)
+	deadSince := make(map[string]time.Time)
 
 	for range ticker.C {
 		lc.mu.RLock()
@@ -890,12 +893,21 @@ func (lc *LoxoneCollector) monitorConnections() {
 		totalAuthFailures := 0
 		totalReconnects := 0
 
-		log.Println("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
-		log.Println("ðŸ” LOXONE CONNECTION STATUS CHECK")
+		log.Println("------------------------------------------------------------")
+		log.Println("[MONITOR] LOXONE CONNECTION STATUS CHECK")
+
+		// Collect connections that need recovery
+		type stuckConn struct {
+			key  string
+			conn *loxone.WebSocketConnection
+		}
+		var stuckConnections []stuckConn
 
 		for key, conn := range lc.connections {
 			conn.Mu.Lock()
 			isConnected := conn.IsConnected
+			isReconnecting := conn.IsReconnecting
+			isShuttingDown := conn.IsShuttingDown
 			tokenValid := conn.TokenValid
 			tokenExpiry := conn.TokenExpiry
 			lastError := conn.LastError
@@ -911,41 +923,67 @@ func (lc *LoxoneCollector) monitorConnections() {
 
 			if !isConnected {
 				disconnectedCount++
-				log.Printf("ðŸ”´ Connection %s: DISCONNECTED (%d devices)", key, deviceCount)
+				log.Printf("[OFFLINE] Connection %s: DISCONNECTED (%d devices, reconnecting: %v)",
+					key, deviceCount, isReconnecting)
 				if lastError != "" {
 					log.Printf("      Last error: %s", lastError)
 				}
 				if authFails > 0 {
-					log.Printf("      âš ï¸  Consecutive auth failures: %d", authFails)
+					log.Printf("      Consecutive auth failures: %d", authFails)
+				}
+
+				// Track dead time
+				if _, exists := deadSince[key]; !exists {
+					deadSince[key] = time.Now()
+				}
+
+				// If disconnected AND not reconnecting AND not shutting down for > 2 min,
+				// the connection is stuck-dead — no goroutine is trying to recover it
+				deadFor := time.Since(deadSince[key])
+				if !isReconnecting && !isShuttingDown && deadFor > 2*time.Minute {
+					log.Printf("      [STUCK] STUCK-DEAD for %v (no reconnect in progress), will force recovery",
+						deadFor.Round(time.Second))
+					stuckConnections = append(stuckConnections, stuckConn{key: key, conn: conn})
 				}
 			} else {
 				connectedCount++
-				log.Printf("   ðŸŸ¢ Connection %s: CONNECTED (%d devices)", key, deviceCount)
+				// Clear dead tracking
+				delete(deadSince, key)
+
+				log.Printf("[ONLINE] Connection %s: CONNECTED (%d devices)", key, deviceCount)
 				if tokenValid && !tokenExpiry.IsZero() {
 					timeUntilExpiry := time.Until(tokenExpiry)
 					log.Printf("      Token expires in: %.1f hours", timeUntilExpiry.Hours())
 				}
 				if totalAuthFails > 0 {
-					log.Printf("      ðŸ“Š Lifetime auth failures: %d", totalAuthFails)
+					log.Printf("      Lifetime auth failures: %d", totalAuthFails)
 				}
 				if totalReconn > 0 {
-					log.Printf("      ðŸ“Š Lifetime reconnects: %d", totalReconn)
+					log.Printf("      Lifetime reconnects: %d", totalReconn)
 				}
 			}
 		}
 		lc.mu.RUnlock()
+
+		// Force recovery for stuck-dead connections (outside of lock)
+		for _, sc := range stuckConnections {
+			log.Printf("[RECOVERY] [%s] Forcing reconnection for stuck-dead connection", sc.key)
+			lc.logToDatabase("Loxone Auto-Recovery",
+				fmt.Sprintf("Host '%s': Connection stuck-dead, monitor forcing reconnect", sc.key))
+			go sc.conn.ConnectWithBackoff(sc.conn.Db, sc.conn.Collector)
+		}
 
 		// Log charger session status
 		lc.chargerMu.RLock()
 		activeSessionCount := len(lc.activeSessions)
 		lc.chargerMu.RUnlock()
 
-		log.Printf("ðŸ“Š Summary: %d connected, %d disconnected, %d total devices",
+		log.Printf("[MONITOR] Summary: %d connected, %d disconnected, %d total devices",
 			connectedCount, disconnectedCount, totalDevices)
-		log.Printf("ðŸ“Š Charger Sessions: %d active", activeSessionCount)
-		log.Printf("ðŸ“Š Metrics: %d total auth failures, %d total reconnects",
+		log.Printf("[MONITOR] Charger Sessions: %d active", activeSessionCount)
+		log.Printf("[MONITOR] Metrics: %d total auth failures, %d total reconnects",
 			totalAuthFailures, totalReconnects)
-		log.Println("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
+		log.Println("------------------------------------------------------------")
 
 		if disconnectedCount > 0 {
 			lc.logToDatabase("Loxone Status Check",
