@@ -937,12 +937,22 @@ func (lc *LoxoneCollector) monitorConnections() {
 					deadSince[key] = time.Now()
 				}
 
-				// If disconnected AND not reconnecting AND not shutting down for > 2 min,
-				// the connection is stuck-dead — no goroutine is trying to recover it
 				deadFor := time.Since(deadSince[key])
+
+				// Recovery case 1: No reconnect in progress for > 2 min — stuck-dead
 				if !isReconnecting && !isShuttingDown && deadFor > 2*time.Minute {
 					log.Printf("      [STUCK] STUCK-DEAD for %v (no reconnect in progress), will force recovery",
 						deadFor.Round(time.Second))
+					stuckConnections = append(stuckConnections, stuckConn{key: key, conn: conn})
+				}
+
+				// Recovery case 2: Reconnect has been "in progress" for > 15 min — likely hung
+				if isReconnecting && !isShuttingDown && deadFor > 15*time.Minute {
+					log.Printf("      [STUCK] Reconnect stuck for %v, resetting IsReconnecting to allow recovery",
+						deadFor.Round(time.Second))
+					conn.Mu.Lock()
+					conn.IsReconnecting = false
+					conn.Mu.Unlock()
 					stuckConnections = append(stuckConnections, stuckConn{key: key, conn: conn})
 				}
 			} else {

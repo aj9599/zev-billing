@@ -644,6 +644,13 @@ func (conn *WebSocketConnection) processMessage(jsonData []byte, chargerData map
 		return
 	}
 
+	// Handle async token refresh response (from monitorTokenExpiry)
+	if strings.Contains(response.LL.Control, "dev/sys/refreshjwt") ||
+		strings.Contains(response.LL.Control, "dev/sys/refreshtoken") {
+		conn.handleTokenRefreshResponse(jsonData, response.LL.Code)
+		return
+	}
+
 	// Check for auth/permission errors in response
 	if response.LL.Code == "401" || response.LL.Code == "403" {
 		log.Printf("🔒 [%s] Auth error detected in response (code: %s)", conn.Host, response.LL.Code)
@@ -718,6 +725,74 @@ func (conn *WebSocketConnection) processMessage(jsonData []byte, chargerData map
 			}
 		}
 	}
+}
+
+// handleTokenRefreshResponse processes the async token refresh response from the Miniserver.
+// This is called by processMessage when a refreshjwt/refreshtoken response is received.
+// On success: updates token in-place, no disconnect. On failure: marks token invalid so
+// monitorTokenExpiry will fall back to full reconnect on next check.
+func (conn *WebSocketConnection) handleTokenRefreshResponse(jsonData []byte, code string) {
+	conn.Mu.Lock()
+	conn.TokenRefreshPending = false
+	conn.Mu.Unlock()
+
+	if code != "200" {
+		log.Printf("[TOKEN] [%s] Async refresh FAILED (code: %s)", conn.Host, code)
+
+		// Token might be invalid — don't mark TokenValid=false immediately,
+		// let monitorTokenExpiry handle the fallback logic based on remaining time
+		conn.logToDatabase("Loxone Token Refresh Failed",
+			fmt.Sprintf("Host '%s': refresh returned code %s", conn.Host, code))
+		return
+	}
+
+	// Parse the refresh response to get the new token and validity
+	var refreshResp struct {
+		LL struct {
+			Control string `json:"control"`
+			Code    string `json:"code"`
+			Value   struct {
+				Token      string `json:"token"`
+				Key        string `json:"key"`
+				ValidUntil int64  `json:"validUntil"`
+				Rights     int    `json:"tokenRights"`
+				Unsecure   bool   `json:"unsecurePass"`
+			} `json:"value"`
+		} `json:"LL"`
+	}
+
+	if err := json.Unmarshal(jsonData, &refreshResp); err != nil {
+		log.Printf("[TOKEN] [%s] Failed to parse refresh response: %v", conn.Host, err)
+		return
+	}
+
+	newToken := refreshResp.LL.Value.Token
+	if newToken == "" {
+		log.Printf("[TOKEN] [%s] Empty token in refresh response", conn.Host)
+		return
+	}
+
+	newExpiry := LoxoneEpoch.Add(time.Duration(refreshResp.LL.Value.ValidUntil) * time.Second)
+	oldExpiry := conn.TokenExpiry
+
+	conn.Mu.Lock()
+	conn.Token = newToken
+	conn.TokenValid = true
+	conn.TokenExpiry = newExpiry
+	conn.LastSuccessfulAuth = time.Now()
+	conn.ConsecutiveAuthFails = 0
+	conn.Mu.Unlock()
+
+	log.Printf("[TOKEN] [%s] ASYNC REFRESH SUCCESS — no disconnect needed!", conn.Host)
+	log.Printf("[TOKEN] [%s] Old expiry: %s, New expiry: %s (valid for %.1f hours)",
+		conn.Host,
+		oldExpiry.Format("15:04:05"),
+		newExpiry.Format("15:04:05"),
+		time.Until(newExpiry).Hours())
+
+	conn.logToDatabase("Loxone Token Refreshed",
+		fmt.Sprintf("Host '%s': token refreshed inline (valid for %.1f hours, no disconnect)",
+			conn.Host, time.Until(newExpiry).Hours()))
 }
 
 // UnmarshalLoxoneLLData is a helper to unmarshal LoxoneLLData

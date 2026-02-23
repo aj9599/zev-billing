@@ -211,13 +211,18 @@ type WebSocketConnection struct {
 	MeterReadingBuffers map[int]*MeterReadingBuffer // meter_id -> buffer
 	MeterBufferMu       sync.Mutex
 
+	// Async token refresh: send refresh command inline over WebSocket,
+	// handle response in readLoop. No disconnect/reconnect needed.
+	TokenRefreshPending bool      // true while waiting for refresh response
+	TokenRefreshSentAt  time.Time // when the refresh command was sent
+
 	StopChan       chan bool
 	GoroutinesWg   sync.WaitGroup
 	IsReconnecting bool
 	IsShuttingDown bool // Flag to prevent reconnection during shutdown
 	Mu             sync.Mutex
 	Db             *sql.DB
-    Collector      LoxoneCollectorInterface
+	Collector      LoxoneCollectorInterface
 }
 
 // ========== DEVICE ==========

@@ -124,8 +124,19 @@ func (conn *WebSocketConnection) ConnectWithBackoff(db *sql.DB, collector Loxone
 	conn.StopChan = make(chan bool)
 	conn.Mu.Unlock()
 
-	// Wait for existing goroutines to finish
-	conn.GoroutinesWg.Wait()
+	// Wait for existing goroutines to finish with a timeout to prevent permanent stall
+	waitDone := make(chan struct{})
+	go func() {
+		conn.GoroutinesWg.Wait()
+		close(waitDone)
+	}()
+
+	select {
+	case <-waitDone:
+		log.Printf("[INFO] [%s] All goroutines stopped cleanly", conn.Host)
+	case <-time.After(30 * time.Second):
+		log.Printf("[WARN] [%s] Goroutine cleanup timed out after 30s, proceeding with reconnect", conn.Host)
+	}
 
 	// Retry indefinitely in rounds of 10 attempts each
 	// After each failed round, wait with increasing cooldown before next round
@@ -399,6 +410,7 @@ func (conn *WebSocketConnection) performConnection(ws *websocket.Conn, db *sql.D
 	conn.ReconnectBackoff = 2 * time.Second
 	conn.TotalReconnects++
 	conn.LastSuccessfulAuth = time.Now()
+	conn.TokenRefreshPending = false // Reset any stale refresh state
 	deviceCount := len(conn.Devices)
 	conn.Mu.Unlock()
 

@@ -65,15 +65,21 @@ func (conn *WebSocketConnection) keepalive() {
 	}
 }
 
-// monitorTokenExpiry monitors token expiry and refreshes as needed
+// monitorTokenExpiry monitors token expiry and refreshes INLINE via the WebSocket.
+// Following the official Loxone LxCommunicator pattern: refresh at ~90% of remaining
+// token lifespan by sending refreshjwt command through the existing connection.
+// The response is handled by processMessage in readLoop — no disconnect/reconnect needed.
+// Only falls back to full reconnect if async refresh fails or token is critically expired.
 func (conn *WebSocketConnection) monitorTokenExpiry(db *sql.DB) {
 	defer conn.GoroutinesWg.Done()
 
-	log.Printf("[TOKEN] MONITOR STARTED for %s (collection-window aware)", conn.Host)
+	log.Printf("[TOKEN] MONITOR STARTED for %s (async refresh, no disconnect)", conn.Host)
 
-	// Check every 3 minutes
-	ticker := time.NewTicker(3 * time.Minute)
+	// Check every 60 seconds (more frequent than before to catch refresh responses)
+	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
+
+	consecutiveRefreshFails := 0
 
 	for {
 		select {
@@ -86,63 +92,125 @@ func (conn *WebSocketConnection) monitorTokenExpiry(db *sql.DB) {
 			tokenValid := conn.TokenValid
 			tokenExpiry := conn.TokenExpiry
 			collectionInProgress := conn.CollectionInProgress
+			refreshPending := conn.TokenRefreshPending
+			refreshSentAt := conn.TokenRefreshSentAt
+			token := conn.Token
 			conn.Mu.Unlock()
 
 			if !isConnected {
-				// FIX: Don't exit - just keep waiting. The connection may come back
-				// via reconnect. Previously this would exit permanently.
 				continue
 			}
 
-			// Skip token operations during collection
+			// Skip during collection to avoid interfering with billing data
 			if collectionInProgress {
 				continue
 			}
 
-			// Skip if we're within 2 minutes of a collection window (:00, :15, :30, :45)
-			minute := time.Now().Minute()
-			nearCollection := (minute >= 58 || minute <= 2) ||
-				(minute >= 13 && minute <= 17) ||
-				(minute >= 28 && minute <= 32) ||
-				(minute >= 43 && minute <= 47)
-			if nearCollection {
+			// Check if a pending refresh timed out (no response in 30 seconds)
+			if refreshPending && time.Since(refreshSentAt) > 30*time.Second {
+				log.Printf("[TOKEN] [%s] Async refresh timed out (sent %.0fs ago), clearing pending flag",
+					conn.Host, time.Since(refreshSentAt).Seconds())
+				conn.Mu.Lock()
+				conn.TokenRefreshPending = false
+				conn.Mu.Unlock()
+				refreshPending = false // Update local var so we can proceed below
+				consecutiveRefreshFails++
+			}
+
+			// Don't send another refresh while one is pending
+			if refreshPending {
 				continue
 			}
 
-			// Check token with 2-minute safety margin
-			if !tokenValid || time.Now().After(tokenExpiry.Add(-2*time.Minute)) {
-				timeUntilExpiry := time.Until(tokenExpiry)
-				log.Printf("[WARN] [%s] Token invalid or expiring soon (%.1f min), triggering reconnect for fresh auth...",
-					conn.Host, timeUntilExpiry.Minutes())
+			timeUntilExpiry := time.Until(tokenExpiry)
+			tokenLifetime := tokenExpiry.Sub(conn.LastSuccessfulAuth)
 
-				conn.logToDatabase("Loxone Token Expiring",
-					fmt.Sprintf("Host '%s' token expiring (%.1f min left), reconnecting for fresh auth",
-						conn.Host, timeUntilExpiry.Minutes()))
-
-				// FIX: Instead of calling ensureAuth() which reads from WebSocket
-				// (racing with the reader goroutine), trigger a full reconnect.
-				// performConnection() authenticates BEFORE starting the reader goroutine,
-				// which is the only safe way to do it.
-				conn.Mu.Lock()
-				conn.IsConnected = false
-				conn.TokenValid = false
-				conn.LastError = "Token expiring, reconnecting"
-				if conn.Ws != nil {
-					conn.Ws.Close()
-				}
-				conn.Mu.Unlock()
-
-				conn.updateDeviceStatus(db, "[RECONNECT] Token expiring, reconnecting...")
-				// readLoop's defer will trigger reconnect
+			// CRITICAL: Token already expired — must do full reconnect
+			if !tokenValid || timeUntilExpiry <= 0 {
+				log.Printf("[TOKEN] [%s] Token EXPIRED, triggering full reconnect", conn.Host)
+				conn.logToDatabase("Loxone Token Expired",
+					fmt.Sprintf("Host '%s' token expired, full reconnect required", conn.Host))
+				conn.triggerReconnect(db, "Token expired")
 				return
-			} else {
-				timeUntilExpiry := time.Until(tokenExpiry)
-				if timeUntilExpiry.Hours() < 1 {
-					log.Printf("[TOKEN] [%s] Token valid for %.1f minutes", conn.Host, timeUntilExpiry.Minutes())
-				}
 			}
+
+			// Calculate refresh threshold:
+			// Per Loxone official library: refresh at 90% of token lifetime elapsed.
+			// Example: 24h token → refresh after 21.6h (2.4h before expiry)
+			// Minimum: refresh at least 5 minutes before expiry
+			refreshThreshold := time.Duration(float64(tokenLifetime) * 0.1) // 10% of lifetime remaining
+			if refreshThreshold < 5*time.Minute {
+				refreshThreshold = 5 * time.Minute
+			}
+
+			needsRefresh := timeUntilExpiry <= refreshThreshold
+
+			// Log token health periodically
+			if timeUntilExpiry.Hours() < 1 {
+				log.Printf("[TOKEN] [%s] Token valid for %.1f min (refresh at %.1f min)",
+					conn.Host, timeUntilExpiry.Minutes(), refreshThreshold.Minutes())
+			}
+
+			if !needsRefresh {
+				consecutiveRefreshFails = 0
+				continue
+			}
+
+			// If async refresh already failed multiple times, fall back to reconnect
+			if consecutiveRefreshFails >= 3 {
+				log.Printf("[TOKEN] [%s] %d consecutive refresh failures, falling back to full reconnect",
+					conn.Host, consecutiveRefreshFails)
+				conn.logToDatabase("Loxone Token Refresh Failed",
+					fmt.Sprintf("Host '%s': %d consecutive refresh failures, reconnecting",
+						conn.Host, consecutiveRefreshFails))
+				conn.triggerReconnect(db, "Token refresh failed repeatedly")
+				return
+			}
+
+			// CRITICAL SAFETY: If token expires in < 2 minutes and we haven't
+			// successfully refreshed yet, do a full reconnect as last resort
+			if timeUntilExpiry < 2*time.Minute && consecutiveRefreshFails > 0 {
+				log.Printf("[TOKEN] [%s] Token expires in %.0fs with prior refresh failures, reconnecting",
+					conn.Host, timeUntilExpiry.Seconds())
+				conn.triggerReconnect(db, "Token critically low after refresh failure")
+				return
+			}
+
+			// Send async token refresh command (response handled by processMessage in readLoop)
+			log.Printf("[TOKEN] [%s] Sending async token refresh (%.1f min remaining, lifetime: %.1f hours)",
+				conn.Host, timeUntilExpiry.Minutes(), tokenLifetime.Hours())
+
+			refreshCmd := fmt.Sprintf("jdev/sys/refreshjwt/%s/%s", token, conn.Username)
+			if err := conn.safeWriteMessage(websocket.TextMessage, []byte(refreshCmd)); err != nil {
+				log.Printf("[TOKEN] [%s] Failed to send refresh command: %v", conn.Host, err)
+				consecutiveRefreshFails++
+				continue
+			}
+
+			conn.Mu.Lock()
+			conn.TokenRefreshPending = true
+			conn.TokenRefreshSentAt = time.Now()
+			conn.Mu.Unlock()
+
+			conn.logToDatabase("Loxone Token Refresh Sent",
+				fmt.Sprintf("Host '%s': async refresh sent (%.1f min remaining)",
+					conn.Host, timeUntilExpiry.Minutes()))
 		}
 	}
+}
+
+// triggerReconnect cleanly disconnects and lets readLoop's defer trigger reconnection
+func (conn *WebSocketConnection) triggerReconnect(db *sql.DB, reason string) {
+	conn.Mu.Lock()
+	conn.IsConnected = false
+	conn.TokenValid = false
+	conn.LastError = reason
+	if conn.Ws != nil {
+		conn.Ws.Close()
+	}
+	conn.Mu.Unlock()
+
+	conn.updateDeviceStatus(db, fmt.Sprintf("[RECONNECT] %s", reason))
 }
 
 // monitorDNSChanges monitors DNS changes for remote connections
