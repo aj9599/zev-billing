@@ -30,6 +30,10 @@ export function useBillGeneration(onSuccess: () => void) {
         throw new Error(t('billConfig.validation.selectUser'));
       }
 
+      if (config.billing_mode === 'charger' && !config.charger_id) {
+        throw new Error(t('billConfig.validation.selectCharger'));
+      }
+
       // Validate vZEV mode
       if (config.is_vzev && !config.sender_name) {
         throw new Error(t('billConfig.validation.vzevComplexRequired'));
@@ -77,6 +81,8 @@ export function useConfigurationState(
     shared_meter_configs: [],
     custom_item_ids: [], // NEW: Array of custom item IDs to include
     is_vzev: false,
+    billing_mode: 'apartments',
+    charger_id: undefined,
     sender_name: '',
     sender_address: '',
     sender_city: '',
@@ -169,6 +175,8 @@ export function useConfigurationState(
       shared_meter_configs: [],
       custom_item_ids: [], // Reset custom items
       is_vzev: false,
+      billing_mode: 'apartments',
+      charger_id: undefined,
       sender_name: '',
       sender_address: '',
       sender_city: '',
@@ -186,8 +194,16 @@ export function useConfigurationState(
 
   const canProceed = () => {
     switch (step) {
-      case 1:
-        return config.building_ids.length > 0 && config.user_ids.length > 0;
+      case 1: {
+        if (config.building_ids.length === 0) return false;
+        if (config.billing_mode === 'charger') {
+          return config.user_ids.length > 0 && !!config.charger_id;
+        }
+        if (config.billing_mode === 'building') {
+          return config.user_ids.length > 0;
+        }
+        return config.user_ids.length > 0;
+      }
       case 2:
         return !!config.start_date && !!config.end_date;
       case 3:

@@ -1744,9 +1744,26 @@ export const de: Translations = {
 
   // BillConfiguration.tsx - Warnings (German)
   'billConfig.warning.mixingTypes': 'Warnung: Gebäudekomplexe (vZEV) können nicht mit regulären Gebäuden (ZEV) gemischt werden. Bitte wählen Sie nur Komplexe ODER nur reguläre Gebäude aus.',
+  'billConfig.warning.mixedBuildingTypes': 'Warnung: Gebäude mit und ohne Wohnungsverwaltung können nicht zusammen abgerechnet werden. Bitte wählen Sie nur einen Typ aus.',
   'billConfig.error.cannotMix': 'Gebäudekomplexe (vZEV) können nicht mit regulären Gebäuden (ZEV) gemischt werden. Bitte deaktivieren Sie zuerst vorhandene Gebäude.',
   'billConfig.validation.selectComplex': 'Bitte wählen Sie einen Gebäudekomplex aus',
+  'billConfig.validation.selectCharger': 'Bitte wählen Sie einen Ladepunkt aus',
   'billConfig.validation.vzevComplexRequired': 'vZEV-Modus erfordert, dass alle ausgewählten Gebäude Komplexe sind',
+
+  // BillConfiguration.tsx - Building / Charger billing modes (German)
+  'billConfig.step1.modeBuilding': 'Modus: Ganzes Gebäude',
+  'billConfig.step1.modeBuildingDescription': 'Für Gebäude ohne Wohnungsverwaltung. Es wird eine Rechnung an den Empfänger erstellt — inklusive aller Ladepunkte des Gebäudes (auch ohne RFID).',
+  'billConfig.step1.modeCharger': 'Modus: Einzelner Ladepunkt',
+  'billConfig.step1.modeChargerDescription': 'Es wird nur der Verbrauch des ausgewählten Ladepunkts abgerechnet (z. B. um das Aufladen eines Geschäftsfahrzeugs an Ihre Firma zu fakturieren).',
+  'billConfig.step1.selectRecipient': 'Rechnungsempfänger auswählen',
+  'billConfig.step1.selectRecipientPlaceholder': '— Empfänger wählen —',
+  'billConfig.step1.noRecipientFound': 'Keine aktiven Nutzer in den gewählten Gebäuden gefunden. Bitte legen Sie zuerst einen Nutzer im Gebäude an.',
+  'billConfig.step1.chargerOnlyToggle': 'Nur einen bestimmten Ladepunkt abrechnen',
+  'billConfig.step1.selectCharger': 'Ladepunkt auswählen',
+  'billConfig.step1.selectChargerPlaceholder': '— Ladepunkt wählen —',
+  'billConfig.step1.noChargerFound': 'Keine aktiven Ladepunkte in den gewählten Gebäuden gefunden.',
+  'billConfig.step1.summaryBuilding': 'Eine Rechnung für das gesamte Gebäude',
+  'billConfig.step1.summaryCharger': 'Eine Rechnung nur für den ausgewählten Ladepunkt',
 
 
   // ============================================================================

@@ -1743,9 +1743,26 @@ export const en: Translations = {
 
   // BillConfiguration.tsx - Warnings
   'billConfig.warning.mixingTypes': 'Warning: Cannot mix building complexes (vZEV) with regular buildings (ZEV). Please select only complexes OR only regular buildings.',
+  'billConfig.warning.mixedBuildingTypes': 'Warning: Buildings with and without apartment management cannot be billed together. Please select only one type.',
   'billConfig.error.cannotMix': 'Cannot mix building complexes (vZEV) with regular buildings (ZEV). Please deselect existing buildings first.',
   'billConfig.validation.selectComplex': 'Please select a building complex',
+  'billConfig.validation.selectCharger': 'Please select a charger',
   'billConfig.validation.vzevComplexRequired': 'vZEV mode requires all selected buildings to be complexes',
+
+  // BillConfiguration.tsx - Building / Charger billing modes (English)
+  'billConfig.step1.modeBuilding': 'Mode: Whole building',
+  'billConfig.step1.modeBuildingDescription': 'For buildings without apartment management. One invoice is created for the recipient covering everything in the building, including all chargers (no RFID required).',
+  'billConfig.step1.modeCharger': 'Mode: Single charger',
+  'billConfig.step1.modeChargerDescription': 'Only the consumption of the selected charger will be billed (e.g. invoicing your company for charging a company car at home).',
+  'billConfig.step1.selectRecipient': 'Select bill recipient',
+  'billConfig.step1.selectRecipientPlaceholder': '— Select recipient —',
+  'billConfig.step1.noRecipientFound': 'No active user found in the selected building(s). Please create a user in the building first.',
+  'billConfig.step1.chargerOnlyToggle': 'Bill only one specific charger',
+  'billConfig.step1.selectCharger': 'Select charger',
+  'billConfig.step1.selectChargerPlaceholder': '— Select charger —',
+  'billConfig.step1.noChargerFound': 'No active chargers found in the selected building(s).',
+  'billConfig.step1.summaryBuilding': 'One invoice for the whole building',
+  'billConfig.step1.summaryCharger': 'One invoice for the selected charger only',
 
   // ============================================================================
   // SHARED METERS CONFIGURATION
