@@ -2073,6 +2073,7 @@ export const en: Translations = {
   'autoBilling.review.billingItems': 'Billing Items',
   'autoBilling.review.sharedMeters': 'Shared Meters',
   'autoBilling.review.customItems': 'Custom Items',
+  'autoBilling.review.billingScope': 'Billing scope',
   'autoBilling.missingRequiredFields': 'Missing Required Fields',
   'autoBilling.readyToCreate': 'Ready to Create',
   'autoBilling.readyToCreateDescription': 'All required information is complete. Click "Create" to activate automatic billing.',

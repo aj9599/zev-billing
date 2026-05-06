@@ -1,6 +1,6 @@
 import { AlertTriangle, CheckCircle } from 'lucide-react';
 import { useTranslation } from '../../../../i18n';
-import type { Building } from '../../../../types';
+import type { Building, BillingMode, Charger } from '../../../../types';
 
 interface AutoBillingStep7ReviewProps {
   name: string;
@@ -10,10 +10,13 @@ interface AutoBillingStep7ReviewProps {
   firstExecutionDate: string;
   buildingIds: number[];
   buildings: Building[];
+  chargers: Charger[];
   apartmentCount: number;
   userCount: number;
   sharedMeterCount: number;
   customItemCount: number;
+  billingMode: BillingMode;
+  chargerId?: number;
   senderName: string;
   senderAddress: string;
   senderCity: string;
@@ -31,10 +34,13 @@ export default function AutoBillingStep7Review({
   firstExecutionDate,
   buildingIds,
   buildings,
+  chargers,
   apartmentCount,
   userCount,
   sharedMeterCount,
   customItemCount,
+  billingMode,
+  chargerId,
   senderName,
   senderAddress,
   senderCity,
@@ -86,12 +92,36 @@ export default function AutoBillingStep7Review({
               ({getBuildingNames()})
             </span>
           </li>
-          <li>
-            <strong>{t('billConfig.step5.apartments')}:</strong> {apartmentCount}
-          </li>
-          <li>
-            <strong>{t('billConfig.step5.users')}:</strong> {userCount}
-          </li>
+          {billingMode === 'apartments' && (
+            <>
+              <li>
+                <strong>{t('billConfig.step5.apartments')}:</strong> {apartmentCount}
+              </li>
+              <li>
+                <strong>{t('billConfig.step5.users')}:</strong> {userCount}
+              </li>
+            </>
+          )}
+          {billingMode === 'building' && (
+            <li>
+              <strong>{t('autoBilling.review.billingScope')}:</strong>{' '}
+              {t('billConfig.step1.summaryBuilding')}
+            </li>
+          )}
+          {billingMode === 'charger' && (
+            <li>
+              <strong>{t('autoBilling.review.billingScope')}:</strong>{' '}
+              {t('billConfig.step1.summaryCharger')}
+              {chargerId && (() => {
+                const c = chargers.find(ch => ch.id === chargerId);
+                return c ? (
+                  <span style={{ color: '#6c757d', marginLeft: '8px' }}>
+                    ({c.name})
+                  </span>
+                ) : null;
+              })()}
+            </li>
+          )}
           <li>
             <strong>{t('autoBilling.frequency')}:</strong> {getFrequencyLabel(frequency)}
           </li>

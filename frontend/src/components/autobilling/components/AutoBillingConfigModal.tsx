@@ -8,7 +8,7 @@ import AutoBillingStep4CustomItems from './steps/AutoBillingStep4CustomItems';
 import AutoBillingStep5Sender from './steps/AutoBillingStep5Sender';
 import AutoBillingStep6Banking from './steps/AutoBillingStep6Banking';
 import AutoBillingStep7Review from './steps/AutoBillingStep7Review';
-import type { Building, ApartmentWithUser, SharedMeterConfig, CustomLineItem } from '../../../types';
+import type { Building, ApartmentWithUser, SharedMeterConfig, CustomLineItem, Charger, User } from '../../../types';
 import type { AutoBillingFormData, AutoBillingConfig } from '../hooks/useAutoBillingConfig';
 
 interface AutoBillingConfigModalProps {
@@ -17,6 +17,8 @@ interface AutoBillingConfigModalProps {
   step: number;
   formData: AutoBillingFormData;
   buildings: Building[];
+  users: User[];
+  chargers: Charger[];
   sharedMeters: SharedMeterConfig[];
   customItems: CustomLineItem[];
   selectedApartments: Set<string>;
@@ -24,6 +26,7 @@ interface AutoBillingConfigModalProps {
   selectedCustomItems: number[];
   apartmentsWithUsers: Map<number, ApartmentWithUser[]>;
   isVZEVMode: boolean;
+  chargerOnly: boolean;
   canProceed: boolean;
   onClose: () => void;
   onStepChange: (step: number) => void;
@@ -31,6 +34,9 @@ interface AutoBillingConfigModalProps {
   onBuildingToggle: (buildingId: number) => boolean;
   onApartmentToggle: (buildingId: number, apartmentUnit: string) => void;
   onSelectAllActive: () => void;
+  onRecipientChange: (userId: number | null) => void;
+  onChargerChange: (chargerId: number | null) => void;
+  onChargerOnlyToggle: (enabled: boolean) => void;
   onSharedMeterToggle: (meterId: number) => void;
   onSelectAllSharedMeters: () => void;
   onDeselectAllSharedMeters: () => void;
@@ -47,6 +53,8 @@ export default function AutoBillingConfigModal({
   step,
   formData,
   buildings,
+  users,
+  chargers,
   sharedMeters,
   customItems,
   selectedApartments,
@@ -54,6 +62,7 @@ export default function AutoBillingConfigModal({
   selectedCustomItems,
   apartmentsWithUsers,
   isVZEVMode,
+  chargerOnly,
   canProceed,
   onClose,
   onStepChange,
@@ -61,6 +70,9 @@ export default function AutoBillingConfigModal({
   onBuildingToggle,
   onApartmentToggle,
   onSelectAllActive,
+  onRecipientChange,
+  onChargerChange,
+  onChargerOnlyToggle,
   onSharedMeterToggle,
   onSelectAllSharedMeters,
   onDeselectAllSharedMeters,
@@ -182,14 +194,23 @@ export default function AutoBillingConfigModal({
             {step === 1 && (
               <AutoBillingStep1Selection
                 buildings={buildings}
+                users={users}
+                chargers={chargers}
                 selectedBuildingIds={formData.building_ids}
                 selectedApartments={selectedApartments}
                 apartmentsWithUsers={apartmentsWithUsers}
                 isVZEVMode={isVZEVMode}
+                billingMode={formData.billing_mode || 'apartments'}
+                chargerOnly={chargerOnly}
+                recipientUserId={formData.apartments[0]?.user_id}
+                selectedChargerId={formData.charger_id}
                 onBuildingToggle={onBuildingToggle}
                 onApartmentToggle={onApartmentToggle}
                 onSelectAllActive={onSelectAllActive}
                 onMixingWarning={handleMixingWarning}
+                onRecipientChange={onRecipientChange}
+                onChargerChange={onChargerChange}
+                onChargerOnlyToggle={onChargerOnlyToggle}
               />
             )}
             {step === 2 && (
@@ -259,10 +280,13 @@ export default function AutoBillingConfigModal({
                 firstExecutionDate={formData.first_execution_date}
                 buildingIds={formData.building_ids}
                 buildings={buildings}
+                chargers={chargers}
                 apartmentCount={selectedApartments.size}
                 userCount={getActiveUsersCount()}
                 sharedMeterCount={selectedSharedMeters.length}
                 customItemCount={selectedCustomItems.length}
+                billingMode={formData.billing_mode || 'apartments'}
+                chargerId={formData.charger_id}
                 senderName={formData.sender_name}
                 senderAddress={formData.sender_address}
                 senderCity={formData.sender_city}

@@ -238,6 +238,8 @@ func RunMigrations(db *sql.DB) error {
 			first_execution_date DATE,
 			is_active INTEGER DEFAULT 1,
 			is_vzev INTEGER DEFAULT 0,
+			billing_mode TEXT DEFAULT 'apartments',
+			charger_id INTEGER,
 			last_run DATETIME,
 			next_run DATETIME,
 			sender_name TEXT,
@@ -393,6 +395,12 @@ func RunMigrations(db *sql.DB) error {
 		return err
 	}
 
+	// Add billing_mode + charger_id columns so auto-billing can target a whole
+	// building or a single charger (matching the manual bill-config flow).
+	if err := addAutoBillingScopeColumns(db); err != nil {
+		return err
+	}
+
 	if err := migrateZaptecConfigs(db); err != nil {
 		return err
 	}
@@ -517,6 +525,45 @@ func addCustomItemIdsColumn(db *sql.DB) error {
 		}
 	} else {
 		log.Println("✓ custom_item_ids column already exists")
+	}
+
+	return nil
+}
+
+// addAutoBillingScopeColumns adds billing_mode and charger_id columns to auto_billing_configs.
+func addAutoBillingScopeColumns(db *sql.DB) error {
+	var autoBillingConfigsSql string
+	err := db.QueryRow(`
+		SELECT sql FROM sqlite_master
+		WHERE type='table' AND name='auto_billing_configs'
+	`).Scan(&autoBillingConfigsSql)
+
+	if err != nil {
+		return err
+	}
+
+	if !contains(autoBillingConfigsSql, "billing_mode") {
+		log.Println("Adding billing_mode column to auto_billing_configs table...")
+		if _, err := db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN billing_mode TEXT DEFAULT 'apartments'`); err != nil {
+			if !contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("failed to add billing_mode column: %v", err)
+			}
+		}
+		log.Println("✓ billing_mode column added successfully")
+	} else {
+		log.Println("✓ billing_mode column already exists")
+	}
+
+	if !contains(autoBillingConfigsSql, "charger_id") {
+		log.Println("Adding charger_id column to auto_billing_configs table...")
+		if _, err := db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN charger_id INTEGER`); err != nil {
+			if !contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("failed to add charger_id column: %v", err)
+			}
+		}
+		log.Println("✓ charger_id column added successfully")
+	} else {
+		log.Println("✓ charger_id column already exists")
 	}
 
 	return nil

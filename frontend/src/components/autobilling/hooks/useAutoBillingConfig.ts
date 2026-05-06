@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../../api/client';
-import type { Building, User, Meter, ApartmentWithUser, SharedMeterConfig, CustomLineItem } from '../../../types';
+import type { Building, User, Meter, ApartmentWithUser, SharedMeterConfig, CustomLineItem, Charger, BillingMode } from '../../../types';
 
 export interface AutoBillingFormData {
   name: string;
@@ -11,6 +11,10 @@ export interface AutoBillingFormData {
   first_execution_date: string;
   is_active: boolean;
   is_vzev: boolean;
+  // Billing mode (parallels manual flow): 'apartments' | 'building' | 'charger'.
+  // 'building' / 'charger' apply to non-apartment buildings only.
+  billing_mode: BillingMode;
+  charger_id?: number;
   // Shared meters and custom items
   shared_meter_ids: number[];
   custom_item_ids: number[];
@@ -42,6 +46,8 @@ export interface AutoBillingConfig {
   first_execution_date?: string;
   is_active: boolean;
   is_vzev?: boolean;
+  billing_mode?: BillingMode;
+  charger_id?: number;
   shared_meter_ids?: number[];
   custom_item_ids?: number[];
   last_run?: string;
@@ -67,6 +73,8 @@ const DEFAULT_FORM_DATA: AutoBillingFormData = {
   first_execution_date: '',
   is_active: true,
   is_vzev: false,
+  billing_mode: 'apartments',
+  charger_id: undefined,
   shared_meter_ids: [],
   custom_item_ids: [],
   sender_name: '',
@@ -86,6 +94,8 @@ export function useAutoBillingConfig() {
   const [meters, setMeters] = useState<Meter[]>([]);
   const [sharedMeters, setSharedMeters] = useState<SharedMeterConfig[]>([]);
   const [customItems, setCustomItems] = useState<CustomLineItem[]>([]);
+  const [chargers, setChargers] = useState<Charger[]>([]);
+  const [chargerOnly, setChargerOnly] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Modal state
@@ -109,13 +119,14 @@ export function useAutoBillingConfig() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [configsData, buildingsData, usersData, metersData, sharedMetersData, customItemsData] = await Promise.all([
+      const [configsData, buildingsData, usersData, metersData, sharedMetersData, customItemsData, chargersData] = await Promise.all([
         api.getAutoBillingConfigs(),
         api.getBuildings(),
         api.getUsers(undefined, true),
         api.getMeters(),
         api.getSharedMeterConfigs(),
-        api.getCustomLineItems()
+        api.getCustomLineItems(),
+        api.getChargers()
       ]);
 
       setConfigs(configsData);
@@ -128,6 +139,7 @@ export function useAutoBillingConfig() {
       setSharedMeters(sharedMetersData);
       // Only active custom items
       setCustomItems(customItemsData.filter(item => item.is_active));
+      setChargers(chargersData.filter(c => c.is_active));
     } catch (err) {
       console.error('Failed to load data:', err);
       throw err;
@@ -260,6 +272,37 @@ export function useAutoBillingConfig() {
       setFormData(prev => ({ ...prev, is_vzev: false }));
     }
   }, [formData.building_ids, buildings]);
+
+  // Detect billing mode based on the selected buildings' has_apartments flag
+  // (mirrors the manual BillConfigModal). vZEV complexes always use 'apartments'.
+  useEffect(() => {
+    if (formData.building_ids.length === 0 || isVZEVMode) {
+      setFormData(prev => ({ ...prev, billing_mode: 'apartments', charger_id: undefined }));
+      setChargerOnly(false);
+      return;
+    }
+    const selected = buildings.filter(b => formData.building_ids.includes(b.id) && !b.is_group);
+    if (selected.length === 0) {
+      setFormData(prev => ({ ...prev, billing_mode: 'apartments', charger_id: undefined }));
+      return;
+    }
+    const allApartmentBldgs = selected.every(b => b.has_apartments);
+    const noApartmentBldgs = selected.every(b => !b.has_apartments);
+
+    if (allApartmentBldgs) {
+      setFormData(prev => ({ ...prev, billing_mode: 'apartments', charger_id: undefined }));
+      setChargerOnly(false);
+    } else if (noApartmentBldgs) {
+      setFormData(prev => ({
+        ...prev,
+        billing_mode: chargerOnly ? 'charger' : 'building',
+        charger_id: chargerOnly ? prev.charger_id : undefined,
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, billing_mode: 'apartments', charger_id: undefined }));
+      setChargerOnly(false);
+    }
+  }, [formData.building_ids, buildings, chargerOnly, isVZEVMode]);
 
   // Update form data
   const updateFormData = useCallback((updates: Partial<AutoBillingFormData>) => {
@@ -433,6 +476,37 @@ export function useAutoBillingConfig() {
     setSelectedSharedMeters([]);
   }, []);
 
+  // Recipient picker for building / charger billing modes — when no apartments
+  // are involved, we still need exactly one user to receive the invoice.
+  // We persist the recipient as a single synthetic apartments[] entry so the
+  // existing scheduler pipeline (which extracts user_ids from apartments) keeps
+  // working unchanged.
+  const handleRecipientChange = useCallback((userId: number | null) => {
+    if (formData.building_ids.length === 0) return;
+    if (userId === null) {
+      setFormData(prev => ({ ...prev, apartments: [] }));
+      setSelectedApartments(new Set());
+      return;
+    }
+    const buildingId = formData.building_ids[0];
+    setFormData(prev => ({
+      ...prev,
+      apartments: [{ building_id: buildingId, apartment_unit: '', user_id: userId }]
+    }));
+    setSelectedApartments(new Set([`${buildingId}|||`]));
+  }, [formData.building_ids]);
+
+  const handleChargerChange = useCallback((chargerId: number | null) => {
+    setFormData(prev => ({ ...prev, charger_id: chargerId ?? undefined }));
+  }, []);
+
+  const handleChargerOnlyToggle = useCallback((enabled: boolean) => {
+    setChargerOnly(enabled);
+    if (!enabled) {
+      setFormData(prev => ({ ...prev, charger_id: undefined }));
+    }
+  }, []);
+
   // Custom item handlers
   const handleCustomItemToggle = useCallback((itemId: number) => {
     setSelectedCustomItems(prev => {
@@ -464,6 +538,7 @@ export function useAutoBillingConfig() {
     setEditingConfig(null);
     setStep(1);
     setIsVZEVMode(false);
+    setChargerOnly(false);
   }, []);
 
   // Open modal for editing
@@ -482,6 +557,8 @@ export function useAutoBillingConfig() {
     setSelectedSharedMeters(config.shared_meter_ids || []);
     setSelectedCustomItems(config.custom_item_ids || []);
 
+    const mode: BillingMode = (config.billing_mode as BillingMode) || 'apartments';
+    setChargerOnly(mode === 'charger');
     setFormData({
       name: config.name,
       building_ids: config.building_ids,
@@ -491,6 +568,8 @@ export function useAutoBillingConfig() {
       first_execution_date: config.first_execution_date || '',
       is_active: config.is_active,
       is_vzev: config.is_vzev || false,
+      billing_mode: mode,
+      charger_id: config.charger_id,
       shared_meter_ids: config.shared_meter_ids || [],
       custom_item_ids: config.custom_item_ids || [],
       sender_name: config.sender_name || '',
@@ -570,8 +649,16 @@ export function useAutoBillingConfig() {
   // Check if can proceed to next step
   const canProceed = useCallback((): boolean => {
     switch (step) {
-      case 1:
-        return formData.building_ids.length > 0 && formData.apartments.length > 0;
+      case 1: {
+        if (formData.building_ids.length === 0) return false;
+        if (formData.billing_mode === 'charger') {
+          return formData.apartments.length > 0 && !!formData.charger_id;
+        }
+        if (formData.billing_mode === 'building') {
+          return formData.apartments.length > 0;
+        }
+        return formData.apartments.length > 0;
+      }
       case 2:
         return !!(formData.name && formData.frequency && formData.generation_day >= 1 && formData.generation_day <= 28);
       case 3:
@@ -620,6 +707,7 @@ export function useAutoBillingConfig() {
     meters,
     sharedMeters,
     customItems,
+    chargers,
     loading,
 
     // Modal state
@@ -639,11 +727,15 @@ export function useAutoBillingConfig() {
     selectedCustomItems,
     apartmentsWithUsers,
     isVZEVMode,
+    chargerOnly,
 
     // Actions
     handleBuildingToggle,
     handleApartmentToggle,
     handleSelectAllActive,
+    handleRecipientChange,
+    handleChargerChange,
+    handleChargerOnlyToggle,
     handleSharedMeterToggle,
     handleSelectAllSharedMeters,
     handleDeselectAllSharedMeters,

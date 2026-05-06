@@ -2075,6 +2075,7 @@ export const de: Translations = {
   'autoBilling.review.billingItems': 'Rechnungspositionen',
   'autoBilling.review.sharedMeters': 'Allgemeinzähler',
   'autoBilling.review.customItems': 'Zusatzposten',
+  'autoBilling.review.billingScope': 'Abrechnungsumfang',
   'autoBilling.missingRequiredFields': 'Fehlende Pflichtfelder',
   'autoBilling.readyToCreate': 'Bereit zum Erstellen',
   'autoBilling.readyToCreateDescription': 'Alle erforderlichen Informationen sind vorhanden. Klicken Sie auf "Erstellen", um die automatische Abrechnung zu aktivieren.',

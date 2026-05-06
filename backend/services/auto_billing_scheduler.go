@@ -66,8 +66,8 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 
 	rows, err := s.db.Query(`
 		SELECT id, name, building_ids, apartments_json, custom_item_ids, frequency, generation_day,
-		       next_run, first_execution_date, is_vzev, sender_name, sender_address, 
-		       sender_city, sender_zip, sender_country, bank_name, bank_iban, 
+		       next_run, first_execution_date, is_vzev, billing_mode, charger_id, sender_name, sender_address,
+		       sender_city, sender_zip, sender_country, bank_name, bank_iban,
 		       bank_account_holder
 		FROM auto_billing_configs
 		WHERE is_active = 1 AND next_run <= ?
@@ -90,11 +90,14 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 		var nextRun time.Time
 		var firstExecutionDate sql.NullString
 		var isVZEV bool
+		var billingMode sql.NullString
+		var chargerID sql.NullInt64
 		var senderName, senderAddress, senderCity, senderZip, senderCountry sql.NullString
 		var bankName, bankIBAN, bankAccountHolder sql.NullString
 
 		err := rows.Scan(&id, &name, &buildingIDsStr, &apartmentsJSON, &customItemIDsStr, &frequency,
-			&generationDay, &nextRun, &firstExecutionDate, &isVZEV, &senderName, &senderAddress,
+			&generationDay, &nextRun, &firstExecutionDate, &isVZEV, &billingMode, &chargerID,
+			&senderName, &senderAddress,
 			&senderCity, &senderZip, &senderCountry, &bankName, &bankIBAN, &bankAccountHolder)
 
 		if err != nil {
@@ -162,12 +165,29 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 			continue
 		}
 
-		log.Printf("Generating bills for period: %s to %s (vZEV mode: %v)", startDate.Format("2006-01-02"), endDate.Format("2006-01-02"), isVZEV)
+		// Build billing scope from stored mode/charger_id.
+		scope := BillingScope{}
+		if billingMode.Valid {
+			switch billingMode.String {
+			case BillingModeBuilding:
+				scope.Mode = BillingModeBuilding
+			case BillingModeCharger:
+				scope.Mode = BillingModeCharger
+				if chargerID.Valid {
+					cid := int(chargerID.Int64)
+					scope.ChargerID = &cid
+				} else {
+					log.Printf("WARNING: Config %d is charger mode but has no charger_id, skipping", id)
+					continue
+				}
+			}
+		}
 
-		// Generate bills using the billing service with vZEV flag and custom item IDs.
-		// Auto-billing always uses the default apartments scope.
+		log.Printf("Generating bills for period: %s to %s (vZEV mode: %v, scope: %q, charger: %v)",
+			startDate.Format("2006-01-02"), endDate.Format("2006-01-02"), isVZEV, scope.Mode, scope.ChargerID)
+
 		invoices, err := s.billingService.GenerateBillsWithOptions(buildingIDs, userIDs,
-			startDate.Format("2006-01-02"), endDate.Format("2006-01-02"), isVZEV, customItemIDs, BillingScope{})
+			startDate.Format("2006-01-02"), endDate.Format("2006-01-02"), isVZEV, customItemIDs, scope)
 
 		if err != nil {
 			log.Printf("ERROR: Failed to generate bills for config %d: %v", id, err)
@@ -247,6 +267,8 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 			"period_start":    startDate.Format("2006-01-02"),
 			"period_end":      endDate.Format("2006-01-02"),
 			"is_vzev":         isVZEV,
+			"billing_mode":    scope.Mode,
+			"charger_id":      scope.ChargerID,
 			"custom_item_ids": customItemIDs,
 		}
 		detailsJSON, _ := json.Marshal(details)

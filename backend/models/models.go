@@ -215,6 +215,8 @@ type AutoBillingConfig struct {
 	FirstExecutionDate *string    `json:"first_execution_date,omitempty"`
 	IsActive           bool       `json:"is_active"`
 	IsVZEV             bool       `json:"is_vzev"`
+	BillingMode        string     `json:"billing_mode,omitempty"` // "apartments" (default), "building", "charger"
+	ChargerID          *int       `json:"charger_id,omitempty"`   // required when BillingMode == "charger"
 	LastRun            *time.Time `json:"last_run,omitempty"`
 	NextRun            *time.Time `json:"next_run,omitempty"`
 	SenderName         string     `json:"sender_name,omitempty"`

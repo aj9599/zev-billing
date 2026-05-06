@@ -1,31 +1,55 @@
 import { Home, User as UserIcon, Building, Zap, Plug } from 'lucide-react';
-import type { Building as BuildingType, ApartmentWithUser } from '../../../../types';
+import type { Building as BuildingType, ApartmentWithUser, BillingMode, Charger, User } from '../../../../types';
 import { useTranslation } from '../../../../i18n';
 
 interface AutoBillingStep1SelectionProps {
   buildings: BuildingType[];
+  users: User[];
+  chargers: Charger[];
   selectedBuildingIds: number[];
   selectedApartments: Set<string>;
   apartmentsWithUsers: Map<number, ApartmentWithUser[]>;
   isVZEVMode: boolean;
+  billingMode: BillingMode;
+  chargerOnly: boolean;
+  recipientUserId?: number;
+  selectedChargerId?: number;
   onBuildingToggle: (buildingId: number) => boolean;
   onApartmentToggle: (buildingId: number, apartmentUnit: string) => void;
   onSelectAllActive: () => void;
   onMixingWarning: () => void;
+  onRecipientChange: (userId: number | null) => void;
+  onChargerChange: (chargerId: number | null) => void;
+  onChargerOnlyToggle: (enabled: boolean) => void;
 }
 
 export default function AutoBillingStep1Selection({
   buildings,
+  users,
+  chargers,
   selectedBuildingIds,
   selectedApartments,
   apartmentsWithUsers,
   isVZEVMode,
+  billingMode,
+  chargerOnly,
+  recipientUserId,
+  selectedChargerId,
   onBuildingToggle,
   onApartmentToggle,
   onSelectAllActive,
-  onMixingWarning
+  onMixingWarning,
+  onRecipientChange,
+  onChargerChange,
+  onChargerOnlyToggle
 }: AutoBillingStep1SelectionProps) {
   const { t } = useTranslation();
+
+  const isBuildingScope = billingMode === 'building' || billingMode === 'charger';
+  const recipientCandidates = users.filter(
+    u => u.user_type === 'regular' && u.is_active && u.building_id != null && selectedBuildingIds.includes(u.building_id)
+  );
+  const chargerCandidates = chargers.filter(c => selectedBuildingIds.includes(c.building_id));
 
   const handleBuildingToggle = (buildingId: number) => {
     const success = onBuildingToggle(buildingId);
@@ -158,7 +182,116 @@ export default function AutoBillingStep1Selection({
         </div>
       </div>
 
-      {/* Apartment Selection */}
+      {/* Building-mode banner (no apartment management) */}
+      {isBuildingScope && (
+        <div style={{
+          padding: '14px 16px',
+          backgroundColor: '#fff7ed',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          border: '2px solid #f59e0b'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+            <Home size={20} color="#b45309" />
+            <h4 style={{ fontSize: '15px', fontWeight: '600', margin: 0, color: '#b45309' }}>
+              {billingMode === 'charger' ? t('billConfig.step1.modeCharger') : t('billConfig.step1.modeBuilding')}
+            </h4>
+          </div>
+          <p style={{ fontSize: '13px', margin: 0, color: '#92400e' }}>
+            {billingMode === 'charger'
+              ? t('billConfig.step1.modeChargerDescription')
+              : t('billConfig.step1.modeBuildingDescription')}
+          </p>
+        </div>
+      )}
+
+      {/* Recipient + charger picker for building / charger mode */}
+      {isBuildingScope && selectedBuildingIds.length > 0 && (
+        <div style={{ marginBottom: '24px' }}>
+          <label style={{ display: 'block', fontWeight: '600', marginBottom: '8px', fontSize: '15px' }}>
+            2. {t('billConfig.step1.selectRecipient')}
+          </label>
+          {recipientCandidates.length === 0 ? (
+            <div style={{ padding: '12px 14px', borderRadius: '6px', backgroundColor: '#fee2e2', color: '#991b1b', fontSize: '13px' }}>
+              {t('billConfig.step1.noRecipientFound')}
+            </div>
+          ) : (
+            <select
+              value={recipientUserId ?? ''}
+              onChange={(e) => onRecipientChange(e.target.value ? Number(e.target.value) : null)}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: '6px',
+                border: '1px solid #dee2e6',
+                fontSize: '14px',
+                backgroundColor: 'white'
+              }}
+            >
+              <option value="">{t('billConfig.step1.selectRecipientPlaceholder')}</option>
+              {recipientCandidates.map(u => (
+                <option key={u.id} value={u.id}>
+                  {u.first_name} {u.last_name}{u.email ? ` — ${u.email}` : ''}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {/* Charger-only toggle */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '14px', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={chargerOnly}
+              onChange={(e) => onChargerOnlyToggle(e.target.checked)}
+              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+            />
+            <span style={{ fontSize: '14px', fontWeight: '500' }}>
+              {t('billConfig.step1.chargerOnlyToggle')}
+            </span>
+          </label>
+
+          {/* Charger picker */}
+          {chargerOnly && (
+            <div style={{ marginTop: '12px' }}>
+              <label style={{ display: 'block', fontWeight: '600', marginBottom: '8px', fontSize: '14px' }}>
+                <Plug size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+                {t('billConfig.step1.selectCharger')}
+              </label>
+              {chargerCandidates.length === 0 ? (
+                <div style={{ padding: '12px 14px', borderRadius: '6px', backgroundColor: '#fee2e2', color: '#991b1b', fontSize: '13px' }}>
+                  {t('billConfig.step1.noChargerFound')}
+                </div>
+              ) : (
+                <select
+                  value={selectedChargerId ?? ''}
+                  onChange={(e) => onChargerChange(e.target.value ? Number(e.target.value) : null)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #dee2e6',
+                    fontSize: '14px',
+                    backgroundColor: 'white'
+                  }}
+                >
+                  <option value="">{t('billConfig.step1.selectChargerPlaceholder')}</option>
+                  {chargerCandidates.map(c => {
+                    const bldg = buildings.find(b => b.id === c.building_id);
+                    return (
+                      <option key={c.id} value={c.id}>
+                        {c.name}{bldg ? ` — ${bldg.name}` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Apartment Selection — only for apartment-managed buildings */}
+      {!isBuildingScope && (
       <div style={{ marginBottom: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
           <label style={{ fontWeight: '600', fontSize: '15px' }}>
@@ -293,9 +426,10 @@ export default function AutoBillingStep1Selection({
           )}
         </div>
       </div>
+      )}
 
-      {/* Selection Summary */}
-      {selectedApartments.size > 0 && (
+      {/* Selection Summary — apartment mode */}
+      {!isBuildingScope && selectedApartments.size > 0 && (
         <div style={{
           padding: '16px',
           backgroundColor: '#e7f3ff',
@@ -304,6 +438,22 @@ export default function AutoBillingStep1Selection({
           color: '#004a99'
         }}>
           <strong>{t('billConfig.step1.selectedSummary')}:</strong> {selectedApartments.size} {selectedApartments.size === 1 ? t('billConfig.step1.apartment') : t('billConfig.step1.apartments')} ({getActiveUsersCount()} {t('billConfig.step1.users')})
+        </div>
+      )}
+
+      {/* Selection Summary — building / charger mode */}
+      {isBuildingScope && recipientUserId && (
+        <div style={{
+          padding: '16px',
+          backgroundColor: '#e7f3ff',
+          borderRadius: '6px',
+          fontSize: '14px',
+          color: '#004a99'
+        }}>
+          <strong>{t('billConfig.step1.selectedSummary')}:</strong>{' '}
+          {billingMode === 'charger'
+            ? t('billConfig.step1.summaryCharger')
+            : t('billConfig.step1.summaryBuilding')}
         </div>
       )}
     </div>

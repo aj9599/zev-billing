@@ -13,6 +13,8 @@ export default function AutoBilling() {
     // Data
     configs,
     buildings,
+    users,
+    chargers,
     sharedMeters,
     customItems,
     loading,
@@ -33,11 +35,15 @@ export default function AutoBilling() {
     selectedCustomItems,
     apartmentsWithUsers,
     isVZEVMode,
+    chargerOnly,
 
     // Actions
     handleBuildingToggle,
     handleApartmentToggle,
     handleSelectAllActive,
+    handleRecipientChange,
+    handleChargerChange,
+    handleChargerOnlyToggle,
     handleSharedMeterToggle,
     handleSelectAllSharedMeters,
     handleDeselectAllSharedMeters,
@@ -157,6 +163,8 @@ export default function AutoBilling() {
         step={step}
         formData={formData}
         buildings={buildings}
+        users={users}
+        chargers={chargers}
         sharedMeters={sharedMeters}
         customItems={customItems}
         selectedApartments={selectedApartments}
@@ -164,6 +172,7 @@ export default function AutoBilling() {
         selectedCustomItems={selectedCustomItems}
         apartmentsWithUsers={apartmentsWithUsers}
         isVZEVMode={isVZEVMode}
+        chargerOnly={chargerOnly}
         canProceed={canProceed()}
         onClose={closeModal}
         onStepChange={setStep}
@@ -171,6 +180,9 @@ export default function AutoBilling() {
         onBuildingToggle={handleBuildingToggle}
         onApartmentToggle={handleApartmentToggle}
         onSelectAllActive={handleSelectAllActive}
+        onRecipientChange={handleRecipientChange}
+        onChargerChange={handleChargerChange}
+        onChargerOnlyToggle={handleChargerOnlyToggle}
         onSharedMeterToggle={handleSharedMeterToggle}
         onSelectAllSharedMeters={handleSelectAllSharedMeters}
         onDeselectAllSharedMeters={handleDeselectAllSharedMeters}
