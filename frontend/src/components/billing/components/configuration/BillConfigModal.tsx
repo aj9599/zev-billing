@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
 import { api } from '../../../../api/client';
-import type { Building, User, Meter, SharedMeterConfig, CustomLineItem } from '../../../../types';
+import type { Building, User, Meter, SharedMeterConfig, CustomLineItem, Charger } from '../../../../types';
 import { useTranslation } from '../../../../i18n';
 import { useConfigurationState, useBillGeneration } from '../../hooks/useBillGeneration';
 import ConfigStepper from './ConfigStepper';
@@ -28,6 +28,8 @@ export default function BillConfigModal({
   const [meters, setMeters] = useState<Meter[]>([]);
   const [sharedMeters, setSharedMeters] = useState<SharedMeterConfig[]>([]);
   const [customItems, setCustomItems] = useState<CustomLineItem[]>([]);
+  const [chargers, setChargers] = useState<Charger[]>([]);
+  const [chargerOnly, setChargerOnly] = useState(false);
 
   const {
     step,
@@ -75,6 +77,39 @@ export default function BillConfigModal({
     }
   }, [config.building_ids, buildings]);
 
+  // Detect billing mode based on selected buildings' apartment-management flag.
+  // - All apartment buildings → 'apartments' (default)
+  // - All non-apartment buildings → 'building' (or 'charger' when the toggle is on)
+  // - Mixed → warn and fall back to 'apartments' until user adjusts
+  useEffect(() => {
+    if (config.building_ids.length === 0 || isVZEVMode) {
+      updateConfig({ billing_mode: 'apartments', charger_id: undefined });
+      setChargerOnly(false);
+      return;
+    }
+    const selected = buildings.filter(b => config.building_ids.includes(b.id) && !b.is_group);
+    if (selected.length === 0) {
+      updateConfig({ billing_mode: 'apartments', charger_id: undefined });
+      return;
+    }
+    const allApartmentBldgs = selected.every(b => b.has_apartments);
+    const noApartmentBldgs = selected.every(b => !b.has_apartments);
+
+    if (allApartmentBldgs) {
+      updateConfig({ billing_mode: 'apartments', charger_id: undefined });
+      setChargerOnly(false);
+    } else if (noApartmentBldgs) {
+      updateConfig({
+        billing_mode: chargerOnly ? 'charger' : 'building',
+        charger_id: chargerOnly ? config.charger_id : undefined,
+      });
+    } else {
+      alert(t('billConfig.warning.mixedBuildingTypes'));
+      updateConfig({ billing_mode: 'apartments', charger_id: undefined });
+      setChargerOnly(false);
+    }
+  }, [config.building_ids, buildings, chargerOnly, isVZEVMode]);
+
   // Load administrator info when reaching step 5
   useEffect(() => {
     if (step === 5 && config.building_ids.length > 0) {
@@ -84,12 +119,13 @@ export default function BillConfigModal({
 
   const loadData = async () => {
     try {
-      const [buildingsData, usersData, metersData, sharedMetersData, customItemsData] = await Promise.all([
+      const [buildingsData, usersData, metersData, sharedMetersData, customItemsData, chargersData] = await Promise.all([
         api.getBuildings(),
         api.getUsers(undefined, true),
         api.getMeters(),
         api.getSharedMeterConfigs(),
-        api.getCustomLineItems()
+        api.getCustomLineItems(),
+        api.getChargers()
       ]);
       setBuildings(buildingsData);
       const regularUsers = usersData.filter(u => u.user_type === 'regular');
@@ -97,6 +133,7 @@ export default function BillConfigModal({
       setMeters(metersData);
       setSharedMeters(sharedMetersData);
       setCustomItems(customItemsData.filter(item => item.is_active));
+      setChargers(chargersData.filter(c => c.is_active));
     } catch (err) {
       console.error('Failed to load data:', err);
     }
@@ -316,6 +353,26 @@ export default function BillConfigModal({
     });
   };
 
+  // For building / charger modes: pick exactly one user as recipient.
+  const handleRecipientChange = (userId: number | null) => {
+    if (userId === null) {
+      updateConfig({ user_ids: [], apartments: [] });
+    } else {
+      updateConfig({ user_ids: [userId], apartments: [] });
+    }
+  };
+
+  const handleChargerChange = (chargerId: number | null) => {
+    updateConfig({ charger_id: chargerId ?? undefined });
+  };
+
+  const handleChargerOnlyToggle = (enabled: boolean) => {
+    setChargerOnly(enabled);
+    if (!enabled) {
+      updateConfig({ charger_id: undefined });
+    }
+  };
+
   const handleGenerate = async () => {
     try {
       const sharedMeterConfigs = selectedSharedMeters.map(id => {
@@ -426,13 +483,22 @@ export default function BillConfigModal({
           {step === 1 && (
             <ConfigStep1Selection
               buildings={buildings}
+              users={users}
+              chargers={chargers}
               selectedBuildingIds={config.building_ids}
               selectedApartments={selectedApartments}
               apartmentsWithUsers={buildApartmentsMap()}
               isVZEVMode={isVZEVMode}
+              billingMode={config.billing_mode || 'apartments'}
+              chargerOnly={chargerOnly}
+              recipientUserId={config.user_ids[0]}
+              selectedChargerId={config.charger_id}
               onBuildingToggle={handleBuildingToggle}
               onApartmentToggle={handleApartmentToggle}
               onSelectAllActive={handleSelectAllActive}
+              onRecipientChange={handleRecipientChange}
+              onChargerChange={handleChargerChange}
+              onChargerOnlyToggle={handleChargerOnlyToggle}
             />
           )}
           {step === 2 && (
