@@ -15,6 +15,7 @@ export interface AutoBillingFormData {
   // 'building' / 'charger' apply to non-apartment buildings only.
   billing_mode: BillingMode;
   charger_id?: number;
+  auto_send_email: boolean;
   // Shared meters and custom items
   shared_meter_ids: number[];
   custom_item_ids: number[];
@@ -48,6 +49,7 @@ export interface AutoBillingConfig {
   is_vzev?: boolean;
   billing_mode?: BillingMode;
   charger_id?: number;
+  auto_send_email?: boolean;
   shared_meter_ids?: number[];
   custom_item_ids?: number[];
   last_run?: string;
@@ -75,6 +77,7 @@ const DEFAULT_FORM_DATA: AutoBillingFormData = {
   is_vzev: false,
   billing_mode: 'apartments',
   charger_id: undefined,
+  auto_send_email: false,
   shared_meter_ids: [],
   custom_item_ids: [],
   sender_name: '',
@@ -570,6 +573,7 @@ export function useAutoBillingConfig() {
       is_vzev: config.is_vzev || false,
       billing_mode: mode,
       charger_id: config.charger_id,
+      auto_send_email: !!config.auto_send_email,
       shared_meter_ids: config.shared_meter_ids || [],
       custom_item_ids: config.custom_item_ids || [],
       sender_name: config.sender_name || '',

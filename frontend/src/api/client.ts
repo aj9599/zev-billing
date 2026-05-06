@@ -509,6 +509,29 @@ class ApiClient {
     return this.request(`/billing/auto-configs/${id}`, { method: 'DELETE' });
   }
 
+  // Bill layout (per building, main invoice page only)
+  async getBillLayout(buildingId: number): Promise<{
+    building_id: number;
+    title: string;
+    intro_text: string;
+    footer_text: string;
+    primary_color: string;
+  }> {
+    return this.request(`/billing/layouts/${buildingId}`);
+  }
+
+  async updateBillLayout(buildingId: number, layout: {
+    title: string;
+    intro_text: string;
+    footer_text: string;
+    primary_color: string;
+  }): Promise<any> {
+    return this.request(`/billing/layouts/${buildingId}`, {
+      method: 'PUT',
+      body: JSON.stringify(layout),
+    });
+  }
+
   // Dashboard
   async getDashboardStats(): Promise<DashboardStats> {
     return this.request('/dashboard/stats');

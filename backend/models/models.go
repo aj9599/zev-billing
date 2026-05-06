@@ -217,6 +217,7 @@ type AutoBillingConfig struct {
 	IsVZEV             bool       `json:"is_vzev"`
 	BillingMode        string     `json:"billing_mode,omitempty"` // "apartments" (default), "building", "charger"
 	ChargerID          *int       `json:"charger_id,omitempty"`   // required when BillingMode == "charger"
+	AutoSendEmail      bool       `json:"auto_send_email"`        // when true, e-mail the generated PDF to the bill recipient
 	LastRun            *time.Time `json:"last_run,omitempty"`
 	NextRun            *time.Time `json:"next_run,omitempty"`
 	SenderName         string     `json:"sender_name,omitempty"`
@@ -229,6 +230,19 @@ type AutoBillingConfig struct {
 	BankAccountHolder  string     `json:"bank_account_holder,omitempty"`
 	CreatedAt          time.Time  `json:"created_at"`
 	UpdatedAt          time.Time  `json:"updated_at"`
+}
+
+// BillLayout customizes the editable parts of the invoice main page (the QR
+// page is intentionally not customizable to keep Swiss QR-bill compliance).
+type BillLayout struct {
+	ID           int       `json:"id"`
+	BuildingID   int       `json:"building_id"`
+	Title        string    `json:"title"`         // overrides translated "Invoice"
+	IntroText    string    `json:"intro_text"`    // optional paragraph before line items
+	FooterText   string    `json:"footer_text"`   // optional paragraph after line items
+	PrimaryColor string    `json:"primary_color"` // hex; overrides #667EEA accent
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type AdminLog struct {

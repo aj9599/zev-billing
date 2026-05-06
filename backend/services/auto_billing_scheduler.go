@@ -3,6 +3,7 @@ package services
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -13,6 +14,7 @@ type AutoBillingScheduler struct {
 	db             *sql.DB
 	billingService *BillingService
 	pdfGenerator   *PDFGenerator
+	emailAlerter   *EmailAlerter // optional — used to send PDF invoices to tenants
 	stopChan       chan bool
 }
 
@@ -29,6 +31,13 @@ func NewAutoBillingScheduler(db *sql.DB, billingService *BillingService, pdfGene
 		pdfGenerator:   pdfGenerator,
 		stopChan:       make(chan bool),
 	}
+}
+
+// SetEmailAlerter wires an EmailAlerter into the scheduler so it can deliver
+// the generated PDF invoices to tenants when the auto_send_email flag is set
+// on a config. Optional — leaving it nil disables auto-email.
+func (s *AutoBillingScheduler) SetEmailAlerter(ea *EmailAlerter) {
+	s.emailAlerter = ea
 }
 
 // Start the scheduler
@@ -66,7 +75,8 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 
 	rows, err := s.db.Query(`
 		SELECT id, name, building_ids, apartments_json, custom_item_ids, frequency, generation_day,
-		       next_run, first_execution_date, is_vzev, billing_mode, charger_id, sender_name, sender_address,
+		       next_run, first_execution_date, is_vzev, billing_mode, charger_id,
+		       COALESCE(auto_send_email, 0), sender_name, sender_address,
 		       sender_city, sender_zip, sender_country, bank_name, bank_iban,
 		       bank_account_holder
 		FROM auto_billing_configs
@@ -92,12 +102,13 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 		var isVZEV bool
 		var billingMode sql.NullString
 		var chargerID sql.NullInt64
+		var autoSendEmail bool
 		var senderName, senderAddress, senderCity, senderZip, senderCountry sql.NullString
 		var bankName, bankIBAN, bankAccountHolder sql.NullString
 
 		err := rows.Scan(&id, &name, &buildingIDsStr, &apartmentsJSON, &customItemIDsStr, &frequency,
 			&generationDay, &nextRun, &firstExecutionDate, &isVZEV, &billingMode, &chargerID,
-			&senderName, &senderAddress,
+			&autoSendEmail, &senderName, &senderAddress,
 			&senderCity, &senderZip, &senderCountry, &bankName, &bankIBAN, &bankAccountHolder)
 
 		if err != nil {
@@ -238,6 +249,25 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 				log.Printf("WARNING: Failed to update PDF path for invoice %d: %v", invoice.ID, err)
 			} else {
 				successCount++
+			}
+
+			// Auto-email the PDF to the bill recipient when the config requests it.
+			// Skip silently when SMTP is not configured or the user has no e-mail
+			// (logged so the admin can spot the misconfiguration).
+			if autoSendEmail && s.emailAlerter != nil {
+				userMap, _ := fullInvoice["user"].(map[string]interface{})
+				recipient, _ := userMap["email"].(string)
+				if recipient == "" {
+					log.Printf("[AUTO-BILLING-EMAIL] Config %d invoice %d: recipient has no e-mail, skipping", id, invoice.ID)
+				} else {
+					subject := fmt.Sprintf("Rechnung / Invoice %s", fullInvoice["invoice_number"])
+					body := s.buildInvoiceEmailBody(fullInvoice)
+					if err := s.emailAlerter.SendEmailWithAttachment(recipient, subject, body, pdfPath); err != nil {
+						log.Printf("[AUTO-BILLING-EMAIL] Config %d invoice %d: failed to send to %s: %v", id, invoice.ID, recipient, err)
+					} else {
+						log.Printf("[AUTO-BILLING-EMAIL] Config %d invoice %d: sent to %s", id, invoice.ID, recipient)
+					}
+				}
 			}
 		}
 
@@ -402,6 +432,32 @@ func (s *AutoBillingScheduler) loadFullInvoice(invoiceID int) (map[string]interf
 func (s *AutoBillingScheduler) invoiceToMap(inv map[string]interface{}) map[string]interface{} {
 	// Already in map format
 	return inv
+}
+
+// buildInvoiceEmailBody renders a short bilingual e-mail body that introduces
+// the attached PDF invoice. Kept simple on purpose — the PDF carries the detail.
+func (s *AutoBillingScheduler) buildInvoiceEmailBody(invoice map[string]interface{}) string {
+	userMap, _ := invoice["user"].(map[string]interface{})
+	firstName, _ := userMap["first_name"].(string)
+	lastName, _ := userMap["last_name"].(string)
+	greeting := strings.TrimSpace(fmt.Sprintf("%s %s", firstName, lastName))
+	if greeting == "" {
+		greeting = "Sehr geehrte Damen und Herren / Dear Sir or Madam"
+	} else {
+		greeting = "Hallo " + greeting
+	}
+
+	invoiceNumber, _ := invoice["invoice_number"].(string)
+	periodStart, _ := invoice["period_start"].(string)
+	periodEnd, _ := invoice["period_end"].(string)
+
+	return fmt.Sprintf(`<html><body style="font-family: Arial, sans-serif; color: #1f2937; line-height:1.6;">
+<p>%s,</p>
+<p>im Anhang finden Sie Ihre Rechnung <strong>%s</strong> für den Zeitraum %s – %s.<br/>
+Please find attached invoice <strong>%s</strong> for the period %s – %s.</p>
+<p>Bei Fragen wenden Sie sich bitte an Ihren Verwalter / If you have any questions, please contact your administrator.</p>
+<p style="color:#6b7280;font-size:12px;margin-top:24px;">— ZEV Billing</p>
+</body></html>`, greeting, invoiceNumber, periodStart, periodEnd, invoiceNumber, periodStart, periodEnd)
 }
 
 // Helper function to get string from sql.NullString

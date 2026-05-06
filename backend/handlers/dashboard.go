@@ -1797,9 +1797,13 @@ func (h *DashboardHandler) GetEnergyFlowLive(w http.ResponseWriter, r *http.Requ
 	var consumptionKw float64
 	var selfConsumptionPct float64
 
+	// EV chargers are commonly wired on a separate grid feed not measured by
+	// total_meter (their own breaker/sub-meter). Treat charger power as an
+	// additional building load so the on-screen values stay consistent
+	// (e.g. Building must always be ≥ EV Charging).
 	if hasAnyGridMeter && hasAnySolarMeter {
-		// Consumption = Solar + Grid Import - Grid Export = Solar + Net Grid
-		consumptionKw = totalSolarKw + totalGridKw
+		// Consumption = Solar + Grid Import - Grid Export + EV Charging
+		consumptionKw = totalSolarKw + totalGridKw + totalEvKw
 		if consumptionKw < 0 {
 			consumptionKw = 0
 		}
@@ -1816,10 +1820,12 @@ func (h *DashboardHandler) GetEnergyFlowLive(w http.ResponseWriter, r *http.Requ
 			selfConsumptionPct = (solarSelfConsumed / totalSolarKw) * 100
 		}
 	} else if hasAnyGridMeter {
-		consumptionKw = totalGridImportKw
+		consumptionKw = totalGridImportKw + totalEvKw
 	} else if hasAnySolarMeter {
-		consumptionKw = totalSolarKw
+		consumptionKw = totalSolarKw + totalEvKw
 		selfConsumptionPct = 100
+	} else if totalEvKw > 0 {
+		consumptionKw = totalEvKw
 	}
 
 	log.Printf("GetEnergyFlowLive: Totals - Solar=%.3f kW, GridImport=%.3f kW, GridExport=%.3f kW, NetGrid=%.3f kW, Consumption=%.3f kW, SelfConsumption=%.1f%%",
@@ -1844,11 +1850,13 @@ func (h *DashboardHandler) GetEnergyFlowLive(w http.ResponseWriter, r *http.Requ
 			var bpConsumption float64
 
 			if bp.hasGridMeter && bp.hasSolarMeter {
-				bpConsumption = bp.solarPowerKw + bpGridKw
+				bpConsumption = bp.solarPowerKw + bpGridKw + bp.evChargingKw
 			} else if bp.hasGridMeter {
-				bpConsumption = bp.gridImportKw
+				bpConsumption = bp.gridImportKw + bp.evChargingKw
 			} else if bp.hasSolarMeter {
-				bpConsumption = bp.solarPowerKw
+				bpConsumption = bp.solarPowerKw + bp.evChargingKw
+			} else if bp.evChargingKw > 0 {
+				bpConsumption = bp.evChargingKw
 			}
 
 			if bpConsumption < 0 {
@@ -1970,7 +1978,7 @@ func (h *DashboardHandler) getEnergyFlowLiveFromDB(w http.ResponseWriter, r *htt
 	}
 
 	// Calculate totals
-	var totalSolarKw, totalGridImportKw, totalGridExportKw float64
+	var totalSolarKw, totalGridImportKw, totalGridExportKw, totalEvKw float64
 	var hasAnyGridMeter, hasAnySolarMeter bool
 
 	for _, bp := range buildingPower {
@@ -1980,6 +1988,7 @@ func (h *DashboardHandler) getEnergyFlowLiveFromDB(w http.ResponseWriter, r *htt
 		totalSolarKw += bp.solarPowerKw
 		totalGridImportKw += bp.gridImportKw
 		totalGridExportKw += bp.gridExportKw
+		totalEvKw += bp.evChargingKw
 		if bp.hasGridMeter {
 			hasAnyGridMeter = true
 		}
@@ -1991,9 +2000,11 @@ func (h *DashboardHandler) getEnergyFlowLiveFromDB(w http.ResponseWriter, r *htt
 	totalGridKw := totalGridImportKw - totalGridExportKw
 	isExporting := totalGridKw < 0
 
+	// EV chargers are commonly on a separate grid feed not measured by total_meter,
+	// so include charger power in building consumption for display consistency.
 	var consumptionKw, selfConsumptionPct float64
 	if hasAnyGridMeter && hasAnySolarMeter {
-		consumptionKw = totalSolarKw + totalGridKw
+		consumptionKw = totalSolarKw + totalGridKw + totalEvKw
 		if consumptionKw < 0 {
 			consumptionKw = 0
 		}
@@ -2005,10 +2016,12 @@ func (h *DashboardHandler) getEnergyFlowLiveFromDB(w http.ResponseWriter, r *htt
 			selfConsumptionPct = (solarSelfConsumed / totalSolarKw) * 100
 		}
 	} else if hasAnyGridMeter {
-		consumptionKw = totalGridImportKw
+		consumptionKw = totalGridImportKw + totalEvKw
 	} else if hasAnySolarMeter {
-		consumptionKw = totalSolarKw
+		consumptionKw = totalSolarKw + totalEvKw
 		selfConsumptionPct = 100
+	} else if totalEvKw > 0 {
+		consumptionKw = totalEvKw
 	}
 
 	response := models.EnergyFlowLiveData{
@@ -2016,6 +2029,7 @@ func (h *DashboardHandler) getEnergyFlowLiveFromDB(w http.ResponseWriter, r *htt
 		SolarPowerKw:       totalSolarKw,
 		ConsumptionPowerKw: consumptionKw,
 		GridPowerKw:        totalGridKw,
+		EvChargingPowerKw:  totalEvKw,
 		SelfConsumptionPct: selfConsumptionPct,
 		IsExporting:        isExporting,
 		Timestamp:          time.Now().Format(time.RFC3339),

@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useState } from 'react';
-import { LayoutDashboard, Users, Building, Car, FileText, Settings as SettingsIcon, LogOut, Activity, DollarSign, Menu, X, Calendar, Zap, ChevronDown, ChevronRight, Lock, Database } from 'lucide-react';
+import { LayoutDashboard, Users, Building, Car, FileText, Settings as SettingsIcon, LogOut, Activity, DollarSign, Menu, X, Calendar, Zap, ChevronDown, ChevronRight, Lock, Database, Mail } from 'lucide-react';
 import { api } from '../api/client';
 import { useTranslation } from '../i18n';
 import Logo from './Logo';
@@ -34,6 +34,7 @@ export default function Layout({ onLogout }: LayoutProps) {
   const settingsNavItems = [
     { path: '/logs', icon: Activity, label: t('nav.logs') },
     { path: '/csv-upload', icon: Database, label: t('nav.csvUpload') },
+    { path: '/email-settings', icon: Mail, label: t('nav.emailSettings') },
     { path: '/settings', icon: Lock, label: t('nav.passwordChange') },
   ];
 
@@ -174,7 +175,7 @@ export default function Layout({ onLogout }: LayoutProps) {
                 padding: '12px 16px',
                 marginBottom: '4px',
                 borderRadius: '8px',
-                backgroundColor: settingsOpen || ['/logs', '/csv-upload', '/settings'].includes(location.pathname) ? '#333' : 'transparent',
+                backgroundColor: settingsOpen || ['/logs', '/csv-upload', '/email-settings', '/settings'].includes(location.pathname) ? '#333' : 'transparent',
                 color: 'white',
                 border: 'none',
                 textDecoration: 'none',
@@ -183,12 +184,12 @@ export default function Layout({ onLogout }: LayoutProps) {
                 fontSize: '14px'
               }}
               onMouseEnter={(e) => {
-                if (!settingsOpen && !['/logs', '/csv-upload', '/settings'].includes(location.pathname)) {
+                if (!settingsOpen && !['/logs', '/csv-upload', '/email-settings', '/settings'].includes(location.pathname)) {
                   e.currentTarget.style.backgroundColor = '#2a2a2a';
                 }
               }}
               onMouseLeave={(e) => {
-                if (!settingsOpen && !['/logs', '/csv-upload', '/settings'].includes(location.pathname)) {
+                if (!settingsOpen && !['/logs', '/csv-upload', '/email-settings', '/settings'].includes(location.pathname)) {
                   e.currentTarget.style.backgroundColor = 'transparent';
                 }
               }}

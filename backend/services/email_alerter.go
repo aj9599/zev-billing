@@ -3,10 +3,14 @@ package services
 import (
 	"crypto/tls"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	"log"
+	"mime"
 	"net"
 	"net/smtp"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -601,6 +605,118 @@ func (ea *EmailAlerter) sendEmailTLS(config *EmailAlertConfig, addr string, msg 
 		return fmt.Errorf("SMTP close data failed: %v", err)
 	}
 
+	return client.Quit()
+}
+
+// SendEmailWithAttachment sends an HTML email with a single file attachment to
+// the given recipient using the configured SMTP. Returns an error if SMTP is
+// not configured or the file cannot be read. Used by auto-billing to deliver
+// generated invoice PDFs to tenants.
+func (ea *EmailAlerter) SendEmailWithAttachment(to, subject, htmlBody, attachmentPath string) error {
+	if to == "" {
+		return fmt.Errorf("recipient email is empty")
+	}
+	cfg := ea.loadConfig()
+	if cfg == nil || cfg.SMTPHost == "" || cfg.SMTPFrom == "" {
+		return fmt.Errorf("SMTP is not configured")
+	}
+
+	addr := fmt.Sprintf("%s:%d", cfg.SMTPHost, cfg.SMTPPort)
+
+	var attachData []byte
+	var attachName string
+	if attachmentPath != "" {
+		data, err := os.ReadFile(attachmentPath)
+		if err != nil {
+			return fmt.Errorf("read attachment: %v", err)
+		}
+		attachData = data
+		attachName = filepath.Base(attachmentPath)
+	}
+
+	boundary := fmt.Sprintf("zev-mime-%d", time.Now().UnixNano())
+
+	var msg strings.Builder
+	msg.WriteString(fmt.Sprintf("From: %s\r\n", cfg.SMTPFrom))
+	msg.WriteString(fmt.Sprintf("To: %s\r\n", to))
+	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
+	msg.WriteString("MIME-Version: 1.0\r\n")
+	if attachData != nil {
+		msg.WriteString(fmt.Sprintf("Content-Type: multipart/mixed; boundary=%q\r\n\r\n", boundary))
+
+		// HTML body part
+		msg.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+		msg.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
+		msg.WriteString("Content-Transfer-Encoding: 7bit\r\n\r\n")
+		msg.WriteString(htmlBody)
+		msg.WriteString("\r\n")
+
+		// Attachment part — base64 with line wrapping per RFC 2045 (76 chars).
+		mimeType := mime.TypeByExtension(filepath.Ext(attachName))
+		if mimeType == "" {
+			mimeType = "application/octet-stream"
+		}
+		msg.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+		msg.WriteString(fmt.Sprintf("Content-Type: %s; name=%q\r\n", mimeType, attachName))
+		msg.WriteString("Content-Transfer-Encoding: base64\r\n")
+		msg.WriteString(fmt.Sprintf("Content-Disposition: attachment; filename=%q\r\n\r\n", attachName))
+		encoded := base64.StdEncoding.EncodeToString(attachData)
+		for i := 0; i < len(encoded); i += 76 {
+			end := i + 76
+			if end > len(encoded) {
+				end = len(encoded)
+			}
+			msg.WriteString(encoded[i:end])
+			msg.WriteString("\r\n")
+		}
+		msg.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
+	} else {
+		msg.WriteString("Content-Type: text/html; charset=UTF-8\r\n\r\n")
+		msg.WriteString(htmlBody)
+	}
+
+	msgBytes := []byte(msg.String())
+
+	if cfg.SMTPPort == 465 {
+		return ea.sendCustomEmailTLS(cfg, addr, to, msgBytes)
+	}
+	auth := smtp.PlainAuth("", cfg.SMTPUser, cfg.SMTPPassword, cfg.SMTPHost)
+	return smtp.SendMail(addr, auth, cfg.SMTPFrom, []string{to}, msgBytes)
+}
+
+// sendCustomEmailTLS is a copy of sendEmailTLS but uses a custom recipient.
+func (ea *EmailAlerter) sendCustomEmailTLS(config *EmailAlertConfig, addr, to string, msg []byte) error {
+	tlsConfig := &tls.Config{ServerName: config.SMTPHost}
+	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 10 * time.Second}, "tcp", addr, tlsConfig)
+	if err != nil {
+		return fmt.Errorf("TLS dial failed: %v", err)
+	}
+	client, err := smtp.NewClient(conn, config.SMTPHost)
+	if err != nil {
+		conn.Close()
+		return fmt.Errorf("SMTP client failed: %v", err)
+	}
+	defer client.Close()
+	auth := smtp.PlainAuth("", config.SMTPUser, config.SMTPPassword, config.SMTPHost)
+	if err = client.Auth(auth); err != nil {
+		return fmt.Errorf("SMTP auth failed: %v", err)
+	}
+	if err = client.Mail(config.SMTPFrom); err != nil {
+		return fmt.Errorf("SMTP MAIL FROM failed: %v", err)
+	}
+	if err = client.Rcpt(to); err != nil {
+		return fmt.Errorf("SMTP RCPT TO failed: %v", err)
+	}
+	w, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("SMTP DATA failed: %v", err)
+	}
+	if _, err = w.Write(msg); err != nil {
+		return fmt.Errorf("SMTP write failed: %v", err)
+	}
+	if err = w.Close(); err != nil {
+		return fmt.Errorf("SMTP close data failed: %v", err)
+	}
 	return client.Quit()
 }
 

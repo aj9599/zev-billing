@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, FileText, Search, HelpCircle } from 'lucide-react';
+import { Plus, FileText, Search, HelpCircle, Palette } from 'lucide-react';
 import { useTranslation } from '../i18n';
 import { useBillingData } from './billing/hooks/useBillingData';
 import BuildingSelector from './billing/components/common/BuildingSelector';
@@ -10,6 +10,7 @@ import SharedMeterConfig from './SharedMeterConfig';
 import CustomItems from './CustomItem';
 import Bills from './Bills';
 import ErrorBoundary from './billing/components/common/ErrorBoundary';
+import BillLayoutEditor from './BillLayoutEditor';
 
 /**
  * Main Billing module component
@@ -23,6 +24,7 @@ export default function Billing() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showInstructions, setShowInstructions] = useState(false);
   const [showAdvancedConfig, setShowAdvancedConfig] = useState(false);
+  const [showLayoutEditor, setShowLayoutEditor] = useState(false);
   const [currentView, setCurrentView] = useState<'invoices' | 'shared-meters' | 'custom-items'>('invoices');
   const [refreshKey, setRefreshKey] = useState(0);
   const [isMobile] = useState(() => window.innerWidth <= 768);
@@ -108,6 +110,28 @@ export default function Billing() {
             >
               <HelpCircle size={18} aria-hidden="true" />
               {t('billing.setupInstructions')}
+            </button>
+
+            <button
+              onClick={() => setShowLayoutEditor(true)}
+              title={t('billLayout.title')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: isMobile ? '8px 14px' : '10px 18px',
+                backgroundColor: 'white',
+                color: '#a855f7',
+                border: '1px solid #e5e7eb',
+                borderRadius: '10px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            >
+              <Palette size={18} aria-hidden="true" />
+              {t('autoBilling.editLayout')}
             </button>
 
             <button
@@ -218,6 +242,13 @@ export default function Billing() {
             setRefreshKey(prev => prev + 1);
             setShowAdvancedConfig(false);
           }}
+        />
+
+        <BillLayoutEditor
+          isOpen={showLayoutEditor}
+          buildings={buildings}
+          initialBuildingId={selectedBuildingId ?? undefined}
+          onClose={() => setShowLayoutEditor(false)}
         />
 
         {/* Responsive Styles */}

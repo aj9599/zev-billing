@@ -118,6 +118,7 @@ func main() {
 	pdfGenerator := services.NewPDFGenerator(db)
 	autoBillingScheduler = services.NewAutoBillingScheduler(db, billingService, pdfGenerator)
 	emailAlerter := services.NewEmailAlerter(db)
+	autoBillingScheduler.SetEmailAlerter(emailAlerter)
 
 	go dataCollector.Start()
 	go autoBillingScheduler.Start()
@@ -138,6 +139,7 @@ func main() {
 	sharedMeterHandler := handlers.NewSharedMeterHandler(db)
 	customItemHandler := handlers.NewCustomItemHandler(db)
 	emailAlertHandler := handlers.NewEmailAlertHandler(db, emailAlerter)
+	billLayoutHandler := handlers.NewBillLayoutHandler(db)
 
 	r := mux.NewRouter()
 
@@ -241,6 +243,10 @@ func main() {
 	api.HandleFunc("/billing/auto-configs/{id}", autoBillingHandler.Get).Methods("GET")
 	api.HandleFunc("/billing/auto-configs/{id}", autoBillingHandler.Update).Methods("PUT")
 	api.HandleFunc("/billing/auto-configs/{id}", autoBillingHandler.Delete).Methods("DELETE")
+
+	// Bill layout customisation (per building) — main invoice page only.
+	api.HandleFunc("/billing/layouts/{building_id}", billLayoutHandler.Get).Methods("GET")
+	api.HandleFunc("/billing/layouts/{building_id}", billLayoutHandler.Upsert).Methods("PUT")
 
 	// Shared Meters API
 	api.HandleFunc("/shared-meters", sharedMeterHandler.List).Methods("GET")

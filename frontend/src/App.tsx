@@ -12,6 +12,7 @@ import Billing from './components/Billing';
 import AutoBilling from './components/AutoBilling';
 import PricingSettings from './components/PricingSettings';
 import Settings from './components/Settings';
+import EmailSettings from './components/EmailSettings';
 import AdminLogs from './components/AdminLogs';
 import CSVUpload from './components/CSVUpload';
 
@@ -52,6 +53,7 @@ function App() {
             <Route path="auto-billing" element={<AutoBilling />} />
             <Route path="pricing" element={<PricingSettings />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="email-settings" element={<EmailSettings />} />
             <Route path="logs" element={<AdminLogs />} />
             <Route path="csv-upload" element={<CSVUpload />} />
           </Route>

@@ -219,10 +219,12 @@ export default function AutoBillingConfigModal({
                 frequency={formData.frequency}
                 generationDay={formData.generation_day}
                 firstExecutionDate={formData.first_execution_date}
+                autoSendEmail={!!formData.auto_send_email}
                 onNameChange={(value) => onFormDataChange({ name: value })}
                 onFrequencyChange={(value) => onFormDataChange({ frequency: value })}
                 onGenerationDayChange={(value) => onFormDataChange({ generation_day: value })}
                 onFirstExecutionDateChange={(value) => onFormDataChange({ first_execution_date: value })}
+                onAutoSendEmailChange={(value) => onFormDataChange({ auto_send_email: value })}
               />
             )}
             {step === 3 && (

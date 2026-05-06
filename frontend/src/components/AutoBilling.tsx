@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useTranslation } from '../i18n';
 import { useAutoBillingConfig } from './autobilling/hooks/useAutoBillingConfig';
 import AutoBillingHeader from './autobilling/components/AutoBillingHeader';
@@ -5,9 +6,20 @@ import AutoBillingConfigCard from './autobilling/components/AutoBillingConfigCar
 import AutoBillingConfigModal from './autobilling/components/AutoBillingConfigModal';
 import AutoBillingInstructionsModal from './autobilling/components/AutoBillingInstructionsModal';
 import AutoBillingEmptyState from './autobilling/components/AutoBillingEmptyState';
+import BillLayoutEditor from './BillLayoutEditor';
+import type { AutoBillingConfig } from './autobilling/hooks/useAutoBillingConfig';
 
 export default function AutoBilling() {
   const { t } = useTranslation();
+  const [layoutEditorOpen, setLayoutEditorOpen] = useState(false);
+  const [layoutBuildingId, setLayoutBuildingId] = useState<number | undefined>(undefined);
+
+  const handleEditLayout = (config: AutoBillingConfig) => {
+    // Layouts are per concrete (non-group) building. Pre-select the first
+    // regular building of the config so the editor opens on a sensible target.
+    setLayoutBuildingId(config.building_ids[0]);
+    setLayoutEditorOpen(true);
+  };
 
   const {
     // Data
@@ -144,6 +156,7 @@ export default function AutoBilling() {
               config={config}
               buildings={buildings}
               onEdit={openEditModal}
+              onEditLayout={handleEditLayout}
               onDelete={handleDelete}
               onToggleActive={handleToggleActive}
               index={i}
@@ -155,6 +168,13 @@ export default function AutoBilling() {
       <AutoBillingInstructionsModal
         isOpen={showInstructions}
         onClose={() => setShowInstructions(false)}
+      />
+
+      <BillLayoutEditor
+        isOpen={layoutEditorOpen}
+        buildings={buildings}
+        initialBuildingId={layoutBuildingId}
+        onClose={() => setLayoutEditorOpen(false)}
       />
 
       <AutoBillingConfigModal

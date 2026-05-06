@@ -1,4 +1,4 @@
-import { Clock, Building, Users, Edit2, Trash2, PlayCircle, PauseCircle } from 'lucide-react';
+import { Clock, Building, Users, Edit2, Trash2, PlayCircle, PauseCircle, Palette } from 'lucide-react';
 import { useTranslation } from '../../../i18n';
 import type { Building as BuildingType } from '../../../types';
 import type { AutoBillingConfig, ApartmentSelection } from '../hooks/useAutoBillingConfig';
@@ -7,6 +7,7 @@ interface AutoBillingConfigCardProps {
   config: AutoBillingConfig;
   buildings: BuildingType[];
   onEdit: (config: AutoBillingConfig) => void;
+  onEditLayout: (config: AutoBillingConfig) => void;
   onDelete: (id: number) => void;
   onToggleActive: (config: AutoBillingConfig) => void;
   index?: number;
@@ -16,6 +17,7 @@ export default function AutoBillingConfigCard({
   config,
   buildings,
   onEdit,
+  onEditLayout,
   onDelete,
   onToggleActive,
   index = 0
@@ -223,6 +225,29 @@ export default function AutoBillingConfigCard({
           >
             <Edit2 size={14} />
             {t('common.edit')}
+          </button>
+          <button
+            onClick={() => onEditLayout(config)}
+            className="ab-btn-layout"
+            style={{
+              flex: 1,
+              padding: '8px',
+              backgroundColor: 'rgba(168, 85, 247, 0.1)',
+              color: '#a855f7',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              transition: 'all 0.2s'
+            }}
+          >
+            <Palette size={14} />
+            {t('autoBilling.editLayout')}
           </button>
           <button
             onClick={handleDelete}

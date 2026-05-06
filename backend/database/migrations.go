@@ -240,6 +240,7 @@ func RunMigrations(db *sql.DB) error {
 			is_vzev INTEGER DEFAULT 0,
 			billing_mode TEXT DEFAULT 'apartments',
 			charger_id INTEGER,
+			auto_send_email INTEGER DEFAULT 0,
 			last_run DATETIME,
 			next_run DATETIME,
 			sender_name TEXT,
@@ -252,6 +253,18 @@ func RunMigrations(db *sql.DB) error {
 			bank_account_holder TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		`CREATE TABLE IF NOT EXISTS bill_layouts (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			building_id INTEGER NOT NULL UNIQUE,
+			title TEXT DEFAULT '',
+			intro_text TEXT DEFAULT '',
+			footer_text TEXT DEFAULT '',
+			primary_color TEXT DEFAULT '#667EEA',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (building_id) REFERENCES buildings(id) ON DELETE CASCADE
 		)`,
 
 		`CREATE TABLE IF NOT EXISTS admin_logs (
@@ -564,6 +577,18 @@ func addAutoBillingScopeColumns(db *sql.DB) error {
 		log.Println("✓ charger_id column added successfully")
 	} else {
 		log.Println("✓ charger_id column already exists")
+	}
+
+	if !contains(autoBillingConfigsSql, "auto_send_email") {
+		log.Println("Adding auto_send_email column to auto_billing_configs table...")
+		if _, err := db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN auto_send_email INTEGER DEFAULT 0`); err != nil {
+			if !contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("failed to add auto_send_email column: %v", err)
+			}
+		}
+		log.Println("✓ auto_send_email column added successfully")
+	} else {
+		log.Println("✓ auto_send_email column already exists")
 	}
 
 	return nil

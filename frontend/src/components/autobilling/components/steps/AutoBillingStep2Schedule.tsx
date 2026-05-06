@@ -1,4 +1,4 @@
-import { Lightbulb } from 'lucide-react';
+import { Lightbulb, Mail } from 'lucide-react';
 import { useTranslation } from '../../../../i18n';
 
 interface AutoBillingStep2ScheduleProps {
@@ -6,10 +6,12 @@ interface AutoBillingStep2ScheduleProps {
   frequency: 'monthly' | 'quarterly' | 'half_yearly' | 'yearly';
   generationDay: number;
   firstExecutionDate: string;
+  autoSendEmail: boolean;
   onNameChange: (value: string) => void;
   onFrequencyChange: (value: 'monthly' | 'quarterly' | 'half_yearly' | 'yearly') => void;
   onGenerationDayChange: (value: number) => void;
   onFirstExecutionDateChange: (value: string) => void;
+  onAutoSendEmailChange: (value: boolean) => void;
 }
 
 export default function AutoBillingStep2Schedule({
@@ -17,10 +19,12 @@ export default function AutoBillingStep2Schedule({
   frequency,
   generationDay,
   firstExecutionDate,
+  autoSendEmail,
   onNameChange,
   onFrequencyChange,
   onGenerationDayChange,
-  onFirstExecutionDateChange
+  onFirstExecutionDateChange,
+  onAutoSendEmailChange
 }: AutoBillingStep2ScheduleProps) {
   const { t } = useTranslation();
 
@@ -104,6 +108,33 @@ export default function AutoBillingStep2Schedule({
           />
           <small style={{ fontSize: '12px', color: '#666' }}>{t('autoBilling.firstExecutionDateHelp')}</small>
         </div>
+      </div>
+
+      {/* Auto-email delivery */}
+      <div style={{
+        marginTop: '20px',
+        padding: '16px',
+        backgroundColor: '#eef2ff',
+        borderRadius: '8px',
+        border: '1px solid #c7d2fe'
+      }}>
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={autoSendEmail}
+            onChange={(e) => onAutoSendEmailChange(e.target.checked)}
+            style={{ width: '18px', height: '18px', cursor: 'pointer', marginTop: '2px' }}
+          />
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: '#3730a3', fontSize: '14px' }}>
+              <Mail size={14} />
+              {t('autoBilling.autoEmail.toggle')}
+            </div>
+            <div style={{ fontSize: '12px', color: '#4338ca', marginTop: '4px' }}>
+              {t('autoBilling.autoEmail.description')}
+            </div>
+          </div>
+        </label>
       </div>
 
       {/* Info Box */}

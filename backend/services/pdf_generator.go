@@ -29,6 +29,31 @@ type SenderInfo struct {
 	Country string
 }
 
+// billLayout mirrors the bill_layouts row used to customise the main invoice
+// page. Empty strings mean "use the default" — the QR-bill page is unaffected.
+type billLayout struct {
+	Title        string
+	IntroText    string
+	FooterText   string
+	PrimaryColor string
+}
+
+// loadBillLayout fetches the per-building override (or returns zero-value
+// defaults if none has been saved). Errors are swallowed: a malformed row
+// must never block invoice generation.
+func (pg *PDFGenerator) loadBillLayout(buildingID int) billLayout {
+	var l billLayout
+	if buildingID == 0 || pg.db == nil {
+		return l
+	}
+	_ = pg.db.QueryRow(`
+		SELECT COALESCE(title, ''), COALESCE(intro_text, ''),
+		       COALESCE(footer_text, ''), COALESCE(primary_color, '')
+		FROM bill_layouts WHERE building_id = ?
+	`, buildingID).Scan(&l.Title, &l.IntroText, &l.FooterText, &l.PrimaryColor)
+	return l
+}
+
 type BankingInfo struct {
 	Name          string
 	IBAN          string
@@ -144,6 +169,36 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		}
 	}
 	tr := GetTranslations(userLanguage)
+
+	// Load the per-building layout override (title, color, intro/footer).
+	// The QR-bill page is rendered with the default colour set on purpose.
+	buildingID := 0
+	switch v := inv["building_id"].(type) {
+	case int:
+		buildingID = v
+	case int64:
+		buildingID = int(v)
+	case float64:
+		buildingID = int(v)
+	}
+	layout := pg.loadBillLayout(buildingID)
+
+	titleText := tr.Invoice
+	if layout.Title != "" {
+		titleText = layout.Title
+	}
+	accentColor := layout.PrimaryColor
+	if accentColor == "" {
+		accentColor = "#667EEA"
+	}
+	introHTML := ""
+	if layout.IntroText != "" {
+		introHTML = fmt.Sprintf(`<div class="intro-text">%s</div>`, template.HTMLEscapeString(layout.IntroText))
+	}
+	footerHTML := ""
+	if layout.FooterText != "" {
+		footerHTML = fmt.Sprintf(`<div class="footer-text">%s</div>`, template.HTMLEscapeString(layout.FooterText))
+	}
 
 	totalAmount := 0.0
 	if ta, ok := inv["total_amount"].(float64); ok {
@@ -422,20 +477,31 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			margin: 0;
 		}
 		
-		.header { 
-			border-bottom: 2px solid #667EEA; 
-			padding-bottom: 15px; 
+		.header {
+			border-bottom: 2px solid #667EEA;
+			padding-bottom: 15px;
 			margin-bottom: 20px;
 			display: flex;
 			justify-content: space-between;
 			align-items: flex-start;
 		}
-		
-		.header-left h1 { 
-			margin: 0; 
-			font-size: 24pt; 
+
+		.header-left h1 {
+			margin: 0;
+			font-size: 24pt;
 			color: #667EEA;
 		}
+
+		.intro-text, .footer-text {
+			margin: 0 0 18px 0;
+			padding: 12px 14px;
+			background: #f8fafc;
+			border-left: 3px solid #667EEA;
+			font-size: 10pt;
+			line-height: 1.5;
+			white-space: pre-wrap;
+		}
+		.footer-text { margin: 18px 0 0 0; }
 		
 		.header-left .invoice-number { 
 			color: #666; 
@@ -836,6 +902,8 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			</div>
 		</div>
 
+		%s
+
 		<table>
 			<thead>
 				<tr>
@@ -853,6 +921,8 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		</div>
 
 		%s
+
+		%s
 	</div>
 
 	%s
@@ -861,7 +931,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		invoiceNumber,
 		statusColors.bg, statusColors.color,
 		archivedBanner,
-		tr.Invoice,
+		titleText,
 		invoiceNumber,
 		strings.ToUpper(status),
 		senderSection,
@@ -874,14 +944,22 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		formatDate(generatedAt),
 		tr.Status,
 		status,
+		introHTML,
 		tr.Description,
 		tr.Amount,
 		itemsHTML,
 		tr.Total,
 		currency, totalAmount,
+		footerHTML,
 		paymentSection,
 		qrPage,
 	)
+
+	// Apply per-building accent colour to the main page only. The QR-bill page
+	// uses different class names (qr-*) and is left untouched.
+	if accentColor != "" && accentColor != "#667EEA" {
+		html = strings.ReplaceAll(html, "#667EEA", accentColor)
+	}
 
 	return html, nil
 }
