@@ -164,9 +164,10 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 
 		log.Printf("Generating bills for period: %s to %s (vZEV mode: %v)", startDate.Format("2006-01-02"), endDate.Format("2006-01-02"), isVZEV)
 
-		// Generate bills using the billing service with vZEV flag and custom item IDs
+		// Generate bills using the billing service with vZEV flag and custom item IDs.
+		// Auto-billing always uses the default apartments scope.
 		invoices, err := s.billingService.GenerateBillsWithOptions(buildingIDs, userIDs,
-			startDate.Format("2006-01-02"), endDate.Format("2006-01-02"), isVZEV, customItemIDs)
+			startDate.Format("2006-01-02"), endDate.Format("2006-01-02"), isVZEV, customItemIDs, BillingScope{})
 
 		if err != nil {
 			log.Printf("ERROR: Failed to generate bills for config %d: %v", id, err)

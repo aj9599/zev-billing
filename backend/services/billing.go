@@ -65,15 +65,28 @@ type BillingOptions struct {
 	CustomItemIDs []int // If empty/nil, no custom items are included. Use specific IDs to include selected items.
 }
 
+// Billing modes selectable from the bill-config UI.
+const (
+	BillingModeApartments = "apartments" // default — per-apartment ZEV/vZEV billing
+	BillingModeBuilding   = "building"   // building without apartment management — bill all chargers in the building by charger_id
+	BillingModeCharger    = "charger"    // bill only a specific charger (e.g. company-car at home)
+)
+
+// BillingScope controls which billing flow is used.
+type BillingScope struct {
+	Mode      string // "" or BillingModeApartments → existing apartment flow
+	ChargerID *int   // required when Mode == BillingModeCharger
+}
+
 // GenerateBills generates bills for the specified buildings and users
 // customItemIDs: if nil or empty, no custom items are included. Pass specific IDs to include those items.
 func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, endDate string, isVZEV bool) ([]models.Invoice, error) {
 	// Call with empty custom item IDs for backward compatibility (no custom items)
-	return bs.GenerateBillsWithOptions(buildingIDs, userIDs, startDate, endDate, isVZEV, nil)
+	return bs.GenerateBillsWithOptions(buildingIDs, userIDs, startDate, endDate, isVZEV, nil, BillingScope{})
 }
 
-// GenerateBillsWithOptions generates bills with custom item selection
-func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, startDate, endDate string, isVZEV bool, customItemIDs []int) ([]models.Invoice, error) {
+// GenerateBillsWithOptions generates bills with custom item selection and an optional billing scope.
+func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, startDate, endDate string, isVZEV bool, customItemIDs []int, scope BillingScope) ([]models.Invoice, error) {
 	log.Printf("=== BILL GENERATION START ===")
 	log.Printf("Mode: %s, Buildings: %v, Users: %v, Period: %s to %s",
 		func() string {
@@ -176,7 +189,8 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 			settings.NormalPowerPrice, settings.SolarPowerPrice, settings.VZEVExportPrice)
 
 		// Route to appropriate billing logic
-		if isVZEV && isComplex {
+		switch {
+		case isVZEV && isComplex:
 			// vZEV: Virtual allocation between buildings in complex
 			log.Printf("Using vZEV billing logic for complex %d", buildingID)
 			complexInvoices, err := bs.generateVZEVBillsWithOptions(buildingID, groupBuildings, userIDs, start, end, settings, customItemIDs)
@@ -185,8 +199,47 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 				continue
 			}
 			invoices = append(invoices, complexInvoices...)
-		} else {
-			// ZEV: Direct meter-based billing
+
+		case scope.Mode == BillingModeCharger:
+			// Single-charger bill — only the specified charger's consumption is billed.
+			if scope.ChargerID == nil {
+				log.Printf("ERROR: charger billing mode requires charger_id; skipping building %d", buildingID)
+				continue
+			}
+			log.Printf("Using single-charger billing logic for building %d (charger %d)", buildingID, *scope.ChargerID)
+			userPeriods, err := bs.getUserPeriodsForBilling(buildingID, userIDs, start, end)
+			if err != nil {
+				log.Printf("ERROR: Failed to get user periods: %v", err)
+				continue
+			}
+			for _, userPeriod := range userPeriods {
+				invoice, err := bs.generateChargerOnlyInvoice(userPeriod, buildingID, *scope.ChargerID, start, end, settings, customItemIDs)
+				if err != nil {
+					log.Printf("ERROR: Failed to generate charger-only invoice for user %d: %v", userPeriod.UserID, err)
+					continue
+				}
+				invoices = append(invoices, *invoice)
+			}
+
+		case scope.Mode == BillingModeBuilding:
+			// Building-wide bill (no apartment management) — bill ALL chargers in the building by charger_id.
+			log.Printf("Using building-wide billing logic for building %d", buildingID)
+			userPeriods, err := bs.getUserPeriodsForBilling(buildingID, userIDs, start, end)
+			if err != nil {
+				log.Printf("ERROR: Failed to get user periods: %v", err)
+				continue
+			}
+			for _, userPeriod := range userPeriods {
+				invoice, err := bs.generateUserInvoiceForPeriodWithOptionsAndScope(userPeriod, buildingID, start, end, settings, customItemIDs, scope)
+				if err != nil {
+					log.Printf("ERROR: Failed to generate invoice for user %d: %v", userPeriod.UserID, err)
+					continue
+				}
+				invoices = append(invoices, *invoice)
+			}
+
+		default:
+			// ZEV: Direct meter-based billing (existing apartment flow)
 			log.Printf("Using ZEV billing logic for building %d", buildingID)
 			userPeriods, err := bs.getUserPeriodsForBilling(buildingID, userIDs, start, end)
 			if err != nil {
@@ -767,8 +820,14 @@ func (bs *BillingService) generateUserInvoiceForPeriod(userPeriod UserPeriod, bu
 	return bs.generateUserInvoiceForPeriodWithOptions(userPeriod, buildingID, fullStart, fullEnd, settings, nil)
 }
 
-// generateUserInvoiceForPeriodWithOptions generates invoice with custom item selection
+// generateUserInvoiceForPeriodWithOptions generates invoice with custom item selection (default apartment scope).
 func (bs *BillingService) generateUserInvoiceForPeriodWithOptions(userPeriod UserPeriod, buildingID int, fullStart, fullEnd time.Time, settings models.BillingSettings, customItemIDs []int) (*models.Invoice, error) {
+	return bs.generateUserInvoiceForPeriodWithOptionsAndScope(userPeriod, buildingID, fullStart, fullEnd, settings, customItemIDs, BillingScope{})
+}
+
+// generateUserInvoiceForPeriodWithOptionsAndScope generates invoice with optional scope override.
+// When scope.Mode == BillingModeBuilding, charging is calculated for ALL chargers in the building (matched by charger_id, no RFID required).
+func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPeriod UserPeriod, buildingID int, fullStart, fullEnd time.Time, settings models.BillingSettings, customItemIDs []int, scope BillingScope) (*models.Invoice, error) {
 	tr := GetTranslations(userPeriod.Language)
 
 	invoiceYear := fullStart.Year()
@@ -872,9 +931,19 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptions(userPeriod Use
 	}
 
 	// CRITICAL: Car charging for THIS USER'S ACTUAL PERIOD
-	if userPeriod.ChargerIDs != "" {
-		log.Printf("  [CHARGING] Calculating for period: %s to %s", start.Format("2006-01-02"), end.Format("2006-01-02"))
-		normalCharging, priorityCharging, firstSession, lastSession := bs.calculateChargingConsumption(buildingID, userPeriod.ChargerIDs, start, end)
+	// In building mode, all chargers in the building are billed (charger_id match, no RFID required).
+	// In default (apartment) mode, only the chargers matching the user's RFIDs are billed.
+	hasChargingSource := scope.Mode == BillingModeBuilding || userPeriod.ChargerIDs != ""
+	if hasChargingSource {
+		log.Printf("  [CHARGING] Calculating for period: %s to %s (mode=%s)", start.Format("2006-01-02"), end.Format("2006-01-02"), scope.Mode)
+
+		var normalCharging, priorityCharging float64
+		var firstSession, lastSession time.Time
+		if scope.Mode == BillingModeBuilding {
+			normalCharging, priorityCharging, firstSession, lastSession = bs.calculateChargingForBuilding(buildingID, start, end)
+		} else {
+			normalCharging, priorityCharging, firstSession, lastSession = bs.calculateChargingConsumption(buildingID, userPeriod.ChargerIDs, start, end)
+		}
 
 		log.Printf("  [CHARGING] Results: Solar=%.3f kWh, Priority=%.3f kWh", normalCharging, priorityCharging)
 
@@ -1836,6 +1905,51 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 	return totalNormal, totalSolar, totalConsumption
 }
 
+// chargerSessionFilter selects charger sessions by either RFID (user_id) match or by charger_id list.
+// Exactly one mode is used per call.
+type chargerSessionFilter struct {
+	useChargerIDs bool
+	rfidCards     []string // when useChargerIDs=false
+	chargerIDs    []int    // when useChargerIDs=true
+}
+
+// calculateChargingForBuilding bills every active charger in the building, regardless of RFID assignment.
+// Used by the "building" billing mode (single-family-home / no apartment management).
+func (bs *BillingService) calculateChargingForBuilding(buildingID int, start, end time.Time) (normal, priority float64, firstSession, lastSession time.Time) {
+	rows, err := bs.db.Query(`SELECT id FROM chargers WHERE building_id = ? AND is_active = 1`, buildingID)
+	if err != nil {
+		log.Printf("  [CHARGING-BLD] ERROR querying chargers for building %d: %v", buildingID, err)
+		return 0, 0, time.Time{}, time.Time{}
+	}
+	defer rows.Close()
+
+	chargerIDs := []int{}
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err == nil {
+			chargerIDs = append(chargerIDs, id)
+		}
+	}
+	if len(chargerIDs) == 0 {
+		log.Printf("  [CHARGING-BLD] No active chargers in building %d", buildingID)
+		return 0, 0, time.Time{}, time.Time{}
+	}
+	log.Printf("  [CHARGING-BLD] Building %d has %d active chargers: %v", buildingID, len(chargerIDs), chargerIDs)
+	return bs.calculateChargingForChargers(buildingID, chargerIDs, start, end)
+}
+
+// calculateChargingForChargers bills exactly the listed chargers (matched by charger_id).
+// Used by both building-mode (all chargers) and charger-mode (one charger).
+func (bs *BillingService) calculateChargingForChargers(buildingID int, chargerIDs []int, start, end time.Time) (normal, priority float64, firstSession, lastSession time.Time) {
+	if len(chargerIDs) == 0 {
+		return 0, 0, time.Time{}, time.Time{}
+	}
+	return bs.calculateChargingFiltered(buildingID, chargerSessionFilter{
+		useChargerIDs: true,
+		chargerIDs:    chargerIDs,
+	}, start, end)
+}
+
 // Charging calculation using data at fixed 15-minute intervals
 func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards string, start, end time.Time) (normal, priority float64, firstSession, lastSession time.Time) {
 	log.Printf("  [CHARGING] ========================================")
@@ -2155,4 +2269,280 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 	log.Printf("  [CHARGING] ========================================")
 
 	return normalTotal, priorityTotal, firstSession, lastSession
+}
+
+// calculateChargingFiltered runs the same accounting logic as calculateChargingConsumption,
+// but selects charger_sessions by charger_id IN (...) rather than by RFID/user_id.
+// It is used for building-mode and charger-mode billing where chargers may have no RFIDs assigned.
+func (bs *BillingService) calculateChargingFiltered(buildingID int, filter chargerSessionFilter, start, end time.Time) (normal, priority float64, firstSession, lastSession time.Time) {
+	if !filter.useChargerIDs || len(filter.chargerIDs) == 0 {
+		log.Printf("  [CHARGING-CID] ERROR: filter must specify chargerIDs")
+		return 0, 0, time.Time{}, time.Time{}
+	}
+
+	log.Printf("  [CHARGING-CID] ========================================")
+	log.Printf("  [CHARGING-CID] Building ID: %d, charger IDs: %v", buildingID, filter.chargerIDs)
+	log.Printf("  [CHARGING-CID] Period: %s to %s", start.Format("2006-01-02 15:04"), end.Format("2006-01-02 15:04"))
+
+	chargerPlaceholders := make([]string, len(filter.chargerIDs))
+	chargerArgs := []interface{}{}
+	for i, id := range filter.chargerIDs {
+		chargerPlaceholders[i] = "?"
+		chargerArgs = append(chargerArgs, id)
+	}
+	chargerIn := strings.Join(chargerPlaceholders, ",")
+
+	chargerRows, err := bs.db.Query(fmt.Sprintf(`
+		SELECT id, name, connection_config FROM chargers
+		WHERE building_id = ? AND id IN (%s) AND is_active = 1
+	`, chargerIn), append([]interface{}{buildingID}, chargerArgs...)...)
+	if err != nil {
+		log.Printf("  [CHARGING-CID] ERROR: Could not query chargers: %v", err)
+		return 0, 0, time.Time{}, time.Time{}
+	}
+	defer chargerRows.Close()
+
+	type chargerCfg struct {
+		ChargerID    int
+		ChargerName  string
+		StateIdle    string
+		ModeNormal   string
+		ModePriority string
+	}
+
+	configs := []chargerCfg{}
+	for chargerRows.Next() {
+		var id int
+		var name, connConfigJSON string
+		if err := chargerRows.Scan(&id, &name, &connConfigJSON); err != nil {
+			continue
+		}
+		var connConfig map[string]interface{}
+		if err := json.Unmarshal([]byte(connConfigJSON), &connConfig); err != nil {
+			log.Printf("  [CHARGING-CID] WARN: bad config for charger %d: %v", id, err)
+			continue
+		}
+		configs = append(configs, chargerCfg{
+			ChargerID:    id,
+			ChargerName:  name,
+			StateIdle:    getConfigString(connConfig, "state_idle", "50"),
+			ModeNormal:   getConfigString(connConfig, "mode_normal", "1"),
+			ModePriority: getConfigString(connConfig, "mode_priority", "2"),
+		})
+	}
+	if len(configs) == 0 {
+		log.Printf("  [CHARGING-CID] No active chargers matched in building %d", buildingID)
+		return 0, 0, time.Time{}, time.Time{}
+	}
+
+	sessionArgs := append([]interface{}{}, chargerArgs...)
+	sessionArgs = append(sessionArgs, start, end)
+	rows, err := bs.db.Query(fmt.Sprintf(`
+		SELECT charger_id, session_time, power_kwh, mode, state
+		FROM charger_sessions
+		WHERE charger_id IN (%s)
+		AND session_time >= ? AND session_time <= ?
+		ORDER BY charger_id, session_time ASC
+	`, chargerIn), sessionArgs...)
+	if err != nil {
+		log.Printf("  [CHARGING-CID] ERROR querying sessions: %v", err)
+		return 0, 0, time.Time{}, time.Time{}
+	}
+	defer rows.Close()
+
+	type sessionData struct {
+		SessionTime time.Time
+		PowerKwh    float64
+		Mode        string
+		State       string
+	}
+	bySession := make(map[int][]sessionData)
+	totalSessions := 0
+	for rows.Next() {
+		var chargerID int
+		var t time.Time
+		var power float64
+		var mode, state string
+		if err := rows.Scan(&chargerID, &t, &power, &mode, &state); err != nil {
+			continue
+		}
+		bySession[chargerID] = append(bySession[chargerID], sessionData{t, power, mode, state})
+		totalSessions++
+	}
+	log.Printf("  [CHARGING-CID] Found %d sessions across %d chargers", totalSessions, len(bySession))
+
+	for _, cfg := range configs {
+		sessions := bySession[cfg.ChargerID]
+		if len(sessions) == 0 {
+			continue
+		}
+
+		var prevPower float64
+		var hasPrev bool
+		for _, s := range sessions {
+			if s.State == cfg.StateIdle {
+				continue
+			}
+			if firstSession.IsZero() || s.SessionTime.Before(firstSession) {
+				firstSession = s.SessionTime
+			}
+			if s.SessionTime.After(lastSession) {
+				lastSession = s.SessionTime
+			}
+			if !hasPrev {
+				prevPower = s.PowerKwh
+				hasPrev = true
+				continue
+			}
+			delta := s.PowerKwh - prevPower
+			if delta < 0 {
+				prevPower = s.PowerKwh
+				continue
+			}
+			if delta > 0 {
+				switch s.Mode {
+				case cfg.ModePriority:
+					priority += delta
+				default:
+					normal += delta
+				}
+			}
+			prevPower = s.PowerKwh
+		}
+		log.Printf("  [CHARGING-CID] Charger %d (%s): %d sessions processed", cfg.ChargerID, cfg.ChargerName, len(sessions))
+	}
+
+	log.Printf("  [CHARGING-CID] FINAL — Normal: %.3f kWh, Priority: %.3f kWh", normal, priority)
+	log.Printf("  [CHARGING-CID] ========================================")
+	return normal, priority, firstSession, lastSession
+}
+
+// generateChargerOnlyInvoice produces an invoice that contains ONLY the consumption of the specified charger,
+// optionally including selected custom items. Used by BillingModeCharger.
+func (bs *BillingService) generateChargerOnlyInvoice(userPeriod UserPeriod, buildingID, chargerID int, fullStart, fullEnd time.Time, settings models.BillingSettings, customItemIDs []int) (*models.Invoice, error) {
+	tr := GetTranslations(userPeriod.Language)
+
+	var chargerName string
+	var chargerBuildingID int
+	err := bs.db.QueryRow(`SELECT name, building_id FROM chargers WHERE id = ? AND is_active = 1`, chargerID).Scan(&chargerName, &chargerBuildingID)
+	if err != nil {
+		return nil, fmt.Errorf("charger %d not found or inactive: %v", chargerID, err)
+	}
+	if chargerBuildingID != buildingID {
+		return nil, fmt.Errorf("charger %d does not belong to building %d", chargerID, buildingID)
+	}
+
+	invoiceYear := fullStart.Year()
+	timestamp := time.Now().Format("20060102150405")
+	invoiceNumber := fmt.Sprintf("INV-%d-%d-%d-CH%d-%s", invoiceYear, buildingID, userPeriod.UserID, chargerID, timestamp)
+
+	totalAmount := 0.0
+	items := []models.InvoiceItem{}
+
+	start := userPeriod.BillingStart
+	end := userPeriod.BillingEnd
+
+	if userPeriod.ProrationFactor < 1.0 {
+		items = append(items, models.InvoiceItem{
+			Description: fmt.Sprintf("⚠️ %s: %s to %s (%.1f%% of billing period)",
+				tr.PartialPeriod,
+				start.Format("02.01.2006"),
+				end.Format("02.01.2006"),
+				userPeriod.ProrationFactor*100),
+			ItemType: "proration_notice",
+		})
+		items = append(items, models.InvoiceItem{ItemType: "separator"})
+	}
+
+	normalCharging, priorityCharging, firstSession, lastSession := bs.calculateChargingForChargers(buildingID, []int{chargerID}, start, end)
+	log.Printf("  [CHARGER-ONLY] Charger %d (%s): Normal=%.3f, Priority=%.3f", chargerID, chargerName, normalCharging, priorityCharging)
+
+	items = append(items, models.InvoiceItem{
+		Description: fmt.Sprintf("%s: %s", tr.CarCharging, chargerName),
+		ItemType:    "charging_header",
+	})
+
+	if !firstSession.IsZero() && !lastSession.IsZero() {
+		totalCharged := normalCharging + priorityCharging
+		items = append(items, models.InvoiceItem{
+			Description: fmt.Sprintf("%s: %s - %s | %s: %.3f kWh",
+				tr.Period,
+				firstSession.Format("02.01 15:04"),
+				lastSession.Format("02.01 15:04"),
+				tr.Total,
+				totalCharged),
+			Quantity: totalCharged,
+			ItemType: "charging_session_compact",
+		})
+		items = append(items, models.InvoiceItem{ItemType: "separator"})
+	}
+
+	if normalCharging > 0 {
+		cost := normalCharging * settings.CarChargingNormalPrice
+		totalAmount += cost
+		items = append(items, models.InvoiceItem{
+			Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh", tr.SolarMode, normalCharging, settings.CarChargingNormalPrice, settings.Currency),
+			Quantity:    normalCharging,
+			UnitPrice:   settings.CarChargingNormalPrice,
+			TotalPrice:  cost,
+			ItemType:    "car_charging_normal",
+		})
+	}
+	if priorityCharging > 0 {
+		cost := priorityCharging * settings.CarChargingPriorityPrice
+		totalAmount += cost
+		items = append(items, models.InvoiceItem{
+			Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh", tr.PriorityMode, priorityCharging, settings.CarChargingPriorityPrice, settings.Currency),
+			Quantity:    priorityCharging,
+			UnitPrice:   settings.CarChargingPriorityPrice,
+			TotalPrice:  cost,
+			ItemType:    "car_charging_priority",
+		})
+	}
+
+	if len(customItemIDs) > 0 {
+		customItems, customCost, err := bs.getCustomLineItemsWithTranslations(buildingID, tr, userPeriod.ProrationFactor, fullStart, fullEnd, customItemIDs)
+		if err != nil {
+			log.Printf("  [CHARGER-ONLY] WARN: custom items lookup failed: %v", err)
+		} else if len(customItems) > 0 {
+			items = append(items, customItems...)
+			totalAmount += customCost
+		}
+	}
+
+	result, err := bs.db.Exec(`
+		INSERT INTO invoices (
+			invoice_number, user_id, building_id, period_start, period_end,
+			total_amount, currency, status
+		) VALUES (?, ?, ?, ?, ?, ?, ?, 'issued')
+	`, invoiceNumber, userPeriod.UserID, buildingID, fullStart.Format("2006-01-02"), fullEnd.Format("2006-01-02"),
+		totalAmount, settings.Currency)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create charger-only invoice: %v", err)
+	}
+	invoiceID, _ := result.LastInsertId()
+	for _, item := range items {
+		_, err := bs.db.Exec(`
+			INSERT INTO invoice_items (
+				invoice_id, description, quantity, unit_price, total_price, item_type
+			) VALUES (?, ?, ?, ?, ?, ?)
+		`, invoiceID, item.Description, item.Quantity, item.UnitPrice, item.TotalPrice, item.ItemType)
+		if err != nil {
+			log.Printf("WARNING: Failed to insert invoice item: %v", err)
+		}
+	}
+
+	return &models.Invoice{
+		ID:            int(invoiceID),
+		InvoiceNumber: invoiceNumber,
+		UserID:        userPeriod.UserID,
+		BuildingID:    buildingID,
+		PeriodStart:   fullStart.Format("2006-01-02"),
+		PeriodEnd:     fullEnd.Format("2006-01-02"),
+		TotalAmount:   totalAmount,
+		Currency:      settings.Currency,
+		Status:        "issued",
+		Items:         items,
+		GeneratedAt:   time.Now(),
+	}, nil
 }

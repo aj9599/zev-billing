@@ -48,6 +48,13 @@ type GenerateBillsRequest struct {
 	EndDate     string `json:"end_date"`
 	IsVZEV      bool   `json:"is_vzev"`
 
+	// Billing mode: "apartments" (default), "building", or "charger".
+	// "apartments": existing per-apartment flow.
+	// "building":   for buildings without apartment management — one invoice per user covering all chargers in the building (matched by charger_id, no RFID required).
+	// "charger":    one invoice per user containing only the consumption of a specific charger (use case: billing a company for company-car charging at home).
+	BillingMode string `json:"billing_mode"`
+	ChargerID   *int   `json:"charger_id,omitempty"`
+
 	// Custom item IDs to include in bills (NEW)
 	CustomItemIDs []int `json:"custom_item_ids"`
 
@@ -252,35 +259,27 @@ func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 			}
 		}(),
 		req.BuildingIDs, req.UserIDs, req.StartDate, req.EndDate)
+	log.Printf("Billing Mode: %s, Charger ID: %v", req.BillingMode, req.ChargerID)
 	log.Printf("Custom Item IDs: %v", req.CustomItemIDs)
 	log.Printf("Sender: %s, IBAN: %s", req.SenderName, req.BankIBAN)
 
-	// Generate invoices with custom item selection
-	// Use GenerateBillsWithOptions to pass custom item IDs
-	var invoices []models.Invoice
-	var err error
-
-	if len(req.CustomItemIDs) > 0 {
-		// Use new method with custom item selection
-		invoices, err = h.billingService.GenerateBillsWithOptions(
-			req.BuildingIDs,
-			req.UserIDs,
-			req.StartDate,
-			req.EndDate,
-			req.IsVZEV,
-			req.CustomItemIDs,
-		)
-	} else {
-		// Backward compatible: no custom items when none selected
-		invoices, err = h.billingService.GenerateBillsWithOptions(
-			req.BuildingIDs,
-			req.UserIDs,
-			req.StartDate,
-			req.EndDate,
-			req.IsVZEV,
-			[]int{}, // Empty = no custom items
-		)
+	customItemIDs := req.CustomItemIDs
+	if customItemIDs == nil {
+		customItemIDs = []int{}
 	}
+
+	invoices, err := h.billingService.GenerateBillsWithOptions(
+		req.BuildingIDs,
+		req.UserIDs,
+		req.StartDate,
+		req.EndDate,
+		req.IsVZEV,
+		customItemIDs,
+		services.BillingScope{
+			Mode:      req.BillingMode,
+			ChargerID: req.ChargerID,
+		},
+	)
 
 	if err != nil {
 		log.Printf("ERROR: Bill generation failed: %v", err)

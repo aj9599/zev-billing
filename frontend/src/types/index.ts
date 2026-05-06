@@ -192,6 +192,8 @@ export interface ApartmentWithUser {
   has_meter: boolean;
 }
 
+export type BillingMode = 'apartments' | 'building' | 'charger';
+
 export interface GenerateBillsRequest {
   building_ids: number[];
   user_ids: number[];
@@ -211,6 +213,12 @@ export interface GenerateBillsRequest {
   custom_line_items?: CustomLineItemSelection[];  // Legacy - kept for backward compatibility
   custom_item_ids?: number[];  // NEW: Array of custom line item IDs to include
   is_vzev?: boolean;
+  // Billing mode — driven by the building's apartment-management flag.
+  // 'apartments' (default) keeps the existing per-apartment flow.
+  // 'building'  bills the whole building to one user (chargers matched by id, no RFID required).
+  // 'charger'   bills only one specific charger to one user.
+  billing_mode?: BillingMode;
+  charger_id?: number;
 }
 
 export interface ApartmentSelection {
