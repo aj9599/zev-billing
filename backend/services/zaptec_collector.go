@@ -288,11 +288,14 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 
 	// Compute the live cumulative meter value (real-time, every poll). Zaptec's
 	// SignedMeterValueKwh refreshes only at OCMF events (~hourly), so we
-	// integrate TotalChargePower over the wall-clock delta since the previous
-	// poll and add it to the session-start signed baseline. We use
+	// integrate the live power reading over the wall-clock delta since the
+	// previous poll and add it to the session-start signed baseline. We use
 	// max(signed, baseline+integrated) so a fresh signed reading always wins
 	// while the in-between polls still see meter creep.
-	liveCumulative := zc.computeLiveCumulative(chargerID, chargerDetails, currentState, previousState)
+	//
+	// liveData.CurrentPower_kW already prefers StateId 513 over the (often
+	// stale) TotalChargePower field, so it's the right input for integration.
+	liveCumulative := zc.computeLiveCumulative(chargerID, chargerDetails, currentState, previousState, liveData.CurrentPower_kW)
 	liveData.TotalEnergy_kWh = liveCumulative
 	liveData.TotalEnergy = liveCumulative
 
@@ -530,10 +533,15 @@ func (zc *ZaptecCollector) writeSessionFallback(history *zaptec.ChargeHistory, c
 //   - Always: return max(SignedMeterValueKwh, baseline + integrated). The
 //     `max` keeps us monotonic and lets fresh signed readings re-anchor the
 //     running estimate (preventing drift across long sessions).
-func (zc *ZaptecCollector) computeLiveCumulative(chargerID int, details *zaptec.ChargerDetails, currentState, previousState int) float64 {
+func (zc *ZaptecCollector) computeLiveCumulative(chargerID int, details *zaptec.ChargerDetails, currentState, previousState int, livePowerKw float64) float64 {
 	now := time.Now()
 	signed := details.SignedMeterValueKwh
-	powerKw := details.TotalChargePower / 1000.0 // API gives Watts
+	// Prefer the live power kW already computed from StateId 513, falling
+	// back to chargerDetails.TotalChargePower (Watts) when it's missing.
+	powerKw := livePowerKw
+	if powerKw <= 0 {
+		powerKw = details.TotalChargePower / 1000.0
+	}
 
 	zc.mu.Lock()
 	defer zc.mu.Unlock()
