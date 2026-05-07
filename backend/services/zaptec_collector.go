@@ -48,15 +48,24 @@ type ZaptecCollector struct {
 	// Live cumulative tracking. Zaptec's SignedMeterValueKwh is the signed
 	// meter reading and only refreshes at OCMF events (~hourly), so polling
 	// it 24× per hour gives the same number until the next checkpoint. To
-	// produce real 15-min cumulative readings we capture the signed value at
-	// session start as a baseline and then integrate TotalChargePower over
-	// time at every poll. The reported live total is
-	//   max(SignedMeterValueKwh, sessionBaseline + integratedSessionKwh)
-	// so a fresh signed reading always wins, but in between we still see the
-	// meter creep up at the actual charging rate.
-	sessionBaselineKwh   map[int]float64   // signed meter at session start
-	integratedSessionKwh map[int]float64   // power × time accumulator since session start
-	lastPollTime         map[int]time.Time // last poll timestamp for dt computation
+	// produce real 15-min cumulative readings we capture the signed value
+	// each time it leaps ("re-anchor") and combine it with delta signals:
+	//   - StateId 553 SessionEnergy_kWh: cumulative session energy reported
+	//     by the charger. Updates near-real-time. We subtract its value at
+	//     the last re-anchor (sessionEnergyAtAnchorKwh) to get the delta
+	//     since the anchor.
+	//   - Power × dt integrator: a local fallback for installations where
+	//     553 is also throttled.
+	// The reported live total is
+	//   max(signed,
+	//       sessionBaseline + (sessionEnergy − sessionEnergyAtAnchor),
+	//       sessionBaseline + integratedSessionKwh)
+	// so a fresh signed reading always wins, but in between we still see
+	// the meter creep up at the real charging rate.
+	sessionBaselineKwh        map[int]float64   // signed meter at last re-anchor
+	sessionEnergyAtAnchorKwh  map[int]float64   // StateId 553 value at last re-anchor
+	integratedSessionKwh      map[int]float64   // power × time accumulator since last re-anchor
+	lastPollTime              map[int]time.Time // last poll timestamp for dt computation
 	
 	stopChan         chan bool
 	apiBaseURL       string
@@ -90,11 +99,12 @@ func NewZaptecCollector(db *sql.DB) *ZaptecCollector {
 		tokenExpiries:     make(map[int]time.Time),
 		activeSessionIDs:  make(map[int]string),
 		previousStates:    make(map[int]int),
-		processedSessions:    make(map[string]bool),
-		lastIdleWrite:        make(map[int]time.Time),
-		sessionBaselineKwh:   make(map[int]float64),
-		integratedSessionKwh: make(map[int]float64),
-		lastPollTime:         make(map[int]time.Time),
+		processedSessions:        make(map[string]bool),
+		lastIdleWrite:            make(map[int]time.Time),
+		sessionBaselineKwh:       make(map[int]float64),
+		sessionEnergyAtAnchorKwh: make(map[int]float64),
+		integratedSessionKwh:     make(map[int]float64),
+		lastPollTime:             make(map[int]time.Time),
 		stopChan:          make(chan bool),
 		apiBaseURL:        apiBaseURL,
 		localTimezone:     localTZ,
@@ -164,6 +174,7 @@ func (zc *ZaptecCollector) RestartConnections() {
 	zc.previousStates = make(map[int]int)
 	zc.lastIdleWrite = make(map[int]time.Time)
 	zc.sessionBaselineKwh = make(map[int]float64)
+	zc.sessionEnergyAtAnchorKwh = make(map[int]float64)
 	zc.integratedSessionKwh = make(map[int]float64)
 	zc.lastPollTime = make(map[int]time.Time)
 	// Don't clear processedSessions - we need to remember what we've already written
@@ -562,15 +573,17 @@ func (zc *ZaptecCollector) computeLiveCumulative(chargerID int, details *zaptec.
 	// Detect session-start transition.
 	if currentState == 3 && previousState != 3 {
 		zc.sessionBaselineKwh[chargerID] = signed
+		zc.sessionEnergyAtAnchorKwh[chargerID] = sessionEnergyKwh
 		zc.integratedSessionKwh[chargerID] = 0
 		zc.lastPollTime[chargerID] = now
 		return signed
 	}
 
-	// Detect session-end transition. Clear baseline so the next session
-	// starts fresh; the signed value will catch up on the next OCMF E.
+	// Detect session-end transition. Clear all trackers so the next
+	// session starts fresh; the signed value will catch up on the OCMF E.
 	if currentState != 3 && previousState == 3 {
 		delete(zc.sessionBaselineKwh, chargerID)
+		delete(zc.sessionEnergyAtAnchorKwh, chargerID)
 		delete(zc.integratedSessionKwh, chargerID)
 		zc.lastPollTime[chargerID] = now
 		return signed
@@ -592,6 +605,7 @@ func (zc *ZaptecCollector) computeLiveCumulative(chargerID int, details *zaptec.
 		// Mid-session restart with no baseline — anchor to the current
 		// signed value and start tracking from here.
 		zc.sessionBaselineKwh[chargerID] = signed
+		zc.sessionEnergyAtAnchorKwh[chargerID] = sessionEnergyKwh
 		zc.integratedSessionKwh[chargerID] = 0
 		baseline = signed
 	}
@@ -604,10 +618,18 @@ func (zc *ZaptecCollector) computeLiveCumulative(chargerID int, details *zaptec.
 	}
 	integrated := zc.integratedSessionKwh[chargerID]
 
+	// SessionEnergy_kWh (StateId 553) is cumulative since session start —
+	// not since our last re-anchor. Subtract the value captured at the
+	// anchor so we add only the delta since then.
+	sessionDelta := sessionEnergyKwh - zc.sessionEnergyAtAnchorKwh[chargerID]
+	if sessionDelta < 0 {
+		sessionDelta = 0
+	}
+
 	// Three candidates for the live cumulative — pick the highest so we
 	// never go backwards and the freshest signal wins.
 	estimate := signed
-	if v := baseline + sessionEnergyKwh; v > estimate {
+	if v := baseline + sessionDelta; v > estimate {
 		estimate = v
 	}
 	if v := baseline + integrated; v > estimate {
@@ -616,9 +638,12 @@ func (zc *ZaptecCollector) computeLiveCumulative(chargerID int, details *zaptec.
 
 	// If the signed reading just leapt ahead of our estimates (typically
 	// because a new OCMF T arrived at the hour), re-anchor: keep the gap
-	// and restart the local trackers from the signed point.
+	// and restart the local trackers from this signed point. We snapshot
+	// the current sessionEnergy so future polls add only the delta from
+	// the anchor — never double-counting energy already in `signed`.
 	if signed >= estimate {
 		zc.sessionBaselineKwh[chargerID] = signed
+		zc.sessionEnergyAtAnchorKwh[chargerID] = sessionEnergyKwh
 		zc.integratedSessionKwh[chargerID] = 0
 		return signed
 	}
