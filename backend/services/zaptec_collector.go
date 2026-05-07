@@ -269,6 +269,11 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 	// ========== CHARGING STATE (OperatingMode == 3) ==========
 	if currentState == 3 {
 		zc.handleChargingState(chargerID, chargerName, liveData, stateData)
+		// Also write a 15-min snapshot of the cumulative meter value so the
+		// dashboard line chart has the same granularity as the building meters.
+		// Without this we'd only see two data points per session (begin/end
+		// from OCMF), which makes long sessions look "hourly".
+		zc.writeIdleReadingIfNeeded(chargerID, chargerName, liveData.TotalEnergy_kWh, liveData.State)
 	} else {
 		// ========== NOT CHARGING - Check for session end ==========
 		zc.handleNonChargingState(chargerID, chargerName, config, token, previousState, previousSessionID, liveData)
@@ -505,10 +510,14 @@ func (zc *ZaptecCollector) writeIdleReadingIfNeeded(chargerID int, chargerName s
 		zc.mu.Lock()
 		zc.lastIdleWrite[chargerID] = interval
 		zc.mu.Unlock()
-		
+
 		timestamp := interval.Format("2006-01-02 15:04:05-07:00")
-		log.Printf("Zaptec: [%s] ⏱ IDLE READING: Time=%s, Energy=%.3f kWh, State=%s", 
-			chargerName, timestamp, totalEnergy, state)
+		label := "IDLE READING"
+		if state == "3" {
+			label = "CHARGING SNAPSHOT"
+		}
+		log.Printf("Zaptec: [%s] ⏱ %s: Time=%s, Energy=%.3f kWh, State=%s",
+			chargerName, label, timestamp, totalEnergy, state)
 	}
 }
 

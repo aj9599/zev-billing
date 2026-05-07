@@ -26,9 +26,10 @@ func (h *ExportHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 	meterIDStr := r.URL.Query().Get("meter_id")
 	meterIDsStr := r.URL.Query().Get("meter_ids")
 	chargerIDStr := r.URL.Query().Get("charger_id")
+	chargerIDsStr := r.URL.Query().Get("charger_ids")
 
-	log.Printf("Export request: type=%s, start=%s, end=%s, meter_id=%s, meter_ids=%s, charger_id=%s",
-		exportType, startDate, endDate, meterIDStr, meterIDsStr, chargerIDStr)
+	log.Printf("Export request: type=%s, start=%s, end=%s, meter_id=%s, meter_ids=%s, charger_id=%s, charger_ids=%s",
+		exportType, startDate, endDate, meterIDStr, meterIDsStr, chargerIDStr, chargerIDsStr)
 
 	if exportType == "" || startDate == "" || endDate == "" {
 		log.Printf("Missing required parameters")
@@ -60,7 +61,12 @@ func (h *ExportHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 		}
 		data, err = h.exportMeterData(startDate, endDate, effectiveMeterIDs)
 	case "chargers":
-		data, err = h.exportChargerData(startDate, endDate, chargerIDStr)
+		// Support both single charger_id and comma-separated charger_ids.
+		effectiveChargerIDs := chargerIDStr
+		if chargerIDsStr != "" {
+			effectiveChargerIDs = chargerIDsStr
+		}
+		data, err = h.exportChargerData(startDate, endDate, effectiveChargerIDs)
 	default:
 		log.Printf("Invalid export type: %s", exportType)
 		http.Error(w, "Invalid export type. Must be 'meters' or 'chargers'", http.StatusBadRequest)
@@ -102,8 +108,11 @@ func (h *ExportHandler) exportMeterData(startDate, endDate, meterIDStr string) (
 	var rows *sql.Rows
 	var err error
 
+	// reading_time is stored with a timezone offset like "2026-05-06 14:30:00+02:00".
+	// SQLite's DATE() function returns NULL on that format, which would silently
+	// exclude every row. Compare the leading 10 characters (YYYY-MM-DD) instead.
 	baseQuery := `
-		SELECT 
+		SELECT
 			m.id,
 			m.name,
 			m.meter_type,
@@ -118,7 +127,7 @@ func (h *ExportHandler) exportMeterData(startDate, endDate, meterIDStr string) (
 		JOIN meters m ON mr.meter_id = m.id
 		JOIN buildings b ON m.building_id = b.id
 		LEFT JOIN users u ON m.user_id = u.id
-		WHERE DATE(mr.reading_time) BETWEEN ? AND ?
+		WHERE substr(mr.reading_time, 1, 10) BETWEEN ? AND ?
 	`
 
 	if meterIDStr != "" {
@@ -199,8 +208,10 @@ func (h *ExportHandler) exportChargerData(startDate, endDate, chargerIDStr strin
 	var rows *sql.Rows
 	var err error
 
+	// See note above: SQLite's DATE() returns NULL on "YYYY-MM-DD HH:MM:SS+HH:MM"
+	// timestamps, which is exactly the format both Loxone and Zaptec write.
 	baseQuery := `
-		SELECT 
+		SELECT
 			c.id,
 			c.name,
 			c.brand,
@@ -213,17 +224,32 @@ func (h *ExportHandler) exportChargerData(startDate, endDate, chargerIDStr strin
 		FROM charger_sessions cs
 		JOIN chargers c ON cs.charger_id = c.id
 		JOIN buildings b ON c.building_id = b.id
-		WHERE DATE(cs.session_time) BETWEEN ? AND ?
+		WHERE substr(cs.session_time, 1, 10) BETWEEN ? AND ?
 	`
 
 	if chargerIDStr != "" {
-		chargerID, err := strconv.Atoi(chargerIDStr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid charger_id: %v", err)
+		// Accept either a single id ("12") or a comma-separated list ("12,13").
+		idParts := strings.Split(chargerIDStr, ",")
+		args := []interface{}{startDate, endDate}
+		placeholders := make([]string, 0, len(idParts))
+		for _, part := range idParts {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			id, parseErr := strconv.Atoi(part)
+			if parseErr != nil {
+				return nil, fmt.Errorf("invalid charger_id '%s': %v", part, parseErr)
+			}
+			args = append(args, id)
+			placeholders = append(placeholders, "?")
 		}
-		baseQuery += " AND c.id = ?"
-		baseQuery += " ORDER BY cs.session_time"
-		rows, err = h.db.Query(baseQuery, startDate, endDate, chargerID)
+		if len(placeholders) == 0 {
+			return nil, fmt.Errorf("no valid charger IDs provided")
+		}
+		baseQuery += " AND c.id IN (" + strings.Join(placeholders, ",") + ")"
+		baseQuery += " ORDER BY c.id, cs.session_time"
+		rows, err = h.db.Query(baseQuery, args...)
 		if err != nil {
 			return nil, fmt.Errorf("query failed: %v", err)
 		}
