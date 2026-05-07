@@ -21,6 +21,31 @@ func NewDatabaseHandler(db *sql.DB, localTimezone *time.Location) *DatabaseHandl
 	}
 }
 
+// roundTimestampTo15Min snaps a timestamp to the nearest 15-min boundary in
+// the local timezone. Doing this for every charger_sessions row keeps the
+// per-(charger, time) UNIQUE INDEX from accidentally splitting OCMF and
+// snapshot rows that describe the same 15-min slot, and matches the
+// dashboard's own bucketing.
+func (dh *DatabaseHandler) roundTimestampTo15Min(t time.Time) time.Time {
+	local := t.In(dh.localTimezone)
+	minute := local.Minute()
+	var rounded int
+	switch {
+	case minute < 8:
+		rounded = 0
+	case minute < 23:
+		rounded = 15
+	case minute < 38:
+		rounded = 30
+	case minute < 53:
+		rounded = 45
+	default:
+		rounded = 0
+		local = local.Add(time.Hour)
+	}
+	return time.Date(local.Year(), local.Month(), local.Day(), local.Hour(), rounded, 0, 0, dh.localTimezone)
+}
+
 // LoadProcessedSessions loads session IDs that have already been written to database
 // This prevents duplicate writes after service restarts
 func (dh *DatabaseHandler) LoadProcessedSessions() int {
@@ -60,49 +85,48 @@ func (dh *DatabaseHandler) WriteSessionToDatabase(session *CompletedSession) err
 		return fmt.Errorf("no readings to write")
 	}
 	
-	// Check if we already have data for this session
-	firstReading := session.MeterReadings[0]
-	firstTimestamp := firstReading.Timestamp.Format("2006-01-02 15:04:05-07:00")
-	
-	var existingCount int
-	err := dh.db.QueryRow(`
-		SELECT COUNT(*) FROM charger_sessions 
-		WHERE charger_id = ? AND user_id = ? AND session_time = ?
-	`, session.ChargerID, session.UserID, firstTimestamp).Scan(&existingCount)
-	
-	if err == nil && existingCount > 0 {
-		log.Printf("Zaptec: [%s] Session already exists in database (timestamp %s), skipping", 
-			session.ChargerName, firstTimestamp)
-		return nil
-	}
-	
 	tx, err := dh.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %v", err)
 	}
 	defer tx.Rollback()
-	
-	// Prepare insert statement
+
+	// INSERT OR REPLACE so that the OCMF reading (signed, hardware-verified) wins
+	// over a live snapshot at the same (charger_id, session_time) — the unique
+	// index added in migrations makes that conflict resolvable. We collapse all
+	// OCMF readings (Begin / End / intermediate) onto 15-min boundaries so the
+	// CSV and the dashboard chart line up.
 	stmt, err := tx.Prepare(`
-		INSERT OR IGNORE INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
+		INSERT OR REPLACE INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
 		VALUES (?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %v", err)
 	}
 	defer stmt.Close()
-	
-	insertCount := 0
-	// Insert each OCMF reading with timezone-aware timestamps
+
+	// Deduplicate by 15-min bucket within this batch, keeping the highest
+	// cumulative reading for each bucket so totals stay monotonic.
+	bucketEnergy := make(map[string]float64)
+	bucketOrder := []string{}
 	for _, reading := range session.MeterReadings {
-		// Format timestamp with timezone offset
-		localTimestamp := reading.Timestamp.Format("2006-01-02 15:04:05-07:00")
-		
+		bucketTime := dh.roundTimestampTo15Min(reading.Timestamp)
+		key := bucketTime.Format("2006-01-02 15:04:05-07:00")
+		if existing, ok := bucketEnergy[key]; !ok {
+			bucketEnergy[key] = reading.Energy_kWh
+			bucketOrder = append(bucketOrder, key)
+		} else if reading.Energy_kWh > existing {
+			bucketEnergy[key] = reading.Energy_kWh
+		}
+	}
+
+	insertCount := 0
+	for _, key := range bucketOrder {
 		result, err := stmt.Exec(
 			session.ChargerID,
 			session.UserID,
-			localTimestamp,
-			reading.Energy_kWh,
+			key,
+			bucketEnergy[key],
 			"1", // mode = normal
 			"3", // state = charging
 		)
@@ -110,19 +134,18 @@ func (dh *DatabaseHandler) WriteSessionToDatabase(session *CompletedSession) err
 			log.Printf("WARNING: Failed to insert OCMF reading: %v", err)
 			continue
 		}
-		
-		rowsAffected, _ := result.RowsAffected()
-		if rowsAffected > 0 {
+		if rows, _ := result.RowsAffected(); rows > 0 {
 			insertCount++
 		}
 	}
-	
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %v", err)
 	}
-	
-	log.Printf("Zaptec: [%s] Inserted %d/%d OCMF readings for session", session.ChargerName, insertCount, len(session.MeterReadings))
-	
+
+	log.Printf("Zaptec: [%s] Wrote %d OCMF buckets (from %d raw readings) for session",
+		session.ChargerName, insertCount, len(session.MeterReadings))
+
 	return nil
 }
 
@@ -140,9 +163,9 @@ func (dh *DatabaseHandler) WriteSessionFallback(history *ChargeHistory, chargerI
 		userID = "unknown"
 	}
 	
-	// Format timestamps with timezone offset
-	localStartTime := startTime.In(dh.localTimezone).Format("2006-01-02 15:04:05-07:00")
-	localEndTime := endTime.In(dh.localTimezone).Format("2006-01-02 15:04:05-07:00")
+	// Snap fallback start/end to 15-min boundaries to align with snapshots and OCMF.
+	localStartTime := dh.roundTimestampTo15Min(startTime).Format("2006-01-02 15:04:05-07:00")
+	localEndTime := dh.roundTimestampTo15Min(endTime).Format("2006-01-02 15:04:05-07:00")
 	
 	// Check if already exists
 	var existingCount int

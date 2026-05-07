@@ -414,6 +414,13 @@ func RunMigrations(db *sql.DB) error {
 		return err
 	}
 
+	// Deduplicate charger_sessions and enforce one row per (charger, session_time).
+	// Without this, OCMF writes and live snapshots produce overlapping rows that
+	// show up as duplicates in the CSV export.
+	if err := dedupeAndIndexChargerSessions(db); err != nil {
+		return err
+	}
+
 	if err := migrateZaptecConfigs(db); err != nil {
 		return err
 	}
@@ -540,6 +547,47 @@ func addCustomItemIdsColumn(db *sql.DB) error {
 		log.Println("✓ custom_item_ids column already exists")
 	}
 
+	return nil
+}
+
+// dedupeAndIndexChargerSessions removes duplicate rows that share the same
+// (charger_id, session_time) and then creates a UNIQUE INDEX so future
+// "INSERT OR IGNORE" / "INSERT OR REPLACE" statements actually deduplicate.
+// Live 15-min snapshots and post-session OCMF writes used to coexist as
+// near-duplicate rows because the table had no constraint.
+func dedupeAndIndexChargerSessions(db *sql.DB) error {
+	// Skip cleanly if the unique index already exists.
+	var existingIndex string
+	err := db.QueryRow(`
+		SELECT name FROM sqlite_master
+		WHERE type='index' AND name='idx_charger_sessions_charger_time_unique'
+	`).Scan(&existingIndex)
+	if err == nil && existingIndex != "" {
+		return nil
+	}
+
+	log.Println("Deduplicating charger_sessions rows…")
+	res, err := db.Exec(`
+		DELETE FROM charger_sessions
+		WHERE id NOT IN (
+			SELECT MAX(id) FROM charger_sessions
+			GROUP BY charger_id, session_time
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to dedupe charger_sessions: %v", err)
+	}
+	if removed, _ := res.RowsAffected(); removed > 0 {
+		log.Printf("✓ Removed %d duplicate charger_sessions rows", removed)
+	}
+
+	if _, err := db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_charger_sessions_charger_time_unique
+		ON charger_sessions(charger_id, session_time)
+	`); err != nil {
+		return fmt.Errorf("failed to create unique index on charger_sessions: %v", err)
+	}
+	log.Println("✓ Unique index on charger_sessions(charger_id, session_time) ready")
 	return nil
 }
 
