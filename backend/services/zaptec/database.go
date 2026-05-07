@@ -145,6 +145,79 @@ func (dh *DatabaseHandler) WriteSessionToDatabase(session *CompletedSession) ([]
 	return dense, nil
 }
 
+// WriteSessionBoundaries writes exactly two rows for a finished session:
+// the OCMF "B" (begin) and "E" (end) readings at their precise raw
+// timestamps with state="3". Used by the live flow when a session ends —
+// the in-between 15-min slots are already populated by the live polling
+// snapshots, so the only thing OCMF adds is precise start/end markers
+// (off the 15-min grid).
+//
+// If "B" or "E" reading-types aren't present we fall back to the
+// chronologically first / last reading.
+func (dh *DatabaseHandler) WriteSessionBoundaries(session *CompletedSession) error {
+	if len(session.MeterReadings) == 0 {
+		return fmt.Errorf("no readings to write")
+	}
+
+	readings := make([]SessionMeterReading, len(session.MeterReadings))
+	copy(readings, session.MeterReadings)
+	sort.Slice(readings, func(i, j int) bool { return readings[i].Timestamp.Before(readings[j].Timestamp) })
+
+	var begin, end *SessionMeterReading
+	for i := range readings {
+		switch readings[i].ReadingType {
+		case "B":
+			if begin == nil {
+				begin = &readings[i]
+			}
+		case "E":
+			end = &readings[i]
+		}
+	}
+	if begin == nil {
+		begin = &readings[0]
+	}
+	if end == nil {
+		end = &readings[len(readings)-1]
+	}
+
+	tx, err := dh.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %v", err)
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`
+		INSERT OR REPLACE INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return fmt.Errorf("prepare: %v", err)
+	}
+	defer stmt.Close()
+
+	wrote := 0
+	for _, r := range []*SessionMeterReading{begin, end} {
+		key := r.Timestamp.Format("2006-01-02 15:04:05-07:00")
+		if _, err := stmt.Exec(session.ChargerID, session.UserID, key, r.Energy_kWh, "1", "3"); err != nil {
+			log.Printf("WARNING: Failed to insert OCMF boundary at %s: %v", key, err)
+			continue
+		}
+		wrote++
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %v", err)
+	}
+
+	log.Printf("Zaptec: [%s] Wrote %d OCMF boundary rows (B@%s=%.3f, E@%s=%.3f) for session %s",
+		session.ChargerName, wrote,
+		begin.Timestamp.Format("15:04:05"), begin.Energy_kWh,
+		end.Timestamp.Format("15:04:05"), end.Energy_kWh,
+		session.SessionID)
+	return nil
+}
+
 // WriteIdleRun writes idle (state="1") rows at every 15-min boundary in
 // [startBucket, endBucket) carrying a flat cumulative meter value. Used to
 // bridge gaps between OCMF sessions during a range sync. Returns the number
