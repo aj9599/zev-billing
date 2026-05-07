@@ -509,6 +509,26 @@ class ApiClient {
     return this.request(`/billing/auto-configs/${id}`, { method: 'DELETE' });
   }
 
+  // Backfill charger_sessions from the Zaptec chargehistory API for a date range.
+  // Safe to re-run thanks to the unique index on (charger_id, session_time).
+  async syncZaptecHistory(chargerId: number, from: string, to: string): Promise<{
+    charger_id: number;
+    charger_name: string;
+    from: string;
+    to: string;
+    fetched: number;
+    ocmf_parsed: number;
+    fallback: number;
+    skipped: number;
+    errors: number;
+    error?: string;
+  }> {
+    return this.request(`/chargers/${chargerId}/sync-zaptec-history`, {
+      method: 'POST',
+      body: JSON.stringify({ from, to }),
+    });
+  }
+
   // Bill layout (per building, main invoice page only)
   async getBillLayout(buildingId: number): Promise<{
     building_id: number;

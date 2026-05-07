@@ -699,6 +699,111 @@ func (zc *ZaptecCollector) GetAllAvailableChargers() ([]map[string]interface{}, 
 	return zc.apiClient.GetAllAvailableChargers(token)
 }
 
+// SyncResult summarises a chargehistory backfill for one charger.
+type SyncResult struct {
+	ChargerID    int    `json:"charger_id"`
+	ChargerName  string `json:"charger_name"`
+	From         string `json:"from"`
+	To           string `json:"to"`
+	Fetched      int    `json:"fetched"`        // sessions returned by Zaptec
+	OCMFParsed   int    `json:"ocmf_parsed"`    // sessions with usable SignedSession
+	Fallback     int    `json:"fallback"`       // sessions written via fallback (no OCMF)
+	Skipped      int    `json:"skipped"`        // already-processed sessions
+	Errors       int    `json:"errors"`         // sessions that failed to write
+	ErrorMessage string `json:"error,omitempty"`
+}
+
+// SyncChargeHistoryRange pulls every session from Zaptec's chargehistory API
+// between `from` and `to` for the given charger and writes it to the local
+// charger_sessions table. The unique index on (charger_id, session_time)
+// combined with INSERT OR REPLACE in the OCMF writer means re-running this
+// for an overlapping range is safe — existing rows are kept or upgraded to
+// the signed reading, never duplicated.
+func (zc *ZaptecCollector) SyncChargeHistoryRange(chargerID int, from, to time.Time) (*SyncResult, error) {
+	result := &SyncResult{
+		ChargerID: chargerID,
+		From:      from.Format(time.RFC3339),
+		To:        to.Format(time.RFC3339),
+	}
+
+	if !to.After(from) {
+		return result, fmt.Errorf("'to' must be after 'from'")
+	}
+
+	// Look up the local charger row to recover its Zaptec config + display name.
+	var name, configJSON string
+	err := zc.db.QueryRow(`
+		SELECT name, connection_config
+		FROM chargers
+		WHERE id = ? AND is_active = 1 AND connection_type = 'zaptec_api'
+	`, chargerID).Scan(&name, &configJSON)
+	if err != nil {
+		return result, fmt.Errorf("charger %d is not a Zaptec API charger: %v", chargerID, err)
+	}
+	result.ChargerName = name
+
+	var config zaptec.ConnectionConfig
+	if err := json.Unmarshal([]byte(configJSON), &config); err != nil {
+		return result, fmt.Errorf("invalid Zaptec config: %v", err)
+	}
+
+	token, err := zc.authHandler.GetAccessToken(chargerID, config)
+	if err != nil {
+		return result, fmt.Errorf("zaptec auth: %v", err)
+	}
+
+	sessions, err := zc.apiClient.GetChargeHistoryRange(token, config.ChargerID, from, to)
+	if err != nil {
+		return result, fmt.Errorf("zaptec chargehistory: %v", err)
+	}
+	result.Fetched = len(sessions)
+
+	for i := range sessions {
+		s := &sessions[i]
+
+		// Cheap dedupe: if we've already processed this session in-memory
+		// (same id), skip without hitting the API parser. The on-disk unique
+		// index will catch the rest.
+		zc.mu.RLock()
+		alreadyProcessed := zc.processedSessions[s.ID]
+		zc.mu.RUnlock()
+		if alreadyProcessed {
+			result.Skipped++
+			continue
+		}
+
+		// Try the signed OCMF path first. Falls back to start/end-only when
+		// the signed payload isn't available (e.g., very old sessions).
+		completed, parseErr := zc.sessionProcessor.ParseSignedSession(s, chargerID, name)
+		if parseErr != nil || completed == nil {
+			if writeErr := zc.dbHandler.WriteSessionFallback(s, chargerID, name); writeErr != nil {
+				log.Printf("[ZAPTEC-SYNC] [%s] fallback write failed for session %s: %v", name, s.ID, writeErr)
+				result.Errors++
+				continue
+			}
+			result.Fallback++
+		} else {
+			if writeErr := zc.dbHandler.WriteSessionToDatabase(completed); writeErr != nil {
+				log.Printf("[ZAPTEC-SYNC] [%s] OCMF write failed for session %s: %v", name, s.ID, writeErr)
+				result.Errors++
+				continue
+			}
+			result.OCMFParsed++
+		}
+
+		zc.mu.Lock()
+		zc.processedSessions[s.ID] = true
+		zc.mu.Unlock()
+	}
+
+	zc.logToDatabase("Zaptec History Sync",
+		fmt.Sprintf("Charger '%s' (%s → %s): fetched=%d, ocmf=%d, fallback=%d, skipped=%d, errors=%d",
+			name, result.From, result.To, result.Fetched, result.OCMFParsed,
+			result.Fallback, result.Skipped, result.Errors))
+
+	return result, nil
+}
+
 // Legacy compatibility methods
 func (zc *ZaptecCollector) GetCompletedSession(chargerID int) (*zaptec.CompletedSession, bool) {
 	return nil, false

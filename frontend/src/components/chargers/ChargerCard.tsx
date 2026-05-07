@@ -1,4 +1,4 @@
-import { Edit2, Trash2, Wifi, WifiOff, Battery, TrendingUp, Info } from 'lucide-react';
+import { Edit2, Trash2, Wifi, WifiOff, Battery, TrendingUp, Info, History } from 'lucide-react';
 import type { Charger } from '../../types';
 import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus, GenericChargerConnectionStatus } from './hooks/useChargerStatus';
 import { getPreset } from '../chargerPresets';
@@ -14,6 +14,7 @@ interface ChargerCardProps {
     mqttChargerStatus?: GenericChargerConnectionStatus[number];
     onEdit: () => void;
     onDelete: () => void;
+    onSyncHistory?: () => void;
     isDetailOpen: boolean;
     onShowDetail: (show: boolean) => void;
     t: (key: string) => string;
@@ -28,6 +29,7 @@ export default function ChargerCard({
     mqttChargerStatus,
     onEdit,
     onDelete,
+    onSyncHistory,
     isDetailOpen,
     onShowDetail,
     t
@@ -178,6 +180,19 @@ export default function ChargerCard({
                         }}>
                             {stateDisplay}
                         </span>
+                        {charger.connection_type === 'zaptec_api' && onSyncHistory && (
+                            <button onClick={onSyncHistory} title={t('chargers.syncZaptecHistory')} style={{
+                                width: '28px', height: '28px', borderRadius: '8px', border: 'none',
+                                backgroundColor: 'rgba(168,85,247,0.08)', color: '#a855f7',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                cursor: 'pointer', transition: 'all 0.15s', flexShrink: 0
+                            }}
+                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(168,85,247,0.15)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'rgba(168,85,247,0.08)'; }}
+                            >
+                                <History size={13} />
+                            </button>
+                        )}
                         <button onClick={onEdit} title={t('common.edit')} style={{
                             width: '28px', height: '28px', borderRadius: '8px', border: 'none',
                             backgroundColor: 'rgba(59,130,246,0.08)', color: '#3b82f6',

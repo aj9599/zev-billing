@@ -591,6 +591,71 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(liveData)
 }
 
+// SyncZaptecHistory backfills charger_sessions from the Zaptec chargehistory
+// API for a date range. The frontend posts {"from": "YYYY-MM-DD",
+// "to": "YYYY-MM-DD"}; both bounds are inclusive in local time. The unique
+// index on (charger_id, session_time) keeps re-runs idempotent.
+func (h *ChargerHandler) SyncZaptecHistory(w http.ResponseWriter, r *http.Request) {
+	chargerID, err := strconv.Atoi(mux.Vars(r)["id"])
+	if err != nil {
+		http.Error(w, "Invalid charger id", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.From == "" || req.To == "" {
+		http.Error(w, "Both 'from' and 'to' (YYYY-MM-DD) are required", http.StatusBadRequest)
+		return
+	}
+
+	from, err := time.ParseInLocation("2006-01-02", req.From, time.Local)
+	if err != nil {
+		http.Error(w, "Invalid 'from' date (YYYY-MM-DD)", http.StatusBadRequest)
+		return
+	}
+	to, err := time.ParseInLocation("2006-01-02", req.To, time.Local)
+	if err != nil {
+		http.Error(w, "Invalid 'to' date (YYYY-MM-DD)", http.StatusBadRequest)
+		return
+	}
+	// Make `to` inclusive of the whole day.
+	to = to.Add(24 * time.Hour)
+	if !to.After(from) {
+		http.Error(w, "'to' must be after 'from'", http.StatusBadRequest)
+		return
+	}
+
+	if h.dataCollector == nil {
+		http.Error(w, "Data collector not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	result, err := h.dataCollector.SyncZaptecChargeHistoryRange(chargerID, from, to)
+	if err != nil {
+		log.Printf("ERROR: Zaptec sync failed for charger %d: %v", chargerID, err)
+		// Return the partial result alongside the error so the UI can show a
+		// useful message even when the API call fails partway.
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		if result == nil {
+			result = &services.SyncResult{ChargerID: chargerID}
+		}
+		result.ErrorMessage = err.Error()
+		json.NewEncoder(w).Encode(result)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
 // formatDuration formats a duration in a human-readable way
 func formatDuration(d time.Duration) string {
 	hours := int(d.Hours())

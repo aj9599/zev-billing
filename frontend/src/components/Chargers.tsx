@@ -10,6 +10,7 @@ import ChargerCard from './chargers/ChargerCard';
 import InstructionsModal from './chargers/InstructionsModal';
 import DeleteConfirmationModal from './chargers/DeleteConfirmationModal';
 import ChargerFormModal from './chargers/ChargerFormModal';
+import ZaptecHistorySyncModal from './chargers/ZaptecHistorySyncModal';
 import { useChargerStatus } from './chargers/hooks/useChargerStatus';
 import { useChargerDeletion } from './chargers/hooks/useChargerDeletion';
 import { useChargerForm } from './chargers/hooks/useChargerForm';
@@ -23,6 +24,7 @@ export default function Chargers() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showInstructions, setShowInstructions] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [syncTargetCharger, setSyncTargetCharger] = useState<Charger | null>(null);
   const [loading, setLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [openDetailId, setOpenDetailId] = useState<number | null>(null);
@@ -466,6 +468,7 @@ export default function Chargers() {
                     mqttChargerStatus={mqttChargerStatus[charger.id]}
                     onEdit={() => handleEdit(charger)}
                     onDelete={() => handleDeleteClick(charger)}
+                    onSyncHistory={() => setSyncTargetCharger(charger)}
                     isDetailOpen={openDetailId === charger.id}
                     onShowDetail={(show) => setOpenDetailId(show ? charger.id : null)}
                     t={t}
@@ -538,6 +541,15 @@ export default function Chargers() {
           onConnectionConfigChange={setConnectionConfig}
           onPresetChange={handlePresetChange}
           onShowInstructions={() => setShowInstructions(true)}
+          t={t}
+        />
+      )}
+
+      {syncTargetCharger && (
+        <ZaptecHistorySyncModal
+          charger={syncTargetCharger}
+          onClose={() => setSyncTargetCharger(null)}
+          onDone={() => fetchStatusData()}
           t={t}
         />
       )}

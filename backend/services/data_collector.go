@@ -240,6 +240,16 @@ func (dc *DataCollector) GetZaptecLiveSession(chargerID int) (*zaptec.ZaptecSess
 	return dc.zaptecCollector.GetLiveSession(chargerID)
 }
 
+// SyncZaptecChargeHistoryRange backfills charger_sessions from Zaptec's
+// chargehistory API for the given charger and date range. Safe to re-run
+// thanks to the unique index on (charger_id, session_time).
+func (dc *DataCollector) SyncZaptecChargeHistoryRange(chargerID int, from, to time.Time) (*SyncResult, error) {
+	if dc.zaptecCollector == nil {
+		return nil, fmt.Errorf("Zaptec collector not initialised")
+	}
+	return dc.zaptecCollector.SyncChargeHistoryRange(chargerID, from, to)
+}
+
 // ========== NEW: LOXONE CHARGER LIVE DATA API ==========
 
 // GetLoxoneChargerLiveData returns Loxone charger live data for a specific charger

@@ -217,6 +217,7 @@ func main() {
 	api.HandleFunc("/chargers/sessions/latest", chargerHandler.GetLatestSessions).Methods("GET")
 	api.HandleFunc("/chargers/{id}/deletion-impact", chargerHandler.GetDeletionImpact).Methods("GET")
 	api.HandleFunc("/chargers/{id}/import-sessions", chargerHandler.ImportChargerSessionsFromCSV).Methods("POST")  // NEW: CSV Import
+	api.HandleFunc("/chargers/{id}/sync-zaptec-history", chargerHandler.SyncZaptecHistory).Methods("POST")          // NEW: Zaptec API range sync
 	api.HandleFunc("/chargers/{id}/sessions", chargerHandler.GetChargerSessions).Methods("GET")                    // NEW: Get sessions
 	api.HandleFunc("/chargers/{id}/sessions", chargerHandler.DeleteChargerSessions).Methods("DELETE")              // NEW: Delete sessions
 	api.HandleFunc("/chargers", chargerHandler.List).Methods("GET")

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"time"
 )
 
 // APIClient handles communication with the Zaptec API
@@ -128,6 +130,74 @@ func (ac *APIClient) GetRecentChargeHistory(token, chargerID string, pageSize in
 	}
 	
 	return sessions, nil
+}
+
+// GetChargeHistoryRange paginates through /api/chargehistory between two
+// timestamps, returning every session for the given charger. We request
+// DetailLevel=1 so the response includes the signed OCMF SignedSession data
+// needed by ParseSignedSession. Pagination is server-driven via the
+// {Pages, Data} envelope used by other Zaptec list endpoints.
+//
+// `from` / `to` are formatted in RFC3339 (UTC); the endpoint matches sessions
+// whose start time falls inside the half-open range.
+func (ac *APIClient) GetChargeHistoryRange(token, chargerID string, from, to time.Time) ([]ChargeHistory, error) {
+	const pageSize = 100
+	var all []ChargeHistory
+
+	pageIndex := 0
+	for {
+		historyURL := fmt.Sprintf(
+			"%s/api/chargehistory?ChargerId=%s&From=%s&To=%s&DetailLevel=1&PageIndex=%d&PageSize=%d",
+			ac.apiBaseURL,
+			chargerID,
+			url.QueryEscape(from.UTC().Format(time.RFC3339)),
+			url.QueryEscape(to.UTC().Format(time.RFC3339)),
+			pageIndex,
+			pageSize,
+		)
+
+		req, err := http.NewRequest("GET", historyURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := ac.client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("chargehistory status %d: %s", resp.StatusCode, string(body))
+		}
+
+		var apiResp APIResponse
+		if err := json.Unmarshal(body, &apiResp); err != nil {
+			return nil, fmt.Errorf("decode chargehistory: %v", err)
+		}
+
+		for _, item := range apiResp.Data {
+			var s ChargeHistory
+			if err := json.Unmarshal(item, &s); err == nil {
+				all = append(all, s)
+			}
+		}
+
+		pageIndex++
+		// Pages is the total number of pages; stop when we've consumed them all.
+		if apiResp.Pages == 0 || pageIndex >= apiResp.Pages {
+			break
+		}
+		// Safety stop in case the API ever loops on us.
+		if pageIndex > 1000 {
+			break
+		}
+	}
+
+	return all, nil
 }
 
 // GetAllAvailableChargers retrieves all chargers from the Zaptec API
