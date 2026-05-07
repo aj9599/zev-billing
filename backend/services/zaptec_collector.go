@@ -44,6 +44,14 @@ type ZaptecCollector struct {
 	
 	// Track last idle write time for gap filling
 	lastIdleWrite    map[int]time.Time // charger_id -> last idle write time
+
+	// Track the cumulative meter value persisted at the most recent 15-min
+	// snapshot per charger. The delta to the next snapshot tells us whether
+	// any charging actually happened in that slot — which is more reliable
+	// than reading OperatingMode at the polling instant (Zaptec can lag at
+	// state transitions, e.g. reporting "Charging" briefly after the car
+	// stopped).
+	lastSnapshotEnergy map[int]float64
 	
 	stopChan         chan bool
 	apiBaseURL       string
@@ -79,6 +87,7 @@ func NewZaptecCollector(db *sql.DB) *ZaptecCollector {
 		previousStates:    make(map[int]int),
 		processedSessions: make(map[string]bool),
 		lastIdleWrite:     make(map[int]time.Time),
+		lastSnapshotEnergy: make(map[int]float64),
 		stopChan:          make(chan bool),
 		apiBaseURL:        apiBaseURL,
 		localTimezone:     localTZ,
@@ -147,6 +156,7 @@ func (zc *ZaptecCollector) RestartConnections() {
 	zc.activeSessionIDs = make(map[int]string)
 	zc.previousStates = make(map[int]int)
 	zc.lastIdleWrite = make(map[int]time.Time)
+	zc.lastSnapshotEnergy = make(map[int]float64)
 	// Don't clear processedSessions - we need to remember what we've already written
 	zc.mu.Unlock()
 	
@@ -490,34 +500,59 @@ func (zc *ZaptecCollector) writeIdleReadingIfNeeded(chargerID int, chargerName s
 	if !shouldWrite {
 		return
 	}
-	
+
 	zc.mu.RLock()
 	activeSessionID := zc.activeSessionIDs[chargerID]
+	prevEnergy, hasPrev := zc.lastSnapshotEnergy[chargerID]
 	zc.mu.RUnlock()
-	
+
 	gapUserID := zc.dbHandler.GetGapUserID(chargerID, activeSessionID)
-	
+
+	// Infer the state from the change in cumulative meter rather than from
+	// OperatingMode at the polling instant. If energy went up since the
+	// previous 15-min snapshot, charging clearly happened in this slot;
+	// otherwise the slot was idle / paused / disconnected — keep whatever
+	// the API reports for the nuance.
+	const energyEpsilon = 0.001 // kWh — anything below this is sensor noise
+	persistedState := state
+	if hasPrev && totalEnergy-prevEnergy > energyEpsilon {
+		persistedState = "3"
+	} else if !hasPrev {
+		// First snapshot: if we're currently in OperatingMode 3 use "3",
+		// otherwise trust whatever was passed in.
+		persistedState = state
+	} else {
+		// Energy unchanged → idle. Treat both "3" (false-positive at slot
+		// edge) and "" as "1"; keep "5" / "2" if Zaptec reported those.
+		if state == "" || state == "3" {
+			persistedState = "1"
+		} else {
+			persistedState = state
+		}
+	}
+
 	if activeSessionID != "" {
-		log.Printf("Zaptec: [%s] Gap during active session %s, using user_id: %s", 
+		log.Printf("Zaptec: [%s] Gap during active session %s, using user_id: %s",
 			chargerName, activeSessionID, gapUserID)
 	} else {
 		log.Printf("Zaptec: [%s] Gap after session end, charger available (no user)", chargerName)
 	}
-	
-	written := zc.dbHandler.WriteIdleReading(chargerID, gapUserID, interval, totalEnergy, state)
+
+	written := zc.dbHandler.WriteIdleReading(chargerID, gapUserID, interval, totalEnergy, persistedState)
 	
 	if written {
 		zc.mu.Lock()
 		zc.lastIdleWrite[chargerID] = interval
+		zc.lastSnapshotEnergy[chargerID] = totalEnergy
 		zc.mu.Unlock()
 
 		timestamp := interval.Format("2006-01-02 15:04:05-07:00")
 		label := "IDLE READING"
-		if state == "3" {
+		if persistedState == "3" {
 			label = "CHARGING SNAPSHOT"
 		}
-		log.Printf("Zaptec: [%s] ⏱ %s: Time=%s, Energy=%.3f kWh, State=%s",
-			chargerName, label, timestamp, totalEnergy, state)
+		log.Printf("Zaptec: [%s] ⏱ %s: Time=%s, Energy=%.3f kWh, State=%s (raw=%s)",
+			chargerName, label, timestamp, totalEnergy, persistedState, state)
 	}
 }
 
