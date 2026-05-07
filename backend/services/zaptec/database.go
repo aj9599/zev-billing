@@ -87,19 +87,22 @@ func (dh *DatabaseHandler) LoadProcessedSessions() int {
 // the cumulative kWh value across the in-between 15-min slots. The unique
 // index on (charger_id, session_time) plus INSERT OR REPLACE makes re-runs
 // idempotent.
-func (dh *DatabaseHandler) WriteSessionToDatabase(session *CompletedSession) error {
+//
+// Returns the dense bucket list so the caller can use the first / last
+// bucket and energy values to bridge idle gaps between sessions.
+func (dh *DatabaseHandler) WriteSessionToDatabase(session *CompletedSession) ([]SessionMeterReading, error) {
 	if len(session.MeterReadings) == 0 {
-		return fmt.Errorf("no readings to write")
+		return nil, fmt.Errorf("no readings to write")
 	}
 
 	dense := dh.interpolate15MinBuckets(session.MeterReadings)
 	if len(dense) == 0 {
-		return fmt.Errorf("no buckets after interpolation")
+		return nil, fmt.Errorf("no buckets after interpolation")
 	}
 
 	tx, err := dh.db.Begin()
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %v", err)
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
 	}
 	defer tx.Rollback()
 
@@ -108,7 +111,7 @@ func (dh *DatabaseHandler) WriteSessionToDatabase(session *CompletedSession) err
 		VALUES (?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
-		return fmt.Errorf("failed to prepare statement: %v", err)
+		return nil, fmt.Errorf("failed to prepare statement: %v", err)
 	}
 	defer stmt.Close()
 
@@ -133,13 +136,56 @@ func (dh *DatabaseHandler) WriteSessionToDatabase(session *CompletedSession) err
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %v", err)
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
 	}
 
 	log.Printf("Zaptec: [%s] Wrote %d 15-min buckets (from %d raw OCMF readings) for session %s",
 		session.ChargerName, insertCount, len(session.MeterReadings), session.SessionID)
 
-	return nil
+	return dense, nil
+}
+
+// WriteIdleRun writes idle (state="1") rows at every 15-min boundary in
+// [startBucket, endBucket) carrying a flat cumulative meter value. Used to
+// bridge gaps between OCMF sessions during a range sync. Returns the number
+// of rows actually inserted/replaced.
+func (dh *DatabaseHandler) WriteIdleRun(chargerID int, userID string, startBucket, endBucket time.Time, energyKwh float64) (int, error) {
+	if !endBucket.After(startBucket) {
+		return 0, nil
+	}
+
+	tx, err := dh.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("begin tx: %v", err)
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`
+		INSERT OR REPLACE INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return 0, fmt.Errorf("prepare: %v", err)
+	}
+	defer stmt.Close()
+
+	count := 0
+	for t := startBucket; t.Before(endBucket); t = t.Add(15 * time.Minute) {
+		key := t.Format("2006-01-02 15:04:05-07:00")
+		res, err := stmt.Exec(chargerID, userID, key, energyKwh, "1", "1")
+		if err != nil {
+			log.Printf("WARNING: Failed to insert idle bucket: %v", err)
+			continue
+		}
+		if rows, _ := res.RowsAffected(); rows > 0 {
+			count++
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit: %v", err)
+	}
+	return count, nil
 }
 
 // interpolate15MinBuckets converts the sparse OCMF readings (typically only

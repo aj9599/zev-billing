@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"sync"
 	"time"
 
@@ -453,8 +454,7 @@ func (zc *ZaptecCollector) processCompletedSession(chargerID int, chargerName st
 		return
 	}
 	
-	err = zc.dbHandler.WriteSessionToDatabase(completedSession)
-	if err != nil {
+	if _, err := zc.dbHandler.WriteSessionToDatabase(completedSession); err != nil {
 		log.Printf("ERROR: [%s] Failed to write session to database: %v", chargerName, err)
 		return
 	}
@@ -775,6 +775,10 @@ func (zc *ZaptecCollector) SyncChargeHistoryRange(chargerID int, from, to time.T
 			name, removed, delFrom, delTo)
 	}
 
+	// Track each successfully written session's bucket range and energy so
+	// we can fill the gaps between sessions with idle (state="1") rows.
+	var ranges []sessionRangeForFill
+
 	for i := range sessions {
 		s := &sessions[i]
 
@@ -792,12 +796,21 @@ func (zc *ZaptecCollector) SyncChargeHistoryRange(chargerID int, from, to time.T
 			}
 			result.Fallback++
 		} else {
-			if writeErr := zc.dbHandler.WriteSessionToDatabase(completed); writeErr != nil {
+			dense, writeErr := zc.dbHandler.WriteSessionToDatabase(completed)
+			if writeErr != nil {
 				log.Printf("[ZAPTEC-SYNC] [%s] OCMF write failed for session %s: %v", name, s.ID, writeErr)
 				result.Errors++
 				continue
 			}
 			result.OCMFParsed++
+			if len(dense) > 0 {
+				ranges = append(ranges, sessionRangeForFill{
+					startBucket: dense[0].Timestamp,
+					endBucket:   dense[len(dense)-1].Timestamp,
+					startEnergy: dense[0].Energy_kWh,
+					endEnergy:   dense[len(dense)-1].Energy_kWh,
+				})
+			}
 		}
 
 		zc.mu.Lock()
@@ -805,12 +818,91 @@ func (zc *ZaptecCollector) SyncChargeHistoryRange(chargerID int, from, to time.T
 		zc.mu.Unlock()
 	}
 
+	// Fill the idle gaps. Cumulative meter values stay flat between sessions
+	// (no charging means no energy delta), so we carry the last known value
+	// forward at every 15-min boundary. State="1" marks these rows as
+	// disconnected/idle so they're visually distinct from charging state="3".
+	idleWritten := zc.fillIdleGaps(chargerID, from, to, ranges)
+	if idleWritten > 0 {
+		log.Printf("[ZAPTEC-SYNC] [%s] wrote %d idle gap rows", name, idleWritten)
+	}
+
 	zc.logToDatabase("Zaptec History Sync",
-		fmt.Sprintf("Charger '%s' (%s → %s): fetched=%d, ocmf=%d, fallback=%d, skipped=%d, errors=%d",
+		fmt.Sprintf("Charger '%s' (%s → %s): fetched=%d, ocmf=%d, fallback=%d, idle_gaps=%d, errors=%d",
 			name, result.From, result.To, result.Fetched, result.OCMFParsed,
-			result.Fallback, result.Skipped, result.Errors))
+			result.Fallback, idleWritten, result.Errors))
 
 	return result, nil
+}
+
+// fillIdleGaps writes flat-energy idle rows (state="1") at every 15-min
+// boundary in [from, to) that isn't already covered by a session bucket.
+// `ranges` must contain the (start, end, energy) of each session that was
+// successfully written. Sessions are sorted by start time before walking.
+func (zc *ZaptecCollector) fillIdleGaps(chargerID int, from, to time.Time, ranges []sessionRangeForFill) int {
+	sort.Slice(ranges, func(i, j int) bool { return ranges[i].startBucket.Before(ranges[j].startBucket) })
+
+	fromBucket := zc.alignTo15Min(from)
+	toBucket := zc.alignTo15Min(to)
+	if !toBucket.After(fromBucket) {
+		return 0
+	}
+
+	written := 0
+	cursor := fromBucket
+	// Carry-forward energy for the first gap: use the first session's start
+	// energy (cumulative was that value before charging started); fall back
+	// to 0 if there are no sessions at all.
+	var carryEnergy float64
+	if len(ranges) > 0 {
+		carryEnergy = ranges[0].startEnergy
+	}
+
+	for _, r := range ranges {
+		// Skip sessions outside the requested range.
+		if !r.endBucket.After(fromBucket) || !r.startBucket.Before(toBucket) {
+			continue
+		}
+		gapEnd := r.startBucket
+		if gapEnd.After(toBucket) {
+			gapEnd = toBucket
+		}
+		if gapEnd.After(cursor) {
+			n, _ := zc.dbHandler.WriteIdleRun(chargerID, "", cursor, gapEnd, carryEnergy)
+			written += n
+		}
+		// Advance cursor to the bucket *after* this session ends.
+		next := r.endBucket.Add(15 * time.Minute)
+		if next.After(cursor) {
+			cursor = next
+		}
+		carryEnergy = r.endEnergy
+	}
+
+	if cursor.Before(toBucket) {
+		n, _ := zc.dbHandler.WriteIdleRun(chargerID, "", cursor, toBucket, carryEnergy)
+		written += n
+	}
+
+	return written
+}
+
+// alignTo15Min rounds DOWN to the previous 15-min boundary in the local TZ.
+// Used to align the requested [from, to) range to bucket edges.
+func (zc *ZaptecCollector) alignTo15Min(t time.Time) time.Time {
+	local := t.In(zc.localTimezone)
+	rounded := (local.Minute() / 15) * 15
+	return time.Date(local.Year(), local.Month(), local.Day(), local.Hour(), rounded, 0, 0, zc.localTimezone)
+}
+
+// sessionRangeForFill mirrors the inline struct used by SyncChargeHistoryRange
+// so it can be passed to fillIdleGaps. Kept package-private — only the
+// sync flow needs it.
+type sessionRangeForFill struct {
+	startBucket time.Time
+	endBucket   time.Time
+	startEnergy float64
+	endEnergy   float64
 }
 
 // Legacy compatibility methods
