@@ -131,10 +131,10 @@ export default function EnergyFlowCard({
               isCenter
             />
 
-            {/* Grid arrow + node */}
+            {/* Grid arrow + node: points right (Building→Grid) when exporting, left (Grid→Building) when importing */}
             <FlowArrow
               color={isExporting ? '#10b981' : '#6b7280'}
-              reverse={isExporting}
+              reverse={!isExporting}
               isMobile={isMobile}
             />
             <EnergyNode
