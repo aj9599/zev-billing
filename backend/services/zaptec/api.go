@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -133,28 +134,35 @@ func (ac *APIClient) GetRecentChargeHistory(token, chargerID string, pageSize in
 }
 
 // GetChargeHistoryRange paginates through /api/chargehistory between two
-// timestamps, returning every session for the given charger. We request
-// DetailLevel=1 so the response includes the signed OCMF SignedSession data
-// needed by ParseSignedSession. Pagination is server-driven via the
-// {Pages, Data} envelope used by other Zaptec list endpoints.
+// timestamps, returning every session for the given charger. Same {Pages,
+// Data} envelope as the rest of the Zaptec list endpoints.
 //
-// `from` / `to` are formatted in RFC3339 (UTC); the endpoint matches sessions
-// whose start time falls inside the half-open range.
+// `from` / `to` are sent as ISO-8601 UTC. We deliberately do NOT pass
+// DetailLevel=1 — the existing live-flow uses the default level and still
+// gets back SignedSession data, and at least one tester saw an empty Data
+// array when DetailLevel=1 was set.
 func (ac *APIClient) GetChargeHistoryRange(token, chargerID string, from, to time.Time) ([]ChargeHistory, error) {
 	const pageSize = 100
 	var all []ChargeHistory
 
+	// Use url.Values so http handles all escaping correctly. Most Zaptec
+	// installations accept "2006-01-02T15:04:05Z"; sending milliseconds works
+	// too but isn't required.
+	fromStr := from.UTC().Format("2006-01-02T15:04:05Z")
+	toStr := to.UTC().Format("2006-01-02T15:04:05Z")
+
 	pageIndex := 0
 	for {
-		historyURL := fmt.Sprintf(
-			"%s/api/chargehistory?ChargerId=%s&From=%s&To=%s&DetailLevel=1&PageIndex=%d&PageSize=%d",
-			ac.apiBaseURL,
-			chargerID,
-			url.QueryEscape(from.UTC().Format(time.RFC3339)),
-			url.QueryEscape(to.UTC().Format(time.RFC3339)),
-			pageIndex,
-			pageSize,
-		)
+		q := url.Values{}
+		q.Set("ChargerId", chargerID)
+		q.Set("From", fromStr)
+		q.Set("To", toStr)
+		q.Set("PageIndex", fmt.Sprintf("%d", pageIndex))
+		q.Set("PageSize", fmt.Sprintf("%d", pageSize))
+
+		historyURL := fmt.Sprintf("%s/api/chargehistory?%s", ac.apiBaseURL, q.Encode())
+
+		log.Printf("[ZAPTEC-SYNC] GET %s", historyURL)
 
 		req, err := http.NewRequest("GET", historyURL, nil)
 		if err != nil {
@@ -179,6 +187,19 @@ func (ac *APIClient) GetChargeHistoryRange(token, chargerID string, from, to tim
 			return nil, fmt.Errorf("decode chargehistory: %v", err)
 		}
 
+		log.Printf("[ZAPTEC-SYNC] page %d: pages=%d, data=%d, message=%q",
+			pageIndex, apiResp.Pages, len(apiResp.Data), apiResp.Message)
+
+		// Show a tiny snippet of the body once per call so misformatted dates
+		// or odd response shapes are obvious in the logs.
+		if pageIndex == 0 {
+			snippet := string(body)
+			if len(snippet) > 400 {
+				snippet = snippet[:400] + "…"
+			}
+			log.Printf("[ZAPTEC-SYNC] response snippet: %s", snippet)
+		}
+
 		for _, item := range apiResp.Data {
 			var s ChargeHistory
 			if err := json.Unmarshal(item, &s); err == nil {
@@ -187,13 +208,11 @@ func (ac *APIClient) GetChargeHistoryRange(token, chargerID string, from, to tim
 		}
 
 		pageIndex++
-		// Pages is the total number of pages; stop when we've consumed them all.
 		if apiResp.Pages == 0 || pageIndex >= apiResp.Pages {
 			break
 		}
-		// Safety stop in case the API ever loops on us.
 		if pageIndex > 1000 {
-			break
+			break // safety
 		}
 	}
 
