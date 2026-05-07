@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"sort"
 	"time"
 )
 
@@ -78,24 +79,30 @@ func (dh *DatabaseHandler) LoadProcessedSessions() int {
 	return count
 }
 
-// WriteSessionToDatabase writes all OCMF meter readings from a completed session to charger_sessions table
-// Handles sessions spanning midnight correctly by preserving original timestamps
+// WriteSessionToDatabase writes a dense 15-min sequence for a completed
+// session into charger_sessions. Zaptec's OCMF readings only land on hour
+// boundaries (B at session start, T every 60 min, E at session end), so
+// writing them verbatim leaves obvious 45-min gaps in the chart and CSV.
+// We snap each OCMF reading to its 15-min bucket, then linearly interpolate
+// the cumulative kWh value across the in-between 15-min slots. The unique
+// index on (charger_id, session_time) plus INSERT OR REPLACE makes re-runs
+// idempotent.
 func (dh *DatabaseHandler) WriteSessionToDatabase(session *CompletedSession) error {
 	if len(session.MeterReadings) == 0 {
 		return fmt.Errorf("no readings to write")
 	}
-	
+
+	dense := dh.interpolate15MinBuckets(session.MeterReadings)
+	if len(dense) == 0 {
+		return fmt.Errorf("no buckets after interpolation")
+	}
+
 	tx, err := dh.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %v", err)
 	}
 	defer tx.Rollback()
 
-	// INSERT OR REPLACE so that the OCMF reading (signed, hardware-verified) wins
-	// over a live snapshot at the same (charger_id, session_time) — the unique
-	// index added in migrations makes that conflict resolvable. We collapse all
-	// OCMF readings (Begin / End / intermediate) onto 15-min boundaries so the
-	// CSV and the dashboard chart line up.
 	stmt, err := tx.Prepare(`
 		INSERT OR REPLACE INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
 		VALUES (?, ?, ?, ?, ?, ?)
@@ -105,28 +112,14 @@ func (dh *DatabaseHandler) WriteSessionToDatabase(session *CompletedSession) err
 	}
 	defer stmt.Close()
 
-	// Deduplicate by 15-min bucket within this batch, keeping the highest
-	// cumulative reading for each bucket so totals stay monotonic.
-	bucketEnergy := make(map[string]float64)
-	bucketOrder := []string{}
-	for _, reading := range session.MeterReadings {
-		bucketTime := dh.roundTimestampTo15Min(reading.Timestamp)
-		key := bucketTime.Format("2006-01-02 15:04:05-07:00")
-		if existing, ok := bucketEnergy[key]; !ok {
-			bucketEnergy[key] = reading.Energy_kWh
-			bucketOrder = append(bucketOrder, key)
-		} else if reading.Energy_kWh > existing {
-			bucketEnergy[key] = reading.Energy_kWh
-		}
-	}
-
 	insertCount := 0
-	for _, key := range bucketOrder {
+	for _, b := range dense {
+		key := b.Timestamp.Format("2006-01-02 15:04:05-07:00")
 		result, err := stmt.Exec(
 			session.ChargerID,
 			session.UserID,
 			key,
-			bucketEnergy[key],
+			b.Energy_kWh,
 			"1", // mode = normal
 			"3", // state = charging
 		)
@@ -143,10 +136,68 @@ func (dh *DatabaseHandler) WriteSessionToDatabase(session *CompletedSession) err
 		return fmt.Errorf("failed to commit transaction: %v", err)
 	}
 
-	log.Printf("Zaptec: [%s] Wrote %d OCMF buckets (from %d raw readings) for session",
-		session.ChargerName, insertCount, len(session.MeterReadings))
+	log.Printf("Zaptec: [%s] Wrote %d 15-min buckets (from %d raw OCMF readings) for session %s",
+		session.ChargerName, insertCount, len(session.MeterReadings), session.SessionID)
 
 	return nil
+}
+
+// interpolate15MinBuckets converts the sparse OCMF readings (typically only
+// hour boundaries plus B/E at the second) into a dense list of 15-min
+// buckets, linearly interpolating the cumulative kWh between consecutive
+// OCMF points. Multiple OCMF readings that fall in the same bucket collapse
+// to the highest cumulative value so totals stay monotonic.
+func (dh *DatabaseHandler) interpolate15MinBuckets(readings []SessionMeterReading) []SessionMeterReading {
+	if len(readings) == 0 {
+		return nil
+	}
+
+	// Step 1: snap each OCMF reading to its 15-min bucket and keep the
+	// highest cumulative energy seen for each bucket (cumulative readings
+	// must never decrease).
+	bucketKey := func(t time.Time) time.Time { return dh.roundTimestampTo15Min(t) }
+	bucketEnergy := map[time.Time]float64{}
+	for _, r := range readings {
+		k := bucketKey(r.Timestamp)
+		if existing, ok := bucketEnergy[k]; !ok || r.Energy_kWh > existing {
+			bucketEnergy[k] = r.Energy_kWh
+		}
+	}
+
+	// Step 2: sort buckets chronologically so we can interpolate forward.
+	type pt struct {
+		t time.Time
+		e float64
+	}
+	pts := make([]pt, 0, len(bucketEnergy))
+	for t, e := range bucketEnergy {
+		pts = append(pts, pt{t: t, e: e})
+	}
+	sort.Slice(pts, func(i, j int) bool { return pts[i].t.Before(pts[j].t) })
+
+	// Step 3: walk every consecutive pair and emit the leading bucket plus
+	// any 15-min slots that fall strictly inside the gap. The final bucket
+	// is appended after the loop so it isn't dropped.
+	out := make([]SessionMeterReading, 0, len(pts)*4)
+	for i := 0; i < len(pts)-1; i++ {
+		a, b := pts[i], pts[i+1]
+		out = append(out, SessionMeterReading{Timestamp: a.t, Energy_kWh: a.e})
+		gapMinutes := int(b.t.Sub(a.t).Minutes())
+		if gapMinutes <= 15 {
+			continue
+		}
+		steps := gapMinutes / 15
+		denom := float64(steps)
+		for step := 1; step < steps; step++ {
+			t := a.t.Add(time.Duration(step) * 15 * time.Minute)
+			ratio := float64(step) / denom
+			energy := a.e + ratio*(b.e-a.e)
+			out = append(out, SessionMeterReading{Timestamp: t, Energy_kWh: energy})
+		}
+	}
+	out = append(out, SessionMeterReading{Timestamp: pts[len(pts)-1].t, Energy_kWh: pts[len(pts)-1].e})
+
+	return out
 }
 
 // WriteSessionFallback writes session data when OCMF parsing fails

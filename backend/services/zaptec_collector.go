@@ -758,20 +758,29 @@ func (zc *ZaptecCollector) SyncChargeHistoryRange(chargerID int, from, to time.T
 	}
 	result.Fetched = len(sessions)
 
+	// Clean reimport: wipe any rows we already have in [from, to) for this
+	// charger so legacy non-15-min-aligned timestamps and partial OCMF rows
+	// from earlier code paths don't survive. INSERT OR REPLACE alone can't
+	// fix those because they live at *different* session_time values than
+	// the buckets we now write.
+	delFrom := from.In(zc.localTimezone).Format("2006-01-02 15:04:05-07:00")
+	delTo := to.In(zc.localTimezone).Format("2006-01-02 15:04:05-07:00")
+	if res, err := zc.db.Exec(`
+		DELETE FROM charger_sessions
+		WHERE charger_id = ? AND session_time >= ? AND session_time < ?
+	`, chargerID, delFrom, delTo); err != nil {
+		log.Printf("[ZAPTEC-SYNC] [%s] failed to wipe existing rows in range: %v", name, err)
+	} else if removed, _ := res.RowsAffected(); removed > 0 {
+		log.Printf("[ZAPTEC-SYNC] [%s] wiped %d existing rows in [%s, %s) before reimport",
+			name, removed, delFrom, delTo)
+	}
+
 	for i := range sessions {
 		s := &sessions[i]
 
-		// Cheap dedupe: if we've already processed this session in-memory
-		// (same id), skip without hitting the API parser. The on-disk unique
-		// index will catch the rest.
-		zc.mu.RLock()
-		alreadyProcessed := zc.processedSessions[s.ID]
-		zc.mu.RUnlock()
-		if alreadyProcessed {
-			result.Skipped++
-			continue
-		}
-
+		// We just wiped the on-disk rows for this range, so don't let the
+		// in-memory processed-set cause us to skip a session we now want to
+		// write again. Always reprocess.
 		// Try the signed OCMF path first. Falls back to start/end-only when
 		// the signed payload isn't available (e.g., very old sessions).
 		completed, parseErr := zc.sessionProcessor.ParseSignedSession(s, chargerID, name)
