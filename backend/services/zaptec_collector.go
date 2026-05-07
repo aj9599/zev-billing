@@ -44,6 +44,19 @@ type ZaptecCollector struct {
 	
 	// Track last idle write time for gap filling
 	lastIdleWrite    map[int]time.Time // charger_id -> last idle write time
+
+	// Live cumulative tracking. Zaptec's SignedMeterValueKwh is the signed
+	// meter reading and only refreshes at OCMF events (~hourly), so polling
+	// it 24× per hour gives the same number until the next checkpoint. To
+	// produce real 15-min cumulative readings we capture the signed value at
+	// session start as a baseline and then integrate TotalChargePower over
+	// time at every poll. The reported live total is
+	//   max(SignedMeterValueKwh, sessionBaseline + integratedSessionKwh)
+	// so a fresh signed reading always wins, but in between we still see the
+	// meter creep up at the actual charging rate.
+	sessionBaselineKwh   map[int]float64   // signed meter at session start
+	integratedSessionKwh map[int]float64   // power × time accumulator since session start
+	lastPollTime         map[int]time.Time // last poll timestamp for dt computation
 	
 	stopChan         chan bool
 	apiBaseURL       string
@@ -77,8 +90,11 @@ func NewZaptecCollector(db *sql.DB) *ZaptecCollector {
 		tokenExpiries:     make(map[int]time.Time),
 		activeSessionIDs:  make(map[int]string),
 		previousStates:    make(map[int]int),
-		processedSessions: make(map[string]bool),
-		lastIdleWrite:     make(map[int]time.Time),
+		processedSessions:    make(map[string]bool),
+		lastIdleWrite:        make(map[int]time.Time),
+		sessionBaselineKwh:   make(map[int]float64),
+		integratedSessionKwh: make(map[int]float64),
+		lastPollTime:         make(map[int]time.Time),
 		stopChan:          make(chan bool),
 		apiBaseURL:        apiBaseURL,
 		localTimezone:     localTZ,
@@ -147,6 +163,9 @@ func (zc *ZaptecCollector) RestartConnections() {
 	zc.activeSessionIDs = make(map[int]string)
 	zc.previousStates = make(map[int]int)
 	zc.lastIdleWrite = make(map[int]time.Time)
+	zc.sessionBaselineKwh = make(map[int]float64)
+	zc.integratedSessionKwh = make(map[int]float64)
+	zc.lastPollTime = make(map[int]time.Time)
 	// Don't clear processedSessions - we need to remember what we've already written
 	zc.mu.Unlock()
 	
@@ -266,14 +285,23 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 	
 	// Build live data for UI display (ALWAYS AVAILABLE)
 	liveData := zc.buildLiveData(chargerDetails, stateData)
-	
+
+	// Compute the live cumulative meter value (real-time, every poll). Zaptec's
+	// SignedMeterValueKwh refreshes only at OCMF events (~hourly), so we
+	// integrate TotalChargePower over the wall-clock delta since the previous
+	// poll and add it to the session-start signed baseline. We use
+	// max(signed, baseline+integrated) so a fresh signed reading always wins
+	// while the in-between polls still see meter creep.
+	liveCumulative := zc.computeLiveCumulative(chargerID, chargerDetails, currentState, previousState)
+	liveData.TotalEnergy_kWh = liveCumulative
+	liveData.TotalEnergy = liveCumulative
+
 	// ========== CHARGING STATE (OperatingMode == 3) ==========
 	if currentState == 3 {
 		zc.handleChargingState(chargerID, chargerName, liveData, stateData)
-		// Also write a 15-min snapshot of the cumulative meter value so the
-		// dashboard line chart has the same granularity as the building meters.
-		// Without this we'd only see two data points per session (begin/end
-		// from OCMF), which makes long sessions look "hourly".
+		// Persist a 15-min snapshot of the *live* cumulative value so the
+		// dashboard line chart and CSV export advance every quarter-hour
+		// rather than jumping once per hour.
 		zc.writeIdleReadingIfNeeded(chargerID, chargerName, liveData.TotalEnergy_kWh, liveData.State)
 	} else {
 		// ========== NOT CHARGING - Check for session end ==========
@@ -487,6 +515,81 @@ func (zc *ZaptecCollector) writeSessionFallback(history *zaptec.ChargeHistory, c
 	zc.mu.Lock()
 	zc.processedSessions[history.ID] = true
 	zc.mu.Unlock()
+}
+
+// computeLiveCumulative returns the best estimate of the cumulative kWh meter
+// value at the current poll instant. Zaptec's SignedMeterValueKwh only updates
+// at OCMF events (~hourly), so we maintain a per-charger integrator over the
+// instantaneous power reading and combine it with the latest signed value.
+//
+// Rules:
+//   - Session start (previousState != 3 && currentState == 3): seed the
+//     baseline from the current SignedMeterValueKwh, reset the integrator.
+//   - During charging: add TotalChargePower × dt to the integrator.
+//   - Session end: clear the integrator state so the next session starts clean.
+//   - Always: return max(SignedMeterValueKwh, baseline + integrated). The
+//     `max` keeps us monotonic and lets fresh signed readings re-anchor the
+//     running estimate (preventing drift across long sessions).
+func (zc *ZaptecCollector) computeLiveCumulative(chargerID int, details *zaptec.ChargerDetails, currentState, previousState int) float64 {
+	now := time.Now()
+	signed := details.SignedMeterValueKwh
+	powerKw := details.TotalChargePower / 1000.0 // API gives Watts
+
+	zc.mu.Lock()
+	defer zc.mu.Unlock()
+
+	// Detect session-start transition.
+	if currentState == 3 && previousState != 3 {
+		zc.sessionBaselineKwh[chargerID] = signed
+		zc.integratedSessionKwh[chargerID] = 0
+		zc.lastPollTime[chargerID] = now
+		return signed
+	}
+
+	// Detect session-end transition. Clear baseline so the next session
+	// starts fresh; the signed value will catch up on the next OCMF E.
+	if currentState != 3 && previousState == 3 {
+		delete(zc.sessionBaselineKwh, chargerID)
+		delete(zc.integratedSessionKwh, chargerID)
+		zc.lastPollTime[chargerID] = now
+		return signed
+	}
+
+	// Outside an active session: trust the signed reading.
+	if currentState != 3 {
+		zc.lastPollTime[chargerID] = now
+		return signed
+	}
+
+	// In an active session: integrate power over wall-clock dt.
+	last, hasLast := zc.lastPollTime[chargerID]
+	zc.lastPollTime[chargerID] = now
+
+	baseline, hasBaseline := zc.sessionBaselineKwh[chargerID]
+	if !hasBaseline {
+		// Mid-session restart with no baseline — anchor to the current
+		// signed value and start integrating from here.
+		zc.sessionBaselineKwh[chargerID] = signed
+		zc.integratedSessionKwh[chargerID] = 0
+		baseline = signed
+	}
+
+	if hasLast {
+		dtHours := now.Sub(last).Hours()
+		if dtHours > 0 && dtHours < 1 { // ignore absurdly large gaps (restart)
+			zc.integratedSessionKwh[chargerID] += powerKw * dtHours
+		}
+	}
+
+	estimate := baseline + zc.integratedSessionKwh[chargerID]
+	if signed > estimate {
+		// Fresh signed reading came in (typically at hour boundaries) —
+		// re-anchor: keep the gap and restart integration from this point.
+		zc.sessionBaselineKwh[chargerID] = signed
+		zc.integratedSessionKwh[chargerID] = 0
+		return signed
+	}
+	return estimate
 }
 
 func (zc *ZaptecCollector) writeIdleReadingIfNeeded(chargerID int, chargerName string, totalEnergy float64, state string) {
