@@ -287,15 +287,16 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 	liveData := zc.buildLiveData(chargerDetails, stateData)
 
 	// Compute the live cumulative meter value (real-time, every poll). Zaptec's
-	// SignedMeterValueKwh refreshes only at OCMF events (~hourly), so we
-	// integrate the live power reading over the wall-clock delta since the
-	// previous poll and add it to the session-start signed baseline. We use
-	// max(signed, baseline+integrated) so a fresh signed reading always wins
-	// while the in-between polls still see meter creep.
-	//
-	// liveData.CurrentPower_kW already prefers StateId 513 over the (often
-	// stale) TotalChargePower field, so it's the right input for integration.
-	liveCumulative := zc.computeLiveCumulative(chargerID, chargerDetails, currentState, previousState, liveData.CurrentPower_kW)
+	// SignedMeterValueKwh only refreshes at OCMF events (~hourly), so we layer
+	// two faster signals on top of the session-start signed baseline:
+	//   - StateId 553: SessionEnergy_kWh — energy delivered in the current
+	//     session, reported by the charger (typically near-real-time).
+	//   - Power × dt — our own integrator using StateId 513 power, used as
+	//     a fallback for installations where 553 is also throttled.
+	// We pick the max of the three candidates so the freshest signal wins
+	// and the meter never goes backwards. A new signed reading at the next
+	// hour mark re-anchors the integrator.
+	liveCumulative := zc.computeLiveCumulative(chargerID, chargerDetails, currentState, previousState, liveData.CurrentPower_kW, liveData.SessionEnergy_kWh)
 	liveData.TotalEnergy_kWh = liveCumulative
 	liveData.TotalEnergy = liveCumulative
 
@@ -340,14 +341,26 @@ func (zc *ZaptecCollector) buildLiveData(chargerDetails *zaptec.ChargerDetails, 
 		Timestamp:        time.Now(),
 	}
 	
-	// Get power from StateId 513 if available (more accurate)
+	// Get power from StateId 513 if available (more accurate, in Watts).
 	if powerStr, ok := stateData[513]; ok {
 		if powerVal, err := zaptec.ParseStateValue(powerStr); err == nil {
 			liveData.CurrentPower_kW = powerVal / 1000.0
 			liveData.Power_kW = powerVal / 1000.0
 		}
 	}
-	
+
+	// Get the active-session energy from StateId 553 (already in kWh). On
+	// most installations this updates in near-real-time, so it's the best
+	// signal for live cumulative kWh during a charging session. We populate
+	// it here unconditionally so computeLiveCumulative can read it before
+	// handleChargingState would otherwise set it.
+	if sessionEnergyStr, ok := stateData[553]; ok {
+		if energyVal, err := zaptec.ParseStateValue(sessionEnergyStr); err == nil {
+			liveData.SessionEnergy_kWh = energyVal
+			liveData.SessionEnergy = energyVal
+		}
+	}
+
 	return liveData
 }
 
@@ -533,7 +546,7 @@ func (zc *ZaptecCollector) writeSessionFallback(history *zaptec.ChargeHistory, c
 //   - Always: return max(SignedMeterValueKwh, baseline + integrated). The
 //     `max` keeps us monotonic and lets fresh signed readings re-anchor the
 //     running estimate (preventing drift across long sessions).
-func (zc *ZaptecCollector) computeLiveCumulative(chargerID int, details *zaptec.ChargerDetails, currentState, previousState int, livePowerKw float64) float64 {
+func (zc *ZaptecCollector) computeLiveCumulative(chargerID int, details *zaptec.ChargerDetails, currentState, previousState int, livePowerKw, sessionEnergyKwh float64) float64 {
 	now := time.Now()
 	signed := details.SignedMeterValueKwh
 	// Prefer the live power kW already computed from StateId 513, falling
@@ -569,14 +582,15 @@ func (zc *ZaptecCollector) computeLiveCumulative(chargerID int, details *zaptec.
 		return signed
 	}
 
-	// In an active session: integrate power over wall-clock dt.
+	// In an active session: layer two faster signals on top of the
+	// session-start signed baseline.
 	last, hasLast := zc.lastPollTime[chargerID]
 	zc.lastPollTime[chargerID] = now
 
 	baseline, hasBaseline := zc.sessionBaselineKwh[chargerID]
 	if !hasBaseline {
 		// Mid-session restart with no baseline — anchor to the current
-		// signed value and start integrating from here.
+		// signed value and start tracking from here.
 		zc.sessionBaselineKwh[chargerID] = signed
 		zc.integratedSessionKwh[chargerID] = 0
 		baseline = signed
@@ -588,11 +602,22 @@ func (zc *ZaptecCollector) computeLiveCumulative(chargerID int, details *zaptec.
 			zc.integratedSessionKwh[chargerID] += powerKw * dtHours
 		}
 	}
+	integrated := zc.integratedSessionKwh[chargerID]
 
-	estimate := baseline + zc.integratedSessionKwh[chargerID]
-	if signed > estimate {
-		// Fresh signed reading came in (typically at hour boundaries) —
-		// re-anchor: keep the gap and restart integration from this point.
+	// Three candidates for the live cumulative — pick the highest so we
+	// never go backwards and the freshest signal wins.
+	estimate := signed
+	if v := baseline + sessionEnergyKwh; v > estimate {
+		estimate = v
+	}
+	if v := baseline + integrated; v > estimate {
+		estimate = v
+	}
+
+	// If the signed reading just leapt ahead of our estimates (typically
+	// because a new OCMF T arrived at the hour), re-anchor: keep the gap
+	// and restart the local trackers from the signed point.
+	if signed >= estimate {
 		zc.sessionBaselineKwh[chargerID] = signed
 		zc.integratedSessionKwh[chargerID] = 0
 		return signed
