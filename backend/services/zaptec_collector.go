@@ -570,18 +570,19 @@ func (zc *ZaptecCollector) computeLiveCumulative(chargerID int, details *zaptec.
 	zc.mu.Lock()
 	defer zc.mu.Unlock()
 
-	// Detect session-start transition.
-	if currentState == 3 && previousState != 3 {
+	// True session boundary = transition involving state 1 (disconnected).
+	// Zaptec's OperatingMode 5 is "finished/paused" — the cable is still
+	// plugged in and a small trickle charge can still flow, so we *don't*
+	// reset trackers on a 3→5 (or 3→2) transition. Only when the cable is
+	// physically pulled (state→1) do we clear and start fresh.
+	if currentState != 1 && previousState == 1 {
 		zc.sessionBaselineKwh[chargerID] = signed
 		zc.sessionEnergyAtAnchorKwh[chargerID] = sessionEnergyKwh
 		zc.integratedSessionKwh[chargerID] = 0
 		zc.lastPollTime[chargerID] = now
 		return signed
 	}
-
-	// Detect session-end transition. Clear all trackers so the next
-	// session starts fresh; the signed value will catch up on the OCMF E.
-	if currentState != 3 && previousState == 3 {
+	if currentState == 1 && previousState != 1 {
 		delete(zc.sessionBaselineKwh, chargerID)
 		delete(zc.sessionEnergyAtAnchorKwh, chargerID)
 		delete(zc.integratedSessionKwh, chargerID)
@@ -589,21 +590,22 @@ func (zc *ZaptecCollector) computeLiveCumulative(chargerID int, details *zaptec.
 		return signed
 	}
 
-	// Outside an active session: trust the signed reading.
-	if currentState != 3 {
+	// Disconnected (no cable, no session): the signed value is authoritative.
+	if currentState == 1 {
 		zc.lastPollTime[chargerID] = now
 		return signed
 	}
 
-	// In an active session: layer two faster signals on top of the
-	// session-start signed baseline.
+	// Plugged in (state 2, 3, or 5). Keep tracking continuously across
+	// 3↔5↔2 transitions so any trickle delivery during a paused window
+	// gets captured by the SessionEnergy / power-integration signals.
 	last, hasLast := zc.lastPollTime[chargerID]
 	zc.lastPollTime[chargerID] = now
 
 	baseline, hasBaseline := zc.sessionBaselineKwh[chargerID]
 	if !hasBaseline {
-		// Mid-session restart with no baseline — anchor to the current
-		// signed value and start tracking from here.
+		// Mid-session restart with no baseline (e.g., service started
+		// while the cable was already plugged in). Anchor to current.
 		zc.sessionBaselineKwh[chargerID] = signed
 		zc.sessionEnergyAtAnchorKwh[chargerID] = sessionEnergyKwh
 		zc.integratedSessionKwh[chargerID] = 0
