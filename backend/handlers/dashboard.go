@@ -1635,15 +1635,20 @@ func (h *DashboardHandler) GetEnergyFlow(w http.ResponseWriter, r *http.Request)
 	json.NewEncoder(w).Encode(flow)
 }
 
-// GetEnergyFlowLive returns real-time power data for live dashboard display
-// Uses live power readings from data collectors (Loxone Pf, Shelly apower/total_act_power, etc.)
-// Falls back to database consumption readings if no live power is available
+// GetEnergyFlowLive returns real-time power data for the dashboard's Live tab.
+// We derive every value from the DB (latest meter_readings / charger_sessions
+// rows) so the diagram shows the same numbers as the per-building card on
+// the Buildings page. The data collector's in-memory cache used to be the
+// primary source, but on installations where it isn't populated the diagram
+// rendered as all-zeros.
 //
 // ZEV Energy Flow Model:
-// - total_meter (grid): Measures what flows in/out from the public grid (import = positive, export = negative)
-// - solar_meter: Measures solar production (always positive, represents generation)
-// - apartment_meter: Measures individual apartment consumption (for billing, not used in energy flow diagram)
-// - Building consumption = Grid Import + Solar Self-Consumed = Grid Import + (Solar - Grid Export)
+// - total_meter (grid): import = positive, export = negative.
+// - solar_meter: production (always positive).
+// - charger_sessions: live charging power inferred from the kWh delta across
+//   the most recent 15-min slot.
+// - Building consumption = Grid Import + Solar Self-Consumed
+//                        = Grid Import + (Solar - Grid Export)
 func (h *DashboardHandler) GetEnergyFlowLive(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -1661,17 +1666,36 @@ func (h *DashboardHandler) GetEnergyFlowLive(w http.ResponseWriter, r *http.Requ
 		fmt.Sscanf(buildingIDStr, "%d", &buildingID)
 	}
 
-	// Check if data collector is available
+	h.getEnergyFlowLiveFromDB(w, r, ctx, buildingID)
+}
+
+// getEnergyFlowLiveLegacy is the original collector-cache path. Kept around
+// for reference only — wire it back into GetEnergyFlowLive if you ever need
+// a true real-time view that doesn't wait for the next 15-min DB write.
+func (h *DashboardHandler) getEnergyFlowLiveLegacy(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("PANIC in getEnergyFlowLiveLegacy: %v", rec)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	buildingIDStr := r.URL.Query().Get("building_id")
+	var buildingID int
+	if buildingIDStr != "" && buildingIDStr != "0" {
+		fmt.Sscanf(buildingIDStr, "%d", &buildingID)
+	}
+
 	if h.dataCollector == nil {
-		log.Printf("GetEnergyFlowLive: Data collector not available, falling back to database")
 		h.getEnergyFlowLiveFromDB(w, r, ctx, buildingID)
 		return
 	}
 
-	// Get live meter readings from data collector
 	readings, err := h.dataCollector.GetLiveMeterReadings(buildingID)
 	if err != nil {
-		log.Printf("GetEnergyFlowLive: Error getting live readings: %v, falling back to database", err)
 		h.getEnergyFlowLiveFromDB(w, r, ctx, buildingID)
 		return
 	}
@@ -1998,8 +2022,70 @@ func (h *DashboardHandler) getEnergyFlowLiveFromDB(w http.ResponseWriter, r *htt
 		}
 	}
 
+	// Live charger power per building from the kWh delta over the last
+	// 15-min slot. charger_sessions stores cumulative kWh, so the most
+	// recent two rows let us infer the average power across that slot.
+	chargerQuery := `SELECT id, building_id FROM chargers WHERE COALESCE(is_active, 1) = 1`
+	chargerArgs := []interface{}{}
+	if buildingID > 0 {
+		chargerQuery += " AND building_id = ?"
+		chargerArgs = append(chargerArgs, buildingID)
+	}
+	chargerRows, _ := h.db.QueryContext(ctx, chargerQuery, chargerArgs...)
+	if chargerRows != nil {
+		for chargerRows.Next() {
+			var chargerID, chBuildingID int
+			if chargerRows.Scan(&chargerID, &chBuildingID) != nil {
+				continue
+			}
+			bp, exists := buildingPower[chBuildingID]
+			if !exists {
+				continue
+			}
+
+			// Pull the latest two cumulative readings for this charger.
+			rows2, err := h.db.QueryContext(ctx, `
+				SELECT power_kwh, session_time FROM charger_sessions
+				WHERE charger_id = ?
+				ORDER BY session_time DESC LIMIT 2
+			`, chargerID)
+			if err != nil {
+				continue
+			}
+			var cumLatest, cumPrev float64
+			var tLatest, tPrev time.Time
+			gotLatest, gotPrev := false, false
+			for rows2.Next() {
+				var v float64
+				var t time.Time
+				if rows2.Scan(&v, &t) != nil {
+					continue
+				}
+				if !gotLatest {
+					cumLatest = v
+					tLatest = t
+					gotLatest = true
+				} else if !gotPrev {
+					cumPrev = v
+					tPrev = t
+					gotPrev = true
+				}
+			}
+			rows2.Close()
+			if !gotLatest || !gotPrev {
+				continue
+			}
+			deltaKwh := cumLatest - cumPrev
+			deltaHours := tLatest.Sub(tPrev).Hours()
+			if deltaKwh > 0 && deltaHours > 0 && deltaHours < 1 {
+				bp.evChargingKw += deltaKwh / deltaHours
+			}
+		}
+		chargerRows.Close()
+	}
+
 	// Calculate totals
-	var totalSolarKw, totalGridImportKw, totalGridExportKw float64
+	var totalSolarKw, totalGridImportKw, totalGridExportKw, totalEvKw float64
 	var hasAnyGridMeter, hasAnySolarMeter bool
 
 	for _, bp := range buildingPower {
@@ -2009,6 +2095,7 @@ func (h *DashboardHandler) getEnergyFlowLiveFromDB(w http.ResponseWriter, r *htt
 		totalSolarKw += bp.solarPowerKw
 		totalGridImportKw += bp.gridImportKw
 		totalGridExportKw += bp.gridExportKw
+		totalEvKw += bp.evChargingKw
 		if bp.hasGridMeter {
 			hasAnyGridMeter = true
 		}
@@ -2045,9 +2132,37 @@ func (h *DashboardHandler) getEnergyFlowLiveFromDB(w http.ResponseWriter, r *htt
 		SolarPowerKw:       totalSolarKw,
 		ConsumptionPowerKw: consumptionKw,
 		GridPowerKw:        totalGridKw,
+		EvChargingPowerKw:  totalEvKw,
 		SelfConsumptionPct: selfConsumptionPct,
 		IsExporting:        isExporting,
 		Timestamp:          time.Now().Format(time.RFC3339),
+	}
+
+	if buildingID == 0 {
+		for _, bp := range buildingPower {
+			bpGridKw := bp.gridImportKw - bp.gridExportKw
+			var bpConsumption float64
+			if bp.hasGridMeter && bp.hasSolarMeter {
+				bpConsumption = bp.solarPowerKw + bpGridKw
+			} else if bp.hasGridMeter {
+				bpConsumption = bp.gridImportKw
+			} else if bp.hasSolarMeter {
+				bpConsumption = bp.solarPowerKw
+			}
+			if bpConsumption < 0 {
+				bpConsumption = 0
+			}
+			if bp.hasGridMeter || bp.hasSolarMeter || bp.evChargingKw > 0 {
+				response.PerBuilding = append(response.PerBuilding, models.BuildingEnergyFlowLive{
+					BuildingID:         bp.id,
+					BuildingName:       bp.name,
+					SolarPowerKw:       bp.solarPowerKw,
+					ConsumptionPowerKw: bpConsumption,
+					GridPowerKw:        bpGridKw,
+					EvChargingPowerKw:  bp.evChargingKw,
+				})
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
