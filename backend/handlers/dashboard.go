@@ -1354,6 +1354,14 @@ func (h *DashboardHandler) GetCostOverview(w http.ResponseWriter, r *http.Reques
 }
 
 // calcMeterConsumption calculates the consumption delta for a single meter in a period
+// calcMeterConsumption returns the per-meter delta of the given cumulative
+// column over [periodStart, periodEnd). Mirrors cumulativeDeltaInPeriod's
+// corruption fallback: prefer the row before the period as the baseline,
+// but fall back to the first in-period reading if that baseline ended up
+// greater than the latest in-period reading (a sign that some historical
+// row got over-counted by a previous code path). This is what made the
+// dashboard's Energy Flow diagram look empty — `latest − corrupt_baseline`
+// went negative and the `> 0` guard zeroed the value out.
 func calcMeterConsumption(db *sql.DB, ctx context.Context, meterID int, column string, periodStart, periodEnd time.Time) float64 {
 	query := fmt.Sprintf(`SELECT %s FROM meter_readings WHERE meter_id = ? AND reading_time >= ? AND reading_time < ? ORDER BY reading_time`, column)
 
@@ -1363,7 +1371,7 @@ func calcMeterConsumption(db *sql.DB, ctx context.Context, meterID int, column s
 	var latestReading sql.NullFloat64
 	db.QueryRowContext(ctx, query+" DESC LIMIT 1", meterID, periodStart, periodEnd).Scan(&latestReading)
 
-	if !firstReading.Valid || !latestReading.Valid {
+	if !latestReading.Valid {
 		return 0
 	}
 
@@ -1371,16 +1379,21 @@ func calcMeterConsumption(db *sql.DB, ctx context.Context, meterID int, column s
 	baseQuery := fmt.Sprintf(`SELECT %s FROM meter_readings WHERE meter_id = ? AND reading_time < ? ORDER BY reading_time DESC LIMIT 1`, column)
 	db.QueryRowContext(ctx, baseQuery, meterID, periodStart).Scan(&baselineReading)
 
-	baseline := firstReading.Float64
-	if baselineReading.Valid {
+	var baseline float64
+	switch {
+	case baselineReading.Valid && baselineReading.Float64 <= latestReading.Float64:
 		baseline = baselineReading.Float64
+	case firstReading.Valid:
+		baseline = firstReading.Float64
+	default:
+		return 0
 	}
 
 	consumption := latestReading.Float64 - baseline
-	if consumption > 0 {
-		return consumption
+	if consumption < 0 {
+		return 0
 	}
-	return 0
+	return consumption
 }
 
 // GetEnergyFlow returns historical energy data (kWh) for the energy flow diagram
@@ -1464,30 +1477,27 @@ func (h *DashboardHandler) GetEnergyFlow(w http.ResponseWriter, r *http.Request)
 			gridRows.Close()
 		}
 
-		// Calculate EV charging
+		// Calculate EV charging — same corruption-fallback pattern as
+		// calcMeterConsumption / cumulativeDeltaInPeriod so a stale
+		// over-counted historical row can't blank out the diagram.
 		chargerRows, err := h.db.QueryContext(ctx, `SELECT id FROM chargers WHERE building_id = ? AND COALESCE(is_active, 1) = 1`, bid)
 		if err == nil {
 			for chargerRows.Next() {
 				var chargerID int
-				if chargerRows.Scan(&chargerID) == nil {
-					var firstReading, latestReading, baselineReading sql.NullFloat64
-					h.db.QueryRowContext(ctx, `SELECT power_kwh FROM charger_sessions WHERE charger_id = ? AND session_time >= ? AND session_time < ? ORDER BY session_time ASC LIMIT 1`,
-						chargerID, startTime, now).Scan(&firstReading)
-					h.db.QueryRowContext(ctx, `SELECT power_kwh FROM charger_sessions WHERE charger_id = ? AND session_time >= ? AND session_time < ? ORDER BY session_time DESC LIMIT 1`,
-						chargerID, startTime, now).Scan(&latestReading)
-					h.db.QueryRowContext(ctx, `SELECT power_kwh FROM charger_sessions WHERE charger_id = ? AND session_time < ? ORDER BY session_time DESC LIMIT 1`,
-						chargerID, startTime).Scan(&baselineReading)
-					if firstReading.Valid && latestReading.Valid {
-						baseline := firstReading.Float64
-						if baselineReading.Valid {
-							baseline = baselineReading.Float64
-						}
-						consumption := latestReading.Float64 - baseline
-						if consumption > 0 {
-							evCharging += consumption
-						}
-					}
+				if chargerRows.Scan(&chargerID) != nil {
+					continue
 				}
+				evCharging += cumulativeDeltaInPeriod(h.db, ctx,
+					`SELECT power_kwh FROM charger_sessions
+					 WHERE charger_id = ? AND session_time >= ? AND session_time < ?
+					 ORDER BY session_time ASC LIMIT 1`,
+					`SELECT power_kwh FROM charger_sessions
+					 WHERE charger_id = ? AND session_time >= ? AND session_time < ?
+					 ORDER BY session_time DESC LIMIT 1`,
+					`SELECT power_kwh FROM charger_sessions
+					 WHERE charger_id = ? AND session_time < ?
+					 ORDER BY session_time DESC LIMIT 1`,
+					chargerID, startTime, now)
 			}
 			chargerRows.Close()
 		}
