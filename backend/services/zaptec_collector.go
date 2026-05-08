@@ -929,13 +929,56 @@ func (zc *ZaptecCollector) SyncChargeHistoryRange(chargerID int, from, to time.T
 	}
 	result.Fetched = len(sessions)
 
-	// Clean reimport: wipe any rows we already have in [from, to) for this
-	// charger so legacy non-15-min-aligned timestamps and partial OCMF rows
-	// from earlier code paths don't survive. INSERT OR REPLACE alone can't
-	// fix those because they live at *different* session_time values than
-	// the buckets we now write.
+	// Determine the latest completed-session end timestamp returned by the
+	// API. Anything after that is owned by the live polling snapshots — we
+	// must not wipe or idle-fill past that boundary, otherwise an active
+	// charging session that the API hasn't surfaced yet (or is in progress
+	// right now) gets erased and the dashboard goes back to 0.
+	var lastSessionEnd time.Time
+	for i := range sessions {
+		end := zaptec.ParseZaptecTime(sessions[i].EndDateTime, zc.localTimezone)
+		if end.After(lastSessionEnd) {
+			lastSessionEnd = end
+		}
+	}
+
+	// Effective wipe + idle-fill end: cap the user's requested `to` at
+	//   - the bucket immediately after the last completed session ends, so
+	//     we cleanly re-import the OCMF data for that session and one final
+	//     idle row but never reach into "now" territory, AND
+	//   - the wall-clock now, so we never write rows in the future.
+	// If the API returned no sessions in this range, leave both DB and live
+	// snapshots untouched — there's nothing to clean up.
+	if len(sessions) == 0 {
+		log.Printf("[ZAPTEC-SYNC] [%s] no sessions in [%s, %s); leaving existing rows untouched",
+			name, from.Format(time.RFC3339), to.Format(time.RFC3339))
+		zc.logToDatabase("Zaptec History Sync",
+			fmt.Sprintf("Charger '%s' (%s → %s): no sessions returned, no changes",
+				name, result.From, result.To))
+		return result, nil
+	}
+	effectiveTo := to
+	if !lastSessionEnd.IsZero() {
+		boundary := zc.alignTo15Min(lastSessionEnd).Add(15 * time.Minute)
+		if boundary.Before(effectiveTo) {
+			effectiveTo = boundary
+		}
+	}
+	now := time.Now()
+	if effectiveTo.After(now) {
+		effectiveTo = now
+	}
+	if !effectiveTo.After(from) {
+		effectiveTo = from // nothing to wipe; loops below become no-ops
+	}
+
+	// Clean reimport: wipe any rows we already have in [from, effectiveTo)
+	// for this charger so legacy non-15-min-aligned timestamps and partial
+	// OCMF rows from earlier code paths don't survive. INSERT OR REPLACE
+	// alone can't fix those because they live at *different* session_time
+	// values than the buckets we now write.
 	delFrom := from.In(zc.localTimezone).Format("2006-01-02 15:04:05-07:00")
-	delTo := to.In(zc.localTimezone).Format("2006-01-02 15:04:05-07:00")
+	delTo := effectiveTo.In(zc.localTimezone).Format("2006-01-02 15:04:05-07:00")
 	if res, err := zc.db.Exec(`
 		DELETE FROM charger_sessions
 		WHERE charger_id = ? AND session_time >= ? AND session_time < ?
@@ -989,11 +1032,13 @@ func (zc *ZaptecCollector) SyncChargeHistoryRange(chargerID int, from, to time.T
 		zc.mu.Unlock()
 	}
 
-	// Fill the idle gaps. Cumulative meter values stay flat between sessions
-	// (no charging means no energy delta), so we carry the last known value
-	// forward at every 15-min boundary. State="1" marks these rows as
-	// disconnected/idle so they're visually distinct from charging state="3".
-	idleWritten := zc.fillIdleGaps(chargerID, from, to, ranges)
+	// Fill the idle gaps inside [from, effectiveTo). Cumulative meter values
+	// stay flat between sessions (no charging means no energy delta), so we
+	// carry the last known value forward at every 15-min boundary.
+	// State="1" marks these rows as disconnected/idle so they're visually
+	// distinct from charging state="3". Capping at effectiveTo keeps live
+	// polling rows (anything after the last completed session) untouched.
+	idleWritten := zc.fillIdleGaps(chargerID, from, effectiveTo, ranges)
 	if idleWritten > 0 {
 		log.Printf("[ZAPTEC-SYNC] [%s] wrote %d idle gap rows", name, idleWritten)
 	}
