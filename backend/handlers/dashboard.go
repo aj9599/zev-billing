@@ -111,8 +111,11 @@ func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	todayEnd := todayStart.Add(24 * time.Hour)
 	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 
-	stats.TodayConsumption = calculateBuildingConsumption(h.db, ctx, todayStart, todayEnd)
-	stats.MonthConsumption = calculateBuildingConsumption(h.db, ctx, startOfMonth, now)
+	// "Consumption" stat on the dashboard means grid usage (imported energy).
+	// Solar self-consumed is shown separately via the Solar / self-consumption
+	// stats, so we don't include it here — that would double-count.
+	stats.TodayConsumption = calculateGridUsage(h.db, ctx, todayStart, todayEnd)
+	stats.MonthConsumption = calculateGridUsage(h.db, ctx, startOfMonth, now)
 
 	// For solar, we calculate export (generation) separately
 	solarMeterTypes := []string{"solar_meter"}
@@ -221,17 +224,37 @@ func calculateTotalConsumption(db *sql.DB, ctx context.Context, meterTypes []str
 	return totalConsumption
 }
 
-// calculateBuildingConsumption returns the building's consumed energy in
-// [periodStart, periodEnd). If apartment_meter rows exist for any active
-// meter, sum those (per-unit billing meters are the source of truth for
-// consumption). Otherwise fall back to the energy-conservation identity at
-// the building boundary:
+// calculateGridUsage returns the energy imported from the public grid in
+// [periodStart, periodEnd) — i.e. only the share that crossed the grid
+// boundary, NOT the building's total consumption (which would include
+// solar self-consumed onsite).
 //
-//   consumption = solar_production + grid_import − grid_export
-//
-// using solar_meter and total_meter readings. This makes the dashboard
-// "Today/Month consumption" stat work for installations that have a single
-// grid meter and no per-apartment meters (and unblocks self-consumption %).
+//   - When a total_meter is configured we use it directly (its power_kwh
+//     column is the grid-import register).
+//   - Otherwise, when apartment meters are available, fall back to
+//     apartment_total − solar_production. Per-apartment readings include
+//     both grid import and solar self-consumed; subtracting solar
+//     production removes the latter, leaving only the grid share.
+//     Clamped to zero in case of edge anomalies.
+func calculateGridUsage(db *sql.DB, ctx context.Context, periodStart, periodEnd time.Time) float64 {
+	if hasMeterOfType(db, ctx, "total_meter") {
+		return calculateTotalConsumption(db, ctx, []string{"total_meter"}, periodStart, periodEnd)
+	}
+	if !hasMeterOfType(db, ctx, "apartment_meter") {
+		return 0
+	}
+	apartmentTotal := calculateTotalConsumption(db, ctx, []string{"apartment_meter"}, periodStart, periodEnd)
+	solarProduction := calculateTotalSolarExport(db, ctx, []string{"solar_meter"}, periodStart, periodEnd)
+	usage := apartmentTotal - solarProduction
+	if usage < 0 {
+		return 0
+	}
+	return usage
+}
+
+// calculateBuildingConsumption returns the building's total consumed energy
+// (solar self-consumed + grid imported). Used for the self-consumption
+// percentage; not displayed as a top-level stat.
 func calculateBuildingConsumption(db *sql.DB, ctx context.Context, periodStart, periodEnd time.Time) float64 {
 	if hasMeterOfType(db, ctx, "apartment_meter") {
 		return calculateTotalConsumption(db, ctx, []string{"apartment_meter"}, periodStart, periodEnd)
