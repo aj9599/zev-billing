@@ -111,9 +111,8 @@ func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	todayEnd := todayStart.Add(24 * time.Hour)
 	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 
-	consumptionMeterTypes := []string{"apartment_meter"}
-	stats.TodayConsumption = calculateTotalConsumption(h.db, ctx, consumptionMeterTypes, todayStart, todayEnd)
-	stats.MonthConsumption = calculateTotalConsumption(h.db, ctx, consumptionMeterTypes, startOfMonth, now)
+	stats.TodayConsumption = calculateBuildingConsumption(h.db, ctx, todayStart, todayEnd)
+	stats.MonthConsumption = calculateBuildingConsumption(h.db, ctx, startOfMonth, now)
 
 	// For solar, we calculate export (generation) separately
 	solarMeterTypes := []string{"solar_meter"}
@@ -127,53 +126,48 @@ func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(stats)
 }
 
-// sumPositiveDeltasInPeriod walks a cumulative-meter column chronologically
-// and sums every positive consecutive delta inside [periodStart, periodEnd).
-// Anomalies in the historical data (e.g. an over-counted row from a previous
-// code path) used to wipe out a whole day's stat because `latest − baseline`
-// went negative and the `> 0` guard zeroed it out. Summing only positive
-// per-row deltas isolates one bad reading to a single missed slice instead.
+// cumulativeDeltaInPeriod returns the energy delivered inside
+// [periodStart, periodEnd) for a single cumulative-meter series, identified
+// by the three positional args (id, periodStart, periodEnd).
 //
-// The first delta is computed against the last row *before* the period when
-// one exists, so the slice from midnight to the first in-period reading is
-// counted too.
+// Strategy: latest_in_period − baseline, with a corruption fallback. When
+// the row immediately before the period exists and is ≤ the latest in-period
+// reading, that's the most accurate baseline (it captures the slice from
+// the period boundary forward). When it's > the latest (a sign of a stale
+// over-counted historical row, e.g. the SessionEnergy double-count rows
+// from before the recent Zaptec fixes), we fall back to the first reading
+// in the period so a single bad row can't trash the whole stat.
 //
-// `tableQuery` must select a single REAL column (the cumulative reading) and
-// take exactly three positional args: id, periodStart, periodEnd.
-func sumPositiveDeltasInPeriod(db *sql.DB, ctx context.Context, tableQuery, baselineQuery string, id interface{}, periodStart, periodEnd time.Time) float64 {
-	hasPrev := false
-	prev := 0.0
+// firstQuery / latestQuery select a REAL column with the args
+// (id, periodStart, periodEnd); baselineQuery selects with (id, periodStart).
+func cumulativeDeltaInPeriod(db *sql.DB, ctx context.Context, firstQuery, latestQuery, baselineQuery string, id interface{}, periodStart, periodEnd time.Time) float64 {
+	var first, latest, before sql.NullFloat64
+	_ = db.QueryRowContext(ctx, firstQuery, id, periodStart, periodEnd).Scan(&first)
+	_ = db.QueryRowContext(ctx, latestQuery, id, periodStart, periodEnd).Scan(&latest)
+	_ = db.QueryRowContext(ctx, baselineQuery, id, periodStart).Scan(&before)
 
-	if baselineQuery != "" {
-		var b sql.NullFloat64
-		_ = db.QueryRowContext(ctx, baselineQuery, id, periodStart).Scan(&b)
-		if b.Valid {
-			prev = b.Float64
-			hasPrev = true
-		}
-	}
-
-	rows, err := db.QueryContext(ctx, tableQuery, id, periodStart, periodEnd)
-	if err != nil {
+	if !latest.Valid {
 		return 0
 	}
-	defer rows.Close()
 
-	total := 0.0
-	for rows.Next() {
-		var v float64
-		if err := rows.Scan(&v); err != nil {
-			continue
-		}
-		if hasPrev {
-			if d := v - prev; d > 0 {
-				total += d
-			}
-		}
-		prev = v
-		hasPrev = true
+	var baseline float64
+	switch {
+	case before.Valid && before.Float64 <= latest.Float64:
+		// Healthy baseline: trust the row before the period.
+		baseline = before.Float64
+	case first.Valid:
+		// Corrupt baseline (over-counted historical row) — fall back to the
+		// first reading inside the period.
+		baseline = first.Float64
+	default:
+		return 0
 	}
-	return total
+
+	delta := latest.Float64 - baseline
+	if delta < 0 {
+		return 0
+	}
+	return delta
 }
 
 func calculateTotalConsumption(db *sql.DB, ctx context.Context, meterTypes []string, periodStart, periodEnd time.Time) float64 {
@@ -211,10 +205,13 @@ func calculateTotalConsumption(db *sql.DB, ctx context.Context, meterTypes []str
 			continue
 		}
 
-		totalConsumption += sumPositiveDeltasInPeriod(db, ctx,
+		totalConsumption += cumulativeDeltaInPeriod(db, ctx,
 			`SELECT power_kwh FROM meter_readings
 			 WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
-			 ORDER BY reading_time ASC`,
+			 ORDER BY reading_time ASC LIMIT 1`,
+			`SELECT power_kwh FROM meter_readings
+			 WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
+			 ORDER BY reading_time DESC LIMIT 1`,
 			`SELECT power_kwh FROM meter_readings
 			 WHERE meter_id = ? AND reading_time < ?
 			 ORDER BY reading_time DESC LIMIT 1`,
@@ -222,6 +219,47 @@ func calculateTotalConsumption(db *sql.DB, ctx context.Context, meterTypes []str
 	}
 
 	return totalConsumption
+}
+
+// calculateBuildingConsumption returns the building's consumed energy in
+// [periodStart, periodEnd). If apartment_meter rows exist for any active
+// meter, sum those (per-unit billing meters are the source of truth for
+// consumption). Otherwise fall back to the energy-conservation identity at
+// the building boundary:
+//
+//   consumption = solar_production + grid_import − grid_export
+//
+// using solar_meter and total_meter readings. This makes the dashboard
+// "Today/Month consumption" stat work for installations that have a single
+// grid meter and no per-apartment meters (and unblocks self-consumption %).
+func calculateBuildingConsumption(db *sql.DB, ctx context.Context, periodStart, periodEnd time.Time) float64 {
+	if hasMeterOfType(db, ctx, "apartment_meter") {
+		return calculateTotalConsumption(db, ctx, []string{"apartment_meter"}, periodStart, periodEnd)
+	}
+
+	solarProduction := calculateTotalSolarExport(db, ctx, []string{"solar_meter"}, periodStart, periodEnd)
+	gridImport := calculateTotalConsumption(db, ctx, []string{"total_meter"}, periodStart, periodEnd)
+	gridExport := calculateTotalSolarExport(db, ctx, []string{"total_meter"}, periodStart, periodEnd)
+
+	consumption := solarProduction + gridImport - gridExport
+	if consumption < 0 {
+		return 0
+	}
+	return consumption
+}
+
+// hasMeterOfType returns true when at least one active meter of the given
+// type is configured.
+func hasMeterOfType(db *sql.DB, ctx context.Context, meterType string) bool {
+	var count int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM meters
+		WHERE meter_type = ? AND COALESCE(is_active, 1) = 1
+	`, meterType).Scan(&count)
+	if err != nil {
+		return false
+	}
+	return count > 0
 }
 
 // New function specifically for solar export calculation
@@ -260,10 +298,13 @@ func calculateTotalSolarExport(db *sql.DB, ctx context.Context, meterTypes []str
 			continue
 		}
 
-		totalExport += sumPositiveDeltasInPeriod(db, ctx,
+		totalExport += cumulativeDeltaInPeriod(db, ctx,
 			`SELECT power_kwh_export FROM meter_readings
 			 WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
-			 ORDER BY reading_time ASC`,
+			 ORDER BY reading_time ASC LIMIT 1`,
+			`SELECT power_kwh_export FROM meter_readings
+			 WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
+			 ORDER BY reading_time DESC LIMIT 1`,
 			`SELECT power_kwh_export FROM meter_readings
 			 WHERE meter_id = ? AND reading_time < ?
 			 ORDER BY reading_time DESC LIMIT 1`,
@@ -292,14 +333,16 @@ func calculateTotalChargingConsumption(db *sql.DB, ctx context.Context, periodSt
 			continue
 		}
 
-		// charger_sessions stores a single cumulative meter for the charger,
-		// regardless of which user/RFID was active. Walk it chronologically
-		// and sum the positive deltas — this matches the actual energy
-		// delivered and is robust against historical anomalies.
-		totalConsumption += sumPositiveDeltasInPeriod(db, ctx,
+		// charger_sessions stores a single cumulative meter for the charger.
+		// Use latest − baseline (with corruption fallback) so a historical
+		// over-counted row outside the period can't inflate the total.
+		totalConsumption += cumulativeDeltaInPeriod(db, ctx,
 			`SELECT power_kwh FROM charger_sessions
 			 WHERE charger_id = ? AND session_time >= ? AND session_time < ?
-			 ORDER BY session_time ASC`,
+			 ORDER BY session_time ASC LIMIT 1`,
+			`SELECT power_kwh FROM charger_sessions
+			 WHERE charger_id = ? AND session_time >= ? AND session_time < ?
+			 ORDER BY session_time DESC LIMIT 1`,
 			`SELECT power_kwh FROM charger_sessions
 			 WHERE charger_id = ? AND session_time < ?
 			 ORDER BY session_time DESC LIMIT 1`,
@@ -1012,10 +1055,9 @@ func (h *DashboardHandler) GetSelfConsumption(w http.ResponseWriter, r *http.Req
 	data.TodaySolarProduced = calculateTotalSolarExport(h.db, ctx, solarTypes, todayStart, todayEnd)
 	data.MonthSolarProduced = calculateTotalSolarExport(h.db, ctx, solarTypes, startOfMonth, now)
 
-	// Total building consumption (apartment meters)
-	consumptionTypes := []string{"apartment_meter"}
-	todayConsumption := calculateTotalConsumption(h.db, ctx, consumptionTypes, todayStart, todayEnd)
-	monthConsumption := calculateTotalConsumption(h.db, ctx, consumptionTypes, startOfMonth, now)
+	// Total building consumption — same calc as the dashboard summary.
+	todayConsumption := calculateBuildingConsumption(h.db, ctx, todayStart, todayEnd)
+	monthConsumption := calculateBuildingConsumption(h.db, ctx, startOfMonth, now)
 
 	// Self-consumed solar = min(solar produced, total consumption)
 	if data.TodaySolarProduced > 0 {
