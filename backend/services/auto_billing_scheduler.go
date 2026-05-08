@@ -24,6 +24,25 @@ type ApartmentSelection struct {
 	UserID        *int   `json:"user_id,omitempty"`
 }
 
+// RunConfigResult summarises a manual test run of an auto-billing config.
+// Returned to the UI so the user can see whether the bill was generated and
+// whether the e-mail delivery succeeded.
+type RunConfigResult struct {
+	ConfigID          int      `json:"config_id"`
+	ConfigName        string   `json:"config_name"`
+	PeriodStart       string   `json:"period_start"`
+	PeriodEnd         string   `json:"period_end"`
+	InvoicesGenerated int      `json:"invoices_generated"`
+	PDFsGenerated     int      `json:"pdfs_generated"`
+	EmailsSent        int      `json:"emails_sent"`
+	EmailsFailed      int      `json:"emails_failed"`
+	EmailRequested    bool     `json:"email_requested"`
+	SMTPConfigured    bool     `json:"smtp_configured"`
+	FirstInvoiceID    int      `json:"first_invoice_id"`
+	InvoiceIDs        []int    `json:"invoice_ids"`
+	Warnings          []string `json:"warnings"`
+}
+
 func NewAutoBillingScheduler(db *sql.DB, billingService *BillingService, pdfGenerator *PDFGenerator) *AutoBillingScheduler {
 	return &AutoBillingScheduler{
 		db:             db,
@@ -74,11 +93,7 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 	now := time.Now()
 
 	rows, err := s.db.Query(`
-		SELECT id, name, building_ids, apartments_json, custom_item_ids, frequency, generation_day,
-		       next_run, first_execution_date, is_vzev, billing_mode, charger_id,
-		       COALESCE(auto_send_email, 0), sender_name, sender_address,
-		       sender_city, sender_zip, sender_country, bank_name, bank_iban,
-		       bank_account_holder
+		SELECT id
 		FROM auto_billing_configs
 		WHERE is_active = 1 AND next_run <= ?
 	`, now)
@@ -87,233 +102,278 @@ func (s *AutoBillingScheduler) checkAndGenerateBills() {
 		log.Printf("ERROR: Failed to query due configs: %v", err)
 		return
 	}
-	defer rows.Close()
 
-	dueConfigs := 0
+	var dueIDs []int
 	for rows.Next() {
 		var id int
-		var name, buildingIDsStr string
-		var apartmentsJSON sql.NullString
-		var customItemIDsStr sql.NullString
-		var frequency string
-		var generationDay int
-		var nextRun time.Time
-		var firstExecutionDate sql.NullString
-		var isVZEV bool
-		var billingMode sql.NullString
-		var chargerID sql.NullInt64
-		var autoSendEmail bool
-		var senderName, senderAddress, senderCity, senderZip, senderCountry sql.NullString
-		var bankName, bankIBAN, bankAccountHolder sql.NullString
-
-		err := rows.Scan(&id, &name, &buildingIDsStr, &apartmentsJSON, &customItemIDsStr, &frequency,
-			&generationDay, &nextRun, &firstExecutionDate, &isVZEV, &billingMode, &chargerID,
-			&autoSendEmail, &senderName, &senderAddress,
-			&senderCity, &senderZip, &senderCountry, &bankName, &bankIBAN, &bankAccountHolder)
-
-		if err != nil {
-			log.Printf("ERROR: Failed to scan config: %v", err)
+		if err := rows.Scan(&id); err != nil {
+			log.Printf("ERROR: Failed to scan due config id: %v", err)
 			continue
 		}
+		dueIDs = append(dueIDs, id)
+	}
+	rows.Close()
 
-		dueConfigs++
-		log.Printf("Processing auto billing config: %s (ID: %d, vZEV: %v)", name, id, isVZEV)
-
-		// Parse building IDs
-		buildingIDs := parseIDList(buildingIDsStr)
-
-		if len(buildingIDs) == 0 {
-			log.Printf("WARNING: Config %d has no buildings, skipping", id)
-			continue
+	for _, id := range dueIDs {
+		if _, err := s.runConfig(id, true); err != nil {
+			log.Printf("ERROR: Failed to run due config %d: %v", id, err)
 		}
+	}
 
-		// Parse custom item IDs
-		var customItemIDs []int
-		if customItemIDsStr.Valid && customItemIDsStr.String != "" {
-			customItemIDs = parseIDList(customItemIDsStr.String)
+	if len(dueIDs) == 0 {
+		log.Println("No due configurations found")
+	} else {
+		log.Printf("=== Auto Billing Scheduler: Processed %d configurations ===", len(dueIDs))
+	}
+}
+
+// RunConfigNow generates bills for a single config on demand (manual test run).
+// It does NOT advance next_run, so the regular schedule is preserved. Used by
+// the "Test" button in the auto-billing UI to verify that a configuration
+// produces the expected bill and (optionally) delivers it by e-mail.
+func (s *AutoBillingScheduler) RunConfigNow(id int) (*RunConfigResult, error) {
+	return s.runConfig(id, false)
+}
+
+// runConfig loads a single auto-billing config by id, generates the bills,
+// produces PDFs, optionally e-mails them, and updates last_run.
+// When advanceSchedule is true, next_run is recalculated for the next cycle —
+// this is the path taken by the scheduler. The manual test path (false) leaves
+// next_run untouched so the periodic schedule still fires as configured.
+func (s *AutoBillingScheduler) runConfig(id int, advanceSchedule bool) (*RunConfigResult, error) {
+	now := time.Now()
+
+	var name, buildingIDsStr string
+	var apartmentsJSON sql.NullString
+	var customItemIDsStr sql.NullString
+	var frequency string
+	var generationDay int
+	var firstExecutionDate sql.NullString
+	var isVZEV bool
+	var billingMode sql.NullString
+	var chargerID sql.NullInt64
+	var autoSendEmail bool
+	var senderName, senderAddress, senderCity, senderZip, senderCountry sql.NullString
+	var bankName, bankIBAN, bankAccountHolder sql.NullString
+
+	err := s.db.QueryRow(`
+		SELECT name, building_ids, apartments_json, custom_item_ids, frequency, generation_day,
+		       first_execution_date, is_vzev, billing_mode, charger_id,
+		       COALESCE(auto_send_email, 0), sender_name, sender_address,
+		       sender_city, sender_zip, sender_country, bank_name, bank_iban,
+		       bank_account_holder
+		FROM auto_billing_configs
+		WHERE id = ?
+	`, id).Scan(&name, &buildingIDsStr, &apartmentsJSON, &customItemIDsStr, &frequency,
+		&generationDay, &firstExecutionDate, &isVZEV, &billingMode, &chargerID,
+		&autoSendEmail, &senderName, &senderAddress,
+		&senderCity, &senderZip, &senderCountry, &bankName, &bankIBAN, &bankAccountHolder)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("auto-billing config %d not found", id)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %v", err)
+	}
+
+	_ = firstExecutionDate // not needed at run time
+
+	result := &RunConfigResult{
+		ConfigID:       id,
+		ConfigName:     name,
+		EmailRequested: autoSendEmail,
+	}
+
+	log.Printf("Processing auto billing config: %s (ID: %d, vZEV: %v, advance: %v)", name, id, isVZEV, advanceSchedule)
+
+	buildingIDs := parseIDList(buildingIDsStr)
+	if len(buildingIDs) == 0 {
+		return nil, fmt.Errorf("config has no buildings")
+	}
+
+	var customItemIDs []int
+	if customItemIDsStr.Valid && customItemIDsStr.String != "" {
+		customItemIDs = parseIDList(customItemIDsStr.String)
+	}
+
+	var apartments []ApartmentSelection
+	if apartmentsJSON.Valid && apartmentsJSON.String != "" {
+		if err := json.Unmarshal([]byte(apartmentsJSON.String), &apartments); err != nil {
+			return nil, fmt.Errorf("failed to parse apartments JSON: %v", err)
 		}
-		log.Printf("Custom items to include: %v", customItemIDs)
+	}
 
-		// Parse apartments
-		var apartments []ApartmentSelection
-		if apartmentsJSON.Valid && apartmentsJSON.String != "" {
-			if err := json.Unmarshal([]byte(apartmentsJSON.String), &apartments); err != nil {
-				log.Printf("ERROR: Failed to parse apartments JSON for config %d: %v", id, err)
-				continue
-			}
+	userIDs := []int{}
+	for _, apt := range apartments {
+		if apt.UserID != nil {
+			userIDs = append(userIDs, *apt.UserID)
 		}
+	}
+	if len(userIDs) == 0 {
+		return nil, fmt.Errorf("config has no users with apartments")
+	}
 
-		// Extract user IDs from apartments (only active users with valid user_id)
-		userIDs := []int{}
-		for _, apt := range apartments {
-			if apt.UserID != nil {
-				userIDs = append(userIDs, *apt.UserID)
-			}
-		}
+	endDate := now.AddDate(0, 0, -1)
+	var startDate time.Time
+	switch frequency {
+	case "monthly":
+		startDate = endDate.AddDate(0, -1, 0)
+	case "quarterly":
+		startDate = endDate.AddDate(0, -3, 0)
+	case "half_yearly":
+		startDate = endDate.AddDate(0, -6, 0)
+	case "yearly":
+		startDate = endDate.AddDate(-1, 0, 0)
+	default:
+		return nil, fmt.Errorf("unknown frequency: %s", frequency)
+	}
 
-		if len(userIDs) == 0 {
-			log.Printf("WARNING: Config %d has no users with apartments, skipping", id)
-			continue
-		}
+	result.PeriodStart = startDate.Format("2006-01-02")
+	result.PeriodEnd = endDate.Format("2006-01-02")
 
-		log.Printf("Found %d apartments with %d active users", len(apartments), len(userIDs))
-
-		// Calculate period based on frequency
-		endDate := now.AddDate(0, 0, -1) // Yesterday
-		var startDate time.Time
-
-		switch frequency {
-		case "monthly":
-			startDate = endDate.AddDate(0, -1, 0)
-		case "quarterly":
-			startDate = endDate.AddDate(0, -3, 0)
-		case "half_yearly":
-			startDate = endDate.AddDate(0, -6, 0)
-		case "yearly":
-			startDate = endDate.AddDate(-1, 0, 0)
-		default:
-			log.Printf("WARNING: Unknown frequency %s for config %d", frequency, id)
-			continue
-		}
-
-		// Build billing scope from stored mode/charger_id.
-		scope := BillingScope{}
-		if billingMode.Valid {
-			switch billingMode.String {
-			case BillingModeBuilding:
-				scope.Mode = BillingModeBuilding
-			case BillingModeCharger:
-				scope.Mode = BillingModeCharger
-				if chargerID.Valid {
-					cid := int(chargerID.Int64)
-					scope.ChargerID = &cid
-				} else {
-					log.Printf("WARNING: Config %d is charger mode but has no charger_id, skipping", id)
-					continue
-				}
-			}
-		}
-
-		log.Printf("Generating bills for period: %s to %s (vZEV mode: %v, scope: %q, charger: %v)",
-			startDate.Format("2006-01-02"), endDate.Format("2006-01-02"), isVZEV, scope.Mode, scope.ChargerID)
-
-		invoices, err := s.billingService.GenerateBillsWithOptions(buildingIDs, userIDs,
-			startDate.Format("2006-01-02"), endDate.Format("2006-01-02"), isVZEV, customItemIDs, scope)
-
-		if err != nil {
-			log.Printf("ERROR: Failed to generate bills for config %d: %v", id, err)
-			// Continue to next config even if this one fails
-			continue
-		}
-
-		log.Printf("SUCCESS: Generated %d invoices for config %s", len(invoices), name)
-
-		// Prepare sender and banking info for PDF generation
-		senderInfo := SenderInfo{
-			Name:    getStringFromNull(senderName),
-			Address: getStringFromNull(senderAddress),
-			City:    getStringFromNull(senderCity),
-			Zip:     getStringFromNull(senderZip),
-			Country: getStringFromNull(senderCountry),
-		}
-
-		bankingInfo := BankingInfo{
-			Name:          getStringFromNull(bankName),
-			IBAN:          getStringFromNull(bankIBAN),
-			AccountHolder: getStringFromNull(bankAccountHolder),
-		}
-
-		// Generate PDFs for each invoice
-		successCount := 0
-		for _, invoice := range invoices {
-			// Load full invoice with items and user details (INCLUDING LANGUAGE)
-			fullInvoice, err := s.loadFullInvoice(invoice.ID)
-			if err != nil {
-				log.Printf("WARNING: Failed to load full invoice %d: %v", invoice.ID, err)
-				continue
-			}
-
-			// Convert invoice struct to map for PDF generator
-			invoiceMap := s.invoiceToMap(fullInvoice)
-
-			// Generate PDF
-			pdfPath, err := s.pdfGenerator.GenerateInvoicePDF(invoiceMap, senderInfo, bankingInfo)
-			if err != nil {
-				log.Printf("WARNING: Failed to generate PDF for invoice %d: %v", invoice.ID, err)
-				continue
-			}
-
-			// Update invoice with PDF path
-			_, err = s.db.Exec("UPDATE invoices SET pdf_path = ? WHERE id = ?", pdfPath, invoice.ID)
-			if err != nil {
-				log.Printf("WARNING: Failed to update PDF path for invoice %d: %v", invoice.ID, err)
+	scope := BillingScope{}
+	if billingMode.Valid {
+		switch billingMode.String {
+		case BillingModeBuilding:
+			scope.Mode = BillingModeBuilding
+		case BillingModeCharger:
+			scope.Mode = BillingModeCharger
+			if chargerID.Valid {
+				cid := int(chargerID.Int64)
+				scope.ChargerID = &cid
 			} else {
-				successCount++
+				return nil, fmt.Errorf("charger mode requires charger_id")
 			}
+		}
+	}
 
-			// Auto-email the PDF to the bill recipient when the config requests it.
-			// Skip silently when SMTP is not configured or the user has no e-mail
-			// (logged so the admin can spot the misconfiguration).
-			if autoSendEmail && s.emailAlerter != nil {
-				userMap, _ := fullInvoice["user"].(map[string]interface{})
-				recipient, _ := userMap["email"].(string)
-				if recipient == "" {
-					log.Printf("[AUTO-BILLING-EMAIL] Config %d invoice %d: recipient has no e-mail, skipping", id, invoice.ID)
+	log.Printf("Generating bills for period: %s to %s (vZEV mode: %v, scope: %q, charger: %v)",
+		result.PeriodStart, result.PeriodEnd, isVZEV, scope.Mode, scope.ChargerID)
+
+	invoices, err := s.billingService.GenerateBillsWithOptions(buildingIDs, userIDs,
+		result.PeriodStart, result.PeriodEnd, isVZEV, customItemIDs, scope)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate bills: %v", err)
+	}
+
+	result.InvoicesGenerated = len(invoices)
+	log.Printf("SUCCESS: Generated %d invoices for config %s", len(invoices), name)
+
+	senderInfo := SenderInfo{
+		Name:    getStringFromNull(senderName),
+		Address: getStringFromNull(senderAddress),
+		City:    getStringFromNull(senderCity),
+		Zip:     getStringFromNull(senderZip),
+		Country: getStringFromNull(senderCountry),
+	}
+	bankingInfo := BankingInfo{
+		Name:          getStringFromNull(bankName),
+		IBAN:          getStringFromNull(bankIBAN),
+		AccountHolder: getStringFromNull(bankAccountHolder),
+	}
+
+	result.SMTPConfigured = s.emailAlerter != nil
+
+	for _, invoice := range invoices {
+		result.InvoiceIDs = append(result.InvoiceIDs, invoice.ID)
+		if result.FirstInvoiceID == 0 {
+			result.FirstInvoiceID = invoice.ID
+		}
+
+		fullInvoice, err := s.loadFullInvoice(invoice.ID)
+		if err != nil {
+			result.Warnings = append(result.Warnings, fmt.Sprintf("Failed to load invoice %d: %v", invoice.ID, err))
+			continue
+		}
+
+		invoiceMap := s.invoiceToMap(fullInvoice)
+		pdfPath, err := s.pdfGenerator.GenerateInvoicePDF(invoiceMap, senderInfo, bankingInfo)
+		if err != nil {
+			result.Warnings = append(result.Warnings, fmt.Sprintf("Failed to generate PDF for invoice %d: %v", invoice.ID, err))
+			continue
+		}
+
+		if _, err := s.db.Exec("UPDATE invoices SET pdf_path = ? WHERE id = ?", pdfPath, invoice.ID); err != nil {
+			result.Warnings = append(result.Warnings, fmt.Sprintf("Failed to update PDF path for invoice %d: %v", invoice.ID, err))
+		} else {
+			result.PDFsGenerated++
+		}
+
+		if autoSendEmail && s.emailAlerter != nil {
+			userMap, _ := fullInvoice["user"].(map[string]interface{})
+			recipient, _ := userMap["email"].(string)
+			if recipient == "" {
+				result.EmailsFailed++
+				result.Warnings = append(result.Warnings, fmt.Sprintf("Invoice %d: recipient has no e-mail address", invoice.ID))
+				log.Printf("[AUTO-BILLING-EMAIL] Config %d invoice %d: recipient has no e-mail, skipping", id, invoice.ID)
+			} else {
+				subject := fmt.Sprintf("Rechnung / Invoice %s", fullInvoice["invoice_number"])
+				body := s.buildInvoiceEmailBody(fullInvoice)
+				if err := s.emailAlerter.SendEmailWithAttachment(recipient, subject, body, pdfPath); err != nil {
+					result.EmailsFailed++
+					result.Warnings = append(result.Warnings, fmt.Sprintf("Invoice %d: e-mail to %s failed: %v", invoice.ID, recipient, err))
+					log.Printf("[AUTO-BILLING-EMAIL] Config %d invoice %d: failed to send to %s: %v", id, invoice.ID, recipient, err)
 				} else {
-					subject := fmt.Sprintf("Rechnung / Invoice %s", fullInvoice["invoice_number"])
-					body := s.buildInvoiceEmailBody(fullInvoice)
-					if err := s.emailAlerter.SendEmailWithAttachment(recipient, subject, body, pdfPath); err != nil {
-						log.Printf("[AUTO-BILLING-EMAIL] Config %d invoice %d: failed to send to %s: %v", id, invoice.ID, recipient, err)
-					} else {
-						log.Printf("[AUTO-BILLING-EMAIL] Config %d invoice %d: sent to %s", id, invoice.ID, recipient)
-					}
+					result.EmailsSent++
+					log.Printf("[AUTO-BILLING-EMAIL] Config %d invoice %d: sent to %s", id, invoice.ID, recipient)
 				}
 			}
 		}
+	}
 
-		log.Printf("Generated %d invoices with %d PDFs", len(invoices), successCount)
+	log.Printf("Generated %d invoices with %d PDFs", result.InvoicesGenerated, result.PDFsGenerated)
 
-		// Calculate next_run based on current execution
+	if advanceSchedule {
 		nextRunTime := calculateNextRun(frequency, generationDay, now)
-
 		_, err = s.db.Exec(`
 			UPDATE auto_billing_configs
 			SET last_run = ?, next_run = ?, updated_at = CURRENT_TIMESTAMP
 			WHERE id = ?
 		`, now, nextRunTime, id)
-
 		if err != nil {
 			log.Printf("ERROR: Failed to update config %d: %v", id, err)
 		} else {
 			log.Printf("Updated config %d: next run scheduled for %s", id, nextRunTime.Format("2006-01-02"))
 		}
-
-		// Log to admin logs
-		details := map[string]interface{}{
-			"config_id":       id,
-			"config_name":     name,
-			"invoices_count":  len(invoices),
-			"pdfs_generated":  successCount,
-			"period_start":    startDate.Format("2006-01-02"),
-			"period_end":      endDate.Format("2006-01-02"),
-			"is_vzev":         isVZEV,
-			"billing_mode":    scope.Mode,
-			"charger_id":      scope.ChargerID,
-			"custom_item_ids": customItemIDs,
-		}
-		detailsJSON, _ := json.Marshal(details)
-
-		s.db.Exec(`
-			INSERT INTO admin_logs (action, details, ip_address)
-			VALUES (?, ?, ?)
-		`, "auto_billing_generated", string(detailsJSON), "system")
-	}
-
-	if dueConfigs == 0 {
-		log.Println("No due configurations found")
 	} else {
-		log.Printf("=== Auto Billing Scheduler: Processed %d configurations ===", dueConfigs)
+		// Manual test run: record last_run only, leave next_run alone.
+		if _, err := s.db.Exec(`
+			UPDATE auto_billing_configs
+			SET last_run = ?, updated_at = CURRENT_TIMESTAMP
+			WHERE id = ?
+		`, now, id); err != nil {
+			log.Printf("ERROR: Failed to update last_run for config %d: %v", id, err)
+		}
 	}
+
+	details := map[string]interface{}{
+		"config_id":       id,
+		"config_name":     name,
+		"invoices_count":  result.InvoicesGenerated,
+		"pdfs_generated":  result.PDFsGenerated,
+		"emails_sent":     result.EmailsSent,
+		"emails_failed":   result.EmailsFailed,
+		"period_start":    result.PeriodStart,
+		"period_end":      result.PeriodEnd,
+		"is_vzev":         isVZEV,
+		"billing_mode":    scope.Mode,
+		"charger_id":      scope.ChargerID,
+		"custom_item_ids": customItemIDs,
+		"manual_test_run": !advanceSchedule,
+	}
+	detailsJSON, _ := json.Marshal(details)
+
+	action := "auto_billing_generated"
+	if !advanceSchedule {
+		action = "auto_billing_test_run"
+	}
+	s.db.Exec(`
+		INSERT INTO admin_logs (action, details, ip_address)
+		VALUES (?, ?, ?)
+	`, action, string(detailsJSON), "system")
+
+	return result, nil
 }
 
 // Helper function to load full invoice with items and user (INCLUDING LANGUAGE)

@@ -509,6 +509,32 @@ class ApiClient {
     return this.request(`/billing/auto-configs/${id}`, { method: 'DELETE' });
   }
 
+  // Manually run an auto-billing config now (test run). Generates the bill
+  // for the period that the next scheduled run would cover, produces the
+  // PDF, and (when the config has auto_send_email enabled) e-mails it via
+  // the configured SMTP. Does not advance the scheduled next_run.
+  async runAutoBillingConfigNow(id: number): Promise<{
+    status: string;
+    result?: {
+      config_id: number;
+      config_name: string;
+      period_start: string;
+      period_end: string;
+      invoices_generated: number;
+      pdfs_generated: number;
+      emails_sent: number;
+      emails_failed: number;
+      email_requested: boolean;
+      smtp_configured: boolean;
+      first_invoice_id: number;
+      invoice_ids: number[];
+      warnings: string[] | null;
+    };
+    message?: string;
+  }> {
+    return this.request(`/billing/auto-configs/${id}/run-now`, { method: 'POST' });
+  }
+
   // Backfill charger_sessions from the Zaptec chargehistory API for a date range.
   // Safe to re-run thanks to the unique index on (charger_id, session_time).
   async syncZaptecHistory(chargerId: number, from: string, to: string): Promise<{

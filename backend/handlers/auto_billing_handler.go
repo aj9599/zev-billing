@@ -15,11 +15,12 @@ import (
 )
 
 type AutoBillingHandler struct {
-	db *sql.DB
+	db        *sql.DB
+	scheduler *services.AutoBillingScheduler
 }
 
-func NewAutoBillingHandler(db *sql.DB) *AutoBillingHandler {
-	return &AutoBillingHandler{db: db}
+func NewAutoBillingHandler(db *sql.DB, scheduler *services.AutoBillingScheduler) *AutoBillingHandler {
+	return &AutoBillingHandler{db: db, scheduler: scheduler}
 }
 
 type ApartmentSelection struct {
@@ -584,6 +585,45 @@ func (h *AutoBillingHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("SUCCESS: Deleted auto billing config ID %d", id)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// RunNow executes a single auto-billing config on demand (test / manual run).
+// Generates the bills, produces PDFs, and — if auto_send_email is set on the
+// config — also sends them to the recipients via SMTP. The scheduled next_run
+// is left untouched so the periodic schedule still fires as configured.
+func (h *AutoBillingHandler) RunNow(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	if h.scheduler == nil {
+		http.Error(w, "Auto-billing scheduler not initialised", http.StatusInternalServerError)
+		return
+	}
+
+	result, err := h.scheduler.RunConfigNow(id)
+	if err != nil {
+		log.Printf("ERROR: Manual auto-billing run for config %d failed: %v", id, err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "error",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	log.Printf("SUCCESS: Manual auto-billing run for config %d (%s) - %d invoices, %d PDFs, %d emails sent, %d failed",
+		id, result.ConfigName, result.InvoicesGenerated, result.PDFsGenerated, result.EmailsSent, result.EmailsFailed)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status": "success",
+		"result": result,
+	})
 }
 
 // GetCustomItemsForBuildings returns all custom items for the specified buildings

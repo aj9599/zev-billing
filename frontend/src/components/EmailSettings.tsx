@@ -214,6 +214,9 @@ export default function EmailSettings() {
                     placeholder={t('settings.smtpFromPlaceholder')}
                     style={{ width: '100%', padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '13px', outline: 'none' }}
                   />
+                  <div style={{ marginTop: '4px', fontSize: '11px', color: '#9ca3af', lineHeight: '1.45' }}>
+                    {t('settings.smtpFromHelp')}
+                  </div>
                 </div>
                 <div>
                   <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600', color: '#374151', fontSize: '12px' }}>
@@ -225,6 +228,9 @@ export default function EmailSettings() {
                     placeholder={t('settings.alertRecipientPlaceholder')}
                     style={{ width: '100%', padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '13px', outline: 'none' }}
                   />
+                  <div style={{ marginTop: '4px', fontSize: '11px', color: '#9ca3af', lineHeight: '1.45' }}>
+                    {t('settings.alertRecipientHelp')}
+                  </div>
                 </div>
               </div>
 

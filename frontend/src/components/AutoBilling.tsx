@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { useTranslation } from '../i18n';
+import { api } from '../api/client';
 import { useAutoBillingConfig } from './autobilling/hooks/useAutoBillingConfig';
 import AutoBillingHeader from './autobilling/components/AutoBillingHeader';
 import AutoBillingConfigCard from './autobilling/components/AutoBillingConfigCard';
 import AutoBillingConfigModal from './autobilling/components/AutoBillingConfigModal';
 import AutoBillingInstructionsModal from './autobilling/components/AutoBillingInstructionsModal';
 import AutoBillingEmptyState from './autobilling/components/AutoBillingEmptyState';
+import AutoBillingTestRunModal from './autobilling/components/AutoBillingTestRunModal';
+import type { TestRunResult } from './autobilling/components/AutoBillingTestRunModal';
 import BillLayoutEditor from './BillLayoutEditor';
 import type { AutoBillingConfig } from './autobilling/hooks/useAutoBillingConfig';
 
@@ -13,6 +16,10 @@ export default function AutoBilling() {
   const { t } = useTranslation();
   const [layoutEditorOpen, setLayoutEditorOpen] = useState(false);
   const [layoutBuildingId, setLayoutBuildingId] = useState<number | undefined>(undefined);
+  const [testRunningId, setTestRunningId] = useState<number | null>(null);
+  const [testRunModalOpen, setTestRunModalOpen] = useState(false);
+  const [testRunResult, setTestRunResult] = useState<TestRunResult | null>(null);
+  const [testRunError, setTestRunError] = useState<string>('');
 
   const handleEditLayout = (config: AutoBillingConfig) => {
     // Layouts are per concrete (non-group) building. Pre-select the first
@@ -94,6 +101,33 @@ export default function AutoBilling() {
     alert(editingConfig ? t('autoBilling.updateSuccess') : t('autoBilling.createSuccess'));
   };
 
+  const handleTestRun = async (config: AutoBillingConfig) => {
+    if (!confirm(t('autoBilling.testRunConfirm'))) return;
+    setTestRunningId(config.id);
+    setTestRunResult(null);
+    setTestRunError('');
+    setTestRunModalOpen(true);
+    try {
+      const response = await api.runAutoBillingConfigNow(config.id);
+      if (response.status === 'success' && response.result) {
+        setTestRunResult(response.result as TestRunResult);
+      } else {
+        setTestRunError(response.message || t('autoBilling.testRunFailed'));
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setTestRunError(message || t('autoBilling.testRunFailed'));
+    } finally {
+      setTestRunningId(null);
+    }
+  };
+
+  const handleCloseTestRun = () => {
+    setTestRunModalOpen(false);
+    setTestRunResult(null);
+    setTestRunError('');
+  };
+
   if (loading) {
     return (
       <div style={{ width: '100%', maxWidth: '100%' }}>
@@ -159,6 +193,8 @@ export default function AutoBilling() {
               onEditLayout={handleEditLayout}
               onDelete={handleDelete}
               onToggleActive={handleToggleActive}
+              onTestRun={handleTestRun}
+              testRunInProgress={testRunningId === config.id}
               index={i}
             />
           ))}
@@ -168,6 +204,14 @@ export default function AutoBilling() {
       <AutoBillingInstructionsModal
         isOpen={showInstructions}
         onClose={() => setShowInstructions(false)}
+      />
+
+      <AutoBillingTestRunModal
+        isOpen={testRunModalOpen}
+        running={testRunningId !== null}
+        result={testRunResult}
+        error={testRunError}
+        onClose={handleCloseTestRun}
       />
 
       <BillLayoutEditor

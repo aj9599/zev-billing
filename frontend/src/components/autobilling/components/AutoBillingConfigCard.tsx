@@ -1,4 +1,4 @@
-import { Clock, Building, Users, Edit2, Trash2, PlayCircle, PauseCircle, Palette } from 'lucide-react';
+import { Clock, Building, Users, Edit2, Trash2, PlayCircle, PauseCircle, Palette, FlaskConical, Loader2 } from 'lucide-react';
 import { useTranslation } from '../../../i18n';
 import type { Building as BuildingType } from '../../../types';
 import type { AutoBillingConfig, ApartmentSelection } from '../hooks/useAutoBillingConfig';
@@ -10,6 +10,8 @@ interface AutoBillingConfigCardProps {
   onEditLayout: (config: AutoBillingConfig) => void;
   onDelete: (id: number) => void;
   onToggleActive: (config: AutoBillingConfig) => void;
+  onTestRun: (config: AutoBillingConfig) => void;
+  testRunInProgress?: boolean;
   index?: number;
 }
 
@@ -20,6 +22,8 @@ export default function AutoBillingConfigCard({
   onEditLayout,
   onDelete,
   onToggleActive,
+  onTestRun,
+  testRunInProgress = false,
   index = 0
 }: AutoBillingConfigCardProps) {
   const { t } = useTranslation();
@@ -201,6 +205,44 @@ export default function AutoBillingConfigCard({
           </div>
         </div>
 
+        {/* Test run button — runs the auto-billing config now so the
+            user can verify the bill (and e-mail delivery) before the
+            scheduled run fires. Spans the full row so it stands out. */}
+        <button
+          onClick={() => onTestRun(config)}
+          disabled={testRunInProgress}
+          className="ab-btn-test"
+          style={{
+            width: '100%',
+            padding: '10px',
+            marginBottom: '8px',
+            background: testRunInProgress
+              ? 'rgba(245, 158, 11, 0.6)'
+              : 'linear-gradient(135deg, #f59e0b 0%, #ea580c 100%)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '13px',
+            fontWeight: '700',
+            cursor: testRunInProgress ? 'wait' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            transition: 'all 0.2s',
+            boxShadow: '0 2px 6px rgba(245, 158, 11, 0.25)',
+            opacity: testRunInProgress ? 0.85 : 1
+          }}
+          title={t('autoBilling.testRunHelp')}
+        >
+          {testRunInProgress ? (
+            <Loader2 size={14} style={{ animation: 'ab-spin 1s linear infinite' }} />
+          ) : (
+            <FlaskConical size={14} />
+          )}
+          {testRunInProgress ? t('autoBilling.testRunRunning') : t('autoBilling.testRun')}
+        </button>
+
         {/* Actions */}
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
@@ -280,6 +322,10 @@ export default function AutoBillingConfigCard({
           from { opacity: 0; transform: translateY(12px); }
           to { opacity: 1; transform: translateY(0); }
         }
+        @keyframes ab-spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
         .ab-config-card:hover {
           box-shadow: 0 4px 12px rgba(0,0,0,0.08);
           transform: translateY(-1px);
@@ -292,6 +338,11 @@ export default function AutoBillingConfigCard({
         }
         .ab-btn-delete:hover {
           background-color: rgba(239, 68, 68, 0.18) !important;
+        }
+        .ab-btn-test:not(:disabled):hover {
+          filter: brightness(1.05);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 10px rgba(245, 158, 11, 0.35) !important;
         }
       `}</style>
     </div>

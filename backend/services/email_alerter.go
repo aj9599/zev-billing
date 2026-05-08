@@ -539,9 +539,17 @@ func (ea *EmailAlerter) SendHealthReportNow() error {
 func (ea *EmailAlerter) sendEmail(config *EmailAlertConfig, subject, body string) error {
 	addr := fmt.Sprintf("%s:%d", config.SMTPHost, config.SMTPPort)
 
+	// Most providers refuse mail when From doesn't match the authenticated
+	// account, so fall back to SMTPUser when the operator hasn't set a
+	// dedicated From address. This also makes the field visibly optional.
+	from := config.SMTPFrom
+	if from == "" {
+		from = config.SMTPUser
+	}
+
 	// Build message
 	var msg strings.Builder
-	msg.WriteString(fmt.Sprintf("From: %s\r\n", config.SMTPFrom))
+	msg.WriteString(fmt.Sprintf("From: %s\r\n", from))
 	msg.WriteString(fmt.Sprintf("To: %s\r\n", config.AlertRecipient))
 	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
 	msg.WriteString("MIME-Version: 1.0\r\n")
@@ -553,16 +561,16 @@ func (ea *EmailAlerter) sendEmail(config *EmailAlertConfig, subject, body string
 
 	if config.SMTPPort == 465 {
 		// Implicit TLS (SMTPS)
-		return ea.sendEmailTLS(config, addr, msgBytes)
+		return ea.sendEmailTLS(config, addr, from, msgBytes)
 	}
 
 	// STARTTLS (port 587) or plain (port 25)
 	auth := smtp.PlainAuth("", config.SMTPUser, config.SMTPPassword, config.SMTPHost)
-	return smtp.SendMail(addr, auth, config.SMTPFrom, []string{config.AlertRecipient}, msgBytes)
+	return smtp.SendMail(addr, auth, from, []string{config.AlertRecipient}, msgBytes)
 }
 
 // sendEmailTLS handles implicit TLS connections (port 465)
-func (ea *EmailAlerter) sendEmailTLS(config *EmailAlertConfig, addr string, msg []byte) error {
+func (ea *EmailAlerter) sendEmailTLS(config *EmailAlertConfig, addr, from string, msg []byte) error {
 	tlsConfig := &tls.Config{
 		ServerName: config.SMTPHost,
 	}
@@ -584,7 +592,7 @@ func (ea *EmailAlerter) sendEmailTLS(config *EmailAlertConfig, addr string, msg 
 		return fmt.Errorf("SMTP auth failed: %v", err)
 	}
 
-	if err = client.Mail(config.SMTPFrom); err != nil {
+	if err = client.Mail(from); err != nil {
 		return fmt.Errorf("SMTP MAIL FROM failed: %v", err)
 	}
 
@@ -617,8 +625,15 @@ func (ea *EmailAlerter) SendEmailWithAttachment(to, subject, htmlBody, attachmen
 		return fmt.Errorf("recipient email is empty")
 	}
 	cfg := ea.loadConfig()
-	if cfg == nil || cfg.SMTPHost == "" || cfg.SMTPFrom == "" {
+	if cfg == nil || cfg.SMTPHost == "" {
 		return fmt.Errorf("SMTP is not configured")
+	}
+	from := cfg.SMTPFrom
+	if from == "" {
+		from = cfg.SMTPUser
+	}
+	if from == "" {
+		return fmt.Errorf("SMTP is not configured: missing From / Username")
 	}
 
 	addr := fmt.Sprintf("%s:%d", cfg.SMTPHost, cfg.SMTPPort)
@@ -637,7 +652,7 @@ func (ea *EmailAlerter) SendEmailWithAttachment(to, subject, htmlBody, attachmen
 	boundary := fmt.Sprintf("zev-mime-%d", time.Now().UnixNano())
 
 	var msg strings.Builder
-	msg.WriteString(fmt.Sprintf("From: %s\r\n", cfg.SMTPFrom))
+	msg.WriteString(fmt.Sprintf("From: %s\r\n", from))
 	msg.WriteString(fmt.Sprintf("To: %s\r\n", to))
 	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
 	msg.WriteString("MIME-Version: 1.0\r\n")
@@ -678,14 +693,14 @@ func (ea *EmailAlerter) SendEmailWithAttachment(to, subject, htmlBody, attachmen
 	msgBytes := []byte(msg.String())
 
 	if cfg.SMTPPort == 465 {
-		return ea.sendCustomEmailTLS(cfg, addr, to, msgBytes)
+		return ea.sendCustomEmailTLS(cfg, addr, from, to, msgBytes)
 	}
 	auth := smtp.PlainAuth("", cfg.SMTPUser, cfg.SMTPPassword, cfg.SMTPHost)
-	return smtp.SendMail(addr, auth, cfg.SMTPFrom, []string{to}, msgBytes)
+	return smtp.SendMail(addr, auth, from, []string{to}, msgBytes)
 }
 
 // sendCustomEmailTLS is a copy of sendEmailTLS but uses a custom recipient.
-func (ea *EmailAlerter) sendCustomEmailTLS(config *EmailAlertConfig, addr, to string, msg []byte) error {
+func (ea *EmailAlerter) sendCustomEmailTLS(config *EmailAlertConfig, addr, from, to string, msg []byte) error {
 	tlsConfig := &tls.Config{ServerName: config.SMTPHost}
 	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 10 * time.Second}, "tcp", addr, tlsConfig)
 	if err != nil {
@@ -701,7 +716,7 @@ func (ea *EmailAlerter) sendCustomEmailTLS(config *EmailAlertConfig, addr, to st
 	if err = client.Auth(auth); err != nil {
 		return fmt.Errorf("SMTP auth failed: %v", err)
 	}
-	if err = client.Mail(config.SMTPFrom); err != nil {
+	if err = client.Mail(from); err != nil {
 		return fmt.Errorf("SMTP MAIL FROM failed: %v", err)
 	}
 	if err = client.Rcpt(to); err != nil {

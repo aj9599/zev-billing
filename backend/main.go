@@ -132,7 +132,7 @@ func main() {
 	meterHandler := handlers.NewMeterHandler(db, dataCollector)
 	chargerHandler := handlers.NewChargerHandler(db, dataCollector)
 	billingHandler := handlers.NewBillingHandler(db, billingService, pdfGenerator)
-	autoBillingHandler := handlers.NewAutoBillingHandler(db)
+	autoBillingHandler := handlers.NewAutoBillingHandler(db, autoBillingScheduler)
 	dashboardHandler := handlers.NewDashboardHandler(db, dataCollector)
 	exportHandler := handlers.NewExportHandler(db)
 	webhookHandler := handlers.NewWebhookHandler(db)
@@ -244,6 +244,7 @@ func main() {
 	api.HandleFunc("/billing/auto-configs/{id}", autoBillingHandler.Get).Methods("GET")
 	api.HandleFunc("/billing/auto-configs/{id}", autoBillingHandler.Update).Methods("PUT")
 	api.HandleFunc("/billing/auto-configs/{id}", autoBillingHandler.Delete).Methods("DELETE")
+	api.HandleFunc("/billing/auto-configs/{id}/run-now", autoBillingHandler.RunNow).Methods("POST")
 
 	// Bill layout customisation (per building) — main invoice page only.
 	api.HandleFunc("/billing/layouts/{building_id}", billLayoutHandler.Get).Methods("GET")
