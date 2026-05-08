@@ -127,6 +127,55 @@ func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(stats)
 }
 
+// sumPositiveDeltasInPeriod walks a cumulative-meter column chronologically
+// and sums every positive consecutive delta inside [periodStart, periodEnd).
+// Anomalies in the historical data (e.g. an over-counted row from a previous
+// code path) used to wipe out a whole day's stat because `latest − baseline`
+// went negative and the `> 0` guard zeroed it out. Summing only positive
+// per-row deltas isolates one bad reading to a single missed slice instead.
+//
+// The first delta is computed against the last row *before* the period when
+// one exists, so the slice from midnight to the first in-period reading is
+// counted too.
+//
+// `tableQuery` must select a single REAL column (the cumulative reading) and
+// take exactly three positional args: id, periodStart, periodEnd.
+func sumPositiveDeltasInPeriod(db *sql.DB, ctx context.Context, tableQuery, baselineQuery string, id interface{}, periodStart, periodEnd time.Time) float64 {
+	hasPrev := false
+	prev := 0.0
+
+	if baselineQuery != "" {
+		var b sql.NullFloat64
+		_ = db.QueryRowContext(ctx, baselineQuery, id, periodStart).Scan(&b)
+		if b.Valid {
+			prev = b.Float64
+			hasPrev = true
+		}
+	}
+
+	rows, err := db.QueryContext(ctx, tableQuery, id, periodStart, periodEnd)
+	if err != nil {
+		return 0
+	}
+	defer rows.Close()
+
+	total := 0.0
+	for rows.Next() {
+		var v float64
+		if err := rows.Scan(&v); err != nil {
+			continue
+		}
+		if hasPrev {
+			if d := v - prev; d > 0 {
+				total += d
+			}
+		}
+		prev = v
+		hasPrev = true
+	}
+	return total
+}
+
 func calculateTotalConsumption(db *sql.DB, ctx context.Context, meterTypes []string, periodStart, periodEnd time.Time) float64 {
 	if len(meterTypes) == 0 {
 		return 0
@@ -138,15 +187,15 @@ func calculateTotalConsumption(db *sql.DB, ctx context.Context, meterTypes []str
 		placeholders[i] = "?"
 		args[i] = mt
 	}
-	
+
 	meterTypeFilter := strings.Join(placeholders, ",")
-	
+
 	meterQuery := fmt.Sprintf(`
-		SELECT id FROM meters 
-		WHERE meter_type IN (%s) 
+		SELECT id FROM meters
+		WHERE meter_type IN (%s)
 		AND COALESCE(is_active, 1) = 1
 	`, meterTypeFilter)
-	
+
 	meterRows, err := db.QueryContext(ctx, meterQuery, args...)
 	if err != nil {
 		log.Printf("Error querying meters: %v", err)
@@ -155,49 +204,23 @@ func calculateTotalConsumption(db *sql.DB, ctx context.Context, meterTypes []str
 	defer meterRows.Close()
 
 	totalConsumption := 0.0
-	
+
 	for meterRows.Next() {
 		var meterID int
 		if err := meterRows.Scan(&meterID); err != nil {
 			continue
 		}
 
-		var firstReading sql.NullFloat64
-		db.QueryRowContext(ctx, `
-			SELECT power_kwh FROM meter_readings 
-			WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
-			ORDER BY reading_time ASC LIMIT 1
-		`, meterID, periodStart, periodEnd).Scan(&firstReading)
-
-		var latestReading sql.NullFloat64
-		db.QueryRowContext(ctx, `
-			SELECT power_kwh FROM meter_readings 
-			WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
-			ORDER BY reading_time DESC LIMIT 1
-		`, meterID, periodStart, periodEnd).Scan(&latestReading)
-
-		if firstReading.Valid && latestReading.Valid {
-			var baselineReading sql.NullFloat64
-			db.QueryRowContext(ctx, `
-				SELECT power_kwh FROM meter_readings 
-				WHERE meter_id = ? AND reading_time < ?
-				ORDER BY reading_time DESC LIMIT 1
-			`, meterID, periodStart).Scan(&baselineReading)
-
-			var baseline float64
-			if baselineReading.Valid {
-				baseline = baselineReading.Float64
-			} else {
-				baseline = firstReading.Float64
-			}
-
-			consumption := latestReading.Float64 - baseline
-			if consumption > 0 {
-				totalConsumption += consumption
-			}
-		}
+		totalConsumption += sumPositiveDeltasInPeriod(db, ctx,
+			`SELECT power_kwh FROM meter_readings
+			 WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
+			 ORDER BY reading_time ASC`,
+			`SELECT power_kwh FROM meter_readings
+			 WHERE meter_id = ? AND reading_time < ?
+			 ORDER BY reading_time DESC LIMIT 1`,
+			meterID, periodStart, periodEnd)
 	}
-	
+
 	return totalConsumption
 }
 
@@ -230,53 +253,23 @@ func calculateTotalSolarExport(db *sql.DB, ctx context.Context, meterTypes []str
 	defer meterRows.Close()
 
 	totalExport := 0.0
-	
+
 	for meterRows.Next() {
 		var meterID int
 		if err := meterRows.Scan(&meterID); err != nil {
 			continue
 		}
 
-		// Get first export reading in period
-		var firstReading sql.NullFloat64
-		db.QueryRowContext(ctx, `
-			SELECT power_kwh_export FROM meter_readings 
-			WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
-			ORDER BY reading_time ASC LIMIT 1
-		`, meterID, periodStart, periodEnd).Scan(&firstReading)
-
-		// Get latest export reading in period
-		var latestReading sql.NullFloat64
-		db.QueryRowContext(ctx, `
-			SELECT power_kwh_export FROM meter_readings 
-			WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
-			ORDER BY reading_time DESC LIMIT 1
-		`, meterID, periodStart, periodEnd).Scan(&latestReading)
-
-		if firstReading.Valid && latestReading.Valid {
-			// Get baseline (reading before period)
-			var baselineReading sql.NullFloat64
-			db.QueryRowContext(ctx, `
-				SELECT power_kwh_export FROM meter_readings 
-				WHERE meter_id = ? AND reading_time < ?
-				ORDER BY reading_time DESC LIMIT 1
-			`, meterID, periodStart).Scan(&baselineReading)
-
-			var baseline float64
-			if baselineReading.Valid {
-				baseline = baselineReading.Float64
-			} else {
-				baseline = firstReading.Float64
-			}
-
-			// Calculate total export for the period
-			exportEnergy := latestReading.Float64 - baseline
-			if exportEnergy > 0 {
-				totalExport += exportEnergy
-			}
-		}
+		totalExport += sumPositiveDeltasInPeriod(db, ctx,
+			`SELECT power_kwh_export FROM meter_readings
+			 WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
+			 ORDER BY reading_time ASC`,
+			`SELECT power_kwh_export FROM meter_readings
+			 WHERE meter_id = ? AND reading_time < ?
+			 ORDER BY reading_time DESC LIMIT 1`,
+			meterID, periodStart, periodEnd)
 	}
-	
+
 	return totalExport
 }
 
@@ -299,64 +292,20 @@ func calculateTotalChargingConsumption(db *sql.DB, ctx context.Context, periodSt
 			continue
 		}
 
-		userRows, err := db.QueryContext(ctx, `
-			SELECT DISTINCT user_id 
-			FROM charger_sessions 
-			WHERE charger_id = ?
-			AND session_time >= ? AND session_time < ?
-		`, chargerID, periodStart, periodEnd)
-		
-		if err != nil {
-			continue
-		}
-
-		for userRows.Next() {
-			var userID string
-			if err := userRows.Scan(&userID); err != nil {
-				continue
-			}
-
-			var firstReading sql.NullFloat64
-			db.QueryRowContext(ctx, `
-				SELECT power_kwh FROM charger_sessions 
-				WHERE charger_id = ? AND user_id = ? 
-				AND session_time >= ? AND session_time < ?
-				ORDER BY session_time ASC LIMIT 1
-			`, chargerID, userID, periodStart, periodEnd).Scan(&firstReading)
-
-			var latestReading sql.NullFloat64
-			db.QueryRowContext(ctx, `
-				SELECT power_kwh FROM charger_sessions 
-				WHERE charger_id = ? AND user_id = ? 
-				AND session_time >= ? AND session_time < ?
-				ORDER BY session_time DESC LIMIT 1
-			`, chargerID, userID, periodStart, periodEnd).Scan(&latestReading)
-
-			if firstReading.Valid && latestReading.Valid {
-				var baselineReading sql.NullFloat64
-				db.QueryRowContext(ctx, `
-					SELECT power_kwh FROM charger_sessions 
-					WHERE charger_id = ? AND user_id = ? 
-					AND session_time < ?
-					ORDER BY session_time DESC LIMIT 1
-				`, chargerID, userID, periodStart).Scan(&baselineReading)
-
-				var baseline float64
-				if baselineReading.Valid {
-					baseline = baselineReading.Float64
-				} else {
-					baseline = firstReading.Float64
-				}
-
-				consumption := latestReading.Float64 - baseline
-				if consumption > 0 {
-					totalConsumption += consumption
-				}
-			}
-		}
-		userRows.Close()
+		// charger_sessions stores a single cumulative meter for the charger,
+		// regardless of which user/RFID was active. Walk it chronologically
+		// and sum the positive deltas — this matches the actual energy
+		// delivered and is robust against historical anomalies.
+		totalConsumption += sumPositiveDeltasInPeriod(db, ctx,
+			`SELECT power_kwh FROM charger_sessions
+			 WHERE charger_id = ? AND session_time >= ? AND session_time < ?
+			 ORDER BY session_time ASC`,
+			`SELECT power_kwh FROM charger_sessions
+			 WHERE charger_id = ? AND session_time < ?
+			 ORDER BY session_time DESC LIMIT 1`,
+			chargerID, periodStart, periodEnd)
 	}
-	
+
 	return totalConsumption
 }
 
