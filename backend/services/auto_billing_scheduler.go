@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -308,9 +310,14 @@ func (s *AutoBillingScheduler) runConfig(id int, advanceSchedule bool) (*RunConf
 				result.Warnings = append(result.Warnings, fmt.Sprintf("Invoice %d: recipient has no e-mail address", invoice.ID))
 				log.Printf("[AUTO-BILLING-EMAIL] Config %d invoice %d: recipient has no e-mail, skipping", id, invoice.ID)
 			} else {
+				// pdfPath returned by the generator is just the filename — resolve
+				// it to the actual on-disk location before reading it as an email
+				// attachment. The PDF generator writes either to the absolute Pi
+				// path or a local ./invoices fallback.
+				attachmentPath := resolveInvoicePDFPath(pdfPath)
 				subject := fmt.Sprintf("Rechnung / Invoice %s", fullInvoice["invoice_number"])
 				body := s.buildInvoiceEmailBody(fullInvoice)
-				if err := s.emailAlerter.SendEmailWithAttachment(recipient, subject, body, pdfPath); err != nil {
+				if err := s.emailAlerter.SendEmailWithAttachment(recipient, subject, body, attachmentPath); err != nil {
 					result.EmailsFailed++
 					result.Warnings = append(result.Warnings, fmt.Sprintf("Invoice %d: e-mail to %s failed: %v", invoice.ID, recipient, err))
 					log.Printf("[AUTO-BILLING-EMAIL] Config %d invoice %d: failed to send to %s: %v", id, invoice.ID, recipient, err)
@@ -526,6 +533,40 @@ func getStringFromNull(ns sql.NullString) string {
 		return ns.String
 	}
 	return ""
+}
+
+// resolveInvoicePDFPath turns whatever GenerateInvoicePDF returned (which is
+// usually just the filename) into a real on-disk path that os.ReadFile can
+// open. Mirrors the directory layout used by main.go's PDF file server and
+// the BillingHandler.DownloadPDF resolver.
+func resolveInvoicePDFPath(stored string) string {
+	if stored == "" {
+		return stored
+	}
+	// Already a real file? Use as-is.
+	if _, err := os.Stat(stored); err == nil {
+		return stored
+	}
+	if filepath.IsAbs(stored) {
+		return stored
+	}
+	// Strip any directory prefix the caller may have tacked on so we
+	// always search by basename — matches how DownloadPDF resolves.
+	base := filepath.Base(stored)
+	candidates := []string{
+		filepath.Join("/home/pi/zev-billing/backend/invoices", base),
+		filepath.Join("/home/pi/zev-billing/invoices", base),
+		filepath.Join("./invoices", base),
+		filepath.Join("./backend/invoices", base),
+	}
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			return c
+		}
+	}
+	// Nothing matched; return what we had so the caller's error message
+	// still makes sense (it will fail to open and surface the original name).
+	return stored
 }
 
 // Helper function to parse comma-separated IDs
