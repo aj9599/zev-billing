@@ -2204,11 +2204,21 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 			consumption := session.PowerKwh - previousPower
 
 			if consumption < 0 {
-				if shouldLog {
-					log.Printf("  [CHARGING]     [%d] NEGATIVE consumption %.3f kWh - meter reset, resetting baseline",
-						sessionNum, consumption)
+				// power_kwh is a cumulative counter. A genuine reset goes back to
+				// near zero (new charger / firmware reset). A non-zero drop is a
+				// sync/corruption artifact — re-baselining at the low value caused
+				// the climb back up to be billed a second time. Hold the previous
+				// high so the recovery isn't double-counted.
+				if session.PowerKwh < 1.0 {
+					if shouldLog {
+						log.Printf("  [CHARGING]     [%d] NEGATIVE consumption %.3f kWh - genuine reset, re-baselining at %.3f",
+							sessionNum, consumption, session.PowerKwh)
+					}
+					previousPower = session.PowerKwh
+				} else if shouldLog {
+					log.Printf("  [CHARGING]     [%d] NEGATIVE consumption %.3f kWh (spurious drop %.3f → %.3f) - holding baseline at %.3f",
+						sessionNum, consumption, previousPower, session.PowerKwh, previousPower)
 				}
-				previousPower = session.PowerKwh
 				continue
 			}
 
@@ -2396,7 +2406,12 @@ func (bs *BillingService) calculateChargingFiltered(buildingID int, filter charg
 			}
 			delta := s.PowerKwh - prevPower
 			if delta < 0 {
-				prevPower = s.PowerKwh
+				// Cumulative counter dropped. Only re-baseline on a genuine reset
+				// (back to ~0). For a non-zero drop, hold the previous high so the
+				// climb back up isn't billed a second time.
+				if s.PowerKwh < 1.0 {
+					prevPower = s.PowerKwh
+				}
 				continue
 			}
 			if delta > 0 {
