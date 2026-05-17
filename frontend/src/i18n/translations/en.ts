@@ -163,6 +163,7 @@ export const en: Translations = {
   'common.next': 'Next',
   'common.back': 'Back',
   'common.or': 'or',
+  'common.total': 'Total',
 
   // ============================================================================
   // DASHBOARD
@@ -1603,6 +1604,7 @@ export const en: Translations = {
   'billing.deleteBtn': 'Delete',
   'billing.view': 'View',
   'billing.downloadPdf': 'Download PDF',
+  'billing.openPdf': 'Open PDF',
   'billing.archived': 'Archived',
   'billing.archiveSection': 'Archive (Archived Users)',
 

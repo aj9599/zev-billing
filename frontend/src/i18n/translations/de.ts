@@ -164,6 +164,7 @@ export const de: Translations = {
   'common.next': 'Weiter',
   'common.back': 'Zurück',
   'common.or': 'oder',
+  'common.total': 'Gesamt',
 
   // ============================================================================
   // DASHBOARD
@@ -1604,6 +1605,7 @@ export const de: Translations = {
   'billing.deleteBtn': 'Löschen',
   'billing.view': 'Ansicht',
   'billing.downloadPdf': 'PDF herunterladen',
+  'billing.openPdf': 'PDF öffnen',
   'billing.archived': 'Archiviert',
   'billing.archiveSection': 'Archiv (Archivierte Benutzer)',
 
