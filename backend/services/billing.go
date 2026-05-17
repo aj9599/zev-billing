@@ -2154,6 +2154,8 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 
 		var previousPower float64
 		var hasPreviousPower bool
+		var firstBillablePower, lastBillablePower float64
+		var genuineReset bool
 
 		chargerBillable := 0
 		chargerSkipped := 0
@@ -2194,12 +2196,16 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 
 			if !hasPreviousPower {
 				previousPower = session.PowerKwh
+				firstBillablePower = session.PowerKwh
+				lastBillablePower = session.PowerKwh
 				hasPreviousPower = true
 				if shouldLog {
 					log.Printf("  [CHARGING]     [%d] Established baseline at %.3f kWh", sessionNum, session.PowerKwh)
 				}
 				continue
 			}
+
+			lastBillablePower = session.PowerKwh
 
 			consumption := session.PowerKwh - previousPower
 
@@ -2215,6 +2221,7 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 							sessionNum, consumption, session.PowerKwh)
 					}
 					previousPower = session.PowerKwh
+					genuineReset = true
 				} else if shouldLog {
 					log.Printf("  [CHARGING]     [%d] NEGATIVE consumption %.3f kWh (spurious drop %.3f → %.3f) - holding baseline at %.3f",
 						sessionNum, consumption, previousPower, session.PowerKwh, previousPower)
@@ -2253,6 +2260,29 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 			}
 
 			previousPower = session.PowerKwh
+		}
+
+		// Sanity cap: for a cumulative counter, total consumption cannot exceed
+		// (last reading − first reading). If upstream data corruption introduced
+		// a phantom spike that later settled back, the delta sum will overshoot
+		// this bound — scale modes proportionally to recover the correct total.
+		// Skipped when a genuine reset happened mid-period (bound is invalid).
+		if hasPreviousPower && !genuineReset {
+			chargerTotal := chargerNormal + chargerPriority
+			bound := lastBillablePower - firstBillablePower
+			if bound < 0 {
+				bound = 0
+			}
+			if chargerTotal > bound+0.001 {
+				factor := 0.0
+				if chargerTotal > 0 {
+					factor = bound / chargerTotal
+				}
+				log.Printf("  [CHARGING] Charger %d (%s): SANITY CAP — sum %.3f kWh > bound %.3f kWh (last %.3f − first %.3f); scaling by %.4f",
+					chargerID, config.ChargerName, chargerTotal, bound, lastBillablePower, firstBillablePower, factor)
+				chargerNormal *= factor
+				chargerPriority *= factor
+			}
 		}
 
 		log.Printf("  [CHARGING] Charger %d summary: %d billable, %d skipped, %.3f kWh normal, %.3f kWh priority",
@@ -2389,6 +2419,9 @@ func (bs *BillingService) calculateChargingFiltered(buildingID int, filter charg
 
 		var prevPower float64
 		var hasPrev bool
+		var firstBillablePower, lastBillablePower float64
+		var genuineReset bool
+		var chargerNormal, chargerPriority float64
 		for _, s := range sessions {
 			if s.State == cfg.StateIdle {
 				continue
@@ -2401,9 +2434,12 @@ func (bs *BillingService) calculateChargingFiltered(buildingID int, filter charg
 			}
 			if !hasPrev {
 				prevPower = s.PowerKwh
+				firstBillablePower = s.PowerKwh
+				lastBillablePower = s.PowerKwh
 				hasPrev = true
 				continue
 			}
+			lastBillablePower = s.PowerKwh
 			delta := s.PowerKwh - prevPower
 			if delta < 0 {
 				// Cumulative counter dropped. Only re-baseline on a genuine reset
@@ -2411,20 +2447,48 @@ func (bs *BillingService) calculateChargingFiltered(buildingID int, filter charg
 				// climb back up isn't billed a second time.
 				if s.PowerKwh < 1.0 {
 					prevPower = s.PowerKwh
+					genuineReset = true
 				}
 				continue
 			}
 			if delta > 0 {
 				switch s.Mode {
 				case cfg.ModePriority:
-					priority += delta
+					chargerPriority += delta
 				default:
-					normal += delta
+					chargerNormal += delta
 				}
 			}
 			prevPower = s.PowerKwh
 		}
-		log.Printf("  [CHARGING-CID] Charger %d (%s): %d sessions processed", cfg.ChargerID, cfg.ChargerName, len(sessions))
+
+		// Sanity cap: for a cumulative counter, total consumption cannot exceed
+		// (last reading − first reading). If upstream data corruption introduced
+		// a phantom spike that later settled back, the delta sum will overshoot
+		// this bound — scale modes proportionally to recover the correct total.
+		// Skipped when a genuine reset happened mid-period (bound is invalid).
+		chargerTotal := chargerNormal + chargerPriority
+		if hasPrev && !genuineReset {
+			bound := lastBillablePower - firstBillablePower
+			if bound < 0 {
+				bound = 0
+			}
+			if chargerTotal > bound+0.001 {
+				factor := 0.0
+				if chargerTotal > 0 {
+					factor = bound / chargerTotal
+				}
+				log.Printf("  [CHARGING-CID] Charger %d (%s): SANITY CAP — sum %.3f kWh > bound %.3f kWh (last %.3f − first %.3f); scaling by %.4f",
+					cfg.ChargerID, cfg.ChargerName, chargerTotal, bound, lastBillablePower, firstBillablePower, factor)
+				chargerNormal *= factor
+				chargerPriority *= factor
+			}
+		}
+
+		normal += chargerNormal
+		priority += chargerPriority
+		log.Printf("  [CHARGING-CID] Charger %d (%s): %d sessions processed (normal=%.3f, priority=%.3f)",
+			cfg.ChargerID, cfg.ChargerName, len(sessions), chargerNormal, chargerPriority)
 	}
 
 	log.Printf("  [CHARGING-CID] FINAL — Normal: %.3f kWh, Priority: %.3f kWh", normal, priority)
