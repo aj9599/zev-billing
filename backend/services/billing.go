@@ -116,6 +116,43 @@ func clipToSegment(seg PriceSegment, a, b time.Time) (start, end time.Time, ok b
 	return start, end, true
 }
 
+// parseStoredDate tolerantly parses a date string read from the DB. The
+// mattn/go-sqlite3 driver auto-converts columns whose declared type is DATE
+// to time.Time, which database/sql then re-formats as RFC3339 when scanned
+// into a string — so the same column can come back as "2026-05-01" or as
+// "2026-05-01T00:00:00Z" depending on the row and driver version. We accept
+// either, plus a few near-relatives, and normalize to midnight UTC of the
+// named day.
+func parseStoredDate(s string) (time.Time, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}, fmt.Errorf("empty date string")
+	}
+	layouts := []string{
+		"2006-01-02",
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02T15:04:05.999999999Z",
+		"2006-01-02T15:04:05Z",
+		"2006-01-02 15:04:05.999999999-07:00",
+		"2006-01-02 15:04:05-07:00",
+		"2006-01-02 15:04:05.999999999",
+		"2006-01-02 15:04:05",
+	}
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, s); err == nil {
+			return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC), nil
+		}
+	}
+	// Last resort: take the first 10 chars if they look date-like.
+	if len(s) >= 10 {
+		if t, err := time.Parse("2006-01-02", s[:10]); err == nil {
+			return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC), nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unrecognized date format %q", s)
+}
+
 // loadPriceSegments returns the ordered, contiguous price segments that cover
 // the half-open interval [start, end) for the given building. When two active
 // pricing rows overlap, the row with the later valid_from wins for the
@@ -157,18 +194,18 @@ func (bs *BillingService) loadPriceSegments(buildingID int, start, end time.Time
 			log.Printf("WARNING: skipping unreadable billing_settings row: %v", err)
 			continue
 		}
-		rangeStart, err := time.Parse("2006-01-02", validFromStr)
+		rangeStart, err := parseStoredDate(validFromStr)
 		if err != nil {
-			log.Printf("WARNING: skipping billing_settings ID %d with invalid valid_from %q", s.ID, validFromStr)
+			log.Printf("ERROR: billing_settings ID %d has unparseable valid_from %q — row skipped: %v", s.ID, validFromStr, err)
 			continue
 		}
 		// valid_to is inclusive of the named day; convert to half-open by
 		// adding 24h. NULL means open-ended — clamp past the caller's window.
 		var rangeEnd time.Time
-		if validToStr.Valid && validToStr.String != "" {
-			parsed, err := time.Parse("2006-01-02", validToStr.String)
+		if validToStr.Valid && strings.TrimSpace(validToStr.String) != "" {
+			parsed, err := parseStoredDate(validToStr.String)
 			if err != nil {
-				log.Printf("WARNING: skipping billing_settings ID %d with invalid valid_to %q", s.ID, validToStr.String)
+				log.Printf("ERROR: billing_settings ID %d has unparseable valid_to %q — row skipped: %v", s.ID, validToStr.String, err)
 				continue
 			}
 			rangeEnd = parsed.Add(24 * time.Hour)
@@ -178,6 +215,9 @@ func (bs *BillingService) loadPriceSegments(buildingID int, start, end time.Time
 				rangeEnd = rangeStart.Add(24 * time.Hour)
 			}
 		}
+		log.Printf("  billing_settings ID %d: valid_from=%q → %s, valid_to=%q → %s",
+			s.ID, validFromStr, rangeStart.Format("2006-01-02"),
+			validToStr.String, rangeEnd.Add(-24*time.Hour).Format("2006-01-02"))
 		allRows = append(allRows, priceRow{settings: s, rangeStart: rangeStart, rangeEnd: rangeEnd})
 	}
 
