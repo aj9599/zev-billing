@@ -78,6 +78,156 @@ type BillingScope struct {
 	ChargerID *int   // required when Mode == BillingModeCharger
 }
 
+// PriceSegment is a contiguous sub-period of a billing run during which a
+// single set of billing settings (prices) is in force. A bill that spans a
+// price change is built from multiple segments.
+type PriceSegment struct {
+	Start    time.Time // inclusive (00:00:00 of first day)
+	End      time.Time // exclusive (00:00:00 of day after last)
+	Settings models.BillingSettings
+}
+
+// segmentSuffix renders a parenthetical date hint like " (01.12-31.12)" used
+// to label per-segment line items on invoices that span a price change. Returns
+// an empty string when there is only one segment so single-price bills keep
+// their existing line-item format unchanged.
+func segmentSuffix(seg PriceSegment, isMultiSegment bool) string {
+	if !isMultiSegment {
+		return ""
+	}
+	lastDay := seg.End.Add(-24 * time.Hour)
+	return fmt.Sprintf(" (%s-%s)", seg.Start.Format("02.01"), lastDay.Format("02.01"))
+}
+
+// clipToSegment returns the intersection of [a, b) and [seg.Start, seg.End).
+// ok is false when the intersection is empty.
+func clipToSegment(seg PriceSegment, a, b time.Time) (start, end time.Time, ok bool) {
+	start = a
+	if seg.Start.After(start) {
+		start = seg.Start
+	}
+	end = b
+	if seg.End.Before(end) {
+		end = seg.End
+	}
+	if !start.Before(end) {
+		return time.Time{}, time.Time{}, false
+	}
+	return start, end, true
+}
+
+// loadPriceSegments returns the ordered, contiguous price segments that cover
+// the half-open interval [start, end) for the given building. When two active
+// pricing rows overlap, the row with the later valid_from wins for the
+// overlapping period (newer prices supersede older open-ended ones). Returns
+// an error naming the uncovered date range if any portion of [start, end) has
+// no active pricing.
+func (bs *BillingService) loadPriceSegments(buildingID int, start, end time.Time) ([]PriceSegment, error) {
+	rows, err := bs.db.Query(`
+		SELECT id, building_id, is_complex, normal_power_price, solar_power_price,
+		       car_charging_normal_price, car_charging_priority_price,
+		       vzev_export_price, currency, valid_from, valid_to
+		FROM billing_settings
+		WHERE building_id = ? AND is_active = 1
+		ORDER BY valid_from ASC, id ASC
+	`, buildingID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query billing_settings: %v", err)
+	}
+	defer rows.Close()
+
+	type priceRow struct {
+		settings   models.BillingSettings
+		rangeStart time.Time // inclusive
+		rangeEnd   time.Time // exclusive
+	}
+
+	var allRows []priceRow
+	for rows.Next() {
+		var s models.BillingSettings
+		var validFromStr string
+		var validToStr sql.NullString
+		if err := rows.Scan(
+			&s.ID, &s.BuildingID, &s.IsComplex,
+			&s.NormalPowerPrice, &s.SolarPowerPrice,
+			&s.CarChargingNormalPrice, &s.CarChargingPriorityPrice,
+			&s.VZEVExportPrice, &s.Currency,
+			&validFromStr, &validToStr,
+		); err != nil {
+			log.Printf("WARNING: skipping unreadable billing_settings row: %v", err)
+			continue
+		}
+		rangeStart, err := time.Parse("2006-01-02", validFromStr)
+		if err != nil {
+			log.Printf("WARNING: skipping billing_settings ID %d with invalid valid_from %q", s.ID, validFromStr)
+			continue
+		}
+		// valid_to is inclusive of the named day; convert to half-open by
+		// adding 24h. NULL means open-ended — clamp past the caller's window.
+		var rangeEnd time.Time
+		if validToStr.Valid && validToStr.String != "" {
+			parsed, err := time.Parse("2006-01-02", validToStr.String)
+			if err != nil {
+				log.Printf("WARNING: skipping billing_settings ID %d with invalid valid_to %q", s.ID, validToStr.String)
+				continue
+			}
+			rangeEnd = parsed.Add(24 * time.Hour)
+		} else {
+			rangeEnd = end.Add(24 * time.Hour)
+			if rangeEnd.Before(rangeStart) {
+				rangeEnd = rangeStart.Add(24 * time.Hour)
+			}
+		}
+		allRows = append(allRows, priceRow{settings: s, rangeStart: rangeStart, rangeEnd: rangeEnd})
+	}
+
+	// If an earlier row's range extends into a later row's range, the later
+	// (newer) row supersedes it from its valid_from onward.
+	for i := 0; i < len(allRows)-1; i++ {
+		if allRows[i].rangeEnd.After(allRows[i+1].rangeStart) {
+			allRows[i].rangeEnd = allRows[i+1].rangeStart
+		}
+	}
+
+	// Intersect with [start, end) and emit segments.
+	var segments []PriceSegment
+	for _, r := range allRows {
+		segStart := r.rangeStart
+		if segStart.Before(start) {
+			segStart = start
+		}
+		segEnd := r.rangeEnd
+		if segEnd.After(end) {
+			segEnd = end
+		}
+		if !segStart.Before(segEnd) {
+			continue
+		}
+		segments = append(segments, PriceSegment{
+			Start:    segStart,
+			End:      segEnd,
+			Settings: r.settings,
+		})
+	}
+
+	// Verify the segments fully cover [start, end) with no gaps.
+	if len(segments) == 0 || segments[0].Start.After(start) {
+		return nil, fmt.Errorf("no active pricing for the period starting %s", start.Format("2006-01-02"))
+	}
+	for i := 1; i < len(segments); i++ {
+		if segments[i].Start.After(segments[i-1].End) {
+			return nil, fmt.Errorf("pricing gap between %s and %s",
+				segments[i-1].End.Format("2006-01-02"),
+				segments[i].Start.Format("2006-01-02"))
+		}
+	}
+	if segments[len(segments)-1].End.Before(end) {
+		return nil, fmt.Errorf("no active pricing for the period ending %s", end.Add(-24*time.Hour).Format("2006-01-02"))
+	}
+
+	return segments, nil
+}
+
 // GenerateBills generates bills for the specified buildings and users
 // customItemIDs: if nil or empty, no custom items are included. Pass specific IDs to include those items.
 func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, endDate string, isVZEV bool) ([]models.Invoice, error) {
@@ -117,41 +267,36 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 
 	log.Printf("Parsed dates - Start: %s, End: %s", start, end)
 
-	// Reference date used to pick the pricing record that was in force during
-	// this billing period. We use the period's start date — if a period happens
-	// to straddle a price change, the user should bill the two segments separately.
-	priceRefDate := start.Format("2006-01-02")
-
-	// VALIDATION: Check that every building has pricing valid for the billing period
+	// VALIDATION: every selected building must have pricing covering the
+	// entire period. loadPriceSegments returns one segment per price era the
+	// period passes through (e.g. Dec 2025 at 2025 rates + Jan-Feb 2026 at
+	// 2026 rates) and an error naming any uncovered date range.
+	buildingSegments := make(map[int][]PriceSegment, len(buildingIDs))
 	buildingsWithoutPricing := []string{}
 	for _, buildingID := range buildingIDs {
-		var count int
-		err := bs.db.QueryRow(`
-			SELECT COUNT(*) FROM billing_settings
-			WHERE building_id = ? AND is_active = 1
-			  AND valid_from <= ?
-			  AND (valid_to IS NULL OR valid_to >= ?)
-		`, buildingID, priceRefDate, priceRefDate).Scan(&count)
-
-		if err != nil || count == 0 {
+		segments, err := bs.loadPriceSegments(buildingID, start, end)
+		if err != nil {
 			var buildingName string
 			bs.db.QueryRow("SELECT name FROM buildings WHERE id = ?", buildingID).Scan(&buildingName)
 			if buildingName == "" {
 				buildingName = fmt.Sprintf("Building ID %d", buildingID)
 			}
-			buildingsWithoutPricing = append(buildingsWithoutPricing, buildingName)
+			buildingsWithoutPricing = append(buildingsWithoutPricing, fmt.Sprintf("%s (%v)", buildingName, err))
+			continue
 		}
+		buildingSegments[buildingID] = segments
 	}
 
 	if len(buildingsWithoutPricing) > 0 {
-		errorMsg := fmt.Sprintf("No pricing configuration valid for %s found for the following building(s): %s. Please configure pricing in the Pricing section for this billing period.",
-			priceRefDate, strings.Join(buildingsWithoutPricing, ", "))
+		errorMsg := fmt.Sprintf("Pricing problem for the following building(s): %s. Please configure pricing in the Pricing section for the full billing period.",
+			strings.Join(buildingsWithoutPricing, "; "))
 		log.Printf("ERROR: %s", errorMsg)
-		return nil, fmt.Errorf(errorMsg)
+		return nil, fmt.Errorf("%s", errorMsg)
 	}
 
 	for _, buildingID := range buildingIDs {
 		log.Printf("\n--- Processing Building ID: %d ---", buildingID)
+		segments := buildingSegments[buildingID]
 
 		// Check if this is a vZEV complex
 		var isComplex bool
@@ -166,51 +311,22 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 			continue
 		}
 
-		// Pick the pricing record whose validity window covers the billing
-		// period's start date. ORDER BY valid_from DESC picks the most recent
-		// match when overlapping rows exist (e.g. an open-ended row plus a
-		// newer one that supersedes it).
-		var settings models.BillingSettings
-		err = bs.db.QueryRow(`
-			SELECT id, building_id, is_complex, normal_power_price, solar_power_price,
-				   car_charging_normal_price, car_charging_priority_price,
-				   vzev_export_price, currency
-			FROM billing_settings
-			WHERE building_id = ? AND is_active = 1
-			  AND valid_from <= ?
-			  AND (valid_to IS NULL OR valid_to >= ?)
-			ORDER BY valid_from DESC
-			LIMIT 1
-		`, buildingID, priceRefDate, priceRefDate).Scan(
-			&settings.ID, &settings.BuildingID, &settings.IsComplex,
-			&settings.NormalPowerPrice, &settings.SolarPowerPrice,
-			&settings.CarChargingNormalPrice, &settings.CarChargingPriorityPrice,
-			&settings.VZEVExportPrice, &settings.Currency,
-		)
-
-		if err != nil {
-			log.Printf("ERROR: No billing settings valid for %s on building %d: %v", priceRefDate, buildingID, err)
-			continue
+		log.Printf("Building %d: %d price segment(s) covering the period", buildingID, len(segments))
+		for i, seg := range segments {
+			log.Printf("  Segment %d: %s to %s — Normal=%.3f, Solar=%.3f, vZEV Export=%.3f, Currency=%s",
+				i+1,
+				seg.Start.Format("2006-01-02"),
+				seg.End.Add(-24*time.Hour).Format("2006-01-02"),
+				seg.Settings.NormalPowerPrice, seg.Settings.SolarPowerPrice,
+				seg.Settings.VZEVExportPrice, seg.Settings.Currency)
 		}
-
-		log.Printf("Selected pricing ID %d for building %d (valid for %s)", settings.ID, buildingID, priceRefDate)
-
-		log.Printf("Billing Settings - Type: %s, Normal: %.3f, Solar: %.3f, vZEV Export: %.3f",
-			func() string {
-				if settings.IsComplex {
-					return "vZEV"
-				} else {
-					return "ZEV"
-				}
-			}(),
-			settings.NormalPowerPrice, settings.SolarPowerPrice, settings.VZEVExportPrice)
 
 		// Route to appropriate billing logic
 		switch {
 		case isVZEV && isComplex:
 			// vZEV: Virtual allocation between buildings in complex
 			log.Printf("Using vZEV billing logic for complex %d", buildingID)
-			complexInvoices, err := bs.generateVZEVBillsWithOptions(buildingID, groupBuildings, userIDs, start, end, settings, customItemIDs)
+			complexInvoices, err := bs.generateVZEVBillsWithOptions(buildingID, groupBuildings, userIDs, start, end, segments, customItemIDs)
 			if err != nil {
 				log.Printf("ERROR: vZEV billing failed: %v", err)
 				continue
@@ -230,7 +346,7 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 				continue
 			}
 			for _, userPeriod := range userPeriods {
-				invoice, err := bs.generateChargerOnlyInvoice(userPeriod, buildingID, *scope.ChargerID, start, end, settings, customItemIDs)
+				invoice, err := bs.generateChargerOnlyInvoice(userPeriod, buildingID, *scope.ChargerID, start, end, segments, customItemIDs)
 				if err != nil {
 					log.Printf("ERROR: Failed to generate charger-only invoice for user %d: %v", userPeriod.UserID, err)
 					continue
@@ -247,7 +363,7 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 				continue
 			}
 			for _, userPeriod := range userPeriods {
-				invoice, err := bs.generateUserInvoiceForPeriodWithOptionsAndScope(userPeriod, buildingID, start, end, settings, customItemIDs, scope)
+				invoice, err := bs.generateUserInvoiceForPeriodWithOptionsAndScope(userPeriod, buildingID, start, end, segments, customItemIDs, scope)
 				if err != nil {
 					log.Printf("ERROR: Failed to generate invoice for user %d: %v", userPeriod.UserID, err)
 					continue
@@ -265,7 +381,7 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 			}
 
 			for _, userPeriod := range userPeriods {
-				invoice, err := bs.generateUserInvoiceForPeriodWithOptions(userPeriod, buildingID, start, end, settings, customItemIDs)
+				invoice, err := bs.generateUserInvoiceForPeriodWithOptions(userPeriod, buildingID, start, end, segments, customItemIDs)
 				if err != nil {
 					log.Printf("ERROR: Failed to generate invoice for user %d: %v", userPeriod.UserID, err)
 					continue
@@ -832,19 +948,25 @@ func (bs *BillingService) countActiveUsers(buildingID int) (int, error) {
 	return count, err
 }
 
-// Generate invoice for a specific user period with ACTUAL consumption (backward compatible)
-func (bs *BillingService) generateUserInvoiceForPeriod(userPeriod UserPeriod, buildingID int, fullStart, fullEnd time.Time, settings models.BillingSettings) (*models.Invoice, error) {
-	return bs.generateUserInvoiceForPeriodWithOptions(userPeriod, buildingID, fullStart, fullEnd, settings, nil)
-}
-
 // generateUserInvoiceForPeriodWithOptions generates invoice with custom item selection (default apartment scope).
-func (bs *BillingService) generateUserInvoiceForPeriodWithOptions(userPeriod UserPeriod, buildingID int, fullStart, fullEnd time.Time, settings models.BillingSettings, customItemIDs []int) (*models.Invoice, error) {
-	return bs.generateUserInvoiceForPeriodWithOptionsAndScope(userPeriod, buildingID, fullStart, fullEnd, settings, customItemIDs, BillingScope{})
+func (bs *BillingService) generateUserInvoiceForPeriodWithOptions(userPeriod UserPeriod, buildingID int, fullStart, fullEnd time.Time, segments []PriceSegment, customItemIDs []int) (*models.Invoice, error) {
+	return bs.generateUserInvoiceForPeriodWithOptionsAndScope(userPeriod, buildingID, fullStart, fullEnd, segments, customItemIDs, BillingScope{})
 }
 
 // generateUserInvoiceForPeriodWithOptionsAndScope generates invoice with optional scope override.
 // When scope.Mode == BillingModeBuilding, charging is calculated for ALL chargers in the building (matched by charger_id, no RFID required).
-func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPeriod UserPeriod, buildingID int, fullStart, fullEnd time.Time, settings models.BillingSettings, customItemIDs []int, scope BillingScope) (*models.Invoice, error) {
+// The segments slice must be ordered, contiguous, and cover [fullStart, fullEnd) — the
+// energy and charging blocks are computed once per segment so a bill that spans a price
+// change is priced correctly. Shared meters, custom items, proration and the meter-reading
+// summary line stay computed once on the full user period; segments[0].Settings provides
+// the invoice currency.
+func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPeriod UserPeriod, buildingID int, fullStart, fullEnd time.Time, segments []PriceSegment, customItemIDs []int, scope BillingScope) (*models.Invoice, error) {
+	if len(segments) == 0 {
+		return nil, fmt.Errorf("no price segments supplied")
+	}
+	primary := segments[0].Settings
+	multiSeg := len(segments) > 1
+
 	tr := GetTranslations(userPeriod.Language)
 
 	invoiceYear := fullStart.Year()
@@ -883,13 +1005,33 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 	// CRITICAL: Get meter readings for THIS USER'S ACTUAL PERIOD
 	meterReadingFrom, meterReadingTo, meterName := bs.getMeterReadings(userPeriod.UserID, start, end)
 
-	// CRITICAL: Calculate consumption for THIS USER'S ACTUAL PERIOD
-	normalPower, solarPower, totalConsumption := bs.calculateZEVConsumption(userPeriod.UserID, buildingID, start, end)
+	// CRITICAL: Calculate consumption per price segment so a bill that spans a
+	// price change is priced correctly. Each segment is clipped to the user's
+	// actual billing period.
+	type zevSegment struct {
+		seg              PriceSegment
+		segStart, segEnd time.Time
+		normalPower      float64
+		solarPower       float64
+	}
+	var zevSegs []zevSegment
+	var totalNormal, totalSolar, totalConsumption float64
+	for _, seg := range segments {
+		segStart, segEnd, ok := clipToSegment(seg, start, end)
+		if !ok {
+			continue
+		}
+		normalPower, solarPower, segConsumption := bs.calculateZEVConsumption(userPeriod.UserID, buildingID, segStart, segEnd)
+		totalNormal += normalPower
+		totalSolar += solarPower
+		totalConsumption += segConsumption
+		zevSegs = append(zevSegs, zevSegment{seg: seg, segStart: segStart, segEnd: segEnd, normalPower: normalPower, solarPower: solarPower})
+	}
 
 	log.Printf("  Meter: %s (Period: %s to %s)", meterName, start.Format("2006-01-02"), end.Format("2006-01-02"))
 	log.Printf("  Reading from: %.3f kWh, Reading to: %.3f kWh", meterReadingFrom, meterReadingTo)
-	log.Printf("  Calculated ACTUAL consumption for this period: %.3f kWh (Normal: %.3f, Solar: %.3f)",
-		totalConsumption, normalPower, solarPower)
+	log.Printf("  Calculated ACTUAL consumption for this period: %.3f kWh (Normal: %.3f, Solar: %.3f, segments: %d)",
+		totalConsumption, totalNormal, totalSolar, len(zevSegs))
 
 	if totalConsumption > 0 {
 		items = append(items, models.InvoiceItem{
@@ -921,30 +1063,33 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 		})
 	}
 
-	if solarPower > 0 {
-		solarCost := solarPower * settings.SolarPowerPrice
-		totalAmount += solarCost
-		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh", tr.SolarPower, solarPower, settings.SolarPowerPrice, settings.Currency),
-			Quantity:    solarPower,
-			UnitPrice:   settings.SolarPowerPrice,
-			TotalPrice:  solarCost,
-			ItemType:    "solar_power",
-		})
-		log.Printf("  Solar Cost: %.3f kWh × %.3f = %.3f %s", solarPower, settings.SolarPowerPrice, solarCost, settings.Currency)
-	}
-
-	if normalPower > 0 {
-		normalCost := normalPower * settings.NormalPowerPrice
-		totalAmount += normalCost
-		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh", tr.NormalPowerGrid, normalPower, settings.NormalPowerPrice, settings.Currency),
-			Quantity:    normalPower,
-			UnitPrice:   settings.NormalPowerPrice,
-			TotalPrice:  normalCost,
-			ItemType:    "normal_power",
-		})
-		log.Printf("  Normal Cost: %.3f kWh × %.3f = %.3f %s", normalPower, settings.NormalPowerPrice, normalCost, settings.Currency)
+	for _, zs := range zevSegs {
+		suffix := segmentSuffix(PriceSegment{Start: zs.segStart, End: zs.segEnd}, multiSeg)
+		s := zs.seg.Settings
+		if zs.solarPower > 0 {
+			solarCost := zs.solarPower * s.SolarPowerPrice
+			totalAmount += solarCost
+			items = append(items, models.InvoiceItem{
+				Description: fmt.Sprintf("%s%s: %.3f kWh × %.3f %s/kWh", tr.SolarPower, suffix, zs.solarPower, s.SolarPowerPrice, s.Currency),
+				Quantity:    zs.solarPower,
+				UnitPrice:   s.SolarPowerPrice,
+				TotalPrice:  solarCost,
+				ItemType:    "solar_power",
+			})
+			log.Printf("  Solar Cost%s: %.3f kWh × %.3f = %.3f %s", suffix, zs.solarPower, s.SolarPowerPrice, solarCost, s.Currency)
+		}
+		if zs.normalPower > 0 {
+			normalCost := zs.normalPower * s.NormalPowerPrice
+			totalAmount += normalCost
+			items = append(items, models.InvoiceItem{
+				Description: fmt.Sprintf("%s%s: %.3f kWh × %.3f %s/kWh", tr.NormalPowerGrid, suffix, zs.normalPower, s.NormalPowerPrice, s.Currency),
+				Quantity:    zs.normalPower,
+				UnitPrice:   s.NormalPowerPrice,
+				TotalPrice:  normalCost,
+				ItemType:    "normal_power",
+			})
+			log.Printf("  Normal Cost%s: %.3f kWh × %.3f = %.3f %s", suffix, zs.normalPower, s.NormalPowerPrice, normalCost, s.Currency)
+		}
 	}
 
 	// CRITICAL: Car charging for THIS USER'S ACTUAL PERIOD
@@ -954,17 +1099,45 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 	if hasChargingSource {
 		log.Printf("  [CHARGING] Calculating for period: %s to %s (mode=%s)", start.Format("2006-01-02"), end.Format("2006-01-02"), scope.Mode)
 
-		var normalCharging, priorityCharging float64
-		var firstSession, lastSession time.Time
-		if scope.Mode == BillingModeBuilding {
-			normalCharging, priorityCharging, firstSession, lastSession = bs.calculateChargingForBuilding(buildingID, start, end)
-		} else {
-			normalCharging, priorityCharging, firstSession, lastSession = bs.calculateChargingConsumption(buildingID, userPeriod.ChargerIDs, start, end)
+		type chargingSegment struct {
+			seg                                PriceSegment
+			segStart, segEnd                   time.Time
+			normalCharging, priorityCharging   float64
+			firstSession, lastSession          time.Time
+		}
+		var chargingSegs []chargingSegment
+		var totalNormalCharging, totalPriorityCharging float64
+		var firstSessionOverall, lastSessionOverall time.Time
+		for _, seg := range segments {
+			segStart, segEnd, ok := clipToSegment(seg, start, end)
+			if !ok {
+				continue
+			}
+			var nC, pC float64
+			var fS, lS time.Time
+			if scope.Mode == BillingModeBuilding {
+				nC, pC, fS, lS = bs.calculateChargingForBuilding(buildingID, segStart, segEnd)
+			} else {
+				nC, pC, fS, lS = bs.calculateChargingConsumption(buildingID, userPeriod.ChargerIDs, segStart, segEnd)
+			}
+			totalNormalCharging += nC
+			totalPriorityCharging += pC
+			if !fS.IsZero() && (firstSessionOverall.IsZero() || fS.Before(firstSessionOverall)) {
+				firstSessionOverall = fS
+			}
+			if !lS.IsZero() && (lastSessionOverall.IsZero() || lS.After(lastSessionOverall)) {
+				lastSessionOverall = lS
+			}
+			chargingSegs = append(chargingSegs, chargingSegment{
+				seg: seg, segStart: segStart, segEnd: segEnd,
+				normalCharging: nC, priorityCharging: pC,
+				firstSession: fS, lastSession: lS,
+			})
 		}
 
-		log.Printf("  [CHARGING] Results: Solar=%.3f kWh, Priority=%.3f kWh", normalCharging, priorityCharging)
+		log.Printf("  [CHARGING] Results: Solar=%.3f kWh, Priority=%.3f kWh", totalNormalCharging, totalPriorityCharging)
 
-		if normalCharging > 0 || priorityCharging > 0 {
+		if totalNormalCharging > 0 || totalPriorityCharging > 0 {
 			items = append(items, models.InvoiceItem{
 				Description: "",
 				Quantity:    0,
@@ -981,13 +1154,13 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 				ItemType:    "charging_header",
 			})
 
-			if !firstSession.IsZero() && !lastSession.IsZero() {
-				totalCharged := normalCharging + priorityCharging
+			if !firstSessionOverall.IsZero() && !lastSessionOverall.IsZero() {
+				totalCharged := totalNormalCharging + totalPriorityCharging
 				items = append(items, models.InvoiceItem{
 					Description: fmt.Sprintf("%s: %s - %s | %s: %.3f kWh",
 						tr.Period,
-						firstSession.Format("02.01 15:04"),
-						lastSession.Format("02.01 15:04"),
+						firstSessionOverall.Format("02.01 15:04"),
+						lastSessionOverall.Format("02.01 15:04"),
 						tr.Total,
 						totalCharged),
 					Quantity:   totalCharged,
@@ -1005,30 +1178,33 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 				})
 			}
 
-			if normalCharging > 0 {
-				normalChargingCost := normalCharging * settings.CarChargingNormalPrice
-				totalAmount += normalChargingCost
-				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh", tr.SolarMode, normalCharging, settings.CarChargingNormalPrice, settings.Currency),
-					Quantity:    normalCharging,
-					UnitPrice:   settings.CarChargingNormalPrice,
-					TotalPrice:  normalChargingCost,
-					ItemType:    "car_charging_normal",
-				})
-				log.Printf("  Solar Charging: %.3f kWh × %.3f = %.3f %s", normalCharging, settings.CarChargingNormalPrice, normalChargingCost, settings.Currency)
-			}
-
-			if priorityCharging > 0 {
-				priorityChargingCost := priorityCharging * settings.CarChargingPriorityPrice
-				totalAmount += priorityChargingCost
-				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh", tr.PriorityMode, priorityCharging, settings.CarChargingPriorityPrice, settings.Currency),
-					Quantity:    priorityCharging,
-					UnitPrice:   settings.CarChargingPriorityPrice,
-					TotalPrice:  priorityChargingCost,
-					ItemType:    "car_charging_priority",
-				})
-				log.Printf("  Priority Charging: %.3f kWh × %.3f = %.3f %s", priorityCharging, settings.CarChargingPriorityPrice, priorityChargingCost, settings.Currency)
+			for _, cs := range chargingSegs {
+				suffix := segmentSuffix(PriceSegment{Start: cs.segStart, End: cs.segEnd}, multiSeg)
+				s := cs.seg.Settings
+				if cs.normalCharging > 0 {
+					cost := cs.normalCharging * s.CarChargingNormalPrice
+					totalAmount += cost
+					items = append(items, models.InvoiceItem{
+						Description: fmt.Sprintf("%s%s: %.3f kWh × %.3f %s/kWh", tr.SolarMode, suffix, cs.normalCharging, s.CarChargingNormalPrice, s.Currency),
+						Quantity:    cs.normalCharging,
+						UnitPrice:   s.CarChargingNormalPrice,
+						TotalPrice:  cost,
+						ItemType:    "car_charging_normal",
+					})
+					log.Printf("  Solar Charging%s: %.3f kWh × %.3f = %.3f %s", suffix, cs.normalCharging, s.CarChargingNormalPrice, cost, s.Currency)
+				}
+				if cs.priorityCharging > 0 {
+					cost := cs.priorityCharging * s.CarChargingPriorityPrice
+					totalAmount += cost
+					items = append(items, models.InvoiceItem{
+						Description: fmt.Sprintf("%s%s: %.3f kWh × %.3f %s/kWh", tr.PriorityMode, suffix, cs.priorityCharging, s.CarChargingPriorityPrice, s.Currency),
+						Quantity:    cs.priorityCharging,
+						UnitPrice:   s.CarChargingPriorityPrice,
+						TotalPrice:  cost,
+						ItemType:    "car_charging_priority",
+					})
+					log.Printf("  Priority Charging%s: %.3f kWh × %.3f = %.3f %s", suffix, cs.priorityCharging, s.CarChargingPriorityPrice, cost, s.Currency)
+				}
 			}
 		}
 	}
@@ -1042,7 +1218,7 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 
 	log.Printf("  Checking for shared meters (pro-rated by %.1f%% of period)...", userPeriod.ProrationFactor*100)
 	sharedMeterItems, sharedMeterCost, err := bs.calculateSharedMeterCostsWithTranslations(
-		buildingID, start, end, userPeriod.UserID, totalActiveUsers, tr, settings.Currency, userPeriod.ProrationFactor,
+		buildingID, start, end, userPeriod.UserID, totalActiveUsers, tr, primary.Currency, userPeriod.ProrationFactor,
 	)
 	if err != nil {
 		log.Printf("  WARNING: Failed to calculate shared meter costs: %v", err)
@@ -1063,7 +1239,7 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 		log.Printf("  ✅ Added %d custom items (total: %.3f)", len(customItems), customCost)
 	}
 
-	log.Printf("  INVOICE TOTAL: %s %.3f", settings.Currency, totalAmount)
+	log.Printf("  INVOICE TOTAL: %s %.3f", primary.Currency, totalAmount)
 	log.Printf("  INVOICE NUMBER: %s (Year: %d)", invoiceNumber, invoiceYear)
 
 	result, err := bs.db.Exec(`
@@ -1072,7 +1248,7 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 			total_amount, currency, status
 		) VALUES (?, ?, ?, ?, ?, ?, ?, 'issued')
 	`, invoiceNumber, userPeriod.UserID, buildingID, fullStart.Format("2006-01-02"), fullEnd.Format("2006-01-02"),
-		totalAmount, settings.Currency)
+		totalAmount, primary.Currency)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create invoice: %v", err)
@@ -1100,7 +1276,7 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 		PeriodStart:   fullStart.Format("2006-01-02"),
 		PeriodEnd:     fullEnd.Format("2006-01-02"),
 		TotalAmount:   totalAmount,
-		Currency:      settings.Currency,
+		Currency:      primary.Currency,
 		Status:        "issued",
 		Items:         items,
 		GeneratedAt:   time.Now(),
@@ -1109,13 +1285,8 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 	return invoice, nil
 }
 
-// generateVZEVBills handles virtual energy allocation for building complexes (backward compatible)
-func (bs *BillingService) generateVZEVBills(complexID int, groupBuildingsJSON string, userIDs []int, start, end time.Time, settings models.BillingSettings) ([]models.Invoice, error) {
-	return bs.generateVZEVBillsWithOptions(complexID, groupBuildingsJSON, userIDs, start, end, settings, nil)
-}
-
 // generateVZEVBillsWithOptions handles virtual energy allocation with custom item selection
-func (bs *BillingService) generateVZEVBillsWithOptions(complexID int, groupBuildingsJSON string, userIDs []int, start, end time.Time, settings models.BillingSettings, customItemIDs []int) ([]models.Invoice, error) {
+func (bs *BillingService) generateVZEVBillsWithOptions(complexID int, groupBuildingsJSON string, userIDs []int, start, end time.Time, segments []PriceSegment, customItemIDs []int) ([]models.Invoice, error) {
 	log.Printf("\n=== vZEV BILLING START ===")
 	log.Printf("Complex ID: %d, Period: %s to %s", complexID, start.Format("2006-01-02"), end.Format("2006-01-02"))
 
@@ -1158,39 +1329,47 @@ func (bs *BillingService) generateVZEVBillsWithOptions(complexID int, groupBuild
 
 	log.Printf("Total users across complex: %d", len(allUsers))
 
-	// Calculate vZEV energy distribution for each user
-	userEnergyResults := make(map[int]*VZEVEnergyResult)
+	// Calculate vZEV energy distribution for each (user, price segment) pair so
+	// a bill that spans a price change is priced correctly. Each segment is
+	// clipped to the user's actual billing period.
+	userSegmentResults := make(map[int][]vzevSegmentResult)
 
 	for _, userInfo := range allUsers {
-		result, err := bs.calculateVZEVEnergyForUser(
-			userInfo.UserID,
-			userInfo.BuildingID,
-			groupBuildings,
-			userInfo.UserPeriod.BillingStart,
-			userInfo.UserPeriod.BillingEnd,
-		)
+		for _, seg := range segments {
+			segStart, segEnd, ok := clipToSegment(seg, userInfo.UserPeriod.BillingStart, userInfo.UserPeriod.BillingEnd)
+			if !ok {
+				continue
+			}
+			result, err := bs.calculateVZEVEnergyForUser(
+				userInfo.UserID,
+				userInfo.BuildingID,
+				groupBuildings,
+				segStart,
+				segEnd,
+			)
+			if err != nil {
+				log.Printf("ERROR: Failed to calculate vZEV energy for user %d (segment %s..%s): %v",
+					userInfo.UserID, segStart.Format("2006-01-02"), segEnd.Format("2006-01-02"), err)
+				continue
+			}
+			userSegmentResults[userInfo.UserID] = append(userSegmentResults[userInfo.UserID], vzevSegmentResult{
+				Segment: PriceSegment{Start: segStart, End: segEnd, Settings: seg.Settings},
+				Result:  result,
+			})
 
-		if err != nil {
-			log.Printf("ERROR: Failed to calculate vZEV energy for user %d: %v", userInfo.UserID, err)
-			continue
+			log.Printf("  User %d segment %s..%s: total=%.3f self=%.3f virtual=%.3f grid=%.3f",
+				userInfo.UserID,
+				segStart.Format("2006-01-02"), segEnd.Format("2006-01-02"),
+				result.TotalConsumption, result.SelfConsumedSolar, result.VirtualPV, result.GridEnergy)
 		}
-
-		userEnergyResults[userInfo.UserID] = result
-
-		log.Printf("\n  User %d (%s %s) - Building %d:",
-			userInfo.UserID, userInfo.UserPeriod.FirstName, userInfo.UserPeriod.LastName, userInfo.BuildingID)
-		log.Printf("    Total Consumption: %.3f kWh", result.TotalConsumption)
-		log.Printf("    Self-Consumed Solar: %.3f kWh (%.1f%%)", result.SelfConsumedSolar, (result.SelfConsumedSolar/result.TotalConsumption)*100)
-		log.Printf("    Virtual PV Share: %.3f kWh (%.1f%%)", result.VirtualPV, (result.VirtualPV/result.TotalConsumption)*100)
-		log.Printf("    Grid Import: %.3f kWh (%.1f%%)", result.GridEnergy, (result.GridEnergy/result.TotalConsumption)*100)
 	}
 
 	// Generate invoices for each user
 	invoices := []models.Invoice{}
 
 	for _, userInfo := range allUsers {
-		energyResult := userEnergyResults[userInfo.UserID]
-		if energyResult == nil {
+		segResults := userSegmentResults[userInfo.UserID]
+		if len(segResults) == 0 {
 			continue
 		}
 
@@ -1199,8 +1378,7 @@ func (bs *BillingService) generateVZEVBillsWithOptions(complexID int, groupBuild
 			userInfo.BuildingID,
 			start,
 			end,
-			settings,
-			energyResult,
+			segResults,
 			customItemIDs,
 		)
 
@@ -1214,6 +1392,14 @@ func (bs *BillingService) generateVZEVBillsWithOptions(complexID int, groupBuild
 
 	log.Printf("\n=== vZEV BILLING COMPLETE: %d invoices ===", len(invoices))
 	return invoices, nil
+}
+
+// vzevSegmentResult pairs a price segment with the vZEV energy allocation
+// computed for it. Used by generateVZEVInvoiceWithOptions to emit one set of
+// cost line items per segment.
+type vzevSegmentResult struct {
+	Segment PriceSegment
+	Result  *VZEVEnergyResult
 }
 
 func (bs *BillingService) calculateVZEVEnergyForUser(userID, userBuildingID int, allBuildingsInComplex []int, start, end time.Time) (*VZEVEnergyResult, error) {
@@ -1424,13 +1610,19 @@ func sortTimestamps(timestamps []time.Time) {
 	}
 }
 
-// generateVZEVInvoice creates an invoice with correct vZEV energy breakdown (backward compatible)
-func (bs *BillingService) generateVZEVInvoice(userPeriod UserPeriod, buildingID int, fullStart, fullEnd time.Time, settings models.BillingSettings, energyResult *VZEVEnergyResult) (*models.Invoice, error) {
-	return bs.generateVZEVInvoiceWithOptions(userPeriod, buildingID, fullStart, fullEnd, settings, energyResult, nil)
-}
+// generateVZEVInvoiceWithOptions creates a vZEV invoice with custom item selection.
+// segResults pairs each price segment with the vZEV energy allocation computed
+// for that segment, so a bill that spans a price change is priced correctly.
+// Shared meters, custom items, proration and the meter-reading summary line
+// are computed once on the full user period; segResults[0].Segment.Settings
+// provides the invoice currency.
+func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, buildingID int, fullStart, fullEnd time.Time, segResults []vzevSegmentResult, customItemIDs []int) (*models.Invoice, error) {
+	if len(segResults) == 0 {
+		return nil, fmt.Errorf("no vZEV segment results supplied")
+	}
+	primary := segResults[0].Segment.Settings
+	multiSeg := len(segResults) > 1
 
-// generateVZEVInvoiceWithOptions creates an invoice with custom item selection
-func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, buildingID int, fullStart, fullEnd time.Time, settings models.BillingSettings, energyResult *VZEVEnergyResult, customItemIDs []int) (*models.Invoice, error) {
 	tr := GetTranslations(userPeriod.Language)
 
 	invoiceYear := fullStart.Year()
@@ -1478,6 +1670,12 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 	// Meter reading info
 	meterReadingFrom, meterReadingTo, meterName := bs.getMeterReadings(userPeriod.UserID, start, end)
 
+	// Sum consumption across all segments for the meter-reading summary line.
+	var totalConsumption float64
+	for _, sr := range segResults {
+		totalConsumption += sr.Result.TotalConsumption
+	}
+
 	items = append(items, models.InvoiceItem{
 		Description: fmt.Sprintf("%s: %s", tr.ApartmentMeter, meterName),
 		Quantity:    0,
@@ -1491,8 +1689,8 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 			tr.Period, start.Format("02.01"), end.Format("02.01"),
 			tr.OldReading, meterReadingFrom,
 			tr.NewReading, meterReadingTo,
-			tr.Consumption, energyResult.TotalConsumption),
-		Quantity:   energyResult.TotalConsumption,
+			tr.Consumption, totalConsumption),
+		Quantity:   totalConsumption,
 		UnitPrice:  0,
 		TotalPrice: 0,
 		ItemType:   "meter_reading_compact",
@@ -1506,7 +1704,7 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 		ItemType:    "separator",
 	})
 
-	// Energy breakdown with correct vZEV logic
+	// Energy breakdown with correct vZEV logic, emitted per price segment.
 	items = append(items, models.InvoiceItem{
 		Description: "🔋 vZEV Energy Breakdown:",
 		Quantity:    0,
@@ -1515,59 +1713,87 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 		ItemType:    "vzev_breakdown_header",
 	})
 
-	// 1. Self-consumed solar (from own building)
-	if energyResult.SelfConsumedSolar > 0 {
-		selfConsumedCost := energyResult.SelfConsumedSolar * settings.SolarPowerPrice
-		totalAmount += selfConsumedCost
-		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  ├─ Own Building Solar: %.3f kWh × %.3f %s/kWh",
-				energyResult.SelfConsumedSolar, settings.SolarPowerPrice, settings.Currency),
-			Quantity:   energyResult.SelfConsumedSolar,
-			UnitPrice:  settings.SolarPowerPrice,
-			TotalPrice: selfConsumedCost,
-			ItemType:   "vzev_self_solar",
-		})
-		log.Printf("  Self-Consumed Solar: %.3f kWh × %.3f = %.3f %s",
-			energyResult.SelfConsumedSolar, settings.SolarPowerPrice, selfConsumedCost, settings.Currency)
+	for _, sr := range segResults {
+		suffix := segmentSuffix(sr.Segment, multiSeg)
+		s := sr.Segment.Settings
+		er := sr.Result
+
+		// 1. Self-consumed solar (from own building)
+		if er.SelfConsumedSolar > 0 {
+			cost := er.SelfConsumedSolar * s.SolarPowerPrice
+			totalAmount += cost
+			items = append(items, models.InvoiceItem{
+				Description: fmt.Sprintf("  ├─ Own Building Solar%s: %.3f kWh × %.3f %s/kWh",
+					suffix, er.SelfConsumedSolar, s.SolarPowerPrice, s.Currency),
+				Quantity:   er.SelfConsumedSolar,
+				UnitPrice:  s.SolarPowerPrice,
+				TotalPrice: cost,
+				ItemType:   "vzev_self_solar",
+			})
+			log.Printf("  Self-Consumed Solar%s: %.3f kWh × %.3f = %.3f %s",
+				suffix, er.SelfConsumedSolar, s.SolarPowerPrice, cost, s.Currency)
+		}
+
+		// 2. Virtual PV (from other buildings in vZEV)
+		if er.VirtualPV > 0 {
+			cost := er.VirtualPV * s.VZEVExportPrice
+			totalAmount += cost
+			items = append(items, models.InvoiceItem{
+				Description: fmt.Sprintf("  ├─ Virtual PV (from vZEV)%s: %.3f kWh × %.3f %s/kWh",
+					suffix, er.VirtualPV, s.VZEVExportPrice, s.Currency),
+				Quantity:   er.VirtualPV,
+				UnitPrice:  s.VZEVExportPrice,
+				TotalPrice: cost,
+				ItemType:   "vzev_virtual_pv",
+			})
+			log.Printf("  Virtual PV%s: %.3f kWh × %.3f = %.3f %s",
+				suffix, er.VirtualPV, s.VZEVExportPrice, cost, s.Currency)
+		}
+
+		// 3. Grid energy
+		if er.GridEnergy > 0 {
+			cost := er.GridEnergy * s.NormalPowerPrice
+			totalAmount += cost
+			items = append(items, models.InvoiceItem{
+				Description: fmt.Sprintf("  └─ %s%s: %.3f kWh × %.3f %s/kWh",
+					tr.NormalPowerGrid, suffix, er.GridEnergy, s.NormalPowerPrice, s.Currency),
+				Quantity:   er.GridEnergy,
+				UnitPrice:  s.NormalPowerPrice,
+				TotalPrice: cost,
+				ItemType:   "normal_power",
+			})
+			log.Printf("  Grid Energy%s: %.3f kWh × %.3f = %.3f %s",
+				suffix, er.GridEnergy, s.NormalPowerPrice, cost, s.Currency)
+		}
 	}
 
-	// 2. Virtual PV (from other buildings in vZEV)
-	if energyResult.VirtualPV > 0 {
-		virtualPVCost := energyResult.VirtualPV * settings.VZEVExportPrice
-		totalAmount += virtualPVCost
-		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  ├─ Virtual PV (from vZEV): %.3f kWh × %.3f %s/kWh",
-				energyResult.VirtualPV, settings.VZEVExportPrice, settings.Currency),
-			Quantity:   energyResult.VirtualPV,
-			UnitPrice:  settings.VZEVExportPrice,
-			TotalPrice: virtualPVCost,
-			ItemType:   "vzev_virtual_pv",
-		})
-		log.Printf("  Virtual PV: %.3f kWh × %.3f = %.3f %s",
-			energyResult.VirtualPV, settings.VZEVExportPrice, virtualPVCost, settings.Currency)
-	}
-
-	// 3. Grid energy
-	if energyResult.GridEnergy > 0 {
-		gridCost := energyResult.GridEnergy * settings.NormalPowerPrice
-		totalAmount += gridCost
-		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  └─ %s: %.3f kWh × %.3f %s/kWh",
-				tr.NormalPowerGrid, energyResult.GridEnergy, settings.NormalPowerPrice, settings.Currency),
-			Quantity:   energyResult.GridEnergy,
-			UnitPrice:  settings.NormalPowerPrice,
-			TotalPrice: gridCost,
-			ItemType:   "normal_power",
-		})
-		log.Printf("  Grid Energy: %.3f kWh × %.3f = %.3f %s",
-			energyResult.GridEnergy, settings.NormalPowerPrice, gridCost, settings.Currency)
-	}
-
-	// Car charging (same logic as ZEV)
+	// Car charging — same per-segment treatment as the energy block.
 	if userPeriod.ChargerIDs != "" {
-		normalCharging, priorityCharging, firstSession, lastSession := bs.calculateChargingConsumption(buildingID, userPeriod.ChargerIDs, start, end)
+		type chargingSegment struct {
+			seg                              PriceSegment
+			normalCharging, priorityCharging float64
+			firstSession, lastSession        time.Time
+		}
+		var chargingSegs []chargingSegment
+		var totalNormalCharging, totalPriorityCharging float64
+		var firstSessionOverall, lastSessionOverall time.Time
+		for _, sr := range segResults {
+			nC, pC, fS, lS := bs.calculateChargingConsumption(buildingID, userPeriod.ChargerIDs, sr.Segment.Start, sr.Segment.End)
+			totalNormalCharging += nC
+			totalPriorityCharging += pC
+			if !fS.IsZero() && (firstSessionOverall.IsZero() || fS.Before(firstSessionOverall)) {
+				firstSessionOverall = fS
+			}
+			if !lS.IsZero() && (lastSessionOverall.IsZero() || lS.After(lastSessionOverall)) {
+				lastSessionOverall = lS
+			}
+			chargingSegs = append(chargingSegs, chargingSegment{
+				seg: sr.Segment, normalCharging: nC, priorityCharging: pC,
+				firstSession: fS, lastSession: lS,
+			})
+		}
 
-		if normalCharging > 0 || priorityCharging > 0 {
+		if totalNormalCharging > 0 || totalPriorityCharging > 0 {
 			items = append(items, models.InvoiceItem{
 				Description: "",
 				Quantity:    0,
@@ -1584,13 +1810,13 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 				ItemType:    "charging_header",
 			})
 
-			if !firstSession.IsZero() {
-				totalCharged := normalCharging + priorityCharging
+			if !firstSessionOverall.IsZero() {
+				totalCharged := totalNormalCharging + totalPriorityCharging
 				items = append(items, models.InvoiceItem{
 					Description: fmt.Sprintf("%s: %s - %s | %s: %.3f kWh",
 						tr.Period,
-						firstSession.Format("02.01 15:04"),
-						lastSession.Format("02.01 15:04"),
+						firstSessionOverall.Format("02.01 15:04"),
+						lastSessionOverall.Format("02.01 15:04"),
 						tr.Total,
 						totalCharged),
 					Quantity:   totalCharged,
@@ -1608,30 +1834,33 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 				})
 			}
 
-			if normalCharging > 0 {
-				normalChargingCost := normalCharging * settings.CarChargingNormalPrice
-				totalAmount += normalChargingCost
-				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh",
-						tr.SolarMode, normalCharging, settings.CarChargingNormalPrice, settings.Currency),
-					Quantity:   normalCharging,
-					UnitPrice:  settings.CarChargingNormalPrice,
-					TotalPrice: normalChargingCost,
-					ItemType:   "car_charging_normal",
-				})
-			}
-
-			if priorityCharging > 0 {
-				priorityChargingCost := priorityCharging * settings.CarChargingPriorityPrice
-				totalAmount += priorityChargingCost
-				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh",
-						tr.PriorityMode, priorityCharging, settings.CarChargingPriorityPrice, settings.Currency),
-					Quantity:   priorityCharging,
-					UnitPrice:  settings.CarChargingPriorityPrice,
-					TotalPrice: priorityChargingCost,
-					ItemType:   "car_charging_priority",
-				})
+			for _, cs := range chargingSegs {
+				suffix := segmentSuffix(cs.seg, multiSeg)
+				s := cs.seg.Settings
+				if cs.normalCharging > 0 {
+					cost := cs.normalCharging * s.CarChargingNormalPrice
+					totalAmount += cost
+					items = append(items, models.InvoiceItem{
+						Description: fmt.Sprintf("%s%s: %.3f kWh × %.3f %s/kWh",
+							tr.SolarMode, suffix, cs.normalCharging, s.CarChargingNormalPrice, s.Currency),
+						Quantity:   cs.normalCharging,
+						UnitPrice:  s.CarChargingNormalPrice,
+						TotalPrice: cost,
+						ItemType:   "car_charging_normal",
+					})
+				}
+				if cs.priorityCharging > 0 {
+					cost := cs.priorityCharging * s.CarChargingPriorityPrice
+					totalAmount += cost
+					items = append(items, models.InvoiceItem{
+						Description: fmt.Sprintf("%s%s: %.3f kWh × %.3f %s/kWh",
+							tr.PriorityMode, suffix, cs.priorityCharging, s.CarChargingPriorityPrice, s.Currency),
+						Quantity:   cs.priorityCharging,
+						UnitPrice:  s.CarChargingPriorityPrice,
+						TotalPrice: cost,
+						ItemType:   "car_charging_priority",
+					})
+				}
 			}
 		}
 	}
@@ -1643,7 +1872,7 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 	}
 
 	sharedMeterItems, sharedMeterCost, _ := bs.calculateSharedMeterCostsWithTranslations(
-		buildingID, start, end, userPeriod.UserID, totalActiveUsers, tr, settings.Currency, userPeriod.ProrationFactor,
+		buildingID, start, end, userPeriod.UserID, totalActiveUsers, tr, primary.Currency, userPeriod.ProrationFactor,
 	)
 	if len(sharedMeterItems) > 0 {
 		items = append(items, sharedMeterItems...)
@@ -1664,7 +1893,7 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 			total_amount, currency, status, is_vzev
 		) VALUES (?, ?, ?, ?, ?, ?, ?, 'issued', 1)
 	`, invoiceNumber, userPeriod.UserID, buildingID, fullStart.Format("2006-01-02"), fullEnd.Format("2006-01-02"),
-		totalAmount, settings.Currency)
+		totalAmount, primary.Currency)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create vZEV invoice: %v", err)
@@ -1693,7 +1922,7 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 		PeriodStart:   fullStart.Format("2006-01-02"),
 		PeriodEnd:     fullEnd.Format("2006-01-02"),
 		TotalAmount:   totalAmount,
-		Currency:      settings.Currency,
+		Currency:      primary.Currency,
 		Status:        "issued",
 		IsVZEV:        true,
 		Items:         items,
@@ -2436,7 +2665,13 @@ func (bs *BillingService) calculateChargingFiltered(buildingID int, filter charg
 
 // generateChargerOnlyInvoice produces an invoice that contains ONLY the consumption of the specified charger,
 // optionally including selected custom items. Used by BillingModeCharger.
-func (bs *BillingService) generateChargerOnlyInvoice(userPeriod UserPeriod, buildingID, chargerID int, fullStart, fullEnd time.Time, settings models.BillingSettings, customItemIDs []int) (*models.Invoice, error) {
+func (bs *BillingService) generateChargerOnlyInvoice(userPeriod UserPeriod, buildingID, chargerID int, fullStart, fullEnd time.Time, segments []PriceSegment, customItemIDs []int) (*models.Invoice, error) {
+	if len(segments) == 0 {
+		return nil, fmt.Errorf("no price segments supplied")
+	}
+	primary := segments[0].Settings
+	multiSeg := len(segments) > 1
+
 	tr := GetTranslations(userPeriod.Language)
 
 	var chargerName string
@@ -2471,21 +2706,52 @@ func (bs *BillingService) generateChargerOnlyInvoice(userPeriod UserPeriod, buil
 		items = append(items, models.InvoiceItem{ItemType: "separator"})
 	}
 
-	normalCharging, priorityCharging, firstSession, lastSession := bs.calculateChargingForChargers(buildingID, []int{chargerID}, start, end)
-	log.Printf("  [CHARGER-ONLY] Charger %d (%s): Normal=%.3f, Priority=%.3f", chargerID, chargerName, normalCharging, priorityCharging)
+	// Compute charging per price segment (clipped to the user's billing period)
+	// so a bill that spans a price change is priced correctly.
+	type chargingSegment struct {
+		seg                              PriceSegment
+		segStart, segEnd                 time.Time
+		normalCharging, priorityCharging float64
+		firstSession, lastSession        time.Time
+	}
+	var chargingSegs []chargingSegment
+	var totalNormalCharging, totalPriorityCharging float64
+	var firstSessionOverall, lastSessionOverall time.Time
+	for _, seg := range segments {
+		segStart, segEnd, ok := clipToSegment(seg, start, end)
+		if !ok {
+			continue
+		}
+		nC, pC, fS, lS := bs.calculateChargingForChargers(buildingID, []int{chargerID}, segStart, segEnd)
+		totalNormalCharging += nC
+		totalPriorityCharging += pC
+		if !fS.IsZero() && (firstSessionOverall.IsZero() || fS.Before(firstSessionOverall)) {
+			firstSessionOverall = fS
+		}
+		if !lS.IsZero() && (lastSessionOverall.IsZero() || lS.After(lastSessionOverall)) {
+			lastSessionOverall = lS
+		}
+		chargingSegs = append(chargingSegs, chargingSegment{
+			seg: seg, segStart: segStart, segEnd: segEnd,
+			normalCharging: nC, priorityCharging: pC,
+			firstSession: fS, lastSession: lS,
+		})
+	}
+	log.Printf("  [CHARGER-ONLY] Charger %d (%s): Normal=%.3f, Priority=%.3f (segments: %d)",
+		chargerID, chargerName, totalNormalCharging, totalPriorityCharging, len(chargingSegs))
 
 	items = append(items, models.InvoiceItem{
 		Description: fmt.Sprintf("%s: %s", tr.CarCharging, chargerName),
 		ItemType:    "charging_header",
 	})
 
-	if !firstSession.IsZero() && !lastSession.IsZero() {
-		totalCharged := normalCharging + priorityCharging
+	if !firstSessionOverall.IsZero() && !lastSessionOverall.IsZero() {
+		totalCharged := totalNormalCharging + totalPriorityCharging
 		items = append(items, models.InvoiceItem{
 			Description: fmt.Sprintf("%s: %s - %s | %s: %.3f kWh",
 				tr.Period,
-				firstSession.Format("02.01 15:04"),
-				lastSession.Format("02.01 15:04"),
+				firstSessionOverall.Format("02.01 15:04"),
+				lastSessionOverall.Format("02.01 15:04"),
 				tr.Total,
 				totalCharged),
 			Quantity: totalCharged,
@@ -2494,27 +2760,31 @@ func (bs *BillingService) generateChargerOnlyInvoice(userPeriod UserPeriod, buil
 		items = append(items, models.InvoiceItem{ItemType: "separator"})
 	}
 
-	if normalCharging > 0 {
-		cost := normalCharging * settings.CarChargingNormalPrice
-		totalAmount += cost
-		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh", tr.SolarMode, normalCharging, settings.CarChargingNormalPrice, settings.Currency),
-			Quantity:    normalCharging,
-			UnitPrice:   settings.CarChargingNormalPrice,
-			TotalPrice:  cost,
-			ItemType:    "car_charging_normal",
-		})
-	}
-	if priorityCharging > 0 {
-		cost := priorityCharging * settings.CarChargingPriorityPrice
-		totalAmount += cost
-		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh", tr.PriorityMode, priorityCharging, settings.CarChargingPriorityPrice, settings.Currency),
-			Quantity:    priorityCharging,
-			UnitPrice:   settings.CarChargingPriorityPrice,
-			TotalPrice:  cost,
-			ItemType:    "car_charging_priority",
-		})
+	for _, cs := range chargingSegs {
+		suffix := segmentSuffix(PriceSegment{Start: cs.segStart, End: cs.segEnd}, multiSeg)
+		s := cs.seg.Settings
+		if cs.normalCharging > 0 {
+			cost := cs.normalCharging * s.CarChargingNormalPrice
+			totalAmount += cost
+			items = append(items, models.InvoiceItem{
+				Description: fmt.Sprintf("%s%s: %.3f kWh × %.3f %s/kWh", tr.SolarMode, suffix, cs.normalCharging, s.CarChargingNormalPrice, s.Currency),
+				Quantity:    cs.normalCharging,
+				UnitPrice:   s.CarChargingNormalPrice,
+				TotalPrice:  cost,
+				ItemType:    "car_charging_normal",
+			})
+		}
+		if cs.priorityCharging > 0 {
+			cost := cs.priorityCharging * s.CarChargingPriorityPrice
+			totalAmount += cost
+			items = append(items, models.InvoiceItem{
+				Description: fmt.Sprintf("%s%s: %.3f kWh × %.3f %s/kWh", tr.PriorityMode, suffix, cs.priorityCharging, s.CarChargingPriorityPrice, s.Currency),
+				Quantity:    cs.priorityCharging,
+				UnitPrice:   s.CarChargingPriorityPrice,
+				TotalPrice:  cost,
+				ItemType:    "car_charging_priority",
+			})
+		}
 	}
 
 	if len(customItemIDs) > 0 {
@@ -2533,7 +2803,7 @@ func (bs *BillingService) generateChargerOnlyInvoice(userPeriod UserPeriod, buil
 			total_amount, currency, status
 		) VALUES (?, ?, ?, ?, ?, ?, ?, 'issued')
 	`, invoiceNumber, userPeriod.UserID, buildingID, fullStart.Format("2006-01-02"), fullEnd.Format("2006-01-02"),
-		totalAmount, settings.Currency)
+		totalAmount, primary.Currency)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create charger-only invoice: %v", err)
 	}
@@ -2557,7 +2827,7 @@ func (bs *BillingService) generateChargerOnlyInvoice(userPeriod UserPeriod, buil
 		PeriodStart:   fullStart.Format("2006-01-02"),
 		PeriodEnd:     fullEnd.Format("2006-01-02"),
 		TotalAmount:   totalAmount,
-		Currency:      settings.Currency,
+		Currency:      primary.Currency,
 		Status:        "issued",
 		Items:         items,
 		GeneratedAt:   time.Now(),
