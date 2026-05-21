@@ -1244,15 +1244,25 @@ func (h *DashboardHandler) GetCostOverview(w http.ResponseWriter, r *http.Reques
 	overview.Buildings = []models.BuildingCostEstimate{}
 	overview.Currency = "CHF"
 
-	// Get buildings with active pricing
+	// Get buildings with the pricing record valid for today. Without the date
+	// filter (and LIMIT 1 per building) we would either pick an arbitrary
+	// historical price or produce one duplicate row per active price record.
+	today := now.Format("2006-01-02")
 	buildingRows, err := h.db.QueryContext(ctx, `
 		SELECT b.id, b.name, bs.normal_power_price, bs.solar_power_price,
 			bs.car_charging_normal_price, COALESCE(bs.currency, 'CHF')
 		FROM buildings b
-		JOIN billing_settings bs ON bs.building_id = b.id AND bs.is_active = 1
+		JOIN billing_settings bs ON bs.id = (
+			SELECT id FROM billing_settings
+			WHERE building_id = b.id AND is_active = 1
+			  AND valid_from <= ?
+			  AND (valid_to IS NULL OR valid_to >= ?)
+			ORDER BY valid_from DESC
+			LIMIT 1
+		)
 		WHERE COALESCE(b.is_group, 0) = 0
 		ORDER BY b.name
-	`)
+	`, today, today)
 	if err != nil {
 		log.Printf("Error querying buildings for cost overview: %v", err)
 		w.Header().Set("Content-Type", "application/json")
