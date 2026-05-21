@@ -99,32 +99,6 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 		buildingIDs, userIDs, startDate, endDate)
 	log.Printf("Custom Item IDs: %v", customItemIDs)
 
-	// VALIDATION: Check if all buildings have active pricing
-	buildingsWithoutPricing := []string{}
-	for _, buildingID := range buildingIDs {
-		var count int
-		err := bs.db.QueryRow(`
-			SELECT COUNT(*) FROM billing_settings 
-			WHERE building_id = ? AND is_active = 1
-		`, buildingID).Scan(&count)
-
-		if err != nil || count == 0 {
-			var buildingName string
-			bs.db.QueryRow("SELECT name FROM buildings WHERE id = ?", buildingID).Scan(&buildingName)
-			if buildingName == "" {
-				buildingName = fmt.Sprintf("Building ID %d", buildingID)
-			}
-			buildingsWithoutPricing = append(buildingsWithoutPricing, buildingName)
-		}
-	}
-
-	if len(buildingsWithoutPricing) > 0 {
-		errorMsg := fmt.Sprintf("No active pricing configuration found for the following building(s): %s. Please configure pricing in the Pricing section before generating bills.",
-			strings.Join(buildingsWithoutPricing, ", "))
-		log.Printf("ERROR: %s", errorMsg)
-		return nil, fmt.Errorf(errorMsg)
-	}
-
 	invoices := []models.Invoice{}
 
 	start, err := time.Parse("2006-01-02", startDate)
@@ -143,6 +117,39 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 
 	log.Printf("Parsed dates - Start: %s, End: %s", start, end)
 
+	// Reference date used to pick the pricing record that was in force during
+	// this billing period. We use the period's start date — if a period happens
+	// to straddle a price change, the user should bill the two segments separately.
+	priceRefDate := start.Format("2006-01-02")
+
+	// VALIDATION: Check that every building has pricing valid for the billing period
+	buildingsWithoutPricing := []string{}
+	for _, buildingID := range buildingIDs {
+		var count int
+		err := bs.db.QueryRow(`
+			SELECT COUNT(*) FROM billing_settings
+			WHERE building_id = ? AND is_active = 1
+			  AND valid_from <= ?
+			  AND (valid_to IS NULL OR valid_to >= ?)
+		`, buildingID, priceRefDate, priceRefDate).Scan(&count)
+
+		if err != nil || count == 0 {
+			var buildingName string
+			bs.db.QueryRow("SELECT name FROM buildings WHERE id = ?", buildingID).Scan(&buildingName)
+			if buildingName == "" {
+				buildingName = fmt.Sprintf("Building ID %d", buildingID)
+			}
+			buildingsWithoutPricing = append(buildingsWithoutPricing, buildingName)
+		}
+	}
+
+	if len(buildingsWithoutPricing) > 0 {
+		errorMsg := fmt.Sprintf("No pricing configuration valid for %s found for the following building(s): %s. Please configure pricing in the Pricing section for this billing period.",
+			priceRefDate, strings.Join(buildingsWithoutPricing, ", "))
+		log.Printf("ERROR: %s", errorMsg)
+		return nil, fmt.Errorf(errorMsg)
+	}
+
 	for _, buildingID := range buildingIDs {
 		log.Printf("\n--- Processing Building ID: %d ---", buildingID)
 
@@ -150,7 +157,7 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 		var isComplex bool
 		var groupBuildings string
 		err := bs.db.QueryRow(`
-			SELECT is_group, COALESCE(group_buildings, '') 
+			SELECT is_group, COALESCE(group_buildings, '')
 			FROM buildings WHERE id = ?
 		`, buildingID).Scan(&isComplex, &groupBuildings)
 
@@ -159,14 +166,22 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 			continue
 		}
 
+		// Pick the pricing record whose validity window covers the billing
+		// period's start date. ORDER BY valid_from DESC picks the most recent
+		// match when overlapping rows exist (e.g. an open-ended row plus a
+		// newer one that supersedes it).
 		var settings models.BillingSettings
 		err = bs.db.QueryRow(`
-			SELECT id, building_id, is_complex, normal_power_price, solar_power_price, 
-				   car_charging_normal_price, car_charging_priority_price, 
+			SELECT id, building_id, is_complex, normal_power_price, solar_power_price,
+				   car_charging_normal_price, car_charging_priority_price,
 				   vzev_export_price, currency
-			FROM billing_settings WHERE building_id = ? AND is_active = 1
+			FROM billing_settings
+			WHERE building_id = ? AND is_active = 1
+			  AND valid_from <= ?
+			  AND (valid_to IS NULL OR valid_to >= ?)
+			ORDER BY valid_from DESC
 			LIMIT 1
-		`, buildingID).Scan(
+		`, buildingID, priceRefDate, priceRefDate).Scan(
 			&settings.ID, &settings.BuildingID, &settings.IsComplex,
 			&settings.NormalPowerPrice, &settings.SolarPowerPrice,
 			&settings.CarChargingNormalPrice, &settings.CarChargingPriorityPrice,
@@ -174,9 +189,11 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 		)
 
 		if err != nil {
-			log.Printf("ERROR: No active billing settings for building %d: %v", buildingID, err)
+			log.Printf("ERROR: No billing settings valid for %s on building %d: %v", priceRefDate, buildingID, err)
 			continue
 		}
+
+		log.Printf("Selected pricing ID %d for building %d (valid for %s)", settings.ID, buildingID, priceRefDate)
 
 		log.Printf("Billing Settings - Type: %s, Normal: %.3f, Solar: %.3f, vZEV Export: %.3f",
 			func() string {
