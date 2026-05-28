@@ -208,6 +208,7 @@ func main() {
 	api.HandleFunc("/meters/{id}/deletion-impact", meterHandler.GetDeletionImpact).Methods("GET")
 	api.HandleFunc("/meters/{id}/replacement-history", meterHandler.GetReplacementHistory).Methods("GET")
 	api.HandleFunc("/meters/{id}/replacement-chain", meterHandler.GetReplacementChain).Methods("GET")
+	api.HandleFunc("/meters/{id}/tariff-breakdown", meterHandler.GetTariffBreakdown).Methods("GET")
 	api.HandleFunc("/meters/{id}", meterHandler.Get).Methods("GET")
 	api.HandleFunc("/meters/{id}", meterHandler.Update).Methods("PUT")
 	api.HandleFunc("/meters/{id}", meterHandler.Delete).Methods("DELETE")

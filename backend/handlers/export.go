@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/aj9599/zev-billing/backend/services"
 )
 
 type ExportHandler struct {
@@ -116,6 +118,7 @@ func (h *ExportHandler) exportMeterData(startDate, endDate, meterIDStr string) (
 			m.id,
 			m.name,
 			m.meter_type,
+			m.building_id,
 			b.name as building_name,
 			COALESCE(u.first_name || ' ' || u.last_name, 'N/A') as user_name,
 			mr.reading_time,
@@ -167,20 +170,54 @@ func (h *ExportHandler) exportMeterData(startDate, endDate, meterIDStr string) (
 	defer rows.Close()
 
 	data := [][]string{
-		{"Meter ID", "Meter Name", "Meter Type", "Building", "User", "Reading Time", 
-		 "Import Energy (kWh)", "Export Energy (kWh)", "Import Consumption (kWh)", "Export Consumption (kWh)"},
+		{"Meter ID", "Meter Name", "Meter Type", "Building", "User", "Reading Time",
+		 "Import Energy (kWh)", "Export Energy (kWh)", "Import Consumption (kWh)", "Export Consumption (kWh)",
+		 "Solar Consumption (kWh)", "Grid Consumption (kWh)", "Tariff"},
 	}
 
+	// Per-building interval aggregates, loaded lazily and cached, so each
+	// apartment meter reading can be split into its solar/grid share using the
+	// same allocation billing applies.
+	aggCache := make(map[int]map[string]*services.BuildingIntervalAgg)
+
 	for rows.Next() {
-		var meterID int
+		var meterID, buildingID int
 		var meterName, meterType, buildingName, userName, readingTime string
 		var powerKWh, powerKWhExport, consumptionKWh, consumptionExport float64
 
-		err := rows.Scan(&meterID, &meterName, &meterType, &buildingName, &userName, &readingTime, 
+		err := rows.Scan(&meterID, &meterName, &meterType, &buildingID, &buildingName, &userName, &readingTime,
 			&powerKWh, &powerKWhExport, &consumptionKWh, &consumptionExport)
 		if err != nil {
 			log.Printf("Error scanning meter row: %v", err)
 			continue
+		}
+
+		solarStr, gridStr, tariff := "", "", ""
+		if meterType == "apartment_meter" {
+			agg, ok := aggCache[buildingID]
+			if !ok {
+				agg, err = services.LoadBuildingIntervalAggregates(h.db, buildingID, startDate, endDate)
+				if err != nil {
+					return nil, fmt.Errorf("failed to load interval aggregates: %v", err)
+				}
+				aggCache[buildingID] = agg
+			}
+			var buildingConsumption, solarProduction float64
+			if a := agg[readingTime]; a != nil {
+				buildingConsumption = a.TotalConsumption
+				solarProduction = a.SolarProduction
+			}
+			solar, grid := services.SplitSolarGrid(consumptionKWh, buildingConsumption, solarProduction)
+			solarStr = fmt.Sprintf("%.3f", solar)
+			gridStr = fmt.Sprintf("%.3f", grid)
+			switch {
+			case solar > 0 && grid > 0:
+				tariff = "mixed"
+			case solar > 0:
+				tariff = "solar"
+			case grid > 0:
+				tariff = "grid"
+			}
 		}
 
 		data = append(data, []string{
@@ -194,6 +231,9 @@ func (h *ExportHandler) exportMeterData(startDate, endDate, meterIDStr string) (
 			fmt.Sprintf("%.3f", powerKWhExport),
 			fmt.Sprintf("%.3f", consumptionKWh),
 			fmt.Sprintf("%.3f", consumptionExport),
+			solarStr,
+			gridStr,
+			tariff,
 		})
 	}
 

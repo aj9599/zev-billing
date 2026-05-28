@@ -288,6 +288,21 @@ export const de: Translations = {
   'export.dateRange': 'Zeitraum',
 
   // ============================================================================
+  // TARIFF BREAKDOWN
+  // ============================================================================
+  'tariff.title': 'Tarifaufschlüsselung',
+  'tariff.apply': 'Anwenden',
+  'tariff.loading': 'Wird geladen...',
+  'tariff.loadFailed': 'Tarifaufschlüsselung konnte nicht geladen werden',
+  'tariff.apartmentOnly': 'Die Tarifaufteilung ist nur für Wohnungszähler verfügbar.',
+  'tariff.noData': 'Keine Verbrauchsdaten in diesem Zeitraum.',
+  'tariff.totalConsumption': 'Gesamtverbrauch',
+  'tariff.solar': 'Solar',
+  'tariff.grid': 'Netz',
+  'tariff.interval': 'Intervall',
+  'tariff.consumption': 'Verbrauch',
+
+  // ============================================================================
   // MATH CAPTCHA
   // ============================================================================
   'captcha.title': '🔒 Sicherheitsüberprüfung - Zum Fortfahren ausfüllen',

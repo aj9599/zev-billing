@@ -288,6 +288,21 @@ export const en: Translations = {
   'export.dateRange': 'Date Range',
 
   // ============================================================================
+  // TARIFF BREAKDOWN
+  // ============================================================================
+  'tariff.title': 'Tariff Breakdown',
+  'tariff.apply': 'Apply',
+  'tariff.loading': 'Loading...',
+  'tariff.loadFailed': 'Failed to load tariff breakdown',
+  'tariff.apartmentOnly': 'Tariff split is only available for apartment meters.',
+  'tariff.noData': 'No consumption data in this period.',
+  'tariff.totalConsumption': 'Total Consumption',
+  'tariff.solar': 'Solar',
+  'tariff.grid': 'Grid',
+  'tariff.interval': 'Interval',
+  'tariff.consumption': 'Consumption',
+
+  // ============================================================================
   // MATH CAPTCHA
   // ============================================================================
   'captcha.title': '🔒 Security Check - Complete to Continue',

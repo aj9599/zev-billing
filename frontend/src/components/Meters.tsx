@@ -5,6 +5,7 @@ import type { Meter, Building as BuildingType, User } from '../types';
 import { useTranslation } from '../i18n';
 import ExportModal from './ExportModal';
 import MeterReplacementModal from './MeterReplacementModal';
+import TariffBreakdownModal from './meters/TariffBreakdownModal';
 import MeterCard from './meters/MeterCard';
 import MeterFormModal from './meters/MeterFormModal';
 import InstructionsModal from './meters/InstructionsModal';
@@ -31,6 +32,9 @@ export default function Meters() {
     // Meter replacement state
     const [showReplacementModal, setShowReplacementModal] = useState(false);
     const [meterToReplace, setMeterToReplace] = useState<Meter | null>(null);
+
+    // Tariff breakdown state
+    const [tariffMeter, setTariffMeter] = useState<Meter | null>(null);
 
     // Custom hooks for form and status management
     const { loxoneStatus, mqttStatus, mqttBrokerConnected, smartmeStatus, udpStatus, modbusStatus, fetchConnectionStatus } = useMeterStatus();
@@ -363,6 +367,7 @@ export default function Meters() {
                                     onEdit={handleEdit}
                                     onReplace={handleReplaceClick}
                                     onDelete={handleDeleteClick}
+                                    onTariffBreakdown={setTariffMeter}
                                 />
                             ))}
                         </div>
@@ -440,6 +445,13 @@ export default function Meters() {
                     buildings={buildings.map(b => ({ id: b.id, name: b.name }))}
                     onClose={() => setShowExportModal(false)}
                     onExport={handleExport}
+                />
+            )}
+
+            {tariffMeter && (
+                <TariffBreakdownModal
+                    meter={tariffMeter}
+                    onClose={() => setTariffMeter(null)}
                 />
             )}
 

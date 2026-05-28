@@ -203,6 +203,46 @@ func (h *MeterHandler) Get(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(m)
 }
 
+// GetTariffBreakdown returns the per-interval solar/grid split for a meter over
+// a date range, mirroring how billing allocates ZEV consumption.
+func (h *MeterHandler) GetTariffBreakdown(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	startDate := r.URL.Query().Get("start_date")
+	endDate := r.URL.Query().Get("end_date")
+	if startDate == "" || endDate == "" {
+		http.Error(w, "Missing required parameters: start_date, end_date", http.StatusBadRequest)
+		return
+	}
+	if _, err := time.Parse("2006-01-02", startDate); err != nil {
+		http.Error(w, "Invalid start_date format. Use YYYY-MM-DD", http.StatusBadRequest)
+		return
+	}
+	if _, err := time.Parse("2006-01-02", endDate); err != nil {
+		http.Error(w, "Invalid end_date format. Use YYYY-MM-DD", http.StatusBadRequest)
+		return
+	}
+
+	breakdown, err := services.ComputeMeterTariffBreakdown(h.db, id, startDate, endDate)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Meter not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		log.Printf("ERROR: Failed to compute tariff breakdown: %v", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(breakdown)
+}
+
 func (h *MeterHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var m models.Meter
 	if err := json.NewDecoder(r.Body).Decode(&m); err != nil {

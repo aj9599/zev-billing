@@ -1,4 +1,4 @@
-import { Edit2, Trash2, RefreshCw, Building, Archive, TrendingUp, TrendingDown } from 'lucide-react';
+import { Edit2, Trash2, RefreshCw, Building, Archive, TrendingUp, TrendingDown, Sun } from 'lucide-react';
 import { useTranslation } from '../../i18n';
 import type { Meter, User } from '../../types';
 import { getMeterTypeLabel } from './utils/meterUtils';
@@ -16,6 +16,7 @@ interface MeterCardProps {
     onEdit: (meter: Meter) => void;
     onReplace: (meter: Meter) => void;
     onDelete: (meter: Meter) => void;
+    onTariffBreakdown: (meter: Meter) => void;
 }
 
 export default function MeterCard({
@@ -29,7 +30,8 @@ export default function MeterCard({
     modbusStatus,
     onEdit,
     onReplace,
-    onDelete
+    onDelete,
+    onTariffBreakdown
 }: MeterCardProps) {
     const { t } = useTranslation();
 
@@ -100,6 +102,36 @@ export default function MeterCard({
                 >
                     <Edit2 size={16} />
                 </button>
+
+                {meter.meter_type === 'apartment_meter' && (
+                    <button
+                        onClick={() => onTariffBreakdown(meter)}
+                        style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            border: 'none',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            color: '#10b981',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.2)';
+                            e.currentTarget.style.transform = 'scale(1.1)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
+                            e.currentTarget.style.transform = 'scale(1)';
+                        }}
+                        title={t('tariff.title') || 'Tariff Breakdown'}
+                    >
+                        <Sun size={16} />
+                    </button>
+                )}
 
                 {!meter.is_archived && (
                     <button
