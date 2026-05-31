@@ -1010,6 +1010,8 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 	tr := GetTranslations(userPeriod.Language)
 
 	invoiceYear := fullStart.Year()
+	// Stored period_end is the inclusive last billed day (for display). Billing math uses the exclusive [fullStart, fullEnd) window.
+	displayEnd := fullEnd.AddDate(0, 0, -1)
 	timestamp := time.Now().Format("20060102150405")
 	invoiceNumber := fmt.Sprintf("INV-%d-%d-%d-%s", invoiceYear, buildingID, userPeriod.UserID, timestamp)
 
@@ -1084,7 +1086,7 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 
 		items = append(items, models.InvoiceItem{
 			Description: fmt.Sprintf("%s: %s-%s | %s: %.3f kWh | %s: %.3f kWh | %s: %.3f kWh",
-				tr.Period, start.Format("02.01"), end.Format("02.01"),
+				tr.Period, start.Format("02.01"), end.AddDate(0, 0, -1).Format("02.01"),
 				tr.OldReading, meterReadingFrom,
 				tr.NewReading, meterReadingTo,
 				tr.Consumption, totalConsumption),
@@ -1287,7 +1289,7 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 			invoice_number, user_id, building_id, period_start, period_end,
 			total_amount, currency, status
 		) VALUES (?, ?, ?, ?, ?, ?, ?, 'issued')
-	`, invoiceNumber, userPeriod.UserID, buildingID, fullStart.Format("2006-01-02"), fullEnd.Format("2006-01-02"),
+	`, invoiceNumber, userPeriod.UserID, buildingID, fullStart.Format("2006-01-02"), displayEnd.Format("2006-01-02"),
 		totalAmount, primary.Currency)
 
 	if err != nil {
@@ -1314,7 +1316,7 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 		UserID:        userPeriod.UserID,
 		BuildingID:    buildingID,
 		PeriodStart:   fullStart.Format("2006-01-02"),
-		PeriodEnd:     fullEnd.Format("2006-01-02"),
+		PeriodEnd:     displayEnd.Format("2006-01-02"),
 		TotalAmount:   totalAmount,
 		Currency:      primary.Currency,
 		Status:        "issued",
@@ -1666,6 +1668,8 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 	tr := GetTranslations(userPeriod.Language)
 
 	invoiceYear := fullStart.Year()
+	// Stored period_end is the inclusive last billed day (for display). Billing math uses the exclusive [fullStart, fullEnd) window.
+	displayEnd := fullEnd.AddDate(0, 0, -1)
 	timestamp := time.Now().Format("20060102150405")
 	invoiceNumber := fmt.Sprintf("VZEV-%d-%d-%d-%s", invoiceYear, buildingID, userPeriod.UserID, timestamp)
 
@@ -1726,7 +1730,7 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 
 	items = append(items, models.InvoiceItem{
 		Description: fmt.Sprintf("%s: %s-%s | %s: %.3f kWh | %s: %.3f kWh | %s: %.3f kWh",
-			tr.Period, start.Format("02.01"), end.Format("02.01"),
+			tr.Period, start.Format("02.01"), end.AddDate(0, 0, -1).Format("02.01"),
 			tr.OldReading, meterReadingFrom,
 			tr.NewReading, meterReadingTo,
 			tr.Consumption, totalConsumption),
@@ -1932,7 +1936,7 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 			invoice_number, user_id, building_id, period_start, period_end,
 			total_amount, currency, status, is_vzev
 		) VALUES (?, ?, ?, ?, ?, ?, ?, 'issued', 1)
-	`, invoiceNumber, userPeriod.UserID, buildingID, fullStart.Format("2006-01-02"), fullEnd.Format("2006-01-02"),
+	`, invoiceNumber, userPeriod.UserID, buildingID, fullStart.Format("2006-01-02"), displayEnd.Format("2006-01-02"),
 		totalAmount, primary.Currency)
 
 	if err != nil {
@@ -1960,7 +1964,7 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 		UserID:        userPeriod.UserID,
 		BuildingID:    buildingID,
 		PeriodStart:   fullStart.Format("2006-01-02"),
-		PeriodEnd:     fullEnd.Format("2006-01-02"),
+		PeriodEnd:     displayEnd.Format("2006-01-02"),
 		TotalAmount:   totalAmount,
 		Currency:      primary.Currency,
 		Status:        "issued",
@@ -2804,6 +2808,8 @@ func (bs *BillingService) generateChargerOnlyInvoice(userPeriod UserPeriod, buil
 	}
 
 	invoiceYear := fullStart.Year()
+	// Stored period_end is the inclusive last billed day (for display). Billing math uses the exclusive [fullStart, fullEnd) window.
+	displayEnd := fullEnd.AddDate(0, 0, -1)
 	timestamp := time.Now().Format("20060102150405")
 	invoiceNumber := fmt.Sprintf("INV-%d-%d-%d-CH%d-%s", invoiceYear, buildingID, userPeriod.UserID, chargerID, timestamp)
 
@@ -2921,7 +2927,7 @@ func (bs *BillingService) generateChargerOnlyInvoice(userPeriod UserPeriod, buil
 			invoice_number, user_id, building_id, period_start, period_end,
 			total_amount, currency, status
 		) VALUES (?, ?, ?, ?, ?, ?, ?, 'issued')
-	`, invoiceNumber, userPeriod.UserID, buildingID, fullStart.Format("2006-01-02"), fullEnd.Format("2006-01-02"),
+	`, invoiceNumber, userPeriod.UserID, buildingID, fullStart.Format("2006-01-02"), displayEnd.Format("2006-01-02"),
 		totalAmount, primary.Currency)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create charger-only invoice: %v", err)
@@ -2944,7 +2950,7 @@ func (bs *BillingService) generateChargerOnlyInvoice(userPeriod UserPeriod, buil
 		UserID:        userPeriod.UserID,
 		BuildingID:    buildingID,
 		PeriodStart:   fullStart.Format("2006-01-02"),
-		PeriodEnd:     fullEnd.Format("2006-01-02"),
+		PeriodEnd:     displayEnd.Format("2006-01-02"),
 		TotalAmount:   totalAmount,
 		Currency:      primary.Currency,
 		Status:        "issued",
