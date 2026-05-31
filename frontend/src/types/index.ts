@@ -412,4 +412,6 @@ export interface EmailAlertSettings {
   health_report_day: number;
   health_report_hour: number;
   last_health_report_sent?: string;
+  invoice_email_subject?: string;
+  invoice_email_body?: string;
 }

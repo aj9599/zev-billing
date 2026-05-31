@@ -26,18 +26,21 @@ func (h *EmailAlertHandler) GetSettings(w http.ResponseWriter, r *http.Request) 
 	var isEnabled, healthReportEnabled bool
 	var healthReportFrequency string
 	var lastAlertSent, lastHealthReportSent sql.NullString
+	var invoiceEmailSubject, invoiceEmailBody string
 
 	err := h.db.QueryRow(`
 		SELECT smtp_host, smtp_port, smtp_user, smtp_password, smtp_from,
 		       alert_recipient, is_enabled, rate_limit_minutes, last_alert_sent,
 		       health_report_enabled, health_report_frequency, health_report_day,
-		       health_report_hour, last_health_report_sent
+		       health_report_hour, last_health_report_sent,
+		       invoice_email_subject, invoice_email_body
 		FROM email_alert_settings WHERE id = 1
 	`).Scan(
 		&smtpHost, &smtpPort, &smtpUser, &smtpPassword, &smtpFrom,
 		&alertRecipient, &isEnabled, &rateLimitMinutes, &lastAlertSent,
 		&healthReportEnabled, &healthReportFrequency, &healthReportDay,
 		&healthReportHour, &lastHealthReportSent,
+		&invoiceEmailSubject, &invoiceEmailBody,
 	)
 	if err != nil {
 		log.Printf("[EMAIL-ALERT] Failed to read settings: %v", err)
@@ -66,6 +69,8 @@ func (h *EmailAlertHandler) GetSettings(w http.ResponseWriter, r *http.Request) 
 		"health_report_day":       healthReportDay,
 		"health_report_hour":      healthReportHour,
 		"last_health_report_sent": lastHealthReportSent.String,
+		"invoice_email_subject":   invoiceEmailSubject,
+		"invoice_email_body":      invoiceEmailBody,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -87,6 +92,8 @@ func (h *EmailAlertHandler) UpdateSettings(w http.ResponseWriter, r *http.Reques
 		HealthReportFrequency string `json:"health_report_frequency"`
 		HealthReportDay       int    `json:"health_report_day"`
 		HealthReportHour      int    `json:"health_report_hour"`
+		InvoiceEmailSubject   string `json:"invoice_email_subject"`
+		InvoiceEmailBody      string `json:"invoice_email_body"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -113,12 +120,14 @@ func (h *EmailAlertHandler) UpdateSettings(w http.ResponseWriter, r *http.Reques
 				alert_recipient = ?, is_enabled = ?, rate_limit_minutes = ?,
 				health_report_enabled = ?, health_report_frequency = ?,
 				health_report_day = ?, health_report_hour = ?,
+				invoice_email_subject = ?, invoice_email_body = ?,
 				updated_at = CURRENT_TIMESTAMP
 			WHERE id = 1
 		`, req.SMTPHost, req.SMTPPort, req.SMTPUser, req.SMTPFrom,
 			req.AlertRecipient, req.IsEnabled, req.RateLimitMinutes,
 			req.HealthReportEnabled, req.HealthReportFrequency,
-			req.HealthReportDay, req.HealthReportHour)
+			req.HealthReportDay, req.HealthReportHour,
+			req.InvoiceEmailSubject, req.InvoiceEmailBody)
 		if err != nil {
 			log.Printf("[EMAIL-ALERT] Failed to update settings: %v", err)
 			http.Error(w, "Failed to update settings", http.StatusInternalServerError)
@@ -132,12 +141,14 @@ func (h *EmailAlertHandler) UpdateSettings(w http.ResponseWriter, r *http.Reques
 				alert_recipient = ?, is_enabled = ?, rate_limit_minutes = ?,
 				health_report_enabled = ?, health_report_frequency = ?,
 				health_report_day = ?, health_report_hour = ?,
+				invoice_email_subject = ?, invoice_email_body = ?,
 				updated_at = CURRENT_TIMESTAMP
 			WHERE id = 1
 		`, req.SMTPHost, req.SMTPPort, req.SMTPUser, req.SMTPPassword, req.SMTPFrom,
 			req.AlertRecipient, req.IsEnabled, req.RateLimitMinutes,
 			req.HealthReportEnabled, req.HealthReportFrequency,
-			req.HealthReportDay, req.HealthReportHour)
+			req.HealthReportDay, req.HealthReportHour,
+			req.InvoiceEmailSubject, req.InvoiceEmailBody)
 		if err != nil {
 			log.Printf("[EMAIL-ALERT] Failed to update settings: %v", err)
 			http.Error(w, "Failed to update settings", http.StatusInternalServerError)

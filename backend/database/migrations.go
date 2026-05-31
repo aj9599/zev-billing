@@ -354,6 +354,8 @@ func RunMigrations(db *sql.DB) error {
 			health_report_day INTEGER NOT NULL DEFAULT 1,
 			health_report_hour INTEGER NOT NULL DEFAULT 8,
 			last_health_report_sent DATETIME,
+			invoice_email_subject TEXT NOT NULL DEFAULT '',
+			invoice_email_body TEXT NOT NULL DEFAULT '',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
@@ -430,6 +432,12 @@ func RunMigrations(db *sql.DB) error {
 	}
 
 	if err := ensureEmailAlertSettingsRow(db); err != nil {
+		return err
+	}
+
+	// Add editable invoice e-mail subject/body columns so the auto-billing
+	// e-mail text can be customised from the Email Settings UI.
+	if err := addInvoiceEmailTemplateColumns(db); err != nil {
 		return err
 	}
 
@@ -812,6 +820,40 @@ func containsHelper(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// addInvoiceEmailTemplateColumns adds the invoice_email_subject and
+// invoice_email_body columns to email_alert_settings on databases created
+// before the editable-template feature existed.
+func addInvoiceEmailTemplateColumns(db *sql.DB) error {
+	var settingsSql string
+	err := db.QueryRow(`
+		SELECT sql FROM sqlite_master
+		WHERE type='table' AND name='email_alert_settings'
+	`).Scan(&settingsSql)
+	if err != nil {
+		return err
+	}
+
+	if !contains(settingsSql, "invoice_email_subject") {
+		log.Println("Adding invoice_email_subject column to email_alert_settings table...")
+		if _, err := db.Exec(`ALTER TABLE email_alert_settings ADD COLUMN invoice_email_subject TEXT NOT NULL DEFAULT ''`); err != nil {
+			if !contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("failed to add invoice_email_subject column: %v", err)
+			}
+		}
+	}
+
+	if !contains(settingsSql, "invoice_email_body") {
+		log.Println("Adding invoice_email_body column to email_alert_settings table...")
+		if _, err := db.Exec(`ALTER TABLE email_alert_settings ADD COLUMN invoice_email_body TEXT NOT NULL DEFAULT ''`); err != nil {
+			if !contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("failed to add invoice_email_body column: %v", err)
+			}
+		}
+	}
+
+	return nil
 }
 
 func ensureEmailAlertSettingsRow(db *sql.DB) error {

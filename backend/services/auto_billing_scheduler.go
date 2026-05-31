@@ -315,8 +315,7 @@ func (s *AutoBillingScheduler) runConfig(id int, advanceSchedule bool) (*RunConf
 				// attachment. The PDF generator writes either to the absolute Pi
 				// path or a local ./invoices fallback.
 				attachmentPath := resolveInvoicePDFPath(pdfPath)
-				subject := fmt.Sprintf("Rechnung / Invoice %s", fullInvoice["invoice_number"])
-				body := s.buildInvoiceEmailBody(fullInvoice)
+				subject, body := s.buildInvoiceEmail(fullInvoice)
 				if err := s.emailAlerter.SendEmailWithAttachment(recipient, subject, body, attachmentPath); err != nil {
 					result.EmailsFailed++
 					result.Warnings = append(result.Warnings, fmt.Sprintf("Invoice %d: e-mail to %s failed: %v", invoice.ID, recipient, err))
@@ -501,9 +500,12 @@ func (s *AutoBillingScheduler) invoiceToMap(inv map[string]interface{}) map[stri
 	return inv
 }
 
-// buildInvoiceEmailBody renders a short bilingual e-mail body that introduces
-// the attached PDF invoice. Kept simple on purpose — the PDF carries the detail.
-func (s *AutoBillingScheduler) buildInvoiceEmailBody(invoice map[string]interface{}) string {
+// buildInvoiceEmail returns the subject and HTML body for the invoice e-mail.
+// If a custom subject/body is configured in email_alert_settings it is used
+// (with placeholder substitution); otherwise the built-in bilingual default is
+// returned. Supported placeholders: {greeting}, {invoice_number},
+// {period_start}, {period_end}.
+func (s *AutoBillingScheduler) buildInvoiceEmail(invoice map[string]interface{}) (string, string) {
 	userMap, _ := invoice["user"].(map[string]interface{})
 	firstName, _ := userMap["first_name"].(string)
 	lastName, _ := userMap["last_name"].(string)
@@ -518,13 +520,48 @@ func (s *AutoBillingScheduler) buildInvoiceEmailBody(invoice map[string]interfac
 	periodStart, _ := invoice["period_start"].(string)
 	periodEnd, _ := invoice["period_end"].(string)
 
-	return fmt.Sprintf(`<html><body style="font-family: Arial, sans-serif; color: #1f2937; line-height:1.6;">
+	var customSubject, customBody string
+	// Single-row settings table; ignore the error so a missing row just falls
+	// back to the built-in defaults below.
+	s.db.QueryRow(`
+		SELECT invoice_email_subject, invoice_email_body
+		FROM email_alert_settings WHERE id = 1
+	`).Scan(&customSubject, &customBody)
+
+	replacer := strings.NewReplacer(
+		"{greeting}", greeting,
+		"{invoice_number}", invoiceNumber,
+		"{period_start}", periodStart,
+		"{period_end}", periodEnd,
+	)
+
+	subject := strings.TrimSpace(customSubject)
+	if subject == "" {
+		subject = fmt.Sprintf("Rechnung / Invoice %s", invoiceNumber)
+	} else {
+		subject = replacer.Replace(subject)
+	}
+
+	body := strings.TrimSpace(customBody)
+	if body == "" {
+		body = fmt.Sprintf(`<html><body style="font-family: Arial, sans-serif; color: #1f2937; line-height:1.6;">
 <p>%s,</p>
 <p>im Anhang finden Sie Ihre Rechnung <strong>%s</strong> für den Zeitraum %s – %s.<br/>
 Please find attached invoice <strong>%s</strong> for the period %s – %s.</p>
 <p>Bei Fragen wenden Sie sich bitte an Ihren Verwalter / If you have any questions, please contact your administrator.</p>
 <p style="color:#6b7280;font-size:12px;margin-top:24px;">— ZEV Billing</p>
 </body></html>`, greeting, invoiceNumber, periodStart, periodEnd, invoiceNumber, periodStart, periodEnd)
+	} else {
+		body = replacer.Replace(body)
+		// Allow admins to enter plain text: when no HTML tag is present, turn
+		// line breaks into <br/> and wrap in a minimal styled body.
+		if !strings.Contains(body, "<") {
+			body = fmt.Sprintf(`<html><body style="font-family: Arial, sans-serif; color: #1f2937; line-height:1.6;">%s</body></html>`,
+				strings.ReplaceAll(body, "\n", "<br/>"))
+		}
+	}
+
+	return subject, body
 }
 
 // Helper function to get string from sql.NullString

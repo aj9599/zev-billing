@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Mail, Send, Server, Clock, Calendar, Heart, CheckCircle, Shield } from 'lucide-react';
+import { Mail, Send, Server, Clock, Calendar, Heart, CheckCircle, Shield, FileText } from 'lucide-react';
 import { api } from '../api/client';
 import { useTranslation } from '../i18n';
 import type { EmailAlertSettings } from '../types';
@@ -13,6 +13,7 @@ export default function EmailSettings() {
     is_enabled: false, rate_limit_minutes: 60,
     health_report_enabled: false, health_report_frequency: 'weekly',
     health_report_day: 1, health_report_hour: 8,
+    invoice_email_subject: '', invoice_email_body: '',
   });
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailTestLoading, setEmailTestLoading] = useState(false);
@@ -355,6 +356,48 @@ export default function EmailSettings() {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+
+          {/* Invoice Email Template Section */}
+          <div style={{ marginTop: '24px', borderTop: '1px solid #f3f4f6', paddingTop: '20px' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: '700', color: '#374151', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FileText size={14} /> {t('settings.invoiceEmail')}
+            </h3>
+            <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0 0 16px 0', lineHeight: '1.5' }}>
+              {t('settings.invoiceEmailDesc')}
+            </p>
+
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600', color: '#374151', fontSize: '12px' }}>
+                {t('settings.invoiceEmailSubject')}
+              </label>
+              <input
+                type="text" value={emailForm.invoice_email_subject || ''}
+                onChange={(e) => setEmailForm({ ...emailForm, invoice_email_subject: e.target.value })}
+                placeholder={t('settings.invoiceEmailSubjectPlaceholder')}
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '13px', outline: 'none' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600', color: '#374151', fontSize: '12px' }}>
+                {t('settings.invoiceEmailBody')}
+              </label>
+              <textarea
+                value={emailForm.invoice_email_body || ''}
+                onChange={(e) => setEmailForm({ ...emailForm, invoice_email_body: e.target.value })}
+                placeholder={t('settings.invoiceEmailBodyPlaceholder')}
+                rows={8}
+                style={{ width: '100%', padding: '10px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '13px', outline: 'none', fontFamily: 'inherit', resize: 'vertical' }}
+              />
+              <div style={{ marginTop: '6px', fontSize: '11px', color: '#9ca3af', lineHeight: '1.5' }}>
+                {t('settings.invoiceEmailPlaceholders')}
+                <code style={{ background: '#f3f4f6', padding: '1px 4px', borderRadius: '4px', margin: '0 2px' }}>{'{greeting}'}</code>
+                <code style={{ background: '#f3f4f6', padding: '1px 4px', borderRadius: '4px', margin: '0 2px' }}>{'{invoice_number}'}</code>
+                <code style={{ background: '#f3f4f6', padding: '1px 4px', borderRadius: '4px', margin: '0 2px' }}>{'{period_start}'}</code>
+                <code style={{ background: '#f3f4f6', padding: '1px 4px', borderRadius: '4px', margin: '0 2px' }}>{'{period_end}'}</code>
               </div>
             </div>
           </div>
