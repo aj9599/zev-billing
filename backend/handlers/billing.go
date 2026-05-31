@@ -194,48 +194,45 @@ func (h *BillingHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Check if settings exist
-	var exists bool
-	err := h.db.QueryRow("SELECT 1 FROM billing_settings WHERE building_id = ?", s.BuildingID).Scan(&exists)
-
-	if err == sql.ErrNoRows {
-		// Insert new settings
-		result, err := h.db.Exec(`
-			INSERT INTO billing_settings (
-				building_id, normal_power_price, solar_power_price,
-				car_charging_normal_price, car_charging_priority_price, currency
-			) VALUES (?, ?, ?, ?, ?, ?)
-		`, s.BuildingID, s.NormalPowerPrice, s.SolarPowerPrice,
-			s.CarChargingNormalPrice, s.CarChargingPriorityPrice, s.Currency)
-
-		if err != nil {
-			log.Printf("ERROR: Failed to create billing settings: %v", err)
-			http.Error(w, "Failed to create settings", http.StatusInternalServerError)
-			return
-		}
-
-		id, _ := result.LastInsertId()
-		s.ID = int(id)
-		log.Printf("SUCCESS: Created billing settings ID %d for building %d", s.ID, s.BuildingID)
-	} else {
-		// Update existing settings
-		_, err = h.db.Exec(`
-			UPDATE billing_settings SET
-				normal_power_price = ?, solar_power_price = ?,
-				car_charging_normal_price = ?, car_charging_priority_price = ?,
-				currency = ?, updated_at = CURRENT_TIMESTAMP
-			WHERE building_id = ?
-		`, s.NormalPowerPrice, s.SolarPowerPrice,
-			s.CarChargingNormalPrice, s.CarChargingPriorityPrice,
-			s.Currency, s.BuildingID)
-
-		if err != nil {
-			log.Printf("ERROR: Failed to update billing settings: %v", err)
-			http.Error(w, "Failed to update settings", http.StatusInternalServerError)
-			return
-		}
-		log.Printf("SUCCESS: Updated billing settings for building %d", s.BuildingID)
+	// Update a specific pricing row by id. Each building can have several
+	// pricing periods (different valid_from/valid_to), so updating by
+	// building_id would clobber the wrong row and silently drop the date
+	// change — match the exact row instead and persist every field.
+	if s.ID == 0 {
+		http.Error(w, "Missing pricing id", http.StatusBadRequest)
+		return
 	}
+
+	validTo := sql.NullString{}
+	if s.ValidTo != "" {
+		validTo.Valid = true
+		validTo.String = s.ValidTo
+	}
+
+	result, err := h.db.Exec(`
+		UPDATE billing_settings SET
+			building_id = ?, is_complex = ?, normal_power_price = ?, solar_power_price = ?,
+			car_charging_normal_price = ?, car_charging_priority_price = ?,
+			vzev_export_price = ?, currency = ?, valid_from = ?, valid_to = ?,
+			is_active = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, s.BuildingID, s.IsComplex, s.NormalPowerPrice, s.SolarPowerPrice,
+		s.CarChargingNormalPrice, s.CarChargingPriorityPrice,
+		s.VZEVExportPrice, s.Currency, s.ValidFrom, validTo,
+		s.IsActive, s.ID)
+
+	if err != nil {
+		log.Printf("ERROR: Failed to update billing settings ID %d: %v", s.ID, err)
+		http.Error(w, "Failed to update settings", http.StatusInternalServerError)
+		return
+	}
+
+	if rowsAffected, _ := result.RowsAffected(); rowsAffected == 0 {
+		http.Error(w, "Pricing not found", http.StatusNotFound)
+		return
+	}
+
+	log.Printf("SUCCESS: Updated billing settings ID %d for building %d", s.ID, s.BuildingID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(s)
