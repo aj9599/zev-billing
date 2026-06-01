@@ -312,7 +312,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		if hasValidQR {
 			qrCodeContent = fmt.Sprintf(`
 				<div class="qr-code-wrapper">
-					<img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=%s" alt="QR Code" style="width: 46mm; height: 46mm;">
+					<img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&ecc=M&data=%s" alt="QR Code" style="width: 46mm; height: 46mm;">
 				</div>`,
 				template.URLQueryEscaper(qrData),
 			)
@@ -1170,9 +1170,20 @@ func (pg *PDFGenerator) generateSwissQRData(inv map[string]interface{}, sender S
 	if ta, ok := inv["total_amount"].(float64); ok {
 		totalAmount = ta
 	}
-	currency := fmt.Sprintf("%v", inv["currency"])
-	if currency == "" {
+	currency := strings.ToUpper(fmt.Sprintf("%v", inv["currency"]))
+	// Swiss QR-bill only permits CHF or EUR.
+	if currency != "CHF" && currency != "EUR" {
 		currency = "CHF"
+	}
+
+	// Reference type/number depend on the IBAN kind: a QR-IBAN MUST carry a
+	// QRR reference, a regular IBAN MUST use NON (or SCOR). Sending NON with a
+	// QR-IBAN — or QRR with a regular IBAN — is rejected by every banking app.
+	referenceType := "NON"
+	reference := ""
+	if isQRIBAN(iban) {
+		referenceType = "QRR"
+		reference = qrReference(invoiceNumber)
 	}
 
 	// Parse addresses
@@ -1216,7 +1227,7 @@ func (pg *PDFGenerator) generateSwissQRData(inv map[string]interface{}, sender S
 		truncate(senderHouseNo, 16),             // 8: Creditor House No
 		truncate(sender.Zip, 16),                // 9: Creditor Postal Code
 		truncate(sender.City, 35),               // 10: Creditor City
-		truncate(sender.Country, 2),             // 11: Creditor Country
+		normalizeCountryCode(sender.Country),    // 11: Creditor Country (ISO alpha-2)
 		"",                                      // 12: Ultimate Creditor Address Type
 		"",                                      // 13: Ultimate Creditor Name
 		"",                                      // 14: Ultimate Creditor Street
@@ -1232,9 +1243,9 @@ func (pg *PDFGenerator) generateSwissQRData(inv map[string]interface{}, sender S
 		truncate(userHouseNo, 16),               // 24: Debtor House No
 		truncate(userZip, 16),                   // 25: Debtor Postal Code
 		truncate(userCity, 35),                  // 26: Debtor City
-		truncate(userCountry, 2),                // 27: Debtor Country
-		"NON",                                   // 28: Reference Type
-		"",                                      // 29: Reference
+		normalizeCountryCode(userCountry),       // 27: Debtor Country (ISO alpha-2)
+		referenceType,                           // 28: Reference Type (QRR for QR-IBAN, else NON)
+		reference,                               // 29: Reference
 		truncate("Invoice "+invoiceNumber, 140), // 30: Additional Information
 		"EPD",                                   // 31: End Payment Data
 	}
@@ -1272,8 +1283,82 @@ func parseAddress(address string) (street, houseNo string) {
 }
 
 func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	// Truncate by rune, not byte, so multi-byte characters (ä, ö, ü, é …)
+	// are never sliced mid-rune — a corrupted UTF-8 tail makes a Swiss QR
+	// payload invalid and the scan gets rejected.
+	r := []rune(s)
+	if len(r) <= maxLen {
 		return s
 	}
-	return s[:maxLen]
+	return string(r[:maxLen])
+}
+
+// normalizeCountryCode returns a valid ISO 3166-1 alpha-2 country code for the
+// Swiss QR-bill. The address field accepts only a 2-letter code; a full name
+// like "Schweiz" would be truncated to "Sc" and rejected by banking apps.
+func normalizeCountryCode(s string) string {
+	c := strings.ToUpper(strings.TrimSpace(s))
+	switch c {
+	case "CH", "CHE", "SCHWEIZ", "SWITZERLAND", "SUISSE", "SVIZZERA":
+		return "CH"
+	case "LI", "LIE", "LIECHTENSTEIN":
+		return "LI"
+	case "DE", "DEU", "DEUTSCHLAND", "GERMANY", "ALLEMAGNE", "GERMANIA":
+		return "DE"
+	case "AT", "AUT", "ÖSTERREICH", "OESTERREICH", "AUSTRIA", "AUTRICHE":
+		return "AT"
+	case "FR", "FRA", "FRANCE", "FRANKREICH", "FRANCIA":
+		return "FR"
+	case "IT", "ITA", "ITALY", "ITALIEN", "ITALIE", "ITALIA":
+		return "IT"
+	}
+	// Already a plausible 2-letter code → keep it; otherwise default to CH
+	// (Swiss QR-bills are domestic; CH is the safe fallback).
+	if len(c) == 2 {
+		return c
+	}
+	return "CH"
+}
+
+// qrReferenceTable is the Modulo-10 recursive lookup used for the QR-reference
+// check digit (Swiss ESR scheme).
+var qrReferenceTable = [10]int{0, 9, 4, 6, 8, 2, 7, 1, 3, 5}
+
+// qrReference builds a 27-digit QR reference (QRR) from arbitrary text: the
+// digits of the source are taken, right-aligned to 26 digits, and a Modulo-10
+// recursive check digit is appended. Required when the creditor IBAN is a
+// QR-IBAN (institution ID 30000–31999).
+func qrReference(source string) string {
+	var digits strings.Builder
+	for _, r := range source {
+		if r >= '0' && r <= '9' {
+			digits.WriteRune(r)
+		}
+	}
+	base := digits.String()
+	if len(base) > 26 {
+		base = base[len(base)-26:]
+	}
+	base = strings.Repeat("0", 26-len(base)) + base
+	carry := 0
+	for _, r := range base {
+		carry = qrReferenceTable[(carry+int(r-'0'))%10]
+	}
+	check := (10 - carry) % 10
+	return base + fmt.Sprintf("%d", check)
+}
+
+// isQRIBAN reports whether a CH/LI IBAN is a QR-IBAN (institution ID in the
+// reserved 30000–31999 range), which mandates a QRR reference.
+func isQRIBAN(iban string) bool {
+	if len(iban) < 9 {
+		return false
+	}
+	iid := iban[4:9] // positions 5–9 = institution ID
+	for _, r := range iid {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return iid >= "30000" && iid <= "31999"
 }
