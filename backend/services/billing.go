@@ -163,7 +163,7 @@ func (bs *BillingService) loadPriceSegments(buildingID int, start, end time.Time
 	rows, err := bs.db.Query(`
 		SELECT id, building_id, is_complex, normal_power_price, solar_power_price,
 		       car_charging_normal_price, car_charging_priority_price,
-		       vzev_export_price, currency, valid_from, valid_to
+		       vzev_export_price, vat_included, vat_rate, currency, valid_from, valid_to
 		FROM billing_settings
 		WHERE building_id = ? AND is_active = 1
 		ORDER BY valid_from ASC, id ASC
@@ -188,7 +188,7 @@ func (bs *BillingService) loadPriceSegments(buildingID int, start, end time.Time
 			&s.ID, &s.BuildingID, &s.IsComplex,
 			&s.NormalPowerPrice, &s.SolarPowerPrice,
 			&s.CarChargingNormalPrice, &s.CarChargingPriorityPrice,
-			&s.VZEVExportPrice, &s.Currency,
+			&s.VZEVExportPrice, &s.VATIncluded, &s.VATRate, &s.Currency,
 			&validFromStr, &validToStr,
 		); err != nil {
 			log.Printf("WARNING: skipping unreadable billing_settings row: %v", err)
