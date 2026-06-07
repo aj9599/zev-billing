@@ -391,3 +391,40 @@ type BuildingEnergyFlowLive struct {
 	GridPowerKw        float64 `json:"grid_power_kw"`
 	EvChargingPowerKw  float64 `json:"ev_charging_power_kw"`
 }
+
+// Device is a controllable device (relay/switch) driven by live solar surplus.
+// Standalone from billing. connection_config is driver-specific JSON.
+type Device struct {
+	ID                   int     `json:"id"`
+	Name                 string  `json:"name"`
+	BuildingID           int     `json:"building_id"`
+	Driver               string  `json:"driver"`            // shelly | loxone
+	ConnectionConfig     string  `json:"connection_config"` // JSON
+	ControlMode          string  `json:"control_mode"`      // auto | on | off
+	ManualOverrideUntil  *string `json:"manual_override_until,omitempty"`
+	SwitchOnThresholdW   float64 `json:"switch_on_threshold_w"`
+	SwitchOffThresholdW  float64 `json:"switch_off_threshold_w"`
+	MinRuntimeSeconds    int     `json:"min_runtime_seconds"`
+	MinOfftimeSeconds    int     `json:"min_offtime_seconds"`
+	Priority             int     `json:"priority"`
+	ScheduleJSON         *string `json:"schedule_json,omitempty"`
+	LastCommand          *string `json:"last_command,omitempty"`
+	LastCommandAt        *string `json:"last_command_at,omitempty"`
+	LastState            *string `json:"last_state,omitempty"`
+	LastStateAt          *string `json:"last_state_at,omitempty"`
+	IsActive             bool    `json:"is_active"`
+	CreatedAt            string  `json:"created_at"`
+	UpdatedAt            string  `json:"updated_at"`
+}
+
+// DeviceSwitchEvent is an audit entry for a switching action.
+type DeviceSwitchEvent struct {
+	ID        int     `json:"id"`
+	DeviceID  int     `json:"device_id"`
+	Command   string  `json:"command"`
+	Reason    string  `json:"reason"`
+	SurplusW  float64 `json:"surplus_w"`
+	Success   bool    `json:"success"`
+	Error     string  `json:"error,omitempty"`
+	CreatedAt string  `json:"created_at"`
+}

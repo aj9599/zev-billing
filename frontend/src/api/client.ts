@@ -4,7 +4,7 @@ import type {
   BuildingConsumption, SharedMeterConfig, CustomLineItem,
   GenerateBillsRequest, MeterReplacement, MeterReplacementRequest,
   SelfConsumptionData, SystemHealth, CostOverview, EnergyFlowData, EnergyFlowLiveData,
-  EmailAlertSettings
+  EmailAlertSettings, Device, DeviceLiveStatus, DeviceSwitchEvent
 } from '../types';
 
 const API_BASE = '/api';
@@ -315,6 +315,48 @@ class ApiClient {
 
   async deleteCharger(id: number) {
     return this.request(`/chargers/${id}`, { method: 'DELETE' });
+  }
+
+  // Controllable devices (solar-driven on/off control)
+  async getDevices(building_id?: number): Promise<Device[]> {
+    const query = building_id ? `?building_id=${building_id}` : '';
+    return this.request(`/devices${query}`);
+  }
+
+  async getDevice(id: number): Promise<Device> {
+    return this.request(`/devices/${id}`);
+  }
+
+  async createDevice(device: Partial<Device>): Promise<Device> {
+    return this.request('/devices', { method: 'POST', body: JSON.stringify(device) });
+  }
+
+  async updateDevice(id: number, device: Partial<Device>): Promise<Device> {
+    return this.request(`/devices/${id}`, { method: 'PUT', body: JSON.stringify(device) });
+  }
+
+  async deleteDevice(id: number) {
+    return this.request(`/devices/${id}`, { method: 'DELETE' });
+  }
+
+  async controlDevice(id: number, mode: 'auto' | 'on' | 'off', duration_seconds?: number): Promise<{ status: string }> {
+    return this.request(`/devices/${id}/control`, {
+      method: 'POST',
+      body: JSON.stringify({ mode, duration_seconds: duration_seconds ?? 0 }),
+    });
+  }
+
+  async getDeviceLiveStatus(building_id?: number): Promise<DeviceLiveStatus[]> {
+    const query = building_id ? `?building_id=${building_id}` : '';
+    return this.request(`/devices/status/live${query}`);
+  }
+
+  async testDevice(id: number): Promise<{ online: boolean; state: string; error?: string }> {
+    return this.request(`/devices/${id}/test`, { method: 'POST' });
+  }
+
+  async getDeviceEvents(id: number): Promise<DeviceSwitchEvent[]> {
+    return this.request(`/devices/${id}/events`);
   }
 
   async getChargerDeletionImpact(id: number): Promise<{

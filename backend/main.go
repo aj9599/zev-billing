@@ -28,6 +28,7 @@ import (
 
 var dataCollector *services.DataCollector
 var autoBillingScheduler *services.AutoBillingScheduler
+var deviceController *services.DeviceController
 
 // Update status tracking
 type UpdateStatus struct {
@@ -119,10 +120,12 @@ func main() {
 	autoBillingScheduler = services.NewAutoBillingScheduler(db, billingService, pdfGenerator)
 	emailAlerter := services.NewEmailAlerter(db)
 	autoBillingScheduler.SetEmailAlerter(emailAlerter)
+	deviceController = services.NewDeviceController(db, dataCollector)
 
 	go dataCollector.Start()
 	go autoBillingScheduler.Start()
 	go emailAlerter.Start()
+	go deviceController.Start()
 	services.StartHealthHistoryCollector(db)
 
 	// Initialize all handlers
@@ -131,6 +134,7 @@ func main() {
 	buildingHandler := handlers.NewBuildingHandler(db)
 	meterHandler := handlers.NewMeterHandler(db, dataCollector)
 	chargerHandler := handlers.NewChargerHandler(db, dataCollector)
+	deviceHandler := handlers.NewDeviceHandler(db, deviceController)
 	billingHandler := handlers.NewBillingHandler(db, billingService, pdfGenerator)
 	autoBillingHandler := handlers.NewAutoBillingHandler(db, autoBillingScheduler)
 	dashboardHandler := handlers.NewDashboardHandler(db, dataCollector)
@@ -226,6 +230,17 @@ func main() {
 	api.HandleFunc("/chargers/{id}", chargerHandler.Get).Methods("GET")
 	api.HandleFunc("/chargers/{id}", chargerHandler.Update).Methods("PUT")
 	api.HandleFunc("/chargers/{id}", chargerHandler.Delete).Methods("DELETE")
+
+	// Controllable device routes - specific routes before {id}
+	api.HandleFunc("/devices/status/live", deviceHandler.LiveStatus).Methods("GET")
+	api.HandleFunc("/devices", deviceHandler.List).Methods("GET")
+	api.HandleFunc("/devices", deviceHandler.Create).Methods("POST")
+	api.HandleFunc("/devices/{id}/control", deviceHandler.Control).Methods("POST")
+	api.HandleFunc("/devices/{id}/test", deviceHandler.Test).Methods("POST")
+	api.HandleFunc("/devices/{id}/events", deviceHandler.Events).Methods("GET")
+	api.HandleFunc("/devices/{id}", deviceHandler.Get).Methods("GET")
+	api.HandleFunc("/devices/{id}", deviceHandler.Update).Methods("PUT")
+	api.HandleFunc("/devices/{id}", deviceHandler.Delete).Methods("DELETE")
 
 	// Billing routes
 	api.HandleFunc("/billing/settings", billingHandler.GetSettings).Methods("GET")
@@ -324,7 +339,12 @@ func main() {
 		if emailAlerter != nil {
 			emailAlerter.Stop()
 		}
-		
+
+		// Stop device controller
+		if deviceController != nil {
+			deviceController.Stop()
+		}
+
 		// Create a deadline for shutdown
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()

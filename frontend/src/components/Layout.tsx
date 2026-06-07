@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useState } from 'react';
-import { LayoutDashboard, Users, Building, Car, FileText, Settings as SettingsIcon, LogOut, Activity, DollarSign, Menu, X, Calendar, Zap, ChevronDown, ChevronRight, Lock, Database, Mail } from 'lucide-react';
+import { LayoutDashboard, Users, Building, Car, FileText, Settings as SettingsIcon, LogOut, Activity, DollarSign, Menu, X, Calendar, Zap, ChevronDown, ChevronRight, Lock, Database, Mail, Power } from 'lucide-react';
 import { api } from '../api/client';
 import { useTranslation } from '../i18n';
 import Logo from './Logo';
@@ -26,6 +26,7 @@ export default function Layout({ onLogout }: LayoutProps) {
     { path: '/users', icon: Users, label: t('nav.users') },
     { path: '/meters', icon: Zap, label: t('nav.meters') },
     { path: '/chargers', icon: Car, label: t('nav.chargers') },
+    { path: '/devices', icon: Power, label: t('nav.devices') },
     { path: '/pricing', icon: DollarSign, label: t('nav.pricing') },
     { path: '/billing', icon: FileText, label: t('nav.billing') },
     { path: '/auto-billing', icon: Calendar, label: t('nav.autoBilling') },

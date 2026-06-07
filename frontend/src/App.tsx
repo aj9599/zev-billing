@@ -8,6 +8,7 @@ import Users from './components/Users';
 import Buildings from './components/Buildings';
 import Meters from './components/Meters';
 import Chargers from './components/Chargers';
+import Devices from './components/Devices';
 import Billing from './components/Billing';
 import AutoBilling from './components/AutoBilling';
 import PricingSettings from './components/PricingSettings';
@@ -49,6 +50,7 @@ function App() {
             <Route path="buildings" element={<Buildings />} />
             <Route path="meters" element={<Meters />} />
             <Route path="chargers" element={<Chargers />} />
+            <Route path="devices" element={<Devices />} />
             <Route path="billing" element={<Billing />} />
             <Route path="auto-billing" element={<AutoBilling />} />
             <Route path="pricing" element={<PricingSettings />} />

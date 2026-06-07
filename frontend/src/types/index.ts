@@ -117,6 +117,51 @@ export interface Charger {
   updated_at: string;
 }
 
+export interface Device {
+  id: number;
+  name: string;
+  building_id: number;
+  driver: string;             // 'shelly' | 'loxone'
+  connection_config: string;  // JSON string
+  control_mode: string;       // 'auto' | 'on' | 'off'
+  manual_override_until?: string | null;
+  switch_on_threshold_w: number;
+  switch_off_threshold_w: number;
+  min_runtime_seconds: number;
+  min_offtime_seconds: number;
+  priority: number;
+  schedule_json?: string | null;
+  last_command?: string | null;
+  last_command_at?: string | null;
+  last_state?: string | null;
+  last_state_at?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeviceLiveStatus {
+  device_id: number;
+  online: boolean;
+  state: string;       // 'on' | 'off' | 'offline' | 'unknown'
+  mode: string;        // 'auto' | 'on' | 'off'
+  has_signal: boolean;
+  building_surplus_w: number;
+  last_error?: string;
+  updated_at?: string;
+}
+
+export interface DeviceSwitchEvent {
+  id: number;
+  device_id: number;
+  command: string;
+  reason: string;
+  surplus_w: number;
+  success: boolean;
+  error?: string;
+  created_at: string;
+}
+
 export interface BillingSettings {
   id: number;
   building_id: number;

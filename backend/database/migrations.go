@@ -198,6 +198,44 @@ func RunMigrations(db *sql.DB) error {
 			FOREIGN KEY (building_id) REFERENCES buildings(id)
 		)`,
 
+		// Controllable devices: standalone solar-driven device control (EVCC-style).
+		// No coupling to billing — driven only by live grid-meter surplus.
+		`CREATE TABLE IF NOT EXISTS controllable_devices (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			building_id INTEGER NOT NULL,
+			driver TEXT NOT NULL DEFAULT 'shelly',
+			connection_config TEXT NOT NULL DEFAULT '{}',
+			control_mode TEXT NOT NULL DEFAULT 'auto',
+			manual_override_until DATETIME,
+			switch_on_threshold_w REAL NOT NULL DEFAULT 1000,
+			switch_off_threshold_w REAL NOT NULL DEFAULT 0,
+			min_runtime_seconds INTEGER NOT NULL DEFAULT 0,
+			min_offtime_seconds INTEGER NOT NULL DEFAULT 0,
+			priority INTEGER NOT NULL DEFAULT 100,
+			schedule_json TEXT,
+			last_command TEXT,
+			last_command_at DATETIME,
+			last_state TEXT,
+			last_state_at DATETIME,
+			is_active INTEGER DEFAULT 1,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (building_id) REFERENCES buildings(id)
+		)`,
+
+		`CREATE TABLE IF NOT EXISTS device_switch_events (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			device_id INTEGER NOT NULL,
+			command TEXT NOT NULL,
+			reason TEXT,
+			surplus_w REAL,
+			success INTEGER DEFAULT 1,
+			error TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (device_id) REFERENCES controllable_devices(id)
+		)`,
+
 		`CREATE TABLE IF NOT EXISTS invoices (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			invoice_number TEXT UNIQUE NOT NULL,
