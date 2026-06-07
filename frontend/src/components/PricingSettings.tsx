@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, DollarSign, Search, Building, HelpCircle, Layers, Check, ChevronDown, ChevronRight, Zap, Sun, Car, Clock, CalendarCheck, CalendarX } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, DollarSign, Search, Building, HelpCircle, Layers, Check, ChevronDown, ChevronRight, Zap, Sun, Car, Clock, CalendarCheck, CalendarX, Percent } from 'lucide-react';
 import { api } from '../api/client';
 import type { BillingSettings, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
@@ -74,6 +74,8 @@ export default function PricingSettings() {
     car_charging_normal_price: 0.30,
     car_charging_priority_price: 0.40,
     vzev_export_price: 0.18,
+    vat_included: false,
+    vat_rate: 0,
     currency: 'CHF',
     valid_from: new Date().toISOString().split('T')[0],
     valid_to: '',
@@ -199,6 +201,8 @@ export default function PricingSettings() {
       car_charging_normal_price: 0.30,
       car_charging_priority_price: 0.40,
       vzev_export_price: 0.18,
+      vat_included: false,
+      vat_rate: 0,
       currency: 'CHF',
       valid_from: new Date().toISOString().split('T')[0],
       valid_to: '',
@@ -640,6 +644,11 @@ export default function PricingSettings() {
                             </td>
                             <td style={{ padding: '14px 16px', fontSize: '13px', color: '#6b7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {formatDate(setting.valid_from)} – {setting.valid_to ? formatDate(setting.valid_to) : t('pricing.ongoing')}
+                              {(setting.vat_rate || 0) > 0 && (
+                                <span style={{ marginLeft: '8px', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '700', backgroundColor: '#10b98115', color: '#059669' }}>
+                                  {t('pricing.vat')} {setting.vat_rate!.toFixed(1)}% {setting.vat_included ? t('pricing.vatInclShort') : t('pricing.vatExclShort')}
+                                </span>
+                              )}
                             </td>
                             <td style={{ padding: '14px 16px', textAlign: 'center' }}>
                               {(() => {
@@ -812,6 +821,11 @@ export default function PricingSettings() {
                           <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '500' }}>
                             {formatDate(setting.valid_from)} {setting.valid_to ? `– ${formatDate(setting.valid_to)}` : `(${t('pricing.ongoing')})`}
                           </div>
+                          {(setting.vat_rate || 0) > 0 && (
+                            <span style={{ display: 'inline-block', marginTop: '8px', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '700', backgroundColor: '#10b98115', color: '#059669' }}>
+                              {t('pricing.vat')} {setting.vat_rate!.toFixed(1)}% {setting.vat_included ? t('pricing.vatInclShort') : t('pricing.vatExclShort')}
+                            </span>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -1103,6 +1117,33 @@ export default function PricingSettings() {
                         style={inputStyle(isMobile)}
                         onFocus={focusHandler} onBlur={blurHandler} />
                     </div>
+                  </div>
+                </div>
+
+                {/* VAT / MwSt. */}
+                <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '18px', border: '1px solid #e5e7eb', marginBottom: '16px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Percent size={14} color="#10b981" /> {t('pricing.vatSection')}
+                  </div>
+                  <div style={{ maxWidth: isMobile ? '100%' : '50%' }}>
+                    <label style={labelStyle}>{t('pricing.vatRate')} (%)</label>
+                    <input type="number" step="0.1" min="0" value={formData.vat_rate ?? 0}
+                      onChange={(e) => setFormData({ ...formData, vat_rate: parseFloat(e.target.value) || 0 })}
+                      style={inputStyle(isMobile)}
+                      onFocus={focusHandler} onBlur={blurHandler} />
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '6px', lineHeight: '1.4' }}>
+                    {t('pricing.vatRateDescription')}
+                  </p>
+                  <div style={{ marginTop: '14px' }}>
+                    <CustomCheckbox
+                      checked={formData.vat_included ?? false}
+                      onChange={(v) => setFormData({ ...formData, vat_included: v })}
+                      label={t('pricing.vatIncluded')}
+                    />
+                    <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px', marginLeft: '30px', lineHeight: '1.4' }}>
+                      {t('pricing.vatIncludedDescription')}
+                    </p>
                   </div>
                 </div>
 

@@ -10,6 +10,9 @@ type InvoiceTranslations struct {
 	Generated         string
 	Description       string
 	Amount            string
+	Subtotal          string
+	VAT               string
+	ThereofVAT        string
 	Total             string
 	PaymentInfo       string
 	BankDetails       string
@@ -89,6 +92,9 @@ func GetTranslations(language string) InvoiceTranslations {
 			Generated:          "Erstellt",
 			Description:        "Beschreibung",
 			Amount:             "Betrag",
+			Subtotal:           "Zwischensumme",
+			VAT:                "MwSt.",
+			ThereofVAT:         "davon MwSt.",
 			Total:              "Gesamt",
 			PaymentInfo:        "Zahlungsinformationen",
 			BankDetails:        "Bankverbindung",
@@ -154,6 +160,9 @@ func GetTranslations(language string) InvoiceTranslations {
 			Generated:          "Générée le",
 			Description:        "Description",
 			Amount:             "Montant",
+			Subtotal:           "Sous-total",
+			VAT:                "TVA",
+			ThereofVAT:         "dont TVA",
 			Total:              "Total",
 			PaymentInfo:        "Informations de paiement",
 			BankDetails:        "Coordonnées bancaires",
@@ -219,6 +228,9 @@ func GetTranslations(language string) InvoiceTranslations {
 			Generated:          "Generata il",
 			Description:        "Descrizione",
 			Amount:             "Importo",
+			Subtotal:           "Subtotale",
+			VAT:                "IVA",
+			ThereofVAT:         "di cui IVA",
 			Total:              "Totale",
 			PaymentInfo:        "Informazioni di pagamento",
 			BankDetails:        "Dati bancari",
@@ -284,6 +296,9 @@ func GetTranslations(language string) InvoiceTranslations {
 			Generated:          "Generated",
 			Description:        "Description",
 			Amount:             "Amount",
+			Subtotal:           "Subtotal",
+			VAT:                "VAT",
+			ThereofVAT:         "thereof VAT",
 			Total:              "Total",
 			PaymentInfo:        "Payment Information",
 			BankDetails:        "Bank Details",

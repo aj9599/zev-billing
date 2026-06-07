@@ -401,6 +401,10 @@ func RunMigrations(db *sql.DB) error {
 		return err
 	}
 
+	if err := addVATColumns(db); err != nil {
+		return err
+	}
+
 	if err := addAutoBillingApartmentsColumn(db); err != nil {
 		return err
 	}
@@ -976,6 +980,57 @@ func addVZEVColumns(db *sql.DB) error {
 		}
 	} else {
 		log.Println("✓ is_vzev column already exists")
+	}
+
+	return nil
+}
+
+// addVATColumns adds VAT (MwSt.) support columns to billing_settings and invoices tables.
+// billing_settings holds the per-building configuration; invoices store the resolved VAT
+// breakdown at generation time so PDFs/views can render it without recomputation.
+func addVATColumns(db *sql.DB) error {
+	addColumn := func(table, column, definition string) error {
+		var tableSql string
+		err := db.QueryRow(`SELECT sql FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&tableSql)
+		if err != nil {
+			return err
+		}
+		if contains(tableSql, column) {
+			log.Printf("✓ %s column already exists on %s", column, table)
+			return nil
+		}
+		log.Printf("Adding %s column to %s table...", column, table)
+		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, definition)); err != nil {
+			if contains(err.Error(), "duplicate column") {
+				log.Printf("✓ %s column already exists on %s", column, table)
+				return nil
+			}
+			return fmt.Errorf("failed to add %s column to %s: %v", column, table, err)
+		}
+		log.Printf("✓ %s column added to %s", column, table)
+		return nil
+	}
+
+	// billing_settings: per-building VAT configuration.
+	if err := addColumn("billing_settings", "vat_included", "INTEGER DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := addColumn("billing_settings", "vat_rate", "REAL DEFAULT 0"); err != nil {
+		return err
+	}
+
+	// invoices: resolved VAT breakdown captured at generation time.
+	if err := addColumn("invoices", "vat_included", "INTEGER DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := addColumn("invoices", "vat_rate", "REAL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := addColumn("invoices", "vat_amount", "REAL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := addColumn("invoices", "net_amount", "REAL DEFAULT 0"); err != nil {
+		return err
 	}
 
 	return nil

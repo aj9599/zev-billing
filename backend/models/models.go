@@ -156,6 +156,8 @@ type BillingSettings struct {
 	CarChargingNormalPrice   float64   `json:"car_charging_normal_price"`
 	CarChargingPriorityPrice float64   `json:"car_charging_priority_price"`
 	VZEVExportPrice          float64   `json:"vzev_export_price"`
+	VATIncluded              bool      `json:"vat_included"`
+	VATRate                  float64   `json:"vat_rate"`
 	Currency                 string    `json:"currency"`
 	ValidFrom                string    `json:"valid_from"`
 	ValidTo                  string    `json:"valid_to"`
@@ -172,6 +174,10 @@ type Invoice struct {
 	PeriodStart   string        `json:"period_start"`
 	PeriodEnd     string        `json:"period_end"`
 	TotalAmount   float64       `json:"total_amount"`
+	NetAmount     float64       `json:"net_amount"`
+	VATAmount     float64       `json:"vat_amount"`
+	VATRate       float64       `json:"vat_rate"`
+	VATIncluded   bool          `json:"vat_included"`
 	Currency      string        `json:"currency"`
 	Status        string        `json:"status"`
 	PDFPath       string        `json:"pdf_path,omitempty"`

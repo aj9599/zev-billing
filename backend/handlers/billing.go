@@ -79,20 +79,21 @@ func (h *BillingHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 
 	if buildingID != "" {
 		query = `
-			SELECT id, building_id, normal_power_price, solar_power_price, 
-			       car_charging_normal_price, car_charging_priority_price, 
-			       currency, valid_from, valid_to, is_active, created_at, updated_at
-			FROM billing_settings 
+			SELECT id, building_id, is_complex, normal_power_price, solar_power_price,
+			       car_charging_normal_price, car_charging_priority_price,
+			       vzev_export_price, vat_included, vat_rate, currency, valid_from,
+			       valid_to, is_active, created_at, updated_at
+			FROM billing_settings
 			WHERE building_id = ?
 			ORDER BY valid_from DESC
 		`
 		args = append(args, buildingID)
 	} else {
 		query = `
-    		SELECT id, building_id, is_complex, normal_power_price, solar_power_price, 
-           			car_charging_normal_price, car_charging_priority_price, 
-           			vzev_export_price, currency, valid_from, valid_to, is_active, 
-           			created_at, updated_at
+    		SELECT id, building_id, is_complex, normal_power_price, solar_power_price,
+           			car_charging_normal_price, car_charging_priority_price,
+           			vzev_export_price, vat_included, vat_rate, currency, valid_from,
+           			valid_to, is_active, created_at, updated_at
     		FROM billing_settings
     		ORDER BY building_id, valid_from DESC
 		`
@@ -113,6 +114,7 @@ func (h *BillingHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 		err := rows.Scan(
 			&s.ID, &s.BuildingID, &s.IsComplex, &s.NormalPowerPrice, &s.SolarPowerPrice,
 			&s.CarChargingNormalPrice, &s.CarChargingPriorityPrice, &s.VZEVExportPrice,
+			&s.VATIncluded, &s.VATRate,
 			&s.Currency, &s.ValidFrom, &validTo, &s.IsActive, &s.CreatedAt, &s.UpdatedAt,
 		)
 		if err == nil {
@@ -145,11 +147,11 @@ func (h *BillingHandler) CreateSettings(w http.ResponseWriter, r *http.Request) 
     	INSERT INTO billing_settings (
         	building_id, is_complex, normal_power_price, solar_power_price,
         	car_charging_normal_price, car_charging_priority_price, 
-        	vzev_export_price, currency, valid_from, valid_to, is_active
-    		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        	vzev_export_price, vat_included, vat_rate, currency, valid_from, valid_to, is_active
+    		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, s.BuildingID, s.IsComplex, s.NormalPowerPrice, s.SolarPowerPrice,
 		s.CarChargingNormalPrice, s.CarChargingPriorityPrice,
-		s.VZEVExportPrice, s.Currency, s.ValidFrom, validTo, s.IsActive)
+		s.VZEVExportPrice, s.VATIncluded, s.VATRate, s.Currency, s.ValidFrom, validTo, s.IsActive)
 
 	if err != nil {
 		log.Printf("ERROR: Failed to create billing settings: %v", err)
@@ -213,12 +215,12 @@ func (h *BillingHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) 
 		UPDATE billing_settings SET
 			building_id = ?, is_complex = ?, normal_power_price = ?, solar_power_price = ?,
 			car_charging_normal_price = ?, car_charging_priority_price = ?,
-			vzev_export_price = ?, currency = ?, valid_from = ?, valid_to = ?,
+			vzev_export_price = ?, vat_included = ?, vat_rate = ?, currency = ?, valid_from = ?, valid_to = ?,
 			is_active = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`, s.BuildingID, s.IsComplex, s.NormalPowerPrice, s.SolarPowerPrice,
 		s.CarChargingNormalPrice, s.CarChargingPriorityPrice,
-		s.VZEVExportPrice, s.Currency, s.ValidFrom, validTo,
+		s.VZEVExportPrice, s.VATIncluded, s.VATRate, s.Currency, s.ValidFrom, validTo,
 		s.IsActive, s.ID)
 
 	if err != nil {
@@ -353,14 +355,16 @@ func (h *BillingHandler) loadFullInvoice(invoiceID int) (models.Invoice, error) 
 	var inv models.Invoice
 
 	err := h.db.QueryRow(`
-		SELECT i.id, i.invoice_number, i.user_id, i.building_id, 
-		       i.period_start, i.period_end, i.total_amount, i.currency, 
-		       i.status, i.generated_at
+		SELECT i.id, i.invoice_number, i.user_id, i.building_id,
+		       i.period_start, i.period_end, i.total_amount, i.currency,
+		       i.status, i.generated_at,
+		       i.net_amount, i.vat_amount, i.vat_rate, i.vat_included
 		FROM invoices i WHERE i.id = ?
 	`, invoiceID).Scan(
 		&inv.ID, &inv.InvoiceNumber, &inv.UserID, &inv.BuildingID,
 		&inv.PeriodStart, &inv.PeriodEnd, &inv.TotalAmount, &inv.Currency,
 		&inv.Status, &inv.GeneratedAt,
+		&inv.NetAmount, &inv.VATAmount, &inv.VATRate, &inv.VATIncluded,
 	)
 
 	if err != nil {
@@ -424,6 +428,10 @@ func (h *BillingHandler) invoiceToMap(inv models.Invoice) map[string]interface{}
 	invoiceMap["period_start"] = inv.PeriodStart
 	invoiceMap["period_end"] = inv.PeriodEnd
 	invoiceMap["total_amount"] = inv.TotalAmount
+	invoiceMap["net_amount"] = inv.NetAmount
+	invoiceMap["vat_amount"] = inv.VATAmount
+	invoiceMap["vat_rate"] = inv.VATRate
+	invoiceMap["vat_included"] = inv.VATIncluded
 	invoiceMap["currency"] = inv.Currency
 	invoiceMap["status"] = inv.Status
 	invoiceMap["generated_at"] = inv.GeneratedAt.Format("2006-01-02")
@@ -470,9 +478,10 @@ func (h *BillingHandler) ListInvoices(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Listing invoices - User: %s, Building: %s", userID, buildingID)
 
 	query := `
-		SELECT i.id, i.invoice_number, i.user_id, i.building_id, 
-		       i.period_start, i.period_end, i.total_amount, i.currency, 
-		       i.status, i.generated_at, i.pdf_path
+		SELECT i.id, i.invoice_number, i.user_id, i.building_id,
+		       i.period_start, i.period_end, i.total_amount, i.currency,
+		       i.status, i.generated_at, i.pdf_path,
+		       i.net_amount, i.vat_amount, i.vat_rate, i.vat_included
 		FROM invoices i
 		WHERE 1=1
 	`
@@ -505,6 +514,7 @@ func (h *BillingHandler) ListInvoices(w http.ResponseWriter, r *http.Request) {
 			&inv.ID, &inv.InvoiceNumber, &inv.UserID, &inv.BuildingID,
 			&inv.PeriodStart, &inv.PeriodEnd, &inv.TotalAmount, &inv.Currency,
 			&inv.Status, &inv.GeneratedAt, &pdfPath,
+			&inv.NetAmount, &inv.VATAmount, &inv.VATRate, &inv.VATIncluded,
 		)
 		if err == nil {
 			if pdfPath.Valid {

@@ -126,6 +126,8 @@ export interface BillingSettings {
   car_charging_normal_price: number;
   car_charging_priority_price: number;
   vzev_export_price?: number;
+  vat_included?: boolean;
+  vat_rate?: number;
   currency: string;
   valid_from: string;
   valid_to: string;

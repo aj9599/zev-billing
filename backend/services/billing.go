@@ -786,6 +786,32 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 	return items, totalCost, nil
 }
 
+// vatBreakdown computes the net / VAT / gross split for an invoice total given the
+// building's VAT (MwSt.) settings.
+//
+//   - vat_rate <= 0  → no VAT applied; gross == total (identical to pre-VAT behaviour).
+//   - vat_included   → the supplied total already contains VAT and is decomposed.
+//   - otherwise      → VAT is added on top of the supplied (net) total.
+//
+// The gross value is what the tenant actually pays and is stored as the invoice total
+// (and used for the QR-bill amount).
+func vatBreakdown(total float64, s models.BillingSettings) (net, vat, gross float64) {
+	if s.VATRate <= 0 {
+		return total, 0, total
+	}
+	r := s.VATRate / 100.0
+	if s.VATIncluded {
+		net = total / (1 + r)
+		vat = total - net
+		gross = total
+	} else {
+		net = total
+		vat = total * r
+		gross = total + vat
+	}
+	return net, vat, gross
+}
+
 // calculateFrequencyProration calculates the proration factor based on item frequency and billing period
 // For example: yearly item of 120 CHF on a 30-day billing period = 120 * (30/365) ≈ 9.86 CHF
 func calculateFrequencyProration(frequency string, billingPeriodDays float64) float64 {
@@ -1281,16 +1307,21 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 		log.Printf("  ✅ Added %d custom items (total: %.3f)", len(customItems), customCost)
 	}
 
-	log.Printf("  INVOICE TOTAL: %s %.3f", primary.Currency, totalAmount)
+	// Resolve VAT (MwSt.) from the primary segment and store the breakdown so the
+	// invoice/PDF can render it. gross becomes the stored total (and QR amount).
+	netAmount, vatAmount, grossAmount := vatBreakdown(totalAmount, primary)
+	totalAmount = grossAmount
+
+	log.Printf("  INVOICE TOTAL: %s %.3f (net %.3f, VAT %.3f @ %.1f%%)", primary.Currency, totalAmount, netAmount, vatAmount, primary.VATRate)
 	log.Printf("  INVOICE NUMBER: %s (Year: %d)", invoiceNumber, invoiceYear)
 
 	result, err := bs.db.Exec(`
 		INSERT INTO invoices (
 			invoice_number, user_id, building_id, period_start, period_end,
-			total_amount, currency, status
-		) VALUES (?, ?, ?, ?, ?, ?, ?, 'issued')
+			total_amount, net_amount, vat_amount, vat_rate, vat_included, currency, status
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'issued')
 	`, invoiceNumber, userPeriod.UserID, buildingID, fullStart.Format("2006-01-02"), displayEnd.Format("2006-01-02"),
-		totalAmount, primary.Currency)
+		totalAmount, netAmount, vatAmount, primary.VATRate, primary.VATIncluded, primary.Currency)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create invoice: %v", err)
@@ -1318,6 +1349,10 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 		PeriodStart:   fullStart.Format("2006-01-02"),
 		PeriodEnd:     displayEnd.Format("2006-01-02"),
 		TotalAmount:   totalAmount,
+		NetAmount:     netAmount,
+		VATAmount:     vatAmount,
+		VATRate:       primary.VATRate,
+		VATIncluded:   primary.VATIncluded,
 		Currency:      primary.Currency,
 		Status:        "issued",
 		Items:         items,
@@ -1930,14 +1965,18 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 		totalAmount += customCost
 	}
 
+	// Resolve VAT (MwSt.) from the primary segment; gross becomes the stored total.
+	netAmount, vatAmount, grossAmount := vatBreakdown(totalAmount, primary)
+	totalAmount = grossAmount
+
 	// Create invoice record
 	result, err := bs.db.Exec(`
 		INSERT INTO invoices (
 			invoice_number, user_id, building_id, period_start, period_end,
-			total_amount, currency, status, is_vzev
-		) VALUES (?, ?, ?, ?, ?, ?, ?, 'issued', 1)
+			total_amount, net_amount, vat_amount, vat_rate, vat_included, currency, status, is_vzev
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'issued', 1)
 	`, invoiceNumber, userPeriod.UserID, buildingID, fullStart.Format("2006-01-02"), displayEnd.Format("2006-01-02"),
-		totalAmount, primary.Currency)
+		totalAmount, netAmount, vatAmount, primary.VATRate, primary.VATIncluded, primary.Currency)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create vZEV invoice: %v", err)
@@ -1966,6 +2005,10 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 		PeriodStart:   fullStart.Format("2006-01-02"),
 		PeriodEnd:     displayEnd.Format("2006-01-02"),
 		TotalAmount:   totalAmount,
+		NetAmount:     netAmount,
+		VATAmount:     vatAmount,
+		VATRate:       primary.VATRate,
+		VATIncluded:   primary.VATIncluded,
 		Currency:      primary.Currency,
 		Status:        "issued",
 		IsVZEV:        true,
@@ -2922,13 +2965,17 @@ func (bs *BillingService) generateChargerOnlyInvoice(userPeriod UserPeriod, buil
 		}
 	}
 
+	// Resolve VAT (MwSt.) from the primary segment; gross becomes the stored total.
+	netAmount, vatAmount, grossAmount := vatBreakdown(totalAmount, primary)
+	totalAmount = grossAmount
+
 	result, err := bs.db.Exec(`
 		INSERT INTO invoices (
 			invoice_number, user_id, building_id, period_start, period_end,
-			total_amount, currency, status
-		) VALUES (?, ?, ?, ?, ?, ?, ?, 'issued')
+			total_amount, net_amount, vat_amount, vat_rate, vat_included, currency, status
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'issued')
 	`, invoiceNumber, userPeriod.UserID, buildingID, fullStart.Format("2006-01-02"), displayEnd.Format("2006-01-02"),
-		totalAmount, primary.Currency)
+		totalAmount, netAmount, vatAmount, primary.VATRate, primary.VATIncluded, primary.Currency)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create charger-only invoice: %v", err)
 	}
@@ -2952,6 +2999,10 @@ func (bs *BillingService) generateChargerOnlyInvoice(userPeriod UserPeriod, buil
 		PeriodStart:   fullStart.Format("2006-01-02"),
 		PeriodEnd:     displayEnd.Format("2006-01-02"),
 		TotalAmount:   totalAmount,
+		NetAmount:     netAmount,
+		VATAmount:     vatAmount,
+		VATRate:       primary.VATRate,
+		VATIncluded:   primary.VATIncluded,
 		Currency:      primary.Currency,
 		Status:        "issued",
 		Items:         items,

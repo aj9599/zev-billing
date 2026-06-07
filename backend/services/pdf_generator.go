@@ -205,6 +205,43 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		totalAmount = ta
 	}
 
+	// VAT (MwSt.) breakdown. When vat_rate > 0 we render Subtotal (net) and a
+	// VAT line above the total; the total itself is always the gross amount.
+	vatRate := 0.0
+	if v, ok := inv["vat_rate"].(float64); ok {
+		vatRate = v
+	}
+	vatAmount := 0.0
+	if v, ok := inv["vat_amount"].(float64); ok {
+		vatAmount = v
+	}
+	netAmount := totalAmount
+	if v, ok := inv["net_amount"].(float64); ok && v > 0 {
+		netAmount = v
+	}
+	vatIncluded := false
+	if v, ok := inv["vat_included"].(bool); ok {
+		vatIncluded = v
+	}
+	vatLinesHTML := ""
+	if vatRate > 0 {
+		if vatIncluded {
+			// Prices already contain VAT: line items sum to the (gross) total,
+			// so we only note the contained VAT amount.
+			vatLinesHTML = fmt.Sprintf(
+				`<p class="total-sub">%s %.1f%%: %s %.2f</p>`,
+				tr.ThereofVAT, vatRate, currency, vatAmount,
+			)
+		} else {
+			// Prices are net: show the net subtotal and the VAT added on top.
+			vatLinesHTML = fmt.Sprintf(
+				`<p class="total-sub">%s: %s %.2f</p><p class="total-sub">%s %.1f%%: %s %.2f</p>`,
+				tr.Subtotal, currency, netAmount,
+				tr.VAT, vatRate, currency, vatAmount,
+			)
+		}
+	}
+
 	periodStart := fmt.Sprintf("%v", inv["period_start"])
 	periodEnd := fmt.Sprintf("%v", inv["period_end"])
 	generatedAt := fmt.Sprintf("%v", inv["generated_at"])
@@ -645,12 +682,19 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 			margin-bottom: 20px;
 		}
 		
-		.total-section p { 
-			font-size: 18pt; 
-			font-weight: bold; 
+		.total-section p {
+			font-size: 18pt;
+			font-weight: bold;
 			margin: 0;
 		}
-		
+
+		.total-section p.total-sub {
+			font-size: 11pt;
+			font-weight: normal;
+			color: #555;
+			margin: 0 0 4px 0;
+		}
+
 		.payment-details-bottom {
 			padding: 15px 0;
 			margin-top: 30px;
@@ -917,6 +961,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		</table>
 
 		<div class="total-section">
+			%s
 			<p>%s %s %.2f</p>
 		</div>
 
@@ -948,6 +993,7 @@ func (pg *PDFGenerator) generateHTML(inv map[string]interface{}, sender SenderIn
 		tr.Description,
 		tr.Amount,
 		itemsHTML,
+		vatLinesHTML,
 		tr.Total,
 		currency, totalAmount,
 		footerHTML,
