@@ -151,6 +151,13 @@ export interface DeviceLiveStatus {
   updated_at?: string;
 }
 
+export interface LoxoneControl {
+  name: string;
+  uuid: string;
+  room: string;
+  type: string;
+}
+
 export interface DeviceSwitchEvent {
   id: number;
   device_id: number;

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Plus, Power, Edit2, Trash2, X, Zap, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { Plus, Power, Edit2, Trash2, X, Zap, Wifi, WifiOff, RefreshCw, Search } from 'lucide-react';
 import { api } from '../api/client';
 import { useTranslation } from '../i18n';
-import type { Device, DeviceLiveStatus, Building as BuildingType } from '../types';
+import type { Device, DeviceLiveStatus, LoxoneControl, Building as BuildingType } from '../types';
 
 type FormState = {
   id?: number;
@@ -74,6 +74,9 @@ export default function Devices() {
   const [testResult, setTestResult] = useState<string>('');
   const [testing, setTesting] = useState(false);
   const [message, setMessage] = useState('');
+  const [loxoneControls, setLoxoneControls] = useState<LoxoneControl[]>([]);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoverError, setDiscoverError] = useState('');
 
   useEffect(() => {
     loadData();
@@ -111,6 +114,8 @@ export default function Devices() {
     f.building_id = buildings[0]?.id || 0;
     setForm(f);
     setTestResult('');
+    setLoxoneControls([]);
+    setDiscoverError('');
     setShowModal(true);
   }
 
@@ -154,6 +159,8 @@ export default function Devices() {
     }
     setForm(f);
     setTestResult('');
+    setLoxoneControls([]);
+    setDiscoverError('');
     setShowModal(true);
   }
 
@@ -222,6 +229,29 @@ export default function Devices() {
       setTestResult(t('devices.offline'));
     } finally {
       setTesting(false);
+    }
+  }
+
+  async function discoverLoxone() {
+    if (!form.loxone_host.trim()) {
+      setDiscoverError(t('devices.discoverNeedHost'));
+      return;
+    }
+    setDiscovering(true);
+    setDiscoverError('');
+    setLoxoneControls([]);
+    try {
+      const list = await api.discoverLoxoneControls({
+        host: form.loxone_host.trim(),
+        username: form.loxone_username,
+        password: form.loxone_password,
+      });
+      setLoxoneControls(list);
+      if (list.length === 0) setDiscoverError(t('devices.discoverEmpty'));
+    } catch (e: any) {
+      setDiscoverError(e?.message || t('devices.discoverError'));
+    } finally {
+      setDiscovering(false);
     }
   }
 
@@ -402,10 +432,6 @@ export default function Devices() {
                       <label style={label}>{t('devices.host')} *</label>
                       <input style={input} placeholder="192.168.1.100" value={form.loxone_host} onChange={(e) => setForm({ ...form, loxone_host: e.target.value })} />
                     </div>
-                    <div>
-                      <label style={label}>{t('devices.outputUuid')} *</label>
-                      <input style={input} placeholder="0f1a2b3c-..." value={form.loxone_output_uuid} onChange={(e) => setForm({ ...form, loxone_output_uuid: e.target.value })} />
-                    </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                       <div>
                         <label style={label}>{t('devices.username')}</label>
@@ -415,6 +441,35 @@ export default function Devices() {
                         <label style={label}>{t('devices.password')}</label>
                         <input type="password" style={input} value={form.loxone_password} onChange={(e) => setForm({ ...form, loxone_password: e.target.value })} />
                       </div>
+                    </div>
+
+                    {/* Auto-discovery: load switchable outputs from the Miniserver */}
+                    <div>
+                      <button onClick={discoverLoxone} disabled={discovering} style={{ ...btn('#10b981', false), display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        <Search size={13} /> {discovering ? t('devices.discovering') : t('devices.discover')}
+                      </button>
+                      {discoverError && <span style={{ marginLeft: '10px', fontSize: '13px', color: '#dc2626' }}>{discoverError}</span>}
+                    </div>
+
+                    {loxoneControls.length > 0 && (
+                      <div>
+                        <label style={label}>{t('devices.pickOutput')} ({loxoneControls.length})</label>
+                        <select style={input} value={form.loxone_output_uuid}
+                          onChange={(e) => {
+                            const sel = loxoneControls.find((c) => c.uuid === e.target.value);
+                            setForm({ ...form, loxone_output_uuid: e.target.value, name: form.name.trim() ? form.name : (sel?.name || '') });
+                          }}>
+                          <option value="">—</option>
+                          {loxoneControls.map((c) => (
+                            <option key={c.uuid} value={c.uuid}>{c.room ? `${c.room} · ` : ''}{c.name} ({c.type})</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    <div>
+                      <label style={label}>{t('devices.outputUuid')} *</label>
+                      <input style={input} placeholder="0f1a2b3c-..." value={form.loxone_output_uuid} onChange={(e) => setForm({ ...form, loxone_output_uuid: e.target.value })} />
                     </div>
                   </div>
                 )}

@@ -42,8 +42,14 @@ func normalizeHost(host string) string {
 	return strings.TrimRight(h, "/")
 }
 
-// httpGetBody performs a GET with optional basic auth and returns the body.
+// httpGetBody performs a GET with optional basic auth and returns the body
+// (capped at 64KB — enough for control/state responses).
 func httpGetBody(url, user, pass string) ([]byte, error) {
+	return httpGetBodyN(url, user, pass, 64*1024)
+}
+
+// httpGetBodyN is httpGetBody with a custom max body size.
+func httpGetBodyN(url, user, pass string, maxBytes int64) ([]byte, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -56,7 +62,7 @@ func httpGetBody(url, user, pass string) ([]byte, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, maxBytes))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return body, fmt.Errorf("device returned HTTP %d", resp.StatusCode)
 	}

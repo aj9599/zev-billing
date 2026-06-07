@@ -233,6 +233,7 @@ func main() {
 
 	// Controllable device routes - specific routes before {id}
 	api.HandleFunc("/devices/status/live", deviceHandler.LiveStatus).Methods("GET")
+	api.HandleFunc("/devices/discover", deviceHandler.Discover).Methods("POST")
 	api.HandleFunc("/devices", deviceHandler.List).Methods("GET")
 	api.HandleFunc("/devices", deviceHandler.Create).Methods("POST")
 	api.HandleFunc("/devices/{id}/control", deviceHandler.Control).Methods("POST")

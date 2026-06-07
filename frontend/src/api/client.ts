@@ -4,7 +4,7 @@ import type {
   BuildingConsumption, SharedMeterConfig, CustomLineItem,
   GenerateBillsRequest, MeterReplacement, MeterReplacementRequest,
   SelfConsumptionData, SystemHealth, CostOverview, EnergyFlowData, EnergyFlowLiveData,
-  EmailAlertSettings, Device, DeviceLiveStatus, DeviceSwitchEvent
+  EmailAlertSettings, Device, DeviceLiveStatus, DeviceSwitchEvent, LoxoneControl
 } from '../types';
 
 const API_BASE = '/api';
@@ -357,6 +357,13 @@ class ApiClient {
 
   async getDeviceEvents(id: number): Promise<DeviceSwitchEvent[]> {
     return this.request(`/devices/${id}/events`);
+  }
+
+  async discoverLoxoneControls(payload: { host: string; username: string; password: string }): Promise<LoxoneControl[]> {
+    return this.request('/devices/discover', {
+      method: 'POST',
+      body: JSON.stringify({ driver: 'loxone', ...payload }),
+    });
   }
 
   async getChargerDeletionImpact(id: number): Promise<{

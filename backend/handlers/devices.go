@@ -192,6 +192,32 @@ func (h *DeviceHandler) Test(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// Discover POST /api/devices/discover — list switchable outputs from a
+// Miniserver so the user can pick one instead of entering a UUID by hand.
+// Uses the connection fields from the form (no saved device required).
+func (h *DeviceHandler) Discover(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Driver   string `json:"driver"`
+		Host     string `json:"host"`
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	if req.Driver != "" && req.Driver != "loxone" {
+		http.Error(w, "Discovery is only supported for Loxone", http.StatusBadRequest)
+		return
+	}
+	controls, err := services.DiscoverLoxoneControls(req.Host, req.Username, req.Password)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, http.StatusOK, controls)
+}
+
 // Events GET /api/devices/{id}/events — recent switching activity.
 func (h *DeviceHandler) Events(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(mux.Vars(r)["id"])
