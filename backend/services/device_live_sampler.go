@@ -9,7 +9,10 @@ import (
 
 const (
 	liveSampleInterval = 10 * time.Second
-	liveStaleAfter     = 90 * time.Second // surplus older than this is treated as no signal
+	// Hold a live value this long before treating it as no-signal. Generous
+	// enough to survive Loxone's ~30s refresh and the billing-collection window
+	// (when the live poll is suppressed for a couple of minutes).
+	liveStaleAfter = 180 * time.Second
 	// Energy-delta estimate window (for meters without true live power).
 	estimateMinWindow = 30 * time.Second
 	estimateMaxWindow = 300 * time.Second
@@ -126,31 +129,45 @@ func (s *LiveSampler) sampleBuilding(buildingID int, now time.Time) {
 	if err != nil {
 		return
 	}
-	var surplus float64
-	var hasSignal, anyLive bool
+	var liveSurplus, estSurplus float64
+	var gotLive, gotEst bool
 	for _, r := range readings {
 		if r.MeterType != "total_meter" {
 			continue
 		}
 		if r.HasLivePower {
 			// True instantaneous power (export positive, import positive).
-			surplus += r.CurrentPowerExpW - r.CurrentPowerW
-			hasSignal = true
-			anyLive = true
+			liveSurplus += r.CurrentPowerExpW - r.CurrentPowerW
+			gotLive = true
 			continue
 		}
-		// No true live power: derive net power from a clean rolling window of the
-		// cumulative import/export counters. This captures EXPORT correctly,
-		// unlike the import-only estimate used elsewhere.
+		// No true live power this read: derive net power from a clean rolling
+		// window of the cumulative import/export counters (captures EXPORT too,
+		// unlike the import-only estimate elsewhere).
 		if net, ok := s.estimateNetPower(r.MeterID, r.TotalImportKwh, r.TotalExportKwh, now); ok {
-			surplus += net
-			hasSignal = true
+			estSurplus += net
+			gotEst = true
 		}
 	}
 
 	s.mu.Lock()
-	s.buildings[buildingID] = buildingSurplusSample{surplusW: surplus, hasSignal: hasSignal, live: anyLive, at: now}
-	s.mu.Unlock()
+	defer s.mu.Unlock()
+
+	if gotLive {
+		s.buildings[buildingID] = buildingSurplusSample{surplusW: liveSurplus, hasSignal: true, live: true, at: now}
+		return
+	}
+	// Meters that DO provide live power (e.g. Loxone Pf) refresh only every ~30s
+	// and go briefly "stale" in between. Hold the last good live value rather
+	// than replacing it with a noisy energy-delta estimate.
+	if prev, ok := s.buildings[buildingID]; ok && prev.live && now.Sub(prev.at) < liveStaleAfter {
+		return
+	}
+	if gotEst {
+		s.buildings[buildingID] = buildingSurplusSample{surplusW: estSurplus, hasSignal: true, live: false, at: now}
+		return
+	}
+	s.buildings[buildingID] = buildingSurplusSample{hasSignal: false, at: now}
 }
 
 // estimateNetPower appends the latest cumulative reading and computes net export

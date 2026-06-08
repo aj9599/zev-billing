@@ -508,14 +508,14 @@ export default function Devices() {
                         )}
                       </span>
                       <span style={{ fontSize: '16px', fontWeight: 800, color: surplus != null && surplus > 0 ? '#059669' : '#9ca3af' }}>
-                        {surplus != null ? `${Math.round(surplus)} W` : t('devices.noSignal')}
+                        {surplus != null ? formatPower(surplus) : t('devices.noSignal')}
                       </span>
                     </div>
                     <div style={{ height: '9px', borderRadius: '6px', background: '#eef2f7', overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${pct}%`, borderRadius: '6px', background: 'linear-gradient(90deg,#34d399,#10b981)', transition: 'width .5s ease' }} />
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '11px', color: '#9ca3af' }}>
-                      <span>{t('devices.onThresholdShort')} {Math.round(threshold)} W</span>
+                      <span>{t('devices.onThresholdShort')} {formatPower(threshold)}</span>
                       <span>{Math.round(pct)}%</span>
                     </div>
                   </div>
@@ -802,6 +802,9 @@ const iconBtn: React.CSSProperties = {
   padding: '7px', borderRadius: '8px', border: '1px solid #e5e7eb', background: 'white', color: '#6b7280', cursor: 'pointer',
   display: 'inline-flex', alignItems: 'center',
 };
+
+// Show kW for large magnitudes, W otherwise.
+const formatPower = (w: number) => (Math.abs(w) >= 1000 ? `${(w / 1000).toFixed(2)} kW` : `${Math.round(w)} W`);
 
 function StatCard({ icon: Icon, label, value, color, sublabel }: {
   icon: React.ComponentType<any>;
