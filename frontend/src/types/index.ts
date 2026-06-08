@@ -159,6 +159,7 @@ export interface DeviceLiveStatus {
 export interface LoxoneControl {
   name: string;
   uuid: string;
+  state_uuid?: string;
   room: string;
   type: string;
 }

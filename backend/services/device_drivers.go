@@ -84,6 +84,7 @@ type loxoneConfig struct {
 	Username   string `json:"username"`
 	Password   string `json:"password"`
 	OutputUUID string `json:"output_uuid"`
+	StateUUID  string `json:"state_uuid"` // reflects the actual output; falls back to OutputUUID
 }
 
 // driverFor builds the right DeviceDriver from a device's stored config.
@@ -195,7 +196,13 @@ func (l *loxoneDriver) Switch(on bool) error {
 }
 
 func (l *loxoneDriver) ReadState() (bool, bool, error) {
-	url := fmt.Sprintf("%s/jdev/sps/io/%s", l.base(), l.cfg.OutputUUID)
+	// Read the state UUID (reflects the real output, incl. changes made directly
+	// in Loxone); fall back to the action UUID for older configs.
+	readUUID := l.cfg.StateUUID
+	if readUUID == "" {
+		readUUID = l.cfg.OutputUUID
+	}
+	url := fmt.Sprintf("%s/jdev/sps/io/%s", l.base(), readUUID)
 	body, err := httpGetBody(url, l.cfg.Username, l.cfg.Password)
 	if err != nil {
 		return false, false, err

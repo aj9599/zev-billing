@@ -9,10 +9,11 @@ import (
 // LoxoneControl is a switchable output discovered from a Miniserver's
 // structure file, ready to be picked in the device form.
 type LoxoneControl struct {
-	Name string `json:"name"`
-	UUID string `json:"uuid"`
-	Room string `json:"room"`
-	Type string `json:"type"`
+	Name      string `json:"name"`
+	UUID      string `json:"uuid"`       // uuidAction — for sending On/Off
+	StateUUID string `json:"state_uuid"` // reflects the actual output state
+	Room      string `json:"room"`
+	Type      string `json:"type"`
 }
 
 // loxoneSwitchableTypes are control types we can drive with /On /Off.
@@ -41,10 +42,11 @@ func DiscoverLoxoneControls(host, user, pass string) ([]LoxoneControl, error) {
 			Name string `json:"name"`
 		} `json:"rooms"`
 		Controls map[string]struct {
-			Name       string `json:"name"`
-			Type       string `json:"type"`
-			UUIDAction string `json:"uuidAction"`
-			Room       string `json:"room"`
+			Name       string            `json:"name"`
+			Type       string            `json:"type"`
+			UUIDAction string            `json:"uuidAction"`
+			Room       string            `json:"room"`
+			States     map[string]string `json:"states"`
 		} `json:"controls"`
 	}
 	if err := json.Unmarshal(body, &s); err != nil {
@@ -64,7 +66,16 @@ func DiscoverLoxoneControls(host, user, pass string) ([]LoxoneControl, error) {
 		if r, ok := s.Rooms[c.Room]; ok {
 			room = r.Name
 		}
-		out = append(out, LoxoneControl{Name: c.Name, UUID: uuid, Room: room, Type: c.Type})
+		// The state that reflects the real output: "active" for a Switch, else
+		// the first available state.
+		stateUUID := c.States["active"]
+		if stateUUID == "" {
+			for _, v := range c.States {
+				stateUUID = v
+				break
+			}
+		}
+		out = append(out, LoxoneControl{Name: c.Name, UUID: uuid, StateUUID: stateUUID, Room: room, Type: c.Type})
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Room != out[j].Room {

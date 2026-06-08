@@ -43,6 +43,8 @@ export const en: Translations = {
   'devices.deviceTooltip': 'Actual switch state read from the device',
   'devices.controlTooltip': 'What the automation is set to',
   'devices.surplusLabel': 'Solar surplus',
+  'devices.gridLabel': 'Grid power',
+  'devices.gridHint': 'Positive = importing from the grid, negative = exporting (solar surplus).',
   'devices.onThresholdShort': 'On at',
   'devices.on': 'On',
   'devices.off': 'Off',

@@ -43,6 +43,8 @@ export const de: Translations = {
   'devices.deviceTooltip': 'Tatsächlicher Schaltzustand, vom Gerät gelesen',
   'devices.controlTooltip': 'Worauf die Automatik eingestellt ist',
   'devices.surplusLabel': 'Solarüberschuss',
+  'devices.gridLabel': 'Netzleistung',
+  'devices.gridHint': 'Positiv = Netzbezug, negativ = Einspeisung (Solarüberschuss).',
   'devices.onThresholdShort': 'Ein ab',
   'devices.on': 'Ein',
   'devices.off': 'Aus',

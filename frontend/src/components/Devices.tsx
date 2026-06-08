@@ -21,6 +21,7 @@ type FormState = {
   loxone_username: string;
   loxone_password: string;
   loxone_output_uuid: string;
+  loxone_state_uuid: string;
   // control
   switch_on_threshold_w: number;
   switch_off_threshold_w: number;
@@ -74,6 +75,7 @@ const emptyForm = (): FormState => ({
   loxone_username: '',
   loxone_password: '',
   loxone_output_uuid: '',
+  loxone_state_uuid: '',
   switch_on_threshold_w: 1000,
   switch_off_threshold_w: 0,
   min_runtime_seconds: 300,
@@ -204,6 +206,7 @@ export default function Devices() {
         f.loxone_username = cfg.username || '';
         f.loxone_password = cfg.password || '';
         f.loxone_output_uuid = cfg.output_uuid || '';
+        f.loxone_state_uuid = cfg.state_uuid || '';
       }
     } catch { /* ignore */ }
     const wins = parseScheduleJson(d.schedule_json);
@@ -233,6 +236,7 @@ export default function Devices() {
             username: f.loxone_username,
             password: f.loxone_password,
             output_uuid: f.loxone_output_uuid.trim(),
+            state_uuid: f.loxone_state_uuid.trim(),
           });
     const schedule_json = windowsToScheduleJson(f.schedule_enabled, f.schedule_windows);
     return {
@@ -478,6 +482,8 @@ export default function Devices() {
             const offline = state === 'offline';
             const accent = isOn ? '#10b981' : offline ? '#ef4444' : '#94a3b8';
             const surplus = s?.has_signal ? s.building_surplus_w : null;
+            // Grid-power convention for display: import positive, export negative.
+            const gridW = surplus != null ? -surplus : null;
             const threshold = d.switch_on_threshold_w || 0;
             const pct = surplus != null && threshold > 0 ? Math.max(0, Math.min(100, (surplus / threshold) * 100)) : 0;
             const mode = (s?.mode || d.control_mode || 'auto') as 'on' | 'off' | 'auto';
@@ -532,15 +538,15 @@ export default function Devices() {
                   <div style={{ marginTop: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '7px' }}>
                       <span style={{ fontSize: '12px', color: '#6b7280', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                        <Zap size={13} color="#f59e0b" /> {t('devices.surplusLabel')}
+                        <Zap size={13} color="#f59e0b" /> {t('devices.gridLabel')}
                         {s?.has_signal && (
                           <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '6px', backgroundColor: s.surplus_live ? '#10b98115' : '#f59e0b15', color: s.surplus_live ? '#059669' : '#d97706' }}>
                             {s.surplus_live ? t('devices.live') : t('devices.estimated')}
                           </span>
                         )}
                       </span>
-                      <span style={{ fontSize: '16px', fontWeight: 800, color: surplus != null && surplus > 0 ? '#059669' : '#9ca3af' }}>
-                        {surplus != null ? formatPower(surplus) : t('devices.noSignal')}
+                      <span title={t('devices.gridHint')} style={{ fontSize: '16px', fontWeight: 800, color: gridW == null ? '#9ca3af' : gridW < 0 ? '#059669' : '#dc2626' }}>
+                        {gridW != null ? formatPower(gridW) : t('devices.noSignal')}
                       </span>
                     </div>
                     <div style={{ height: '9px', borderRadius: '6px', background: '#eef2f7', overflow: 'hidden' }}>
@@ -718,7 +724,7 @@ export default function Devices() {
                         <select style={input} value={form.loxone_output_uuid}
                           onChange={(e) => {
                             const sel = loxoneControls.find((c) => c.uuid === e.target.value);
-                            setForm({ ...form, loxone_output_uuid: e.target.value, name: form.name.trim() ? form.name : (sel?.name || '') });
+                            setForm({ ...form, loxone_output_uuid: e.target.value, loxone_state_uuid: sel?.state_uuid || '', name: form.name.trim() ? form.name : (sel?.name || '') });
                           }}>
                           <option value="">—</option>
                           {loxoneControls.map((c) => (
