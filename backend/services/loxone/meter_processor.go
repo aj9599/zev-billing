@@ -36,7 +36,9 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 			}
 		}
 
-		// Get live power from output0 (Pf - Power Flow in W)
+		// Get live power from output0 (Pf - Power Flow). Loxone's meter-block
+		// power output is in kW, so convert to Watts. Billing is unaffected: it
+		// uses the Mrc/Mrd energy registers, not this live power value.
 		if output0, ok := response.LL.Outputs["output0"]; ok {
 			switch v := output0.Value.(type) {
 			case float64:
@@ -46,6 +48,7 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 					livePowerW = f
 				}
 			}
+			livePowerW *= 1000 // kW → W
 		}
 
 		// Get export reading from output8 (Mrd) (only for total/solar meters)
@@ -94,7 +97,7 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 		device.LivePowerTime = time.Now()
 
 		log.Printf("   📥 Import reading (output1/Mrc): %.3f kWh", importReading)
-		log.Printf("   ⚡ Live power (output0/Pf): %.1f W", livePowerW)
+		log.Printf("   ⚡ Live power (output0/Pf): %.1f W (%.3f kW)", livePowerW, livePowerW/1000)
 		if supportsExport {
 			log.Printf("   📤 Export reading (output8/Mrd): %.3f kWh", exportReading)
 		}
