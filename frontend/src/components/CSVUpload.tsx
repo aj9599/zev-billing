@@ -289,7 +289,7 @@ export default function CSVUpload() {
   const selectedChargerData = chargers.find(c => c.id === selectedCharger);
 
   return (
-    <div className="csv-upload-container" style={{ maxWidth: '1600px', margin: '0 auto', padding: '20px' }}>
+    <div className="csv-upload-container" style={{ width: '100%', maxWidth: '100%' }}>
       <div className="csv-upload-header app-fade-in" style={{ marginBottom: '40px' }}>
         <h1 style={{ 
           fontSize: '36px', 
@@ -334,7 +334,7 @@ export default function CSVUpload() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginBottom: '30px' }}>
+      <div className="app-fade-in" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginBottom: '30px', animationDelay: '0.05s' }}>
         {/* Charger Selection Card */}
         <div style={{ 
           backgroundColor: 'white', 
@@ -630,9 +630,9 @@ export default function CSVUpload() {
 
       {/* CSV Editor */}
       {showPreview && csvData.length > 0 && (
-        <div style={{ 
-          backgroundColor: 'white', 
-          borderRadius: '20px', 
+        <div className="app-fade-in" style={{
+          backgroundColor: 'white',
+          borderRadius: '20px',
           padding: '40px',
           boxShadow: '0 8px 30px rgba(0,0,0,0.08)',
           border: '1px solid #f3f4f6',
@@ -839,10 +839,11 @@ export default function CSVUpload() {
       )}
 
       {/* Instructions Card */}
-      <div style={{ 
-        backgroundColor: 'white', 
-        borderRadius: '20px', 
+      <div className="app-fade-in" style={{
+        backgroundColor: 'white',
+        borderRadius: '20px',
         padding: '40px',
+        animationDelay: '0.1s',
         boxShadow: '0 8px 30px rgba(0,0,0,0.08)',
         border: '1px solid #f3f4f6',
       }}>

@@ -179,15 +179,23 @@ export default function AdminLogs() {
         onClose={() => setShowUpdateCard(false)}
       />
 
-      <StatisticsCards />
+      <div className="app-fade-in" style={{ animationDelay: '0.05s' }}>
+        <StatisticsCards />
+      </div>
 
-      <SystemHealthCards systemHealth={systemHealth} />
+      <div className="app-fade-in" style={{ animationDelay: '0.1s' }}>
+        <SystemHealthCards systemHealth={systemHealth} />
+      </div>
 
-      <SystemHealthCharts healthHistory={healthHistory} />
+      <div className="app-fade-in" style={{ animationDelay: '0.15s' }}>
+        <SystemHealthCharts healthHistory={healthHistory} />
+      </div>
 
-      <DebugInfoCards debugInfo={debugInfo} />
+      <div className="app-fade-in" style={{ animationDelay: '0.2s' }}>
+        <DebugInfoCards debugInfo={debugInfo} />
+      </div>
 
-      <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+      <div className="app-fade-in" style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', animationDelay: '0.25s' }}>
         <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1f2937', margin: 0 }}>
           {t('logs.activityLog')}
         </h2>
@@ -219,11 +227,12 @@ export default function AdminLogs() {
       </div>
 
       {/* Category filter bar */}
-      <div style={{
+      <div className="app-fade-in" style={{
         display: 'flex',
         gap: '8px',
         marginBottom: '16px',
         flexWrap: 'wrap',
+        animationDelay: '0.3s',
       }}>
         {filterOptions.map(opt => {
           const count = categoryCounts[opt.key] || 0;
@@ -267,9 +276,10 @@ export default function AdminLogs() {
         })}
       </div>
 
-      <LogsTable logs={logs} loading={loading} filter={logFilter} />
-
-      <LogsTableMobile logs={logs} loading={loading} filter={logFilter} />
+      <div className="app-fade-in" style={{ animationDelay: '0.35s' }}>
+        <LogsTable logs={logs} loading={loading} filter={logFilter} />
+        <LogsTableMobile logs={logs} loading={loading} filter={logFilter} />
+      </div>
 
       <style>{`
         @keyframes spin {

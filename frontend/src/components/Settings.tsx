@@ -48,7 +48,7 @@ export default function Settings() {
   ];
 
   return (
-    <div className="settings-container" style={{ maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="settings-container" style={{ width: '100%', maxWidth: '100%' }}>
       {/* Header */}
       <div className="settings-header app-fade-in" style={{ marginBottom: '30px' }}>
         <h1 style={{
