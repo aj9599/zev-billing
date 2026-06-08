@@ -57,6 +57,11 @@ type DeviceController struct {
 }
 
 func NewDeviceController(db *sql.DB, dc *DataCollector) *DeviceController {
+	// Let the Loxone driver read real actuator states from the WebSocket status
+	// stream (via the data collector's Loxone connection).
+	if dc != nil {
+		loxoneStateProvider = dc.GetLoxoneState
+	}
 	return &DeviceController{
 		db:      db,
 		dc:      dc,

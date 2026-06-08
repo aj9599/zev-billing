@@ -211,6 +211,12 @@ type WebSocketConnection struct {
 	MeterReadingBuffers map[int]*MeterReadingBuffer // meter_id -> buffer
 	MeterBufferMu       sync.Mutex
 
+	// Live control/actuator states from the binary status stream
+	// (jdev/sps/enablebinstatusupdate). Keyed by state UUID. Used for device
+	// control feedback; NOT used by billing.
+	StateValues   map[string]float64
+	StateValuesMu sync.RWMutex
+
 	// Async token refresh: send refresh command inline over WebSocket,
 	// handle response in readLoop. No disconnect/reconnect needed.
 	TokenRefreshPending bool      // true while waiting for refresh response
