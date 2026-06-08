@@ -346,6 +346,13 @@ class ApiClient {
     });
   }
 
+  async updateDeviceSchedule(id: number, schedule_json: string | null): Promise<{ status: string }> {
+    return this.request(`/devices/${id}/schedule`, {
+      method: 'PUT',
+      body: JSON.stringify({ schedule_json }),
+    });
+  }
+
   async getDeviceLiveStatus(building_id?: number): Promise<DeviceLiveStatus[]> {
     const query = building_id ? `?building_id=${building_id}` : '';
     return this.request(`/devices/status/live${query}`);

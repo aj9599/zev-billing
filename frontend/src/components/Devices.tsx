@@ -36,6 +36,27 @@ type ScheduleWindow = { from: string; to: string; days: number[] };
 
 const newWindow = (): ScheduleWindow => ({ from: '10:00', to: '16:00', days: [1, 2, 3, 4, 5, 6, 7] });
 
+const parseScheduleJson = (s?: string | null): ScheduleWindow[] => {
+  if (!s) return [];
+  try {
+    const arr = JSON.parse(s);
+    return Array.isArray(arr)
+      ? arr.map((w: any) => ({
+          from: w.from || '10:00',
+          to: w.to || '16:00',
+          days: Array.isArray(w.days) && w.days.length ? w.days : [1, 2, 3, 4, 5, 6, 7],
+        }))
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+const windowsToScheduleJson = (enabled: boolean, windows: ScheduleWindow[]): string | null => {
+  const w = windows.filter((x) => x.days.length > 0);
+  return enabled && w.length > 0 ? JSON.stringify(w.map((x) => ({ days: x.days, from: x.from, to: x.to }))) : null;
+};
+
 const emptyForm = (): FormState => ({
   name: '',
   building_id: 0,
@@ -71,6 +92,10 @@ export default function Devices() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm());
+  // dedicated schedule modal (edits only the schedule, nothing else)
+  const [schedDevice, setSchedDevice] = useState<Device | null>(null);
+  const [schedEnabled, setSchedEnabled] = useState(false);
+  const [schedWindows, setSchedWindows] = useState<ScheduleWindow[]>([newWindow()]);
   const [testResult, setTestResult] = useState<string>('');
   const [testing, setTesting] = useState(false);
   const [message, setMessage] = useState('');
@@ -109,15 +134,7 @@ export default function Devices() {
 
   const buildingName = (id: number) => buildings.find((b) => b.id === id)?.name || `#${id}`;
 
-  const parseSchedule = (d: Device): ScheduleWindow[] => {
-    if (!d.schedule_json) return [];
-    try {
-      const arr = JSON.parse(d.schedule_json);
-      return Array.isArray(arr) ? arr : [];
-    } catch {
-      return [];
-    }
-  };
+  const parseSchedule = (d: Device): ScheduleWindow[] => parseScheduleJson(d.schedule_json);
 
   const formatDays = (days: number[]): string => {
     const sorted = [...new Set(days)].filter((n) => n >= 1 && n <= 7).sort((a, b) => a - b);
@@ -172,18 +189,10 @@ export default function Devices() {
         f.loxone_output_uuid = cfg.output_uuid || '';
       }
     } catch { /* ignore */ }
-    if (d.schedule_json) {
-      try {
-        const arr = JSON.parse(d.schedule_json);
-        if (Array.isArray(arr) && arr.length > 0) {
-          f.schedule_enabled = true;
-          f.schedule_windows = arr.map((wnd: any) => ({
-            from: wnd.from || '10:00',
-            to: wnd.to || '16:00',
-            days: Array.isArray(wnd.days) && wnd.days.length ? wnd.days : [1, 2, 3, 4, 5, 6, 7],
-          }));
-        }
-      } catch { /* ignore */ }
+    const wins = parseScheduleJson(d.schedule_json);
+    if (wins.length > 0) {
+      f.schedule_enabled = true;
+      f.schedule_windows = wins;
     }
     setForm(f);
     setTestResult('');
@@ -208,10 +217,7 @@ export default function Devices() {
             password: f.loxone_password,
             output_uuid: f.loxone_output_uuid.trim(),
           });
-    const windows = f.schedule_windows.filter((wnd) => wnd.days.length > 0);
-    const schedule_json = f.schedule_enabled && windows.length > 0
-      ? JSON.stringify(windows.map((wnd) => ({ days: wnd.days, from: wnd.from, to: wnd.to })))
-      : null;
+    const schedule_json = windowsToScheduleJson(f.schedule_enabled, f.schedule_windows);
     return {
       name: f.name.trim(),
       building_id: Number(f.building_id),
@@ -283,6 +289,81 @@ export default function Devices() {
       setDiscovering(false);
     }
   }
+
+  function openSchedule(d: Device) {
+    const wins = parseScheduleJson(d.schedule_json);
+    setSchedDevice(d);
+    setSchedEnabled(wins.length > 0);
+    setSchedWindows(wins.length > 0 ? wins : [newWindow()]);
+  }
+
+  async function saveSchedule() {
+    if (!schedDevice) return;
+    try {
+      await api.updateDeviceSchedule(schedDevice.id, windowsToScheduleJson(schedEnabled, schedWindows));
+      setSchedDevice(null);
+      await loadData();
+    } catch {
+      setMessage(t('devices.saveError'));
+    }
+  }
+
+  // Reusable multi-window schedule editor — used by both the full edit modal
+  // and the dedicated schedule modal, so both stay in sync.
+  const renderScheduleEditor = (
+    enabled: boolean,
+    windows: ScheduleWindow[],
+    setEnabled: (v: boolean) => void,
+    setWindows: (w: ScheduleWindow[]) => void,
+  ) => (
+    <div style={card}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+        {t('devices.scheduleEnabled')}
+      </label>
+      {enabled && (
+        <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {windows.map((wnd, idx) => {
+            const setWindow = (patch: Partial<ScheduleWindow>) =>
+              setWindows(windows.map((x, i) => (i === idx ? { ...x, ...patch } : x)));
+            return (
+              <div key={idx} style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '12px', background: '#fafafa' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={label}>{t('devices.from')}</label>
+                    <input type="time" style={input} value={wnd.from} onChange={(e) => setWindow({ from: e.target.value })} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={label}>{t('devices.to')}</label>
+                    <input type="time" style={input} value={wnd.to} onChange={(e) => setWindow({ to: e.target.value })} />
+                  </div>
+                  {windows.length > 1 && (
+                    <button onClick={() => setWindows(windows.filter((_, i) => i !== idx))}
+                      title={t('common.delete')} style={{ ...iconBtn, color: '#dc2626', height: '37px' }}><Trash2 size={15} /></button>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap' }}>
+                  {[1, 2, 3, 4, 5, 6, 7].map((day) => {
+                    const on = wnd.days.includes(day);
+                    return (
+                      <button key={day} onClick={() => setWindow({ days: on ? wnd.days.filter((x) => x !== day) : [...wnd.days, day] })}
+                        style={{ padding: '5px 10px', borderRadius: '8px', border: '1px solid #d1d5db', background: on ? '#10b981' : 'white', color: on ? 'white' : '#6b7280', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
+                        {t(`devices.day.${day}`)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+          <button onClick={() => setWindows([...windows, newWindow()])}
+            style={{ ...btn('#10b981', false), display: 'inline-flex', alignItems: 'center', gap: '6px', alignSelf: 'flex-start' }}>
+            <Plus size={13} /> {t('devices.addWindow')}
+          </button>
+        </div>
+      )}
+    </div>
+  );
 
   async function control(d: Device, mode: 'auto' | 'on' | 'off') {
     try {
@@ -433,7 +514,12 @@ export default function Devices() {
                   </div>
 
                   {/* footer */}
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', marginTop: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '12px' }}>
+                    <button onClick={() => openSchedule(d)} title={t('devices.editSchedule')}
+                      style={{ ...iconBtn, color: parseSchedule(d).length > 0 ? '#0ea5e9' : '#6b7280', borderColor: parseSchedule(d).length > 0 ? '#bae6fd' : '#e5e7eb' }}>
+                      <Clock size={15} />
+                    </button>
+                    <div style={{ flex: 1 }} />
                     <button onClick={() => openEdit(d)} title={t('common.edit')} style={iconBtn}><Edit2 size={15} /></button>
                     <button onClick={() => remove(d)} title={t('common.delete')} style={{ ...iconBtn, color: '#dc2626' }}><Trash2 size={15} /></button>
                   </div>
@@ -595,53 +681,12 @@ export default function Devices() {
               </div>
 
               {/* Schedule */}
-              <div style={card}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={form.schedule_enabled} onChange={(e) => setForm({ ...form, schedule_enabled: e.target.checked })} />
-                  {t('devices.scheduleEnabled')}
-                </label>
-                {form.schedule_enabled && (
-                  <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {form.schedule_windows.map((wnd, idx) => {
-                      const setWindow = (patch: Partial<ScheduleWindow>) =>
-                        setForm({ ...form, schedule_windows: form.schedule_windows.map((x, i) => (i === idx ? { ...x, ...patch } : x)) });
-                      return (
-                        <div key={idx} style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '12px', background: '#fafafa' }}>
-                          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px' }}>
-                            <div style={{ flex: 1 }}>
-                              <label style={label}>{t('devices.from')}</label>
-                              <input type="time" style={input} value={wnd.from} onChange={(e) => setWindow({ from: e.target.value })} />
-                            </div>
-                            <div style={{ flex: 1 }}>
-                              <label style={label}>{t('devices.to')}</label>
-                              <input type="time" style={input} value={wnd.to} onChange={(e) => setWindow({ to: e.target.value })} />
-                            </div>
-                            {form.schedule_windows.length > 1 && (
-                              <button onClick={() => setForm({ ...form, schedule_windows: form.schedule_windows.filter((_, i) => i !== idx) })}
-                                title={t('common.delete')} style={{ ...iconBtn, color: '#dc2626', height: '37px' }}><Trash2 size={15} /></button>
-                            )}
-                          </div>
-                          <div style={{ display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap' }}>
-                            {[1, 2, 3, 4, 5, 6, 7].map((day) => {
-                              const on = wnd.days.includes(day);
-                              return (
-                                <button key={day} onClick={() => setWindow({ days: on ? wnd.days.filter((x) => x !== day) : [...wnd.days, day] })}
-                                  style={{ padding: '5px 10px', borderRadius: '8px', border: '1px solid #d1d5db', background: on ? '#10b981' : 'white', color: on ? 'white' : '#6b7280', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
-                                  {t(`devices.day.${day}`)}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    <button onClick={() => setForm({ ...form, schedule_windows: [...form.schedule_windows, newWindow()] })}
-                      style={{ ...btn('#10b981', false), display: 'inline-flex', alignItems: 'center', gap: '6px', alignSelf: 'flex-start' }}>
-                      <Plus size={13} /> {t('devices.addWindow')}
-                    </button>
-                  </div>
-                )}
-              </div>
+              {renderScheduleEditor(
+                form.schedule_enabled,
+                form.schedule_windows,
+                (v) => setForm({ ...form, schedule_enabled: v }),
+                (w) => setForm({ ...form, schedule_windows: w }),
+              )}
 
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
                 <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
@@ -652,6 +697,26 @@ export default function Devices() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
               <button onClick={() => setShowModal(false)} style={{ ...btn('#9ca3af', false) }}>{t('common.cancel')}</button>
               <button onClick={save} style={{ ...btn('#10b981', false) }}>{t('common.save')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dedicated schedule modal — edits only the schedule */}
+      {schedDevice && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '24px', zIndex: 50, overflowY: 'auto' }}>
+          <div style={{ backgroundColor: '#f9fafb', borderRadius: '16px', width: '100%', maxWidth: '480px', padding: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Clock size={18} color="#0ea5e9" /> {t('devices.scheduleFor').replace('{name}', schedDevice.name)}
+              </h2>
+              <button onClick={() => setSchedDevice(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+            <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0 0 14px' }}>{t('devices.scheduleHint')}</p>
+            {renderScheduleEditor(schedEnabled, schedWindows, setSchedEnabled, setSchedWindows)}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
+              <button onClick={() => setSchedDevice(null)} style={{ ...btn('#9ca3af', false) }}>{t('common.cancel')}</button>
+              <button onClick={saveSchedule} style={{ ...btn('#10b981', false) }}>{t('common.save')}</button>
             </div>
           </div>
         </div>

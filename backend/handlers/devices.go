@@ -136,6 +136,35 @@ func (h *DeviceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// UpdateSchedule PUT /api/devices/{id}/schedule  {schedule_json: string|null}
+// Targeted update of just the schedule column — leaves every other field
+// untouched, so editing schedules can't accidentally change device settings.
+func (h *DeviceHandler) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(mux.Vars(r)["id"])
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		ScheduleJSON *string `json:"schedule_json"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	res, err := h.db.Exec(`UPDATE controllable_devices SET schedule_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+		nullableStr(req.ScheduleJSON), id)
+	if err != nil {
+		http.Error(w, "Failed to update schedule", http.StatusInternalServerError)
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		http.Error(w, "Device not found", http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 // Control POST /api/devices/{id}/control  {mode: auto|on|off, duration_seconds?}
 func (h *DeviceHandler) Control(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(mux.Vars(r)["id"])
