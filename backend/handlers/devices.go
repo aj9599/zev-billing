@@ -167,6 +167,39 @@ func (h *DeviceHandler) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// UpdateGuarantee PUT /api/devices/{id}/guarantee  {guarantee_hours, guarantee_by}
+// Targeted update of just the runtime-guarantee fields.
+func (h *DeviceHandler) UpdateGuarantee(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(mux.Vars(r)["id"])
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		GuaranteeHours float64 `json:"guarantee_hours"`
+		GuaranteeBy    *string `json:"guarantee_by"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	by := req.GuaranteeBy
+	if req.GuaranteeHours <= 0 {
+		by = nil
+	}
+	res, err := h.db.Exec(`UPDATE controllable_devices SET guarantee_hours = ?, guarantee_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+		req.GuaranteeHours, nullableStr(by), id)
+	if err != nil {
+		http.Error(w, "Failed to update guarantee", http.StatusInternalServerError)
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		http.Error(w, "Device not found", http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 // Control POST /api/devices/{id}/control  {mode: auto|on|off, duration_seconds?}
 func (h *DeviceHandler) Control(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(mux.Vars(r)["id"])

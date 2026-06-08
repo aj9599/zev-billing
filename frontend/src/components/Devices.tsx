@@ -102,6 +102,10 @@ export default function Devices() {
   const [schedDevice, setSchedDevice] = useState<Device | null>(null);
   const [schedEnabled, setSchedEnabled] = useState(false);
   const [schedWindows, setSchedWindows] = useState<ScheduleWindow[]>([newWindow()]);
+  // dedicated runtime-guarantee modal
+  const [guarDevice, setGuarDevice] = useState<Device | null>(null);
+  const [guarHours, setGuarHours] = useState(0);
+  const [guarBy, setGuarBy] = useState('18:00');
   const [testResult, setTestResult] = useState<string>('');
   const [testing, setTesting] = useState(false);
   const [message, setMessage] = useState('');
@@ -317,6 +321,23 @@ export default function Devices() {
     try {
       await api.updateDeviceSchedule(schedDevice.id, windowsToScheduleJson(schedEnabled, schedWindows));
       setSchedDevice(null);
+      await loadData();
+    } catch {
+      setMessage(t('devices.saveError'));
+    }
+  }
+
+  function openGuarantee(d: Device) {
+    setGuarDevice(d);
+    setGuarHours(d.guarantee_hours || 0);
+    setGuarBy(d.guarantee_by || '18:00');
+  }
+
+  async function saveGuarantee() {
+    if (!guarDevice) return;
+    try {
+      await api.updateDeviceGuarantee(guarDevice.id, Number(guarHours) || 0, Number(guarHours) > 0 ? guarBy : null);
+      setGuarDevice(null);
       await loadData();
     } catch {
       setMessage(t('devices.saveError'));
@@ -547,6 +568,12 @@ export default function Devices() {
                     <div style={{ fontSize: '12px', color: '#dc2626', marginTop: '10px' }}>{s.last_error}</div>
                   )}
 
+                  {s?.reason && (
+                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '10px', fontStyle: 'italic' }}>
+                      {t('devices.reasonLabel')}: {s.reason}
+                    </div>
+                  )}
+
                   {/* segmented mode control */}
                   <div style={{ display: 'flex', gap: '0', marginTop: '14px', background: '#f1f5f9', borderRadius: '11px', padding: '3px' }}>
                     {(['on', 'off', 'auto'] as const).map((m) => {
@@ -568,6 +595,10 @@ export default function Devices() {
                     <button onClick={() => openSchedule(d)} title={t('devices.editSchedule')}
                       style={{ ...iconBtn, color: parseSchedule(d).length > 0 ? '#0ea5e9' : '#6b7280', borderColor: parseSchedule(d).length > 0 ? '#bae6fd' : '#e5e7eb' }}>
                       <Clock size={15} />
+                    </button>
+                    <button onClick={() => openGuarantee(d)} title={t('devices.editGuarantee')}
+                      style={{ ...iconBtn, color: d.guarantee_hours > 0 ? '#8b5cf6' : '#6b7280', borderColor: d.guarantee_hours > 0 ? '#ddd6fe' : '#e5e7eb' }}>
+                      <Target size={15} />
                     </button>
                     <div style={{ flex: 1 }} />
                     <button onClick={() => openEdit(d)} title={t('common.edit')} style={iconBtn}><Edit2 size={15} /></button>
@@ -785,6 +816,37 @@ export default function Devices() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
               <button onClick={() => setSchedDevice(null)} style={{ ...btn('#9ca3af', false) }}>{t('common.cancel')}</button>
               <button onClick={saveSchedule} style={{ ...btn('#10b981', false) }}>{t('common.save')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dedicated runtime-guarantee modal */}
+      {guarDevice && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '24px', zIndex: 50, overflowY: 'auto' }}>
+          <div style={{ backgroundColor: '#f9fafb', borderRadius: '16px', width: '100%', maxWidth: '440px', padding: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Target size={18} color="#8b5cf6" /> {t('devices.guaranteeFor').replace('{name}', guarDevice.name)}
+              </h2>
+              <button onClick={() => setGuarDevice(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+            <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0 0 14px' }}>{t('devices.guaranteeHint')}</p>
+            <div style={card}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={label}>{t('devices.guaranteeHours')}</label>
+                  <input type="number" step="0.5" min="0" style={input} value={guarHours} onChange={(e) => setGuarHours(Number(e.target.value) || 0)} />
+                </div>
+                <div>
+                  <label style={label}>{t('devices.guaranteeBy')}</label>
+                  <input type="time" style={input} value={guarBy} disabled={guarHours <= 0} onChange={(e) => setGuarBy(e.target.value)} />
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
+              <button onClick={() => setGuarDevice(null)} style={{ ...btn('#9ca3af', false) }}>{t('common.cancel')}</button>
+              <button onClick={saveGuarantee} style={{ ...btn('#10b981', false) }}>{t('common.save')}</button>
             </div>
           </div>
         </div>

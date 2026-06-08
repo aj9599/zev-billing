@@ -38,6 +38,7 @@ type deviceRuntime struct {
 	hasSignal        bool
 	surplusLive      bool
 	mode             string
+	reason           string
 	updatedAt        time.Time
 	lastError        string
 }
@@ -251,6 +252,7 @@ func (c *DeviceController) apply(d models.Device, desired, forced bool, reason s
 	rt.buildingSurplusW = surplus
 	rt.hasSignal = hasSignal
 	rt.surplusLive = live
+	rt.reason = reason
 	rt.updatedAt = now
 	c.mu.Unlock()
 
@@ -462,6 +464,7 @@ type DeviceLiveStatus struct {
 	SurplusLive      bool    `json:"surplus_live"` // true = instantaneous, false = estimated
 	BuildingSurplusW float64 `json:"building_surplus_w"`
 	RuntimeTodayMin  int     `json:"runtime_today_min"` // accumulated ON minutes today
+	Reason           string  `json:"reason,omitempty"`  // why the device is in its current state
 	LastError        string  `json:"last_error,omitempty"`
 	UpdatedAt        string  `json:"updated_at,omitempty"`
 }
@@ -496,6 +499,7 @@ func (c *DeviceController) LiveStatus(buildingID int) ([]DeviceLiveStatus, error
 			st.SurplusLive = rt.surplusLive
 			st.BuildingSurplusW = rt.buildingSurplusW
 			st.RuntimeTodayMin = int(rt.onSecondsToday / 60)
+			st.Reason = rt.reason
 			st.LastError = rt.lastError
 			if !rt.updatedAt.IsZero() {
 				st.UpdatedAt = rt.updatedAt.Format(time.RFC3339)

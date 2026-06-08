@@ -353,6 +353,13 @@ class ApiClient {
     });
   }
 
+  async updateDeviceGuarantee(id: number, guarantee_hours: number, guarantee_by: string | null): Promise<{ status: string }> {
+    return this.request(`/devices/${id}/guarantee`, {
+      method: 'PUT',
+      body: JSON.stringify({ guarantee_hours, guarantee_by }),
+    });
+  }
+
   async getDeviceLiveStatus(building_id?: number): Promise<DeviceLiveStatus[]> {
     const query = building_id ? `?building_id=${building_id}` : '';
     return this.request(`/devices/status/live${query}`);

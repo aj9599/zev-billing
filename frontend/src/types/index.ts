@@ -151,6 +151,7 @@ export interface DeviceLiveStatus {
   surplus_live: boolean;      // true = instantaneous, false = estimated
   building_surplus_w: number;
   runtime_today_min: number;  // accumulated ON minutes today
+  reason?: string;            // why the device is in its current state
   last_error?: string;
   updated_at?: string;
 }

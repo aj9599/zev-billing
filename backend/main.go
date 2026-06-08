@@ -238,6 +238,7 @@ func main() {
 	api.HandleFunc("/devices", deviceHandler.Create).Methods("POST")
 	api.HandleFunc("/devices/{id}/control", deviceHandler.Control).Methods("POST")
 	api.HandleFunc("/devices/{id}/schedule", deviceHandler.UpdateSchedule).Methods("PUT")
+	api.HandleFunc("/devices/{id}/guarantee", deviceHandler.UpdateGuarantee).Methods("PUT")
 	api.HandleFunc("/devices/{id}/test", deviceHandler.Test).Methods("POST")
 	api.HandleFunc("/devices/{id}/events", deviceHandler.Events).Methods("GET")
 	api.HandleFunc("/devices/{id}", deviceHandler.Get).Methods("GET")
