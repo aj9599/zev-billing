@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -196,33 +195,15 @@ func (l *loxoneDriver) Switch(on bool) error {
 }
 
 func (l *loxoneDriver) ReadState() (bool, bool, error) {
-	// Query the control (action) UUID over HTTP — for a Switch this returns its
-	// current value ("0"/"1"), reflecting changes made anywhere (us, Loxone app,
-	// internal logic). State UUIDs are NOT HTTP-readable (they return 404 and are
-	// only delivered via the WebSocket binary status stream), so don't use them here.
+	// IMPORTANT: an HTTP GET of the control UUID does NOT reliably return a Loxone
+	// actuator's real state — it comes back 0 even when the output is on. Actuator
+	// states are only delivered over the WebSocket binary status stream
+	// (enablebinstatusupdate), per Loxone's docs. So we use this only as a
+	// reachability check (online/offline) and report known=false, which keeps the
+	// controller's own commanded state instead of clobbering it with a wrong "off".
 	url := fmt.Sprintf("%s/jdev/sps/io/%s", l.base(), l.cfg.OutputUUID)
-	body, err := httpGetBody(url, l.cfg.Username, l.cfg.Password)
-	if err != nil {
+	if _, err := httpGetBody(url, l.cfg.Username, l.cfg.Password); err != nil {
 		return false, false, err
 	}
-	// Loxone replies {"LL":{"control":"...","value":"1","Code":"200"}}.
-	// value can be "1"/"0" or a numeric string; treat >0 as on.
-	var resp struct {
-		LL struct {
-			Value string `json:"value"`
-		} `json:"LL"`
-	}
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return false, false, err
-	}
-	v := strings.TrimSpace(resp.LL.Value)
-	if v == "" {
-		return false, false, nil
-	}
-	f, err := strconv.ParseFloat(v, 64)
-	if err != nil {
-		// Non-numeric value (e.g. "On"/"Off") — fall back to a textual check.
-		return strings.EqualFold(v, "on") || v == "1", true, nil
-	}
-	return f > 0.5, true, nil
+	return false, false, nil
 }

@@ -264,10 +264,10 @@ func (c *DeviceController) apply(d models.Device, desired, forced bool, reason s
 		return
 	}
 
-	// Best-effort actual-state read (also gives us "online").
+	// Best-effort actual-state read (also gives us "online"). For drivers that
+	// can't report a trustworthy state (e.g. Loxone over HTTP) known=false, so we
+	// keep the controller's own commanded state rather than clobbering it.
 	if actual, known, rerr := driver.ReadState(); rerr == nil {
-		log.Printf("[DeviceCtrl] device %d (%s): ReadState actual=%v known=%v | desired=%v forced=%v reason=%q",
-			d.ID, d.Name, actual, known, desired, forced, reason)
 		c.mu.Lock()
 		rt.online = true
 		rt.lastError = ""
@@ -276,7 +276,6 @@ func (c *DeviceController) apply(d models.Device, desired, forced bool, reason s
 		}
 		c.mu.Unlock()
 	} else {
-		log.Printf("[DeviceCtrl] device %d (%s): ReadState error: %v", d.ID, d.Name, rerr)
 		c.mu.Lock()
 		rt.online = false
 		rt.lastError = rerr.Error()

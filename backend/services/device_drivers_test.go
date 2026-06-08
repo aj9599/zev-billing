@@ -106,9 +106,11 @@ func TestLoxoneSwitchAndState(t *testing.T) {
 	if !strings.HasSuffix(gotPath, "/Off") {
 		t.Errorf("loxone off URL wrong: %s", gotPath)
 	}
-	on, known, err := drv.ReadState()
-	if err != nil || !known || !on {
-		t.Errorf("ReadState loxone = (%v,%v,%v), want (true,true,nil)", on, known, err)
+	// Loxone state isn't HTTP-readable, so ReadState is a reachability check only:
+	// no error (reachable) and known=false (don't trust the value).
+	_, known, err := drv.ReadState()
+	if err != nil || known {
+		t.Errorf("ReadState loxone = (known=%v, err=%v), want (known=false, err=nil)", known, err)
 	}
 }
 

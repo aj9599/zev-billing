@@ -96,10 +96,14 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 		}
 		device.LivePowerTime = time.Now()
 
-		log.Printf("   📥 Import reading (output1/Mrc): %.3f kWh", importReading)
-		log.Printf("   ⚡ Live power (output0/Pf): %.1f W (%.3f kW)", livePowerW, livePowerW/1000)
-		if supportsExport {
-			log.Printf("   📤 Export reading (output8/Mrd): %.3f kWh", exportReading)
+		// Only log on the real 15-min collection, not the frequent live poll,
+		// to avoid flooding the journal.
+		if !conn.LivePollActive {
+			log.Printf("   📥 Import reading (output1/Mrc): %.3f kWh", importReading)
+			log.Printf("   ⚡ Live power (output0/Pf): %.1f W (%.3f kW)", livePowerW, livePowerW/1000)
+			if supportsExport {
+				log.Printf("   📤 Export reading (output8/Mrd): %.3f kWh", exportReading)
+			}
 		}
 
 		reading = importReading

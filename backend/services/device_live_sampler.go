@@ -34,9 +34,8 @@ type LiveSampler struct {
 	stopCh chan struct{}
 	stopMu sync.Once
 
-	mu         sync.Mutex
-	buildings  map[int]buildingSurplusSample
-	logCounter int // throttles diagnostic logging
+	mu        sync.Mutex
+	buildings map[int]buildingSurplusSample
 }
 
 func NewLiveSampler(db *sql.DB, dc *DataCollector) *LiveSampler {
@@ -91,14 +90,10 @@ func (s *LiveSampler) tick() {
 		return
 	}
 	now := time.Now()
-	s.logCounter++
 	for _, bID := range buildingIDs {
 		s.sampleBuilding(bID, now)
 	}
 }
-
-// verbose logs roughly every 60s (every 6th 10s tick).
-func (s *LiveSampler) verbose() bool { return s.logCounter%6 == 0 }
 
 func (s *LiveSampler) buildingsWithDevices() ([]int, error) {
 	rows, err := s.db.Query(`SELECT DISTINCT building_id FROM controllable_devices WHERE is_active = 1`)
@@ -126,10 +121,6 @@ func (s *LiveSampler) sampleBuilding(buildingID int, now time.Time) {
 	for _, r := range readings {
 		if r.MeterType != "total_meter" {
 			continue
-		}
-		if s.verbose() {
-			log.Printf("[LiveSampler] bldg=%d meter=%d(%s) hasLive=%v curW=%.1f curExpW=%.1f online=%v",
-				buildingID, r.MeterID, r.ConnectionType, r.HasLivePower, r.CurrentPowerW, r.CurrentPowerExpW, r.IsOnline)
 		}
 		if r.HasLivePower {
 			// True instantaneous power (Pf). export positive, import positive.
