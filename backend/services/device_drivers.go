@@ -196,13 +196,11 @@ func (l *loxoneDriver) Switch(on bool) error {
 }
 
 func (l *loxoneDriver) ReadState() (bool, bool, error) {
-	// Read the state UUID (reflects the real output, incl. changes made directly
-	// in Loxone); fall back to the action UUID for older configs.
-	readUUID := l.cfg.StateUUID
-	if readUUID == "" {
-		readUUID = l.cfg.OutputUUID
-	}
-	url := fmt.Sprintf("%s/jdev/sps/io/%s", l.base(), readUUID)
+	// Query the control (action) UUID over HTTP — for a Switch this returns its
+	// current value ("0"/"1"), reflecting changes made anywhere (us, Loxone app,
+	// internal logic). State UUIDs are NOT HTTP-readable (they return 404 and are
+	// only delivered via the WebSocket binary status stream), so don't use them here.
+	url := fmt.Sprintf("%s/jdev/sps/io/%s", l.base(), l.cfg.OutputUUID)
 	body, err := httpGetBody(url, l.cfg.Username, l.cfg.Password)
 	if err != nil {
 		return false, false, err
