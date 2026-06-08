@@ -307,7 +307,7 @@ func (conn *WebSocketConnection) requestData() {
 func (conn *WebSocketConnection) requestLivePower() {
 	defer conn.GoroutinesWg.Done()
 
-	log.Printf("⚡ LIVE POWER POLLING STARTED for %s (every 30 seconds)", conn.Host)
+	log.Printf("⚡ LIVE POWER POLLING STARTED for %s (every 5 seconds)", conn.Host)
 
 	// Wait a bit for initial connection to stabilize
 	time.Sleep(5 * time.Second)
@@ -329,7 +329,9 @@ func (conn *WebSocketConnection) requestLivePower() {
 	conn.Mu.Unlock()
 	log.Printf("⚡ [%s] Live power polling: %d meters with Pf support, %d meters using energy delta calculation", conn.Host, meterBlockCount, otherModeCount)
 
-	ticker := time.NewTicker(30 * time.Second)
+	// Poll Pf frequently for near-real-time live power (still skipped around the
+	// 15-min billing collection window below to avoid conflicts).
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	pollCount := 0

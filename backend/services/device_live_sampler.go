@@ -8,23 +8,12 @@ import (
 )
 
 const (
-	liveSampleInterval = 10 * time.Second
+	liveSampleInterval = 5 * time.Second
 	// Hold a live value this long before treating it as no-signal. Generous
-	// enough to survive Loxone's ~30s refresh and the billing-collection window
-	// (when the live poll is suppressed for a couple of minutes).
-	liveStaleAfter = 180 * time.Second
-	// Energy-delta estimate window (for meters without true live power).
-	estimateMinWindow = 30 * time.Second
-	estimateMaxWindow = 300 * time.Second
+	// enough to survive the billing-collection window (when the Loxone live poll
+	// is suppressed for ~3 minutes around :00/:15/:30/:45).
+	liveStaleAfter = 300 * time.Second
 )
-
-// energySample is a timestamped cumulative-energy reading used to derive power
-// for meters that don't expose true instantaneous power.
-type energySample struct {
-	importKwh float64
-	exportKwh float64
-	at        time.Time
-}
 
 // buildingSurplusSample is the cached live surplus for one building.
 type buildingSurplusSample struct {
@@ -47,8 +36,7 @@ type LiveSampler struct {
 
 	mu         sync.Mutex
 	buildings  map[int]buildingSurplusSample
-	history    map[int][]energySample // by meter id
-	logCounter int                    // throttles diagnostic logging
+	logCounter int // throttles diagnostic logging
 }
 
 func NewLiveSampler(db *sql.DB, dc *DataCollector) *LiveSampler {
@@ -57,7 +45,6 @@ func NewLiveSampler(db *sql.DB, dc *DataCollector) *LiveSampler {
 		dc:        dc,
 		stopCh:    make(chan struct{}),
 		buildings: make(map[int]buildingSurplusSample),
-		history:   make(map[int][]energySample),
 	}
 }
 
@@ -134,34 +121,21 @@ func (s *LiveSampler) sampleBuilding(buildingID int, now time.Time) {
 	if err != nil {
 		return
 	}
-	var liveSurplus, estSurplus float64
-	var gotLive, gotEst bool
+	var liveSurplus float64
+	var gotLive bool
 	for _, r := range readings {
 		if r.MeterType != "total_meter" {
 			continue
 		}
 		if s.verbose() {
-			log.Printf("[LiveSampler] bldg=%d meter=%d(%s) hasLive=%v curW=%.1f curExpW=%.1f impKwh=%.3f expKwh=%.3f online=%v",
-				buildingID, r.MeterID, r.ConnectionType, r.HasLivePower, r.CurrentPowerW, r.CurrentPowerExpW, r.TotalImportKwh, r.TotalExportKwh, r.IsOnline)
+			log.Printf("[LiveSampler] bldg=%d meter=%d(%s) hasLive=%v curW=%.1f curExpW=%.1f online=%v",
+				buildingID, r.MeterID, r.ConnectionType, r.HasLivePower, r.CurrentPowerW, r.CurrentPowerExpW, r.IsOnline)
 		}
 		if r.HasLivePower {
-			// True instantaneous power (export positive, import positive).
+			// True instantaneous power (Pf). export positive, import positive.
 			liveSurplus += r.CurrentPowerExpW - r.CurrentPowerW
 			gotLive = true
-			continue
 		}
-		// No true live power this read: derive net power from a clean rolling
-		// window of the cumulative import/export counters (captures EXPORT too,
-		// unlike the import-only estimate elsewhere).
-		if net, ok := s.estimateNetPower(r.MeterID, r.TotalImportKwh, r.TotalExportKwh, now); ok {
-			estSurplus += net
-			gotEst = true
-		}
-	}
-
-	if s.verbose() {
-		log.Printf("[LiveSampler] bldg=%d decision: gotLive=%v liveSurplus=%.1fW gotEst=%v estSurplus=%.1fW",
-			buildingID, gotLive, liveSurplus, gotEst, estSurplus)
 	}
 
 	s.mu.Lock()
@@ -171,52 +145,13 @@ func (s *LiveSampler) sampleBuilding(buildingID int, now time.Time) {
 		s.buildings[buildingID] = buildingSurplusSample{surplusW: liveSurplus, hasSignal: true, live: true, at: now}
 		return
 	}
-	// Meters that DO provide live power (e.g. Loxone Pf) refresh only every ~30s
-	// and go briefly "stale" in between. Hold the last good live value rather
-	// than replacing it with a noisy energy-delta estimate.
+	// No fresh live value this tick (e.g. the Loxone poll is suppressed during the
+	// billing-collection window). Hold the last good live value; only fall to
+	// "no signal" once it's older than liveStaleAfter. We deliberately do NOT
+	// fabricate an energy-delta estimate — cumulative counters step, which yields
+	// garbage at short intervals.
 	if prev, ok := s.buildings[buildingID]; ok && prev.live && now.Sub(prev.at) < liveStaleAfter {
 		return
 	}
-	if gotEst {
-		s.buildings[buildingID] = buildingSurplusSample{surplusW: estSurplus, hasSignal: true, live: false, at: now}
-		return
-	}
 	s.buildings[buildingID] = buildingSurplusSample{hasSignal: false, at: now}
-}
-
-// estimateNetPower appends the latest cumulative reading and computes net export
-// power (W) over the oldest sample within [min,max] window. Returns ok=false
-// until enough history exists.
-func (s *LiveSampler) estimateNetPower(meterID int, importKwh, exportKwh float64, now time.Time) (float64, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	hist := append(s.history[meterID], energySample{importKwh: importKwh, exportKwh: exportKwh, at: now})
-	// Trim anything older than the max window.
-	cutoff := now.Add(-estimateMaxWindow)
-	trimmed := hist[:0]
-	for _, e := range hist {
-		if e.at.After(cutoff) {
-			trimmed = append(trimmed, e)
-		}
-	}
-	s.history[meterID] = trimmed
-
-	// Find the oldest sample at least estimateMinWindow ago.
-	var ref *energySample
-	for i := range trimmed {
-		if now.Sub(trimmed[i].at) >= estimateMinWindow {
-			ref = &trimmed[i]
-			break
-		}
-	}
-	if ref == nil {
-		return 0, false // not enough history yet
-	}
-	dtHours := now.Sub(ref.at).Hours()
-	if dtHours <= 0 {
-		return 0, false
-	}
-	netKwh := (exportKwh - ref.exportKwh) - (importKwh - ref.importKwh)
-	return netKwh / dtHours * 1000.0, true
 }
