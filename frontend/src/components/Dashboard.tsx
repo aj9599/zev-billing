@@ -425,7 +425,7 @@ export default function Dashboard() {
     <div className="dashboard-container">
 
       {/* ─── Header ───────────────────────────────────────────────── */}
-      <div className="dashboard-header" style={{ marginBottom: '28px' }}>
+      <div className="dashboard-header app-fade-in" style={{ marginBottom: '28px' }}>
         <h1 className="dashboard-title" style={{
           fontSize: '32px',
           fontWeight: '800',

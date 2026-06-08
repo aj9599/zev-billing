@@ -87,7 +87,7 @@ export default function EmailSettings() {
   return (
     <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ marginBottom: '24px' }}>
+      <div className="app-fade-in" style={{ marginBottom: '24px' }}>
         <h1 style={{
           fontSize: '32px', fontWeight: '800', marginBottom: '6px',
           display: 'flex', alignItems: 'center', gap: '12px',

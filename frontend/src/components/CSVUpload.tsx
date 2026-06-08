@@ -290,7 +290,7 @@ export default function CSVUpload() {
 
   return (
     <div className="csv-upload-container" style={{ maxWidth: '1600px', margin: '0 auto', padding: '20px' }}>
-      <div className="csv-upload-header" style={{ marginBottom: '40px' }}>
+      <div className="csv-upload-header app-fade-in" style={{ marginBottom: '40px' }}>
         <h1 style={{ 
           fontSize: '36px', 
           fontWeight: '800', 

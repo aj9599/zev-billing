@@ -297,7 +297,7 @@ export default function PricingSettings() {
   return (
     <div className="pricing-container" style={{ width: '100%', maxWidth: '100%' }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: '24px', gap: '15px', flexWrap: 'wrap' }}>
+      <div className="app-fade-in" style={{ display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: '24px', gap: '15px', flexWrap: 'wrap' }}>
         <div>
           <h1 style={{
             fontSize: isMobile ? '24px' : '36px',

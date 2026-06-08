@@ -171,10 +171,12 @@ export default function AutoBilling() {
 
   return (
     <div className="ab-container" style={{ width: '100%', maxWidth: '100%' }}>
-      <AutoBillingHeader
-        onShowInstructions={() => setShowInstructions(true)}
-        onAddConfig={openCreateModal}
-      />
+      <div className="app-fade-in">
+        <AutoBillingHeader
+          onShowInstructions={() => setShowInstructions(true)}
+          onAddConfig={openCreateModal}
+        />
+      </div>
 
       {configs.length === 0 ? (
         <AutoBillingEmptyState />

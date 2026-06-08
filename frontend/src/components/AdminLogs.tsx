@@ -152,6 +152,7 @@ export default function AdminLogs() {
         onDismissError={dismissUpdateError}
       />
 
+      <div className="app-fade-in">
       <AdminLogsHeader
         isLive={isLive}
         backing={backing}
@@ -170,6 +171,7 @@ export default function AdminLogs() {
         onFactoryReset={handleFactoryResetClick}
         onReboot={handleReboot}
       />
+      </div>
 
       <UpdateInfoCard
         updateInfo={updateInfo}

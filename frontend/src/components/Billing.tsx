@@ -56,7 +56,7 @@ export default function Billing() {
     <ErrorBoundary fallbackMessage="An error occurred in the billing module. Please refresh the page.">
       <div className="billing-container" style={{ width: '100%', maxWidth: '100%' }}>
         {/* Header */}
-        <div className="billing-header" style={{
+        <div className="billing-header app-fade-in" style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: isMobile ? 'flex-start' : 'center',

@@ -15,6 +15,10 @@ export const en: Translations = {
   // Controllable devices
   'devices.title': 'Controllable Devices',
   'devices.subtitle': 'Switch relays, heaters and other loads automatically from your solar surplus',
+  'devices.statTotal': 'Total devices',
+  'devices.statAuto': 'On auto',
+  'devices.statOnline': 'Online',
+  'devices.statOn': 'Currently on',
   'devices.add': 'Add device',
   'devices.edit': 'Edit device',
   'devices.empty': 'No devices yet. Add a Shelly or Loxone relay to control it from solar surplus.',

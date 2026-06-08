@@ -19,6 +19,17 @@ body {
   position: relative;
 }
 
+/* Shared page entrance animation. Apply .app-fade-in to a section (header,
+   stats row, content) and stagger with inline style={{ animationDelay }}. */
+@keyframes appFadeSlideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.app-fade-in {
+  animation: appFadeSlideIn 0.4s ease-out both;
+}
+
 input,
 select,
 textarea,

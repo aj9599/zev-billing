@@ -15,6 +15,10 @@ export const de: Translations = {
   // Controllable devices
   'devices.title': 'Steuerbare Geräte',
   'devices.subtitle': 'Relais, Heizungen und andere Verbraucher automatisch nach Solarüberschuss schalten',
+  'devices.statTotal': 'Geräte gesamt',
+  'devices.statAuto': 'Auf Auto',
+  'devices.statOnline': 'Online',
+  'devices.statOn': 'Aktuell ein',
   'devices.add': 'Gerät hinzufügen',
   'devices.edit': 'Gerät bearbeiten',
   'devices.empty': 'Noch keine Geräte. Füge ein Shelly- oder Loxone-Relais hinzu, um es nach Solarüberschuss zu steuern.',

@@ -300,13 +300,15 @@ export default function Chargers() {
 
   return (
     <div className="chargers-container">
-      <ChargersHeader
-        onAddCharger={handleAddCharger}
-        onShowInstructions={() => setShowInstructions(true)}
-        onShowExport={() => setShowExportModal(true)}
-        isMobile={isMobile}
-        t={t}
-      />
+      <div className="app-fade-in">
+        <ChargersHeader
+          onAddCharger={handleAddCharger}
+          onShowInstructions={() => setShowInstructions(true)}
+          onShowExport={() => setShowExportModal(true)}
+          isMobile={isMobile}
+          t={t}
+        />
+      </div>
 
       {/* Stats Row */}
       <div style={{

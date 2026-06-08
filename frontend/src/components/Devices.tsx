@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Power, Edit2, Trash2, X, Zap, RefreshCw, Search, Clock } from 'lucide-react';
+import { Plus, Power, Edit2, Trash2, X, Zap, RefreshCw, Search, Clock, Wifi, Activity } from 'lucide-react';
 import { api } from '../api/client';
 import { useTranslation } from '../i18n';
 import type { Device, DeviceLiveStatus, LoxoneControl, Building as BuildingType } from '../types';
@@ -90,6 +90,7 @@ export default function Devices() {
   const [buildings, setBuildings] = useState<BuildingType[]>([]);
   const [status, setStatus] = useState<Record<number, DeviceLiveStatus>>({});
   const [loading, setLoading] = useState(true);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm());
   // dedicated schedule modal (edits only the schedule, nothing else)
@@ -107,7 +108,12 @@ export default function Devices() {
     loadData();
     refreshStatus();
     const interval = setInterval(refreshStatus, 5000);
-    return () => clearInterval(interval);
+    const onResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', onResize);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('resize', onResize);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -385,22 +391,41 @@ export default function Devices() {
     return <div style={{ padding: '40px', color: '#6b7280' }}>{t('common.loading')}</div>;
   }
 
+  const onlineCount = devices.filter((d) => status[d.id]?.online).length;
+  const onCount = devices.filter((d) => status[d.id]?.state === 'on').length;
+  const autoCount = devices.filter((d) => (status[d.id]?.mode || d.control_mode) === 'auto' && d.is_active).length;
+
   return (
-    <div style={{ padding: '24px', maxWidth: '1100px', margin: '0 auto' }}>
+    <div style={{ padding: isMobile ? '16px' : '24px', maxWidth: '1100px', margin: '0 auto' }}>
       <style>{`@keyframes dev-pulse {
         0%, 100% { box-shadow: 0 0 0 4px rgba(16,185,129,0.20); }
         50% { box-shadow: 0 0 0 9px rgba(16,185,129,0.04); }
       }`}</style>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', flexWrap: 'wrap', gap: '12px' }}>
+
+      {/* Header */}
+      <div className="app-fade-in" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isMobile ? '20px' : '28px', gap: '15px', flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Power size={24} color="#10b981" /> {t('devices.title')}
+          <h1 style={{
+            fontSize: isMobile ? '24px' : '32px', fontWeight: 800, marginBottom: '6px',
+            display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '12px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+          }}>
+            <Power size={isMobile ? 24 : 32} style={{ color: '#667eea' }} /> {t('devices.title')}
           </h1>
-          <p style={{ color: '#6b7280', margin: '6px 0 0', fontSize: '14px' }}>{t('devices.subtitle')}</p>
+          <p style={{ color: '#6b7280', fontSize: isMobile ? '13px' : '15px', margin: 0 }}>{t('devices.subtitle')}</p>
         </div>
         <button onClick={openCreate} style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 16px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
           <Plus size={16} /> {t('devices.add')}
         </button>
+      </div>
+
+      {/* Stat cards */}
+      <div className="app-fade-in" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '20px', animationDelay: '0.05s' }}>
+        <StatCard icon={Power} color="#667eea" label={t('devices.statTotal')} value={devices.length} />
+        <StatCard icon={Activity} color="#3b82f6" label={t('devices.statAuto')} value={autoCount} />
+        <StatCard icon={Wifi} color="#0ea5e9" label={t('devices.statOnline')} value={onlineCount} sublabel={`${devices.length - onlineCount} ${t('devices.offline')}`} />
+        <StatCard icon={Zap} color="#10b981" label={t('devices.statOn')} value={onCount} />
       </div>
 
       {message && (
@@ -410,12 +435,12 @@ export default function Devices() {
       )}
 
       {devices.length === 0 ? (
-        <div style={{ ...card, textAlign: 'center', padding: '48px', color: '#9ca3af', marginTop: '16px' }}>
+        <div className="app-fade-in" style={{ ...card, textAlign: 'center', padding: '48px', color: '#9ca3af', marginTop: '16px', animationDelay: '0.1s' }}>
           <Power size={40} style={{ opacity: 0.4 }} />
           <p style={{ marginTop: '12px' }}>{t('devices.empty')}</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: '18px', marginTop: '16px' }}>
+        <div className="app-fade-in" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: '18px', marginTop: '16px', animationDelay: '0.1s' }}>
           {devices.map((d) => {
             const s = status[d.id];
             const state = s?.state || 'unknown';
@@ -734,3 +759,23 @@ const iconBtn: React.CSSProperties = {
   padding: '7px', borderRadius: '8px', border: '1px solid #e5e7eb', background: 'white', color: '#6b7280', cursor: 'pointer',
   display: 'inline-flex', alignItems: 'center',
 };
+
+function StatCard({ icon: Icon, label, value, color, sublabel }: {
+  icon: React.ComponentType<any>;
+  label: string; value: number | string; color: string; sublabel?: string;
+}) {
+  return (
+    <div style={{ backgroundColor: 'white', padding: '16px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', borderLeft: `4px solid ${color}` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: 500, marginBottom: '4px' }}>{label}</div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#1f2937', lineHeight: 1.1 }}>{value}</div>
+          {sublabel && <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>{sublabel}</div>}
+        </div>
+        <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: color + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Icon size={20} color={color} />
+        </div>
+      </div>
+    </div>
+  );
+}
