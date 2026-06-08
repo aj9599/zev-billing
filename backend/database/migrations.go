@@ -214,6 +214,8 @@ func RunMigrations(db *sql.DB) error {
 			min_offtime_seconds INTEGER NOT NULL DEFAULT 0,
 			priority INTEGER NOT NULL DEFAULT 100,
 			schedule_json TEXT,
+			guarantee_hours REAL NOT NULL DEFAULT 0,
+			guarantee_by TEXT,
 			last_command TEXT,
 			last_command_at DATETIME,
 			last_state TEXT,
@@ -440,6 +442,10 @@ func RunMigrations(db *sql.DB) error {
 	}
 
 	if err := addVATColumns(db); err != nil {
+		return err
+	}
+
+	if err := addDeviceControlColumns(db); err != nil {
 		return err
 	}
 
@@ -1020,6 +1026,40 @@ func addVZEVColumns(db *sql.DB) error {
 		log.Println("✓ is_vzev column already exists")
 	}
 
+	return nil
+}
+
+// addDeviceControlColumns adds the runtime-guarantee columns to controllable_devices
+// for existing databases (the table is created with them for fresh installs).
+func addDeviceControlColumns(db *sql.DB) error {
+	// controllable_devices may not exist yet on a brand-new DB until the base
+	// schema runs — but RunMigrations creates tables first, so it's present here.
+	var tableSql string
+	if err := db.QueryRow(`SELECT sql FROM sqlite_master WHERE type='table' AND name='controllable_devices'`).Scan(&tableSql); err != nil {
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+	add := func(column, def string) error {
+		if contains(tableSql, column) {
+			return nil
+		}
+		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE controllable_devices ADD COLUMN %s %s", column, def)); err != nil {
+			if contains(err.Error(), "duplicate column") {
+				return nil
+			}
+			return fmt.Errorf("failed to add %s to controllable_devices: %v", column, err)
+		}
+		log.Printf("✓ %s column added to controllable_devices", column)
+		return nil
+	}
+	if err := add("guarantee_hours", "REAL NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := add("guarantee_by", "TEXT"); err != nil {
+		return err
+	}
 	return nil
 }
 

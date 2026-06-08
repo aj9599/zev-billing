@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Power, Edit2, Trash2, X, Zap, RefreshCw, Search, Clock, Wifi, Activity } from 'lucide-react';
+import { Plus, Power, Edit2, Trash2, X, Zap, RefreshCw, Search, Clock, Wifi, Activity, Target } from 'lucide-react';
 import { api } from '../api/client';
 import { useTranslation } from '../i18n';
 import type { Device, DeviceLiveStatus, LoxoneControl, Building as BuildingType } from '../types';
@@ -30,6 +30,9 @@ type FormState = {
   // schedule (zero or more optional windows)
   schedule_enabled: boolean;
   schedule_windows: ScheduleWindow[];
+  // runtime guarantee
+  guarantee_hours: number;
+  guarantee_by: string;
 };
 
 type ScheduleWindow = { from: string; to: string; days: number[] };
@@ -78,6 +81,8 @@ const emptyForm = (): FormState => ({
   priority: 100,
   schedule_enabled: false,
   schedule_windows: [newWindow()],
+  guarantee_hours: 0,
+  guarantee_by: '18:00',
 });
 
 const card: React.CSSProperties = { backgroundColor: 'white', borderRadius: '12px', padding: '16px', border: '1px solid #e5e7eb' };
@@ -180,6 +185,8 @@ export default function Devices() {
     f.min_runtime_seconds = d.min_runtime_seconds;
     f.min_offtime_seconds = d.min_offtime_seconds;
     f.priority = d.priority;
+    f.guarantee_hours = d.guarantee_hours || 0;
+    f.guarantee_by = d.guarantee_by || '18:00';
     try {
       const cfg = JSON.parse(d.connection_config || '{}');
       if (f.driver === 'shelly') {
@@ -235,6 +242,8 @@ export default function Devices() {
       min_offtime_seconds: Number(f.min_offtime_seconds),
       priority: Number(f.priority),
       schedule_json,
+      guarantee_hours: Number(f.guarantee_hours) || 0,
+      guarantee_by: Number(f.guarantee_hours) > 0 ? f.guarantee_by : null,
       is_active: f.is_active,
     };
   }
@@ -492,6 +501,11 @@ export default function Devices() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '7px' }}>
                       <span style={{ fontSize: '12px', color: '#6b7280', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
                         <Zap size={13} color="#f59e0b" /> {t('devices.surplusLabel')}
+                        {s?.has_signal && (
+                          <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '6px', backgroundColor: s.surplus_live ? '#10b98115' : '#f59e0b15', color: s.surplus_live ? '#059669' : '#d97706' }}>
+                            {s.surplus_live ? t('devices.live') : t('devices.estimated')}
+                          </span>
+                        )}
                       </span>
                       <span style={{ fontSize: '16px', fontWeight: 800, color: surplus != null && surplus > 0 ? '#059669' : '#9ca3af' }}>
                         {surplus != null ? `${Math.round(surplus)} W` : t('devices.noSignal')}
@@ -515,6 +529,17 @@ export default function Devices() {
                           <span><strong style={{ color: '#475569' }}>{formatDays(wnd.days)}</strong> · {wnd.from}–{wnd.to}</span>
                         </div>
                       ))}
+                    </div>
+                  )}
+
+                  {/* runtime guarantee */}
+                  {d.guarantee_hours > 0 && d.guarantee_by && (
+                    <div style={{ marginTop: '8px', fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Target size={12} color="#94a3b8" />
+                      <span>
+                        <strong style={{ color: '#475569' }}>≥{d.guarantee_hours}h</strong> {t('devices.by')} {d.guarantee_by}
+                        {s && ` · ${t('devices.todayShort')} ${Math.floor((s.runtime_today_min || 0) / 60)}h ${(s.runtime_today_min || 0) % 60}m`}
+                      </span>
                     </div>
                   )}
 
@@ -712,6 +737,24 @@ export default function Devices() {
                 (v) => setForm({ ...form, schedule_enabled: v }),
                 (w) => setForm({ ...form, schedule_windows: w }),
               )}
+
+              {/* Runtime guarantee */}
+              <div style={card}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: '12px' }}>{t('devices.guaranteeSection')}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={label}>{t('devices.guaranteeHours')}</label>
+                    <input type="number" step="0.5" min="0" style={input} value={form.guarantee_hours}
+                      onChange={(e) => setForm({ ...form, guarantee_hours: Number(e.target.value) || 0 })} />
+                  </div>
+                  <div>
+                    <label style={label}>{t('devices.guaranteeBy')}</label>
+                    <input type="time" style={input} value={form.guarantee_by} disabled={form.guarantee_hours <= 0}
+                      onChange={(e) => setForm({ ...form, guarantee_by: e.target.value })} />
+                  </div>
+                </div>
+                <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px', marginBottom: 0 }}>{t('devices.guaranteeHint')}</p>
+              </div>
 
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
                 <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />

@@ -131,6 +131,8 @@ export interface Device {
   min_offtime_seconds: number;
   priority: number;
   schedule_json?: string | null;
+  guarantee_hours: number;
+  guarantee_by?: string | null;
   last_command?: string | null;
   last_command_at?: string | null;
   last_state?: string | null;
@@ -146,7 +148,9 @@ export interface DeviceLiveStatus {
   state: string;       // 'on' | 'off' | 'offline' | 'unknown'
   mode: string;        // 'auto' | 'on' | 'off'
   has_signal: boolean;
+  surplus_live: boolean;      // true = instantaneous, false = estimated
   building_surplus_w: number;
+  runtime_today_min: number;  // accumulated ON minutes today
   last_error?: string;
   updated_at?: string;
 }

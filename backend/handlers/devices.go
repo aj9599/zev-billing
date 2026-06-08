@@ -69,11 +69,11 @@ func (h *DeviceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	res, err := h.db.Exec(`INSERT INTO controllable_devices (
 		name, building_id, driver, connection_config, control_mode,
 		switch_on_threshold_w, switch_off_threshold_w, min_runtime_seconds,
-		min_offtime_seconds, priority, schedule_json, is_active
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		min_offtime_seconds, priority, schedule_json, guarantee_hours, guarantee_by, is_active
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		d.Name, d.BuildingID, d.Driver, d.ConnectionConfig, d.ControlMode,
 		d.SwitchOnThresholdW, d.SwitchOffThresholdW, d.MinRuntimeSeconds,
-		d.MinOfftimeSeconds, d.Priority, nullableStr(d.ScheduleJSON), boolToInt(d.IsActive))
+		d.MinOfftimeSeconds, d.Priority, nullableStr(d.ScheduleJSON), d.GuaranteeHours, nullableStr(d.GuaranteeBy), boolToInt(d.IsActive))
 	if err != nil {
 		http.Error(w, "Failed to create device", http.StatusInternalServerError)
 		return
@@ -100,12 +100,14 @@ func (h *DeviceHandler) Update(w http.ResponseWriter, r *http.Request) {
 	res, err := h.db.Exec(`UPDATE controllable_devices SET
 		name = ?, building_id = ?, driver = ?, connection_config = ?,
 		switch_on_threshold_w = ?, switch_off_threshold_w = ?, min_runtime_seconds = ?,
-		min_offtime_seconds = ?, priority = ?, schedule_json = ?, is_active = ?,
+		min_offtime_seconds = ?, priority = ?, schedule_json = ?,
+		guarantee_hours = ?, guarantee_by = ?, is_active = ?,
 		updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?`,
 		d.Name, d.BuildingID, d.Driver, d.ConnectionConfig,
 		d.SwitchOnThresholdW, d.SwitchOffThresholdW, d.MinRuntimeSeconds,
-		d.MinOfftimeSeconds, d.Priority, nullableStr(d.ScheduleJSON), boolToInt(d.IsActive), id)
+		d.MinOfftimeSeconds, d.Priority, nullableStr(d.ScheduleJSON),
+		d.GuaranteeHours, nullableStr(d.GuaranteeBy), boolToInt(d.IsActive), id)
 	if err != nil {
 		http.Error(w, "Failed to update device", http.StatusInternalServerError)
 		return

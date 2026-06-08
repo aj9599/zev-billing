@@ -408,6 +408,8 @@ type Device struct {
 	MinOfftimeSeconds    int     `json:"min_offtime_seconds"`
 	Priority             int     `json:"priority"`
 	ScheduleJSON         *string `json:"schedule_json,omitempty"`
+	GuaranteeHours       float64 `json:"guarantee_hours"`
+	GuaranteeBy          *string `json:"guarantee_by,omitempty"`
 	LastCommand          *string `json:"last_command,omitempty"`
 	LastCommandAt        *string `json:"last_command_at,omitempty"`
 	LastState            *string `json:"last_state,omitempty"`

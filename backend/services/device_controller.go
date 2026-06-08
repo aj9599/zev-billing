@@ -15,9 +15,8 @@ import (
 )
 
 const (
-	deviceControlInterval = 30 * time.Second
-	deviceSwitchDebounce  = 20 * time.Second // a desired change must persist into the next tick
-	defaultManualSeconds  = 3600             // manual override default duration when none supplied
+	deviceControlInterval = 15 * time.Second
+	deviceSwitchDebounce  = 10 * time.Second // a desired change must persist into the next tick
 )
 
 // deviceRuntime is the in-memory control state for one device. Guarded by
@@ -28,10 +27,16 @@ type deviceRuntime struct {
 	candidateDesired bool
 	candidateSince   time.Time
 
+	// accumulated ON time today, for the runtime guarantee (#2)
+	onSecondsToday float64
+	accrualDay     string
+	lastAccrual    time.Time
+
 	// snapshot for the live status API
 	online           bool
 	buildingSurplusW float64
 	hasSignal        bool
+	surplusLive      bool
 	mode             string
 	updatedAt        time.Time
 	lastError        string
@@ -40,10 +45,11 @@ type deviceRuntime struct {
 // DeviceController periodically drives controllable devices from live solar
 // surplus. Standalone from billing — it only reads GetLiveMeterReadings.
 type DeviceController struct {
-	db     *sql.DB
-	dc     *DataCollector
-	stopCh chan struct{}
-	stopMu sync.Once
+	db      *sql.DB
+	dc      *DataCollector
+	sampler *LiveSampler
+	stopCh  chan struct{}
+	stopMu  sync.Once
 
 	mu      sync.Mutex
 	runtime map[int]*deviceRuntime
@@ -53,6 +59,7 @@ func NewDeviceController(db *sql.DB, dc *DataCollector) *DeviceController {
 	return &DeviceController{
 		db:      db,
 		dc:      dc,
+		sampler: NewLiveSampler(db, dc),
 		stopCh:  make(chan struct{}),
 		runtime: make(map[int]*deviceRuntime),
 	}
@@ -60,6 +67,7 @@ func NewDeviceController(db *sql.DB, dc *DataCollector) *DeviceController {
 
 func (c *DeviceController) Start() {
 	log.Println("Starting Device Controller (solar-driven device control)...")
+	go c.sampler.Start()
 	ticker := time.NewTicker(deviceControlInterval)
 	defer ticker.Stop()
 
@@ -77,7 +85,10 @@ func (c *DeviceController) Start() {
 }
 
 func (c *DeviceController) Stop() {
-	c.stopMu.Do(func() { close(c.stopCh) })
+	c.stopMu.Do(func() {
+		close(c.stopCh)
+		c.sampler.Stop()
+	})
 }
 
 // runtimeFor returns (creating if needed) the runtime for a device id.
@@ -110,27 +121,53 @@ func (c *DeviceController) tick() {
 
 	now := time.Now()
 	for buildingID, list := range byBuilding {
-		surplus, hasSignal := c.buildingSurplus(buildingID)
+		surplus, hasSignal, live := c.sampler.BuildingInfo(buildingID)
 		avail := surplus
 
 		// Higher priority (lower number) gets first claim on the surplus.
 		sort.SliceStable(list, func(i, j int) bool { return list[i].Priority < list[j].Priority })
 
 		for _, d := range list {
-			desired, manual, reason := c.resolveDesired(d, avail, hasSignal, now)
+			c.accrueRuntime(d.ID, now)
+			desired, forced, reason := c.resolveDesired(d, avail, hasSignal, now)
 			if desired {
 				avail -= d.SwitchOnThresholdW
 			}
-			c.apply(d, desired, manual, reason, surplus, hasSignal, now)
+			c.apply(d, desired, forced, reason, surplus, hasSignal, live, now)
 		}
 	}
 }
 
+// accrueRuntime adds the elapsed time since the last tick to the device's
+// accumulated ON-time for today (used by the runtime guarantee), resetting at
+// midnight. Best-effort and in-memory: a restart resets the counter, which can
+// only cause the guarantee to run a bit more — never less.
+func (c *DeviceController) accrueRuntime(id int, now time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	rt := c.runtimeFor(id)
+	day := now.Format("2006-01-02")
+	if rt.accrualDay != day {
+		rt.accrualDay = day
+		rt.onSecondsToday = 0
+		rt.lastAccrual = now
+		return
+	}
+	if !rt.lastAccrual.IsZero() && rt.lastKnownOn {
+		rt.onSecondsToday += now.Sub(rt.lastAccrual).Seconds()
+	}
+	rt.lastAccrual = now
+}
+
 // resolveDesired computes the target on/off state for a device this tick.
-// manual=true means a manual override is currently active (bypasses debounce/timers).
-func (c *DeviceController) resolveDesired(d models.Device, avail float64, hasSignal bool, now time.Time) (desired bool, manual bool, reason string) {
-	// Manual override? A nil manual_override_until means a permanent manual mode
-	// (holds until the user picks Auto). A set time means a timed override.
+// forced=true means the decision overrides solar (manual / schedule window /
+// runtime guarantee) and bypasses the debounce + min-runtime/cooldown timers so
+// it takes effect promptly.
+//
+// Priority: manual override → schedule force-on window → runtime guarantee → solar.
+func (c *DeviceController) resolveDesired(d models.Device, avail float64, hasSignal bool, now time.Time) (desired bool, forced bool, reason string) {
+	// 1. Manual override. nil manual_override_until = permanent (until the user
+	// picks Auto); a set time = timed override.
 	if d.ControlMode == "on" || d.ControlMode == "off" {
 		if d.ManualOverrideUntil == nil {
 			return d.ControlMode == "on", true, "manual override"
@@ -138,24 +175,32 @@ func (c *DeviceController) resolveDesired(d models.Device, avail float64, hasSig
 		if until, err := parseDeviceTime(*d.ManualOverrideUntil); err == nil && until.After(now) {
 			return d.ControlMode == "on", true, "manual override"
 		}
-		// Timed override expired → revert to auto and persist.
-		c.clearOverride(d.ID)
-	}
-
-	// Auto mode.
-	if !hasSignal {
-		return false, false, "no grid signal — holding off"
-	}
-	if !c.scheduleAllows(d, now) {
-		return false, false, "outside schedule"
+		c.clearOverride(d.ID) // timed override expired → back to auto
 	}
 
 	c.mu.Lock()
-	on := c.runtimeFor(d.ID).lastKnownOn
+	rt := c.runtimeFor(d.ID)
+	on := rt.lastKnownOn
+	onToday := rt.onSecondsToday
 	c.mu.Unlock()
 
+	// 2. Schedule window → force ON during the configured time (a timer that
+	// works independently of solar, e.g. keep the boiler warm 18:00–23:00).
+	if c.inScheduleWindow(d, now) {
+		return true, true, "schedule window"
+	}
+
+	// 3. Runtime guarantee → force ON late enough to still reach the required
+	// hours by the deadline (e.g. boiler ≥3h by 18:00 even without sun).
+	if must, why := guaranteeRequiresOn(d, onToday, now); must {
+		return true, true, why
+	}
+
+	// 4. Solar surplus control (with hysteresis).
+	if !hasSignal {
+		return false, false, "no grid signal — holding off"
+	}
 	if on {
-		// Stay on until surplus drops below the off threshold (hysteresis).
 		if avail >= d.SwitchOffThresholdW {
 			return true, false, fmt.Sprintf("surplus %.0fW ≥ off-threshold %.0fW", avail, d.SwitchOffThresholdW)
 		}
@@ -167,10 +212,37 @@ func (c *DeviceController) resolveDesired(d models.Device, avail float64, hasSig
 	return false, false, fmt.Sprintf("surplus %.0fW < on-threshold %.0fW", avail, d.SwitchOnThresholdW)
 }
 
+// guaranteeRequiresOn reports whether the device must run now to still reach its
+// guaranteed runtime by the deadline today (latest-start logic). Solar runtime
+// earlier in the day counts toward onSecondsToday, so this only kicks in if the
+// remaining time until the deadline is just enough for the remaining need.
+func guaranteeRequiresOn(d models.Device, onSecondsToday float64, now time.Time) (bool, string) {
+	if d.GuaranteeHours <= 0 || d.GuaranteeBy == nil {
+		return false, ""
+	}
+	deadlineMin, ok := parseHHMM(*d.GuaranteeBy)
+	if !ok {
+		return false, ""
+	}
+	nowMin := now.Hour()*60 + now.Minute()
+	if nowMin >= deadlineMin {
+		return false, "" // deadline already passed today
+	}
+	remainingNeeded := d.GuaranteeHours*3600 - onSecondsToday
+	if remainingNeeded <= 0 {
+		return false, "" // guarantee already met today
+	}
+	secsUntilDeadline := float64((deadlineMin - nowMin) * 60)
+	if secsUntilDeadline <= remainingNeeded {
+		return true, fmt.Sprintf("runtime guarantee: need %.1fh by %s", d.GuaranteeHours, *d.GuaranteeBy)
+	}
+	return false, ""
+}
+
 // apply reconciles a device toward the desired state, honouring debounce and
-// min-runtime/cooldown timers (skipped for manual overrides). It also refreshes
-// the live-status snapshot.
-func (c *DeviceController) apply(d models.Device, desired, manual bool, reason string, surplus float64, hasSignal bool, now time.Time) {
+// min-runtime/cooldown timers (skipped when forced = manual/schedule/guarantee).
+// It also refreshes the live-status snapshot.
+func (c *DeviceController) apply(d models.Device, desired, forced bool, reason string, surplus float64, hasSignal, live bool, now time.Time) {
 	driver, derr := driverFor(d)
 
 	c.mu.Lock()
@@ -178,6 +250,7 @@ func (c *DeviceController) apply(d models.Device, desired, manual bool, reason s
 	rt.mode = d.ControlMode
 	rt.buildingSurplusW = surplus
 	rt.hasSignal = hasSignal
+	rt.surplusLive = live
 	rt.updatedAt = now
 	c.mu.Unlock()
 
@@ -216,7 +289,7 @@ func (c *DeviceController) apply(d models.Device, desired, manual bool, reason s
 		return
 	}
 
-	if !manual {
+	if !forced {
 		// Debounce: the change must have been pending since a previous tick.
 		c.mu.Lock()
 		if rt.candidateSince.IsZero() || rt.candidateDesired != desired {
@@ -301,34 +374,11 @@ func (c *DeviceController) recordEvent(deviceID int, cmd, reason string, surplus
 		VALUES (?, ?, ?, ?, ?, ?)`, deviceID, cmd, reason, surplus, success, errStr)
 }
 
-// buildingSurplus sums net export across the building's grid/total meters.
-// surplus > 0 means power is flowing back to the grid (PV surplus available).
-func (c *DeviceController) buildingSurplus(buildingID int) (surplus float64, hasSignal bool) {
-	if c.dc == nil {
-		return 0, false
-	}
-	readings, err := c.dc.GetLiveMeterReadings(buildingID)
-	if err != nil {
-		return 0, false
-	}
-	for _, r := range readings {
-		if r.MeterType != "total_meter" {
-			continue
-		}
-		if !r.IsOnline && !r.HasLivePower {
-			continue
-		}
-		hasSignal = true
-		surplus += r.CurrentPowerExpW - r.CurrentPowerW
-	}
-	return surplus, hasSignal
-}
-
-// scheduleAllows reports whether the current time is inside one of the device's
-// allowed windows. No schedule configured => always allowed.
-func (c *DeviceController) scheduleAllows(d models.Device, now time.Time) bool {
+// inScheduleWindow reports whether now falls inside one of the device's
+// configured time windows. No schedule => not in a window (solar control runs).
+func (c *DeviceController) inScheduleWindow(d models.Device, now time.Time) bool {
 	if d.ScheduleJSON == nil || strings.TrimSpace(*d.ScheduleJSON) == "" {
-		return true
+		return false
 	}
 	type window struct {
 		Days []int  `json:"days"` // ISO weekday 1..7 (Mon..Sun); empty = every day
@@ -337,7 +387,7 @@ func (c *DeviceController) scheduleAllows(d models.Device, now time.Time) bool {
 	}
 	var windows []window
 	if err := json.Unmarshal([]byte(*d.ScheduleJSON), &windows); err != nil || len(windows) == 0 {
-		return true // malformed/empty schedule should not brick control
+		return false
 	}
 	weekday := int(now.Weekday())
 	if weekday == 0 {
@@ -409,7 +459,9 @@ type DeviceLiveStatus struct {
 	State            string  `json:"state"` // on | off | unknown
 	Mode             string  `json:"mode"`
 	HasSignal        bool    `json:"has_signal"`
+	SurplusLive      bool    `json:"surplus_live"` // true = instantaneous, false = estimated
 	BuildingSurplusW float64 `json:"building_surplus_w"`
+	RuntimeTodayMin  int     `json:"runtime_today_min"` // accumulated ON minutes today
 	LastError        string  `json:"last_error,omitempty"`
 	UpdatedAt        string  `json:"updated_at,omitempty"`
 }
@@ -441,7 +493,9 @@ func (c *DeviceController) LiveStatus(buildingID int) ([]DeviceLiveStatus, error
 		if rt := c.runtime[d.ID]; rt != nil {
 			st.Online = rt.online
 			st.HasSignal = rt.hasSignal
+			st.SurplusLive = rt.surplusLive
 			st.BuildingSurplusW = rt.buildingSurplusW
+			st.RuntimeTodayMin = int(rt.onSecondsToday / 60)
 			st.LastError = rt.lastError
 			if !rt.updatedAt.IsZero() {
 				st.UpdatedAt = rt.updatedAt.Format(time.RFC3339)
@@ -495,16 +549,18 @@ func (c *DeviceController) TestDevice(d models.Device) (online bool, state strin
 const deviceColumns = `id, name, building_id, driver, connection_config, control_mode,
 	manual_override_until, switch_on_threshold_w, switch_off_threshold_w,
 	min_runtime_seconds, min_offtime_seconds, priority, schedule_json,
+	guarantee_hours, guarantee_by,
 	last_command, last_command_at, last_state, last_state_at, is_active, created_at, updated_at`
 
 func scanDevice(rows interface{ Scan(...interface{}) error }) (models.Device, error) {
 	var d models.Device
-	var override, schedule, lastCmd, lastCmdAt, lastState, lastStateAt sql.NullString
+	var override, schedule, guaranteeBy, lastCmd, lastCmdAt, lastState, lastStateAt sql.NullString
 	var active sql.NullBool
 	err := rows.Scan(
 		&d.ID, &d.Name, &d.BuildingID, &d.Driver, &d.ConnectionConfig, &d.ControlMode,
 		&override, &d.SwitchOnThresholdW, &d.SwitchOffThresholdW,
 		&d.MinRuntimeSeconds, &d.MinOfftimeSeconds, &d.Priority, &schedule,
+		&d.GuaranteeHours, &guaranteeBy,
 		&lastCmd, &lastCmdAt, &lastState, &lastStateAt, &active, &d.CreatedAt, &d.UpdatedAt,
 	)
 	if err != nil {
@@ -513,6 +569,7 @@ func scanDevice(rows interface{ Scan(...interface{}) error }) (models.Device, er
 	d.IsActive = !active.Valid || active.Bool
 	d.ManualOverrideUntil = nullStrPtr(override)
 	d.ScheduleJSON = nullStrPtr(schedule)
+	d.GuaranteeBy = nullStrPtr(guaranteeBy)
 	d.LastCommand = nullStrPtr(lastCmd)
 	d.LastCommandAt = nullStrPtr(lastCmdAt)
 	d.LastState = nullStrPtr(lastState)
