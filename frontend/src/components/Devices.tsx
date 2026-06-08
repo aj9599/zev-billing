@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Power, Edit2, Trash2, X, Zap, RefreshCw, Search, Clock, Wifi, Activity, Target } from 'lucide-react';
+import { Plus, Power, Edit2, Trash2, X, Zap, RefreshCw, Search, Clock, Wifi, Activity, Target, Plug } from 'lucide-react';
 import { api } from '../api/client';
 import { useTranslation } from '../i18n';
 import type { Device, DeviceLiveStatus, LoxoneControl, Building as BuildingType } from '../types';
@@ -507,14 +507,25 @@ export default function Devices() {
                       <div style={{ fontWeight: 700, fontSize: '16px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.name}</div>
                       <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px', textTransform: 'capitalize' }}>{buildingName(d.building_id)} · {d.driver}</div>
                     </div>
-                    <span style={{
-                      padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap',
-                      background: isOn ? '#10b98115' : offline ? '#ef444415' : '#f3f4f6',
-                      color: isOn ? '#059669' : offline ? '#dc2626' : '#6b7280',
-                    }}>
-                      <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: accent, boxShadow: isOn ? `0 0 6px ${accent}` : 'none' }} />
-                      {t(`devices.state.${state}`)}
-                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
+                      {/* DEVICE: actual switch state read from the hardware */}
+                      <span title={t('devices.deviceTooltip')} style={{
+                        padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap',
+                        background: isOn ? '#10b98115' : offline ? '#ef444415' : '#f3f4f6',
+                        color: isOn ? '#059669' : offline ? '#dc2626' : '#6b7280',
+                      }}>
+                        <Plug size={12} />
+                        {t('devices.deviceShort')}: {t(`devices.state.${state}`)}
+                      </span>
+                      {/* CONTROL: what the automation is set to */}
+                      <span title={t('devices.controlTooltip')} style={{
+                        padding: '3px 9px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap',
+                        background: modeColor[mode] + '15', color: modeColor[mode],
+                      }}>
+                        <Activity size={11} />
+                        {t('devices.controlShort')}: {t(`devices.mode.${mode}`)}
+                      </span>
+                    </div>
                   </div>
 
                   {/* surplus gauge */}
