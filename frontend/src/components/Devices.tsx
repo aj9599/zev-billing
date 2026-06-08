@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Power, Edit2, Trash2, X, Zap, RefreshCw, Search } from 'lucide-react';
+import { Plus, Power, Edit2, Trash2, X, Zap, RefreshCw, Search, Clock } from 'lucide-react';
 import { api } from '../api/client';
 import { useTranslation } from '../i18n';
 import type { Device, DeviceLiveStatus, LoxoneControl, Building as BuildingType } from '../types';
@@ -27,12 +27,14 @@ type FormState = {
   min_runtime_seconds: number;
   min_offtime_seconds: number;
   priority: number;
-  // schedule (single optional window)
+  // schedule (zero or more optional windows)
   schedule_enabled: boolean;
-  schedule_from: string;
-  schedule_to: string;
-  schedule_days: number[];
+  schedule_windows: ScheduleWindow[];
 };
+
+type ScheduleWindow = { from: string; to: string; days: number[] };
+
+const newWindow = (): ScheduleWindow => ({ from: '10:00', to: '16:00', days: [1, 2, 3, 4, 5, 6, 7] });
 
 const emptyForm = (): FormState => ({
   name: '',
@@ -54,9 +56,7 @@ const emptyForm = (): FormState => ({
   min_offtime_seconds: 300,
   priority: 100,
   schedule_enabled: false,
-  schedule_from: '10:00',
-  schedule_to: '16:00',
-  schedule_days: [1, 2, 3, 4, 5, 6, 7],
+  schedule_windows: [newWindow()],
 });
 
 const card: React.CSSProperties = { backgroundColor: 'white', borderRadius: '12px', padding: '16px', border: '1px solid #e5e7eb' };
@@ -109,6 +109,32 @@ export default function Devices() {
 
   const buildingName = (id: number) => buildings.find((b) => b.id === id)?.name || `#${id}`;
 
+  const parseSchedule = (d: Device): ScheduleWindow[] => {
+    if (!d.schedule_json) return [];
+    try {
+      const arr = JSON.parse(d.schedule_json);
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const formatDays = (days: number[]): string => {
+    const sorted = [...new Set(days)].filter((n) => n >= 1 && n <= 7).sort((a, b) => a - b);
+    if (sorted.length === 0) return '';
+    if (sorted.length === 7) return t('devices.everyDay');
+    const parts: string[] = [];
+    let i = 0;
+    while (i < sorted.length) {
+      let j = i;
+      while (j + 1 < sorted.length && sorted[j + 1] === sorted[j] + 1) j++;
+      if (j - i >= 2) parts.push(`${t(`devices.day.${sorted[i]}`)}–${t(`devices.day.${sorted[j]}`)}`);
+      else for (let k = i; k <= j; k++) parts.push(t(`devices.day.${sorted[k]}`));
+      i = j + 1;
+    }
+    return parts.join(', ');
+  };
+
   function openCreate() {
     const f = emptyForm();
     f.building_id = buildings[0]?.id || 0;
@@ -149,11 +175,13 @@ export default function Devices() {
     if (d.schedule_json) {
       try {
         const arr = JSON.parse(d.schedule_json);
-        if (Array.isArray(arr) && arr[0]) {
+        if (Array.isArray(arr) && arr.length > 0) {
           f.schedule_enabled = true;
-          f.schedule_from = arr[0].from || '10:00';
-          f.schedule_to = arr[0].to || '16:00';
-          f.schedule_days = Array.isArray(arr[0].days) && arr[0].days.length ? arr[0].days : [1, 2, 3, 4, 5, 6, 7];
+          f.schedule_windows = arr.map((wnd: any) => ({
+            from: wnd.from || '10:00',
+            to: wnd.to || '16:00',
+            days: Array.isArray(wnd.days) && wnd.days.length ? wnd.days : [1, 2, 3, 4, 5, 6, 7],
+          }));
         }
       } catch { /* ignore */ }
     }
@@ -180,8 +208,9 @@ export default function Devices() {
             password: f.loxone_password,
             output_uuid: f.loxone_output_uuid.trim(),
           });
-    const schedule_json = f.schedule_enabled
-      ? JSON.stringify([{ days: f.schedule_days, from: f.schedule_from, to: f.schedule_to }])
+    const windows = f.schedule_windows.filter((wnd) => wnd.days.length > 0);
+    const schedule_json = f.schedule_enabled && windows.length > 0
+      ? JSON.stringify(windows.map((wnd) => ({ days: wnd.days, from: wnd.from, to: wnd.to })))
       : null;
     return {
       name: f.name.trim(),
@@ -370,6 +399,18 @@ export default function Devices() {
                       <span>{Math.round(pct)}%</span>
                     </div>
                   </div>
+
+                  {/* schedule windows */}
+                  {parseSchedule(d).length > 0 && (
+                    <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {parseSchedule(d).map((wnd, i) => (
+                        <div key={i} style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Clock size={12} color="#94a3b8" />
+                          <span><strong style={{ color: '#475569' }}>{formatDays(wnd.days)}</strong> · {wnd.from}–{wnd.to}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {s?.last_error && (
                     <div style={{ fontSize: '12px', color: '#dc2626', marginTop: '10px' }}>{s.last_error}</div>
@@ -560,28 +601,44 @@ export default function Devices() {
                   {t('devices.scheduleEnabled')}
                 </label>
                 {form.schedule_enabled && (
-                  <div style={{ marginTop: '12px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                      <div>
-                        <label style={label}>{t('devices.from')}</label>
-                        <input type="time" style={input} value={form.schedule_from} onChange={(e) => setForm({ ...form, schedule_from: e.target.value })} />
-                      </div>
-                      <div>
-                        <label style={label}>{t('devices.to')}</label>
-                        <input type="time" style={input} value={form.schedule_to} onChange={(e) => setForm({ ...form, schedule_to: e.target.value })} />
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap' }}>
-                      {[1, 2, 3, 4, 5, 6, 7].map((day) => {
-                        const on = form.schedule_days.includes(day);
-                        return (
-                          <button key={day} onClick={() => setForm({ ...form, schedule_days: on ? form.schedule_days.filter((x) => x !== day) : [...form.schedule_days, day] })}
-                            style={{ padding: '5px 10px', borderRadius: '8px', border: '1px solid #d1d5db', background: on ? '#10b981' : 'white', color: on ? 'white' : '#6b7280', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
-                            {t(`devices.day.${day}`)}
-                          </button>
-                        );
-                      })}
-                    </div>
+                  <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {form.schedule_windows.map((wnd, idx) => {
+                      const setWindow = (patch: Partial<ScheduleWindow>) =>
+                        setForm({ ...form, schedule_windows: form.schedule_windows.map((x, i) => (i === idx ? { ...x, ...patch } : x)) });
+                      return (
+                        <div key={idx} style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '12px', background: '#fafafa' }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px' }}>
+                            <div style={{ flex: 1 }}>
+                              <label style={label}>{t('devices.from')}</label>
+                              <input type="time" style={input} value={wnd.from} onChange={(e) => setWindow({ from: e.target.value })} />
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <label style={label}>{t('devices.to')}</label>
+                              <input type="time" style={input} value={wnd.to} onChange={(e) => setWindow({ to: e.target.value })} />
+                            </div>
+                            {form.schedule_windows.length > 1 && (
+                              <button onClick={() => setForm({ ...form, schedule_windows: form.schedule_windows.filter((_, i) => i !== idx) })}
+                                title={t('common.delete')} style={{ ...iconBtn, color: '#dc2626', height: '37px' }}><Trash2 size={15} /></button>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap' }}>
+                            {[1, 2, 3, 4, 5, 6, 7].map((day) => {
+                              const on = wnd.days.includes(day);
+                              return (
+                                <button key={day} onClick={() => setWindow({ days: on ? wnd.days.filter((x) => x !== day) : [...wnd.days, day] })}
+                                  style={{ padding: '5px 10px', borderRadius: '8px', border: '1px solid #d1d5db', background: on ? '#10b981' : 'white', color: on ? 'white' : '#6b7280', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
+                                  {t(`devices.day.${day}`)}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <button onClick={() => setForm({ ...form, schedule_windows: [...form.schedule_windows, newWindow()] })}
+                      style={{ ...btn('#10b981', false), display: 'inline-flex', alignItems: 'center', gap: '6px', alignSelf: 'flex-start' }}>
+                      <Plus size={13} /> {t('devices.addWindow')}
+                    </button>
                   </div>
                 )}
               </div>

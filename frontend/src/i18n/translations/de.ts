@@ -67,6 +67,8 @@ export const de: Translations = {
   'devices.priority': 'Priorität',
   'devices.thresholdHint': 'Das Gerät schaltet EIN, wenn die Netzeinspeisung den Ein-Schwellwert übersteigt, und AUS, wenn sie unter den Aus-Schwellwert fällt. Kleinere Priorität wird zuerst bedient.',
   'devices.scheduleEnabled': 'Nur in diesen Zeiten laufen',
+  'devices.addWindow': 'Zeitfenster hinzufügen',
+  'devices.everyDay': 'Täglich',
   'devices.from': 'Von',
   'devices.to': 'Bis',
   'devices.activeControl': 'Aktiv (in automatische Steuerung einbeziehen)',

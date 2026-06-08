@@ -129,16 +129,16 @@ func (c *DeviceController) tick() {
 // resolveDesired computes the target on/off state for a device this tick.
 // manual=true means a manual override is currently active (bypasses debounce/timers).
 func (c *DeviceController) resolveDesired(d models.Device, avail float64, hasSignal bool, now time.Time) (desired bool, manual bool, reason string) {
-	// Manual override?
+	// Manual override? A nil manual_override_until means a permanent manual mode
+	// (holds until the user picks Auto). A set time means a timed override.
 	if d.ControlMode == "on" || d.ControlMode == "off" {
-		if d.ManualOverrideUntil != nil {
-			if until, err := parseDeviceTime(*d.ManualOverrideUntil); err == nil {
-				if until.After(now) {
-					return d.ControlMode == "on", true, "manual override"
-				}
-			}
+		if d.ManualOverrideUntil == nil {
+			return d.ControlMode == "on", true, "manual override"
 		}
-		// Override missing/expired → revert to auto and persist.
+		if until, err := parseDeviceTime(*d.ManualOverrideUntil); err == nil && until.After(now) {
+			return d.ControlMode == "on", true, "manual override"
+		}
+		// Timed override expired → revert to auto and persist.
 		c.clearOverride(d.ID)
 	}
 
@@ -374,10 +374,11 @@ func (c *DeviceController) ControlDevice(id int, mode string, durationSeconds in
 		return err
 	}
 
-	if durationSeconds <= 0 {
-		durationSeconds = defaultManualSeconds
+	// durationSeconds <= 0 → permanent manual mode (NULL until); >0 → timed override.
+	var until interface{}
+	if durationSeconds > 0 {
+		until = time.Now().Add(time.Duration(durationSeconds) * time.Second).Format("2006-01-02 15:04:05")
 	}
-	until := time.Now().Add(time.Duration(durationSeconds) * time.Second).Format("2006-01-02 15:04:05")
 	if _, err := c.db.Exec(`UPDATE controllable_devices
 		SET control_mode = ?, manual_override_until = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, mode, until, id); err != nil {
 		return err
@@ -422,14 +423,26 @@ func (c *DeviceController) LiveStatus(buildingID int) ([]DeviceLiveStatus, error
 	out := make([]DeviceLiveStatus, 0, len(devices))
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	now := time.Now()
 	for _, d := range devices {
-		st := DeviceLiveStatus{DeviceID: d.ID, State: "unknown", Mode: d.ControlMode}
+		// Mode comes from the device row (source of truth) so a manual switch
+		// shows immediately, not on the next 30s tick. Downgrade to "auto" when
+		// a manual override has already expired.
+		mode := d.ControlMode
+		if mode == "on" || mode == "off" {
+			// nil override = permanent manual mode; a set time can expire back to auto.
+			if d.ManualOverrideUntil != nil {
+				if until, err := parseDeviceTime(*d.ManualOverrideUntil); err != nil || !until.After(now) {
+					mode = "auto"
+				}
+			}
+		}
+		st := DeviceLiveStatus{DeviceID: d.ID, State: "unknown", Mode: mode}
 		if rt := c.runtime[d.ID]; rt != nil {
 			st.Online = rt.online
 			st.HasSignal = rt.hasSignal
 			st.BuildingSurplusW = rt.buildingSurplusW
 			st.LastError = rt.lastError
-			st.Mode = rt.mode
 			if !rt.updatedAt.IsZero() {
 				st.UpdatedAt = rt.updatedAt.Format(time.RFC3339)
 			}

@@ -67,6 +67,8 @@ export const en: Translations = {
   'devices.priority': 'Priority',
   'devices.thresholdHint': 'The device turns ON when grid export exceeds the on-threshold, and OFF when it drops below the off-threshold. Lower priority number is served first.',
   'devices.scheduleEnabled': 'Only run during these hours',
+  'devices.addWindow': 'Add time window',
+  'devices.everyDay': 'Every day',
   'devices.from': 'From',
   'devices.to': 'To',
   'devices.activeControl': 'Active (include in automatic control)',
