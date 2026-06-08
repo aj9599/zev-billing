@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math"
 	"strings"
 	"time"
 
@@ -64,21 +63,8 @@ func (conn *WebSocketConnection) readLoxoneMessage() (messageType byte, jsonData
 			return headerType, nil, nil
 		}
 
-		// Binary event tables (value / daytimer / weather states). Each carries
-		// its payload in the NEXT WebSocket message, which we must consume to
-		// stay in sync with the stream. We only parse value events (type 2);
-		// daytimer/weather payloads are read and discarded.
+		// Handle event table and daytimer events - these are binary data, not JSON
 		if headerType == LoxoneMsgTypeEventTable || headerType == LoxoneMsgTypeDaytimerEvent || headerType == LoxoneMsgTypeWeather {
-			if payloadLength == 0 {
-				return headerType, nil, nil
-			}
-			_, payload, perr := conn.Ws.ReadMessage()
-			if perr != nil {
-				return 0, nil, fmt.Errorf("failed to read event-table payload: %v", perr)
-			}
-			if headerType == LoxoneMsgTypeEventTable {
-				conn.parseValueEvents(payload)
-			}
 			return headerType, nil, nil
 		}
 
@@ -122,39 +108,6 @@ func (conn *WebSocketConnection) readLoxoneMessage() (messageType byte, jsonData
 	}
 
 	return 0, nil, fmt.Errorf("unexpected message type: %d", wsMessageType)
-}
-
-// parseValueEvents decodes a value-event table from the binary status stream
-// (jdev/sps/enablebinstatusupdate). Each record is 24 bytes: a 16-byte UUID
-// followed by an 8-byte little-endian float64 value. Results are cached in
-// StateValues (keyed by the dashed UUID string) for device-control feedback.
-func (conn *WebSocketConnection) parseValueEvents(payload []byte) {
-	const recordSize = 24
-	n := len(payload) / recordSize
-	if n == 0 {
-		return
-	}
-	conn.StateValuesMu.Lock()
-	wasEmpty := len(conn.StateValues) == 0
-	var sampleUUID string
-	var sampleVal float64
-	for i := 0; i < n; i++ {
-		off := i * recordSize
-		uuid := UUIDFromBytes(payload[off : off+16])
-		bits := binary.LittleEndian.Uint64(payload[off+16 : off+24])
-		conn.StateValues[uuid] = math.Float64frombits(bits)
-		if i == 0 {
-			sampleUUID, sampleVal = uuid, conn.StateValues[uuid]
-		}
-	}
-	total := len(conn.StateValues)
-	conn.StateValuesMu.Unlock()
-
-	// One-time confirmation that the status stream is flowing (and the UUID
-	// format matches the stored state_uuid).
-	if wasEmpty && total > 0 {
-		log.Printf("✅ [%s] Status stream active: %d control states cached (sample %s = %.1f)", conn.Host, total, sampleUUID, sampleVal)
-	}
 }
 
 // requestData requests data from all devices at 15-minute intervals

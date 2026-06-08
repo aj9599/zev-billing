@@ -425,26 +425,6 @@ func (lc *LoxoneCollector) GetDeviceByMeterID(meterID int) *loxone.Device {
 	return nil
 }
 
-// GetLiveStateByUUID returns the live value of a Loxone control's state UUID from
-// the binary status stream (any connected connection), and whether it's present.
-// Used by device control to read real actuator on/off state.
-func (lc *LoxoneCollector) GetLiveStateByUUID(uuid string) (float64, bool) {
-	if uuid == "" {
-		return 0, false
-	}
-	lc.mu.RLock()
-	defer lc.mu.RUnlock()
-	for _, conn := range lc.connections {
-		if conn == nil {
-			continue
-		}
-		if v, ok := conn.GetStateValue(uuid); ok {
-			return v, true
-		}
-	}
-	return 0, false
-}
-
 // UpdateActiveSession updates the active session
 func (lc *LoxoneCollector) UpdateActiveSession(chargerID int, session *loxone.ActiveChargerSession) {
 	lc.chargerMu.Lock()

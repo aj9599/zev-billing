@@ -48,7 +48,6 @@ func NewWebSocketConnection(host, username, password, macAddress string, isRemot
 		ReconnectAttempt:    0,
 		Collector:           collector,
 		MeterReadingBuffers: make(map[int]*MeterReadingBuffer),
-		StateValues:         make(map[string]float64),
 	}
 
 	// Different backoff strategy for remote vs local
@@ -430,11 +429,6 @@ func (conn *WebSocketConnection) performConnection(ws *websocket.Conn, db *sql.D
 	conn.GoroutinesWg.Add(1)
 	go conn.readLoop(db, collector)
 
-	// Subscribe to the binary status stream (only if device control uses Loxone)
-	// so the device controller can read real actuator states. Sent after the
-	// read loop is running so the initial event tables are consumed.
-	conn.maybeEnableStatusUpdates(db)
-
 	log.Printf("[START] Starting data request scheduler for %s...", conn.Host)
 	conn.GoroutinesWg.Add(1)
 	go conn.requestData()
@@ -464,33 +458,6 @@ func (conn *WebSocketConnection) performConnection(ws *websocket.Conn, db *sql.D
 	}
 
 	return true
-}
-
-// maybeEnableStatusUpdates subscribes to the Loxone binary status stream so the
-// device controller can read actuator states — but ONLY when at least one active
-// Loxone controllable device exists, so billing-only installs are unaffected.
-func (conn *WebSocketConnection) maybeEnableStatusUpdates(db *sql.DB) {
-	if db == nil {
-		return
-	}
-	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM controllable_devices WHERE driver = 'loxone' AND is_active = 1`).Scan(&count); err != nil || count == 0 {
-		return
-	}
-	if err := conn.safeWriteMessage(websocket.TextMessage, []byte("jdev/sps/enablebinstatusupdate")); err != nil {
-		log.Printf("⚠️ [%s] Failed to enable status updates: %v", conn.Host, err)
-		return
-	}
-	log.Printf("✅ [%s] Enabled binary status updates (device-control state feedback)", conn.Host)
-}
-
-// GetStateValue returns the cached live value for a control's state UUID from the
-// binary status stream, and whether it's present.
-func (conn *WebSocketConnection) GetStateValue(uuid string) (float64, bool) {
-	conn.StateValuesMu.RLock()
-	defer conn.StateValuesMu.RUnlock()
-	v, ok := conn.StateValues[uuid]
-	return v, ok
 }
 
 // Close gracefully closes the connection

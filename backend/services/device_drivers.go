@@ -194,23 +194,13 @@ func (l *loxoneDriver) Switch(on bool) error {
 	return err
 }
 
-// loxoneStateProvider returns the live value of a control's state UUID from the
-// Loxone WebSocket binary status stream. Set once at startup by the device
-// controller (wired to DataCollector.GetLoxoneState). nil in tests.
-var loxoneStateProvider func(stateUUID string) (float64, bool)
-
 func (l *loxoneDriver) ReadState() (bool, bool, error) {
-	// Preferred: the REAL actuator state from the WebSocket status stream
-	// (reflects changes made anywhere, incl. directly in Loxone).
-	if loxoneStateProvider != nil && l.cfg.StateUUID != "" {
-		if v, ok := loxoneStateProvider(l.cfg.StateUUID); ok {
-			return v > 0.5, true, nil
-		}
-	}
-	// Fallback: an HTTP GET of the control UUID does NOT reliably return the real
-	// state (returns 0 even when on; state UUIDs aren't HTTP-readable), so use it
-	// only as a reachability check and report known=false so the controller keeps
-	// its own commanded state instead of clobbering it.
+	// IMPORTANT: an HTTP GET of the control UUID does NOT reliably return a Loxone
+	// actuator's real state — it comes back 0 even when the output is on. Actuator
+	// states are only delivered over the WebSocket binary status stream
+	// (enablebinstatusupdate), per Loxone's docs. So we use this only as a
+	// reachability check (online/offline) and report known=false, which keeps the
+	// controller's own commanded state instead of clobbering it with a wrong "off".
 	url := fmt.Sprintf("%s/jdev/sps/io/%s", l.base(), l.cfg.OutputUUID)
 	if _, err := httpGetBody(url, l.cfg.Username, l.cfg.Password); err != nil {
 		return false, false, err

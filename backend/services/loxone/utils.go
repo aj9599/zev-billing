@@ -1,27 +1,12 @@
 package loxone
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
 	"time"
 )
-
-// UUIDFromBytes formats a 16-byte Loxone UUID (as delivered in binary status
-// event tables) into the dashed string form used in LoxAPP3.json, e.g.
-// "0f869a64-0a0a-0fb0-ff80000f868b05c9". Layout: uint32 LE | uint16 LE |
-// uint16 LE | 8 raw bytes.
-func UUIDFromBytes(b []byte) string {
-	if len(b) < 16 {
-		return ""
-	}
-	d1 := binary.LittleEndian.Uint32(b[0:4])
-	d2 := binary.LittleEndian.Uint16(b[4:6])
-	d3 := binary.LittleEndian.Uint16(b[6:8])
-	return fmt.Sprintf("%08x-%04x-%04x-%016x", d1, d2, d3, b[8:16])
-}
 
 // classifyError determines the type of error for better handling
 func ClassifyError(err error) ErrorType {

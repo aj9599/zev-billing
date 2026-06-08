@@ -1018,16 +1018,6 @@ type MeterLiveReading struct {
 	LastUpdate       time.Time `json:"last_update"`
 }
 
-// GetLoxoneState returns the live value of a Loxone control's state UUID (from
-// the WebSocket binary status stream) and whether it's available. Used by device
-// control for real actuator on/off feedback.
-func (dc *DataCollector) GetLoxoneState(uuid string) (float64, bool) {
-	if dc.loxoneCollector == nil {
-		return 0, false
-	}
-	return dc.loxoneCollector.GetLiveStateByUUID(uuid)
-}
-
 // GetLiveMeterReadings returns real-time meter data without storing to database
 // This is for live dashboard display only, does not affect 15-minute billing cycle
 //
