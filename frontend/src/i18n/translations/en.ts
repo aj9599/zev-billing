@@ -34,6 +34,7 @@ export const en: Translations = {
   'devices.mode.on': 'Manual on',
   'devices.mode.off': 'Manual off',
   'devices.modeLabel': 'Mode',
+  'devices.surplusLabel': 'Solar surplus',
   'devices.onThresholdShort': 'On at',
   'devices.on': 'On',
   'devices.off': 'Off',

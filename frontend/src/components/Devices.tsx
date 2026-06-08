@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Power, Edit2, Trash2, X, Zap, Wifi, WifiOff, RefreshCw, Search } from 'lucide-react';
+import { Plus, Power, Edit2, Trash2, X, Zap, RefreshCw, Search } from 'lucide-react';
 import { api } from '../api/client';
 import { useTranslation } from '../i18n';
 import type { Device, DeviceLiveStatus, LoxoneControl, Building as BuildingType } from '../types';
@@ -271,30 +271,16 @@ export default function Devices() {
     await loadData();
   }
 
-  const stateBadge = (d: Device) => {
-    const s = status[d.id];
-    const state = s?.state || 'unknown';
-    const colors: Record<string, { bg: string; fg: string }> = {
-      on: { bg: '#10b98115', fg: '#059669' },
-      off: { bg: '#f3f4f6', fg: '#6b7280' },
-      offline: { bg: '#ef444415', fg: '#dc2626' },
-      unknown: { bg: '#f3f4f6', fg: '#9ca3af' },
-    };
-    const c = colors[state] || colors.unknown;
-    return (
-      <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 700, backgroundColor: c.bg, color: c.fg, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-        {state === 'offline' ? <WifiOff size={12} /> : <Wifi size={12} />}
-        {t(`devices.state.${state}`)}
-      </span>
-    );
-  };
-
   if (loading) {
     return <div style={{ padding: '40px', color: '#6b7280' }}>{t('common.loading')}</div>;
   }
 
   return (
     <div style={{ padding: '24px', maxWidth: '1100px', margin: '0 auto' }}>
+      <style>{`@keyframes dev-pulse {
+        0%, 100% { box-shadow: 0 0 0 4px rgba(16,185,129,0.20); }
+        50% { box-shadow: 0 0 0 9px rgba(16,185,129,0.04); }
+      }`}</style>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h1 style={{ fontSize: '24px', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -319,41 +305,97 @@ export default function Devices() {
           <p style={{ marginTop: '12px' }}>{t('devices.empty')}</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px', marginTop: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: '18px', marginTop: '16px' }}>
           {devices.map((d) => {
             const s = status[d.id];
+            const state = s?.state || 'unknown';
+            const isOn = state === 'on';
+            const offline = state === 'offline';
+            const accent = isOn ? '#10b981' : offline ? '#ef4444' : '#94a3b8';
+            const surplus = s?.has_signal ? s.building_surplus_w : null;
+            const threshold = d.switch_on_threshold_w || 0;
+            const pct = surplus != null && threshold > 0 ? Math.max(0, Math.min(100, (surplus / threshold) * 100)) : 0;
+            const mode = (s?.mode || d.control_mode || 'auto') as 'on' | 'off' | 'auto';
+            const modeColor: Record<string, string> = { on: '#10b981', off: '#ef4444', auto: '#3b82f6' };
             return (
-              <div key={d.id} style={card}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '16px' }}>{d.name}</div>
-                    <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>
-                      {buildingName(d.building_id)} · {d.driver}
+              <div key={d.id} style={{
+                position: 'relative', borderRadius: '16px', overflow: 'hidden',
+                background: isOn ? 'linear-gradient(150deg,#ecfdf5 0%,#ffffff 55%)' : '#ffffff',
+                border: `1px solid ${isOn ? '#a7f3d0' : '#e5e7eb'}`,
+                boxShadow: isOn ? '0 8px 24px rgba(16,185,129,0.16)' : '0 1px 3px rgba(0,0,0,0.06)',
+                transition: 'all .3s ease',
+              }}>
+                <div style={{ height: '4px', background: accent }} />
+                <div style={{ padding: '16px' }}>
+                  {/* header */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                      width: '46px', height: '46px', borderRadius: '13px', flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: isOn ? '#10b981' : offline ? '#fee2e2' : '#f1f5f9',
+                      color: isOn ? '#fff' : offline ? '#dc2626' : '#64748b',
+                      animation: isOn ? 'dev-pulse 2.2s ease-in-out infinite' : 'none',
+                    }}>
+                      <Power size={22} />
+                    </div>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: '16px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.name}</div>
+                      <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px', textTransform: 'capitalize' }}>{buildingName(d.building_id)} · {d.driver}</div>
+                    </div>
+                    <span style={{
+                      padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap',
+                      background: isOn ? '#10b98115' : offline ? '#ef444415' : '#f3f4f6',
+                      color: isOn ? '#059669' : offline ? '#dc2626' : '#6b7280',
+                    }}>
+                      <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: accent, boxShadow: isOn ? `0 0 6px ${accent}` : 'none' }} />
+                      {t(`devices.state.${state}`)}
+                    </span>
+                  </div>
+
+                  {/* surplus gauge */}
+                  <div style={{ marginTop: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '7px' }}>
+                      <span style={{ fontSize: '12px', color: '#6b7280', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                        <Zap size={13} color="#f59e0b" /> {t('devices.surplusLabel')}
+                      </span>
+                      <span style={{ fontSize: '16px', fontWeight: 800, color: surplus != null && surplus > 0 ? '#059669' : '#9ca3af' }}>
+                        {surplus != null ? `${Math.round(surplus)} W` : t('devices.noSignal')}
+                      </span>
+                    </div>
+                    <div style={{ height: '9px', borderRadius: '6px', background: '#eef2f7', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pct}%`, borderRadius: '6px', background: 'linear-gradient(90deg,#34d399,#10b981)', transition: 'width .5s ease' }} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '11px', color: '#9ca3af' }}>
+                      <span>{t('devices.onThresholdShort')} {Math.round(threshold)} W</span>
+                      <span>{Math.round(pct)}%</span>
                     </div>
                   </div>
-                  {stateBadge(d)}
-                </div>
 
-                <div style={{ display: 'flex', gap: '12px', margin: '12px 0', fontSize: '13px', color: '#374151', flexWrap: 'wrap' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                    <Zap size={13} color="#f59e0b" />
-                    {s && s.has_signal ? `${Math.round(s.building_surplus_w)} W` : t('devices.noSignal')}
-                  </span>
-                  <span>· {t('devices.modeLabel')}: <strong>{t(`devices.mode.${(s?.mode || d.control_mode)}`)}</strong></span>
-                  <span>· {t('devices.onThresholdShort')}: {Math.round(d.switch_on_threshold_w)} W</span>
-                </div>
+                  {s?.last_error && (
+                    <div style={{ fontSize: '12px', color: '#dc2626', marginTop: '10px' }}>{s.last_error}</div>
+                  )}
 
-                {s?.last_error && (
-                  <div style={{ fontSize: '12px', color: '#dc2626', marginBottom: '8px' }}>{s.last_error}</div>
-                )}
+                  {/* segmented mode control */}
+                  <div style={{ display: 'flex', gap: '0', marginTop: '14px', background: '#f1f5f9', borderRadius: '11px', padding: '3px' }}>
+                    {(['on', 'off', 'auto'] as const).map((m) => {
+                      const active = mode === m;
+                      return (
+                        <button key={m} onClick={() => control(d, m)} style={{
+                          flex: 1, padding: '8px 0', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 700,
+                          background: active ? '#ffffff' : 'transparent',
+                          color: active ? modeColor[m] : '#94a3b8',
+                          boxShadow: active ? '0 1px 3px rgba(0,0,0,0.12)' : 'none',
+                          transition: 'all .15s',
+                        }}>{t(`devices.${m}`)}</button>
+                      );
+                    })}
+                  </div>
 
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                  <button onClick={() => control(d, 'on')} style={btn('#10b981', (s?.mode === 'on'))}>{t('devices.on')}</button>
-                  <button onClick={() => control(d, 'off')} style={btn('#ef4444', (s?.mode === 'off'))}>{t('devices.off')}</button>
-                  <button onClick={() => control(d, 'auto')} style={btn('#3b82f6', (s?.mode === 'auto' || !s))}>{t('devices.auto')}</button>
-                  <div style={{ flex: 1 }} />
-                  <button onClick={() => openEdit(d)} title={t('common.edit')} style={iconBtn}><Edit2 size={15} /></button>
-                  <button onClick={() => remove(d)} title={t('common.delete')} style={{ ...iconBtn, color: '#dc2626' }}><Trash2 size={15} /></button>
+                  {/* footer */}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', marginTop: '12px' }}>
+                    <button onClick={() => openEdit(d)} title={t('common.edit')} style={iconBtn}><Edit2 size={15} /></button>
+                    <button onClick={() => remove(d)} title={t('common.delete')} style={{ ...iconBtn, color: '#dc2626' }}><Trash2 size={15} /></button>
+                  </div>
                 </div>
               </div>
             );

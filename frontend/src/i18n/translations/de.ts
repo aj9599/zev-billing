@@ -34,6 +34,7 @@ export const de: Translations = {
   'devices.mode.on': 'Manuell ein',
   'devices.mode.off': 'Manuell aus',
   'devices.modeLabel': 'Modus',
+  'devices.surplusLabel': 'Solarüberschuss',
   'devices.onThresholdShort': 'Ein ab',
   'devices.on': 'Ein',
   'devices.off': 'Aus',
