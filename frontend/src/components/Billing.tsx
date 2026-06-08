@@ -162,7 +162,7 @@ export default function Billing() {
         </div>
 
         {/* Search Bar */}
-        <div style={{ marginBottom: '20px' }}>
+        <div className="app-fade-in" style={{ marginBottom: '20px', animationDelay: '0.1s' }}>
           <div style={{ position: 'relative', maxWidth: '400px' }}>
             <label htmlFor="building-search" style={{ position: 'absolute', left: '-9999px' }}>
               {t('billing.searchBuildings')}
@@ -202,32 +202,36 @@ export default function Billing() {
         </div>
 
         {/* Building Selection */}
-        <BuildingSelector
-          buildings={buildings}
-          selectedBuildingId={selectedBuildingId}
-          onSelect={setSelectedBuildingId}
-          searchQuery={searchQuery}
-          currentView={currentView}
-        />
+        <div className="app-fade-in" style={{ animationDelay: '0.15s' }}>
+          <BuildingSelector
+            buildings={buildings}
+            selectedBuildingId={selectedBuildingId}
+            onSelect={setSelectedBuildingId}
+            searchQuery={searchQuery}
+            currentView={currentView}
+          />
+        </div>
 
         {/* Content Area */}
-        {currentView === 'invoices' && (
-          <Bills
-            key={refreshKey}
-            selectedBuildingId={selectedBuildingId}
-            buildings={buildings}
-            users={users}
-            onRefresh={refresh}
-          />
-        )}
+        <div className="app-fade-in" style={{ animationDelay: '0.2s' }}>
+          {currentView === 'invoices' && (
+            <Bills
+              key={refreshKey}
+              selectedBuildingId={selectedBuildingId}
+              buildings={buildings}
+              users={users}
+              onRefresh={refresh}
+            />
+          )}
 
-        {currentView === 'shared-meters' && (
-          <SharedMeterConfig selectedBuildingId={selectedBuildingId} />
-        )}
+          {currentView === 'shared-meters' && (
+            <SharedMeterConfig selectedBuildingId={selectedBuildingId} />
+          )}
 
-        {currentView === 'custom-items' && (
-          <CustomItems onSave={refresh} selectedBuildingId={selectedBuildingId} />
-        )}
+          {currentView === 'custom-items' && (
+            <CustomItems onSave={refresh} selectedBuildingId={selectedBuildingId} />
+          )}
+        </div>
 
         {/* Modals */}
         {showInstructions && (

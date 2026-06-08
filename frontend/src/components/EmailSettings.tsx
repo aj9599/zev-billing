@@ -85,7 +85,7 @@ export default function EmailSettings() {
   ];
 
   return (
-    <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+    <div style={{ width: '100%', maxWidth: '100%' }}>
       {/* Header */}
       <div className="app-fade-in" style={{ marginBottom: '24px' }}>
         <h1 style={{
@@ -101,12 +101,13 @@ export default function EmailSettings() {
       </div>
 
       {/* Email Notifications Card */}
-      <div style={{
+      <div className="app-fade-in" style={{
         backgroundColor: 'white',
         borderRadius: '14px',
         border: '1px solid #e5e7eb',
         boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        animationDelay: '0.05s'
       }}>
         {/* Card Header */}
         <div style={{

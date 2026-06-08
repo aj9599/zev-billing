@@ -396,7 +396,7 @@ export default function Devices() {
   const autoCount = devices.filter((d) => (status[d.id]?.mode || d.control_mode) === 'auto' && d.is_active).length;
 
   return (
-    <div style={{ padding: isMobile ? '16px' : '24px', maxWidth: '1100px', margin: '0 auto' }}>
+    <div style={{ width: '100%', maxWidth: '100%' }}>
       <style>{`@keyframes dev-pulse {
         0%, 100% { box-shadow: 0 0 0 4px rgba(16,185,129,0.20); }
         50% { box-shadow: 0 0 0 9px rgba(16,185,129,0.04); }

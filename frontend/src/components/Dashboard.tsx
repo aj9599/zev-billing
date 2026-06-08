@@ -1158,12 +1158,13 @@ export default function Dashboard() {
       </div>
 
       {/* ─── Building Consumption Section ──────────────────────────── */}
-      <div className="consumption-controls" style={{
+      <div className="consumption-controls fade-in" style={{
         backgroundColor: 'white',
         padding: '16px 20px',
         borderRadius: '12px',
         boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
         marginBottom: '16px',
+        animationDelay: '0.4s',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',

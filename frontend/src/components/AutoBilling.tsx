@@ -179,12 +179,15 @@ export default function AutoBilling() {
       </div>
 
       {configs.length === 0 ? (
-        <AutoBillingEmptyState />
+        <div className="app-fade-in" style={{ animationDelay: '0.05s' }}>
+          <AutoBillingEmptyState />
+        </div>
       ) : (
-        <div style={{
+        <div className="app-fade-in" style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
-          gap: '20px'
+          gap: '20px',
+          animationDelay: '0.05s'
         }}>
           {configs.map((config, i) => (
             <AutoBillingConfigCard
