@@ -148,6 +148,9 @@ export default function Devices() {
   const [testing, setTesting] = useState(false);
   const [message, setMessage] = useState('');
   const [loxoneControls, setLoxoneControls] = useState<LoxoneControl[]>([]);
+  // building filter (matches the Meters/Chargers pages)
+  const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [discovering, setDiscovering] = useState(false);
   const [discoverError, setDiscoverError] = useState('');
 
@@ -487,6 +490,24 @@ export default function Devices() {
   const onCount = devices.filter((d) => status[d.id]?.state === 'on').length;
   const autoCount = devices.filter((d) => (status[d.id]?.mode || d.control_mode) === 'auto' && d.is_active).length;
 
+  // building filter: search narrows the building pills; the selected building
+  // narrows the device grid.
+  const filteredBuildings = buildings.filter((b) => b.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredDevices = selectedBuildingId ? devices.filter((d) => d.building_id === selectedBuildingId) : devices;
+  const pillStyle = (active: boolean): React.CSSProperties => ({
+    padding: isMobile ? '8px 14px' : '8px 18px', borderRadius: '20px',
+    border: active ? '1.5px solid #667eea' : '1.5px solid #e5e7eb',
+    backgroundColor: active ? '#667eea' : 'white', color: active ? 'white' : '#6b7280',
+    fontSize: '13px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
+    display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap',
+    boxShadow: active ? '0 2px 8px rgba(102,126,234,0.3)' : '0 1px 3px rgba(0,0,0,0.04)',
+  });
+  const countBadge = (active: boolean): React.CSSProperties => ({
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '20px', height: '20px',
+    padding: '0 6px', borderRadius: '10px', fontSize: '11px', fontWeight: 700,
+    backgroundColor: active ? 'rgba(255,255,255,0.25)' : '#f3f4f6', color: active ? 'white' : '#9ca3af',
+  });
+
   return (
     <div style={{ width: '100%', maxWidth: '100%' }}>
       <style>{`@keyframes dev-pulse {
@@ -526,14 +547,51 @@ export default function Devices() {
         </div>
       )}
 
+      {/* Building filter (search + per-building pills), like Meters/Chargers */}
+      {devices.length > 0 && buildings.length > 1 && (
+        <div className="app-fade-in" style={{ marginBottom: '8px', animationDelay: '0.08s' }}>
+          <div style={{ position: 'relative', maxWidth: '400px', marginBottom: '14px' }}>
+            <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
+            <input
+              type="text"
+              placeholder={t('dashboard.searchBuildings')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ width: '100%', padding: '10px 14px 10px 42px', border: '1px solid #e5e7eb', borderRadius: '12px', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            <button onClick={() => setSelectedBuildingId(null)} style={pillStyle(selectedBuildingId === null)}>
+              {t('dashboard.allBuildings')}
+              <span style={countBadge(selectedBuildingId === null)}>{devices.length}</span>
+            </button>
+            {filteredBuildings.map((b) => {
+              const count = devices.filter((d) => d.building_id === b.id).length;
+              const active = selectedBuildingId === b.id;
+              return (
+                <button key={b.id} onClick={() => setSelectedBuildingId(b.id)} style={pillStyle(active)}>
+                  {b.name}
+                  <span style={countBadge(active)}>{count}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {devices.length === 0 ? (
         <div className="app-fade-in" style={{ ...card, textAlign: 'center', padding: '48px', color: '#9ca3af', marginTop: '16px', animationDelay: '0.1s' }}>
           <Power size={40} style={{ opacity: 0.4 }} />
           <p style={{ marginTop: '12px' }}>{t('devices.empty')}</p>
         </div>
+      ) : filteredDevices.length === 0 ? (
+        <div className="app-fade-in" style={{ ...card, textAlign: 'center', padding: '40px', color: '#9ca3af', marginTop: '16px' }}>
+          <Power size={36} style={{ opacity: 0.4 }} />
+          <p style={{ marginTop: '12px' }}>{t('devices.emptyBuilding')}</p>
+        </div>
       ) : (
         <div className="app-fade-in" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: '18px', marginTop: '16px', animationDelay: '0.1s' }}>
-          {devices.map((d) => {
+          {filteredDevices.map((d) => {
             const s = status[d.id];
             const state = s?.state || 'unknown';
             const isOn = state === 'on';

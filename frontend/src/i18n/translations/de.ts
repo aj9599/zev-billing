@@ -22,6 +22,7 @@ export const de: Translations = {
   'devices.add': 'Gerät hinzufügen',
   'devices.edit': 'Gerät bearbeiten',
   'devices.empty': 'Noch keine Geräte. Füge ein Shelly- oder Loxone-Relais hinzu, um es nach Solarüberschuss zu steuern.',
+  'devices.emptyBuilding': 'Keine Geräte in diesem Gebäude.',
   'devices.validation': 'Bitte einen Namen eingeben und ein Gebäude wählen.',
   'devices.saveError': 'Gerät konnte nicht gespeichert werden.',
   'devices.saveFirst': 'Gerät zuerst speichern, dann die Verbindung testen.',

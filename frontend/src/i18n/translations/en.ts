@@ -22,6 +22,7 @@ export const en: Translations = {
   'devices.add': 'Add device',
   'devices.edit': 'Edit device',
   'devices.empty': 'No devices yet. Add a Shelly or Loxone relay to control it from solar surplus.',
+  'devices.emptyBuilding': 'No devices in this building.',
   'devices.validation': 'Please enter a name and select a building.',
   'devices.saveError': 'Could not save the device.',
   'devices.saveFirst': 'Save the device first, then test the connection.',
