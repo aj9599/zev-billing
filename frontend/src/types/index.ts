@@ -154,6 +154,8 @@ export interface DeviceLiveStatus {
   runtime_today_min: number;  // accumulated ON minutes today
   power_w?: number;           // live power (PM devices)
   energy_wh?: number;         // lifetime energy counter (PM devices)
+  stage_level?: number;       // active stage (staged devices; 0 = all off)
+  stage_count?: number;       // total configured stages (staged devices)
   reason?: string;            // why the device is in its current state
   last_error?: string;
   updated_at?: string;

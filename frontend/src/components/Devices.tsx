@@ -17,6 +17,8 @@ type FormState = {
   shelly_channel: number;
   shelly_auth_user: string;
   shelly_auth_pass: string;
+  shelly_staged: boolean;
+  shelly_stages: ShellyStage[];
   // loxone
   loxone_host: string;
   loxone_username: string;
@@ -61,6 +63,14 @@ const SHELLY_MODELS: ShellyModel[] = [
 const shellyModelById = (id: string): ShellyModel =>
   SHELLY_MODELS.find((m) => m.id === id) || SHELLY_MODELS[SHELLY_MODELS.length - 1];
 
+// One cumulative power level of a staged device. relays = 0-based channels that
+// are ON at this stage; the stage turns on at on_threshold_w surplus and drops
+// below off_threshold_w.
+type ShellyStage = { relays: number[]; on_threshold_w: number; off_threshold_w: number };
+const newStage = (): ShellyStage => ({ relays: [], on_threshold_w: 2000, off_threshold_w: 1500 });
+// Staging only makes sense for multi-relay models.
+const stagingAvailable = (modelId: string): boolean => shellyModelById(modelId).channels > 1;
+
 const newWindow = (): ScheduleWindow => ({ from: '10:00', to: '16:00', days: [1, 2, 3, 4, 5, 6, 7] });
 
 const parseScheduleJson = (s?: string | null): ScheduleWindow[] => {
@@ -95,6 +105,8 @@ const emptyForm = (): FormState => ({
   shelly_channel: 0,
   shelly_auth_user: '',
   shelly_auth_pass: '',
+  shelly_staged: false,
+  shelly_stages: [newStage()],
   loxone_host: '',
   loxone_username: '',
   loxone_password: '',
@@ -228,6 +240,14 @@ export default function Devices() {
         f.shelly_model = cfg.model || (Number(cfg.gen) >= 2 ? 'generic2' : 'generic1');
         f.shelly_auth_user = cfg.auth_user || '';
         f.shelly_auth_pass = cfg.auth_pass || '';
+        f.shelly_staged = !!cfg.staged;
+        if (Array.isArray(cfg.stages) && cfg.stages.length > 0) {
+          f.shelly_stages = cfg.stages.map((st: any) => ({
+            relays: Array.isArray(st.relays) ? st.relays.map(Number) : [],
+            on_threshold_w: Number(st.on_threshold_w) || 0,
+            off_threshold_w: Number(st.off_threshold_w) || 0,
+          }));
+        }
       } else {
         f.loxone_host = cfg.host || '';
         f.loxone_username = cfg.username || '';
@@ -258,6 +278,16 @@ export default function Devices() {
             channel: Number(f.shelly_channel) || 0,
             auth_user: f.shelly_auth_user,
             auth_pass: f.shelly_auth_pass,
+            staged: stagingAvailable(f.shelly_model) && f.shelly_staged,
+            stages: stagingAvailable(f.shelly_model) && f.shelly_staged
+              ? f.shelly_stages
+                  .filter((st) => st.relays.length > 0)
+                  .map((st) => ({
+                    relays: [...st.relays].sort((a, b) => a - b),
+                    on_threshold_w: Number(st.on_threshold_w) || 0,
+                    off_threshold_w: Number(st.off_threshold_w) || 0,
+                  }))
+              : [],
           })
         : JSON.stringify({
             host: f.loxone_host.trim(),
@@ -556,7 +586,11 @@ export default function Devices() {
                         background: modeColor[mode] + '15', color: modeColor[mode],
                       }}>
                         <Activity size={11} />
-                        {t('devices.controlShort')}: {mode === 'auto' && s ? `${t('devices.mode.auto')} (${s.desired_on ? 'ON' : 'OFF'})` : t(`devices.mode.${mode}`)}
+                        {t('devices.controlShort')}: {mode === 'auto' && s
+                          ? `${t('devices.mode.auto')} (${s.stage_count
+                              ? (s.stage_level && s.stage_level > 0 ? `${t('devices.stage')} ${s.stage_level}/${s.stage_count}` : 'OFF')
+                              : (s.desired_on ? 'ON' : 'OFF')})`
+                          : t(`devices.mode.${mode}`)}
                       </span>
                     </div>
                   </div>
@@ -697,30 +731,92 @@ export default function Devices() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {(() => {
                       const m = shellyModelById(form.shelly_model);
+                      const multi = m.channels > 1;
+                      const staged = multi && form.shelly_staged;
+                      const setStage = (idx: number, patch: Partial<ShellyStage>) =>
+                        setForm({ ...form, shelly_stages: form.shelly_stages.map((s, i) => (i === idx ? { ...s, ...patch } : s)) });
+                      const toggleRelay = (idx: number, ch: number) => {
+                        const s = form.shelly_stages[idx];
+                        const relays = s.relays.includes(ch) ? s.relays.filter((r) => r !== ch) : [...s.relays, ch];
+                        setStage(idx, { relays });
+                      };
+                      const segBtn = (active: boolean): React.CSSProperties => ({
+                        flex: 1, padding: '8px 0', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 700,
+                        background: active ? '#ffffff' : 'transparent', color: active ? '#10b981' : '#94a3b8',
+                        boxShadow: active ? '0 1px 3px rgba(0,0,0,0.12)' : 'none',
+                      });
+                      const relayChip = (active: boolean): React.CSSProperties => ({
+                        padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 700, border: 'none',
+                        background: active ? '#10b981' : '#eef2f7', color: active ? '#fff' : '#64748b',
+                      });
                       return (
-                        <div style={{ display: 'grid', gridTemplateColumns: m.channels > 1 ? '1fr 1fr' : '1fr', gap: '12px' }}>
+                        <>
                           <div>
                             <label style={label}>{t('devices.shellyModel')}</label>
                             <select style={input} value={form.shelly_model} onChange={(e) => {
                               const sel = shellyModelById(e.target.value);
-                              setForm({ ...form, shelly_model: e.target.value, shelly_gen: sel.gen, shelly_channel: Math.min(form.shelly_channel, sel.channels - 1) });
+                              setForm({ ...form, shelly_model: e.target.value, shelly_gen: sel.gen, shelly_channel: Math.min(form.shelly_channel, sel.channels - 1), shelly_staged: sel.channels > 1 ? form.shelly_staged : false });
                             }}>
                               {SHELLY_MODELS.map((sm) => (
                                 <option key={sm.id} value={sm.id}>{sm.label}</option>
                               ))}
                             </select>
                           </div>
-                          {m.channels > 1 && (
+
+                          {multi && (
+                            <div>
+                              <label style={label}>{t('devices.shellyControlMode')}</label>
+                              <div style={{ display: 'flex', gap: '0', background: '#f1f5f9', borderRadius: '11px', padding: '3px' }}>
+                                <button type="button" style={segBtn(!form.shelly_staged)} onClick={() => setForm({ ...form, shelly_staged: false })}>{t('devices.shellySingle')}</button>
+                                <button type="button" style={segBtn(form.shelly_staged)} onClick={() => setForm({ ...form, shelly_staged: true })}>{t('devices.shellyStaged')}</button>
+                              </div>
+                            </div>
+                          )}
+
+                          {multi && !staged && (
                             <div>
                               <label style={label}>{t('devices.channel')}</label>
                               <select style={input} value={form.shelly_channel} onChange={(e) => setForm({ ...form, shelly_channel: Number(e.target.value) })}>
                                 {Array.from({ length: m.channels }, (_, i) => (
-                                  <option key={i} value={i}>{i}</option>
+                                  <option key={i} value={i}>{t('devices.relay')} {i + 1}</option>
                                 ))}
                               </select>
                             </div>
                           )}
-                        </div>
+
+                          {staged && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                              <label style={label}>{t('devices.stages')}</label>
+                              {form.shelly_stages.map((st, idx) => (
+                                <div key={idx} style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '10px', background: '#fafafa' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                    <strong style={{ fontSize: '13px', color: '#475569' }}>{t('devices.stage')} {idx + 1}</strong>
+                                    {form.shelly_stages.length > 1 && (
+                                      <button type="button" onClick={() => setForm({ ...form, shelly_stages: form.shelly_stages.filter((_, i) => i !== idx) })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626' }}><X size={15} /></button>
+                                    )}
+                                  </div>
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
+                                    {Array.from({ length: m.channels }, (_, ch) => (
+                                      <button type="button" key={ch} onClick={() => toggleRelay(idx, ch)} style={relayChip(st.relays.includes(ch))}>{t('devices.relay')} {ch + 1}</button>
+                                    ))}
+                                  </div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                    <div>
+                                      <label style={label}>{t('devices.stageOnThreshold')}</label>
+                                      <input type="number" style={input} value={st.on_threshold_w} onChange={(e) => setStage(idx, { on_threshold_w: Number(e.target.value) || 0 })} />
+                                    </div>
+                                    <div>
+                                      <label style={label}>{t('devices.stageOffThreshold')}</label>
+                                      <input type="number" style={input} value={st.off_threshold_w} onChange={(e) => setStage(idx, { off_threshold_w: Number(e.target.value) || 0 })} />
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                              <button type="button" onClick={() => setForm({ ...form, shelly_stages: [...form.shelly_stages, newStage()] })} style={{ ...btn('#10b981', false), alignSelf: 'flex-start' }}>+ {t('devices.addStage')}</button>
+                              <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>{t('devices.stagesHint')}</p>
+                            </div>
+                          )}
+                        </>
                       );
                     })()}
                     <div>

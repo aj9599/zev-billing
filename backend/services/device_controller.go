@@ -47,6 +47,10 @@ type deviceRuntime struct {
 	powerW     float64
 	energyWh   float64
 	powerKnown bool
+
+	// staged multi-relay devices
+	currentLevel int // active stage (0 = all off, 1..N = stage index)
+	stageCount   int // number of configured stages (0 = not a staged device)
 }
 
 // DeviceController periodically drives controllable devices from live solar
@@ -136,6 +140,10 @@ func (c *DeviceController) tick() {
 
 		for _, d := range list {
 			c.accrueRuntime(d.ID, now)
+			if isStagedDevice(d) {
+				avail -= c.applyStaged(d, avail, hasSignal, surplus, live, now)
+				continue
+			}
 			desired, forced, reason := c.resolveDesired(d, avail, hasSignal, now)
 			if desired {
 				avail -= d.SwitchOnThresholdW
@@ -462,6 +470,12 @@ func (c *DeviceController) ControlDevice(id int, mode string, durationSeconds in
 	if err != nil {
 		return err
 	}
+	// Staged devices are driven by the control loop (applyStaged); a single
+	// binary switch here would only toggle one channel. The manual override is
+	// already stored above, so the next tick (≤15s) applies the right stage.
+	if isStagedDevice(d) {
+		return nil
+	}
 	driver, err := driverFor(d)
 	if err != nil {
 		return err
@@ -489,6 +503,8 @@ type DeviceLiveStatus struct {
 	RuntimeTodayMin  int      `json:"runtime_today_min"`  // accumulated ON minutes today
 	PowerW           *float64 `json:"power_w,omitempty"`  // live power (PM devices)
 	EnergyWh         *float64 `json:"energy_wh,omitempty"` // lifetime energy counter (PM devices)
+	StageLevel       *int     `json:"stage_level,omitempty"` // active stage (staged devices)
+	StageCount       *int     `json:"stage_count,omitempty"` // total stages (staged devices)
 	Reason           string   `json:"reason,omitempty"`   // why the device is in its current state
 	LastError        string   `json:"last_error,omitempty"`
 	UpdatedAt        string   `json:"updated_at,omitempty"`
@@ -530,6 +546,12 @@ func (c *DeviceController) LiveStatus(buildingID int) ([]DeviceLiveStatus, error
 				ew := rt.energyWh
 				st.PowerW = &pw
 				st.EnergyWh = &ew
+			}
+			if rt.stageCount > 0 {
+				sl := rt.currentLevel
+				sc := rt.stageCount
+				st.StageLevel = &sl
+				st.StageCount = &sc
 			}
 			st.Reason = rt.reason
 			st.LastError = rt.lastError

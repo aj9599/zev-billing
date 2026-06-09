@@ -78,14 +78,147 @@ func httpGetBodyN(url, user, pass string, maxBytes int64) ([]byte, error) {
 	return body, nil
 }
 
+// shellyChannelStatus reads a Gen2+ channel's on/off state AND live power in a
+// single Switch.GetStatus call (output + apower + aenergy.total). powerKnown is
+// false for non-PM channels. Falls back to a plain state read on Gen1.
+func shellyChannelStatus(cfg shellyConfig, channel int) (on bool, onKnown bool, powerW, energyWh float64, powerKnown bool, err error) {
+	if cfg.Gen < 2 {
+		o, k, e := shellyReadChannel(cfg, channel)
+		return o, k, 0, 0, false, e
+	}
+	url := fmt.Sprintf("%s/rpc/Switch.GetStatus?id=%d", normalizeHost(cfg.Host), channel)
+	body, e := httpGetBody(url, cfg.AuthUser, cfg.AuthPass)
+	if e != nil {
+		return false, false, 0, 0, false, e
+	}
+	var st struct {
+		Output  bool     `json:"output"`
+		Apower  *float64 `json:"apower"`
+		Aenergy *struct {
+			Total *float64 `json:"total"`
+		} `json:"aenergy"`
+	}
+	if e := json.Unmarshal(body, &st); e != nil {
+		return false, false, 0, 0, false, e
+	}
+	wh := 0.0
+	pk := st.Apower != nil
+	if pk {
+		powerW = *st.Apower
+		if st.Aenergy != nil && st.Aenergy.Total != nil {
+			wh = *st.Aenergy.Total
+		}
+	}
+	return st.Output, true, powerW, wh, pk, nil
+}
+
 // ---- Config shapes (parsed from Device.ConnectionConfig JSON) ----
 
 type shellyConfig struct {
 	Host     string `json:"host"`
+	Model    string `json:"model"`   // UI model id (informational)
 	Gen      int    `json:"gen"`     // 1 or 2 (default 1)
 	Channel  int    `json:"channel"` // relay/switch index (default 0)
 	AuthUser string `json:"auth_user"`
 	AuthPass string `json:"auth_pass"`
+	// Staged multi-relay control (boiler-style). When Staged is true the device
+	// is driven by Stages instead of a single Channel: the active stage's relays
+	// are ON, all other managed relays OFF.
+	Staged bool          `json:"staged"`
+	Stages []shellyStage `json:"stages"`
+}
+
+// shellyStage is one cumulative power level of a staged device. Relays are
+// 0-based channel indices. Stages are ordered low→high by threshold.
+type shellyStage struct {
+	Relays        []int   `json:"relays"`
+	OnThresholdW  float64 `json:"on_threshold_w"`
+	OffThresholdW float64 `json:"off_threshold_w"`
+}
+
+// ---- Shelly channel helpers (used by both the single-channel driver and the
+// staged controller) ----
+
+// shellySwitchChannel turns one relay/switch channel on or off.
+func shellySwitchChannel(cfg shellyConfig, channel int, on bool) error {
+	base := normalizeHost(cfg.Host)
+	var url string
+	if cfg.Gen >= 2 {
+		val := "false"
+		if on {
+			val = "true"
+		}
+		url = fmt.Sprintf("%s/rpc/Switch.Set?id=%d&on=%s", base, channel, val)
+	} else {
+		turn := "off"
+		if on {
+			turn = "on"
+		}
+		url = fmt.Sprintf("%s/relay/%d?turn=%s", base, channel, turn)
+	}
+	_, err := httpGetBody(url, cfg.AuthUser, cfg.AuthPass)
+	return err
+}
+
+// shellyReadChannel reports a single channel's on/off state (known=true).
+func shellyReadChannel(cfg shellyConfig, channel int) (bool, bool, error) {
+	base := normalizeHost(cfg.Host)
+	if cfg.Gen >= 2 {
+		url := fmt.Sprintf("%s/rpc/Switch.GetStatus?id=%d", base, channel)
+		body, err := httpGetBody(url, cfg.AuthUser, cfg.AuthPass)
+		if err != nil {
+			return false, false, err
+		}
+		var st struct {
+			Output bool `json:"output"`
+		}
+		if err := json.Unmarshal(body, &st); err != nil {
+			return false, false, err
+		}
+		return st.Output, true, nil
+	}
+	url := fmt.Sprintf("%s/relay/%d", base, channel)
+	body, err := httpGetBody(url, cfg.AuthUser, cfg.AuthPass)
+	if err != nil {
+		return false, false, err
+	}
+	var st struct {
+		Ison bool `json:"ison"`
+	}
+	if err := json.Unmarshal(body, &st); err != nil {
+		return false, false, err
+	}
+	return st.Ison, true, nil
+}
+
+// shellyChannelPower reports a single Gen2+ channel's live power (W) and
+// lifetime energy (Wh). known=false for non-PM channels / Gen1.
+func shellyChannelPower(cfg shellyConfig, channel int) (float64, float64, bool, error) {
+	if cfg.Gen < 2 {
+		return 0, 0, false, nil
+	}
+	url := fmt.Sprintf("%s/rpc/Switch.GetStatus?id=%d", normalizeHost(cfg.Host), channel)
+	body, err := httpGetBody(url, cfg.AuthUser, cfg.AuthPass)
+	if err != nil {
+		return 0, 0, false, err
+	}
+	var st struct {
+		Apower  *float64 `json:"apower"`
+		Aenergy *struct {
+			Total *float64 `json:"total"`
+		} `json:"aenergy"`
+	}
+	if err := json.Unmarshal(body, &st); err != nil {
+		return 0, 0, false, err
+	}
+	if st.Apower == nil {
+		return 0, 0, false, nil
+	}
+	var wh float64
+	if st.Aenergy != nil && st.Aenergy.Total != nil {
+		wh = *st.Aenergy.Total
+	}
+	return *st.Apower, wh, true, nil
 }
 
 type loxoneConfig struct {
@@ -139,53 +272,11 @@ type shellyDriver struct{ cfg shellyConfig }
 func (s *shellyDriver) base() string { return normalizeHost(s.cfg.Host) }
 
 func (s *shellyDriver) Switch(on bool) error {
-	var url string
-	if s.cfg.Gen >= 2 {
-		// Gen2+ RPC
-		val := "false"
-		if on {
-			val = "true"
-		}
-		url = fmt.Sprintf("%s/rpc/Switch.Set?id=%d&on=%s", s.base(), s.cfg.Channel, val)
-	} else {
-		// Gen1 REST
-		turn := "off"
-		if on {
-			turn = "on"
-		}
-		url = fmt.Sprintf("%s/relay/%d?turn=%s", s.base(), s.cfg.Channel, turn)
-	}
-	_, err := httpGetBody(url, s.cfg.AuthUser, s.cfg.AuthPass)
-	return err
+	return shellySwitchChannel(s.cfg, s.cfg.Channel, on)
 }
 
 func (s *shellyDriver) ReadState() (bool, bool, error) {
-	if s.cfg.Gen >= 2 {
-		url := fmt.Sprintf("%s/rpc/Switch.GetStatus?id=%d", s.base(), s.cfg.Channel)
-		body, err := httpGetBody(url, s.cfg.AuthUser, s.cfg.AuthPass)
-		if err != nil {
-			return false, false, err
-		}
-		var st struct {
-			Output bool `json:"output"`
-		}
-		if err := json.Unmarshal(body, &st); err != nil {
-			return false, false, err
-		}
-		return st.Output, true, nil
-	}
-	url := fmt.Sprintf("%s/relay/%d", s.base(), s.cfg.Channel)
-	body, err := httpGetBody(url, s.cfg.AuthUser, s.cfg.AuthPass)
-	if err != nil {
-		return false, false, err
-	}
-	var st struct {
-		Ison bool `json:"ison"`
-	}
-	if err := json.Unmarshal(body, &st); err != nil {
-		return false, false, err
-	}
-	return st.Ison, true, nil
+	return shellyReadChannel(s.cfg, s.cfg.Channel)
 }
 
 // ReadPower reports live power + energy for Shelly PM models. Gen2+ exposes
@@ -193,31 +284,7 @@ func (s *shellyDriver) ReadState() (bool, bool, error) {
 // apower, so we report known=false and the card simply shows no power. Gen1 PM
 // reads are not implemented (none of the supported models use the Gen1 API).
 func (s *shellyDriver) ReadPower() (float64, float64, bool, error) {
-	if s.cfg.Gen < 2 {
-		return 0, 0, false, nil
-	}
-	url := fmt.Sprintf("%s/rpc/Switch.GetStatus?id=%d", s.base(), s.cfg.Channel)
-	body, err := httpGetBody(url, s.cfg.AuthUser, s.cfg.AuthPass)
-	if err != nil {
-		return 0, 0, false, err
-	}
-	var st struct {
-		Apower  *float64 `json:"apower"`
-		Aenergy *struct {
-			Total *float64 `json:"total"`
-		} `json:"aenergy"`
-	}
-	if err := json.Unmarshal(body, &st); err != nil {
-		return 0, 0, false, err
-	}
-	if st.Apower == nil {
-		return 0, 0, false, nil // not a PM model
-	}
-	var wh float64
-	if st.Aenergy != nil && st.Aenergy.Total != nil {
-		wh = *st.Aenergy.Total
-	}
-	return *st.Apower, wh, true, nil
+	return shellyChannelPower(s.cfg, s.cfg.Channel)
 }
 
 // ---- Loxone ----
