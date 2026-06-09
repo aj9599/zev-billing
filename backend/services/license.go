@@ -68,7 +68,8 @@ type LicenseStatus struct {
 	BillingAllowed bool          `json:"billing_allowed"`
 	Limits         LicenseLimits `json:"limits"`
 	Usage          LicenseUsage  `json:"usage"`
-	Message        string        `json:"message,omitempty"`
+	Message        string        `json:"message,omitempty"`      // English fallback
+	MessageCode    string        `json:"message_code,omitempty"` // for i18n on the client
 
 	// Phase 2 (online activation) fields.
 	Online        bool   `json:"online"`         // online activation is configured
@@ -342,12 +343,14 @@ func (ls *LicenseService) Status() LicenseStatus {
 			} else {
 				st := ls.trialOrFree(installDate, usage)
 				st.Message = err.Error()
+				st.MessageCode = "reactivation_needed"
 				return base(st)
 			}
 		}
 		if key != "" {
 			st := ls.trialOrFree(installDate, usage)
 			st.Message = "Awaiting activation — connect to the internet to activate this device."
+			st.MessageCode = "awaiting_activation"
 			return base(st)
 		}
 		return base(ls.trialOrFree(installDate, usage))
@@ -363,6 +366,7 @@ func (ls *LicenseService) Status() LicenseStatus {
 		} else {
 			st := ls.trialOrFree(installDate, usage)
 			st.Message = err.Error()
+			st.MessageCode = "key_invalid"
 			return base(st)
 		}
 	}

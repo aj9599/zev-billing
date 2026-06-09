@@ -186,6 +186,9 @@ export const en: Translations = {
   'license.keyType': 'Type',
   'license.lifetime': 'Lifetime',
   'license.limited': 'Limited',
+  'license.msg.awaiting_activation': 'Awaiting activation — connect to the internet to activate this device.',
+  'license.msg.reactivation_needed': 'Re-activation needed — could not confirm this device with the licensing server.',
+  'license.msg.key_invalid': 'This license key is not valid or has expired.',
   'emailSettings.title': 'Email Settings',
   'emailSettings.subtitle': 'Configure SMTP, error alerts, health reports, and automatic invoice delivery.',
 

@@ -186,6 +186,9 @@ export const de: Translations = {
   'license.keyType': 'Typ',
   'license.lifetime': 'Unbegrenzt',
   'license.limited': 'Befristet',
+  'license.msg.awaiting_activation': 'Aktivierung ausstehend — verbinden Sie sich mit dem Internet, um dieses Gerät zu aktivieren.',
+  'license.msg.reactivation_needed': 'Erneute Aktivierung nötig — dieses Gerät konnte beim Lizenzserver nicht bestätigt werden.',
+  'license.msg.key_invalid': 'Dieser Lizenzschlüssel ist ungültig oder abgelaufen.',
   'emailSettings.title': 'E-Mail-Einstellungen',
   'emailSettings.subtitle': 'SMTP, Fehlerbenachrichtigungen, Status-Reports und automatischer Rechnungsversand konfigurieren.',
 
