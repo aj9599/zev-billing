@@ -306,7 +306,7 @@ export default function PricingSettings() {
             display: 'flex',
             alignItems: 'center',
             gap: '12px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: '#667eea',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text'
@@ -447,7 +447,7 @@ export default function PricingSettings() {
             border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600',
             transition: 'all 0.2s', whiteSpace: 'nowrap',
             ...(selectedBuildingId === null
-              ? { background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', boxShadow: '0 2px 8px rgba(102,126,234,0.3)' }
+              ? { background: '#667eea', color: 'white', boxShadow: '0 2px 8px rgba(102,126,234,0.3)' }
               : { backgroundColor: 'white', color: '#6b7280', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #e5e7eb' }
             )
           }}
@@ -478,7 +478,7 @@ export default function PricingSettings() {
                 border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600',
                 transition: 'all 0.2s', whiteSpace: 'nowrap',
                 ...(isActive
-                  ? { background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', boxShadow: '0 2px 8px rgba(102,126,234,0.3)' }
+                  ? { background: '#667eea', color: 'white', boxShadow: '0 2px 8px rgba(102,126,234,0.3)' }
                   : { backgroundColor: 'white', color: '#6b7280', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #e5e7eb' }
                 )
               }}
@@ -958,7 +958,7 @@ export default function PricingSettings() {
             <div style={{ padding: '16px 28px 24px', borderTop: '1px solid #f3f4f6', position: 'sticky', bottom: 0, backgroundColor: 'white', borderRadius: '0 0 20px 20px' }}>
               <button onClick={() => setShowInstructions(false)} style={{
                 width: '100%', padding: '12px',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: '#667eea',
                 color: 'white', border: 'none', borderRadius: '10px',
                 fontSize: '14px', fontWeight: '600', cursor: 'pointer',
                 boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)'
@@ -992,7 +992,7 @@ export default function PricingSettings() {
             }}>
               <div style={{
                 width: '44px', height: '44px', borderRadius: '12px',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: '#667eea',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)', flexShrink: 0
               }}>
@@ -1214,7 +1214,7 @@ export default function PricingSettings() {
               </button>
               <button type="submit" form="pricing-form" style={{
                 flex: 1, padding: '12px',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: '#667eea',
                 color: 'white', border: 'none', borderRadius: '10px',
                 fontSize: '14px', fontWeight: '600', cursor: 'pointer',
                 boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)',

@@ -33,7 +33,7 @@ export default function ChargersHeader({
             display: 'flex',
             alignItems: 'center',
             gap: '12px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: '#667eea',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text'
@@ -97,7 +97,7 @@ export default function ChargersHeader({
               alignItems: 'center',
               gap: '8px',
               padding: isMobile ? '8px 14px' : '10px 18px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: '#667eea',
               color: 'white',
               border: 'none',
               borderRadius: '10px',

@@ -360,7 +360,7 @@ export default function AutoBillingConfigModal({
                 disabled={!canProceed}
                 style={{
                   padding: '10px 20px',
-                  background: canProceed ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#d1d5db',
+                  background: canProceed ? '#667eea' : '#d1d5db',
                   color: 'white',
                   border: 'none',
                   borderRadius: '10px',

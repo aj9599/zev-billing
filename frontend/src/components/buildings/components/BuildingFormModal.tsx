@@ -85,7 +85,7 @@ export default function BuildingFormModal({
               width: '36px',
               height: '36px',
               borderRadius: '10px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: '#667eea',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
@@ -435,7 +435,7 @@ export default function BuildingFormModal({
             style={{
               flex: 1,
               padding: '12px 24px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: '#667eea',
               color: 'white',
               border: 'none',
               borderRadius: '10px',

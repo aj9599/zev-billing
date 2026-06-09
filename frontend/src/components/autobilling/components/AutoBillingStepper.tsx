@@ -63,9 +63,9 @@ export default function AutoBillingStepper({ currentStep }: AutoBillingStepperPr
                 height: '36px',
                 borderRadius: '50%',
                 background: isCompleted
-                  ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                  ? '#667eea'
                   : isCurrent
-                    ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                    ? '#667eea'
                     : '#e5e7eb',
                 color: 'white',
                 display: 'flex',

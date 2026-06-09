@@ -91,7 +91,7 @@ export default function EmailSettings() {
         <h1 style={{
           fontSize: '32px', fontWeight: '800', marginBottom: '6px',
           display: 'flex', alignItems: 'center', gap: '12px',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          background: '#667eea',
           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text'
         }}>
           <Mail size={32} style={{ color: '#667eea' }} />
@@ -117,7 +117,7 @@ export default function EmailSettings() {
         }}>
           <div style={{
             width: '40px', height: '40px', borderRadius: '10px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: '#667eea',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)', flexShrink: 0
           }}>
@@ -410,7 +410,7 @@ export default function EmailSettings() {
               disabled={emailLoading}
               style={{
                 padding: '10px 20px',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: '#667eea',
                 color: 'white', border: 'none', borderRadius: '8px',
                 fontSize: '13px', fontWeight: '700', cursor: emailLoading ? 'not-allowed' : 'pointer',
                 opacity: emailLoading ? 0.6 : 1, boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)',

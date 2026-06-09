@@ -474,7 +474,7 @@ export default function CustomItemFormModal({
             style={{
               flex: 1,
               padding: '10px',
-              background: saving ? '#d1d5db' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: saving ? '#d1d5db' : '#667eea',
               color: 'white',
               border: 'none',
               borderRadius: '10px',

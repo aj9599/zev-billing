@@ -31,7 +31,7 @@ export default function BuildingsHeader({
           display: 'flex',
           alignItems: 'center',
           gap: isMobile ? '8px' : '12px',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          background: '#667eea',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
           backgroundClip: 'text'

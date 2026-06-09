@@ -73,7 +73,7 @@ export default function AutoBillingConfigCard({
       <div style={{
         height: '3px',
         background: config.is_active
-          ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+          ? '#667eea'
           : '#e5e7eb'
       }} />
 
@@ -89,7 +89,7 @@ export default function AutoBillingConfigCard({
                 <span style={{
                   display: 'inline-block',
                   padding: '2px 8px',
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  background: '#667eea',
                   color: 'white',
                   borderRadius: '10px',
                   fontSize: '10px',

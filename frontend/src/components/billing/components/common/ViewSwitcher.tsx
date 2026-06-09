@@ -28,7 +28,7 @@ export default function ViewSwitcher({ currentView, onViewChange }: ViewSwitcher
           onClick={() => onViewChange(id)}
           style={{
             padding: '8px 16px',
-            background: currentView === id ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
+            background: currentView === id ? '#667eea' : 'transparent',
             color: currentView === id ? 'white' : '#6b7280',
             border: 'none',
             borderRadius: '8px',

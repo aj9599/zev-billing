@@ -37,7 +37,7 @@ export default function MetersHeader({
                     display: 'flex',
                     alignItems: 'center',
                     gap: isMobile ? '8px' : '12px',
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    background: '#667eea',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                     backgroundClip: 'text'
@@ -125,7 +125,7 @@ export default function MetersHeader({
                         alignItems: 'center',
                         gap: '8px',
                         padding: isMobile ? '8px 14px' : '8px 16px',
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        background: '#667eea',
                         color: 'white',
                         border: 'none',
                         borderRadius: '8px',

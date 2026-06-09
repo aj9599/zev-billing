@@ -448,7 +448,7 @@ export default function BillConfigModal({
             fontSize: '24px',
             fontWeight: 'bold',
             margin: 0,
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: '#667eea',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text'

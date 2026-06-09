@@ -222,7 +222,7 @@ export default function AutoBillingTestRunModal({ isOpen, running, result, error
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                     padding: '10px',
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    background: '#667eea',
                     color: 'white', borderRadius: '8px',
                     textDecoration: 'none', fontSize: '13px', fontWeight: '700',
                     boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)'

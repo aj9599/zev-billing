@@ -36,7 +36,7 @@ export default function BuildingSelector({
         onClick={() => onSelect(null)}
         style={{
           padding: '8px 18px',
-          background: isSelected(null) ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'white',
+          background: isSelected(null) ? '#667eea' : 'white',
           color: isSelected(null) ? 'white' : '#374151',
           borderRadius: '20px',
           border: isSelected(null) ? 'none' : '1px solid #e5e7eb',
@@ -71,7 +71,7 @@ export default function BuildingSelector({
           onClick={() => onSelect(building.id)}
           style={{
             padding: '8px 18px',
-            background: isSelected(building.id) ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'white',
+            background: isSelected(building.id) ? '#667eea' : 'white',
             color: isSelected(building.id) ? 'white' : '#374151',
             borderRadius: '20px',
             border: isSelected(building.id) ? 'none' : '1px solid #e5e7eb',

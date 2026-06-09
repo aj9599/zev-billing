@@ -454,7 +454,7 @@ export default function SharedMeterFormModal({
             style={{
               flex: 1,
               padding: '10px',
-              background: isFormValid ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#d1d5db',
+              background: isFormValid ? '#667eea' : '#d1d5db',
               color: 'white',
               border: 'none',
               borderRadius: '10px',

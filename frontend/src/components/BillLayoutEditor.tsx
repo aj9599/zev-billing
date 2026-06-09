@@ -112,7 +112,7 @@ export default function BillLayoutEditor({
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{
               width: '38px', height: '38px', borderRadius: '10px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: '#667eea',
               display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}>
               <Palette size={18} color="white" />
@@ -339,7 +339,7 @@ export default function BillLayoutEditor({
               disabled={saving || buildingId == null}
               style={{
                 padding: '10px 18px',
-                background: saving ? '#d1d5db' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: saving ? '#d1d5db' : '#667eea',
                 color: 'white', border: 'none', borderRadius: 10,
                 cursor: saving || buildingId == null ? 'not-allowed' : 'pointer',
                 fontSize: 13, fontWeight: 700,

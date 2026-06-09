@@ -32,7 +32,7 @@ export default function AutoBillingHeader({
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          background: '#667eea',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
           backgroundClip: 'text'
@@ -74,7 +74,7 @@ export default function AutoBillingHeader({
             alignItems: 'center',
             gap: '8px',
             padding: '10px 18px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: '#667eea',
             color: 'white',
             border: 'none',
             borderRadius: '10px',

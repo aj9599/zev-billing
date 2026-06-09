@@ -121,7 +121,7 @@ export default function InvoiceCard({
           title={t('billing.viewBtn')}
           style={{
             padding: '10px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: '#667eea',
             color: 'white',
             border: 'none',
             borderRadius: '8px',

@@ -521,14 +521,14 @@ export default function Devices() {
           <h1 style={{
             fontSize: isMobile ? '24px' : '32px', fontWeight: 800, marginBottom: '6px',
             display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '12px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: '#667eea',
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
           }}>
             <Power size={isMobile ? 24 : 32} style={{ color: '#667eea' }} /> {t('devices.title')}
           </h1>
           <p style={{ color: '#6b7280', fontSize: isMobile ? '13px' : '15px', margin: 0 }}>{t('devices.subtitle')}</p>
         </div>
-        <button onClick={openCreate} style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 16px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
+        <button onClick={openCreate} style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#667eea', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 16px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
           <Plus size={16} /> {t('devices.add')}
         </button>
       </div>

@@ -68,7 +68,7 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{
               width: '40px', height: '40px', borderRadius: '12px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: '#667eea',
               display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}>
               <FileText size={20} color="white" />
@@ -223,7 +223,7 @@ export default function InstructionsModal({ onClose }: InstructionsModalProps) {
             style={{
               width: '100%',
               padding: '12px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: '#667eea',
               color: 'white',
               border: 'none',
               borderRadius: '10px',
