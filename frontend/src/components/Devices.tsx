@@ -824,7 +824,7 @@ export default function Devices() {
       {/* Dedicated runtime-guarantee modal */}
       {guarDevice && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '24px', zIndex: 50, overflowY: 'auto' }}>
-          <div style={{ backgroundColor: '#f9fafb', borderRadius: '16px', width: '100%', maxWidth: '440px', padding: '20px' }}>
+          <div style={{ backgroundColor: '#f9fafb', borderRadius: '16px', width: '100%', maxWidth: '520px', padding: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
               <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Target size={18} color="#8b5cf6" /> {t('devices.guaranteeFor').replace('{name}', guarDevice.name)}
@@ -894,23 +894,23 @@ function GuaranteeFields({ hours, by, onHours, onBy }: {
     boxShadow: unit === u ? '0 1px 2px rgba(0,0,0,0.12)' : 'none',
   });
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-      <div>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px' }}>
+      <div style={{ flex: '1 1 220px', minWidth: 0 }}>
         <label style={label}>{t('devices.guaranteeRuntime')}</label>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <input type="number" step={unit === 'h' ? '0.5' : '1'} min="0" style={{ ...input, flex: 1 }}
+          <input type="number" step={unit === 'h' ? '0.5' : '1'} min="0" style={{ ...input, flex: 1, minWidth: 0 }}
             value={displayValue}
             onChange={(e) => {
               const v = Number(e.target.value) || 0;
               onHours(unit === 'h' ? v : v / 60);
             }} />
-          <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '9px', padding: '3px' }}>
+          <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '9px', padding: '3px', flexShrink: 0 }}>
             <button type="button" style={unitBtn('h')} onClick={() => setUnit('h')}>{t('devices.unitHours')}</button>
             <button type="button" style={unitBtn('m')} onClick={() => setUnit('m')}>{t('devices.unitMinutes')}</button>
           </div>
         </div>
       </div>
-      <div>
+      <div style={{ flex: '0 0 130px' }}>
         <label style={label}>{t('devices.guaranteeBy')}</label>
         <input type="time" style={input} value={by} disabled={hours <= 0} onChange={(e) => onBy(e.target.value)} />
       </div>
