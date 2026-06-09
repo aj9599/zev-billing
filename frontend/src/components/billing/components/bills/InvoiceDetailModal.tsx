@@ -197,8 +197,14 @@ export default function InvoiceDetailModal({
               </thead>
               <tbody>
                 {invoice.items?.map(item => {
-                  const isHeader = item.item_type === 'meter_info' || item.item_type === 'charging_header';
-                  const isInfo = item.item_type === 'meter_reading_from' ||
+                  const isHeader = item.item_type === 'meter_info' ||
+                    item.item_type === 'charging_header' ||
+                    item.item_type === 'custom_item_header' ||
+                    item.item_type === 'vzev_breakdown_header';
+                  const isInfo = item.item_type === 'meter_reading_compact' ||
+                    item.item_type === 'charging_session_compact' ||
+                    // legacy item types (kept for invoices generated before the compact rows)
+                    item.item_type === 'meter_reading_from' ||
                     item.item_type === 'meter_reading_to' ||
                     item.item_type === 'total_consumption' ||
                     item.item_type === 'charging_session_from' ||
@@ -239,7 +245,8 @@ export default function InvoiceDetailModal({
                       }}>
                         {isSolar && <Sun size={14} color="#f59e0b" />}
                         {isNormal && <Zap size={14} color="#3b82f6" />}
-                        {(isChargingNormal || isChargingPriority) && <Car size={14} color="#10b981" />}
+                        {isChargingNormal && <><Car size={14} color="#10b981" /><Sun size={14} color="#f59e0b" /></>}
+                        {isChargingPriority && <><Car size={14} color="#10b981" /><Zap size={14} color="#3b82f6" /></>}
                         {item.description}
                       </td>
                       <td style={{
