@@ -178,6 +178,10 @@ export const en: Translations = {
   'license.removeButton': 'Remove license',
   'license.activated': 'License activated. Thank you!',
   'license.invalidKey': 'This license key is not valid.',
+  'license.activationMode': 'Activation',
+  'license.online': 'Online (device-bound)',
+  'license.deviceId': 'Device ID',
+  'license.lastChecked': 'Last checked',
   'emailSettings.title': 'Email Settings',
   'emailSettings.subtitle': 'Configure SMTP, error alerts, health reports, and automatic invoice delivery.',
 

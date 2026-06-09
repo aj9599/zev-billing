@@ -1,0 +1,13 @@
+{
+  "name": "zev-billing-license-functions",
+  "description": "ZEV Billing online license activation (Cloud Functions)",
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^6.1.0"
+  },
+  "private": true
+}

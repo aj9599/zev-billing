@@ -117,7 +117,7 @@ func main() {
 	dataCollector = services.NewDataCollector(db)
 	billingService := services.NewBillingService(db)
 	pdfGenerator := services.NewPDFGenerator(db)
-	licenseService := services.NewLicenseService(db, cfg.LicensePublicKey)
+	licenseService := services.NewLicenseService(db, cfg.LicensePublicKey, cfg.LicenseActivationURL)
 	autoBillingScheduler = services.NewAutoBillingScheduler(db, billingService, pdfGenerator)
 	autoBillingScheduler.SetLicenseService(licenseService)
 	emailAlerter := services.NewEmailAlerter(db)
@@ -128,6 +128,7 @@ func main() {
 	go autoBillingScheduler.Start()
 	go emailAlerter.Start()
 	go deviceController.Start()
+	go licenseService.StartRefresher()
 	services.StartHealthHistoryCollector(db)
 
 	// Initialize all handlers

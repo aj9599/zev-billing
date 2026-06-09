@@ -9,14 +9,15 @@ import (
 // license keys offline. The matching PRIVATE key is held only by the vendor and
 // is used by ./cmd/licensegen to sign keys — it must never ship with the app.
 // Override at deploy time with LICENSE_PUBLIC_KEY if you generate your own pair.
-const defaultLicensePublicKey = "JDUtLiro2UP0VTNXHwHgBbu75bOb16Cyy53LZ6gss0M="
+const defaultLicensePublicKey = "8o+ttNmb+tc9xtr4T7EsGpEDwrG8ZY3Uc4DR4b1sA48="
 
 type Config struct {
-	DatabasePath     string
-	ServerAddress    string
-	ServerPort       int
-	JWTSecret        string
-	LicensePublicKey string
+	DatabasePath         string
+	ServerAddress        string
+	ServerPort           int
+	JWTSecret            string
+	LicensePublicKey     string
+	LicenseActivationURL string
 }
 
 func Load() *Config {
@@ -29,6 +30,10 @@ func Load() *Config {
 		ServerPort:       port,
 		JWTSecret:        getEnv("JWT_SECRET", "zev-billing-secret-change-in-production"),
 		LicensePublicKey: getEnv("LICENSE_PUBLIC_KEY", defaultLicensePublicKey),
+		// Empty = offline mode (Phase 1): license keys are verified locally with no
+		// device binding. Set to the deployed Firebase "activate" Cloud Function URL
+		// to enable online activation + per-device binding (Phase 2).
+		LicenseActivationURL: getEnv("LICENSE_ACTIVATION_URL", ""),
 	}
 }
 

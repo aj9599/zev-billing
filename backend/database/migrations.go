@@ -513,7 +513,43 @@ func RunMigrations(db *sql.DB) error {
 		return err
 	}
 
+	// Phase 2 online activation: per-device binding columns.
+	if err := addAppLicenseActivationColumns(db); err != nil {
+		return err
+	}
+
 	return createDefaultAdmin(db)
+}
+
+// addAppLicenseActivationColumns adds the columns used by online (Firebase)
+// activation: a stable device id, the signed activation receipt, and the last
+// time the receipt was refreshed against the activation server.
+func addAppLicenseActivationColumns(db *sql.DB) error {
+	var tableSQL string
+	if err := db.QueryRow(`SELECT sql FROM sqlite_master WHERE type='table' AND name='app_license'`).Scan(&tableSQL); err != nil {
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+	cols := []struct{ name, def string }{
+		{"device_id", "TEXT NOT NULL DEFAULT ''"},
+		{"activation_receipt", "TEXT NOT NULL DEFAULT ''"},
+		{"last_validated", "DATETIME"},
+	}
+	for _, c := range cols {
+		if contains(tableSQL, c.name) {
+			continue
+		}
+		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE app_license ADD COLUMN %s %s", c.name, c.def)); err != nil {
+			if !contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("failed to add app_license.%s: %v", c.name, err)
+			}
+		} else {
+			log.Printf("✓ app_license.%s column added", c.name)
+		}
+	}
+	return nil
 }
 
 // ensureAppLicenseRow creates the singleton app_license row (id=1) on first run.

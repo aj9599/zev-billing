@@ -178,6 +178,10 @@ export const de: Translations = {
   'license.removeButton': 'Lizenz entfernen',
   'license.activated': 'Lizenz aktiviert. Vielen Dank!',
   'license.invalidKey': 'Dieser Lizenzschlüssel ist ungültig.',
+  'license.activationMode': 'Aktivierung',
+  'license.online': 'Online (gerätegebunden)',
+  'license.deviceId': 'Geräte-ID',
+  'license.lastChecked': 'Zuletzt geprüft',
   'emailSettings.title': 'E-Mail-Einstellungen',
   'emailSettings.subtitle': 'SMTP, Fehlerbenachrichtigungen, Status-Reports und automatischer Rechnungsversand konfigurieren.',
 

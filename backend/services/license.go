@@ -1,12 +1,19 @@
 package services
 
 import (
+	"bytes"
 	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -61,9 +68,14 @@ type LicenseStatus struct {
 	Limits         LicenseLimits `json:"limits"`
 	Usage          LicenseUsage  `json:"usage"`
 	Message        string        `json:"message,omitempty"`
+
+	// Phase 2 (online activation) fields.
+	Online        bool   `json:"online"`         // online activation is configured
+	DeviceID      string `json:"device_id"`      // this install's device fingerprint
+	LastValidated string `json:"last_validated"` // RFC3339 of last successful refresh
 }
 
-// licensePayload is the signed content encoded inside a license key.
+// licensePayload is the signed content encoded inside a vendor license key.
 type licensePayload struct {
 	ID       string `json:"id"`
 	Licensee string `json:"licensee"`
@@ -72,35 +84,59 @@ type licensePayload struct {
 	Expires  string `json:"expires"` // RFC3339 / YYYY-MM-DD, or "" for perpetual
 }
 
-// LicenseService verifies license keys offline (Ed25519) and computes the
-// effective tier/limits from the singleton app_license row.
-type LicenseService struct {
-	db     *sql.DB
-	pubKey ed25519.PublicKey
+// receiptPayload is the signed, device-bound activation receipt returned by the
+// online activation server (Firebase). Verified offline with the same public key.
+type receiptPayload struct {
+	Type     string `json:"type"` // "receipt"
+	KeyID    string `json:"key_id"`
+	DeviceID string `json:"device_id"`
+	Licensee string `json:"licensee"`
+	Tier     string `json:"tier"`
+	Issued   string `json:"issued"`
+	Expires  string `json:"expires"` // RFC3339 — receipt lifetime (refresh before this)
 }
 
-// NewLicenseService builds the service from a base64-encoded Ed25519 public key.
-func NewLicenseService(db *sql.DB, publicKeyB64 string) *LicenseService {
+// LicenseService verifies license keys / activation receipts offline (Ed25519)
+// and, when an activation URL is configured, performs online device-bound
+// activation against the Firebase Cloud Function.
+type LicenseService struct {
+	db            *sql.DB
+	pubKey        ed25519.PublicKey
+	activationURL string
+	httpClient    *http.Client
+}
+
+// NewLicenseService builds the service. activationURL == "" keeps offline (Phase 1)
+// behaviour; a non-empty URL enables online activation + device binding.
+func NewLicenseService(db *sql.DB, publicKeyB64, activationURL string) *LicenseService {
 	var pub ed25519.PublicKey
 	if b, err := base64.StdEncoding.DecodeString(strings.TrimSpace(publicKeyB64)); err == nil && len(b) == ed25519.PublicKeySize {
 		pub = ed25519.PublicKey(b)
 	} else {
 		log.Printf("[LICENSE] WARNING: invalid/empty LICENSE_PUBLIC_KEY — key activation will not work")
 	}
-	return &LicenseService{db: db, pubKey: pub}
+	return &LicenseService{
+		db:            db,
+		pubKey:        pub,
+		activationURL: strings.TrimSpace(activationURL),
+		httpClient:    &http.Client{Timeout: 12 * time.Second},
+	}
 }
 
-// verifyKey checks a key's signature and expiry, returning the decoded payload.
-// A non-nil payload with a non-nil error means the key parsed but is expired.
-func (ls *LicenseService) verifyKey(key string) (*licensePayload, error) {
-	key = strings.TrimSpace(key)
-	key = strings.TrimPrefix(key, "ZEV-")
-	if key == "" {
-		return nil, fmt.Errorf("empty key")
+// online reports whether online activation is configured.
+func (ls *LicenseService) online() bool { return ls.activationURL != "" }
+
+// verifySigned validates a "<payload>.<sig>" token against the public key and
+// returns the raw payload bytes. Shared by license keys and activation receipts.
+func (ls *LicenseService) verifySigned(token string) ([]byte, error) {
+	token = strings.TrimSpace(token)
+	token = strings.TrimPrefix(token, "ZEV-")
+	if token == "" {
+		return nil, fmt.Errorf("empty token")
 	}
-	parts := strings.SplitN(key, ".", 2)
+	parts := strings.SplitN(token, ".", 2)
 	if len(parts) != 2 {
-		return nil, fmt.Errorf("malformed key")
+		return nil, fmt.Errorf("malformed token")
 	}
 	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
 	if err != nil {
@@ -116,35 +152,105 @@ func (ls *LicenseService) verifyKey(key string) (*licensePayload, error) {
 	if !ed25519.Verify(ls.pubKey, payloadBytes, sig) {
 		return nil, fmt.Errorf("invalid signature")
 	}
+	return payloadBytes, nil
+}
+
+func parseExpiry(s string) (time.Time, bool) {
+	if s == "" {
+		return time.Time{}, false
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t, true
+	}
+	if t, err := time.Parse("2006-01-02", s); err == nil {
+		return t, true
+	}
+	return time.Time{}, false
+}
+
+// verifyKey checks a vendor license key's signature and expiry.
+func (ls *LicenseService) verifyKey(key string) (*licensePayload, error) {
+	payloadBytes, err := ls.verifySigned(key)
+	if err != nil {
+		return nil, err
+	}
 	var p licensePayload
 	if err := json.Unmarshal(payloadBytes, &p); err != nil {
 		return nil, fmt.Errorf("bad payload")
 	}
-	if p.Expires != "" {
-		exp, perr := time.Parse(time.RFC3339, p.Expires)
-		if perr != nil {
-			exp, perr = time.Parse("2006-01-02", p.Expires)
-		}
-		if perr == nil && time.Now().After(exp) {
-			return &p, fmt.Errorf("license expired on %s", exp.Format("2006-01-02"))
-		}
+	if exp, ok := parseExpiry(p.Expires); ok && time.Now().After(exp) {
+		return &p, fmt.Errorf("license expired on %s", exp.Format("2006-01-02"))
 	}
 	return &p, nil
 }
 
-func (ls *LicenseService) readRow() (installDate time.Time, key string) {
+// verifyReceipt checks an activation receipt's signature, expiry and that it is
+// bound to this device.
+func (ls *LicenseService) verifyReceipt(token, deviceID string) (*receiptPayload, error) {
+	payloadBytes, err := ls.verifySigned(token)
+	if err != nil {
+		return nil, err
+	}
+	var p receiptPayload
+	if err := json.Unmarshal(payloadBytes, &p); err != nil {
+		return nil, fmt.Errorf("bad receipt")
+	}
+	if p.Type != "receipt" {
+		return nil, fmt.Errorf("not a receipt")
+	}
+	if p.DeviceID != deviceID {
+		return &p, fmt.Errorf("receipt is bound to a different device")
+	}
+	if exp, ok := parseExpiry(p.Expires); ok && time.Now().After(exp) {
+		return &p, fmt.Errorf("activation expired on %s — reconnect to refresh", exp.Format("2006-01-02"))
+	}
+	return &p, nil
+}
+
+func (ls *LicenseService) readRow() (installDate time.Time, key, deviceID, receipt string, lastValidated sql.NullTime) {
 	installDate = time.Now()
 	var inst sql.NullTime
-	var k sql.NullString
-	if err := ls.db.QueryRow(`SELECT install_date, license_key FROM app_license WHERE id = 1`).Scan(&inst, &k); err == nil {
+	var k, dev, rec sql.NullString
+	err := ls.db.QueryRow(`SELECT install_date, license_key, COALESCE(device_id,''), COALESCE(activation_receipt,''), last_validated FROM app_license WHERE id = 1`).
+		Scan(&inst, &k, &dev, &rec, &lastValidated)
+	if err == nil {
 		if inst.Valid {
 			installDate = inst.Time
 		}
-		if k.Valid {
-			key = k.String
+		key = k.String
+		deviceID = dev.String
+		receipt = rec.String
+	}
+	return installDate, key, deviceID, receipt, lastValidated
+}
+
+// DeviceID returns a stable per-install fingerprint, generating and persisting
+// one on first use. Prefers the OS machine-id (hashed), falls back to random.
+func (ls *LicenseService) DeviceID() string {
+	_, _, dev, _, _ := ls.readRow()
+	if dev != "" {
+		return dev
+	}
+	dev = computeDeviceID()
+	_, _ = ls.db.Exec(`UPDATE app_license SET device_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1`, dev)
+	return dev
+}
+
+func computeDeviceID() string {
+	for _, path := range []string{"/etc/machine-id", "/var/lib/dbus/machine-id"} {
+		if b, err := os.ReadFile(path); err == nil {
+			if id := strings.TrimSpace(string(b)); id != "" {
+				sum := sha256.Sum256([]byte("zev-billing:" + id))
+				return hex.EncodeToString(sum[:16])
+			}
 		}
 	}
-	return installDate, key
+	// Fallback: random, persisted by the caller.
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("dev-%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
 }
 
 func (ls *LicenseService) usage() LicenseUsage {
@@ -164,23 +270,54 @@ func (ls *LicenseService) usage() LicenseUsage {
 
 // Status computes the current license state, effective limits and usage.
 func (ls *LicenseService) Status() LicenseStatus {
-	installDate, key := ls.readRow()
+	installDate, key, deviceID, receipt, lastValidated := ls.readRow()
 	usage := ls.usage()
 
+	base := func(st LicenseStatus) LicenseStatus {
+		st.Online = ls.online()
+		st.DeviceID = deviceID
+		if lastValidated.Valid {
+			st.LastValidated = lastValidated.Time.Format(time.RFC3339)
+		}
+		return st
+	}
+
+	if ls.online() {
+		// Pro requires a valid, device-bound activation receipt.
+		if receipt != "" {
+			if rp, err := ls.verifyReceipt(receipt, deviceID); err == nil {
+				return base(LicenseStatus{
+					Tier: "pro", Valid: true, Licensee: rp.Licensee, Expires: rp.Expires,
+					BillingAllowed: true, Limits: unlimitedLimits, Usage: usage,
+				})
+			} else {
+				st := ls.trialOrFree(installDate, usage)
+				st.Message = err.Error()
+				return base(st)
+			}
+		}
+		if key != "" {
+			st := ls.trialOrFree(installDate, usage)
+			st.Message = "Awaiting activation — connect to the internet to activate this device."
+			return base(st)
+		}
+		return base(ls.trialOrFree(installDate, usage))
+	}
+
+	// Offline (Phase 1): a valid signed key is enough.
 	if key != "" {
 		if p, err := ls.verifyKey(key); err == nil {
-			return LicenseStatus{
+			return base(LicenseStatus{
 				Tier: "pro", Valid: true, Licensee: p.Licensee, Expires: p.Expires,
 				BillingAllowed: true, Limits: unlimitedLimits, Usage: usage,
-			}
+			})
 		} else {
-			// Stored key no longer valid (expired/revoked) — fall back, but say why.
 			st := ls.trialOrFree(installDate, usage)
 			st.Message = err.Error()
-			return st
+			return base(st)
 		}
 	}
-	return ls.trialOrFree(installDate, usage)
+	return base(ls.trialOrFree(installDate, usage))
 }
 
 func (ls *LicenseService) trialOrFree(installDate time.Time, usage LicenseUsage) LicenseStatus {
@@ -232,19 +369,137 @@ func (ls *LicenseService) CanBill() bool {
 	return ls.Status().BillingAllowed
 }
 
-// Activate verifies a license key and stores it.
+// activateResult is the parsed response from the activation server.
+type activateResult struct {
+	receipt  string
+	rejected bool   // server definitively refused (revoked / limit / invalid)
+	message  string // server-supplied reason
+}
+
+// callActivate POSTs the key + device to the activation server and returns the
+// signed receipt. rejected=true means the server refused (do not retry blindly);
+// a non-nil error with rejected=false is a transient/network failure.
+func (ls *LicenseService) callActivate(key, deviceID string) (activateResult, error) {
+	hostname, _ := os.Hostname()
+	body, _ := json.Marshal(map[string]string{
+		"key":       strings.TrimSpace(key),
+		"device_id": deviceID,
+		"hostname":  hostname,
+	})
+	req, err := http.NewRequest(http.MethodPost, ls.activationURL, bytes.NewReader(body))
+	if err != nil {
+		return activateResult{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := ls.httpClient.Do(req)
+	if err != nil {
+		return activateResult{}, err // transient
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
+
+	var parsed struct {
+		Receipt string `json:"receipt"`
+		Error   string `json:"error"`
+		Message string `json:"message"`
+	}
+	_ = json.Unmarshal(raw, &parsed)
+
+	if resp.StatusCode == http.StatusOK && parsed.Receipt != "" {
+		return activateResult{receipt: parsed.Receipt}, nil
+	}
+	// 4xx → definitive rejection; 5xx / unexpected → transient.
+	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+		msg := parsed.Message
+		if msg == "" {
+			msg = parsed.Error
+		}
+		if msg == "" {
+			msg = "activation refused"
+		}
+		return activateResult{rejected: true, message: msg}, fmt.Errorf("%s", msg)
+	}
+	return activateResult{}, fmt.Errorf("activation server error (HTTP %d)", resp.StatusCode)
+}
+
+// Activate verifies/stores a license. In online mode it performs device-bound
+// activation against the server and stores the returned receipt; offline it just
+// verifies and stores the signed key (Phase 1).
 func (ls *LicenseService) Activate(key string) error {
+	key = strings.TrimSpace(key)
 	if _, err := ls.verifyKey(key); err != nil {
 		return err
 	}
-	_, err := ls.db.Exec(
-		`UPDATE app_license SET license_key = ?, activated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = 1`,
-		strings.TrimSpace(key))
+
+	if !ls.online() {
+		_, err := ls.db.Exec(
+			`UPDATE app_license SET license_key = ?, activation_receipt = '', activated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = 1`,
+			key)
+		return err
+	}
+
+	deviceID := ls.DeviceID()
+	res, err := ls.callActivate(key, deviceID)
+	if err != nil {
+		if res.rejected {
+			return fmt.Errorf("%s", res.message)
+		}
+		return fmt.Errorf("could not reach the activation server — check your internet connection")
+	}
+	rp, err := ls.verifyReceipt(res.receipt, deviceID)
+	if err != nil {
+		return fmt.Errorf("activation server returned an invalid receipt: %v", err)
+	}
+	_ = rp
+	_, err = ls.db.Exec(
+		`UPDATE app_license SET license_key = ?, activation_receipt = ?, activated_at = CURRENT_TIMESTAMP, last_validated = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = 1`,
+		key, res.receipt)
 	return err
 }
 
-// Deactivate removes the stored license key.
+// Deactivate removes the stored license key and receipt from this install.
 func (ls *LicenseService) Deactivate() error {
-	_, err := ls.db.Exec(`UPDATE app_license SET license_key = '', activated_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = 1`)
+	_, err := ls.db.Exec(`UPDATE app_license SET license_key = '', activation_receipt = '', activated_at = NULL, last_validated = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = 1`)
 	return err
+}
+
+// refresh re-activates against the server to obtain a fresh receipt (online mode).
+// A definitive rejection (revoked / limit) clears the receipt so the plan drops;
+// transient failures keep the existing receipt so brief outages don't lock out.
+func (ls *LicenseService) refresh() {
+	_, key, _, receipt, _ := ls.readRow()
+	if key == "" {
+		return
+	}
+	deviceID := ls.DeviceID()
+	res, err := ls.callActivate(key, deviceID)
+	if err != nil {
+		if res.rejected {
+			log.Printf("[LICENSE] activation revoked/refused on refresh: %s", res.message)
+			_, _ = ls.db.Exec(`UPDATE app_license SET activation_receipt = '', updated_at = CURRENT_TIMESTAMP WHERE id = 1`)
+		}
+		return // transient: keep current receipt
+	}
+	if _, err := ls.verifyReceipt(res.receipt, deviceID); err != nil {
+		return
+	}
+	_, _ = ls.db.Exec(`UPDATE app_license SET activation_receipt = ?, last_validated = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = 1`, res.receipt)
+	_ = receipt
+}
+
+// StartRefresher periodically refreshes the activation receipt while online
+// activation is configured. No-op in offline mode.
+func (ls *LicenseService) StartRefresher() {
+	if !ls.online() {
+		return
+	}
+	// Initial refresh shortly after boot, then every 12 hours.
+	time.Sleep(20 * time.Second)
+	ls.refresh()
+	ticker := time.NewTicker(12 * time.Hour)
+	defer ticker.Stop()
+	for range ticker.C {
+		ls.refresh()
+	}
 }

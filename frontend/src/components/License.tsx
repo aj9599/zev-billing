@@ -141,6 +141,19 @@ export default function License() {
           </div>
         )}
 
+        {/* Device binding (online activation) */}
+        {status.online && (
+          <div style={{ marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 12, color: '#6b7280' }}>
+            <span>{t('license.activationMode')}: <strong style={{ color: '#374151' }}>{t('license.online')}</strong></span>
+            {status.device_id && (
+              <span>{t('license.deviceId')}: <code style={{ color: '#374151' }}>{status.device_id.slice(0, 12)}</code></span>
+            )}
+            {status.last_validated && (
+              <span>{t('license.lastChecked')}: {status.last_validated.slice(0, 10)}</span>
+            )}
+          </div>
+        )}
+
         {/* Usage vs limits */}
         <div style={{ marginTop: 18, borderTop: '1px solid #f3f4f6', paddingTop: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#6b7280', marginBottom: 10 }}>{t('license.usage')}</div>

@@ -147,6 +147,10 @@ export interface LicenseStatus {
   limits: LicenseLimits;
   usage: LicenseUsage;
   message?: string;
+  // Phase 2 (online activation / device binding)
+  online: boolean;
+  device_id: string;
+  last_validated?: string;
 }
 
 export interface Device {
