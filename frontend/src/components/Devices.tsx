@@ -485,7 +485,6 @@ export default function Devices() {
             // Grid-power convention for display: import positive, export negative.
             const gridW = surplus != null ? -surplus : null;
             const threshold = d.switch_on_threshold_w || 0;
-            const pct = surplus != null && threshold > 0 ? Math.max(0, Math.min(100, (surplus / threshold) * 100)) : 0;
             const mode = (s?.mode || d.control_mode || 'auto') as 'on' | 'off' | 'auto';
             const modeColor: Record<string, string> = { on: '#10b981', off: '#ef4444', auto: '#3b82f6' };
             return (
@@ -534,9 +533,9 @@ export default function Devices() {
                     </div>
                   </div>
 
-                  {/* surplus gauge */}
+                  {/* live grid power */}
                   <div style={{ marginTop: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '7px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                       <span style={{ fontSize: '12px', color: '#6b7280', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
                         <Zap size={13} color="#f59e0b" /> {t('devices.gridLabel')}
                         {s?.has_signal && (
@@ -549,12 +548,8 @@ export default function Devices() {
                         {gridW != null ? formatPower(gridW) : t('devices.noSignal')}
                       </span>
                     </div>
-                    <div style={{ height: '9px', borderRadius: '6px', background: '#eef2f7', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${pct}%`, borderRadius: '6px', background: 'linear-gradient(90deg,#34d399,#10b981)', transition: 'width .5s ease' }} />
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '11px', color: '#9ca3af' }}>
-                      <span>{t('devices.onThresholdShort')} {formatPower(threshold)}</span>
-                      <span>{Math.round(pct)}%</span>
+                    <div style={{ marginTop: '6px', fontSize: '11px', color: '#9ca3af' }}>
+                      {t('devices.onThresholdShort')} {formatPower(threshold)}
                     </div>
                   </div>
 
@@ -575,7 +570,7 @@ export default function Devices() {
                     <div style={{ marginTop: '8px', fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <Target size={12} color="#94a3b8" />
                       <span>
-                        <strong style={{ color: '#475569' }}>≥{d.guarantee_hours}h</strong> {t('devices.by')} {d.guarantee_by}
+                        <strong style={{ color: '#475569' }}>≥{formatGuarantee(d.guarantee_hours)}</strong> {t('devices.by')} {d.guarantee_by}
                         {s && ` · ${t('devices.todayShort')} ${Math.floor((s.runtime_today_min || 0) / 60)}h ${(s.runtime_today_min || 0) % 60}m`}
                       </span>
                     </div>
@@ -583,12 +578,6 @@ export default function Devices() {
 
                   {s?.last_error && (
                     <div style={{ fontSize: '12px', color: '#dc2626', marginTop: '10px' }}>{s.last_error}</div>
-                  )}
-
-                  {s?.reason && (
-                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '10px', fontStyle: 'italic' }}>
-                      {t('devices.reasonLabel')}: {s.reason}
-                    </div>
                   )}
 
                   {/* segmented mode control */}
@@ -789,18 +778,12 @@ export default function Devices() {
               {/* Runtime guarantee */}
               <div style={card}>
                 <div style={{ fontSize: '12px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: '12px' }}>{t('devices.guaranteeSection')}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label style={label}>{t('devices.guaranteeHours')}</label>
-                    <input type="number" step="0.5" min="0" style={input} value={form.guarantee_hours}
-                      onChange={(e) => setForm({ ...form, guarantee_hours: Number(e.target.value) || 0 })} />
-                  </div>
-                  <div>
-                    <label style={label}>{t('devices.guaranteeBy')}</label>
-                    <input type="time" style={input} value={form.guarantee_by} disabled={form.guarantee_hours <= 0}
-                      onChange={(e) => setForm({ ...form, guarantee_by: e.target.value })} />
-                  </div>
-                </div>
+                <GuaranteeFields
+                  hours={form.guarantee_hours}
+                  by={form.guarantee_by}
+                  onHours={(h) => setForm({ ...form, guarantee_hours: h })}
+                  onBy={(v) => setForm({ ...form, guarantee_by: v })}
+                />
                 <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px', marginBottom: 0 }}>{t('devices.guaranteeHint')}</p>
               </div>
 
@@ -850,16 +833,12 @@ export default function Devices() {
             </div>
             <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0 0 14px' }}>{t('devices.guaranteeHint')}</p>
             <div style={card}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={label}>{t('devices.guaranteeHours')}</label>
-                  <input type="number" step="0.5" min="0" style={input} value={guarHours} onChange={(e) => setGuarHours(Number(e.target.value) || 0)} />
-                </div>
-                <div>
-                  <label style={label}>{t('devices.guaranteeBy')}</label>
-                  <input type="time" style={input} value={guarBy} disabled={guarHours <= 0} onChange={(e) => setGuarBy(e.target.value)} />
-                </div>
-              </div>
+              <GuaranteeFields
+                hours={guarHours}
+                by={guarBy}
+                onHours={setGuarHours}
+                onBy={setGuarBy}
+              />
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
               <button onClick={() => setGuarDevice(null)} style={{ ...btn('#9ca3af', false) }}>{t('common.cancel')}</button>
@@ -884,6 +863,60 @@ const iconBtn: React.CSSProperties = {
 
 // Show kW for large magnitudes, W otherwise.
 const formatPower = (w: number) => (Math.abs(w) >= 1000 ? `${(w / 1000).toFixed(2)} kW` : `${Math.round(w)} W`);
+
+// Format a guarantee stored in (fractional) hours as a clean "1h 30m" / "2h" / "45m".
+const formatGuarantee = (hours: number): string => {
+  const total = Math.round(hours * 60);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (h > 0 && m > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h}h`;
+  return `${m}m`;
+};
+
+// Default the hours/minutes toggle to minutes when the stored value isn't a whole
+// number of hours (e.g. 0.5h shows as 30m), otherwise hours.
+const guaranteeDefaultUnit = (hours: number): 'h' | 'm' => (hours > 0 && (hours * 60) % 60 !== 0 ? 'm' : 'h');
+
+// GuaranteeFields renders the runtime-guarantee amount (with an hours/minutes
+// toggle) + the "by" time. Storage is always hours (what the backend expects);
+// the toggle only changes how the amount is entered/displayed.
+function GuaranteeFields({ hours, by, onHours, onBy }: {
+  hours: number; by: string; onHours: (h: number) => void; onBy: (v: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [unit, setUnit] = useState<'h' | 'm'>(guaranteeDefaultUnit(hours));
+  const displayValue = unit === 'h' ? hours : Math.round(hours * 60);
+  const unitBtn = (u: 'h' | 'm'): React.CSSProperties => ({
+    padding: '6px 12px', border: 'none', borderRadius: '7px', cursor: 'pointer', fontSize: '12px', fontWeight: 700,
+    background: unit === u ? '#ffffff' : 'transparent',
+    color: unit === u ? '#8b5cf6' : '#94a3b8',
+    boxShadow: unit === u ? '0 1px 2px rgba(0,0,0,0.12)' : 'none',
+  });
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+      <div>
+        <label style={label}>{t('devices.guaranteeRuntime')}</label>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <input type="number" step={unit === 'h' ? '0.5' : '1'} min="0" style={{ ...input, flex: 1 }}
+            value={displayValue}
+            onChange={(e) => {
+              const v = Number(e.target.value) || 0;
+              onHours(unit === 'h' ? v : v / 60);
+            }} />
+          <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '9px', padding: '3px' }}>
+            <button type="button" style={unitBtn('h')} onClick={() => setUnit('h')}>{t('devices.unitHours')}</button>
+            <button type="button" style={unitBtn('m')} onClick={() => setUnit('m')}>{t('devices.unitMinutes')}</button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <label style={label}>{t('devices.guaranteeBy')}</label>
+        <input type="time" style={input} value={by} disabled={hours <= 0} onChange={(e) => onBy(e.target.value)} />
+      </div>
+    </div>
+  );
+}
 
 function StatCard({ icon: Icon, label, value, color, sublabel }: {
   icon: React.ComponentType<any>;
