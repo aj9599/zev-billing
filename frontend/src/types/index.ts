@@ -151,6 +151,8 @@ export interface LicenseStatus {
   online: boolean;
   device_id: string;
   last_validated?: string;
+  key_masked?: string;
+  key_type?: 'lifetime' | 'limited';
 }
 
 export interface Device {

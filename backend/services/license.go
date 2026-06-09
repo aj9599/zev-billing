@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -73,6 +74,10 @@ type LicenseStatus struct {
 	Online        bool   `json:"online"`         // online activation is configured
 	DeviceID      string `json:"device_id"`      // this install's device fingerprint
 	LastValidated string `json:"last_validated"` // RFC3339 of last successful refresh
+
+	// Key presentation (for the License page).
+	KeyMasked string `json:"key_masked,omitempty"` // e.g. "ZEV-…a1b2c3"
+	KeyType   string `json:"key_type,omitempty"`   // "lifetime" | "limited"
 }
 
 // licensePayload is the signed content encoded inside a vendor license key.
@@ -153,6 +158,36 @@ func (ls *LicenseService) verifySigned(token string) ([]byte, error) {
 		return nil, fmt.Errorf("invalid signature")
 	}
 	return payloadBytes, nil
+}
+
+// maskKey shows just enough of a key to recognise it (prefix + last 6 chars).
+func maskKey(k string) string {
+	k = strings.TrimSpace(k)
+	if len(k) <= 12 {
+		return k
+	}
+	prefix := ""
+	if strings.HasPrefix(k, "ZEV-") {
+		prefix = "ZEV-"
+	}
+	return prefix + "…" + k[len(k)-6:]
+}
+
+// primaryMAC returns the MAC of the first up, non-loopback interface (best effort).
+func primaryMAC() string {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return ""
+	}
+	for _, i := range ifaces {
+		if i.Flags&net.FlagLoopback != 0 || i.Flags&net.FlagUp == 0 {
+			continue
+		}
+		if mac := i.HardwareAddr.String(); mac != "" {
+			return mac
+		}
+	}
+	return ""
 }
 
 func parseExpiry(s string) (time.Time, bool) {
@@ -279,6 +314,20 @@ func (ls *LicenseService) Status() LicenseStatus {
 		if lastValidated.Valid {
 			st.LastValidated = lastValidated.Time.Format(time.RFC3339)
 		}
+		if key != "" {
+			st.KeyMasked = maskKey(key)
+			exp := st.Expires
+			if exp == "" {
+				if p, _ := ls.verifyKey(key); p != nil {
+					exp = p.Expires
+				}
+			}
+			if exp == "" {
+				st.KeyType = "lifetime"
+			} else {
+				st.KeyType = "limited"
+			}
+		}
 		return st
 	}
 
@@ -385,6 +434,7 @@ func (ls *LicenseService) callActivate(key, deviceID string) (activateResult, er
 		"key":       strings.TrimSpace(key),
 		"device_id": deviceID,
 		"hostname":  hostname,
+		"mac":       primaryMAC(),
 	})
 	req, err := http.NewRequest(http.MethodPost, ls.activationURL, bytes.NewReader(body))
 	if err != nil {
@@ -494,10 +544,12 @@ func (ls *LicenseService) StartRefresher() {
 	if !ls.online() {
 		return
 	}
-	// Initial refresh shortly after boot, then every 12 hours.
+	// Initial refresh shortly after boot, then hourly. The hourly check-in renews
+	// the receipt, refreshes lastSeen (powers the operator console's online dot),
+	// and picks up any server-side revocation within ~1h.
 	time.Sleep(20 * time.Second)
 	ls.refresh()
-	ticker := time.NewTicker(12 * time.Hour)
+	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 	for range ticker.C {
 		ls.refresh()

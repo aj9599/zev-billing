@@ -182,6 +182,10 @@ export const en: Translations = {
   'license.online': 'Online (device-bound)',
   'license.deviceId': 'Device ID',
   'license.lastChecked': 'Last checked',
+  'license.activeKey': 'Active key',
+  'license.keyType': 'Type',
+  'license.lifetime': 'Lifetime',
+  'license.limited': 'Limited',
   'emailSettings.title': 'Email Settings',
   'emailSettings.subtitle': 'Configure SMTP, error alerts, health reports, and automatic invoice delivery.',
 

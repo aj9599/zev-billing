@@ -135,6 +135,19 @@ export default function License() {
           </div>
         )}
 
+        {/* Active key details */}
+        {status.key_masked && (
+          <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 13, color: '#374151' }}>
+            <span>{t('license.activeKey')}: <code style={{ background: '#f3f4f6', padding: '2px 6px', borderRadius: 4 }}>{status.key_masked}</code></span>
+            {status.key_type && (
+              <span>{t('license.keyType')}: <strong>{status.key_type === 'lifetime' ? t('license.lifetime') : t('license.limited')}</strong></span>
+            )}
+            {status.key_type === 'limited' && status.expires && (
+              <span>{t('license.validUntil')}: {status.expires.slice(0, 10)}</span>
+            )}
+          </div>
+        )}
+
         {status.message && (
           <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8, color: '#b45309', fontSize: 13 }}>
             <AlertTriangle size={16} /> {status.message}

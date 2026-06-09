@@ -74,7 +74,7 @@ exports.activate = onRequest(
     if (req.method !== "POST") {
       return res.status(405).json({ error: "method_not_allowed" });
     }
-    const { key, device_id: deviceId, hostname } = req.body || {};
+    const { key, device_id: deviceId, hostname, mac } = req.body || {};
     if (!key || !deviceId) {
       return res.status(400).json({ error: "bad_request", message: "key and device_id are required" });
     }
@@ -111,7 +111,7 @@ exports.activate = onRequest(
             maxActivations: 1,
             revoked: false,
             createdAt: now,
-            devices: { [deviceId]: { hostname: hostname || "", activatedAt: now, lastSeen: now } },
+            devices: { [deviceId]: { hostname: hostname || "", mac: mac || "", activatedAt: now, lastSeen: now } },
           });
           return { ok: true };
         }
@@ -123,6 +123,8 @@ exports.activate = onRequest(
         const max = data.maxActivations || 1;
         if (devices[deviceId]) {
           devices[deviceId].lastSeen = now;
+          if (hostname) devices[deviceId].hostname = hostname;
+          if (mac) devices[deviceId].mac = mac;
           tx.update(ref, { devices });
           return { ok: true };
         }
@@ -134,7 +136,7 @@ exports.activate = onRequest(
             message: `This license is already active on ${Object.keys(devices).length} device(s) (limit ${max}). Remove a device or contact support.`,
           };
         }
-        devices[deviceId] = { hostname: hostname || "", activatedAt: now, lastSeen: now };
+        devices[deviceId] = { hostname: hostname || "", mac: mac || "", activatedAt: now, lastSeen: now };
         tx.update(ref, { devices });
         return { ok: true };
       });

@@ -1,7 +1,8 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LayoutDashboard, Users, Building, Car, FileText, Settings as SettingsIcon, LogOut, Activity, DollarSign, Menu, X, Calendar, Zap, ChevronDown, ChevronRight, Lock, Database, Mail, Power, KeyRound } from 'lucide-react';
 import { api } from '../api/client';
+import type { LicenseStatus } from '../types';
 import { useTranslation } from '../i18n';
 import Logo from './Logo';
 
@@ -14,6 +15,24 @@ export default function Layout({ onLogout }: LayoutProps) {
   const { t, language, setLanguage } = useTranslation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [license, setLicense] = useState<LicenseStatus | null>(null);
+
+  useEffect(() => {
+    api.getLicense().then(setLicense).catch(() => {});
+  }, [location.pathname]);
+
+  const tierBadge = (() => {
+    if (!license) return null;
+    const map: Record<string, { label: string; bg: string }> = {
+      pro: { label: t('license.tierPro'), bg: '#10b981' },
+      trial: { label: t('license.tierTrial'), bg: '#f59e0b' },
+      free: { label: t('license.tierFree'), bg: '#6b7280' },
+    };
+    const m = map[license.tier] || map.free;
+    const extra = license.tier === 'trial' && license.trial_days_left
+      ? ` · ${license.trial_days_left}d` : '';
+    return { ...m, label: m.label + extra };
+  })();
 
   const handleLogout = () => {
     api.logout();
@@ -124,11 +143,28 @@ export default function Layout({ onLogout }: LayoutProps) {
           marginBottom: '30px' 
         }}>
           <Logo size={60} />
-          <h1 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>
-            ZEV Billing
-          </h1>
+          <div>
+            <h1 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>
+              ZEV Billing
+            </h1>
+            {tierBadge && (
+              <Link
+                to="/license"
+                onClick={closeMobileMenu}
+                title={t('nav.license')}
+                style={{
+                  display: 'inline-block', marginTop: '6px', padding: '2px 10px',
+                  borderRadius: '999px', fontSize: '11px', fontWeight: 700,
+                  letterSpacing: '0.4px', textTransform: 'uppercase',
+                  background: tierBadge.bg, color: '#fff', textDecoration: 'none',
+                }}
+              >
+                {tierBadge.label}
+              </Link>
+            )}
+          </div>
         </div>
-        
+
         <nav style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', marginBottom: '12px' }}>
           {navItems.map(item => {
             const Icon = item.icon;

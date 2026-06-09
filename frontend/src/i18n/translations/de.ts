@@ -182,6 +182,10 @@ export const de: Translations = {
   'license.online': 'Online (gerätegebunden)',
   'license.deviceId': 'Geräte-ID',
   'license.lastChecked': 'Zuletzt geprüft',
+  'license.activeKey': 'Aktiver Schlüssel',
+  'license.keyType': 'Typ',
+  'license.lifetime': 'Unbegrenzt',
+  'license.limited': 'Befristet',
   'emailSettings.title': 'E-Mail-Einstellungen',
   'emailSettings.subtitle': 'SMTP, Fehlerbenachrichtigungen, Status-Reports und automatischer Rechnungsversand konfigurieren.',
 
