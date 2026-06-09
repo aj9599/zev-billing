@@ -69,7 +69,10 @@ function signReceipt(obj, privKeyObj) {
 }
 
 exports.activate = onRequest(
-  { secrets: [LICENSE_PUBLIC_KEY, LICENSE_PRIVATE_KEY], cors: true },
+  // invoker:"public" allows unauthenticated calls (self-hosted installs activate
+  // anonymously; the key signature is the real auth). Without it, gen-2 functions
+  // can deploy as private and return 403.
+  { secrets: [LICENSE_PUBLIC_KEY, LICENSE_PRIVATE_KEY], cors: true, invoker: "public" },
   async (req, res) => {
     if (req.method !== "POST") {
       return res.status(405).json({ error: "method_not_allowed" });
