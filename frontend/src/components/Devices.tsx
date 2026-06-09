@@ -588,8 +588,8 @@ export default function Devices() {
                         <Activity size={11} />
                         {t('devices.controlShort')}: {mode === 'auto' && s
                           ? `${t('devices.mode.auto')} (${s.stage_count
-                              ? (s.stage_level && s.stage_level > 0 ? `${t('devices.stage')} ${s.stage_level}/${s.stage_count}` : 'OFF')
-                              : (s.desired_on ? 'ON' : 'OFF')})`
+                              ? (s.stage_level && s.stage_level > 0 ? `${t('devices.stage')} ${s.stage_level}/${s.stage_count}` : t('devices.state.off'))
+                              : (s.desired_on ? t('devices.state.on') : t('devices.state.off'))})`
                           : t(`devices.mode.${mode}`)}
                       </span>
                     </div>
