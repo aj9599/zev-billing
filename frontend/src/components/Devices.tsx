@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Power, Edit2, Trash2, X, Zap, RefreshCw, Search, Clock, Wifi, Activity, Target, Plug, Building } from 'lucide-react';
+import { Plus, Power, Edit2, Trash2, X, Zap, RefreshCw, Search, Clock, Wifi, Activity, Target, Plug, Building, HelpCircle } from 'lucide-react';
 import { api } from '../api/client';
 import { useTranslation } from '../i18n';
 import type { Device, DeviceLiveStatus, LoxoneControl, Building as BuildingType } from '../types';
@@ -151,6 +151,7 @@ export default function Devices() {
   // building filter (matches the Meters/Chargers pages)
   const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showInstructions, setShowInstructions] = useState(false);
   const [discovering, setDiscovering] = useState(false);
   const [discoverError, setDiscoverError] = useState('');
 
@@ -507,6 +508,15 @@ export default function Devices() {
     padding: '0 6px', borderRadius: '10px', fontSize: '11px', fontWeight: 700,
     backgroundColor: active ? 'rgba(255,255,255,0.25)' : '#f3f4f6', color: active ? 'white' : '#9ca3af',
   });
+  // one coloured section of the setup-instructions modal
+  const infoBox = (bg: string, border: string, Icon: React.ComponentType<any>, title: string, text: string) => (
+    <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: '12px', padding: '14px', marginBottom: '12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '14px', color: '#111827', marginBottom: '6px' }}>
+        <Icon size={16} color="#667eea" /> {title}
+      </div>
+      <p style={{ margin: 0, fontSize: '13px', color: '#4b5563', lineHeight: 1.5, whiteSpace: 'pre-line' }}>{text}</p>
+    </div>
+  );
 
   return (
     <div style={{ width: '100%', maxWidth: '100%' }}>
@@ -528,9 +538,14 @@ export default function Devices() {
           </h1>
           <p style={{ color: '#6b7280', fontSize: isMobile ? '13px' : '15px', margin: 0 }}>{t('devices.subtitle')}</p>
         </div>
-        <button onClick={openCreate} style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#667eea', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 16px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
-          <Plus size={16} /> {t('devices.add')}
-        </button>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button onClick={() => setShowInstructions(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'white', color: '#667eea', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '10px 16px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
+            <HelpCircle size={16} /> {!isMobile && t('devices.setupInstructions')}
+          </button>
+          <button onClick={openCreate} style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#667eea', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 16px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
+            <Plus size={16} /> {t('devices.add')}
+          </button>
+        </div>
       </div>
 
       {/* Stat cards */}
@@ -1055,6 +1070,29 @@ export default function Devices() {
               <button onClick={() => setGuarDevice(null)} style={{ ...btn('#9ca3af', false) }}>{t('common.cancel')}</button>
               <button onClick={saveGuarantee} style={{ ...btn('#10b981', false) }}>{t('common.save')}</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Setup instructions */}
+      {showInstructions && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '24px', zIndex: 2000, overflowY: 'auto' }}>
+          <div style={{ backgroundColor: 'white', borderRadius: '16px', width: '100%', maxWidth: '720px', padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <HelpCircle size={20} color="#667eea" /> {t('devices.instructions.title')}
+              </h2>
+              <button onClick={() => setShowInstructions(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={22} /></button>
+            </div>
+            <p style={{ fontSize: '14px', color: '#6b7280', marginTop: 0, marginBottom: '16px' }}>{t('devices.instructions.intro')}</p>
+
+            {infoBox('#ecfdf5', '#a7f3d0', Plug, t('devices.instructions.shellyTitle'), t('devices.instructions.shellyText'))}
+            {infoBox('#ecfdf5', '#a7f3d0', Wifi, t('devices.instructions.loxoneTitle'), t('devices.instructions.loxoneText'))}
+            {infoBox('#f3f4f6', '#e5e7eb', Activity, t('devices.instructions.controlTitle'), t('devices.instructions.controlText'))}
+            {infoBox('#f3f4f6', '#e5e7eb', Clock, t('devices.instructions.scheduleTitle'), t('devices.instructions.scheduleText'))}
+            {infoBox('#f3f4f6', '#e5e7eb', Target, t('devices.instructions.guaranteeTitle'), t('devices.instructions.guaranteeText'))}
+
+            <button onClick={() => setShowInstructions(false)} style={{ width: '100%', marginTop: '6px', padding: '12px', backgroundColor: '#667eea', color: 'white', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>{t('common.close')}</button>
           </div>
         </div>
       )}
