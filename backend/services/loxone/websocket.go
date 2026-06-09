@@ -79,6 +79,14 @@ func (conn *WebSocketConnection) readLoxoneMessage() (messageType byte, jsonData
 				return 0, nil, fmt.Errorf("failed to read JSON payload: %v", err)
 			}
 
+			// The Miniserver occasionally pushes non-JSON text events — most
+			// commonly the gzip-compressed LoxAPP3 structure file (magic 0x1f 0x8b).
+			// We fetch the structure over HTTP and don't need it here, so skip it
+			// quietly instead of logging a scary (but harmless) warning.
+			if len(message) >= 2 && message[0] == 0x1f && message[1] == 0x8b {
+				return headerType, nil, nil
+			}
+
 			jsonData = ExtractJSON(message)
 			if jsonData == nil {
 				log.Printf("⚠️ [%s] Could not extract JSON from text event (first 200 bytes): %q",
