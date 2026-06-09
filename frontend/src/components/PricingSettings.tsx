@@ -341,7 +341,7 @@ export default function PricingSettings() {
             style={{
               display: 'flex', alignItems: 'center', gap: '8px',
               padding: isMobile ? '8px 14px' : '10px 18px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              backgroundColor: '#667eea',
               color: 'white', border: 'none', borderRadius: '10px',
               fontSize: '14px', fontWeight: '600', cursor: 'pointer',
               transition: 'all 0.2s',
