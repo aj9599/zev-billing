@@ -17,6 +17,21 @@ export default function Layout({ onLogout }: LayoutProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [license, setLicense] = useState<LicenseStatus | null>(null);
 
+  // Keep the tier badge fresh: on mount, on every navigation, when the License
+  // page signals a change, on window focus, and periodically as a backstop.
+  useEffect(() => {
+    const refresh = () => api.getLicense().then(setLicense).catch(() => {});
+    refresh();
+    window.addEventListener('license-changed', refresh);
+    window.addEventListener('focus', refresh);
+    const iv = setInterval(refresh, 60000);
+    return () => {
+      window.removeEventListener('license-changed', refresh);
+      window.removeEventListener('focus', refresh);
+      clearInterval(iv);
+    };
+  }, []);
+
   useEffect(() => {
     api.getLicense().then(setLicense).catch(() => {});
   }, [location.pathname]);

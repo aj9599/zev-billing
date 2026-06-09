@@ -41,6 +41,7 @@ export default function License() {
     try {
       const s = await api.activateLicense(keyInput.trim());
       setStatus(s);
+      window.dispatchEvent(new Event('license-changed'));
       if (s.tier === 'pro') { setSuccess(t('license.activated')); setKeyInput(''); }
       else { setError(statusMessage(s) || t('license.invalidKey')); }
     } catch (e) { setError(parseError(e)); }
@@ -50,7 +51,10 @@ export default function License() {
   const deactivate = async () => {
     setError(''); setSuccess('');
     setBusy(true);
-    try { setStatus(await api.deactivateLicense()); }
+    try {
+      setStatus(await api.deactivateLicense());
+      window.dispatchEvent(new Event('license-changed'));
+    }
     catch (e) { setError(parseError(e)); }
     finally { setBusy(false); }
   };

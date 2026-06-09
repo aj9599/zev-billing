@@ -317,13 +317,14 @@ func (ls *LicenseService) Status() LicenseStatus {
 		}
 		if key != "" {
 			st.KeyMasked = maskKey(key)
-			exp := st.Expires
-			if exp == "" {
-				if p, _ := ls.verifyKey(key); p != nil {
-					exp = p.Expires
-				}
+			// Show the LICENSE's own validity (from the key), not the rolling 30-day
+			// activation receipt expiry. A key with no expiry is a lifetime licence.
+			keyExp := ""
+			if p, _ := ls.verifyKey(key); p != nil {
+				keyExp = p.Expires
 			}
-			if exp == "" {
+			st.Expires = keyExp
+			if keyExp == "" {
 				st.KeyType = "lifetime"
 			} else {
 				st.KeyType = "limited"
