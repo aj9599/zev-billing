@@ -11,6 +11,11 @@ import (
 // Override at deploy time with LICENSE_PUBLIC_KEY if you generate your own pair.
 const defaultLicensePublicKey = "8o+ttNmb+tc9xtr4T7EsGpEDwrG8ZY3Uc4DR4b1sA48="
 
+// defaultLicenseActivationURL points every install at the vendor's online
+// activation function (device binding + revocation). Override/disable per
+// install with LICENSE_ACTIVATION_URL (set it to "" to force offline mode).
+const defaultLicenseActivationURL = "https://activate-6n3rv7n5ta-uc.a.run.app"
+
 type Config struct {
 	DatabasePath         string
 	ServerAddress        string
@@ -30,10 +35,9 @@ func Load() *Config {
 		ServerPort:       port,
 		JWTSecret:        getEnv("JWT_SECRET", "zev-billing-secret-change-in-production"),
 		LicensePublicKey: getEnv("LICENSE_PUBLIC_KEY", defaultLicensePublicKey),
-		// Empty = offline mode (Phase 1): license keys are verified locally with no
-		// device binding. Set to the deployed Firebase "activate" Cloud Function URL
-		// to enable online activation + per-device binding (Phase 2).
-		LicenseActivationURL: getEnv("LICENSE_ACTIVATION_URL", ""),
+		// Online activation + per-device binding via the Firebase "activate" function.
+		// Defaults to the vendor function; override with LICENSE_ACTIVATION_URL.
+		LicenseActivationURL: getEnv("LICENSE_ACTIVATION_URL", defaultLicenseActivationURL),
 	}
 }
 
