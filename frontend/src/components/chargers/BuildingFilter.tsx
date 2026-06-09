@@ -1,3 +1,4 @@
+import { Building } from 'lucide-react';
 import type { Building as BuildingType, Charger } from '../../types';
 
 interface BuildingFilterProps {
@@ -60,6 +61,7 @@ export default function BuildingFilter({
         onClick={() => onBuildingSelect(null)}
         style={pillStyle(selectedBuildingId === null)}
       >
+        <Building size={14} />
         {t('dashboard.allBuildings')}
         <span style={countBadge(chargers.length, selectedBuildingId === null)}>
           {chargers.length}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Power, Edit2, Trash2, X, Zap, RefreshCw, Search, Clock, Wifi, Activity, Target, Plug } from 'lucide-react';
+import { Plus, Power, Edit2, Trash2, X, Zap, RefreshCw, Search, Clock, Wifi, Activity, Target, Plug, Building } from 'lucide-react';
 import { api } from '../api/client';
 import { useTranslation } from '../i18n';
 import type { Device, DeviceLiveStatus, LoxoneControl, Building as BuildingType } from '../types';
@@ -562,6 +562,7 @@ export default function Devices() {
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
             <button onClick={() => setSelectedBuildingId(null)} style={pillStyle(selectedBuildingId === null)}>
+              <Building size={14} />
               {t('dashboard.allBuildings')}
               <span style={countBadge(selectedBuildingId === null)}>{devices.length}</span>
             </button>
