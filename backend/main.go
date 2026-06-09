@@ -33,7 +33,7 @@ var deviceController *services.DeviceController
 // Update status tracking
 type UpdateStatus struct {
 	mu       sync.RWMutex
-	Phase    string `json:"phase"`    // "idle", "queued", "waiting", "updating", "error", "done"
+	Phase    string `json:"phase"` // "idle", "queued", "waiting", "updating", "error", "done"
 	Message  string `json:"message"`
 	Progress int    `json:"progress"` // 0-100
 	Error    string `json:"error"`
@@ -117,7 +117,9 @@ func main() {
 	dataCollector = services.NewDataCollector(db)
 	billingService := services.NewBillingService(db)
 	pdfGenerator := services.NewPDFGenerator(db)
+	licenseService := services.NewLicenseService(db, cfg.LicensePublicKey)
 	autoBillingScheduler = services.NewAutoBillingScheduler(db, billingService, pdfGenerator)
+	autoBillingScheduler.SetLicenseService(licenseService)
 	emailAlerter := services.NewEmailAlerter(db)
 	autoBillingScheduler.SetEmailAlerter(emailAlerter)
 	deviceController = services.NewDeviceController(db, dataCollector)
@@ -144,6 +146,7 @@ func main() {
 	customItemHandler := handlers.NewCustomItemHandler(db)
 	emailAlertHandler := handlers.NewEmailAlertHandler(db, emailAlerter)
 	billLayoutHandler := handlers.NewBillLayoutHandler(db)
+	licenseHandler := handlers.NewLicenseHandler(licenseService)
 
 	r := mux.NewRouter()
 
@@ -164,6 +167,12 @@ func main() {
 	// Protected API routes (authentication required)
 	api := r.PathPrefix("/api").Subrouter()
 	api.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	api.Use(middleware.LicenseMiddleware(licenseService))
+
+	// License status / activation (not gated by the license middleware itself)
+	api.HandleFunc("/license", licenseHandler.GetStatus).Methods("GET")
+	api.HandleFunc("/license/activate", licenseHandler.Activate).Methods("POST")
+	api.HandleFunc("/license/deactivate", licenseHandler.Deactivate).Methods("POST")
 
 	api.HandleFunc("/auth/change-password", authHandler.ChangePassword).Methods("POST")
 	api.HandleFunc("/auth/refresh", authHandler.RefreshToken).Methods("POST")
@@ -178,7 +187,7 @@ func main() {
 	api.HandleFunc("/system/update/check", checkUpdateHandler).Methods("GET")
 	api.HandleFunc("/system/update/apply", applyUpdateHandler).Methods("POST")
 	api.HandleFunc("/system/update/status", updateStatusHandler).Methods("GET")
-	
+
 	// NEW: Factory Reset endpoint
 	api.HandleFunc("/system/factory-reset", factoryResetHandler(cfg.DatabasePath)).Methods("POST")
 
@@ -218,13 +227,13 @@ func main() {
 	api.HandleFunc("/meters/{id}", meterHandler.Delete).Methods("DELETE")
 
 	// Charger routes - IMPORTANT: Specific routes MUST come before {id} routes
-	api.HandleFunc("/chargers/live-data", chargerHandler.GetLiveData).Methods("GET")          // âœ… ADDED - Must be before {id}
+	api.HandleFunc("/chargers/live-data", chargerHandler.GetLiveData).Methods("GET") // âœ… ADDED - Must be before {id}
 	api.HandleFunc("/chargers/sessions/latest", chargerHandler.GetLatestSessions).Methods("GET")
 	api.HandleFunc("/chargers/{id}/deletion-impact", chargerHandler.GetDeletionImpact).Methods("GET")
-	api.HandleFunc("/chargers/{id}/import-sessions", chargerHandler.ImportChargerSessionsFromCSV).Methods("POST")  // NEW: CSV Import
-	api.HandleFunc("/chargers/{id}/sync-zaptec-history", chargerHandler.SyncZaptecHistory).Methods("POST")          // NEW: Zaptec API range sync
-	api.HandleFunc("/chargers/{id}/sessions", chargerHandler.GetChargerSessions).Methods("GET")                    // NEW: Get sessions
-	api.HandleFunc("/chargers/{id}/sessions", chargerHandler.DeleteChargerSessions).Methods("DELETE")              // NEW: Delete sessions
+	api.HandleFunc("/chargers/{id}/import-sessions", chargerHandler.ImportChargerSessionsFromCSV).Methods("POST") // NEW: CSV Import
+	api.HandleFunc("/chargers/{id}/sync-zaptec-history", chargerHandler.SyncZaptecHistory).Methods("POST")        // NEW: Zaptec API range sync
+	api.HandleFunc("/chargers/{id}/sessions", chargerHandler.GetChargerSessions).Methods("GET")                   // NEW: Get sessions
+	api.HandleFunc("/chargers/{id}/sessions", chargerHandler.DeleteChargerSessions).Methods("DELETE")             // NEW: Delete sessions
 	api.HandleFunc("/chargers", chargerHandler.List).Methods("GET")
 	api.HandleFunc("/chargers", chargerHandler.Create).Methods("POST")
 	api.HandleFunc("/chargers/{id}", chargerHandler.Get).Methods("GET")
@@ -332,7 +341,7 @@ func main() {
 	go func() {
 		<-stop
 		log.Println("Shutting down gracefully...")
-		
+
 		// Stop data collector (which will stop Loxone and Modbus collectors)
 		if dataCollector != nil {
 			dataCollector.Stop()
@@ -351,11 +360,11 @@ func main() {
 		// Create a deadline for shutdown
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		
+
 		if err := server.Shutdown(ctx); err != nil {
 			log.Printf("Server forced to shutdown: %v", err)
 		}
-		
+
 		log.Println("Server stopped")
 	}()
 
@@ -414,12 +423,12 @@ func rebootHandler(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		time.Sleep(1 * time.Second)
-		
+
 		// Gracefully stop data collector
 		if dataCollector != nil {
 			dataCollector.Stop()
 		}
-		
+
 		log.Println("Executing service restart...")
 
 		cmd := exec.Command("systemctl", "restart", "zev-billing.service")
@@ -589,7 +598,7 @@ func restoreBackupHandler(dbPath string) http.HandlerFunc {
 			if dataCollector != nil {
 				dataCollector.Stop()
 			}
-			
+
 			time.Sleep(1 * time.Second)
 			cmd := exec.Command("systemctl", "restart", "zev-billing.service")
 			if err := cmd.Run(); err != nil {
@@ -928,7 +937,7 @@ func factoryResetHandler(dbPath string) http.HandlerFunc {
 			if dataCollector != nil {
 				dataCollector.Stop()
 			}
-			
+
 			time.Sleep(1 * time.Second)
 			cmd := exec.Command("systemctl", "restart", "zev-billing.service")
 			if err := cmd.Run(); err != nil {

@@ -198,3 +198,7 @@ CLAUDE.md
 .DS_Store
 backend/go.sum
 .DS_Store
+
+# License signing private key — NEVER commit this
+LICENSE_PRIVATE_KEY*
+*license*private*

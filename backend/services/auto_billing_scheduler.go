@@ -16,7 +16,8 @@ type AutoBillingScheduler struct {
 	db             *sql.DB
 	billingService *BillingService
 	pdfGenerator   *PDFGenerator
-	emailAlerter   *EmailAlerter // optional — used to send PDF invoices to tenants
+	emailAlerter   *EmailAlerter   // optional — used to send PDF invoices to tenants
+	licenseService *LicenseService // optional — gates billing on the free tier
 	stopChan       chan bool
 }
 
@@ -59,6 +60,12 @@ func NewAutoBillingScheduler(db *sql.DB, billingService *BillingService, pdfGene
 // on a config. Optional — leaving it nil disables auto-email.
 func (s *AutoBillingScheduler) SetEmailAlerter(ea *EmailAlerter) {
 	s.emailAlerter = ea
+}
+
+// SetLicenseService wires license gating into the scheduler so automated billing
+// is blocked when the plan does not include bill generation (free tier).
+func (s *AutoBillingScheduler) SetLicenseService(ls *LicenseService) {
+	s.licenseService = ls
 }
 
 // Start the scheduler
@@ -143,6 +150,10 @@ func (s *AutoBillingScheduler) RunConfigNow(id int) (*RunConfigResult, error) {
 // this is the path taken by the scheduler. The manual test path (false) leaves
 // next_run untouched so the periodic schedule still fires as configured.
 func (s *AutoBillingScheduler) runConfig(id int, advanceSchedule bool) (*RunConfigResult, error) {
+	if s.licenseService != nil && !s.licenseService.CanBill() {
+		return nil, fmt.Errorf("automated billing is not included in the free plan — activate a license")
+	}
+
 	now := time.Now()
 
 	var name, buildingIDsStr string

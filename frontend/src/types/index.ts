@@ -119,6 +119,36 @@ export interface Charger {
   updated_at: string;
 }
 
+export interface LicenseLimits {
+  buildings: number;  // -1 = unlimited
+  users: number;
+  meters: number;
+  chargers: number;
+  devices: number;
+  billing: boolean;
+}
+
+export interface LicenseUsage {
+  buildings: number;
+  users: number;
+  meters: number;
+  chargers: number;
+  devices: number;
+}
+
+export interface LicenseStatus {
+  tier: 'free' | 'trial' | 'pro';
+  valid: boolean;
+  licensee?: string;
+  expires?: string;
+  trial_active: boolean;
+  trial_days_left: number;
+  billing_allowed: boolean;
+  limits: LicenseLimits;
+  usage: LicenseUsage;
+  message?: string;
+}
+
 export interface Device {
   id: number;
   name: string;

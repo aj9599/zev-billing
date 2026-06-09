@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useState } from 'react';
-import { LayoutDashboard, Users, Building, Car, FileText, Settings as SettingsIcon, LogOut, Activity, DollarSign, Menu, X, Calendar, Zap, ChevronDown, ChevronRight, Lock, Database, Mail, Power } from 'lucide-react';
+import { LayoutDashboard, Users, Building, Car, FileText, Settings as SettingsIcon, LogOut, Activity, DollarSign, Menu, X, Calendar, Zap, ChevronDown, ChevronRight, Lock, Database, Mail, Power, KeyRound } from 'lucide-react';
 import { api } from '../api/client';
 import { useTranslation } from '../i18n';
 import Logo from './Logo';
@@ -36,6 +36,7 @@ export default function Layout({ onLogout }: LayoutProps) {
     { path: '/logs', icon: Activity, label: t('nav.logs') },
     { path: '/csv-upload', icon: Database, label: t('nav.csvUpload') },
     { path: '/email-settings', icon: Mail, label: t('nav.emailSettings') },
+    { path: '/license', icon: KeyRound, label: t('nav.license') },
     { path: '/settings', icon: Lock, label: t('nav.passwordChange') },
   ];
 

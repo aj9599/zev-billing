@@ -16,6 +16,7 @@ import Settings from './components/Settings';
 import EmailSettings from './components/EmailSettings';
 import AdminLogs from './components/AdminLogs';
 import CSVUpload from './components/CSVUpload';
+import License from './components/License';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
@@ -56,6 +57,7 @@ function App() {
             <Route path="pricing" element={<PricingSettings />} />
             <Route path="settings" element={<Settings />} />
             <Route path="email-settings" element={<EmailSettings />} />
+            <Route path="license" element={<License />} />
             <Route path="logs" element={<AdminLogs />} />
             <Route path="csv-upload" element={<CSVUpload />} />
           </Route>

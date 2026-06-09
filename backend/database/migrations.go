@@ -117,6 +117,17 @@ func RunMigrations(db *sql.DB) error {
 			FOREIGN KEY (building_id) REFERENCES buildings(id)
 		)`,
 
+		// Singleton row holding the install date (trial start) and the activated
+		// license key. Drives free-tier limits / trial / pro gating.
+		`CREATE TABLE IF NOT EXISTS app_license (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			install_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			license_key TEXT NOT NULL DEFAULT '',
+			activated_at DATETIME,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
 		`CREATE TABLE IF NOT EXISTS meter_readings (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			meter_id INTEGER NOT NULL,
@@ -497,7 +508,28 @@ func RunMigrations(db *sql.DB) error {
 		return err
 	}
 
+	// Seed the singleton license row so the trial clock starts on first run.
+	if err := ensureAppLicenseRow(db); err != nil {
+		return err
+	}
+
 	return createDefaultAdmin(db)
+}
+
+// ensureAppLicenseRow creates the singleton app_license row (id=1) on first run.
+// install_date defaults to now, which starts the free trial.
+func ensureAppLicenseRow(db *sql.DB) error {
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM app_license").Scan(&count); err != nil {
+		return err
+	}
+	if count == 0 {
+		if _, err := db.Exec(`INSERT INTO app_license (id) VALUES (1)`); err != nil {
+			return fmt.Errorf("failed to seed app_license: %v", err)
+		}
+		log.Println("app_license default row created (trial started)")
+	}
+	return nil
 }
 
 // addChargerBillingMethodColumn adds chargers.billing_method.

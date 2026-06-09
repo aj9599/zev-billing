@@ -4,7 +4,8 @@ import type {
   BuildingConsumption, SharedMeterConfig, CustomLineItem,
   GenerateBillsRequest, MeterReplacement, MeterReplacementRequest,
   SelfConsumptionData, SystemHealth, CostOverview, EnergyFlowData, EnergyFlowLiveData,
-  EmailAlertSettings, Device, DeviceLiveStatus, DeviceSwitchEvent, LoxoneControl
+  EmailAlertSettings, Device, DeviceLiveStatus, DeviceSwitchEvent, LoxoneControl,
+  LicenseStatus
 } from '../types';
 
 const API_BASE = '/api';
@@ -448,6 +449,24 @@ class ApiClient {
     return this.request('/billing/settings', {
       method: 'POST',
       body: JSON.stringify(settings),
+    });
+  }
+
+  // License / plan
+  async getLicense(): Promise<LicenseStatus> {
+    return this.request('/license');
+  }
+
+  async activateLicense(key: string): Promise<LicenseStatus> {
+    return this.request('/license/activate', {
+      method: 'POST',
+      body: JSON.stringify({ key }),
+    });
+  }
+
+  async deactivateLicense(): Promise<LicenseStatus> {
+    return this.request('/license/deactivate', {
+      method: 'POST',
     });
   }
 
