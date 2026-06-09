@@ -202,3 +202,6 @@ backend/go.sum
 # License signing private key — NEVER commit this
 LICENSE_PRIVATE_KEY*
 *license*private*
+
+# Operator-only license control console — local to the operator's machine, never published
+licenseadmin/
