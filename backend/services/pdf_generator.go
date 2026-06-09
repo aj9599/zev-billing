@@ -1067,16 +1067,31 @@ func (pg *PDFGenerator) generateItemHTML(item map[string]interface{}, currency s
 			<td class="text-right"><strong>%s %.2f</strong></td>
 		</tr>`, boltIcon, description, currency, totalPrice)
 
-	case "car_charging_normal", "car_charging_priority":
+	case "car_charging_normal":
+		// Solar charging (mode "Solar Mode" / solar-split solar share): car + sun,
+		// mirroring the meter solar icon so solar is recognisable everywhere.
 		return fmt.Sprintf(`<tr class="item-cost charging-highlight">
 			<td style="padding-left: 20px;">
 				<span style="display: inline-flex; align-items: center; gap: 6px;">
-					%s
+					%s%s
 					<strong>%s</strong>
 				</span>
 			</td>
 			<td class="text-right"><strong>%s %.2f</strong></td>
-		</tr>`, carIcon, description, currency, totalPrice)
+		</tr>`, carIcon, sunIcon, description, currency, totalPrice)
+
+	case "car_charging_priority":
+		// Priority / grid charging (mode "Priority Mode" / solar-split grid share):
+		// car + bolt, mirroring the meter grid icon.
+		return fmt.Sprintf(`<tr class="item-cost charging-highlight">
+			<td style="padding-left: 20px;">
+				<span style="display: inline-flex; align-items: center; gap: 6px;">
+					%s%s
+					<strong>%s</strong>
+				</span>
+			</td>
+			<td class="text-right"><strong>%s %.2f</strong></td>
+		</tr>`, carIcon, boltIcon, description, currency, totalPrice)
 
 	case "custom_item_header":
 		return fmt.Sprintf(`<tr class="section-separator"><td colspan="2"></td></tr><tr class="item-header"><td colspan="2"><strong>%s</strong></td></tr>`, description)
