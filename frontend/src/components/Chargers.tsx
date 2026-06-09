@@ -356,7 +356,7 @@ export default function Chargers() {
       </div>
 
       {/* Search + Filter */}
-      {buildings.length > 1 && (
+      {buildings.length > 0 && (
         <>
           <div className="app-fade-in" style={{ marginBottom: '16px', animationDelay: '0.1s' }}>
             <div style={{

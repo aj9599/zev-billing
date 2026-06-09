@@ -548,7 +548,7 @@ export default function Devices() {
       )}
 
       {/* Building filter (search + per-building pills), like Meters/Chargers */}
-      {devices.length > 0 && buildings.length > 1 && (
+      {buildings.length > 0 && (
         <div className="app-fade-in" style={{ marginBottom: '8px', animationDelay: '0.08s' }}>
           <div style={{ position: 'relative', maxWidth: '400px', marginBottom: '14px' }}>
             <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
