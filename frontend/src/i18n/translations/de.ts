@@ -2096,6 +2096,7 @@ export const de: Translations = {
   'autoBilling.users': 'Benutzer',
   'autoBilling.allUsers': 'Alle Benutzer in ausgewählten Gebäuden',
   'autoBilling.noBuildings': 'Keine Gebäude ausgewählt',
+  'autoBilling.emptyBuilding': 'Keine Abrechnungspläne für dieses Gebäude.',
 
   // Actions
   'autoBilling.pause': 'Pausieren',

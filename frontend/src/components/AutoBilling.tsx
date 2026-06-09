@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Search, Building } from 'lucide-react';
 import { useTranslation } from '../i18n';
 import { api } from '../api/client';
 import { useAutoBillingConfig } from './autobilling/hooks/useAutoBillingConfig';
@@ -20,6 +21,10 @@ export default function AutoBilling() {
   const [testRunModalOpen, setTestRunModalOpen] = useState(false);
   const [testRunResult, setTestRunResult] = useState<TestRunResult | null>(null);
   const [testRunError, setTestRunError] = useState<string>('');
+  // building filter (matches Meters/Chargers/Devices)
+  const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isMobile] = useState(() => window.innerWidth <= 768);
 
   const handleEditLayout = (config: AutoBillingConfig) => {
     // Layouts are per concrete (non-group) building. Pre-select the first
@@ -169,6 +174,24 @@ export default function AutoBilling() {
     );
   }
 
+  // A config can span multiple buildings, so it matches a building filter when
+  // its building_ids include the selected building.
+  const filteredBuildings = buildings.filter((b) => b.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredConfigs = selectedBuildingId ? configs.filter((c) => c.building_ids.includes(selectedBuildingId)) : configs;
+  const pillStyle = (active: boolean): React.CSSProperties => ({
+    padding: isMobile ? '8px 14px' : '8px 18px', borderRadius: '20px',
+    border: active ? '1.5px solid #667eea' : '1.5px solid #e5e7eb',
+    backgroundColor: active ? '#667eea' : 'white', color: active ? 'white' : '#6b7280',
+    fontSize: '13px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
+    display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap',
+    boxShadow: active ? '0 2px 8px rgba(102,126,234,0.3)' : '0 1px 3px rgba(0,0,0,0.04)',
+  });
+  const countBadge = (active: boolean): React.CSSProperties => ({
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '20px', height: '20px',
+    padding: '0 6px', borderRadius: '10px', fontSize: '11px', fontWeight: 700,
+    backgroundColor: active ? 'rgba(255,255,255,0.25)' : '#f3f4f6', color: active ? 'white' : '#9ca3af',
+  });
+
   return (
     <div className="ab-container" style={{ width: '100%', maxWidth: '100%' }}>
       <div className="app-fade-in">
@@ -183,27 +206,68 @@ export default function AutoBilling() {
           <AutoBillingEmptyState />
         </div>
       ) : (
-        <div className="app-fade-in" style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
-          gap: '20px',
-          animationDelay: '0.05s'
-        }}>
-          {configs.map((config, i) => (
-            <AutoBillingConfigCard
-              key={config.id}
-              config={config}
-              buildings={buildings}
-              onEdit={openEditModal}
-              onEditLayout={handleEditLayout}
-              onDelete={handleDelete}
-              onToggleActive={handleToggleActive}
-              onTestRun={handleTestRun}
-              testRunInProgress={testRunningId === config.id}
-              index={i}
-            />
-          ))}
-        </div>
+        <>
+          {/* Building filter (search + per-building pills), like the other pages */}
+          {buildings.length > 0 && (
+            <div className="app-fade-in" style={{ marginBottom: '20px', animationDelay: '0.04s' }}>
+              <div style={{ position: 'relative', maxWidth: '400px', marginBottom: '14px' }}>
+                <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
+                <input
+                  type="text"
+                  placeholder={t('dashboard.searchBuildings')}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{ width: '100%', padding: '10px 14px 10px 42px', border: '1px solid #e5e7eb', borderRadius: '12px', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                <button onClick={() => setSelectedBuildingId(null)} style={pillStyle(selectedBuildingId === null)}>
+                  <Building size={14} />
+                  {t('dashboard.allBuildings')}
+                  <span style={countBadge(selectedBuildingId === null)}>{configs.length}</span>
+                </button>
+                {filteredBuildings.map((b) => {
+                  const count = configs.filter((c) => c.building_ids.includes(b.id)).length;
+                  const active = selectedBuildingId === b.id;
+                  return (
+                    <button key={b.id} onClick={() => setSelectedBuildingId(b.id)} style={pillStyle(active)}>
+                      {b.name}
+                      <span style={countBadge(active)}>{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {filteredConfigs.length === 0 ? (
+            <div className="app-fade-in" style={{ textAlign: 'center', padding: '40px', color: '#9ca3af', backgroundColor: 'white', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
+              {t('autoBilling.emptyBuilding')}
+            </div>
+          ) : (
+            <div className="app-fade-in" style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
+              gap: '20px',
+              animationDelay: '0.05s'
+            }}>
+              {filteredConfigs.map((config, i) => (
+                <AutoBillingConfigCard
+                  key={config.id}
+                  config={config}
+                  buildings={buildings}
+                  onEdit={openEditModal}
+                  onEditLayout={handleEditLayout}
+                  onDelete={handleDelete}
+                  onToggleActive={handleToggleActive}
+                  onTestRun={handleTestRun}
+                  testRunInProgress={testRunningId === config.id}
+                  index={i}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       <AutoBillingInstructionsModal

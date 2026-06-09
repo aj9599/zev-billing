@@ -2094,6 +2094,7 @@ export const en: Translations = {
   'autoBilling.users': 'Users',
   'autoBilling.allUsers': 'All users in selected buildings',
   'autoBilling.noBuildings': 'No buildings selected',
+  'autoBilling.emptyBuilding': 'No billing schedules for this building.',
 
   // Actions
   'autoBilling.pause': 'Pause',
