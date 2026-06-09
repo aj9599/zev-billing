@@ -1,0 +1,17 @@
+[Unit]
+Description=ZEV Billing License Control (operator console)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust user and paths to your installation
+User=pi
+WorkingDirectory=/home/pi/zev-billing/licenseadmin
+EnvironmentFile=/etc/zev-licenseadmin.env
+ExecStart=/home/pi/zev-billing/licenseadmin/licenseadmin
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
