@@ -2,81 +2,83 @@ package services
 
 // Translations contains all text that appears on invoices
 type InvoiceTranslations struct {
-	Invoice           string
-	Status            string
-	BillTo            string
-	InvoiceDetails    string
-	Period            string
-	Generated         string
-	Description       string
-	Amount            string
-	Subtotal          string
-	VAT               string
-	ThereofVAT        string
-	Total             string
-	PaymentInfo       string
-	BankDetails       string
-	AccountHolder     string
-	IBAN              string
-	Reference         string
-	PleasePayBy       string
-	ThankYou          string
-	ArchivedNotice    string
-	
+	Invoice        string
+	Status         string
+	BillTo         string
+	InvoiceDetails string
+	Period         string
+	Generated      string
+	Description    string
+	Amount         string
+	Subtotal       string
+	VAT            string
+	ThereofVAT     string
+	Total          string
+	PaymentInfo    string
+	BankDetails    string
+	AccountHolder  string
+	IBAN           string
+	Reference      string
+	PleasePayBy    string
+	ThankYou       string
+	ArchivedNotice string
+
 	// Item type translations
-	NormalPower       string
-	SolarPower        string
-	CarCharging       string
-	SharedMeter       string
-	CustomItem        string
-	
+	NormalPower string
+	SolarPower  string
+	CarCharging string
+	SharedMeter string
+	CustomItem  string
+
 	// NEW: Additional translations for item descriptions
-	ApartmentMeter    string
-	OldReading        string
-	NewReading        string
-	Consumption       string
-	NormalPowerGrid   string
-	SolarMode         string
-	PriorityMode      string
+	ApartmentMeter     string
+	OldReading         string
+	NewReading         string
+	Consumption        string
+	NormalPowerGrid    string
+	SolarMode          string
+	PriorityMode       string
+	SolarCharging      string
+	GridCharging       string
 	AdditionalServices string
-	TotalConsumption  string
-	YourShare         string
-	SplitEqually      string
-	SplitByUnits      string
-	CustomSplit       string
-	Among             string
-	Users             string
-	Of                string
-	TotalUnits        string
-	
+	TotalConsumption   string
+	YourShare          string
+	SplitEqually       string
+	SplitByUnits       string
+	CustomSplit        string
+	Among              string
+	Users              string
+	Of                 string
+	TotalUnits         string
+
 	// QR Code section translations
-	ReceiptSection    string  // "Empfangsschein" / "Receipt" / "Section de réception" / "Sezione ricevuta"
-	PaymentPart       string  // "Zahlteil" / "Payment part" / "Section paiement" / "Sezione pagamento"
-	AccountPayableTo  string  // "Konto / Zahlbar an" / "Account / Payable to" / "Compte / Payable à" / "Conto / Pagabile a"
-	PayableBy         string  // "Zahlbar durch" / "Payable by" / "Payable par" / "Pagabile da"
-	Currency          string  // "Währung" / "Currency" / "Monnaie" / "Valuta"
-	AmountLabel       string  // "Betrag" / "Amount" / "Montant" / "Importo"
-	AcceptancePoint   string  // "Annahmestelle" / "Acceptance point" / "Point d'acceptation" / "Punto di accettazione"
-	AdditionalInfo    string  // "Zusätzliche Informationen" / "Additional information" / "Informations supplémentaires" / "Informazioni aggiuntive"
-	InvoiceLabel      string  // "Invoice" / "Rechnung" / "Facture" / "Fattura"	
-		
-	PartialPeriod     string
-	
+	ReceiptSection   string // "Empfangsschein" / "Receipt" / "Section de réception" / "Sezione ricevuta"
+	PaymentPart      string // "Zahlteil" / "Payment part" / "Section paiement" / "Sezione pagamento"
+	AccountPayableTo string // "Konto / Zahlbar an" / "Account / Payable to" / "Compte / Payable à" / "Conto / Pagabile a"
+	PayableBy        string // "Zahlbar durch" / "Payable by" / "Payable par" / "Pagabile da"
+	Currency         string // "Währung" / "Currency" / "Monnaie" / "Valuta"
+	AmountLabel      string // "Betrag" / "Amount" / "Montant" / "Importo"
+	AcceptancePoint  string // "Annahmestelle" / "Acceptance point" / "Point d'acceptation" / "Punto di accettazione"
+	AdditionalInfo   string // "Zusätzliche Informationen" / "Additional information" / "Informations supplémentaires" / "Informazioni aggiuntive"
+	InvoiceLabel     string // "Invoice" / "Rechnung" / "Facture" / "Fattura"
+
+	PartialPeriod string
+
 	// NEW: Frequency translations for custom line items
 	FrequencyOnce      string
 	FrequencyMonthly   string
 	FrequencyQuarterly string
 	FrequencyYearly    string
-	
+
 	// NEW: Category translations for custom line items
 	CategoryMeterRent   string
 	CategoryMaintenance string
 	CategoryService     string
 	CategoryOther       string
-	
+
 	// NEW: Proration description translations
-	Days               string
-	OfPeriod           string
+	Days     string
+	OfPeriod string
 }
 
 // GetTranslations returns translations for the specified language
@@ -116,6 +118,8 @@ func GetTranslations(language string) InvoiceTranslations {
 			NormalPowerGrid:    "Normaler Strom (Netz)",
 			SolarMode:          "Solarmodus",
 			PriorityMode:       "Prioritätsmodus",
+			SolarCharging:      "Solarladen",
+			GridCharging:       "Netzladen",
 			AdditionalServices: "Zusätzliche Dienstleistungen",
 			TotalConsumption:   "Gesamtverbrauch",
 			YourShare:          "Ihr Anteil",
@@ -147,8 +151,8 @@ func GetTranslations(language string) InvoiceTranslations {
 			CategoryService:     "Service",
 			CategoryOther:       "Sonstiges",
 			// Proration translations
-			Days:               "Tage",
-			OfPeriod:           "des Zeitraums",
+			Days:     "Tage",
+			OfPeriod: "des Zeitraums",
 		}
 	case "fr": // French
 		return InvoiceTranslations{
@@ -184,6 +188,8 @@ func GetTranslations(language string) InvoiceTranslations {
 			NormalPowerGrid:    "Électricité normale (réseau)",
 			SolarMode:          "Mode solaire",
 			PriorityMode:       "Mode prioritaire",
+			SolarCharging:      "Recharge solaire",
+			GridCharging:       "Recharge réseau",
 			AdditionalServices: "Services supplémentaires",
 			TotalConsumption:   "Consommation totale",
 			YourShare:          "Votre part",
@@ -215,8 +221,8 @@ func GetTranslations(language string) InvoiceTranslations {
 			CategoryService:     "Service",
 			CategoryOther:       "Autre",
 			// Proration translations
-			Days:               "jours",
-			OfPeriod:           "de la période",
+			Days:     "jours",
+			OfPeriod: "de la période",
 		}
 	case "it": // Italian
 		return InvoiceTranslations{
@@ -252,6 +258,8 @@ func GetTranslations(language string) InvoiceTranslations {
 			NormalPowerGrid:    "Energia normale (rete)",
 			SolarMode:          "Modalità solare",
 			PriorityMode:       "Modalità prioritaria",
+			SolarCharging:      "Ricarica solare",
+			GridCharging:       "Ricarica rete",
 			AdditionalServices: "Servizi aggiuntivi",
 			TotalConsumption:   "Consumo totale",
 			YourShare:          "La tua quota",
@@ -283,8 +291,8 @@ func GetTranslations(language string) InvoiceTranslations {
 			CategoryService:     "Servizio",
 			CategoryOther:       "Altro",
 			// Proration translations
-			Days:               "giorni",
-			OfPeriod:           "del periodo",
+			Days:     "giorni",
+			OfPeriod: "del periodo",
 		}
 	default: // English
 		return InvoiceTranslations{
@@ -320,6 +328,8 @@ func GetTranslations(language string) InvoiceTranslations {
 			NormalPowerGrid:    "Normal Power (Grid)",
 			SolarMode:          "Solar Mode",
 			PriorityMode:       "Priority Mode",
+			SolarCharging:      "Solar Charging",
+			GridCharging:       "Grid Charging",
 			AdditionalServices: "Additional Services",
 			TotalConsumption:   "Total consumption",
 			YourShare:          "Your share",
@@ -351,8 +361,8 @@ func GetTranslations(language string) InvoiceTranslations {
 			CategoryService:     "Service",
 			CategoryOther:       "Other",
 			// Proration translations
-			Days:               "days",
-			OfPeriod:           "of period",
+			Days:     "days",
+			OfPeriod: "of period",
 		}
 	}
 }

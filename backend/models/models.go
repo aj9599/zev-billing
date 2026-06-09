@@ -61,27 +61,27 @@ type FloorConfig struct {
 }
 
 type Meter struct {
-	ID                 int        `json:"id"`
-	Name               string     `json:"name"`
-	MeterType          string     `json:"meter_type"`
-	BuildingID         int        `json:"building_id"`
-	UserID             *int       `json:"user_id"`
-	ApartmentUnit      string     `json:"apartment_unit"`
-	ConnectionType     string     `json:"connection_type"`
-	ConnectionConfig   string     `json:"connection_config"`
-	DeviceType         string     `json:"device_type"`
-	Notes              string     `json:"notes"`
-	LastReading        float64    `json:"last_reading"`
-	LastReadingTime    *time.Time `json:"last_reading_time"`
-	LastReadingExport  float64    `json:"last_reading_export"`
-	IsActive           bool       `json:"is_active"`
-	IsArchived         bool       `json:"is_archived"`
-	ReplacedByMeterID  *int       `json:"replaced_by_meter_id"`
-	ReplacesMetterID   *int       `json:"replaces_meter_id"`
-	ReplacementDate    *time.Time `json:"replacement_date"`
-	ReplacementNotes   string     `json:"replacement_notes"`
-	CreatedAt          time.Time  `json:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at"`
+	ID                int        `json:"id"`
+	Name              string     `json:"name"`
+	MeterType         string     `json:"meter_type"`
+	BuildingID        int        `json:"building_id"`
+	UserID            *int       `json:"user_id"`
+	ApartmentUnit     string     `json:"apartment_unit"`
+	ConnectionType    string     `json:"connection_type"`
+	ConnectionConfig  string     `json:"connection_config"`
+	DeviceType        string     `json:"device_type"`
+	Notes             string     `json:"notes"`
+	LastReading       float64    `json:"last_reading"`
+	LastReadingTime   *time.Time `json:"last_reading_time"`
+	LastReadingExport float64    `json:"last_reading_export"`
+	IsActive          bool       `json:"is_active"`
+	IsArchived        bool       `json:"is_archived"`
+	ReplacedByMeterID *int       `json:"replaced_by_meter_id"`
+	ReplacesMetterID  *int       `json:"replaces_meter_id"`
+	ReplacementDate   *time.Time `json:"replacement_date"`
+	ReplacementNotes  string     `json:"replacement_notes"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 type MeterReplacement struct {
@@ -111,18 +111,23 @@ type MeterReplacementRequest struct {
 }
 
 type Charger struct {
-	ID               int       `json:"id"`
-	Name             string    `json:"name"`
-	Brand            string    `json:"brand"`
-	Preset           string    `json:"preset"`
-	BuildingID       int       `json:"building_id"`
-	ConnectionType   string    `json:"connection_type"`
-	ConnectionConfig string    `json:"connection_config"`
-	SupportsPriority bool      `json:"supports_priority"`
-	Notes            string    `json:"notes"`
-	IsActive         bool      `json:"is_active"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID               int    `json:"id"`
+	Name             string `json:"name"`
+	Brand            string `json:"brand"`
+	Preset           string `json:"preset"`
+	BuildingID       int    `json:"building_id"`
+	ConnectionType   string `json:"connection_type"`
+	ConnectionConfig string `json:"connection_config"`
+	SupportsPriority bool   `json:"supports_priority"`
+	// BillingMethod controls how this charger's energy is billed:
+	//   "mode_based"  – bill by session charge mode (normal vs priority).
+	//   "solar_split" – treat like a meter; its consumption joins the building
+	//                   pool and gets a proportional share of solar production.
+	BillingMethod string    `json:"billing_method"`
+	Notes         string    `json:"notes"`
+	IsActive      bool      `json:"is_active"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 type MeterReading struct {
@@ -215,7 +220,7 @@ type AutoBillingConfig struct {
 	Name               string     `json:"name"`
 	BuildingIDs        string     `json:"building_ids"`
 	UserIDs            string     `json:"user_ids"`
-	CustomItemIDs      string     `json:"custom_item_ids"`      // NEW: Comma-separated list of custom item IDs to include
+	CustomItemIDs      string     `json:"custom_item_ids"` // NEW: Comma-separated list of custom item IDs to include
 	Frequency          string     `json:"frequency"`
 	GenerationDay      int        `json:"generation_day"`
 	FirstExecutionDate *string    `json:"first_execution_date,omitempty"`
@@ -372,14 +377,14 @@ type BuildingEnergyFlow struct {
 // EnergyFlowLiveData holds real-time power data (instantaneous, in Watts/kW)
 // This is separate from EnergyFlowData which holds cumulative energy (kWh)
 type EnergyFlowLiveData struct {
-	Period             string                   `json:"period"`                // Always "live"
-	SolarPowerKw       float64                  `json:"solar_power_kw"`        // Current solar production power
-	ConsumptionPowerKw float64                  `json:"consumption_power_kw"`  // Current building consumption power
-	GridPowerKw        float64                  `json:"grid_power_kw"`         // Current grid power (positive=import, negative=export)
-	EvChargingPowerKw  float64                  `json:"ev_charging_power_kw"`  // Current EV charging power
-	SelfConsumptionPct float64                  `json:"self_consumption_pct"`  // Current self-consumption percentage
-	IsExporting        bool                     `json:"is_exporting"`          // True if exporting to grid
-	Timestamp          string                   `json:"timestamp"`             // ISO timestamp of reading
+	Period             string                   `json:"period"`               // Always "live"
+	SolarPowerKw       float64                  `json:"solar_power_kw"`       // Current solar production power
+	ConsumptionPowerKw float64                  `json:"consumption_power_kw"` // Current building consumption power
+	GridPowerKw        float64                  `json:"grid_power_kw"`        // Current grid power (positive=import, negative=export)
+	EvChargingPowerKw  float64                  `json:"ev_charging_power_kw"` // Current EV charging power
+	SelfConsumptionPct float64                  `json:"self_consumption_pct"` // Current self-consumption percentage
+	IsExporting        bool                     `json:"is_exporting"`         // True if exporting to grid
+	Timestamp          string                   `json:"timestamp"`            // ISO timestamp of reading
 	PerBuilding        []BuildingEnergyFlowLive `json:"per_building,omitempty"`
 }
 
@@ -395,28 +400,28 @@ type BuildingEnergyFlowLive struct {
 // Device is a controllable device (relay/switch) driven by live solar surplus.
 // Standalone from billing. connection_config is driver-specific JSON.
 type Device struct {
-	ID                   int     `json:"id"`
-	Name                 string  `json:"name"`
-	BuildingID           int     `json:"building_id"`
-	Driver               string  `json:"driver"`            // shelly | loxone
-	ConnectionConfig     string  `json:"connection_config"` // JSON
-	ControlMode          string  `json:"control_mode"`      // auto | on | off
-	ManualOverrideUntil  *string `json:"manual_override_until,omitempty"`
-	SwitchOnThresholdW   float64 `json:"switch_on_threshold_w"`
-	SwitchOffThresholdW  float64 `json:"switch_off_threshold_w"`
-	MinRuntimeSeconds    int     `json:"min_runtime_seconds"`
-	MinOfftimeSeconds    int     `json:"min_offtime_seconds"`
-	Priority             int     `json:"priority"`
-	ScheduleJSON         *string `json:"schedule_json,omitempty"`
-	GuaranteeHours       float64 `json:"guarantee_hours"`
-	GuaranteeBy          *string `json:"guarantee_by,omitempty"`
-	LastCommand          *string `json:"last_command,omitempty"`
-	LastCommandAt        *string `json:"last_command_at,omitempty"`
-	LastState            *string `json:"last_state,omitempty"`
-	LastStateAt          *string `json:"last_state_at,omitempty"`
-	IsActive             bool    `json:"is_active"`
-	CreatedAt            string  `json:"created_at"`
-	UpdatedAt            string  `json:"updated_at"`
+	ID                  int     `json:"id"`
+	Name                string  `json:"name"`
+	BuildingID          int     `json:"building_id"`
+	Driver              string  `json:"driver"`            // shelly | loxone
+	ConnectionConfig    string  `json:"connection_config"` // JSON
+	ControlMode         string  `json:"control_mode"`      // auto | on | off
+	ManualOverrideUntil *string `json:"manual_override_until,omitempty"`
+	SwitchOnThresholdW  float64 `json:"switch_on_threshold_w"`
+	SwitchOffThresholdW float64 `json:"switch_off_threshold_w"`
+	MinRuntimeSeconds   int     `json:"min_runtime_seconds"`
+	MinOfftimeSeconds   int     `json:"min_offtime_seconds"`
+	Priority            int     `json:"priority"`
+	ScheduleJSON        *string `json:"schedule_json,omitempty"`
+	GuaranteeHours      float64 `json:"guarantee_hours"`
+	GuaranteeBy         *string `json:"guarantee_by,omitempty"`
+	LastCommand         *string `json:"last_command,omitempty"`
+	LastCommandAt       *string `json:"last_command_at,omitempty"`
+	LastState           *string `json:"last_state,omitempty"`
+	LastStateAt         *string `json:"last_state_at,omitempty"`
+	IsActive            bool    `json:"is_active"`
+	CreatedAt           string  `json:"created_at"`
+	UpdatedAt           string  `json:"updated_at"`
 }
 
 // DeviceSwitchEvent is an audit entry for a switching action.

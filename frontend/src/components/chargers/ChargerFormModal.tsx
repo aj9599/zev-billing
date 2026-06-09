@@ -326,6 +326,26 @@ export default function ChargerFormModal({
                 </select>
               </div>
 
+              {/* Billing Method */}
+              <div style={{ marginBottom: '14px' }}>
+                <label style={labelStyle}>{t('chargers.billingMethod')}</label>
+                <select
+                  value={formData.billing_method || 'mode_based'}
+                  onChange={(e) => onFormDataChange({ ...formData, billing_method: e.target.value })}
+                  onFocus={focusHandler}
+                  onBlur={blurHandler}
+                  style={inputStyle(isMobile)}
+                >
+                  <option value="mode_based">{t('chargers.billingModeBased')}</option>
+                  <option value="solar_split">{t('chargers.billingSolarSplit')}</option>
+                </select>
+                <p style={{ fontSize: '12px', color: '#6b7280', margin: '6px 2px 0' }}>
+                  {(formData.billing_method || 'mode_based') === 'solar_split'
+                    ? t('chargers.billingSolarSplitHint')
+                    : t('chargers.billingModeBasedHint')}
+                </p>
+              </div>
+
               {/* Connection Type (not for Zaptec) */}
               {formData.preset !== 'zaptec' && (
                 <div>

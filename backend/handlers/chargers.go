@@ -30,8 +30,8 @@ func (h *ChargerHandler) List(w http.ResponseWriter, r *http.Request) {
 	buildingID := r.URL.Query().Get("building_id")
 
 	query := `
-		SELECT id, name, brand, preset, building_id, connection_type, 
-		       connection_config, supports_priority, notes, is_active,
+		SELECT id, name, brand, preset, building_id, connection_type,
+		       connection_config, supports_priority, billing_method, notes, is_active,
 		       created_at, updated_at
 		FROM chargers
 	`
@@ -57,7 +57,7 @@ func (h *ChargerHandler) List(w http.ResponseWriter, r *http.Request) {
 		var c models.Charger
 		err := rows.Scan(
 			&c.ID, &c.Name, &c.Brand, &c.Preset, &c.BuildingID, &c.ConnectionType,
-			&c.ConnectionConfig, &c.SupportsPriority, &c.Notes, &c.IsActive,
+			&c.ConnectionConfig, &c.SupportsPriority, &c.BillingMethod, &c.Notes, &c.IsActive,
 			&c.CreatedAt, &c.UpdatedAt,
 		)
 		if err != nil {
@@ -80,13 +80,13 @@ func (h *ChargerHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	var c models.Charger
 	err = h.db.QueryRow(`
-		SELECT id, name, brand, preset, building_id, connection_type, 
-		       connection_config, supports_priority, notes, is_active,
+		SELECT id, name, brand, preset, building_id, connection_type,
+		       connection_config, supports_priority, billing_method, notes, is_active,
 		       created_at, updated_at
 		FROM chargers WHERE id = ?
 	`, id).Scan(
 		&c.ID, &c.Name, &c.Brand, &c.Preset, &c.BuildingID, &c.ConnectionType,
-		&c.ConnectionConfig, &c.SupportsPriority, &c.Notes, &c.IsActive,
+		&c.ConnectionConfig, &c.SupportsPriority, &c.BillingMethod, &c.Notes, &c.IsActive,
 		&c.CreatedAt, &c.UpdatedAt,
 	)
 
@@ -110,13 +110,24 @@ func (h *ChargerHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Default the billing method when the client doesn't specify one: Zaptec cloud
+	// chargers have no usable charge mode, so they bill best with a proportional
+	// solar split; everything else keeps the classic mode-based billing.
+	if c.BillingMethod == "" {
+		if c.ConnectionType == "zaptec_api" {
+			c.BillingMethod = "solar_split"
+		} else {
+			c.BillingMethod = "mode_based"
+		}
+	}
+
 	result, err := h.db.Exec(`
 		INSERT INTO chargers (
-			name, brand, preset, building_id, connection_type, 
-			connection_config, supports_priority, notes, is_active
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			name, brand, preset, building_id, connection_type,
+			connection_config, supports_priority, billing_method, notes, is_active
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, c.Name, c.Brand, c.Preset, c.BuildingID, c.ConnectionType,
-		c.ConnectionConfig, c.SupportsPriority, c.Notes, c.IsActive)
+		c.ConnectionConfig, c.SupportsPriority, c.BillingMethod, c.Notes, c.IsActive)
 
 	if err != nil {
 		http.Error(w, "Failed to create charger", http.StatusInternalServerError)
@@ -163,15 +174,23 @@ func (h *ChargerHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if c.BillingMethod == "" {
+		if c.ConnectionType == "zaptec_api" {
+			c.BillingMethod = "solar_split"
+		} else {
+			c.BillingMethod = "mode_based"
+		}
+	}
+
 	_, err = h.db.Exec(`
 		UPDATE chargers SET
-			name = ?, brand = ?, preset = ?, building_id = ?, 
-			connection_type = ?, connection_config = ?, 
-			supports_priority = ?, notes = ?, is_active = ?,
+			name = ?, brand = ?, preset = ?, building_id = ?,
+			connection_type = ?, connection_config = ?,
+			supports_priority = ?, billing_method = ?, notes = ?, is_active = ?,
 			updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`, c.Name, c.Brand, c.Preset, c.BuildingID, c.ConnectionType,
-		c.ConnectionConfig, c.SupportsPriority, c.Notes, c.IsActive, id)
+		c.ConnectionConfig, c.SupportsPriority, c.BillingMethod, c.Notes, c.IsActive, id)
 
 	if err != nil {
 		http.Error(w, "Failed to update charger", http.StatusInternalServerError)
@@ -415,7 +434,7 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 		Voltage          float64          `json:"voltage,omitempty"`
 		Current          float64          `json:"current,omitempty"`
 		LiveSession      *LiveSessionData `json:"live_session,omitempty"`
-		
+
 		// Enhanced Loxone statistics
 		LastSessionEnergy   float64 `json:"last_session_energy,omitempty"`
 		LastSessionDuration float64 `json:"last_session_duration_sec,omitempty"`
@@ -503,7 +522,7 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 				data.Mode = zaptecData.Mode
 				data.LastUpdate = zaptecData.Timestamp.Format("2006-01-02 15:04:05")
 
-				log.Printf("GetLiveData: Zaptec charger %s - State: %s, Power: %.2f kW, Total: %.3f kWh, Session: %.3f kWh, Online: %t", 
+				log.Printf("GetLiveData: Zaptec charger %s - State: %s, Power: %.2f kW, Total: %.3f kWh, Session: %.3f kWh, Online: %t",
 					chargerName, data.State, data.CurrentPowerKW, data.TotalEnergy, data.SessionEnergy, data.IsOnline)
 
 				// Get live session if available
@@ -520,7 +539,7 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 							IsActive:  liveSession.IsActive,
 							PowerKW:   liveSession.Power_kW,
 						}
-						log.Printf("GetLiveData: Zaptec charger %s - Live session: %s, Energy: %.3f kWh, Duration: %s, StartTime: %s", 
+						log.Printf("GetLiveData: Zaptec charger %s - Live session: %s, Energy: %.3f kWh, Duration: %s, StartTime: %s",
 							chargerName, liveSession.SessionID, liveSession.Energy, formatDuration(duration), liveSession.StartTime.Format(time.RFC3339))
 					} else {
 						log.Printf("GetLiveData: Zaptec charger %s - Live session has zero/invalid start time, skipping", chargerName)
@@ -554,9 +573,9 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 				data.YearlyEnergy = loxoneData.YearlyEnergy_kWh
 				data.LastYearEnergy = loxoneData.LastYearEnergy_kWh
 
-				log.Printf("GetLiveData: Loxone charger %s - State: %s (%s), Power: %.2f kW, Total: %.3f kWh, Session: %.3f kWh, Online: %t", 
+				log.Printf("GetLiveData: Loxone charger %s - State: %s (%s), Power: %.2f kW, Total: %.3f kWh, Session: %.3f kWh, Online: %t",
 					chargerName, data.State, data.StateDescription, data.CurrentPowerKW, data.TotalEnergy, data.SessionEnergy, data.IsOnline)
-				log.Printf("  Enhanced stats - Weekly: %.2f, Monthly: %.2f, Yearly: %.2f kWh", 
+				log.Printf("  Enhanced stats - Weekly: %.2f, Monthly: %.2f, Yearly: %.2f kWh",
 					data.WeeklyEnergy, data.MonthlyEnergy, data.YearlyEnergy)
 
 				// Get live session if available
@@ -573,7 +592,7 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 							IsActive:  loxoneData.ChargingActive,
 							PowerKW:   data.CurrentPowerKW,
 						}
-						log.Printf("GetLiveData: Loxone charger %s - Active session, Energy: %.3f kWh, Duration: %s", 
+						log.Printf("GetLiveData: Loxone charger %s - Active session, Energy: %.3f kWh, Duration: %s",
 							chargerName, data.SessionEnergy, formatDuration(duration))
 					} else {
 						log.Printf("GetLiveData: Loxone charger %s - Active session has zero/invalid start time, skipping", chargerName)

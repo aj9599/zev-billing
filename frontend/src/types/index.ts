@@ -111,6 +111,8 @@ export interface Charger {
   connection_type: string;
   connection_config: string;
   supports_priority: boolean;
+  /** "mode_based" (bill by charge mode) | "solar_split" (proportional solar share, like a meter) */
+  billing_method?: string;
   notes: string;
   is_active: boolean;
   created_at: string;

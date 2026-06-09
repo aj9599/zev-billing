@@ -53,6 +53,7 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
     building_id: 0,
     connection_type: 'loxone_api',
     connection_config: '{}',
+    billing_method: 'mode_based',
     notes: '',
     is_active: true
   });
@@ -123,6 +124,7 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
       building_id: 0,
       connection_type: 'loxone_api',
       connection_config: '{}',
+      billing_method: 'mode_based',
       notes: '',
       is_active: true
     });
@@ -262,7 +264,10 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
       ...prev,
       brand: presetName,
       preset: presetName,
-      connection_type: presetName === 'zaptec' ? 'zaptec_api' : prev.connection_type
+      connection_type: presetName === 'zaptec' ? 'zaptec_api' : prev.connection_type,
+      // Zaptec cloud reports no charge mode, so default it to the proportional
+      // solar split; other presets keep classic mode-based billing.
+      billing_method: presetName === 'zaptec' ? 'solar_split' : (prev.billing_method || 'mode_based')
     }));
     setConnectionConfig(prev => ({
       ...prev,

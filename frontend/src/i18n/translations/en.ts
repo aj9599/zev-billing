@@ -1451,6 +1451,13 @@ export const en: Translations = {
   // Delete Confirmation
   'chargers.captchaRequired': 'Please solve the security challenge to proceed.',
 
+  // Billing Method
+  'chargers.billingMethod': 'Billing Method',
+  'chargers.billingModeBased': 'Charge mode (solar / priority)',
+  'chargers.billingSolarSplit': 'Proportional solar split (like a meter)',
+  'chargers.billingModeBasedHint': 'Energy is billed by the charger’s reported charge mode: priority sessions at the priority price, everything else at the solar price.',
+  'chargers.billingSolarSplitHint': 'The charger joins the building consumption pool: solar production is shared between all meters and chargers by usage. The charger’s solar share is billed at the solar-charging price, the rest at the grid-charging price. Recommended for Zaptec (no charge mode).',
+
   // Connection Types
   'chargers.loxoneApiRecommended': 'Loxone WebSocket API (Recommended)',
   'chargers.udpAlternative': 'UDP (Legacy)',

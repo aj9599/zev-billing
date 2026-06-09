@@ -1163,118 +1163,13 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 	// CRITICAL: Car charging for THIS USER'S ACTUAL PERIOD
 	// In building mode, all chargers in the building are billed (charger_id match, no RFID required).
 	// In default (apartment) mode, only the chargers matching the user's RFIDs are billed.
+	// Solar-split chargers are billed via a proportional solar share; mode-based
+	// chargers by their reported charge mode. computeCharging keeps the two separate.
 	hasChargingSource := scope.Mode == BillingModeBuilding || userPeriod.ChargerIDs != ""
 	if hasChargingSource {
 		log.Printf("  [CHARGING] Calculating for period: %s to %s (mode=%s)", start.Format("2006-01-02"), end.Format("2006-01-02"), scope.Mode)
-
-		type chargingSegment struct {
-			seg                                PriceSegment
-			segStart, segEnd                   time.Time
-			normalCharging, priorityCharging   float64
-			firstSession, lastSession          time.Time
-		}
-		var chargingSegs []chargingSegment
-		var totalNormalCharging, totalPriorityCharging float64
-		var firstSessionOverall, lastSessionOverall time.Time
-		for _, seg := range segments {
-			segStart, segEnd, ok := clipToSegment(seg, start, end)
-			if !ok {
-				continue
-			}
-			var nC, pC float64
-			var fS, lS time.Time
-			if scope.Mode == BillingModeBuilding {
-				nC, pC, fS, lS = bs.calculateChargingForBuilding(buildingID, segStart, segEnd)
-			} else {
-				nC, pC, fS, lS = bs.calculateChargingConsumption(buildingID, userPeriod.ChargerIDs, segStart, segEnd)
-			}
-			totalNormalCharging += nC
-			totalPriorityCharging += pC
-			if !fS.IsZero() && (firstSessionOverall.IsZero() || fS.Before(firstSessionOverall)) {
-				firstSessionOverall = fS
-			}
-			if !lS.IsZero() && (lastSessionOverall.IsZero() || lS.After(lastSessionOverall)) {
-				lastSessionOverall = lS
-			}
-			chargingSegs = append(chargingSegs, chargingSegment{
-				seg: seg, segStart: segStart, segEnd: segEnd,
-				normalCharging: nC, priorityCharging: pC,
-				firstSession: fS, lastSession: lS,
-			})
-		}
-
-		log.Printf("  [CHARGING] Results: Solar=%.3f kWh, Priority=%.3f kWh", totalNormalCharging, totalPriorityCharging)
-
-		if totalNormalCharging > 0 || totalPriorityCharging > 0 {
-			items = append(items, models.InvoiceItem{
-				Description: "",
-				Quantity:    0,
-				UnitPrice:   0,
-				TotalPrice:  0,
-				ItemType:    "separator",
-			})
-
-			items = append(items, models.InvoiceItem{
-				Description: tr.CarCharging,
-				Quantity:    0,
-				UnitPrice:   0,
-				TotalPrice:  0,
-				ItemType:    "charging_header",
-			})
-
-			if !firstSessionOverall.IsZero() && !lastSessionOverall.IsZero() {
-				totalCharged := totalNormalCharging + totalPriorityCharging
-				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("%s: %s - %s | %s: %.3f kWh",
-						tr.Period,
-						firstSessionOverall.Format("02.01 15:04"),
-						lastSessionOverall.Format("02.01 15:04"),
-						tr.Total,
-						totalCharged),
-					Quantity:   totalCharged,
-					UnitPrice:  0,
-					TotalPrice: 0,
-					ItemType:   "charging_session_compact",
-				})
-
-				items = append(items, models.InvoiceItem{
-					Description: "",
-					Quantity:    0,
-					UnitPrice:   0,
-					TotalPrice:  0,
-					ItemType:    "separator",
-				})
-			}
-
-			for _, cs := range chargingSegs {
-				suffix := segmentSuffix(PriceSegment{Start: cs.segStart, End: cs.segEnd}, multiSeg)
-				s := cs.seg.Settings
-				if cs.normalCharging > 0 {
-					cost := cs.normalCharging * s.CarChargingNormalPrice
-					totalAmount += cost
-					items = append(items, models.InvoiceItem{
-						Description: fmt.Sprintf("%s%s: %.3f kWh × %.3f %s/kWh", tr.SolarMode, suffix, cs.normalCharging, s.CarChargingNormalPrice, s.Currency),
-						Quantity:    cs.normalCharging,
-						UnitPrice:   s.CarChargingNormalPrice,
-						TotalPrice:  cost,
-						ItemType:    "car_charging_normal",
-					})
-					log.Printf("  Solar Charging%s: %.3f kWh × %.3f = %.3f %s", suffix, cs.normalCharging, s.CarChargingNormalPrice, cost, s.Currency)
-				}
-				if cs.priorityCharging > 0 {
-					cost := cs.priorityCharging * s.CarChargingPriorityPrice
-					totalAmount += cost
-					items = append(items, models.InvoiceItem{
-						Description: fmt.Sprintf("%s%s: %.3f kWh × %.3f %s/kWh", tr.PriorityMode, suffix, cs.priorityCharging, s.CarChargingPriorityPrice, s.Currency),
-						Quantity:    cs.priorityCharging,
-						UnitPrice:   s.CarChargingPriorityPrice,
-						TotalPrice:  cost,
-						ItemType:    "car_charging_priority",
-					})
-					log.Printf("  Priority Charging%s: %.3f kWh × %.3f = %.3f %s", suffix, cs.priorityCharging, s.CarChargingPriorityPrice, cost, s.Currency)
-				}
-			}
-		}
+		chargingSegs, firstSessionOverall, lastSessionOverall := bs.computeCharging(buildingID, scope.Mode, userPeriod.ChargerIDs, 0, segments, start, end)
+		totalAmount += appendChargingItems(&items, chargingSegs, firstSessionOverall, lastSessionOverall, multiSeg, tr, tr.CarCharging)
 	}
 
 	// Shared meters and custom items ARE pro-rated by days
@@ -1846,102 +1741,23 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 		}
 	}
 
-	// Car charging — same per-segment treatment as the energy block.
+	// Car charging — mode-based and solar-split chargers handled together. The solar
+	// split here uses the charger's own building pool (the vZEV virtual-PV sharing
+	// applies to apartment energy, not to charger billing).
 	if userPeriod.ChargerIDs != "" {
-		type chargingSegment struct {
-			seg                              PriceSegment
-			normalCharging, priorityCharging float64
-			firstSession, lastSession        time.Time
-		}
-		var chargingSegs []chargingSegment
-		var totalNormalCharging, totalPriorityCharging float64
-		var firstSessionOverall, lastSessionOverall time.Time
+		segs := make([]PriceSegment, 0, len(segResults))
+		var winStart, winEnd time.Time
 		for _, sr := range segResults {
-			nC, pC, fS, lS := bs.calculateChargingConsumption(buildingID, userPeriod.ChargerIDs, sr.Segment.Start, sr.Segment.End)
-			totalNormalCharging += nC
-			totalPriorityCharging += pC
-			if !fS.IsZero() && (firstSessionOverall.IsZero() || fS.Before(firstSessionOverall)) {
-				firstSessionOverall = fS
+			segs = append(segs, sr.Segment)
+			if winStart.IsZero() || sr.Segment.Start.Before(winStart) {
+				winStart = sr.Segment.Start
 			}
-			if !lS.IsZero() && (lastSessionOverall.IsZero() || lS.After(lastSessionOverall)) {
-				lastSessionOverall = lS
-			}
-			chargingSegs = append(chargingSegs, chargingSegment{
-				seg: sr.Segment, normalCharging: nC, priorityCharging: pC,
-				firstSession: fS, lastSession: lS,
-			})
-		}
-
-		if totalNormalCharging > 0 || totalPriorityCharging > 0 {
-			items = append(items, models.InvoiceItem{
-				Description: "",
-				Quantity:    0,
-				UnitPrice:   0,
-				TotalPrice:  0,
-				ItemType:    "separator",
-			})
-
-			items = append(items, models.InvoiceItem{
-				Description: tr.CarCharging,
-				Quantity:    0,
-				UnitPrice:   0,
-				TotalPrice:  0,
-				ItemType:    "charging_header",
-			})
-
-			if !firstSessionOverall.IsZero() {
-				totalCharged := totalNormalCharging + totalPriorityCharging
-				items = append(items, models.InvoiceItem{
-					Description: fmt.Sprintf("%s: %s - %s | %s: %.3f kWh",
-						tr.Period,
-						firstSessionOverall.Format("02.01 15:04"),
-						lastSessionOverall.Format("02.01 15:04"),
-						tr.Total,
-						totalCharged),
-					Quantity:   totalCharged,
-					UnitPrice:  0,
-					TotalPrice: 0,
-					ItemType:   "charging_session_compact",
-				})
-
-				items = append(items, models.InvoiceItem{
-					Description: "",
-					Quantity:    0,
-					UnitPrice:   0,
-					TotalPrice:  0,
-					ItemType:    "separator",
-				})
-			}
-
-			for _, cs := range chargingSegs {
-				suffix := segmentSuffix(cs.seg, multiSeg)
-				s := cs.seg.Settings
-				if cs.normalCharging > 0 {
-					cost := cs.normalCharging * s.CarChargingNormalPrice
-					totalAmount += cost
-					items = append(items, models.InvoiceItem{
-						Description: fmt.Sprintf("%s%s: %.3f kWh × %.3f %s/kWh",
-							tr.SolarMode, suffix, cs.normalCharging, s.CarChargingNormalPrice, s.Currency),
-						Quantity:   cs.normalCharging,
-						UnitPrice:  s.CarChargingNormalPrice,
-						TotalPrice: cost,
-						ItemType:   "car_charging_normal",
-					})
-				}
-				if cs.priorityCharging > 0 {
-					cost := cs.priorityCharging * s.CarChargingPriorityPrice
-					totalAmount += cost
-					items = append(items, models.InvoiceItem{
-						Description: fmt.Sprintf("%s%s: %.3f kWh × %.3f %s/kWh",
-							tr.PriorityMode, suffix, cs.priorityCharging, s.CarChargingPriorityPrice, s.Currency),
-						Quantity:   cs.priorityCharging,
-						UnitPrice:  s.CarChargingPriorityPrice,
-						TotalPrice: cost,
-						ItemType:   "car_charging_priority",
-					})
-				}
+			if sr.Segment.End.After(winEnd) {
+				winEnd = sr.Segment.End
 			}
 		}
+		chargingSegs, firstSessionOverall, lastSessionOverall := bs.computeCharging(buildingID, BillingModeApartments, userPeriod.ChargerIDs, 0, segs, winStart, winEnd)
+		totalAmount += appendChargingItems(&items, chargingSegs, firstSessionOverall, lastSessionOverall, multiSeg, tr, tr.CarCharging)
 	}
 
 	// Shared meters and custom items (pro-rated)
@@ -2149,7 +1965,9 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 	intervalData := make(map[time.Time]*IntervalData)
 
 	for _, reading := range allReadings {
-		roundedTime := reading.ReadingTime
+		// Snap to the fixed 15-minute grid so meter readings and charger sessions
+		// land in the same buckets (required for the shared solar pool below).
+		roundedTime := floorTo15min(reading.ReadingTime)
 
 		if intervalData[roundedTime] == nil {
 			intervalData[roundedTime] = &IntervalData{}
@@ -2164,6 +1982,25 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 			// FIXED: Use ConsumptionExport for solar production (export energy)
 			intervalData[roundedTime].SolarProduction += reading.ConsumptionExport
 		}
+	}
+
+	// Solar-split chargers participate in the building consumption pool just like
+	// apartment meters: their per-interval consumption is added to the building
+	// total so solar production is shared between meters AND chargers. This dilutes
+	// the solar credited to apartments by the chargers' share — the physically
+	// correct "everyone draws from the same sun" model.
+	if splitIDs := bs.solarSplitChargerIDsForBuilding(buildingID); len(splitIDs) > 0 {
+		chargerIntervals, _, _ := bs.chargerIntervalKwh(buildingID, chargerSessionFilter{
+			useChargerIDs: true,
+			chargerIDs:    splitIDs,
+		}, start, end, true)
+		for ts, kwh := range chargerIntervals {
+			if intervalData[ts] == nil {
+				intervalData[ts] = &IntervalData{}
+			}
+			intervalData[ts].BuildingConsumption += kwh
+		}
+		log.Printf("    [ZEV] Added %d solar-split charger interval(s) to building pool", len(chargerIntervals))
 	}
 
 	totalNormal := 0.0
@@ -2312,9 +2149,11 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 
 	log.Printf("  [CHARGING] Cleaned RFID cards: %v", cleanedRfids)
 
+	// Solar-split chargers are billed separately (proportional solar share), so the
+	// classic mode-based RFID path must ignore them to avoid double-counting.
 	chargerRows, err := bs.db.Query(`
-		SELECT id, name, connection_config FROM chargers 
-		WHERE building_id = ? AND is_active = 1
+		SELECT id, name, connection_config FROM chargers
+		WHERE building_id = ? AND is_active = 1 AND COALESCE(billing_method, 'mode_based') != 'solar_split'
 	`, buildingID)
 
 	if err != nil {
@@ -2829,6 +2668,458 @@ func (bs *BillingService) calculateChargingFiltered(buildingID int, filter charg
 	return normal, priority, firstSession, lastSession
 }
 
+// floorTo15min snaps a timestamp down to the fixed 15-minute grid (Swiss metering
+// standard) so meter readings and charger sessions share the same interval keys.
+func floorTo15min(t time.Time) time.Time {
+	return t.Truncate(15 * time.Minute)
+}
+
+// solarSplitChargerIDsForBuilding returns the IDs of active chargers in the building
+// whose billing_method is "solar_split".
+func (bs *BillingService) solarSplitChargerIDsForBuilding(buildingID int) []int {
+	rows, err := bs.db.Query(`
+		SELECT id FROM chargers
+		WHERE building_id = ? AND is_active = 1 AND COALESCE(billing_method, 'mode_based') = 'solar_split'
+	`, buildingID)
+	if err != nil {
+		log.Printf("  [SOLAR-SPLIT] ERROR querying solar-split chargers for building %d: %v", buildingID, err)
+		return nil
+	}
+	defer rows.Close()
+	var ids []int
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// chargerIntervalKwh returns per-15-minute-interval consumption (keyed by the floored
+// session time) summed across the selected chargers, plus the first/last billable
+// session time. It applies the same cumulative-counter delta logic as the mode-based
+// path (idle sessions skipped, genuine resets / spurious drops handled, per-charger
+// sanity cap), but buckets the energy by interval instead of by charge mode.
+//
+// Selection mirrors chargerSessionFilter: by charger_id list, or by RFID/user_id.
+// When onlySolarSplit is true, only chargers with billing_method="solar_split" count.
+func (bs *BillingService) chargerIntervalKwh(buildingID int, filter chargerSessionFilter, start, end time.Time, onlySolarSplit bool) (map[time.Time]float64, time.Time, time.Time) {
+	result := make(map[time.Time]float64)
+	var firstSession, lastSession time.Time
+
+	var where string
+	var args []interface{}
+	if filter.useChargerIDs {
+		if len(filter.chargerIDs) == 0 {
+			return result, firstSession, lastSession
+		}
+		ph := make([]string, len(filter.chargerIDs))
+		for i, id := range filter.chargerIDs {
+			ph[i] = "?"
+			args = append(args, id)
+		}
+		where = "cs.charger_id IN (" + strings.Join(ph, ",") + ")"
+	} else {
+		if len(filter.rfidCards) == 0 {
+			return result, firstSession, lastSession
+		}
+		ph := make([]string, len(filter.rfidCards))
+		for i, rfid := range filter.rfidCards {
+			ph[i] = "?"
+			args = append(args, rfid)
+		}
+		where = "cs.user_id IN (" + strings.Join(ph, ",") + ")"
+	}
+
+	splitClause := ""
+	if onlySolarSplit {
+		splitClause = "AND COALESCE(c.billing_method, 'mode_based') = 'solar_split'"
+	}
+
+	query := fmt.Sprintf(`
+		SELECT cs.charger_id, cs.session_time, cs.power_kwh, cs.state, c.connection_config
+		FROM charger_sessions cs
+		JOIN chargers c ON cs.charger_id = c.id
+		WHERE c.building_id = ? AND c.is_active = 1 %s AND %s
+		AND cs.session_time >= ? AND cs.session_time <= ?
+		ORDER BY cs.charger_id, cs.session_time ASC
+	`, splitClause, where)
+
+	qArgs := append([]interface{}{buildingID}, args...)
+	qArgs = append(qArgs, start, end)
+
+	rows, err := bs.db.Query(query, qArgs...)
+	if err != nil {
+		log.Printf("  [SOLAR-SPLIT] ERROR querying charger intervals: %v", err)
+		return result, firstSession, lastSession
+	}
+	defer rows.Close()
+
+	type sess struct {
+		t     time.Time
+		power float64
+		state string
+	}
+	byCharger := make(map[int][]sess)
+	idleByCharger := make(map[int]string)
+	for rows.Next() {
+		var id int
+		var t time.Time
+		var power float64
+		var state, connConfigJSON string
+		if err := rows.Scan(&id, &t, &power, &state, &connConfigJSON); err != nil {
+			continue
+		}
+		if _, ok := idleByCharger[id]; !ok {
+			idleByCharger[id] = "50"
+			var cc map[string]interface{}
+			if json.Unmarshal([]byte(connConfigJSON), &cc) == nil {
+				idleByCharger[id] = getConfigString(cc, "state_idle", "50")
+			}
+		}
+		byCharger[id] = append(byCharger[id], sess{t, power, state})
+	}
+
+	for id, sessions := range byCharger {
+		stateIdle := idleByCharger[id]
+		var prevPower, firstBillable, lastBillable float64
+		var hasPrev, genuineReset bool
+		perInterval := make(map[time.Time]float64)
+
+		for _, s := range sessions {
+			if s.state == stateIdle {
+				continue
+			}
+			if firstSession.IsZero() || s.t.Before(firstSession) {
+				firstSession = s.t
+			}
+			if s.t.After(lastSession) {
+				lastSession = s.t
+			}
+			if !hasPrev {
+				prevPower = s.power
+				firstBillable = s.power
+				lastBillable = s.power
+				hasPrev = true
+				continue
+			}
+			lastBillable = s.power
+			delta := s.power - prevPower
+			if delta < 0 {
+				// Genuine reset (back to ~0) re-baselines; a spurious non-zero drop
+				// holds the previous high so the climb back isn't billed twice.
+				if s.power < 1.0 {
+					prevPower = s.power
+					genuineReset = true
+				}
+				continue
+			}
+			if delta > 0 {
+				perInterval[floorTo15min(s.t)] += delta
+			}
+			prevPower = s.power
+		}
+
+		// Per-charger sanity cap: total cannot exceed (last − first) reading.
+		if hasPrev && !genuineReset {
+			var sum float64
+			for _, v := range perInterval {
+				sum += v
+			}
+			bound := lastBillable - firstBillable
+			if bound < 0 {
+				bound = 0
+			}
+			if sum > bound+0.001 && sum > 0 {
+				factor := bound / sum
+				for ts := range perInterval {
+					perInterval[ts] *= factor
+				}
+			}
+		}
+
+		for ts, v := range perInterval {
+			result[ts] += v
+		}
+	}
+
+	return result, firstSession, lastSession
+}
+
+// buildingMeterIntervals returns, per 15-minute interval, the building's total
+// apartment consumption and solar production (export energy). Used as the base for
+// the charger solar split.
+func (bs *BillingService) buildingMeterIntervals(buildingID int, start, end time.Time) (apt, solar map[time.Time]float64) {
+	apt = make(map[time.Time]float64)
+	solar = make(map[time.Time]float64)
+
+	rows, err := bs.db.Query(`
+		SELECT m.meter_type, mr.reading_time, mr.consumption_kwh, mr.consumption_export
+		FROM meter_readings mr
+		JOIN meters m ON mr.meter_id = m.id
+		WHERE m.building_id = ?
+		AND m.meter_type IN ('apartment_meter', 'solar_meter')
+		AND mr.reading_time >= ? AND mr.reading_time <= ?
+	`, buildingID, start, end)
+	if err != nil {
+		log.Printf("  [SOLAR-SPLIT] ERROR querying building meter intervals: %v", err)
+		return apt, solar
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var mtype string
+		var t time.Time
+		var cons, exportE float64
+		if err := rows.Scan(&mtype, &t, &cons, &exportE); err != nil {
+			continue
+		}
+		ts := floorTo15min(t)
+		if mtype == "apartment_meter" {
+			apt[ts] += cons
+		} else if mtype == "solar_meter" {
+			solar[ts] += exportE
+		}
+	}
+	return apt, solar
+}
+
+// calculateChargingSolarSplit bills the selected solar-split chargers by giving them a
+// proportional share of the building's solar production, exactly like apartment meters.
+// Per interval the consumption pool is (apartment consumption + ALL solar-split chargers
+// in the building); the selected chargers receive solar in proportion to their share of
+// that pool, and the remainder is grid energy. The pool here matches the one
+// calculateZEVConsumption uses to dilute apartments, so solar is conserved.
+//
+// Returns the selected chargers' solar and grid kWh plus the first/last session time.
+func (bs *BillingService) calculateChargingSolarSplit(buildingID int, target chargerSessionFilter, start, end time.Time) (solar, grid float64, firstSession, lastSession time.Time) {
+	targetIntervals, fS, lS := bs.chargerIntervalKwh(buildingID, target, start, end, true)
+	firstSession, lastSession = fS, lS
+	if len(targetIntervals) == 0 {
+		return 0, 0, firstSession, lastSession
+	}
+
+	aptIntervals, solarIntervals := bs.buildingMeterIntervals(buildingID, start, end)
+	var poolCharger map[time.Time]float64
+	if allSplit := bs.solarSplitChargerIDsForBuilding(buildingID); len(allSplit) > 0 {
+		poolCharger, _, _ = bs.chargerIntervalKwh(buildingID, chargerSessionFilter{
+			useChargerIDs: true,
+			chargerIDs:    allSplit,
+		}, start, end, true)
+	}
+
+	for ts, tKwh := range targetIntervals {
+		if tKwh <= 0 {
+			continue
+		}
+		poolCh := poolCharger[ts]
+		// A target subset (RFID-filtered) must never exceed the pool's charger total
+		// for the same interval (delta baselines can differ slightly).
+		if tKwh > poolCh {
+			poolCh = tKwh
+		}
+		pool := aptIntervals[ts] + poolCh
+		solarProd := solarIntervals[ts]
+
+		if pool <= 0 {
+			grid += tKwh
+			continue
+		}
+		if solarProd >= pool {
+			solar += tKwh
+			continue
+		}
+		s := solarProd * (tKwh / pool)
+		if s > tKwh {
+			s = tKwh
+		}
+		solar += s
+		grid += tKwh - s
+	}
+
+	log.Printf("  [SOLAR-SPLIT] Building %d: target solar=%.3f kWh, grid=%.3f kWh", buildingID, solar, grid)
+	return solar, grid, firstSession, lastSession
+}
+
+// modeBasedChargerIDsForBuilding returns active chargers in the building that are NOT
+// billed via the solar split (i.e. classic charge-mode billing).
+func (bs *BillingService) modeBasedChargerIDsForBuilding(buildingID int) []int {
+	rows, err := bs.db.Query(`
+		SELECT id FROM chargers
+		WHERE building_id = ? AND is_active = 1 AND COALESCE(billing_method, 'mode_based') != 'solar_split'
+	`, buildingID)
+	if err != nil {
+		log.Printf("  [CHARGING] ERROR querying mode-based chargers for building %d: %v", buildingID, err)
+		return nil
+	}
+	defer rows.Close()
+	var ids []int
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// chargerBillingMethod returns the billing_method for a single charger ("mode_based"
+// or "solar_split"), defaulting to "mode_based".
+func (bs *BillingService) chargerBillingMethod(chargerID int) string {
+	var method sql.NullString
+	if err := bs.db.QueryRow(`SELECT billing_method FROM chargers WHERE id = ?`, chargerID).Scan(&method); err != nil {
+		return "mode_based"
+	}
+	if method.Valid && method.String == "solar_split" {
+		return "solar_split"
+	}
+	return "mode_based"
+}
+
+// cleanRfidList splits and trims a comma-separated RFID string.
+func cleanRfidList(rfidCards string) []string {
+	var out []string
+	for _, r := range strings.Split(rfidCards, ",") {
+		if c := strings.TrimSpace(r); c != "" {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// chargingSeg holds per-price-segment charging energy split across both billing methods.
+type chargingSeg struct {
+	seg              PriceSegment
+	segStart, segEnd time.Time
+	modeNormal       float64 // mode-based "solar mode" kWh  (CarChargingNormalPrice)
+	modePriority     float64 // mode-based "priority mode" kWh (CarChargingPriorityPrice)
+	splitSolar       float64 // solar-split solar kWh          (CarChargingNormalPrice)
+	splitGrid        float64 // solar-split grid kWh           (CarChargingPriorityPrice)
+}
+
+// computeCharging gathers charging energy per price segment for the given selection,
+// keeping mode-based and solar-split chargers separate so each is priced correctly.
+// scopeMode is "" / BillingModeApartments (RFID), BillingModeBuilding (all chargers),
+// or BillingModeCharger (the single singleChargerID).
+func (bs *BillingService) computeCharging(buildingID int, scopeMode, rfids string, singleChargerID int, segments []PriceSegment, start, end time.Time) ([]chargingSeg, time.Time, time.Time) {
+	var segs []chargingSeg
+	var firstOverall, lastOverall time.Time
+	merge := func(fS, lS time.Time) {
+		if !fS.IsZero() && (firstOverall.IsZero() || fS.Before(firstOverall)) {
+			firstOverall = fS
+		}
+		if !lS.IsZero() && (lastOverall.IsZero() || lS.After(lastOverall)) {
+			lastOverall = lS
+		}
+	}
+
+	for _, seg := range segments {
+		segStart, segEnd, ok := clipToSegment(seg, start, end)
+		if !ok {
+			continue
+		}
+		cs := chargingSeg{seg: seg, segStart: segStart, segEnd: segEnd}
+
+		switch scopeMode {
+		case BillingModeBuilding:
+			if modeIDs := bs.modeBasedChargerIDsForBuilding(buildingID); len(modeIDs) > 0 {
+				nC, pC, fS, lS := bs.calculateChargingForChargers(buildingID, modeIDs, segStart, segEnd)
+				cs.modeNormal, cs.modePriority = nC, pC
+				merge(fS, lS)
+			}
+			if splitIDs := bs.solarSplitChargerIDsForBuilding(buildingID); len(splitIDs) > 0 {
+				sol, grd, fS, lS := bs.calculateChargingSolarSplit(buildingID, chargerSessionFilter{useChargerIDs: true, chargerIDs: splitIDs}, segStart, segEnd)
+				cs.splitSolar, cs.splitGrid = sol, grd
+				merge(fS, lS)
+			}
+
+		case BillingModeCharger:
+			if bs.chargerBillingMethod(singleChargerID) == "solar_split" {
+				sol, grd, fS, lS := bs.calculateChargingSolarSplit(buildingID, chargerSessionFilter{useChargerIDs: true, chargerIDs: []int{singleChargerID}}, segStart, segEnd)
+				cs.splitSolar, cs.splitGrid = sol, grd
+				merge(fS, lS)
+			} else {
+				nC, pC, fS, lS := bs.calculateChargingForChargers(buildingID, []int{singleChargerID}, segStart, segEnd)
+				cs.modeNormal, cs.modePriority = nC, pC
+				merge(fS, lS)
+			}
+
+		default: // apartment / RFID flow
+			// Mode-based path (already excludes solar-split chargers internally).
+			nC, pC, fS, lS := bs.calculateChargingConsumption(buildingID, rfids, segStart, segEnd)
+			cs.modeNormal, cs.modePriority = nC, pC
+			merge(fS, lS)
+			// Solar-split chargers attributed to this user's RFID cards.
+			if rfidList := cleanRfidList(rfids); len(rfidList) > 0 {
+				sol, grd, fS2, lS2 := bs.calculateChargingSolarSplit(buildingID, chargerSessionFilter{rfidCards: rfidList}, segStart, segEnd)
+				cs.splitSolar, cs.splitGrid = sol, grd
+				merge(fS2, lS2)
+			}
+		}
+
+		segs = append(segs, cs)
+	}
+	return segs, firstOverall, lastOverall
+}
+
+// appendChargingItems renders the car-charging invoice section (header, session-period
+// line, and per-segment line items for both billing methods) into items, returning the
+// added cost. Mode-based: SolarMode @ normal price, PriorityMode @ priority price.
+// Solar-split: SolarCharging @ normal price, GridCharging @ priority price.
+func appendChargingItems(items *[]models.InvoiceItem, segs []chargingSeg, firstSession, lastSession time.Time, multiSeg bool, tr InvoiceTranslations, header string) float64 {
+	var grand float64
+	for _, cs := range segs {
+		grand += cs.modeNormal + cs.modePriority + cs.splitSolar + cs.splitGrid
+	}
+	if grand <= 0 {
+		return 0
+	}
+
+	*items = append(*items, models.InvoiceItem{ItemType: "separator"})
+	*items = append(*items, models.InvoiceItem{Description: header, ItemType: "charging_header"})
+	if !firstSession.IsZero() && !lastSession.IsZero() {
+		*items = append(*items, models.InvoiceItem{
+			Description: fmt.Sprintf("%s: %s - %s | %s: %.3f kWh",
+				tr.Period, firstSession.Format("02.01 15:04"), lastSession.Format("02.01 15:04"), tr.Total, grand),
+			Quantity: grand,
+			ItemType: "charging_session_compact",
+		})
+		*items = append(*items, models.InvoiceItem{ItemType: "separator"})
+	}
+
+	var cost float64
+	add := func(label, suffix string, kwh, price float64, currency, itemType string) {
+		c := kwh * price
+		cost += c
+		*items = append(*items, models.InvoiceItem{
+			Description: fmt.Sprintf("%s%s: %.3f kWh × %.3f %s/kWh", label, suffix, kwh, price, currency),
+			Quantity:    kwh,
+			UnitPrice:   price,
+			TotalPrice:  c,
+			ItemType:    itemType,
+		})
+	}
+
+	for _, cs := range segs {
+		suffix := segmentSuffix(PriceSegment{Start: cs.segStart, End: cs.segEnd}, multiSeg)
+		s := cs.seg.Settings
+		if cs.modeNormal > 0 {
+			add(tr.SolarMode, suffix, cs.modeNormal, s.CarChargingNormalPrice, s.Currency, "car_charging_normal")
+		}
+		if cs.modePriority > 0 {
+			add(tr.PriorityMode, suffix, cs.modePriority, s.CarChargingPriorityPrice, s.Currency, "car_charging_priority")
+		}
+		if cs.splitSolar > 0 {
+			add(tr.SolarCharging, suffix, cs.splitSolar, s.CarChargingNormalPrice, s.Currency, "car_charging_normal")
+		}
+		if cs.splitGrid > 0 {
+			add(tr.GridCharging, suffix, cs.splitGrid, s.CarChargingPriorityPrice, s.Currency, "car_charging_priority")
+		}
+	}
+	return cost
+}
+
 // generateChargerOnlyInvoice produces an invoice that contains ONLY the consumption of the specified charger,
 // optionally including selected custom items. Used by BillingModeCharger.
 func (bs *BillingService) generateChargerOnlyInvoice(userPeriod UserPeriod, buildingID, chargerID int, fullStart, fullEnd time.Time, segments []PriceSegment, customItemIDs []int) (*models.Invoice, error) {
@@ -2874,86 +3165,12 @@ func (bs *BillingService) generateChargerOnlyInvoice(userPeriod UserPeriod, buil
 		items = append(items, models.InvoiceItem{ItemType: "separator"})
 	}
 
-	// Compute charging per price segment (clipped to the user's billing period)
-	// so a bill that spans a price change is priced correctly.
-	type chargingSegment struct {
-		seg                              PriceSegment
-		segStart, segEnd                 time.Time
-		normalCharging, priorityCharging float64
-		firstSession, lastSession        time.Time
-	}
-	var chargingSegs []chargingSegment
-	var totalNormalCharging, totalPriorityCharging float64
-	var firstSessionOverall, lastSessionOverall time.Time
-	for _, seg := range segments {
-		segStart, segEnd, ok := clipToSegment(seg, start, end)
-		if !ok {
-			continue
-		}
-		nC, pC, fS, lS := bs.calculateChargingForChargers(buildingID, []int{chargerID}, segStart, segEnd)
-		totalNormalCharging += nC
-		totalPriorityCharging += pC
-		if !fS.IsZero() && (firstSessionOverall.IsZero() || fS.Before(firstSessionOverall)) {
-			firstSessionOverall = fS
-		}
-		if !lS.IsZero() && (lastSessionOverall.IsZero() || lS.After(lastSessionOverall)) {
-			lastSessionOverall = lS
-		}
-		chargingSegs = append(chargingSegs, chargingSegment{
-			seg: seg, segStart: segStart, segEnd: segEnd,
-			normalCharging: nC, priorityCharging: pC,
-			firstSession: fS, lastSession: lS,
-		})
-	}
-	log.Printf("  [CHARGER-ONLY] Charger %d (%s): Normal=%.3f, Priority=%.3f (segments: %d)",
-		chargerID, chargerName, totalNormalCharging, totalPriorityCharging, len(chargingSegs))
-
-	items = append(items, models.InvoiceItem{
-		Description: fmt.Sprintf("%s: %s", tr.CarCharging, chargerName),
-		ItemType:    "charging_header",
-	})
-
-	if !firstSessionOverall.IsZero() && !lastSessionOverall.IsZero() {
-		totalCharged := totalNormalCharging + totalPriorityCharging
-		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("%s: %s - %s | %s: %.3f kWh",
-				tr.Period,
-				firstSessionOverall.Format("02.01 15:04"),
-				lastSessionOverall.Format("02.01 15:04"),
-				tr.Total,
-				totalCharged),
-			Quantity: totalCharged,
-			ItemType: "charging_session_compact",
-		})
-		items = append(items, models.InvoiceItem{ItemType: "separator"})
-	}
-
-	for _, cs := range chargingSegs {
-		suffix := segmentSuffix(PriceSegment{Start: cs.segStart, End: cs.segEnd}, multiSeg)
-		s := cs.seg.Settings
-		if cs.normalCharging > 0 {
-			cost := cs.normalCharging * s.CarChargingNormalPrice
-			totalAmount += cost
-			items = append(items, models.InvoiceItem{
-				Description: fmt.Sprintf("%s%s: %.3f kWh × %.3f %s/kWh", tr.SolarMode, suffix, cs.normalCharging, s.CarChargingNormalPrice, s.Currency),
-				Quantity:    cs.normalCharging,
-				UnitPrice:   s.CarChargingNormalPrice,
-				TotalPrice:  cost,
-				ItemType:    "car_charging_normal",
-			})
-		}
-		if cs.priorityCharging > 0 {
-			cost := cs.priorityCharging * s.CarChargingPriorityPrice
-			totalAmount += cost
-			items = append(items, models.InvoiceItem{
-				Description: fmt.Sprintf("%s%s: %.3f kWh × %.3f %s/kWh", tr.PriorityMode, suffix, cs.priorityCharging, s.CarChargingPriorityPrice, s.Currency),
-				Quantity:    cs.priorityCharging,
-				UnitPrice:   s.CarChargingPriorityPrice,
-				TotalPrice:  cost,
-				ItemType:    "car_charging_priority",
-			})
-		}
-	}
+	// Compute charging per price segment (clipped to the user's billing period) so a
+	// bill that spans a price change is priced correctly. Routes to the solar split
+	// or mode-based billing based on this charger's billing_method.
+	chargingSegs, firstSessionOverall, lastSessionOverall := bs.computeCharging(buildingID, BillingModeCharger, "", chargerID, segments, start, end)
+	log.Printf("  [CHARGER-ONLY] Charger %d (%s): %d segment(s)", chargerID, chargerName, len(chargingSegs))
+	totalAmount += appendChargingItems(&items, chargingSegs, firstSessionOverall, lastSessionOverall, multiSeg, tr, fmt.Sprintf("%s: %s", tr.CarCharging, chargerName))
 
 	if len(customItemIDs) > 0 {
 		customItems, customCost, err := bs.getCustomLineItemsWithTranslations(buildingID, tr, userPeriod.ProrationFactor, fullStart, fullEnd, customItemIDs)

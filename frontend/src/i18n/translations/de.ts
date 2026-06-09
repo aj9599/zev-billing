@@ -1452,6 +1452,13 @@ export const de: Translations = {
   // Delete Confirmation
   'chargers.captchaRequired': 'Bitte lösen Sie die Sicherheitsaufgabe, um fortzufahren.',
 
+  // Billing Method
+  'chargers.billingMethod': 'Abrechnungsart',
+  'chargers.billingModeBased': 'Lademodus (Solar / Priorität)',
+  'chargers.billingSolarSplit': 'Anteilige Solaraufteilung (wie ein Zähler)',
+  'chargers.billingModeBasedHint': 'Die Energie wird nach dem gemeldeten Lademodus abgerechnet: Prioritätsladungen zum Prioritätspreis, alles andere zum Solarpreis.',
+  'chargers.billingSolarSplitHint': 'Die Ladestation wird Teil des Gebäudeverbrauchs: Die Solarproduktion wird anhand des Verbrauchs auf alle Zähler und Ladestationen verteilt. Der Solaranteil wird zum Solar-Ladepreis abgerechnet, der Rest zum Netz-Ladepreis. Empfohlen für Zaptec (kein Lademodus).',
+
   // Connection Types
   'chargers.loxoneApiRecommended': 'Loxone WebSocket API (Empfohlen)',
   'chargers.udpAlternative': 'UDP (Legacy)',

@@ -109,6 +109,7 @@ func RunMigrations(db *sql.DB) error {
 			connection_type TEXT NOT NULL,
 			connection_config TEXT NOT NULL,
 			supports_priority INTEGER DEFAULT 0,
+			billing_method TEXT NOT NULL DEFAULT 'mode_based',
 			notes TEXT,
 			is_active INTEGER DEFAULT 1,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -489,7 +490,58 @@ func RunMigrations(db *sql.DB) error {
 		return err
 	}
 
+	// Add per-charger billing_method so chargers without a real charge mode
+	// (e.g. Zaptec cloud) can be billed with a proportional solar split instead
+	// of dumping all energy into the flat "solar mode" car-charging price.
+	if err := addChargerBillingMethodColumn(db); err != nil {
+		return err
+	}
+
 	return createDefaultAdmin(db)
+}
+
+// addChargerBillingMethodColumn adds chargers.billing_method.
+//   - "mode_based"  (default): bill by session charge mode (normal vs priority).
+//   - "solar_split": treat the charger like a meter — its consumption joins the
+//     building consumption pool and receives a proportional share of solar.
+//
+// Existing Zaptec API chargers are backfilled to "solar_split" since they never
+// report a usable charge mode.
+func addChargerBillingMethodColumn(db *sql.DB) error {
+	var chargersSql string
+	err := db.QueryRow(`SELECT sql FROM sqlite_master WHERE type='table' AND name='chargers'`).Scan(&chargersSql)
+	if err != nil {
+		// Table not created yet (fresh DB handled by CREATE TABLE above) — nothing to do.
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+
+	if !contains(chargersSql, "billing_method") {
+		log.Println("Adding billing_method column to chargers table...")
+		if _, err := db.Exec(`ALTER TABLE chargers ADD COLUMN billing_method TEXT NOT NULL DEFAULT 'mode_based'`); err != nil {
+			if contains(err.Error(), "duplicate column") {
+				log.Println("✓ billing_method column already exists")
+			} else {
+				return fmt.Errorf("failed to add billing_method column: %v", err)
+			}
+		} else {
+			log.Println("✓ billing_method column added successfully")
+		}
+
+		// Backfill: Zaptec cloud chargers have no charge mode, so the only sensible
+		// existing behaviour is the new proportional solar split.
+		if res, err := db.Exec(`UPDATE chargers SET billing_method = 'solar_split' WHERE connection_type = 'zaptec_api'`); err != nil {
+			return fmt.Errorf("failed to backfill billing_method for Zaptec chargers: %v", err)
+		} else if n, _ := res.RowsAffected(); n > 0 {
+			log.Printf("✓ Backfilled %d Zaptec charger(s) to billing_method='solar_split'", n)
+		}
+	} else {
+		log.Println("✓ billing_method column already exists")
+	}
+
+	return nil
 }
 
 // NEW: Add group_buildings column to buildings table
