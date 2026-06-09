@@ -38,9 +38,15 @@ type deviceRuntime struct {
 	hasSignal        bool
 	surplusLive      bool
 	mode             string
+	desiredOn        bool // what the controller wants this device to be (auto: ON/OFF)
 	reason           string
 	updatedAt        time.Time
 	lastError        string
+
+	// live power metering (PM devices only)
+	powerW     float64
+	energyWh   float64
+	powerKnown bool
 }
 
 // DeviceController periodically drives controllable devices from live solar
@@ -249,6 +255,7 @@ func (c *DeviceController) apply(d models.Device, desired, forced bool, reason s
 	c.mu.Lock()
 	rt := c.runtimeFor(d.ID)
 	rt.mode = d.ControlMode
+	rt.desiredOn = desired
 	rt.buildingSurplusW = surplus
 	rt.hasSignal = hasSignal
 	rt.surplusLive = live
@@ -268,11 +275,24 @@ func (c *DeviceController) apply(d models.Device, desired, forced bool, reason s
 	// can't report a trustworthy state (e.g. Loxone over HTTP) known=false, so we
 	// keep the controller's own commanded state rather than clobbering it.
 	if actual, known, rerr := driver.ReadState(); rerr == nil {
+		// Best-effort live power for PM devices (display only).
+		var pw, ew float64
+		var pk bool
+		if pr, ok := driver.(PowerReader); ok {
+			if p, e, kn, perr := pr.ReadPower(); perr == nil && kn {
+				pw, ew, pk = p, e, true
+			}
+		}
 		c.mu.Lock()
 		rt.online = true
 		rt.lastError = ""
 		if known {
 			rt.lastKnownOn = actual
+		}
+		if pk {
+			rt.powerW = pw
+			rt.energyWh = ew
+			rt.powerKnown = true
 		}
 		c.mu.Unlock()
 	} else {
@@ -460,15 +480,18 @@ func (c *DeviceController) clearOverride(id int) {
 type DeviceLiveStatus struct {
 	DeviceID         int     `json:"device_id"`
 	Online           bool    `json:"online"`
-	State            string  `json:"state"` // on | off | unknown
-	Mode             string  `json:"mode"`
-	HasSignal        bool    `json:"has_signal"`
-	SurplusLive      bool    `json:"surplus_live"` // true = instantaneous, false = estimated
-	BuildingSurplusW float64 `json:"building_surplus_w"`
-	RuntimeTodayMin  int     `json:"runtime_today_min"` // accumulated ON minutes today
-	Reason           string  `json:"reason,omitempty"`  // why the device is in its current state
-	LastError        string  `json:"last_error,omitempty"`
-	UpdatedAt        string  `json:"updated_at,omitempty"`
+	State            string   `json:"state"` // on | off | unknown
+	Mode             string   `json:"mode"`
+	DesiredOn        bool     `json:"desired_on"` // what the controller wants (auto: ON/OFF)
+	HasSignal        bool     `json:"has_signal"`
+	SurplusLive      bool     `json:"surplus_live"` // true = instantaneous, false = estimated
+	BuildingSurplusW float64  `json:"building_surplus_w"`
+	RuntimeTodayMin  int      `json:"runtime_today_min"`  // accumulated ON minutes today
+	PowerW           *float64 `json:"power_w,omitempty"`  // live power (PM devices)
+	EnergyWh         *float64 `json:"energy_wh,omitempty"` // lifetime energy counter (PM devices)
+	Reason           string   `json:"reason,omitempty"`   // why the device is in its current state
+	LastError        string   `json:"last_error,omitempty"`
+	UpdatedAt        string   `json:"updated_at,omitempty"`
 }
 
 // LiveStatus returns runtime snapshots for devices (optionally one building).
@@ -497,10 +520,17 @@ func (c *DeviceController) LiveStatus(buildingID int) ([]DeviceLiveStatus, error
 		st := DeviceLiveStatus{DeviceID: d.ID, State: "unknown", Mode: mode}
 		if rt := c.runtime[d.ID]; rt != nil {
 			st.Online = rt.online
+			st.DesiredOn = rt.desiredOn
 			st.HasSignal = rt.hasSignal
 			st.SurplusLive = rt.surplusLive
 			st.BuildingSurplusW = rt.buildingSurplusW
 			st.RuntimeTodayMin = int(rt.onSecondsToday / 60)
+			if rt.powerKnown {
+				pw := rt.powerW
+				ew := rt.energyWh
+				st.PowerW = &pw
+				st.EnergyWh = &ew
+			}
 			st.Reason = rt.reason
 			st.LastError = rt.lastError
 			if !rt.updatedAt.IsZero() {

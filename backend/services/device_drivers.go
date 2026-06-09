@@ -25,6 +25,15 @@ type DeviceDriver interface {
 	ReadState() (on bool, known bool, err error)
 }
 
+// PowerReader is an optional capability for drivers that can report live power
+// and a cumulative energy counter (e.g. Shelly PM models). The controller calls
+// it best-effort for display only — it never affects control decisions.
+type PowerReader interface {
+	// ReadPower returns instantaneous power (W) and the lifetime energy counter
+	// (Wh). known=false means this device has no power metering.
+	ReadPower() (powerW float64, energyWh float64, known bool, err error)
+}
+
 // deviceHTTPClient is shared by all HTTP drivers. Short timeout so a slow or
 // unreachable device never stalls the 30s control loop.
 var deviceHTTPClient = &http.Client{Timeout: 5 * time.Second}
@@ -177,6 +186,38 @@ func (s *shellyDriver) ReadState() (bool, bool, error) {
 		return false, false, err
 	}
 	return st.Ison, true, nil
+}
+
+// ReadPower reports live power + energy for Shelly PM models. Gen2+ exposes
+// apower (W) and aenergy.total (Wh) in Switch.GetStatus; non-PM models omit
+// apower, so we report known=false and the card simply shows no power. Gen1 PM
+// reads are not implemented (none of the supported models use the Gen1 API).
+func (s *shellyDriver) ReadPower() (float64, float64, bool, error) {
+	if s.cfg.Gen < 2 {
+		return 0, 0, false, nil
+	}
+	url := fmt.Sprintf("%s/rpc/Switch.GetStatus?id=%d", s.base(), s.cfg.Channel)
+	body, err := httpGetBody(url, s.cfg.AuthUser, s.cfg.AuthPass)
+	if err != nil {
+		return 0, 0, false, err
+	}
+	var st struct {
+		Apower  *float64 `json:"apower"`
+		Aenergy *struct {
+			Total *float64 `json:"total"`
+		} `json:"aenergy"`
+	}
+	if err := json.Unmarshal(body, &st); err != nil {
+		return 0, 0, false, err
+	}
+	if st.Apower == nil {
+		return 0, 0, false, nil // not a PM model
+	}
+	var wh float64
+	if st.Aenergy != nil && st.Aenergy.Total != nil {
+		wh = *st.Aenergy.Total
+	}
+	return *st.Apower, wh, true, nil
 }
 
 // ---- Loxone ----

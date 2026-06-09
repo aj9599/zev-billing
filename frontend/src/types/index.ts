@@ -147,10 +147,13 @@ export interface DeviceLiveStatus {
   online: boolean;
   state: string;       // 'on' | 'off' | 'offline' | 'unknown'
   mode: string;        // 'auto' | 'on' | 'off'
+  desired_on?: boolean;       // what the controller wants (auto: ON/OFF)
   has_signal: boolean;
   surplus_live: boolean;      // true = instantaneous, false = estimated
   building_surplus_w: number;
   runtime_today_min: number;  // accumulated ON minutes today
+  power_w?: number;           // live power (PM devices)
+  energy_wh?: number;         // lifetime energy counter (PM devices)
   reason?: string;            // why the device is in its current state
   last_error?: string;
   updated_at?: string;

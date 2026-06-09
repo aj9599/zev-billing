@@ -12,6 +12,7 @@ type FormState = {
   is_active: boolean;
   // shelly
   shelly_host: string;
+  shelly_model: string;
   shelly_gen: number;
   shelly_channel: number;
   shelly_auth_user: string;
@@ -37,6 +38,28 @@ type FormState = {
 };
 
 type ScheduleWindow = { from: string; to: string; days: number[] };
+
+// Supported Shelly models. All Gen3/Gen4 + Pro use the same Gen2+ RPC API, so
+// gen is 2 for them; the two generic entries keep older/other devices working.
+// channels = number of relays/switches; pm = has power metering.
+type ShellyModel = { id: string; label: string; gen: number; channels: number; pm: boolean };
+const SHELLY_MODELS: ShellyModel[] = [
+  { id: 'shelly1', label: 'Shelly 1 (Gen3/4)', gen: 2, channels: 1, pm: false },
+  { id: 'shelly1pm', label: 'Shelly 1PM (Gen3/4)', gen: 2, channels: 1, pm: true },
+  { id: 'shelly2pm', label: 'Shelly 2PM (Gen3/4)', gen: 2, channels: 2, pm: true },
+  { id: 'shelly1mini', label: 'Shelly 1 Mini (Gen3/4)', gen: 2, channels: 1, pm: false },
+  { id: 'shelly1pmmini', label: 'Shelly 1PM Mini (Gen3/4)', gen: 2, channels: 1, pm: true },
+  { id: 'shellypro1', label: 'Shelly Pro 1', gen: 2, channels: 1, pm: false },
+  { id: 'shellypro1pm', label: 'Shelly Pro 1PM', gen: 2, channels: 1, pm: true },
+  { id: 'shellypro2', label: 'Shelly Pro 2', gen: 2, channels: 2, pm: false },
+  { id: 'shellypro2pm', label: 'Shelly Pro 2PM', gen: 2, channels: 2, pm: true },
+  { id: 'shellypro3', label: 'Shelly Pro 3', gen: 2, channels: 3, pm: false },
+  { id: 'shellypro4pm', label: 'Shelly Pro 4PM', gen: 2, channels: 4, pm: true },
+  { id: 'generic1', label: 'Other Shelly (Gen1)', gen: 1, channels: 4, pm: false },
+  { id: 'generic2', label: 'Other Shelly (Gen2+)', gen: 2, channels: 4, pm: false },
+];
+const shellyModelById = (id: string): ShellyModel =>
+  SHELLY_MODELS.find((m) => m.id === id) || SHELLY_MODELS[SHELLY_MODELS.length - 1];
 
 const newWindow = (): ScheduleWindow => ({ from: '10:00', to: '16:00', days: [1, 2, 3, 4, 5, 6, 7] });
 
@@ -67,7 +90,8 @@ const emptyForm = (): FormState => ({
   driver: 'shelly',
   is_active: true,
   shelly_host: '',
-  shelly_gen: 1,
+  shelly_model: 'shelly1pm',
+  shelly_gen: 2,
   shelly_channel: 0,
   shelly_auth_user: '',
   shelly_auth_pass: '',
@@ -199,6 +223,9 @@ export default function Devices() {
         f.shelly_host = cfg.host || '';
         f.shelly_gen = cfg.gen || 1;
         f.shelly_channel = cfg.channel || 0;
+        // Prefer the saved model; fall back to a generic entry by generation
+        // for devices created before the model picker existed.
+        f.shelly_model = cfg.model || (Number(cfg.gen) >= 2 ? 'generic2' : 'generic1');
         f.shelly_auth_user = cfg.auth_user || '';
         f.shelly_auth_pass = cfg.auth_pass || '';
       } else {
@@ -226,7 +253,8 @@ export default function Devices() {
       f.driver === 'shelly'
         ? JSON.stringify({
             host: f.shelly_host.trim(),
-            gen: Number(f.shelly_gen) || 1,
+            model: f.shelly_model,
+            gen: shellyModelById(f.shelly_model).gen,
             channel: Number(f.shelly_channel) || 0,
             auth_user: f.shelly_auth_user,
             auth_pass: f.shelly_auth_pass,
@@ -528,7 +556,7 @@ export default function Devices() {
                         background: modeColor[mode] + '15', color: modeColor[mode],
                       }}>
                         <Activity size={11} />
-                        {t('devices.controlShort')}: {t(`devices.mode.${mode}`)}
+                        {t('devices.controlShort')}: {mode === 'auto' && s ? `${t('devices.mode.auto')} (${s.desired_on ? 'ON' : 'OFF'})` : t(`devices.mode.${mode}`)}
                       </span>
                     </div>
                   </div>
@@ -552,6 +580,19 @@ export default function Devices() {
                       {t('devices.onThresholdShort')} {formatPower(threshold)}
                     </div>
                   </div>
+
+                  {/* device power metering (PM models) */}
+                  {s?.power_w != null && (
+                    <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '12px', color: '#475569' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#6b7280' }}>
+                        <Activity size={13} color="#6366f1" /> {t('devices.devicePower')}
+                      </span>
+                      <span style={{ fontWeight: 700 }}>
+                        {formatPower(s.power_w)}
+                        {s.energy_wh != null && <span style={{ fontWeight: 500, color: '#9ca3af' }}> · {(s.energy_wh / 1000).toFixed(2)} kWh</span>}
+                      </span>
+                    </div>
+                  )}
 
                   {/* schedule windows */}
                   {parseSchedule(d).length > 0 && (
@@ -654,22 +695,37 @@ export default function Devices() {
                 <div style={{ fontSize: '12px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: '12px' }}>{t('devices.connection')}</div>
                 {form.driver === 'shelly' ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '12px' }}>
-                      <div>
-                        <label style={label}>{t('devices.host')} *</label>
-                        <input style={input} placeholder="192.168.1.50" value={form.shelly_host} onChange={(e) => setForm({ ...form, shelly_host: e.target.value })} />
-                      </div>
-                      <div>
-                        <label style={label}>{t('devices.generation')}</label>
-                        <select style={input} value={form.shelly_gen} onChange={(e) => setForm({ ...form, shelly_gen: Number(e.target.value) })}>
-                          <option value={1}>Gen 1</option>
-                          <option value={2}>Gen 2+</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label style={label}>{t('devices.channel')}</label>
-                        <input type="number" style={input} value={form.shelly_channel} onChange={(e) => setForm({ ...form, shelly_channel: Number(e.target.value) })} />
-                      </div>
+                    {(() => {
+                      const m = shellyModelById(form.shelly_model);
+                      return (
+                        <div style={{ display: 'grid', gridTemplateColumns: m.channels > 1 ? '1fr 1fr' : '1fr', gap: '12px' }}>
+                          <div>
+                            <label style={label}>{t('devices.shellyModel')}</label>
+                            <select style={input} value={form.shelly_model} onChange={(e) => {
+                              const sel = shellyModelById(e.target.value);
+                              setForm({ ...form, shelly_model: e.target.value, shelly_gen: sel.gen, shelly_channel: Math.min(form.shelly_channel, sel.channels - 1) });
+                            }}>
+                              {SHELLY_MODELS.map((sm) => (
+                                <option key={sm.id} value={sm.id}>{sm.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                          {m.channels > 1 && (
+                            <div>
+                              <label style={label}>{t('devices.channel')}</label>
+                              <select style={input} value={form.shelly_channel} onChange={(e) => setForm({ ...form, shelly_channel: Number(e.target.value) })}>
+                                {Array.from({ length: m.channels }, (_, i) => (
+                                  <option key={i} value={i}>{i}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    <div>
+                      <label style={label}>{t('devices.host')} *</label>
+                      <input style={input} placeholder="192.168.1.50" value={form.shelly_host} onChange={(e) => setForm({ ...form, shelly_host: e.target.value })} />
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                       <div>
