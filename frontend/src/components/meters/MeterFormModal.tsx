@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { X, Info, AlertCircle, Wifi, Rss, Cloud, Zap, Check } from 'lucide-react';
 import { useTranslation } from '../../i18n';
-import type { Meter, Building, User } from '../../types';
+import type { Meter, Building, User, LoxoneControl } from '../../types';
+import LoxoneDiscovery from '../LoxoneDiscovery';
 
 interface ConnectionConfig {
     endpoint?: string;
@@ -140,6 +141,8 @@ export default function MeterFormModal({
 }: MeterFormModalProps) {
     const { t } = useTranslation();
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+    // Discovered Loxone controls (auto-discovery picker). Config-only, never billing.
+    const [loxoneControls, setLoxoneControls] = useState<LoxoneControl[]>([]);
 
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -877,6 +880,66 @@ export default function MeterFormModal({
                                     <p style={{ ...helpTextStyle, marginBottom: '14px' }}>
                                         {t('meters.loxoneCredentialsDescription')}
                                     </p>
+
+                                    {/* Auto-discovery: pick the meter block instead of typing the UUID */}
+                                    <LoxoneDiscovery
+                                        host={connectionConfig.loxone_host || ''}
+                                        username={connectionConfig.loxone_username || ''}
+                                        password={connectionConfig.loxone_password || ''}
+                                        category="meter"
+                                        onControls={setLoxoneControls}
+                                        isMobile={isMobile}
+                                    />
+                                    {loxoneControls.length > 0 && (
+                                        <>
+                                            <div style={{ marginBottom: '14px' }}>
+                                                <label style={labelStyle}>
+                                                    {connectionConfig.loxone_mode === 'virtual_output_dual'
+                                                        ? t('meters.loxonePickBlockImport')
+                                                        : t('meters.loxonePickBlock')}
+                                                </label>
+                                                <select
+                                                    value={connectionConfig.loxone_device_id || ''}
+                                                    onChange={(e) => onConnectionConfigChange({
+                                                        ...connectionConfig,
+                                                        loxone_device_id: e.target.value
+                                                    })}
+                                                    onFocus={focusHandler}
+                                                    onBlur={blurHandler}
+                                                    style={inputStyle(isMobile)}
+                                                >
+                                                    <option value="">—</option>
+                                                    {loxoneControls.map((c) => (
+                                                        <option key={c.uuid} value={c.uuid}>
+                                                            {c.room ? `${c.room} · ` : ''}{c.name} ({c.type})
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            {connectionConfig.loxone_mode === 'virtual_output_dual' && (
+                                                <div style={{ marginBottom: '14px' }}>
+                                                    <label style={labelStyle}>{t('meters.loxonePickBlockExport')}</label>
+                                                    <select
+                                                        value={connectionConfig.loxone_export_device_id || ''}
+                                                        onChange={(e) => onConnectionConfigChange({
+                                                            ...connectionConfig,
+                                                            loxone_export_device_id: e.target.value
+                                                        })}
+                                                        onFocus={focusHandler}
+                                                        onBlur={blurHandler}
+                                                        style={inputStyle(isMobile)}
+                                                    >
+                                                        <option value="">—</option>
+                                                        {loxoneControls.map((c) => (
+                                                            <option key={c.uuid} value={c.uuid}>
+                                                                {c.room ? `${c.room} · ` : ''}{c.name} ({c.type})
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
 
                                     {/* Setup Guide */}
                                     <div style={{

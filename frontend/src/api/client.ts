@@ -373,7 +373,7 @@ class ApiClient {
     return this.request(`/devices/${id}/events`);
   }
 
-  async discoverLoxoneControls(payload: { host: string; username: string; password: string }): Promise<LoxoneControl[]> {
+  async discoverLoxoneControls(payload: { host: string; username: string; password: string; category?: string }): Promise<LoxoneControl[]> {
     return this.request('/devices/discover', {
       method: 'POST',
       body: JSON.stringify({ driver: 'loxone', ...payload }),

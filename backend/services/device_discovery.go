@@ -4,19 +4,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 )
 
-// LoxoneControl is a switchable output discovered from a Miniserver's
-// structure file, ready to be picked in the device form.
+// LoxoneControl is a control discovered from a Miniserver's structure file,
+// ready to be picked in a device / meter / charger form.
 type LoxoneControl struct {
 	Name      string `json:"name"`
-	UUID      string `json:"uuid"`       // uuidAction — for sending On/Off
-	StateUUID string `json:"state_uuid"` // reflects the actual output state
+	UUID      string `json:"uuid"`       // uuidAction — for sending commands / reading /all
+	StateUUID string `json:"state_uuid"` // reflects the actual output state (switches)
 	Room      string `json:"room"`
 	Type      string `json:"type"`
 }
 
-// loxoneSwitchableTypes are control types we can drive with /On /Off.
+// loxoneSwitchableTypes are control types we can drive with /On /Off (devices).
 var loxoneSwitchableTypes = map[string]bool{
 	"Switch":      true,
 	"Pushbutton":  true,
@@ -24,9 +25,18 @@ var loxoneSwitchableTypes = map[string]bool{
 }
 
 // DiscoverLoxoneControls fetches the Miniserver structure file
-// (/data/LoxAPP3.json) and returns the switchable outputs (name, room, UUID),
-// so the user can pick one instead of hunting for the UUID by hand.
-func DiscoverLoxoneControls(host, user, pass string) ([]LoxoneControl, error) {
+// (/data/LoxAPP3.json) and returns controls the user can pick from instead of
+// hunting for a UUID by hand.
+//
+// category selects what is returned:
+//   - "switch" / "" → only switchable outputs (for the Devices page).
+//   - "meter" / "charger" / "all" → every control with an action UUID, so the
+//     user can pick their meter/charger block by the name they gave it in Loxone.
+//
+// The UUID returned is always the control's uuidAction, which is exactly what
+// both the device driver (jdev/sps/io/{uuid}/On|Off|/all) and the meter/charger
+// collectors (jdev/sps/io/{uuid}/all) query — so a picked control just works.
+func DiscoverLoxoneControls(host, user, pass, category string) ([]LoxoneControl, error) {
 	base := normalizeHost(host)
 	if base == "" {
 		return nil, fmt.Errorf("missing host")
@@ -53,9 +63,14 @@ func DiscoverLoxoneControls(host, user, pass string) ([]LoxoneControl, error) {
 		return nil, fmt.Errorf("could not parse Loxone structure: %v", err)
 	}
 
+	switchOnly := strings.TrimSpace(strings.ToLower(category)) == "" ||
+		strings.EqualFold(category, "switch")
+
 	out := []LoxoneControl{}
 	for _, c := range s.Controls {
-		if !loxoneSwitchableTypes[c.Type] {
+		// Switchable-only for the Devices page; everything else gets the full
+		// list so meters/chargers can be identified by name.
+		if switchOnly && !loxoneSwitchableTypes[c.Type] {
 			continue
 		}
 		uuid := c.UUIDAction
@@ -67,7 +82,7 @@ func DiscoverLoxoneControls(host, user, pass string) ([]LoxoneControl, error) {
 			room = r.Name
 		}
 		// The state that reflects the real output: "active" for a Switch, else
-		// the first available state.
+		// the first available state. Not needed for meters/chargers, but cheap.
 		stateUUID := c.States["active"]
 		if stateUUID == "" {
 			for _, v := range c.States {

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { X, Info, Wifi, AlertCircle, AlertTriangle, Car, Check } from 'lucide-react';
-import type { Charger, Building as BuildingType } from '../../types';
+import type { Charger, Building as BuildingType, LoxoneControl } from '../../types';
 import type { ChargerConnectionConfig } from './hooks/useChargerForm';
 import { CHARGER_PRESETS, getPreset } from '../chargerPresets';
+import LoxoneDiscovery from '../LoxoneDiscovery';
 
 interface ChargerFormModalProps {
   editingCharger: Charger | null;
@@ -104,6 +105,8 @@ export default function ChargerFormModal({
   t
 }: ChargerFormModalProps) {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  // Discovered Loxone controls (auto-discovery picker). Config-only, never billing.
+  const [loxoneControls, setLoxoneControls] = useState<LoxoneControl[]>([]);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -615,6 +618,64 @@ export default function ChargerFormModal({
                       />
                     </div>
                   </div>
+
+                  {/* Auto-discovery: pick the charger block instead of typing the UUID */}
+                  <LoxoneDiscovery
+                    host={connectionConfig.loxone_host || ''}
+                    username={connectionConfig.loxone_username || ''}
+                    password={connectionConfig.loxone_password || ''}
+                    category="charger"
+                    onControls={setLoxoneControls}
+                    isMobile={isMobile}
+                  />
+                  {loxoneControls.length > 0 && (
+                    isSingleBlockMode ? (
+                      <div style={{ marginBottom: '14px' }}>
+                        <label style={labelStyle}>{t('chargers.loxonePickBlock')}</label>
+                        <select
+                          value={connectionConfig.loxone_charger_block_uuid || ''}
+                          onChange={(e) => onConnectionConfigChange({ ...connectionConfig, loxone_charger_block_uuid: e.target.value })}
+                          onFocus={focusHandler}
+                          onBlur={blurHandler}
+                          style={inputStyle(isMobile)}
+                        >
+                          <option value="">—</option>
+                          {loxoneControls.map((c) => (
+                            <option key={c.uuid} value={c.uuid}>
+                              {c.room ? `${c.room} · ` : ''}{c.name} ({c.type})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <>
+                        {([
+                          { key: 'loxone_power_uuid', label: t('chargers.loxonePowerUuid') },
+                          { key: 'loxone_state_uuid', label: t('chargers.loxoneStateUuid') },
+                          { key: 'loxone_user_id_uuid', label: t('chargers.loxoneUserIdUuid') },
+                          { key: 'loxone_mode_uuid', label: t('chargers.loxoneModeUuid') },
+                        ] as const).map(({ key, label }) => (
+                          <div key={key} style={{ marginBottom: '14px' }}>
+                            <label style={labelStyle}>{t('chargers.loxonePickFor')} {label}</label>
+                            <select
+                              value={(connectionConfig as any)[key] || ''}
+                              onChange={(e) => onConnectionConfigChange({ ...connectionConfig, [key]: e.target.value })}
+                              onFocus={focusHandler}
+                              onBlur={blurHandler}
+                              style={inputStyle(isMobile)}
+                            >
+                              <option value="">—</option>
+                              {loxoneControls.map((c) => (
+                                <option key={c.uuid} value={c.uuid}>
+                                  {c.room ? `${c.room} · ` : ''}{c.name} ({c.type})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        ))}
+                      </>
+                    )
+                  )}
                 </>
               )}
 

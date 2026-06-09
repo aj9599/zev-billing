@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -195,15 +196,82 @@ func (l *loxoneDriver) Switch(on bool) error {
 }
 
 func (l *loxoneDriver) ReadState() (bool, bool, error) {
-	// IMPORTANT: an HTTP GET of the control UUID does NOT reliably return a Loxone
-	// actuator's real state — it comes back 0 even when the output is on. Actuator
-	// states are only delivered over the WebSocket binary status stream
-	// (enablebinstatusupdate), per Loxone's docs. So we use this only as a
-	// reachability check (online/offline) and report known=false, which keeps the
-	// controller's own commanded state instead of clobbering it with a wrong "off".
-	url := fmt.Sprintf("%s/jdev/sps/io/%s", l.base(), l.cfg.OutputUUID)
-	if _, err := httpGetBody(url, l.cfg.Username, l.cfg.Password); err != nil {
+	// Read the actual output state via the "/all" endpoint. Unlike a bare
+	// GET /jdev/sps/io/{uuid} (which comes back 0 even when the output is on),
+	// /jdev/sps/io/{uuid}/all returns the control's full output table, and
+	// output0 holds the real on/off value (0 = off, 1 = on) — the same shape the
+	// meter collector already relies on.
+	//
+	// BILLING SAFETY: this is a plain, short-lived HTTP GET on the device's own
+	// connection. It is completely independent of the Loxone billing WebSocket
+	// stream, so it cannot disturb metering. If the response can't be parsed we
+	// fall back to known=false (reachability only), which keeps the controller's
+	// commanded state exactly as before — no regression.
+	url := fmt.Sprintf("%s/jdev/sps/io/%s/all", l.base(), l.cfg.OutputUUID)
+	body, err := httpGetBody(url, l.cfg.Username, l.cfg.Password)
+	if err != nil {
 		return false, false, err
 	}
-	return false, false, nil
+	on, ok := parseLoxoneOutput0State(body)
+	if !ok {
+		// Reachable, but state couldn't be determined → keep commanded state.
+		return false, false, nil
+	}
+	return on, true, nil
+}
+
+// parseLoxoneOutput0State extracts output0's value from a /jdev/sps/io/{uuid}/all
+// response and reports whether the output is on. The body looks like:
+//
+//	{"LL": { "control": "...", "value": "0", "Code": "200",
+//	    "output0": { "name": "O", "nr": 1, "value": 0}, ... }}
+//
+// output0.value may be a JSON number (0 / 1 / 0.000) or a quoted string ("0"/"1").
+// Returns ok=false if output0 is missing or its value isn't numeric.
+func parseLoxoneOutput0State(body []byte) (on bool, ok bool) {
+	var env struct {
+		LL map[string]json.RawMessage `json:"LL"`
+	}
+	if err := json.Unmarshal(body, &env); err != nil || env.LL == nil {
+		return false, false
+	}
+	raw, exists := env.LL["output0"]
+	if !exists {
+		return false, false
+	}
+	var out struct {
+		Value json.RawMessage `json:"value"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return false, false
+	}
+	v, vok := parseLoxoneNumericValue(out.Value)
+	if !vok {
+		return false, false
+	}
+	return v != 0, true
+}
+
+// parseLoxoneNumericValue reads a Loxone output value that may be encoded as a
+// JSON number or as a quoted numeric string. Empty strings / non-numeric values
+// report ok=false.
+func parseLoxoneNumericValue(raw json.RawMessage) (float64, bool) {
+	if len(raw) == 0 {
+		return 0, false
+	}
+	var num float64
+	if err := json.Unmarshal(raw, &num); err == nil {
+		return num, true
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			return 0, false
+		}
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			return f, true
+		}
+	}
+	return 0, false
 }

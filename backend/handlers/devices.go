@@ -265,6 +265,9 @@ func (h *DeviceHandler) Discover(w http.ResponseWriter, r *http.Request) {
 		Host     string `json:"host"`
 		Username string `json:"username"`
 		Password string `json:"password"`
+		// Category: "switch"/"" → switchable outputs (devices); "meter"/"charger"/
+		// "all" → every control with an action UUID (meter/charger pickers).
+		Category string `json:"category"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -274,7 +277,7 @@ func (h *DeviceHandler) Discover(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Discovery is only supported for Loxone", http.StatusBadRequest)
 		return
 	}
-	controls, err := services.DiscoverLoxoneControls(req.Host, req.Username, req.Password)
+	controls, err := services.DiscoverLoxoneControls(req.Host, req.Username, req.Password, req.Category)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
