@@ -159,6 +159,7 @@ export const en: Translations = {
   'license.tierFree': 'Free',
   'license.tierTrial': 'Trial',
   'license.tierPro': 'Pro',
+  'license.tierCustom': 'Custom',
   'license.trialDaysLeft': '{days} days left in trial',
   'license.validUntil': 'Valid until',
   'license.licensedTo': 'Licensed to',

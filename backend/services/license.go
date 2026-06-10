@@ -83,11 +83,12 @@ type LicenseStatus struct {
 
 // licensePayload is the signed content encoded inside a vendor license key.
 type licensePayload struct {
-	ID       string `json:"id"`
-	Licensee string `json:"licensee"`
-	Tier     string `json:"tier"`
-	Issued   string `json:"issued"`
-	Expires  string `json:"expires"` // RFC3339 / YYYY-MM-DD, or "" for perpetual
+	ID       string         `json:"id"`
+	Licensee string         `json:"licensee"`
+	Tier     string         `json:"tier"`
+	Issued   string         `json:"issued"`
+	Expires  string         `json:"expires"`          // RFC3339 / YYYY-MM-DD, or "" for perpetual
+	Limits   *LicenseLimits `json:"limits,omitempty"` // nil = full unlimited (classic pro)
 }
 
 // receiptPayload is the signed, device-bound activation receipt returned by the
@@ -304,6 +305,34 @@ func (ls *LicenseService) usage() LicenseUsage {
 	}
 }
 
+// effectiveLimits returns the entitlement for a valid licence key: the key's own
+// limits if present, otherwise full unlimited. It also derives a display tier:
+// "pro" for full unlimited, "custom" when the key restricts something.
+func (ls *LicenseService) effectiveLimits(key string) (LicenseLimits, string) {
+	lim := unlimitedLimits
+	if p, _ := ls.verifyKey(key); p != nil && p.Limits != nil {
+		lim = normalizeLimits(*p.Limits)
+	}
+	tier := "pro"
+	if lim != unlimitedLimits {
+		tier = "custom"
+	}
+	return lim, tier
+}
+
+// normalizeLimits clamps negative counts to -1 (unlimited).
+func normalizeLimits(l LicenseLimits) LicenseLimits {
+	clamp := func(n int) int {
+		if n < 0 {
+			return -1
+		}
+		return n
+	}
+	l.Buildings, l.Users, l.Meters = clamp(l.Buildings), clamp(l.Users), clamp(l.Meters)
+	l.Chargers, l.Devices = clamp(l.Chargers), clamp(l.Devices)
+	return l
+}
+
 // Status computes the current license state, effective limits and usage.
 func (ls *LicenseService) Status() LicenseStatus {
 	installDate, key, deviceID, receipt, lastValidated := ls.readRow()
@@ -337,9 +366,10 @@ func (ls *LicenseService) Status() LicenseStatus {
 		// Pro requires a valid, device-bound activation receipt.
 		if receipt != "" {
 			if rp, err := ls.verifyReceipt(receipt, deviceID); err == nil {
+				lim, tier := ls.effectiveLimits(key)
 				return base(LicenseStatus{
-					Tier: "pro", Valid: true, Licensee: rp.Licensee, Expires: rp.Expires,
-					BillingAllowed: true, Limits: unlimitedLimits, Usage: usage,
+					Tier: tier, Valid: true, Licensee: rp.Licensee,
+					BillingAllowed: lim.Billing, Limits: lim, Usage: usage,
 				})
 			} else {
 				st := ls.trialOrFree(installDate, usage)
@@ -360,9 +390,10 @@ func (ls *LicenseService) Status() LicenseStatus {
 	// Offline (Phase 1): a valid signed key is enough.
 	if key != "" {
 		if p, err := ls.verifyKey(key); err == nil {
+			lim, tier := ls.effectiveLimits(key)
 			return base(LicenseStatus{
-				Tier: "pro", Valid: true, Licensee: p.Licensee, Expires: p.Expires,
-				BillingAllowed: true, Limits: unlimitedLimits, Usage: usage,
+				Tier: tier, Valid: true, Licensee: p.Licensee,
+				BillingAllowed: lim.Billing, Limits: lim, Usage: usage,
 			})
 		} else {
 			st := ls.trialOrFree(installDate, usage)

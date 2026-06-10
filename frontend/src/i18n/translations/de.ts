@@ -159,6 +159,7 @@ export const de: Translations = {
   'license.tierFree': 'Gratis',
   'license.tierTrial': 'Testphase',
   'license.tierPro': 'Pro',
+  'license.tierCustom': 'Individuell',
   'license.trialDaysLeft': 'Noch {days} Tage in der Testphase',
   'license.validUntil': 'Gültig bis',
   'license.licensedTo': 'Lizenziert für',

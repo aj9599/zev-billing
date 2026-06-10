@@ -75,8 +75,8 @@ export default function License() {
     return <div style={{ padding: 24, color: '#6b7280' }}>{t('common.loading')}</div>;
   }
 
-  const tierColor = status.tier === 'pro' ? '#10b981' : status.tier === 'trial' ? '#667eea' : '#9ca3af';
-  const tierLabel = status.tier === 'pro' ? t('license.tierPro') : status.tier === 'trial' ? t('license.tierTrial') : t('license.tierFree');
+  const tierColor = status.tier === 'pro' ? '#10b981' : status.tier === 'custom' ? '#8b5cf6' : status.tier === 'trial' ? '#667eea' : '#9ca3af';
+  const tierLabel = status.tier === 'pro' ? t('license.tierPro') : status.tier === 'custom' ? t('license.tierCustom') : status.tier === 'trial' ? t('license.tierTrial') : t('license.tierFree');
   const fmtLimit = (n: number) => (n < 0 ? '∞' : String(n));
   const msg = statusMessage(status);
 

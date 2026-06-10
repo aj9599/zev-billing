@@ -137,7 +137,7 @@ export interface LicenseUsage {
 }
 
 export interface LicenseStatus {
-  tier: 'free' | 'trial' | 'pro';
+  tier: 'free' | 'trial' | 'pro' | 'custom';
   valid: boolean;
   licensee?: string;
   expires?: string;

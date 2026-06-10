@@ -40,6 +40,7 @@ export default function Layout({ onLogout }: LayoutProps) {
     if (!license) return null;
     const map: Record<string, { label: string; bg: string }> = {
       pro: { label: t('license.tierPro'), bg: '#10b981' },
+      custom: { label: t('license.tierCustom'), bg: '#8b5cf6' },
       trial: { label: t('license.tierTrial'), bg: '#f59e0b' },
       free: { label: t('license.tierFree'), bg: '#6b7280' },
     };
