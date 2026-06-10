@@ -37,6 +37,23 @@ func getConfigString(config map[string]interface{}, key string, defaultValue str
 	return defaultValue
 }
 
+// modeMatches reports whether a charger session's reported mode value matches a
+// configured billing-mode setting. The configured value may be a single value
+// ("1") or a comma-separated list of values ("1,99") so that several physical
+// charger modes can map to the same billing category. Whitespace is ignored.
+func modeMatches(sessionMode, configValue string) bool {
+	sessionMode = strings.TrimSpace(sessionMode)
+	if sessionMode == "" {
+		return false
+	}
+	for _, v := range strings.Split(configValue, ",") {
+		if strings.TrimSpace(v) == sessionMode {
+			return true
+		}
+	}
+	return false
+}
+
 // UserPeriod represents a user's rental period within the billing period
 type UserPeriod struct {
 	UserID          int
@@ -2404,8 +2421,8 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 			if consumption > 0 {
 				chargerBillable++
 
-				isNormal := (session.Mode == config.ModeNormal)
-				isPriority := (session.Mode == config.ModePriority)
+				isPriority := modeMatches(session.Mode, config.ModePriority)
+				isNormal := !isPriority && modeMatches(session.Mode, config.ModeNormal)
 
 				if isNormal {
 					chargerNormal += consumption
@@ -2624,10 +2641,9 @@ func (bs *BillingService) calculateChargingFiltered(buildingID int, filter charg
 				continue
 			}
 			if delta > 0 {
-				switch s.Mode {
-				case cfg.ModePriority:
+				if modeMatches(s.Mode, cfg.ModePriority) {
 					chargerPriority += delta
-				default:
+				} else {
 					chargerNormal += delta
 				}
 			}

@@ -43,9 +43,15 @@ export const WEIDMULLER_PRESET: PresetConfig = {
     charging: '67',
     idle: '50'
   },
+  // Loxone mode values:
+  //   1  = Priority           (priority price)
+  //   2  = Solar              (solar price)
+  //   3  = Solar priority     (solar price)
+  //   99 = Priority w/ set power (priority price)
+  // Comma-separated lists map several physical modes to one billing category.
   defaultModeMappings: {
-    normal: '1',
-    priority: '2'
+    normal: '2,3',
+    priority: '1,99'
   },
   stateOptions: [
     { value: 'cable_locked', label: 'Cable Locked' },
