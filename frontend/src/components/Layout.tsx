@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { LayoutDashboard, Users, Building, Car, FileText, Settings as SettingsIcon, LogOut, Activity, DollarSign, Menu, X, Calendar, Zap, ChevronDown, ChevronRight, Lock, Database, Mail, Power, KeyRound } from 'lucide-react';
 import { api } from '../api/client';
 import type { LicenseStatus } from '../types';
@@ -15,26 +15,34 @@ export default function Layout({ onLogout }: LayoutProps) {
   const { t, language, setLanguage } = useTranslation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [license, setLicense] = useState<LicenseStatus | null>(null);
+  // Seed from the cached tier so the badge shows INSTANTLY on reload, before the
+  // network call returns. Then refresh in the background.
+  const [license, setLicense] = useState<LicenseStatus | null>(() => {
+    try { const c = localStorage.getItem('license_cache'); return c ? JSON.parse(c) as LicenseStatus : null; } catch { return null; }
+  });
 
-  // Keep the tier badge fresh: on mount, on every navigation, when the License
-  // page signals a change, on window focus, and periodically as a backstop.
-  useEffect(() => {
-    const refresh = () => api.getLicense().then(setLicense).catch(() => {});
-    refresh();
-    window.addEventListener('license-changed', refresh);
-    window.addEventListener('focus', refresh);
-    const iv = setInterval(refresh, 60000);
-    return () => {
-      window.removeEventListener('license-changed', refresh);
-      window.removeEventListener('focus', refresh);
-      clearInterval(iv);
-    };
+  const refreshLicense = useCallback(() => {
+    api.getLicense().then(s => {
+      setLicense(s);
+      try { localStorage.setItem('license_cache', JSON.stringify(s)); } catch { /* ignore */ }
+    }).catch(() => { /* keep cached value */ });
   }, []);
 
+  // Refresh on mount, on navigation, on a "license-changed" event, on focus, and
+  // periodically — so the badge is always present and current.
   useEffect(() => {
-    api.getLicense().then(setLicense).catch(() => {});
-  }, [location.pathname]);
+    refreshLicense();
+    window.addEventListener('license-changed', refreshLicense);
+    window.addEventListener('focus', refreshLicense);
+    const iv = setInterval(refreshLicense, 60000);
+    return () => {
+      window.removeEventListener('license-changed', refreshLicense);
+      window.removeEventListener('focus', refreshLicense);
+      clearInterval(iv);
+    };
+  }, [refreshLicense]);
+
+  useEffect(() => { refreshLicense(); }, [location.pathname, refreshLicense]);
 
   const tierBadge = (() => {
     if (!license) return null;
@@ -95,9 +103,22 @@ export default function Layout({ onLogout }: LayoutProps) {
         zIndex: 1001,
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Logo size={50} />
           <h1 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0 }}>ZEV Billing</h1>
+          {tierBadge && (
+            <Link
+              to="/license"
+              onClick={closeMobileMenu}
+              style={{
+                padding: '2px 9px', borderRadius: '999px', fontSize: '10px', fontWeight: 700,
+                letterSpacing: '0.4px', textTransform: 'uppercase',
+                background: tierBadge.bg, color: '#fff', textDecoration: 'none', whiteSpace: 'nowrap',
+              }}
+            >
+              {tierBadge.label}
+            </Link>
+          )}
         </div>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
