@@ -668,15 +668,16 @@ fi
 rm -f zev-billing go.sum
 
 # Download dependencies
+# Note: sudo resets PATH to a minimal secure_path that omits /usr/local/go/bin,
+# so we re-inject the Go path (and GOTOOLCHAIN) via `env` for the build user.
+GO_ENV="env PATH=/usr/local/go/bin:/usr/bin:/bin GOTOOLCHAIN=local"
 print_info "Downloading Go dependencies..."
-export GOTOOLCHAIN=local
-sudo -u "$ACTUAL_USER" go mod download || true
-sudo -u "$ACTUAL_USER" go mod tidy || true
+sudo -u "$ACTUAL_USER" $GO_ENV go mod download || true
+sudo -u "$ACTUAL_USER" $GO_ENV go mod tidy || true
 
 # Build backend
 print_info "Building backend..."
-export GOTOOLCHAIN=local
-sudo -u "$ACTUAL_USER" CGO_ENABLED=1 go build -o zev-billing
+sudo -u "$ACTUAL_USER" $GO_ENV CGO_ENABLED=1 go build -o zev-billing
 
 if [ ! -f "zev-billing" ]; then
     print_error "Backend build failed!"
@@ -1047,6 +1048,7 @@ echo ""
 echo "Rebuilding backend..."
 cd backend
 rm -f zev-billing go.sum
+export PATH=$PATH:/usr/local/go/bin
 export GOTOOLCHAIN=local
 go mod download
 go mod tidy
