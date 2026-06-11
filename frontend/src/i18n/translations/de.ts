@@ -33,6 +33,7 @@ export const de: Translations = {
   'meters.e3dcDischarging': 'entlädt',
   'meters.e3dcIdle': 'inaktiv',
   'chargers.e3dcInfo': 'E3/DC-Wallbox via lokales RSCP — liest die Ladeenergie (inkl. Solaranteil) und kann das Laden starten/stoppen.',
+  'chargers.billingE3dcModeHint': 'Jedes 15-Minuten-Intervall wird nach der Solar/Netz-Aufteilung des E3/DC abgerechnet: solar geladene Energie zum Solar-Tarif (normal), aus dem Netz geladene Energie zum Prioritäts-Tarif. Wähle stattdessen Solar-Aufteilung, um den Gebäude-Solarstrom anteilig zu verteilen (wie Zaptec).',
   'chargers.e3dcHost': 'E3/DC IP-Adresse / Host',
   'chargers.e3dcPort': 'RSCP-Port',
   'chargers.e3dcWallboxIndex': 'Wallbox-Index',

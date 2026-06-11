@@ -380,7 +380,12 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
         e3dc_user: connectionConfig.e3dc_user,
         e3dc_password: connectionConfig.e3dc_password,
         e3dc_rscp_key: connectionConfig.e3dc_rscp_key,
-        e3dc_wallbox_index: connectionConfig.e3dc_wallbox_index
+        e3dc_wallbox_index: connectionConfig.e3dc_wallbox_index,
+        // For mode_based billing the collector tags each slot "solar" or "grid"
+        // from the E3/DC's own solar/grid split; these map them to the car
+        // charging normal (solar, cheaper) and priority (grid, dearer) rates.
+        mode_normal: 'solar',
+        mode_priority: 'grid'
       } as ChargerConnectionConfig;
     } else if (formData.connection_type === 'http') {
       config = {

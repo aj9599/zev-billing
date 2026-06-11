@@ -342,7 +342,9 @@ export default function ChargerFormModal({
                 <p style={{ fontSize: '12px', color: '#6b7280', margin: '6px 2px 0' }}>
                   {(formData.billing_method || 'mode_based') === 'solar_split'
                     ? t('chargers.billingSolarSplitHint')
-                    : t('chargers.billingModeBasedHint')}
+                    : formData.preset === 'e3dc'
+                      ? t('chargers.billingE3dcModeHint')
+                      : t('chargers.billingModeBasedHint')}
                 </p>
               </div>
 

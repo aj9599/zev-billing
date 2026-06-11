@@ -82,6 +82,13 @@ type e3dcChargerState struct {
 	rfid       string // RFID of the card on the active session (for billing)
 	lastUpdate time.Time
 	lastWrite  time.Time // last 15-min boundary written
+
+	// mode_based billing: classify each 15-min slot as solar or grid from the
+	// E3/DC's own per-slot solar/total energy delta.
+	billingMode  string // "solar_split" | "mode_based"
+	prevTotalKwh float64
+	prevSolarKwh float64
+	prevSet      bool
 }
 
 func NewE3DCCollector(db *sql.DB) *E3DCCollector {
@@ -187,7 +194,7 @@ func (ec *E3DCCollector) reload() {
 
 	// --- Chargers ---
 	crows, err := ec.db.Query(`
-		SELECT id, name, connection_config
+		SELECT id, name, connection_config, COALESCE(billing_method, 'solar_split')
 		FROM chargers
 		WHERE is_active = 1 AND connection_type = 'e3dc_api'
 	`)
@@ -197,8 +204,8 @@ func (ec *E3DCCollector) reload() {
 		defer crows.Close()
 		for crows.Next() {
 			var id int
-			var name, cfgJSON string
-			if crows.Scan(&id, &name, &cfgJSON) != nil {
+			var name, cfgJSON, billingMethod string
+			if crows.Scan(&id, &name, &cfgJSON, &billingMethod) != nil {
 				continue
 			}
 			var cfg e3dc.Config
@@ -211,7 +218,7 @@ func (ec *E3DCCollector) reload() {
 			}
 			key := ec.ensureClient(cfg)
 			ec.mu.Lock()
-			ec.chargers[id] = &e3dcChargerState{chargerID: id, name: name, cfg: cfg, devKey: key}
+			ec.chargers[id] = &e3dcChargerState{chargerID: id, name: name, cfg: cfg, devKey: key, billingMode: billingMethod}
 			ec.mu.Unlock()
 			log.Printf("E3/DC charger loaded: '%s' (wallbox %d via %s:%d)", name, cfg.WallboxIndex, cfg.Host, cfg.Port)
 		}
@@ -347,21 +354,44 @@ func (ec *E3DCCollector) updateCharger(st *e3dcChargerState, snap *e3dc.Snapshot
 }
 
 func (ec *E3DCCollector) writeChargerBoundary(st *e3dcChargerState) {
-	ec.mu.RLock()
+	ec.mu.Lock()
 	total := st.totalKwh
+	solar := st.solarKwh
 	charging := st.charging
 	boundary := st.lastWrite
 	name := st.name
 	id := st.chargerID
 	rfid := st.rfid
-	ec.mu.RUnlock()
+
+	// Mode for this slot. For solar_split billing the mode is ignored (record
+	// "normal" for visibility). For mode_based billing we classify the slot from
+	// the E3/DC's own solar vs total energy delta since the last write: if at
+	// least half of the energy charged in this slot came from solar, it's billed
+	// at the (cheaper) solar/normal rate, otherwise the (dearer) grid/priority
+	// rate. Config mode_normal="solar" / mode_priority="grid" make billing match.
+	mode := "normal"
+	if st.billingMode == "mode_based" {
+		mode = "solar"
+		if st.prevSet {
+			totalDelta := total - st.prevTotalKwh
+			solarDelta := solar - st.prevSolarKwh
+			if solarDelta < 0 {
+				solarDelta = 0
+			}
+			if totalDelta > 0 && solarDelta < 0.5*totalDelta {
+				mode = "grid"
+			}
+		}
+		st.prevTotalKwh = total
+		st.prevSolarKwh = solar
+		st.prevSet = true
+	}
+	ec.mu.Unlock()
 
 	state := "1" // idle / not charging
 	if charging {
 		state = "3"
 	}
-	// solar_split billing ignores mode; record it for visibility only.
-	mode := "normal"
 
 	// user_id = the RFID of the card on the active session, so billing can
 	// attribute the energy to the right tenant (empty when no card / idle).

@@ -33,6 +33,7 @@ export const en: Translations = {
   'meters.e3dcDischarging': 'discharging',
   'meters.e3dcIdle': 'idle',
   'chargers.e3dcInfo': 'E3/DC integrated wallbox via local RSCP — reads charging energy (incl. solar share) and can start/stop charging.',
+  'chargers.billingE3dcModeHint': 'Each 15-minute slot is billed from the E3/DC’s own solar/grid split: solar-charged energy at the solar (normal) car rate, grid-charged energy at the priority rate. Choose Solar split instead to share the building’s solar proportionally (like Zaptec).',
   'chargers.e3dcHost': 'E3/DC IP address / host',
   'chargers.e3dcPort': 'RSCP port',
   'chargers.e3dcWallboxIndex': 'Wallbox index',
