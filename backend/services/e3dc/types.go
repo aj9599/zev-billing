@@ -110,6 +110,15 @@ type Snapshot struct {
 	WallboxCharging  bool // actively delivering energy
 	WallboxStatusOK  bool // the status byte was read successfully
 
+	// WallboxRFID is the RFID token of the card used to start the current
+	// session (RSCP WB_SESSION_AUTH_DATA), hex-encoded. Empty when no session /
+	// no card. Used to attribute charging to a tenant for billing.
+	WallboxRFID string
+	// WallboxSessionSolarKWh / WallboxSessionEnergyKWh are the current session's
+	// solar and total charged energy as measured by the E3/DC itself.
+	WallboxSessionEnergyKWh float64
+	WallboxSessionSolarKWh  float64
+
 	Timestamp time.Time
 }
 

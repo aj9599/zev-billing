@@ -47,6 +47,7 @@ export const en: Translations = {
   'devices.e3dcPhases': 'Phases',
   'devices.e3dcMinCurrent': 'Min A',
   'devices.e3dcMaxCurrent': 'Max A',
+  'devices.e3dcDynamicControlHint': 'No thresholds needed — the wallbox current follows the solar surplus between the min and max above. Priority decides which device gets the surplus first.',
   // ============================================================================
   // NAVIGATION
   // ============================================================================

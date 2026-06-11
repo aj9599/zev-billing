@@ -47,6 +47,7 @@ export const de: Translations = {
   'devices.e3dcPhases': 'Phasen',
   'devices.e3dcMinCurrent': 'Min A',
   'devices.e3dcMaxCurrent': 'Max A',
+  'devices.e3dcDynamicControlHint': 'Keine Schwellen nötig — der Wallbox-Strom folgt dem Solarüberschuss zwischen dem oben gesetzten Min und Max. Die Priorität bestimmt, welches Gerät den Überschuss zuerst erhält.',
   // ============================================================================
   // NAVIGATION
   // ============================================================================

@@ -1,8 +1,10 @@
 package e3dc
 
 import (
+	"encoding/hex"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -135,7 +137,75 @@ func (r *rscpClient) Read() (*Snapshot, error) {
 	// Wallbox block — sent inside a WB_REQ_DATA container addressed by index.
 	r.readWallbox(snap)
 
+	// Session block (RFID + per-session solar/total energy). Best-effort and
+	// isolated so a failure never affects the main wallbox read.
+	r.readWallboxSession(snap)
+
 	return snap, nil
+}
+
+// readWallboxSession reads the current charging session's RFID token and
+// solar/total energy. Non-fatal: failures leave the session fields empty.
+func (r *rscpClient) readWallboxSession(snap *Snapshot) {
+	container := rscp.NewMessage(rscp.WB_REQ_DATA, []rscp.Message{
+		*rscp.NewMessage(rscp.WB_INDEX, uint8(r.cfg.WallboxIndex)),
+		*rscp.NewMessage(rscp.WB_REQ_SESSION, nil),
+	})
+	res, err := r.send(*container)
+	if err != nil {
+		return
+	}
+	inner, ok := res.Value.([]rscp.Message)
+	if !ok {
+		return
+	}
+	if v, found := findTag(inner, rscp.WB_SESSION_AUTH_DATA); found {
+		snap.WallboxRFID = formatRFID(v)
+	}
+	if v, found := findTag(inner, rscp.WB_SESSION_CHARGED_ENERGY); found {
+		if f, ok := asFloat64(v); ok {
+			snap.WallboxSessionEnergyKWh = f / 1000.0
+		}
+	}
+	if v, found := findTag(inner, rscp.WB_SESSION_CHARGED_SUN_ENERGY); found {
+		if f, ok := asFloat64(v); ok {
+			snap.WallboxSessionSolarKWh = f / 1000.0
+		}
+	}
+}
+
+// findTag recursively searches a (possibly nested) slice of RSCP messages for
+// the given tag and returns its value.
+func findTag(msgs []rscp.Message, tag rscp.Tag) (interface{}, bool) {
+	for i := range msgs {
+		m := msgs[i]
+		if m.Tag == tag {
+			return m.Value, true
+		}
+		if nested, ok := m.Value.([]rscp.Message); ok {
+			if v, found := findTag(nested, tag); found {
+				return v, true
+			}
+		}
+	}
+	return nil, false
+}
+
+// formatRFID renders an RFID token value as an uppercase hex string. The token
+// comes back either as a byte array or as a string depending on firmware; both
+// are normalised. NOTE: the exact on-screen format (and byte order — E3/DC also
+// exposes a *_SWAPPED variant) should be verified against real hardware so it
+// matches the value tenants register.
+func formatRFID(v interface{}) string {
+	switch b := v.(type) {
+	case []byte:
+		s := strings.ToUpper(hex.EncodeToString(b))
+		return strings.TrimLeft(s, "0") // drop leading zero padding; "" if all-zero
+	case string:
+		return strings.TrimSpace(b)
+	default:
+		return ""
+	}
 }
 
 // readWallbox queries the configured wallbox and fills the wallbox fields of

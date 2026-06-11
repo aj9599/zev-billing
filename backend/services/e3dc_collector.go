@@ -79,6 +79,7 @@ type e3dcChargerState struct {
 	charging   bool
 	connected  bool
 	online     bool
+	rfid       string // RFID of the card on the active session (for billing)
 	lastUpdate time.Time
 	lastWrite  time.Time // last 15-min boundary written
 }
@@ -330,6 +331,7 @@ func (ec *E3DCCollector) updateCharger(st *e3dcChargerState, snap *e3dc.Snapshot
 		st.totalKwh = snap.WallboxEnergyKWh
 		st.solarKwh = snap.WallboxEnergySolarKWh
 	}
+	st.rfid = snap.WallboxRFID
 	st.lastUpdate = now
 
 	boundary := ec.alignTo15(now.In(ec.localTZ))
@@ -351,6 +353,7 @@ func (ec *E3DCCollector) writeChargerBoundary(st *e3dcChargerState) {
 	boundary := st.lastWrite
 	name := st.name
 	id := st.chargerID
+	rfid := st.rfid
 	ec.mu.RUnlock()
 
 	state := "1" // idle / not charging
@@ -360,10 +363,12 @@ func (ec *E3DCCollector) writeChargerBoundary(st *e3dcChargerState) {
 	// solar_split billing ignores mode; record it for visibility only.
 	mode := "normal"
 
+	// user_id = the RFID of the card on the active session, so billing can
+	// attribute the energy to the right tenant (empty when no card / idle).
 	_, err := ec.db.Exec(`
 		INSERT INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
-		VALUES (?, '', ?, ?, ?, ?)
-	`, id, boundary, total, mode, state)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, id, rfid, boundary, total, mode, state)
 	if err != nil {
 		log.Printf("E3/DC: failed to write charger '%s' boundary: %v", name, err)
 		return
@@ -412,6 +417,7 @@ type E3DCChargerData struct {
 	IsOnline     bool
 	IsCharging   bool
 	IsConnected  bool
+	RFID         string // card on the active session (to register against a tenant)
 	Timestamp    time.Time
 }
 
@@ -431,6 +437,7 @@ func (ec *E3DCCollector) GetChargerData(chargerID int) (*E3DCChargerData, bool) 
 		IsOnline:    st.online,
 		IsCharging:  st.charging,
 		IsConnected: st.connected,
+		RFID:        st.rfid,
 		Timestamp:   st.lastUpdate,
 	}, true
 }
@@ -478,6 +485,7 @@ func (ec *E3DCCollector) GetConnectionStatus() map[string]interface{} {
 			"total_kwh":    st.totalKwh,
 			"solar_kwh":    st.solarKwh,
 			"power_kw":     st.powerKw,
+			"rfid":         st.rfid,
 		}
 	}
 	return map[string]interface{}{

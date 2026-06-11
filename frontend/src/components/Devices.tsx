@@ -1074,53 +1074,71 @@ export default function Devices() {
                 )}
               </div>
 
-              {/* Control parameters */}
+              {/* Control parameters. A dynamic (PV-following) charger ignores the
+                  on/off thresholds and runtime timers — it's driven by the
+                  min/max current set above — so only Priority is shown for it. */}
               <div style={card}>
                 <div style={{ fontSize: '12px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: '12px' }}>{t('devices.controlSection')}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label style={label}>{t('devices.onThreshold')} (W)</label>
-                    <input type="number" style={input} value={form.switch_on_threshold_w} onChange={(e) => setForm({ ...form, switch_on_threshold_w: Number(e.target.value) })} />
-                  </div>
-                  <div>
-                    <label style={label}>{t('devices.offThreshold')} (W)</label>
-                    <input type="number" style={input} value={form.switch_off_threshold_w} onChange={(e) => setForm({ ...form, switch_off_threshold_w: Number(e.target.value) })} />
-                  </div>
-                  <div>
-                    <label style={label}>{t('devices.minRuntime')} (s)</label>
-                    <input type="number" style={input} value={form.min_runtime_seconds} onChange={(e) => setForm({ ...form, min_runtime_seconds: Number(e.target.value) })} />
-                  </div>
-                  <div>
-                    <label style={label}>{t('devices.minOfftime')} (s)</label>
-                    <input type="number" style={input} value={form.min_offtime_seconds} onChange={(e) => setForm({ ...form, min_offtime_seconds: Number(e.target.value) })} />
-                  </div>
-                  <div>
-                    <label style={label}>{t('devices.priority')}</label>
-                    <input type="number" style={input} value={form.priority} onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })} />
-                  </div>
-                </div>
-                <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px', marginBottom: 0 }}>{t('devices.thresholdHint')}</p>
+                {form.driver === 'e3dc' && form.e3dc_dynamic ? (
+                  <>
+                    <div style={{ maxWidth: '50%' }}>
+                      <label style={label}>{t('devices.priority')}</label>
+                      <input type="number" style={input} value={form.priority} onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })} />
+                    </div>
+                    <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px', marginBottom: 0 }}>{t('devices.e3dcDynamicControlHint')}</p>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div>
+                        <label style={label}>{t('devices.onThreshold')} (W)</label>
+                        <input type="number" style={input} value={form.switch_on_threshold_w} onChange={(e) => setForm({ ...form, switch_on_threshold_w: Number(e.target.value) })} />
+                      </div>
+                      <div>
+                        <label style={label}>{t('devices.offThreshold')} (W)</label>
+                        <input type="number" style={input} value={form.switch_off_threshold_w} onChange={(e) => setForm({ ...form, switch_off_threshold_w: Number(e.target.value) })} />
+                      </div>
+                      <div>
+                        <label style={label}>{t('devices.minRuntime')} (s)</label>
+                        <input type="number" style={input} value={form.min_runtime_seconds} onChange={(e) => setForm({ ...form, min_runtime_seconds: Number(e.target.value) })} />
+                      </div>
+                      <div>
+                        <label style={label}>{t('devices.minOfftime')} (s)</label>
+                        <input type="number" style={input} value={form.min_offtime_seconds} onChange={(e) => setForm({ ...form, min_offtime_seconds: Number(e.target.value) })} />
+                      </div>
+                      <div>
+                        <label style={label}>{t('devices.priority')}</label>
+                        <input type="number" style={input} value={form.priority} onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })} />
+                      </div>
+                    </div>
+                    <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px', marginBottom: 0 }}>{t('devices.thresholdHint')}</p>
+                  </>
+                )}
               </div>
 
-              {/* Schedule */}
-              {renderScheduleEditor(
-                form.schedule_enabled,
-                form.schedule_windows,
-                (v) => setForm({ ...form, schedule_enabled: v }),
-                (w) => setForm({ ...form, schedule_windows: w }),
+              {/* Schedule + runtime guarantee — only for on/off devices, not the
+                  dynamic charger (which has no fixed runtime concept). */}
+              {!(form.driver === 'e3dc' && form.e3dc_dynamic) && (
+                <>
+                  {renderScheduleEditor(
+                    form.schedule_enabled,
+                    form.schedule_windows,
+                    (v) => setForm({ ...form, schedule_enabled: v }),
+                    (w) => setForm({ ...form, schedule_windows: w }),
+                  )}
+
+                  <div style={card}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: '12px' }}>{t('devices.guaranteeSection')}</div>
+                    <GuaranteeFields
+                      hours={form.guarantee_hours}
+                      by={form.guarantee_by}
+                      onHours={(h) => setForm({ ...form, guarantee_hours: h })}
+                      onBy={(v) => setForm({ ...form, guarantee_by: v })}
+                    />
+                    <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px', marginBottom: 0 }}>{t('devices.guaranteeHint')}</p>
+                  </div>
+                </>
               )}
-
-              {/* Runtime guarantee */}
-              <div style={card}>
-                <div style={{ fontSize: '12px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: '12px' }}>{t('devices.guaranteeSection')}</div>
-                <GuaranteeFields
-                  hours={form.guarantee_hours}
-                  by={form.guarantee_by}
-                  onHours={(h) => setForm({ ...form, guarantee_hours: h })}
-                  onBy={(v) => setForm({ ...form, guarantee_by: v })}
-                />
-                <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px', marginBottom: 0 }}>{t('devices.guaranteeHint')}</p>
-              </div>
 
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
                 <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
