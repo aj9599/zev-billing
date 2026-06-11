@@ -111,8 +111,9 @@ export default function Layout({ onLogout }: LayoutProps) {
               to="/license"
               onClick={closeMobileMenu}
               style={{
-                padding: '2px 9px', borderRadius: '999px', fontSize: '10px', fontWeight: 700,
-                letterSpacing: '0.4px', textTransform: 'uppercase',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                padding: '3px 9px', borderRadius: '999px', fontSize: '10px', fontWeight: 700,
+                lineHeight: 1, letterSpacing: '0.4px', textTransform: 'uppercase',
                 background: tierBadge.bg, color: '#fff', textDecoration: 'none', whiteSpace: 'nowrap',
               }}
             >
