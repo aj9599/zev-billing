@@ -8,6 +8,11 @@
 
 set -e  # Exit on any error
 
+# Use a neutral locale so perl/dpkg don't spam "Cannot set LC_*" warnings
+# on Pis where the configured locale (e.g. en_GB.UTF-8) isn't generated.
+export LC_ALL=C
+export LANG=C
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -54,6 +59,14 @@ print_info() {
     echo -e "${BLUE}ℹ️  $1${NC}"
 }
 
+# Auto-elevate: this installer must run as root. Re-exec via sudo (using
+# `bash "$0"` so it works even if the file isn't marked executable) instead
+# of failing with a "please run as root" error.
+if [ "$EUID" -ne 0 ]; then
+    echo "Requesting root privileges (sudo)..."
+    exec sudo -E bash "$0" "$@"
+fi
+
 clear
 echo -e "${CYAN}${BOLD}"
 cat << "EOF"
@@ -81,12 +94,6 @@ if [ "$1" == "--fresh" ] || [ "$1" == "-f" ]; then
         exit 0
     fi
     echo ""
-fi
-
-# Check if running as root
-if [ "$EUID" -ne 0 ]; then 
-   print_error "Please run this script as root (use sudo)"
-   exit 1
 fi
 
 # Get the actual user who called sudo
@@ -237,7 +244,25 @@ if [ "$FRESH_INSTALL" = true ]; then
 fi
 
 print_step "1" "Installing system dependencies"
-apt-get update -qq
+
+# Pre-flight: a corrupted apt package database (e.g. from an interrupted
+# download or a flaky SD card) makes every install fail with a cryptic
+# "could not be parsed" error. Detect it here and auto-repair by rebuilding
+# the package lists, so the user gets a working install instead of a wall.
+if ! apt-get update -qq; then
+    print_warning "apt-get update failed — package lists may be corrupted."
+    print_info "Attempting automatic repair (rebuilding apt package lists)..."
+    rm -rf /var/lib/apt/lists/*
+    apt-get clean
+    if ! apt-get update; then
+        print_error "Could not repair apt automatically."
+        echo "Run these on the Pi, then re-run the installer:"
+        echo "    sudo rm -rf /var/lib/apt/lists/*"
+        echo "    sudo apt-get clean && sudo apt-get update"
+        exit 1
+    fi
+    print_success "apt package lists repaired"
+fi
 
 # Install git and build tools
 print_info "Installing development tools..."
@@ -576,14 +601,20 @@ if [ -d "$INSTALL_DIR" ]; then
     if [ -d "$INSTALL_DIR/.git" ]; then
         print_info "Directory is a git repository, pulling latest changes..."
         cd "$INSTALL_DIR"
-        sudo -u "$ACTUAL_USER" git pull || {
-            print_warning "Git pull failed"
-            echo "This might happen if you have local changes or connection issues"
-            read -p "Continue with existing files? (yes/no) [yes]: " continue_anyway
-            if [ "$continue_anyway" == "no" ]; then
-                exit 1
+        if ! sudo -u "$ACTUAL_USER" git pull --ff-only 2>/dev/null; then
+            print_warning "Git pull failed — likely local changes to tracked files."
+            print_info "Stashing local changes and retrying..."
+            sudo -u "$ACTUAL_USER" git stash --include-untracked >/dev/null 2>&1 || true
+            if sudo -u "$ACTUAL_USER" git pull --ff-only; then
+                print_success "Repository updated (any local changes saved in 'git stash')"
+            else
+                print_warning "Still could not update from GitHub (connection issue?)"
+                read -p "Continue with existing files? (yes/no) [yes]: " continue_anyway
+                if [ "$continue_anyway" == "no" ]; then
+                    exit 1
+                fi
             fi
-        }
+        fi
     else
         print_warning "Directory exists but is not a git repository"
         echo "Options:"
