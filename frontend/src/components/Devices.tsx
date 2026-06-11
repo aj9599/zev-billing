@@ -8,7 +8,7 @@ type FormState = {
   id?: number;
   name: string;
   building_id: number;
-  driver: 'shelly' | 'loxone';
+  driver: 'shelly' | 'loxone' | 'e3dc';
   is_active: boolean;
   // shelly
   shelly_host: string;
@@ -25,6 +25,13 @@ type FormState = {
   loxone_password: string;
   loxone_output_uuid: string;
   loxone_state_uuid: string;
+  // e3dc wallbox (RSCP)
+  e3dc_host: string;
+  e3dc_port: number;
+  e3dc_user: string;
+  e3dc_password: string;
+  e3dc_rscp_key: string;
+  e3dc_wallbox_index: number;
   // control
   switch_on_threshold_w: number;
   switch_off_threshold_w: number;
@@ -112,6 +119,12 @@ const emptyForm = (): FormState => ({
   loxone_password: '',
   loxone_output_uuid: '',
   loxone_state_uuid: '',
+  e3dc_host: '',
+  e3dc_port: 5033,
+  e3dc_user: '',
+  e3dc_password: '',
+  e3dc_rscp_key: '',
+  e3dc_wallbox_index: 0,
   switch_on_threshold_w: 1000,
   switch_off_threshold_w: 0,
   min_runtime_seconds: 300,
@@ -224,7 +237,7 @@ export default function Devices() {
     f.id = d.id;
     f.name = d.name;
     f.building_id = d.building_id;
-    f.driver = (d.driver as 'shelly' | 'loxone') || 'shelly';
+    f.driver = (d.driver as 'shelly' | 'loxone' | 'e3dc') || 'shelly';
     f.is_active = d.is_active;
     f.switch_on_threshold_w = d.switch_on_threshold_w;
     f.switch_off_threshold_w = d.switch_off_threshold_w;
@@ -252,6 +265,13 @@ export default function Devices() {
             off_threshold_w: Number(st.off_threshold_w) || 0,
           }));
         }
+      } else if (f.driver === 'e3dc') {
+        f.e3dc_host = cfg.e3dc_host || '';
+        f.e3dc_port = cfg.e3dc_port || 5033;
+        f.e3dc_user = cfg.e3dc_user || '';
+        f.e3dc_password = cfg.e3dc_password || '';
+        f.e3dc_rscp_key = cfg.e3dc_rscp_key || '';
+        f.e3dc_wallbox_index = cfg.e3dc_wallbox_index || 0;
       } else {
         f.loxone_host = cfg.host || '';
         f.loxone_username = cfg.username || '';
@@ -274,7 +294,17 @@ export default function Devices() {
 
   function buildPayload(f: FormState): Partial<Device> {
     const connection_config =
-      f.driver === 'shelly'
+      f.driver === 'e3dc'
+      ? JSON.stringify({
+          e3dc_protocol: 'rscp',
+          e3dc_host: f.e3dc_host.trim(),
+          e3dc_port: Number(f.e3dc_port) || 5033,
+          e3dc_user: f.e3dc_user,
+          e3dc_password: f.e3dc_password,
+          e3dc_rscp_key: f.e3dc_rscp_key,
+          e3dc_wallbox_index: Number(f.e3dc_wallbox_index) || 0,
+        })
+      : f.driver === 'shelly'
         ? JSON.stringify({
             host: f.shelly_host.trim(),
             model: f.shelly_model,
@@ -791,9 +821,10 @@ export default function Devices() {
                 </div>
                 <div style={{ marginTop: '12px' }}>
                   <label style={label}>{t('devices.driver')}</label>
-                  <select style={input} value={form.driver} onChange={(e) => setForm({ ...form, driver: e.target.value as 'shelly' | 'loxone' })}>
+                  <select style={input} value={form.driver} onChange={(e) => setForm({ ...form, driver: e.target.value as 'shelly' | 'loxone' | 'e3dc' })}>
                     <option value="shelly">Shelly</option>
                     <option value="loxone">Loxone</option>
+                    <option value="e3dc">E3/DC wallbox</option>
                   </select>
                 </div>
               </div>
@@ -801,7 +832,42 @@ export default function Devices() {
               {/* Connection */}
               <div style={card}>
                 <div style={{ fontSize: '12px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: '12px' }}>{t('devices.connection')}</div>
-                {form.driver === 'shelly' ? (
+                {form.driver === 'e3dc' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>
+                      Controls the E3/DC integrated wallbox over RSCP — "on" enables charging, "off" stops it.
+                      Disable Sun Mode &amp; Auto Phase Switching in the E3/DC portal so this app can steer it.
+                    </p>
+                    <div>
+                      <label style={label}>{t('devices.host')} *</label>
+                      <input style={input} placeholder="192.168.1.50" value={form.e3dc_host} onChange={(e) => setForm({ ...form, e3dc_host: e.target.value })} />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div>
+                        <label style={label}>RSCP port</label>
+                        <input type="number" style={input} value={form.e3dc_port} onChange={(e) => setForm({ ...form, e3dc_port: Number(e.target.value) || 5033 })} />
+                      </div>
+                      <div>
+                        <label style={label}>Wallbox index</label>
+                        <input type="number" style={input} value={form.e3dc_wallbox_index} onChange={(e) => setForm({ ...form, e3dc_wallbox_index: Number(e.target.value) || 0 })} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div>
+                        <label style={label}>{t('devices.username')} *</label>
+                        <input style={input} value={form.e3dc_user} onChange={(e) => setForm({ ...form, e3dc_user: e.target.value })} />
+                      </div>
+                      <div>
+                        <label style={label}>{t('devices.password')} *</label>
+                        <input type="password" style={input} value={form.e3dc_password} onChange={(e) => setForm({ ...form, e3dc_password: e.target.value })} />
+                      </div>
+                    </div>
+                    <div>
+                      <label style={label}>RSCP key *</label>
+                      <input type="password" style={input} placeholder="RSCP password from the device screen" value={form.e3dc_rscp_key} onChange={(e) => setForm({ ...form, e3dc_rscp_key: e.target.value })} />
+                    </div>
+                  </div>
+                ) : form.driver === 'shelly' ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {(() => {
                       const m = shellyModelById(form.shelly_model);

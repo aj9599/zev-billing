@@ -114,7 +114,7 @@ func (h *ChargerHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// chargers have no usable charge mode, so they bill best with a proportional
 	// solar split; everything else keeps the classic mode-based billing.
 	if c.BillingMethod == "" {
-		if c.ConnectionType == "zaptec_api" {
+		if c.ConnectionType == "zaptec_api" || c.ConnectionType == "e3dc_api" {
 			c.BillingMethod = "solar_split"
 		} else {
 			c.BillingMethod = "mode_based"
@@ -155,6 +155,12 @@ func (h *ChargerHandler) Create(w http.ResponseWriter, r *http.Request) {
 		go h.dataCollector.RestartUDPListeners() // This also restarts Zaptec connections
 	}
 
+	// If it's an E3/DC wallbox charger, restart E3/DC connections
+	if c.ConnectionType == "e3dc_api" {
+		log.Printf("New E3/DC charger created, restarting E3/DC connections...")
+		go h.dataCollector.RestartUDPListeners() // This also restarts E3/DC connections
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(c)
@@ -175,7 +181,7 @@ func (h *ChargerHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if c.BillingMethod == "" {
-		if c.ConnectionType == "zaptec_api" {
+		if c.ConnectionType == "zaptec_api" || c.ConnectionType == "e3dc_api" {
 			c.BillingMethod = "solar_split"
 		} else {
 			c.BillingMethod = "mode_based"
@@ -215,6 +221,12 @@ func (h *ChargerHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if c.ConnectionType == "zaptec_api" {
 		log.Printf("Zaptec API charger updated, restarting Zaptec connections...")
 		go h.dataCollector.RestartUDPListeners() // This also restarts Zaptec connections
+	}
+
+	// If it's an E3/DC wallbox charger, restart E3/DC connections
+	if c.ConnectionType == "e3dc_api" {
+		log.Printf("E3/DC charger updated, restarting E3/DC connections...")
+		go h.dataCollector.RestartUDPListeners() // This also restarts E3/DC connections
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -342,6 +354,12 @@ func (h *ChargerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if connectionType == "zaptec_api" {
 		log.Printf("Zaptec API charger deleted, restarting Zaptec connections...")
 		go h.dataCollector.RestartUDPListeners() // This also restarts Zaptec connections
+	}
+
+	// If it was an E3/DC wallbox charger, restart E3/DC connections
+	if connectionType == "e3dc_api" {
+		log.Printf("E3/DC charger deleted, restarting E3/DC connections...")
+		go h.dataCollector.RestartUDPListeners() // This also restarts E3/DC connections
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -547,6 +565,27 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 				}
 			} else {
 				log.Printf("GetLiveData: No Zaptec data available for charger %s", chargerName)
+			}
+		}
+
+		// For E3/DC wallbox chargers, enrich with live collector data
+		if connectionType == "e3dc_api" {
+			if e3dcData, exists := h.dataCollector.GetE3DCChargerData(chargerID); exists {
+				data.TotalEnergy = e3dcData.TotalEnergy
+				data.SessionEnergy = e3dcData.SolarEnergy
+				data.IsOnline = e3dcData.IsOnline
+				data.CurrentPowerKW = e3dcData.Power_kW
+				data.PowerKWh = e3dcData.TotalEnergy
+				if e3dcData.IsCharging {
+					data.State = "3"
+				} else if e3dcData.IsConnected {
+					data.State = "2"
+				} else {
+					data.State = "1"
+				}
+				data.LastUpdate = e3dcData.Timestamp.Format("2006-01-02 15:04:05")
+				log.Printf("GetLiveData: E3/DC charger %s - Charging: %t, Power: %.2f kW, Total: %.3f kWh",
+					chargerName, e3dcData.IsCharging, data.CurrentPowerKW, data.TotalEnergy)
 			}
 		}
 

@@ -40,6 +40,16 @@ interface ConnectionConfig {
     client_id?: string;
     client_secret?: string;
     device_id?: string;
+    // E3/DC EMS metering (Modbus read-only, or RSCP)
+    e3dc_protocol?: 'modbus' | 'rscp';
+    e3dc_host?: string;
+    e3dc_port?: number;
+    e3dc_unit_id?: number;
+    e3dc_user?: string;
+    e3dc_password?: string;
+    e3dc_rscp_key?: string;
+    e3dc_value?: string;
+    e3dc_external_power?: boolean;
 }
 
 interface MeterFormModalProps {
@@ -614,6 +624,7 @@ export default function MeterFormModal({
                                     <option value="mqtt">{t('meters.mqttProtocol')}</option>
                                     <option value="udp">{t('meters.udpAlternative')}</option>
                                     <option value="modbus_tcp">{t('meters.modbusTcp')}</option>
+                                    <option value="e3dc">E3/DC Hauskraftwerk</option>
                                 </select>
                             </div>
                         </div>
@@ -1799,6 +1810,155 @@ export default function MeterFormModal({
                                         {t('meters.modbusImport')}@{connectionConfig.register_address || 0}
                                         {connectionConfig.has_export_register && ` | ${t('meters.modbusExport')}@${connectionConfig.export_register_address || 0}`}
                                     </div>
+                                </>
+                            )}
+
+                            {/* ===== E3/DC Hauskraftwerk Configuration ===== */}
+                            {formData.connection_type === 'e3dc' && (
+                                <>
+                                    <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '14px', lineHeight: 1.5 }}>
+                                        Reads one value from an E3/DC EMS. Power is integrated into cumulative energy
+                                        for billing. Modbus (port 502) is read-only and needs no login; RSCP (port 5033)
+                                        also works and is required for wallbox readings.
+                                    </p>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+                                        <div>
+                                            <label style={labelStyle}>Protocol *</label>
+                                            <select
+                                                required
+                                                value={connectionConfig.e3dc_protocol || 'modbus'}
+                                                onChange={(e) => onConnectionConfigChange({
+                                                    ...connectionConfig,
+                                                    e3dc_protocol: e.target.value as 'modbus' | 'rscp',
+                                                    e3dc_port: e.target.value === 'rscp' ? 5033 : 502
+                                                })}
+                                                onFocus={focusHandler}
+                                                onBlur={blurHandler}
+                                                style={inputStyle(isMobile)}
+                                            >
+                                                <option value="modbus">Modbus TCP (read-only)</option>
+                                                <option value="rscp">RSCP (encrypted)</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label style={labelStyle}>Value *</label>
+                                            <select
+                                                required
+                                                value={connectionConfig.e3dc_value || 'grid'}
+                                                onChange={(e) => onConnectionConfigChange({ ...connectionConfig, e3dc_value: e.target.value })}
+                                                onFocus={focusHandler}
+                                                onBlur={blurHandler}
+                                                style={inputStyle(isMobile)}
+                                            >
+                                                <option value="grid">Grid (import / export)</option>
+                                                <option value="pv">PV production</option>
+                                                <option value="battery">Battery (charge / discharge)</option>
+                                                <option value="home">Household consumption</option>
+                                                <option value="wallbox">Wallbox (RSCP only)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '14px' }}>
+                                        <div>
+                                            <label style={labelStyle}>E3/DC IP address / host *</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={connectionConfig.e3dc_host || ''}
+                                                onChange={(e) => onConnectionConfigChange({ ...connectionConfig, e3dc_host: e.target.value })}
+                                                placeholder="192.168.1.50"
+                                                onFocus={focusHandler}
+                                                onBlur={blurHandler}
+                                                style={inputStyle(isMobile)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={labelStyle}>Port</label>
+                                            <input
+                                                type="number"
+                                                value={connectionConfig.e3dc_port ?? (connectionConfig.e3dc_protocol === 'rscp' ? 5033 : 502)}
+                                                onChange={(e) => onConnectionConfigChange({ ...connectionConfig, e3dc_port: parseInt(e.target.value) || 0 })}
+                                                onFocus={focusHandler}
+                                                onBlur={blurHandler}
+                                                style={inputStyle(isMobile)}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {connectionConfig.e3dc_protocol === 'rscp' ? (
+                                        <>
+                                            <div style={{ marginBottom: '14px' }}>
+                                                <label style={labelStyle}>Portal user (myE3DC e-mail) *</label>
+                                                <input
+                                                    type="text"
+                                                    required
+                                                    value={connectionConfig.e3dc_user || ''}
+                                                    onChange={(e) => onConnectionConfigChange({ ...connectionConfig, e3dc_user: e.target.value })}
+                                                    placeholder="your.email@example.com"
+                                                    onFocus={focusHandler}
+                                                    onBlur={blurHandler}
+                                                    style={inputStyle(isMobile)}
+                                                />
+                                            </div>
+                                            <div style={{ marginBottom: '14px' }}>
+                                                <label style={labelStyle}>Portal password *</label>
+                                                <input
+                                                    type="password"
+                                                    required
+                                                    value={connectionConfig.e3dc_password || ''}
+                                                    onChange={(e) => onConnectionConfigChange({ ...connectionConfig, e3dc_password: e.target.value })}
+                                                    placeholder="••••••••"
+                                                    onFocus={focusHandler}
+                                                    onBlur={blurHandler}
+                                                    style={inputStyle(isMobile)}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={labelStyle}>RSCP key *</label>
+                                                <input
+                                                    type="password"
+                                                    required
+                                                    value={connectionConfig.e3dc_rscp_key || ''}
+                                                    onChange={(e) => onConnectionConfigChange({ ...connectionConfig, e3dc_rscp_key: e.target.value })}
+                                                    placeholder="RSCP password set on the device screen"
+                                                    onFocus={focusHandler}
+                                                    onBlur={blurHandler}
+                                                    style={inputStyle(isMobile)}
+                                                />
+                                                <p style={helpTextStyle}>
+                                                    Set on the device under Personalize → User profile (the encryption key, not the portal password).
+                                                </p>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div style={{ marginBottom: '14px' }}>
+                                            <label style={labelStyle}>Modbus unit ID</label>
+                                            <input
+                                                type="number"
+                                                value={connectionConfig.e3dc_unit_id ?? 1}
+                                                onChange={(e) => onConnectionConfigChange({ ...connectionConfig, e3dc_unit_id: parseInt(e.target.value) || 1 })}
+                                                placeholder="1"
+                                                onFocus={focusHandler}
+                                                onBlur={blurHandler}
+                                                style={inputStyle(isMobile)}
+                                            />
+                                            <p style={helpTextStyle}>
+                                                Enable Modbus/TCP in the E3/DC settings first. Wallbox readings require RSCP.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {connectionConfig.e3dc_value === 'pv' && (
+                                        <div style={{ marginTop: '14px' }}>
+                                            <CustomCheckbox
+                                                checked={connectionConfig.e3dc_external_power === true}
+                                                onChange={(checked) => onConnectionConfigChange({ ...connectionConfig, e3dc_external_power: checked })}
+                                                label="Subtract additional feed-in (second inverter)"
+                                            />
+                                        </div>
+                                    )}
                                 </>
                             )}
                         </div>

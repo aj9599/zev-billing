@@ -41,6 +41,14 @@ export interface ChargerConnectionConfig {
   zaptec_password?: string;
   zaptec_charger_id?: string;
   zaptec_installation_id?: string;
+  // E3/DC integrated wallbox (RSCP, read+write control)
+  e3dc_protocol?: string;
+  e3dc_host?: string;
+  e3dc_port?: number;
+  e3dc_user?: string;
+  e3dc_password?: string;
+  e3dc_rscp_key?: string;
+  e3dc_wallbox_index?: number;
 }
 
 export const useChargerForm = (onSubmitSuccess: () => void) => {
@@ -94,7 +102,13 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
     zaptec_username: '',
     zaptec_password: '',
     zaptec_charger_id: '',
-    zaptec_installation_id: ''
+    zaptec_installation_id: '',
+    e3dc_host: '',
+    e3dc_port: 5033,
+    e3dc_user: '',
+    e3dc_password: '',
+    e3dc_rscp_key: '',
+    e3dc_wallbox_index: 0
   });
 
   const generateUUID = (): string => {
@@ -249,7 +263,13 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
         zaptec_username: config.zaptec_username || '',
         zaptec_password: config.zaptec_password || '',
         zaptec_charger_id: config.zaptec_charger_id || '',
-        zaptec_installation_id: config.zaptec_installation_id || ''
+        zaptec_installation_id: config.zaptec_installation_id || '',
+        e3dc_host: config.e3dc_host || '',
+        e3dc_port: config.e3dc_port || 5033,
+        e3dc_user: config.e3dc_user || '',
+        e3dc_password: config.e3dc_password || '',
+        e3dc_rscp_key: config.e3dc_rscp_key || '',
+        e3dc_wallbox_index: config.e3dc_wallbox_index || 0
       });
     } catch (e) {
       console.error('Failed to parse config:', e);
@@ -264,10 +284,15 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
       ...prev,
       brand: presetName,
       preset: presetName,
-      connection_type: presetName === 'zaptec' ? 'zaptec_api' : prev.connection_type,
-      // Zaptec cloud reports no charge mode, so default it to the proportional
-      // solar split; other presets keep classic mode-based billing.
-      billing_method: presetName === 'zaptec' ? 'solar_split' : (prev.billing_method || 'mode_based')
+      connection_type:
+        presetName === 'zaptec' ? 'zaptec_api'
+        : presetName === 'e3dc' ? 'e3dc_api'
+        : prev.connection_type,
+      // Zaptec and E3/DC report no usable charge mode, so default them to the
+      // proportional solar split; other presets keep classic mode-based billing.
+      billing_method:
+        presetName === 'zaptec' || presetName === 'e3dc' ? 'solar_split'
+        : (prev.billing_method || 'mode_based')
     }));
     setConnectionConfig(prev => ({
       ...prev,
@@ -345,6 +370,18 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
         zaptec_charger_id: connectionConfig.zaptec_charger_id,
         zaptec_installation_id: connectionConfig.zaptec_installation_id
       };
+    } else if (formData.connection_type === 'e3dc_api') {
+      // The integrated E3/DC wallbox requires RSCP (the only protocol that can
+      // read wallbox energy and control charging).
+      config = {
+        e3dc_protocol: 'rscp',
+        e3dc_host: connectionConfig.e3dc_host,
+        e3dc_port: connectionConfig.e3dc_port,
+        e3dc_user: connectionConfig.e3dc_user,
+        e3dc_password: connectionConfig.e3dc_password,
+        e3dc_rscp_key: connectionConfig.e3dc_rscp_key,
+        e3dc_wallbox_index: connectionConfig.e3dc_wallbox_index
+      } as ChargerConnectionConfig;
     } else if (formData.connection_type === 'http') {
       config = {
         power_endpoint: connectionConfig.power_endpoint,

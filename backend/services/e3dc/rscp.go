@@ -1,0 +1,276 @@
+package e3dc
+
+import (
+	"fmt"
+	"reflect"
+	"sync"
+	"time"
+
+	"github.com/spali/go-rscp/rscp"
+)
+
+// responseFlag is bit 23 of a tag; set in response tags, clear in request tags.
+const responseFlag = rscp.Tag(1 << 23)
+
+// reqTag strips the response flag so a response tag can be matched back to the
+// request tag that produced it.
+func reqTag(t rscp.Tag) rscp.Tag { return t &^ responseFlag }
+
+// rscpClient talks to the E3/DC over the encrypted RSCP protocol. It reads the
+// full EMS power block plus the integrated wallbox, and can issue wallbox
+// control commands. The underlying go-rscp client is NOT reentrant, so every
+// exchange is serialized through mu and a dropped socket is reconnected once.
+type rscpClient struct {
+	cfg    Config
+	mu     sync.Mutex
+	client *rscp.Client
+}
+
+func newRSCPClient(cfg Config) (Client, error) {
+	if cfg.Host == "" {
+		return nil, &ConfigError{Field: "e3dc_host", Msg: "required"}
+	}
+	if cfg.User == "" || cfg.Password == "" {
+		return nil, &ConfigError{Field: "e3dc_user/e3dc_password", Msg: "required for RSCP"}
+	}
+	if cfg.RSCPKey == "" {
+		return nil, &ConfigError{Field: "e3dc_rscp_key", Msg: "required for RSCP"}
+	}
+	return &rscpClient{cfg: cfg}, nil
+}
+
+// ensure (re)creates the RSCP client. Caller must hold mu.
+func (r *rscpClient) ensure() error {
+	if r.client != nil {
+		return nil
+	}
+	c, err := rscp.NewClient(rscp.ClientConfig{
+		Address:           r.cfg.Host,
+		Port:              uint16(r.cfg.port()),
+		Username:          r.cfg.User,
+		Password:          r.cfg.Password,
+		Key:               r.cfg.RSCPKey,
+		ConnectionTimeout: 5 * time.Second,
+		SendTimeout:       5 * time.Second,
+		ReceiveTimeout:    5 * time.Second,
+	})
+	if err != nil {
+		return err
+	}
+	r.client = c
+	return nil
+}
+
+// reset drops the current connection so the next call reconnects. Caller holds mu.
+func (r *rscpClient) reset() {
+	if r.client != nil {
+		_ = r.client.Disconnect()
+		r.client = nil
+	}
+}
+
+// send issues one request and returns the response, reconnecting + retrying
+// once on error (E3/DC routinely drops idle RSCP sockets). Caller holds mu.
+func (r *rscpClient) send(req rscp.Message) (*rscp.Message, error) {
+	if err := r.ensure(); err != nil {
+		return nil, err
+	}
+	res, err := r.client.Send(req)
+	if err != nil {
+		r.reset()
+		if err := r.ensure(); err != nil {
+			return nil, err
+		}
+		res, err = r.client.Send(req)
+		if err != nil {
+			r.reset()
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (r *rscpClient) Read() (*Snapshot, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	snap := &Snapshot{Timestamp: time.Now()}
+
+	// EMS power block — one request per value (the device answers each with its
+	// response-variant tag and a numeric value).
+	emsReads := []struct {
+		tag rscp.Tag
+		set func(float64)
+	}{
+		{rscp.EMS_REQ_POWER_PV, func(v float64) { snap.PVPowerW = v }},
+		{rscp.EMS_REQ_POWER_ADD, func(v float64) {
+			if r.cfg.ExternalPower {
+				snap.PVPowerW -= v
+			}
+		}},
+		{rscp.EMS_REQ_POWER_GRID, func(v float64) { snap.GridPowerW = v }},
+		{rscp.EMS_REQ_POWER_BAT, func(v float64) { snap.BatteryPowerW = -v }}, // + = discharge
+		{rscp.EMS_REQ_POWER_HOME, func(v float64) { snap.HomePowerW = v }},
+		{rscp.EMS_REQ_BAT_SOC, func(v float64) { snap.BatterySoC = v }},
+	}
+
+	var firstErr error
+	for _, e := range emsReads {
+		res, err := r.send(*rscp.NewMessage(e.tag, nil))
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if v, ok := asFloat64(res.Value); ok {
+			e.set(v)
+		}
+	}
+	// If we couldn't read anything at all, surface the error.
+	if firstErr != nil && snap.PVPowerW == 0 && snap.GridPowerW == 0 && snap.HomePowerW == 0 {
+		return nil, fmt.Errorf("e3dc rscp read: %w", firstErr)
+	}
+
+	// Wallbox block — sent inside a WB_REQ_DATA container addressed by index.
+	r.readWallbox(snap)
+
+	return snap, nil
+}
+
+// readWallbox queries the configured wallbox and fills the wallbox fields of
+// snap. Failures are non-fatal (the EMS data is still useful on systems without
+// a wallbox).
+func (r *rscpClient) readWallbox(snap *Snapshot) {
+	container := rscp.NewMessage(rscp.WB_REQ_DATA, []rscp.Message{
+		*rscp.NewMessage(rscp.WB_INDEX, uint8(r.cfg.WallboxIndex)),
+		*rscp.NewMessage(rscp.WB_REQ_ENERGY_ALL, nil),
+		*rscp.NewMessage(rscp.WB_REQ_ENERGY_SOLAR, nil),
+		*rscp.NewMessage(rscp.WB_REQ_PM_POWER_L1, nil),
+		*rscp.NewMessage(rscp.WB_REQ_PM_POWER_L2, nil),
+		*rscp.NewMessage(rscp.WB_REQ_PM_POWER_L3, nil),
+		*rscp.NewMessage(rscp.WB_REQ_EXTERN_DATA_ALG, nil),
+	})
+
+	res, err := r.send(*container)
+	if err != nil {
+		return
+	}
+	inner, ok := res.Value.([]rscp.Message)
+	if !ok {
+		return
+	}
+
+	var l1, l2, l3 float64
+	for i := range inner {
+		m := inner[i]
+		switch reqTag(m.Tag) {
+		case rscp.WB_REQ_ENERGY_ALL:
+			if v, ok := asFloat64(m.Value); ok {
+				snap.WallboxEnergyKWh = v / 1000.0 // Wh → kWh
+				snap.WallboxEnergyValid = true
+			}
+		case rscp.WB_REQ_ENERGY_SOLAR:
+			if v, ok := asFloat64(m.Value); ok {
+				snap.WallboxEnergySolarKWh = v / 1000.0
+			}
+		case rscp.WB_REQ_PM_POWER_L1:
+			l1, _ = mustFloat(m.Value)
+		case rscp.WB_REQ_PM_POWER_L2:
+			l2, _ = mustFloat(m.Value)
+		case rscp.WB_REQ_PM_POWER_L3:
+			l3, _ = mustFloat(m.Value)
+		case rscp.WB_REQ_EXTERN_DATA_ALG:
+			parseWallboxStatus(m.Value, snap)
+		}
+	}
+	snap.WallboxPowerW = l1 + l2 + l3
+}
+
+// parseWallboxStatus decodes the WB_EXTERN_DATA_ALG byte array. Byte index 2 is
+// a status bitfield: bit5 (0x20) = charging, bit3 (0x08) = vehicle connected.
+func parseWallboxStatus(v interface{}, snap *Snapshot) {
+	b, ok := v.([]byte)
+	if !ok || len(b) < 3 {
+		return
+	}
+	status := b[2]
+	snap.WallboxConnected = status&0x08 != 0
+	snap.WallboxCharging = status&0x20 != 0
+	snap.WallboxStatusOK = true
+}
+
+func (r *rscpClient) CanControl() bool { return true }
+
+// SetWallboxEnabled starts/stops charging by writing WB_REQ_SET_ABORT_CHARGING
+// (abort = !on) inside the wallbox container.
+func (r *rscpClient) SetWallboxEnabled(on bool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	container := rscp.NewMessage(rscp.WB_REQ_DATA, []rscp.Message{
+		*rscp.NewMessage(rscp.WB_INDEX, uint8(r.cfg.WallboxIndex)),
+		*rscp.NewMessage(rscp.WB_REQ_SET_ABORT_CHARGING, !on),
+	})
+	_, err := r.send(*container)
+	return err
+}
+
+// SetWallboxMaxCurrent writes WB_REQ_SET_MAX_CHARGE_CURRENT (Amps) inside the
+// wallbox container.
+func (r *rscpClient) SetWallboxMaxCurrent(amps int) error {
+	if amps < 0 {
+		amps = 0
+	}
+	if amps > 255 {
+		amps = 255
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	container := rscp.NewMessage(rscp.WB_REQ_DATA, []rscp.Message{
+		*rscp.NewMessage(rscp.WB_INDEX, uint8(r.cfg.WallboxIndex)),
+		*rscp.NewMessage(rscp.WB_REQ_SET_MAX_CHARGE_CURRENT, uint8(amps)),
+	})
+	_, err := r.send(*container)
+	return err
+}
+
+func (r *rscpClient) Close() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.reset()
+	return nil
+}
+
+// mustFloat is asFloat64 discarding the ok flag (0 when not numeric).
+func mustFloat(v interface{}) (float64, bool) { return asFloat64(v) }
+
+// asFloat64 converts an RSCP message value (which may be a pointer to a numeric
+// type, or a concrete numeric/bool) to a float64. Returns ok=false for
+// non-numeric values (strings, byte arrays, nil, RSCP errors).
+func asFloat64(v interface{}) (float64, bool) {
+	if v == nil {
+		return 0, false
+	}
+	rv := reflect.ValueOf(v)
+	if rv.Kind() == reflect.Ptr {
+		if rv.IsNil() {
+			return 0, false
+		}
+		rv = rv.Elem()
+	}
+	switch rv.Kind() {
+	case reflect.Float32, reflect.Float64:
+		return rv.Float(), true
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return float64(rv.Int()), true
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return float64(rv.Uint()), true
+	case reflect.Bool:
+		if rv.Bool() {
+			return 1, true
+		}
+		return 0, true
+	default:
+		return 0, false
+	}
+}

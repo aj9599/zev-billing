@@ -21,6 +21,7 @@ type DataCollector struct {
 	mqttCollector      *MQTTCollector
 	smartmeCollector   *SmartMeCollector
 	zaptecCollector    *ZaptecCollector
+	e3dcCollector      *E3DCCollector
 	mu                 sync.Mutex
 	lastCollection     time.Time
 	isCollecting       bool
@@ -116,7 +117,8 @@ func NewDataCollector(db *sql.DB) *DataCollector {
 	dc.mqttCollector = NewMQTTCollector(db)
 	dc.smartmeCollector = NewSmartMeCollector(db)
 	dc.zaptecCollector = NewZaptecCollector(db)
-	
+	dc.e3dcCollector = NewE3DCCollector(db)
+
 	return dc
 }
 
@@ -130,6 +132,7 @@ func (dc *DataCollector) Start() {
 	log.Println("  - MQTT Broker (flexible pub/sub messaging)")
 	log.Println("  - Smart-me API (cloud-based polling)")
 	log.Println("  - Zaptec API (cloud-based, session-based charger tracking)")
+	log.Println("  - E3/DC (Modbus EMS metering + RSCP wallbox, energy-integrated)")
 	log.Println("Collection Interval: 15 minutes (fixed at :00, :15, :30, :45)")
 	log.Println("===================================")
 
@@ -140,7 +143,8 @@ func (dc *DataCollector) Start() {
 	go dc.mqttCollector.Start()
 	go dc.smartmeCollector.Start()
 	go dc.zaptecCollector.Start()
-	
+	go dc.e3dcCollector.Start()
+
 	dc.logSystemStatus()
 	
 	// Wait until the next exact 15-minute interval
@@ -201,7 +205,11 @@ func (dc *DataCollector) Stop() {
 	if dc.zaptecCollector != nil {
 		dc.zaptecCollector.Stop()
 	}
-	
+
+	if dc.e3dcCollector != nil {
+		dc.e3dcCollector.Stop()
+	}
+
 	log.Println("Data Collector stopped")
 }
 
@@ -214,9 +222,10 @@ func (dc *DataCollector) RestartUDPListeners() {
 	dc.mqttCollector.RestartConnections()
 	dc.smartmeCollector.RestartConnections()
 	dc.zaptecCollector.RestartConnections()
-	
+	dc.e3dcCollector.RestartConnections()
+
 	log.Println("=== All Collectors Restarted ===")
-	dc.logToDatabase("Collectors Restarted", "All collectors (Loxone, Modbus, UDP, MQTT, Smart-me, Zaptec) have been reinitialized")
+	dc.logToDatabase("Collectors Restarted", "All collectors (Loxone, Modbus, UDP, MQTT, Smart-me, Zaptec, E3/DC) have been reinitialized")
 }
 
 // GetSmartMeCollector returns the Smart-me collector instance
@@ -425,6 +434,7 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 	mqttStatus := dc.mqttCollector.GetConnectionStatus()
 	smartmeStatus := dc.smartmeCollector.GetConnectionStatus()
 	zaptecStatus := dc.zaptecCollector.GetConnectionStatus()
+	e3dcStatus := dc.e3dcCollector.GetConnectionStatus()
 
 	result := map[string]interface{}{
 		"active_meters":           activeMeters,
@@ -457,8 +467,19 @@ func (dc *DataCollector) GetDebugInfo() map[string]interface{} {
 	for key, value := range zaptecStatus {
 		result[key] = value
 	}
-	
+	for key, value := range e3dcStatus {
+		result[key] = value
+	}
+
 	return result
+}
+
+// GetE3DCChargerData returns live E3/DC wallbox data for a specific charger.
+func (dc *DataCollector) GetE3DCChargerData(chargerID int) (*E3DCChargerData, bool) {
+	if dc.e3dcCollector == nil {
+		return nil, false
+	}
+	return dc.e3dcCollector.GetChargerData(chargerID)
 }
 
 func (dc *DataCollector) collectAndSaveAllData() {
@@ -596,6 +617,7 @@ func (dc *DataCollector) collectAndSaveMeters() {
 	udpMeters := []int{}
 	mqttMeters := []int{}
 	smartmeMeters := []int{}
+	e3dcMeters := []int{}
 	
 	meterInfo := make(map[int]struct{
 		name string
@@ -636,6 +658,9 @@ func (dc *DataCollector) collectAndSaveMeters() {
 			
 		case "smartme":
 			smartmeMeters = append(smartmeMeters, id)
+
+		case "e3dc":
+			e3dcMeters = append(e3dcMeters, id)
 		}
 	}
 
@@ -727,6 +752,27 @@ func (dc *DataCollector) collectAndSaveMeters() {
 			successCount++
 			log.Printf("[Smart-me] ✔ Saved meter '%s' at EXACT time %s: %.3f kWh import, %.3f kWh export",
 				info.name, currentTime.Format("15:04:05"), readingImport, readingExport)
+		}
+	}
+
+	// E3/DC meters: read the cumulative energy the collector has integrated
+	// from instantaneous power since the last cycle. Saved even when import is
+	// zero (PV/solar meters carry their production in the export column).
+	for _, meterID := range e3dcMeters {
+		info := meterInfo[meterID]
+		importVal, exportVal, ok := dc.e3dcCollector.GetMeterReading(meterID)
+		if !ok {
+			log.Printf("WARNING: No E3/DC data for meter '%s'", info.name)
+			continue
+		}
+		if importVal == 0 && exportVal == 0 {
+			log.Printf("WARNING: Zero reading from E3/DC meter '%s'", info.name)
+			continue
+		}
+		if err := dc.saveMeterReading(meterID, info.name, currentTime, importVal, exportVal); err != nil {
+			log.Printf("ERROR: Failed to save E3/DC meter '%s': %v", info.name, err)
+		} else {
+			successCount++
 		}
 	}
 
@@ -924,7 +970,21 @@ func (dc *DataCollector) collectAndSaveChargers() {
 			// Count as success since we got data (database writes happen via OCMF after session ends)
 			successCount++
 			continue
-			
+
+		case "e3dc_api":
+			// E3/DC wallbox: the E3DCCollector writes cumulative energy to
+			// charger_sessions at 15-min boundaries itself (like Zaptec). Here
+			// we only confirm live data is flowing.
+			data, exists := dc.e3dcCollector.GetChargerData(id)
+			if !exists {
+				log.Printf("[%d/%d] WARNING: No E3/DC data for charger '%s'", totalCount, totalCount, name)
+				continue
+			}
+			log.Printf("[%d/%d] Charger '%s': E3/DC LIVE - Energy: %.3f kWh (solar %.3f), Power: %.2f kW, Charging: %t",
+				totalCount, totalCount, name, data.TotalEnergy, data.SolarEnergy, data.Power_kW, data.IsCharging)
+			successCount++
+			continue
+
 		default:
 			log.Printf("[%d/%d] WARNING: Unknown connection type '%s' for charger '%s'", 
 				totalCount, totalCount, connectionType, name)
@@ -1162,6 +1222,28 @@ func (dc *DataCollector) GetLiveMeterReadings(buildingID int) ([]MeterLiveReadin
 							reading.CurrentPowerW = dc.estimatePowerFromRecentReadings(meterID, importVal)
 						}
 					}
+				}
+			}
+
+		case "e3dc":
+			// E3/DC: read the collector's integrated cumulative energy + last
+			// instantaneous power (no extra device round-trip).
+			if dc.e3dcCollector != nil {
+				importVal, exportVal, ok := dc.e3dcCollector.GetMeterReading(meterID)
+				if ok {
+					reading.TotalImportKwh = importVal
+					reading.TotalExportKwh = exportVal
+					reading.IsOnline = true
+				}
+				if pImp, pExp, hasLive := dc.e3dcCollector.GetMeterLivePower(meterID); hasLive {
+					if isSolarMeter {
+						reading.CurrentPowerW = pExp
+					} else {
+						reading.CurrentPowerW = pImp
+					}
+					reading.CurrentPowerExpW = pExp
+					reading.HasLivePower = true
+					reading.IsOnline = true
 				}
 			}
 

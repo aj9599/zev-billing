@@ -96,6 +96,39 @@ export const ZAPTEC_PRESET: PresetConfig = {
 };
 
 // ============================================================================
+// E3/DC Preset
+// ============================================================================
+// E3/DC Hauskraftwerk integrated wallbox via the local RSCP protocol. Like
+// Zaptec it has no usable charge-mode signal, so it bills via a proportional
+// solar split. Solar-vs-grid energy is read directly from the device.
+export const E3DC_PRESET: PresetConfig = {
+  name: 'e3dc',
+  label: 'E3/DC',
+  description: 'E3/DC Hauskraftwerk integrated wallbox via local RSCP (solar split billing)',
+  supportsPriority: false,
+  defaultStateMappings: {
+    cable_locked: '65',
+    waiting_auth: '66',
+    charging: '67',
+    idle: '50'
+  },
+  defaultModeMappings: {
+    normal: '1',
+    priority: '1'
+  },
+  stateOptions: [
+    { value: 'cable_locked', label: 'Cable Locked' },
+    { value: 'waiting_auth', label: 'Waiting for Authentication' },
+    { value: 'charging', label: 'Charging' },
+    { value: 'idle', label: 'Idle' }
+  ],
+  modeOptions: [
+    { value: 'normal', label: 'Normal Charging' },
+    { value: 'priority', label: 'Priority Charging' }
+  ]
+};
+
+// ============================================================================
 // Add future presets here
 // ============================================================================
 // Example ABB Preset (uncomment and configure when needed):
@@ -135,6 +168,7 @@ export const ABB_PRESET: PresetConfig = {
 export const CHARGER_PRESETS: Record<string, PresetConfig> = {
   weidmuller: WEIDMULLER_PRESET,
   zaptec: ZAPTEC_PRESET,
+  e3dc: E3DC_PRESET,
   // abb: ABB_PRESET,  // Uncomment when implementing
 };
 

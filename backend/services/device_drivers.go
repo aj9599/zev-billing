@@ -9,7 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"sync"
+
 	"github.com/aj9599/zev-billing/backend/models"
+	"github.com/aj9599/zev-billing/backend/services/e3dc"
 )
 
 // DeviceDriver controls a single external device (relay/switch) over HTTP.
@@ -253,6 +256,22 @@ func driverFor(d models.Device) (DeviceDriver, error) {
 			return nil, fmt.Errorf("loxone config missing output_uuid")
 		}
 		return &loxoneDriver{cfg: c}, nil
+	case "e3dc":
+		var c e3dc.Config
+		if err := json.Unmarshal([]byte(emptyToObject(d.ConnectionConfig)), &c); err != nil {
+			return nil, fmt.Errorf("invalid e3dc config: %v", err)
+		}
+		// Control requires RSCP (Modbus is read-only). Default and enforce it.
+		if c.Protocol == "" {
+			c.Protocol = e3dc.ProtocolRSCP
+		}
+		if c.Protocol != e3dc.ProtocolRSCP {
+			return nil, fmt.Errorf("e3dc device control requires the RSCP protocol")
+		}
+		if strings.TrimSpace(c.Host) == "" {
+			return nil, fmt.Errorf("e3dc config missing host")
+		}
+		return &e3dcDriver{cfg: c}, nil
 	default:
 		return nil, fmt.Errorf("unknown device driver %q", d.Driver)
 	}
@@ -358,6 +377,76 @@ func parseLoxoneOutput0State(body []byte) (on bool, ok bool) {
 		return false, false
 	}
 	return v != 0, true
+}
+
+// ---- E3/DC wallbox (RSCP) ----
+
+// e3dcDriver controls an E3/DC integrated wallbox over RSCP. "On" enables
+// charging, "off" stops it (WB_REQ_SET_ABORT_CHARGING). ReadState reports
+// whether the wallbox is actively charging; ReadPower reports the wallbox's
+// live power and lifetime energy counter.
+type e3dcDriver struct{ cfg e3dc.Config }
+
+// e3dcDeviceClients caches one RSCP client per physical E3/DC unit so the 30s
+// control loop doesn't re-authenticate on every Switch/ReadState/ReadPower
+// call. Clients serialize their own access internally, and the control loop is
+// sequential, so sharing is safe.
+var e3dcDeviceClients sync.Map // key string -> e3dc.Client
+
+func e3dcDeviceClient(cfg e3dc.Config) (e3dc.Client, error) {
+	key := fmt.Sprintf("%s|%s|%d|wb%d", cfg.Protocol, cfg.Host, cfg.Port, cfg.WallboxIndex)
+	if v, ok := e3dcDeviceClients.Load(key); ok {
+		return v.(e3dc.Client), nil
+	}
+	c, err := e3dc.New(cfg)
+	if err != nil {
+		return nil, err
+	}
+	actual, loaded := e3dcDeviceClients.LoadOrStore(key, c)
+	if loaded {
+		_ = c.Close() // another goroutine won the race
+	}
+	return actual.(e3dc.Client), nil
+}
+
+func (d *e3dcDriver) Switch(on bool) error {
+	c, err := e3dcDeviceClient(d.cfg)
+	if err != nil {
+		return err
+	}
+	return c.SetWallboxEnabled(on)
+}
+
+func (d *e3dcDriver) ReadState() (bool, bool, error) {
+	c, err := e3dcDeviceClient(d.cfg)
+	if err != nil {
+		return false, false, err
+	}
+	snap, err := c.Read()
+	if err != nil {
+		return false, false, err
+	}
+	if !snap.WallboxStatusOK {
+		// Reachable but status unknown → keep commanded state.
+		return false, false, nil
+	}
+	return snap.WallboxCharging, true, nil
+}
+
+func (d *e3dcDriver) ReadPower() (float64, float64, bool, error) {
+	c, err := e3dcDeviceClient(d.cfg)
+	if err != nil {
+		return 0, 0, false, err
+	}
+	snap, err := c.Read()
+	if err != nil {
+		return 0, 0, false, err
+	}
+	wh := 0.0
+	if snap.WallboxEnergyValid {
+		wh = snap.WallboxEnergyKWh * 1000.0
+	}
+	return snap.WallboxPowerW, wh, true, nil
 }
 
 // parseLoxoneNumericValue reads a Loxone output value that may be encoded as a

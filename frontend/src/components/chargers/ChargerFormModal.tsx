@@ -346,8 +346,8 @@ export default function ChargerFormModal({
                 </p>
               </div>
 
-              {/* Connection Type (not for Zaptec) */}
-              {formData.preset !== 'zaptec' && (
+              {/* Connection Type (not for Zaptec or E3/DC, which force their own) */}
+              {formData.preset !== 'zaptec' && formData.preset !== 'e3dc' && (
                 <div>
                   <label style={labelStyle}>{t('meters.connectionType')} *</label>
                   <select
@@ -840,6 +840,114 @@ export default function ChargerFormModal({
                       onBlur={blurHandler}
                       style={inputStyle(isMobile, true)}
                     />
+                  </div>
+                </>
+              )}
+
+              {/* ===== E3/DC wallbox (RSCP) ===== */}
+              {formData.connection_type === 'e3dc_api' && (
+                <>
+                  <div style={{
+                    backgroundColor: '#f0fdf4',
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    marginBottom: '16px',
+                    border: '1px solid #bbf7d0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px'
+                  }}>
+                    <Wifi size={18} color="#10b981" />
+                    <p style={{ fontSize: '13px', color: '#065f46', margin: 0, fontWeight: '500' }}>
+                      E3/DC integrated wallbox via local RSCP — reads charging energy (incl. solar share) and can start/stop charging.
+                    </p>
+                  </div>
+
+                  <div style={{ marginBottom: '14px' }}>
+                    <label style={labelStyle}>E3/DC IP address / host *</label>
+                    <input
+                      type="text"
+                      required
+                      value={connectionConfig.e3dc_host || ''}
+                      onChange={(e) => onConnectionConfigChange({ ...connectionConfig, e3dc_host: e.target.value })}
+                      placeholder="192.168.1.50"
+                      onFocus={focusHandler}
+                      onBlur={blurHandler}
+                      style={inputStyle(isMobile)}
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+                    <div>
+                      <label style={labelStyle}>RSCP port</label>
+                      <input
+                        type="number"
+                        value={connectionConfig.e3dc_port ?? 5033}
+                        onChange={(e) => onConnectionConfigChange({ ...connectionConfig, e3dc_port: parseInt(e.target.value) || 5033 })}
+                        placeholder="5033"
+                        onFocus={focusHandler}
+                        onBlur={blurHandler}
+                        style={inputStyle(isMobile)}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Wallbox index</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={connectionConfig.e3dc_wallbox_index ?? 0}
+                        onChange={(e) => onConnectionConfigChange({ ...connectionConfig, e3dc_wallbox_index: parseInt(e.target.value) || 0 })}
+                        placeholder="0"
+                        onFocus={focusHandler}
+                        onBlur={blurHandler}
+                        style={inputStyle(isMobile)}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: '14px' }}>
+                    <label style={labelStyle}>Portal user (myE3DC e-mail) *</label>
+                    <input
+                      type="text"
+                      required
+                      value={connectionConfig.e3dc_user || ''}
+                      onChange={(e) => onConnectionConfigChange({ ...connectionConfig, e3dc_user: e.target.value })}
+                      placeholder="your.email@example.com"
+                      onFocus={focusHandler}
+                      onBlur={blurHandler}
+                      style={inputStyle(isMobile)}
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: '14px' }}>
+                    <label style={labelStyle}>Portal password *</label>
+                    <input
+                      type="password"
+                      required
+                      value={connectionConfig.e3dc_password || ''}
+                      onChange={(e) => onConnectionConfigChange({ ...connectionConfig, e3dc_password: e.target.value })}
+                      placeholder="••••••••"
+                      onFocus={focusHandler}
+                      onBlur={blurHandler}
+                      style={inputStyle(isMobile)}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>RSCP key *</label>
+                    <input
+                      type="password"
+                      required
+                      value={connectionConfig.e3dc_rscp_key || ''}
+                      onChange={(e) => onConnectionConfigChange({ ...connectionConfig, e3dc_rscp_key: e.target.value })}
+                      placeholder="RSCP password set on the device screen"
+                      onFocus={focusHandler}
+                      onBlur={blurHandler}
+                      style={inputStyle(isMobile)}
+                    />
+                    <p style={helpTextStyle}>
+                      Set on the device under Personalize → User profile. This is the encryption key, NOT the portal password.
+                    </p>
                   </div>
                 </>
               )}

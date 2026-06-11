@@ -40,6 +40,16 @@ interface ConnectionConfig {
     client_id?: string;
     client_secret?: string;
     device_id?: string;
+    // E3/DC EMS metering (Modbus read-only, or RSCP)
+    e3dc_protocol?: 'modbus' | 'rscp';
+    e3dc_host?: string;
+    e3dc_port?: number;
+    e3dc_unit_id?: number;
+    e3dc_user?: string;
+    e3dc_password?: string;
+    e3dc_rscp_key?: string;
+    e3dc_value?: string; // grid | pv | battery | home | wallbox
+    e3dc_external_power?: boolean;
 }
 
 export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => void, meters: any[] = []) {
@@ -94,7 +104,16 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
         api_key: '',
         client_id: '',
         client_secret: '',
-        device_id: ''
+        device_id: '',
+        e3dc_protocol: 'modbus',
+        e3dc_host: '',
+        e3dc_port: 502,
+        e3dc_unit_id: 1,
+        e3dc_user: '',
+        e3dc_password: '',
+        e3dc_rscp_key: '',
+        e3dc_value: 'grid',
+        e3dc_external_power: false
     });
 
     const resetForm = () => {
@@ -145,7 +164,16 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
             api_key: '',
             client_id: '',
             client_secret: '',
-            device_id: ''
+            device_id: '',
+            e3dc_protocol: 'modbus',
+            e3dc_host: '',
+            e3dc_port: 502,
+            e3dc_unit_id: 1,
+            e3dc_user: '',
+            e3dc_password: '',
+            e3dc_rscp_key: '',
+            e3dc_value: 'grid',
+            e3dc_external_power: false
         });
     };
 
@@ -207,7 +235,16 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
                 api_key: config.api_key || '',
                 client_id: config.client_id || '',
                 client_secret: config.client_secret || '',
-                device_id: config.device_id || ''
+                device_id: config.device_id || '',
+                e3dc_protocol: config.e3dc_protocol || 'modbus',
+                e3dc_host: config.e3dc_host || '',
+                e3dc_port: config.e3dc_port || (config.e3dc_protocol === 'rscp' ? 5033 : 502),
+                e3dc_unit_id: config.e3dc_unit_id || 1,
+                e3dc_user: config.e3dc_user || '',
+                e3dc_password: config.e3dc_password || '',
+                e3dc_rscp_key: config.e3dc_rscp_key || '',
+                e3dc_value: config.e3dc_value || 'grid',
+                e3dc_external_power: config.e3dc_external_power || false
             });
         } catch (e) {
             console.error('Failed to parse config:', e);
@@ -349,6 +386,23 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
                 mqtt_password: connectionConfig.mqtt_password,
                 mqtt_qos: connectionConfig.mqtt_qos
             };
+        } else if (formData.connection_type === 'e3dc') {
+            // E3/DC EMS metering. Modbus is read-only (no auth); RSCP needs
+            // portal credentials + the device RSCP key.
+            config = {
+                e3dc_protocol: connectionConfig.e3dc_protocol,
+                e3dc_host: connectionConfig.e3dc_host,
+                e3dc_port: connectionConfig.e3dc_port,
+                e3dc_value: connectionConfig.e3dc_value,
+                e3dc_external_power: connectionConfig.e3dc_external_power
+            };
+            if (connectionConfig.e3dc_protocol === 'rscp') {
+                config.e3dc_user = connectionConfig.e3dc_user;
+                config.e3dc_password = connectionConfig.e3dc_password;
+                config.e3dc_rscp_key = connectionConfig.e3dc_rscp_key;
+            } else {
+                config.e3dc_unit_id = connectionConfig.e3dc_unit_id;
+            }
         } else if (formData.connection_type === 'smartme') {
             // Smart-me configuration
             config = {
