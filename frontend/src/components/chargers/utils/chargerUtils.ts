@@ -17,6 +17,16 @@ export const getStateDisplay = (charger: Charger, stateValue?: string, t?: (key:
     }
   }
 
+  // E3/DC wallbox: 1=disconnected, 2=connected/waiting, 3=charging
+  if (charger.connection_type === 'e3dc_api') {
+    switch (stateStr) {
+      case '1': return t?.('chargers.state.disconnected') || 'Disconnected';
+      case '2': return t?.('chargers.state.awaitingStart') || 'Connected';
+      case '3': return t?.('chargers.state.charging') || 'Charging';
+      default: return t?.('chargers.state.idle') || 'Idle';
+    }
+  }
+
   // For Zaptec chargers, use native API state values (0, 1, 2, 3, 5)
   if (charger.connection_type === 'zaptec_api') {
     switch (stateStr) {

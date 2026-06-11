@@ -1,4 +1,4 @@
-import { Wifi, WifiOff, Rss, AlertCircle, Cloud, Radio, Cable } from 'lucide-react';
+import { Wifi, WifiOff, Rss, AlertCircle, Cloud, Radio, Cable, BatteryCharging, Battery } from 'lucide-react';
 import { useTranslation } from '../../i18n';
 import type { Meter } from '../../types';
 
@@ -10,6 +10,7 @@ interface MeterConnectionStatusProps {
     smartmeStatus: any;
     udpStatus: any;
     modbusStatus: any;
+    e3dcStatus?: any;
 }
 
 const formatTime = (dateStr: string) => {
@@ -67,7 +68,8 @@ export default function MeterConnectionStatus({
     mqttBrokerConnected,
     smartmeStatus,
     udpStatus,
-    modbusStatus
+    modbusStatus,
+    e3dcStatus
 }: MeterConnectionStatusProps) {
     const { t } = useTranslation();
 
@@ -187,6 +189,42 @@ export default function MeterConnectionStatus({
         return <ConnectionBadge
             icon={Cable} color="#9ca3af" bgColor="rgba(156, 163, 175, 0.1)"
             label={t('meters.modbusConnecting')}
+        />;
+    }
+
+    if (meter.connection_type === 'e3dc') {
+        const status = e3dcStatus?.[meter.id];
+        if (status) {
+            const isBattery = status.value === 'battery' || status.value === 'bat';
+            // Build a battery detail line (SoC + charge/discharge direction).
+            let batteryDetail: string | undefined;
+            let batteryIcon = Cable;
+            if (isBattery && typeof status.soc === 'number') {
+                const dir = status.battery_charging === true
+                    ? t('meters.e3dcCharging')
+                    : status.battery_charging === false
+                        ? t('meters.e3dcDischarging')
+                        : t('meters.e3dcIdle');
+                batteryDetail = `${t('meters.e3dcSoc')}: ${Math.round(status.soc)}% · ${dir}`;
+                batteryIcon = status.battery_charging === true ? BatteryCharging : Battery;
+            }
+            if (status.is_connected) {
+                return <ConnectionBadge
+                    icon={isBattery ? batteryIcon : Cable} color="#22c55e" bgColor="rgba(34, 197, 94, 0.1)"
+                    label={t('meters.e3dcConnected')}
+                    detail={batteryDetail || (status.ip_address ? `${status.ip_address}` : undefined)}
+                    detail2={batteryDetail && status.ip_address ? `${status.ip_address}` : (status.last_update ? `${t('meters.lastUpdate')}: ${formatTime(status.last_update)}` : undefined)}
+                />;
+            }
+            return <ConnectionBadge
+                icon={Cable} color="#ef4444" bgColor="rgba(239, 68, 68, 0.1)"
+                label={t('meters.e3dcDisconnected')}
+                detail={status.ip_address}
+            />;
+        }
+        return <ConnectionBadge
+            icon={Cable} color="#9ca3af" bgColor="rgba(156, 163, 175, 0.1)"
+            label={t('meters.e3dcConnecting')}
         />;
     }
 

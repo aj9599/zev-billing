@@ -32,6 +32,10 @@ type FormState = {
   e3dc_password: string;
   e3dc_rscp_key: string;
   e3dc_wallbox_index: number;
+  e3dc_dynamic: boolean;
+  e3dc_phases: number;
+  e3dc_min_current: number;
+  e3dc_max_current: number;
   // control
   switch_on_threshold_w: number;
   switch_off_threshold_w: number;
@@ -125,6 +129,10 @@ const emptyForm = (): FormState => ({
   e3dc_password: '',
   e3dc_rscp_key: '',
   e3dc_wallbox_index: 0,
+  e3dc_dynamic: true,
+  e3dc_phases: 1,
+  e3dc_min_current: 6,
+  e3dc_max_current: 16,
   switch_on_threshold_w: 1000,
   switch_off_threshold_w: 0,
   min_runtime_seconds: 300,
@@ -272,6 +280,10 @@ export default function Devices() {
         f.e3dc_password = cfg.e3dc_password || '';
         f.e3dc_rscp_key = cfg.e3dc_rscp_key || '';
         f.e3dc_wallbox_index = cfg.e3dc_wallbox_index || 0;
+        f.e3dc_dynamic = cfg.e3dc_dynamic !== false;
+        f.e3dc_phases = cfg.e3dc_phases || 1;
+        f.e3dc_min_current = cfg.e3dc_min_current || 6;
+        f.e3dc_max_current = cfg.e3dc_max_current || 16;
       } else {
         f.loxone_host = cfg.host || '';
         f.loxone_username = cfg.username || '';
@@ -303,6 +315,10 @@ export default function Devices() {
           e3dc_password: f.e3dc_password,
           e3dc_rscp_key: f.e3dc_rscp_key,
           e3dc_wallbox_index: Number(f.e3dc_wallbox_index) || 0,
+          e3dc_dynamic: f.e3dc_dynamic,
+          e3dc_phases: Number(f.e3dc_phases) || 1,
+          e3dc_min_current: Number(f.e3dc_min_current) || 6,
+          e3dc_max_current: Number(f.e3dc_max_current) || 16,
         })
       : f.driver === 'shelly'
         ? JSON.stringify({
@@ -835,8 +851,7 @@ export default function Devices() {
                 {form.driver === 'e3dc' ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>
-                      Controls the E3/DC integrated wallbox over RSCP — "on" enables charging, "off" stops it.
-                      Disable Sun Mode &amp; Auto Phase Switching in the E3/DC portal so this app can steer it.
+                      {t('devices.e3dcInfo')}
                     </p>
                     <div>
                       <label style={label}>{t('devices.host')} *</label>
@@ -863,8 +878,36 @@ export default function Devices() {
                       </div>
                     </div>
                     <div>
-                      <label style={label}>RSCP key *</label>
+                      <label style={label}>{t('devices.e3dcRscpKey')} *</label>
                       <input type="password" style={input} placeholder="RSCP password from the device screen" value={form.e3dc_rscp_key} onChange={(e) => setForm({ ...form, e3dc_rscp_key: e.target.value })} />
+                    </div>
+
+                    {/* Dynamic (PV-following) charging */}
+                    <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '12px', marginTop: '4px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: '8px' }}>
+                        <input type="checkbox" checked={form.e3dc_dynamic} onChange={(e) => setForm({ ...form, e3dc_dynamic: e.target.checked })} />
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>{t('devices.e3dcDynamic')}</span>
+                      </label>
+                      <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0 0 10px 0' }}>{t('devices.e3dcDynamicHint')}</p>
+                      {form.e3dc_dynamic && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                          <div>
+                            <label style={label}>{t('devices.e3dcPhases')}</label>
+                            <select style={input} value={form.e3dc_phases} onChange={(e) => setForm({ ...form, e3dc_phases: Number(e.target.value) })}>
+                              <option value={1}>1</option>
+                              <option value={3}>3</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label style={label}>{t('devices.e3dcMinCurrent')}</label>
+                            <input type="number" style={input} value={form.e3dc_min_current} onChange={(e) => setForm({ ...form, e3dc_min_current: Number(e.target.value) || 6 })} />
+                          </div>
+                          <div>
+                            <label style={label}>{t('devices.e3dcMaxCurrent')}</label>
+                            <input type="number" style={input} value={form.e3dc_max_current} onChange={(e) => setForm({ ...form, e3dc_max_current: Number(e.target.value) || 16 })} />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : form.driver === 'shelly' ? (

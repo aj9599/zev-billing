@@ -271,7 +271,25 @@ func driverFor(d models.Device) (DeviceDriver, error) {
 		if strings.TrimSpace(c.Host) == "" {
 			return nil, fmt.Errorf("e3dc config missing host")
 		}
-		return &e3dcDriver{cfg: c}, nil
+		// Optional dynamic (PV-following) charging parameters.
+		var extra struct {
+			Dynamic    bool `json:"e3dc_dynamic"`
+			Phases     int  `json:"e3dc_phases"`
+			MinCurrent int  `json:"e3dc_min_current"`
+			MaxCurrent int  `json:"e3dc_max_current"`
+		}
+		_ = json.Unmarshal([]byte(emptyToObject(d.ConnectionConfig)), &extra)
+		drv := &e3dcDriver{cfg: c, dynamic: extra.Dynamic, phases: extra.Phases, minA: extra.MinCurrent, maxA: extra.MaxCurrent}
+		if drv.phases != 3 {
+			drv.phases = 1
+		}
+		if drv.minA <= 0 {
+			drv.minA = 6
+		}
+		if drv.maxA <= 0 {
+			drv.maxA = 16
+		}
+		return drv, nil
 	default:
 		return nil, fmt.Errorf("unknown device driver %q", d.Driver)
 	}
@@ -381,11 +399,41 @@ func parseLoxoneOutput0State(body []byte) (on bool, ok bool) {
 
 // ---- E3/DC wallbox (RSCP) ----
 
+// DynamicCharger is an optional capability for device drivers that can modulate
+// their charge current to follow available solar surplus (instead of plain
+// on/off switching). The device controller calls it for devices that report
+// DynamicEnabled() == true.
+type DynamicCharger interface {
+	// DynamicEnabled reports whether dynamic (PV-following) control is configured.
+	DynamicEnabled() bool
+	// ChargeBounds returns the phase count and the min/max charge current (A).
+	ChargeBounds() (phases, minA, maxA int)
+	// SetChargeCurrent sets the charge-current limit in Amps.
+	SetChargeCurrent(amps int) error
+}
+
 // e3dcDriver controls an E3/DC integrated wallbox over RSCP. "On" enables
 // charging, "off" stops it (WB_REQ_SET_ABORT_CHARGING). ReadState reports
 // whether the wallbox is actively charging; ReadPower reports the wallbox's
-// live power and lifetime energy counter.
-type e3dcDriver struct{ cfg e3dc.Config }
+// live power and lifetime energy counter. When dynamic is set it additionally
+// modulates the charge current to the available solar surplus.
+type e3dcDriver struct {
+	cfg     e3dc.Config
+	dynamic bool
+	phases  int
+	minA    int
+	maxA    int
+}
+
+func (d *e3dcDriver) DynamicEnabled() bool             { return d.dynamic }
+func (d *e3dcDriver) ChargeBounds() (int, int, int)    { return d.phases, d.minA, d.maxA }
+func (d *e3dcDriver) SetChargeCurrent(amps int) error {
+	c, err := e3dcDeviceClient(d.cfg)
+	if err != nil {
+		return err
+	}
+	return c.SetWallboxMaxCurrent(amps)
+}
 
 // e3dcDeviceClients caches one RSCP client per physical E3/DC unit so the 30s
 // control loop doesn't re-authenticate on every Switch/ReadState/ReadPower

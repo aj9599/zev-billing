@@ -37,7 +37,7 @@ export default function Meters() {
     const [tariffMeter, setTariffMeter] = useState<Meter | null>(null);
 
     // Custom hooks for form and status management
-    const { loxoneStatus, mqttStatus, mqttBrokerConnected, smartmeStatus, udpStatus, modbusStatus, fetchConnectionStatus } = useMeterStatus();
+    const { loxoneStatus, mqttStatus, mqttBrokerConnected, smartmeStatus, udpStatus, modbusStatus, e3dcStatus, fetchConnectionStatus } = useMeterStatus();
     const {
         showModal,
         editingMeter,
@@ -207,6 +207,7 @@ export default function Meters() {
         if (m.connection_type === 'smartme') return smartmeStatus[id]?.is_connected;
         if (m.connection_type === 'udp') return udpStatus[id]?.is_connected;
         if (m.connection_type === 'modbus_tcp') return modbusStatus[id]?.is_connected;
+        if (m.connection_type === 'e3dc') return e3dcStatus[id]?.is_connected;
         return false;
     }).length;
     const offlineCount = totalCount - connectedCount;
@@ -364,6 +365,7 @@ export default function Meters() {
                                     smartmeStatus={smartmeStatus}
                                     udpStatus={udpStatus}
                                     modbusStatus={modbusStatus}
+                                    e3dcStatus={e3dcStatus}
                                     onEdit={handleEdit}
                                     onReplace={handleReplaceClick}
                                     onDelete={handleDeleteClick}

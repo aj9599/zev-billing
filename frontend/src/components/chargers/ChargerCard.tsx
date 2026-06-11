@@ -49,25 +49,28 @@ export default function ChargerCard({
 
     const stateDescription = charger.connection_type === 'loxone_api' ? liveData?.state_description : undefined;
 
-    const isCharging = charger.connection_type === 'zaptec_api'
+    // Zaptec and E3/DC both report native numeric states (1/2/3/5).
+    const numericState = charger.connection_type === 'zaptec_api' || charger.connection_type === 'e3dc_api';
+
+    const isCharging = numericState
         ? stateValue === '3'
         : charger.connection_type === 'loxone_api'
             ? (stateDescription === 'Charging' || stateValue === '3')
             : stateValue === '67';
 
-    const isCompleted = charger.connection_type === 'zaptec_api'
+    const isCompleted = numericState
         ? stateValue === '5'
         : charger.connection_type === 'loxone_api'
             ? (stateValue === '5' || stateDescription === 'Complete')
             : false;
 
-    const isAwaitingStart = charger.connection_type === 'zaptec_api'
+    const isAwaitingStart = numericState
         ? stateValue === '2'
         : charger.connection_type === 'loxone_api'
             ? false
             : stateValue === '66';
 
-    const isDisconnected = charger.connection_type === 'zaptec_api'
+    const isDisconnected = numericState
         ? stateValue === '1'
         : charger.connection_type === 'loxone_api'
             ? (stateDescription === 'Disconnected' || stateValue === '1')
@@ -95,7 +98,9 @@ export default function ChargerCard({
                 ? (udpChargerStatus?.is_connected ?? false)
                 : charger.connection_type === 'mqtt'
                     ? (mqttChargerStatus?.is_connected ?? false)
-                    : false;
+                    : charger.connection_type === 'e3dc_api'
+                        ? (liveData?.is_online ?? false)
+                        : false;
 
     const stateDisplay = getStateDisplay(charger, stateValue, t);
 

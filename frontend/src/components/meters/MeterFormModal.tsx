@@ -1817,14 +1817,12 @@ export default function MeterFormModal({
                             {formData.connection_type === 'e3dc' && (
                                 <>
                                     <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '14px', lineHeight: 1.5 }}>
-                                        Reads one value from an E3/DC EMS. Power is integrated into cumulative energy
-                                        for billing. Modbus (port 502) is read-only and needs no login; RSCP (port 5033)
-                                        also works and is required for wallbox readings.
+                                        {t('meters.e3dcIntro')}
                                     </p>
 
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
                                         <div>
-                                            <label style={labelStyle}>Protocol *</label>
+                                            <label style={labelStyle}>{t('meters.e3dcProtocol')} *</label>
                                             <select
                                                 required
                                                 value={connectionConfig.e3dc_protocol || 'modbus'}
@@ -1837,12 +1835,12 @@ export default function MeterFormModal({
                                                 onBlur={blurHandler}
                                                 style={inputStyle(isMobile)}
                                             >
-                                                <option value="modbus">Modbus TCP (read-only)</option>
-                                                <option value="rscp">RSCP (encrypted)</option>
+                                                <option value="modbus">{t('meters.e3dcProtocolModbus')}</option>
+                                                <option value="rscp">{t('meters.e3dcProtocolRscp')}</option>
                                             </select>
                                         </div>
                                         <div>
-                                            <label style={labelStyle}>Value *</label>
+                                            <label style={labelStyle}>{t('meters.e3dcValue')} *</label>
                                             <select
                                                 required
                                                 value={connectionConfig.e3dc_value || 'grid'}
@@ -1851,18 +1849,18 @@ export default function MeterFormModal({
                                                 onBlur={blurHandler}
                                                 style={inputStyle(isMobile)}
                                             >
-                                                <option value="grid">Grid (import / export)</option>
-                                                <option value="pv">PV production</option>
-                                                <option value="battery">Battery (charge / discharge)</option>
-                                                <option value="home">Household consumption</option>
-                                                <option value="wallbox">Wallbox (RSCP only)</option>
+                                                <option value="grid">{t('meters.e3dcValueGrid')}</option>
+                                                <option value="pv">{t('meters.e3dcValuePv')}</option>
+                                                <option value="battery">{t('meters.e3dcValueBattery')}</option>
+                                                <option value="home">{t('meters.e3dcValueHome')}</option>
+                                                <option value="wallbox">{t('meters.e3dcValueWallbox')}</option>
                                             </select>
                                         </div>
                                     </div>
 
                                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '14px' }}>
                                         <div>
-                                            <label style={labelStyle}>E3/DC IP address / host *</label>
+                                            <label style={labelStyle}>{t('meters.e3dcHost')} *</label>
                                             <input
                                                 type="text"
                                                 required
@@ -1875,7 +1873,7 @@ export default function MeterFormModal({
                                             />
                                         </div>
                                         <div>
-                                            <label style={labelStyle}>Port</label>
+                                            <label style={labelStyle}>{t('meters.e3dcPort')}</label>
                                             <input
                                                 type="number"
                                                 value={connectionConfig.e3dc_port ?? (connectionConfig.e3dc_protocol === 'rscp' ? 5033 : 502)}
@@ -1890,7 +1888,7 @@ export default function MeterFormModal({
                                     {connectionConfig.e3dc_protocol === 'rscp' ? (
                                         <>
                                             <div style={{ marginBottom: '14px' }}>
-                                                <label style={labelStyle}>Portal user (myE3DC e-mail) *</label>
+                                                <label style={labelStyle}>{t('meters.e3dcUser')} *</label>
                                                 <input
                                                     type="text"
                                                     required
@@ -1903,7 +1901,7 @@ export default function MeterFormModal({
                                                 />
                                             </div>
                                             <div style={{ marginBottom: '14px' }}>
-                                                <label style={labelStyle}>Portal password *</label>
+                                                <label style={labelStyle}>{t('meters.e3dcPassword')} *</label>
                                                 <input
                                                     type="password"
                                                     required
@@ -1916,7 +1914,7 @@ export default function MeterFormModal({
                                                 />
                                             </div>
                                             <div>
-                                                <label style={labelStyle}>RSCP key *</label>
+                                                <label style={labelStyle}>{t('meters.e3dcRscpKey')} *</label>
                                                 <input
                                                     type="password"
                                                     required
@@ -1928,13 +1926,13 @@ export default function MeterFormModal({
                                                     style={inputStyle(isMobile)}
                                                 />
                                                 <p style={helpTextStyle}>
-                                                    Set on the device under Personalize → User profile (the encryption key, not the portal password).
+                                                    {t('meters.e3dcRscpKeyHint')}
                                                 </p>
                                             </div>
                                         </>
                                     ) : (
                                         <div style={{ marginBottom: '14px' }}>
-                                            <label style={labelStyle}>Modbus unit ID</label>
+                                            <label style={labelStyle}>{t('meters.e3dcUnitId')}</label>
                                             <input
                                                 type="number"
                                                 value={connectionConfig.e3dc_unit_id ?? 1}
@@ -1945,7 +1943,7 @@ export default function MeterFormModal({
                                                 style={inputStyle(isMobile)}
                                             />
                                             <p style={helpTextStyle}>
-                                                Enable Modbus/TCP in the E3/DC settings first. Wallbox readings require RSCP.
+                                                {t('meters.e3dcUnitIdHint')}
                                             </p>
                                         </div>
                                     )}
@@ -1955,7 +1953,7 @@ export default function MeterFormModal({
                                             <CustomCheckbox
                                                 checked={connectionConfig.e3dc_external_power === true}
                                                 onChange={(checked) => onConnectionConfigChange({ ...connectionConfig, e3dc_external_power: checked })}
-                                                label="Subtract additional feed-in (second inverter)"
+                                                label={t('meters.e3dcExternalPower')}
                                             />
                                         </div>
                                     )}

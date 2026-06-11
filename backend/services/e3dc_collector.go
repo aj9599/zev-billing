@@ -60,6 +60,11 @@ type e3dcMeterState struct {
 	livePowerI float64 // last instantaneous import power (W)
 	livePowerE float64 // last instantaneous export power (W)
 	online     bool
+
+	// device-level telemetry (same for every meter on this unit) — used for the
+	// battery card: state of charge and charge/discharge direction.
+	socPct        float64
+	batteryPowerW float64 // + = discharging, - = charging (snapshot convention)
 }
 
 // e3dcChargerState holds one wallbox charger's config and live snapshot.
@@ -296,6 +301,8 @@ func (ec *E3DCCollector) updateMeter(st *e3dcMeterState, snap *e3dc.Snapshot, no
 	}
 	importW, exportW := selectMeterPower(st.valueSel, snap)
 	st.livePowerI, st.livePowerE = importW, exportW
+	st.socPct = snap.BatterySoC
+	st.batteryPowerW = snap.BatteryPowerW
 	st.online = true
 
 	if !st.lastPoll.IsZero() {
@@ -433,15 +440,31 @@ func (ec *E3DCCollector) GetConnectionStatus() map[string]interface{} {
 	defer ec.mu.RUnlock()
 	meters := make(map[string]interface{})
 	for id, st := range ec.meters {
+		// battery_charging: true while charging, false while discharging, nil when
+		// neither (idle) or this meter doesn't track the battery.
+		var batteryCharging interface{}
+		if st.valueSel == "battery" || st.valueSel == "bat" {
+			if st.batteryPowerW < -10 {
+				batteryCharging = true
+			} else if st.batteryPowerW > 10 {
+				batteryCharging = false
+			}
+		}
 		meters[fmt.Sprintf("%d", id)] = map[string]interface{}{
-			"meter_name":   st.name,
-			"value":        st.valueSel,
-			"protocol":     st.cfg.Protocol,
-			"host":         fmt.Sprintf("%s:%d", st.cfg.Host, st.cfg.Port),
-			"is_online":    st.online,
-			"import_kwh":   st.importKwh,
-			"export_kwh":   st.exportKwh,
-			"live_power_w": st.livePowerI - st.livePowerE,
+			"meter_name":       st.name,
+			"value":            st.valueSel,
+			"protocol":         st.cfg.Protocol,
+			"host":             fmt.Sprintf("%s:%d", st.cfg.Host, st.cfg.Port),
+			"ip_address":       fmt.Sprintf("%s:%d", st.cfg.Host, st.cfg.Port),
+			"is_online":        st.online,
+			"is_connected":     st.online,
+			"last_update":      st.lastPoll.Format(time.RFC3339),
+			"import_kwh":       st.importKwh,
+			"export_kwh":       st.exportKwh,
+			"live_power_w":     st.livePowerI - st.livePowerE,
+			"soc":              st.socPct,
+			"battery_power_w":  st.batteryPowerW,
+			"battery_charging": batteryCharging,
 		}
 	}
 	chargers := make(map[string]interface{})

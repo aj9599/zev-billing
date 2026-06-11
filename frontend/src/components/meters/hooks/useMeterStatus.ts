@@ -13,6 +13,12 @@ interface ConnectionStatus {
         device_id?: string;
         topic?: string;
         ip_address?: string;
+        // E3/DC
+        value?: string;
+        soc?: number;
+        battery_charging?: boolean | null;
+        battery_power_w?: number;
+        is_online?: boolean;
     };
 }
 
@@ -23,6 +29,7 @@ export function useMeterStatus() {
     const [smartmeStatus, setSmartmeStatus] = useState<ConnectionStatus>({});
     const [udpStatus, setUdpStatus] = useState<ConnectionStatus>({});
     const [modbusStatus, setModbusStatus] = useState<ConnectionStatus>({});
+    const [e3dcStatus, setE3dcStatus] = useState<ConnectionStatus>({});
 
     const parseStringKeyedStatus = (data: Record<string, any>): ConnectionStatus => {
         const result: ConnectionStatus = {};
@@ -56,6 +63,9 @@ export function useMeterStatus() {
             if (debugData.modbus_connections) {
                 setModbusStatus(parseStringKeyedStatus(debugData.modbus_connections));
             }
+            if (debugData.e3dc_meter_connections) {
+                setE3dcStatus(parseStringKeyedStatus(debugData.e3dc_meter_connections));
+            }
         } catch (error) {
             console.error('Failed to fetch connection status:', error);
         }
@@ -68,6 +78,7 @@ export function useMeterStatus() {
         smartmeStatus,
         udpStatus,
         modbusStatus,
+        e3dcStatus,
         fetchConnectionStatus
     };
 }

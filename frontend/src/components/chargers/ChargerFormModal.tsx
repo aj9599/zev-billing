@@ -859,12 +859,12 @@ export default function ChargerFormModal({
                   }}>
                     <Wifi size={18} color="#10b981" />
                     <p style={{ fontSize: '13px', color: '#065f46', margin: 0, fontWeight: '500' }}>
-                      E3/DC integrated wallbox via local RSCP — reads charging energy (incl. solar share) and can start/stop charging.
+                      {t('chargers.e3dcInfo')}
                     </p>
                   </div>
 
                   <div style={{ marginBottom: '14px' }}>
-                    <label style={labelStyle}>E3/DC IP address / host *</label>
+                    <label style={labelStyle}>{t('chargers.e3dcHost')} *</label>
                     <input
                       type="text"
                       required
@@ -879,7 +879,7 @@ export default function ChargerFormModal({
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
                     <div>
-                      <label style={labelStyle}>RSCP port</label>
+                      <label style={labelStyle}>{t('chargers.e3dcPort')}</label>
                       <input
                         type="number"
                         value={connectionConfig.e3dc_port ?? 5033}
@@ -891,7 +891,7 @@ export default function ChargerFormModal({
                       />
                     </div>
                     <div>
-                      <label style={labelStyle}>Wallbox index</label>
+                      <label style={labelStyle}>{t('chargers.e3dcWallboxIndex')}</label>
                       <input
                         type="number"
                         min={0}
@@ -906,7 +906,7 @@ export default function ChargerFormModal({
                   </div>
 
                   <div style={{ marginBottom: '14px' }}>
-                    <label style={labelStyle}>Portal user (myE3DC e-mail) *</label>
+                    <label style={labelStyle}>{t('chargers.e3dcUser')} *</label>
                     <input
                       type="text"
                       required
@@ -920,7 +920,7 @@ export default function ChargerFormModal({
                   </div>
 
                   <div style={{ marginBottom: '14px' }}>
-                    <label style={labelStyle}>Portal password *</label>
+                    <label style={labelStyle}>{t('chargers.e3dcPassword')} *</label>
                     <input
                       type="password"
                       required
@@ -934,7 +934,7 @@ export default function ChargerFormModal({
                   </div>
 
                   <div>
-                    <label style={labelStyle}>RSCP key *</label>
+                    <label style={labelStyle}>{t('chargers.e3dcRscpKey')} *</label>
                     <input
                       type="password"
                       required
@@ -946,7 +946,7 @@ export default function ChargerFormModal({
                       style={inputStyle(isMobile)}
                     />
                     <p style={helpTextStyle}>
-                      Set on the device under Personalize → User profile. This is the encryption key, NOT the portal password.
+                      {t('chargers.e3dcRscpKeyHint')}
                     </p>
                   </div>
                 </>
@@ -1113,8 +1113,9 @@ export default function ChargerFormModal({
                 </>
               )}
 
-              {/* State & Mode Mappings (hide for single-block & Zaptec) */}
-              {formData.preset !== 'zaptec' && !isSingleBlockMode && (
+              {/* State & Mode Mappings (hide for single-block, Zaptec & E3/DC —
+                  their states/modes are fixed on the device side) */}
+              {formData.preset !== 'zaptec' && formData.preset !== 'e3dc' && !isSingleBlockMode && (
                 <>
                   <div style={{
                     marginTop: '16px',

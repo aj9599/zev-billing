@@ -51,6 +51,11 @@ type deviceRuntime struct {
 	// staged multi-relay devices
 	currentLevel int // active stage (0 = all off, 1..N = stage index)
 	stageCount   int // number of configured stages (0 = not a staged device)
+
+	// dynamic (PV-following) chargers: last current sent, to avoid resending
+	// the same value every tick.
+	lastTargetA int
+	targetSet   bool
 }
 
 // DeviceController periodically drives controllable devices from live solar
@@ -140,6 +145,14 @@ func (c *DeviceController) tick() {
 
 		for _, d := range list {
 			c.accrueRuntime(d.ID, now)
+			// Dynamic (PV-following) chargers modulate their current instead of
+			// switching on/off — handle them before the binary paths.
+			if drv, derr := driverFor(d); derr == nil {
+				if dyn, ok := drv.(DynamicCharger); ok && dyn.DynamicEnabled() {
+					avail -= c.applyDynamicCharger(d, drv, dyn, avail, hasSignal, live, now)
+					continue
+				}
+			}
 			if isStagedDevice(d) {
 				avail -= c.applyStaged(d, avail, hasSignal, surplus, live, now)
 				continue
@@ -350,6 +363,131 @@ func (c *DeviceController) apply(d models.Device, desired, forced bool, reason s
 	}
 
 	c.switchDevice(d, driver, desired, reason, surplus, now)
+}
+
+// applyDynamicCharger modulates a PV-following charger's current to the
+// available surplus and returns the power (W) it claimed from the building
+// budget. Unlike binary devices it adjusts current continuously rather than
+// switching on/off, mirroring evcc's PV mode.
+//
+// Available power for the charger = building surplus + what the wallbox is
+// already drawing (so we use all the PV the wallbox is currently masking).
+// Below the minimum current the wallbox is stopped; manual on/off overrides
+// force max current / off.
+func (c *DeviceController) applyDynamicCharger(d models.Device, driver DeviceDriver, dyn DynamicCharger, avail float64, hasSignal, live bool, now time.Time) float64 {
+	const voltage = 230.0
+	phases, minA, maxA := dyn.ChargeBounds()
+
+	// Live wallbox power (for display + available-power calculation).
+	var curW, curWh float64
+	var pk bool
+	if pr, ok := driver.(PowerReader); ok {
+		if p, e, kn, perr := pr.ReadPower(); perr == nil && kn {
+			curW, curWh, pk = p, e, true
+		}
+	}
+
+	// Resolve the target current.
+	mode := d.ControlMode
+	forcedManual := false
+	if mode == "on" || mode == "off" {
+		if d.ManualOverrideUntil == nil {
+			forcedManual = true
+		} else if until, err := parseDeviceTime(*d.ManualOverrideUntil); err == nil && until.After(now) {
+			forcedManual = true
+		} else {
+			c.clearOverride(d.ID)
+			mode = "auto"
+		}
+	}
+
+	var targetA int
+	var reason string
+	switch {
+	case forcedManual && mode == "on":
+		targetA, reason = maxA, fmt.Sprintf("manual override: max %dA", maxA)
+	case forcedManual && mode == "off":
+		targetA, reason = 0, "manual override: off"
+	case !hasSignal:
+		targetA, reason = 0, "no grid signal — holding off"
+	default:
+		availW := avail + curW
+		targetA = int(availW / (float64(phases) * voltage))
+		if targetA > maxA {
+			targetA = maxA
+		}
+		if targetA < minA {
+			targetA = 0
+			reason = fmt.Sprintf("surplus %.0fW below %dA minimum — paused", availW, minA)
+		} else {
+			reason = fmt.Sprintf("solar follow: %dA (%.1f kW, %dp)", targetA, float64(targetA)*float64(phases)*voltage/1000.0, phases)
+		}
+	}
+
+	// Apply only when the target changed (avoid resending every tick).
+	c.mu.Lock()
+	rt := c.runtimeFor(d.ID)
+	changed := !rt.targetSet || rt.lastTargetA != targetA
+	wasOn := rt.lastTargetA > 0
+	c.mu.Unlock()
+
+	var err error
+	if changed {
+		if targetA == 0 {
+			err = driver.Switch(false)
+		} else {
+			if e := driver.Switch(true); e != nil {
+				err = e
+			}
+			if e := dyn.SetChargeCurrent(targetA); e != nil && err == nil {
+				err = e
+			}
+		}
+		// Record only on/off transitions to keep the event log readable.
+		if (targetA > 0) != wasOn {
+			cmd := "off"
+			if targetA > 0 {
+				cmd = "on"
+			}
+			c.recordEvent(d.ID, cmd, reason, avail, err)
+		}
+		if err == nil {
+			log.Printf("DeviceController: dynamic charger %d (%s) -> %dA (%s)", d.ID, d.Name, targetA, reason)
+		} else {
+			log.Printf("DeviceController: dynamic charger %d (%s) -> %dA failed: %v", d.ID, d.Name, targetA, err)
+		}
+	}
+
+	c.mu.Lock()
+	rt = c.runtimeFor(d.ID)
+	rt.mode = mode
+	rt.desiredOn = targetA > 0
+	rt.buildingSurplusW = avail
+	rt.hasSignal = hasSignal
+	rt.surplusLive = live
+	rt.reason = reason
+	rt.updatedAt = now
+	if err == nil {
+		rt.online = true
+		rt.lastError = ""
+		rt.lastKnownOn = targetA > 0
+		rt.lastTargetA = targetA
+		rt.targetSet = true
+	} else {
+		rt.online = false
+		rt.lastError = err.Error()
+	}
+	if pk {
+		rt.powerW = curW
+		rt.energyWh = curWh
+		rt.powerKnown = true
+	}
+	c.mu.Unlock()
+
+	if err != nil {
+		return 0
+	}
+	return float64(targetA) * float64(phases) * voltage
 }
 
 // switchDevice issues the command, records the event, and updates runtime + DB.

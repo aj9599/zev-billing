@@ -13,6 +13,7 @@ interface MeterCardProps {
     smartmeStatus: any;
     udpStatus: any;
     modbusStatus: any;
+    e3dcStatus?: any;
     onEdit: (meter: Meter) => void;
     onReplace: (meter: Meter) => void;
     onDelete: (meter: Meter) => void;
@@ -28,6 +29,7 @@ export default function MeterCard({
     smartmeStatus,
     udpStatus,
     modbusStatus,
+    e3dcStatus,
     onEdit,
     onReplace,
     onDelete,
@@ -390,6 +392,7 @@ export default function MeterCard({
                 smartmeStatus={smartmeStatus}
                 udpStatus={udpStatus}
                 modbusStatus={modbusStatus}
+                e3dcStatus={e3dcStatus}
             />
         </div>
     );
