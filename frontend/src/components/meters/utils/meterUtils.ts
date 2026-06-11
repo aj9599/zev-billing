@@ -11,6 +11,7 @@ export const getMeterTypeLabel = (meterType: string, t: (key: string) => string)
         'total_meter': t('meters.totalMeter'),
         'solar_meter': t('meters.solarMeter'),
         'apartment_meter': t('meters.apartmentMeter'),
+        'battery_meter': t('meters.batteryMeter'),
         'heating_meter': t('meters.heatingMeter'),
         'other': t('meters.other')
     };

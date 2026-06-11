@@ -388,13 +388,18 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
             };
         } else if (formData.connection_type === 'e3dc') {
             // E3/DC EMS metering. Modbus is read-only (no auth); RSCP needs
-            // portal credentials + the device RSCP key.
+            // portal credentials + the device RSCP key. The value read is
+            // derived from the meter type — no separate, contradictory choice.
+            const e3dcValue =
+                formData.meter_type === 'solar_meter' ? 'pv'
+                : formData.meter_type === 'battery_meter' ? 'battery'
+                : 'grid';
             config = {
                 e3dc_protocol: connectionConfig.e3dc_protocol,
                 e3dc_host: connectionConfig.e3dc_host,
                 e3dc_port: connectionConfig.e3dc_port,
-                e3dc_value: connectionConfig.e3dc_value,
-                e3dc_external_power: connectionConfig.e3dc_external_power
+                e3dc_value: e3dcValue,
+                e3dc_external_power: formData.meter_type === 'solar_meter' ? connectionConfig.e3dc_external_power : false
             };
             if (connectionConfig.e3dc_protocol === 'rscp') {
                 config.e3dc_user = connectionConfig.e3dc_user;

@@ -182,6 +182,7 @@ export default function MeterFormModal({
         { value: 'total_meter', label: t('meters.totalMeter') },
         { value: 'solar_meter', label: t('meters.solarMeter') },
         { value: 'apartment_meter', label: t('meters.apartmentMeter') },
+        { value: 'battery_meter', label: t('meters.batteryMeter') },
         { value: 'heating_meter', label: t('meters.heatingMeter') },
         { value: 'other', label: t('meters.other') }
     ];
@@ -1820,42 +1821,33 @@ export default function MeterFormModal({
                                         {t('meters.e3dcIntro')}
                                     </p>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
-                                        <div>
-                                            <label style={labelStyle}>{t('meters.e3dcProtocol')} *</label>
-                                            <select
-                                                required
-                                                value={connectionConfig.e3dc_protocol || 'modbus'}
-                                                onChange={(e) => onConnectionConfigChange({
-                                                    ...connectionConfig,
-                                                    e3dc_protocol: e.target.value as 'modbus' | 'rscp',
-                                                    e3dc_port: e.target.value === 'rscp' ? 5033 : 502
-                                                })}
-                                                onFocus={focusHandler}
-                                                onBlur={blurHandler}
-                                                style={inputStyle(isMobile)}
-                                            >
-                                                <option value="modbus">{t('meters.e3dcProtocolModbus')}</option>
-                                                <option value="rscp">{t('meters.e3dcProtocolRscp')}</option>
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label style={labelStyle}>{t('meters.e3dcValue')} *</label>
-                                            <select
-                                                required
-                                                value={connectionConfig.e3dc_value || 'grid'}
-                                                onChange={(e) => onConnectionConfigChange({ ...connectionConfig, e3dc_value: e.target.value })}
-                                                onFocus={focusHandler}
-                                                onBlur={blurHandler}
-                                                style={inputStyle(isMobile)}
-                                            >
-                                                <option value="grid">{t('meters.e3dcValueGrid')}</option>
-                                                <option value="pv">{t('meters.e3dcValuePv')}</option>
-                                                <option value="battery">{t('meters.e3dcValueBattery')}</option>
-                                                <option value="home">{t('meters.e3dcValueHome')}</option>
-                                                <option value="wallbox">{t('meters.e3dcValueWallbox')}</option>
-                                            </select>
-                                        </div>
+                                    <div style={{ marginBottom: '14px' }}>
+                                        <label style={labelStyle}>{t('meters.e3dcProtocol')} *</label>
+                                        <select
+                                            required
+                                            value={connectionConfig.e3dc_protocol || 'modbus'}
+                                            onChange={(e) => onConnectionConfigChange({
+                                                ...connectionConfig,
+                                                e3dc_protocol: e.target.value as 'modbus' | 'rscp',
+                                                e3dc_port: e.target.value === 'rscp' ? 5033 : 502
+                                            })}
+                                            onFocus={focusHandler}
+                                            onBlur={blurHandler}
+                                            style={inputStyle(isMobile)}
+                                        >
+                                            <option value="modbus">{t('meters.e3dcProtocolModbus')}</option>
+                                            <option value="rscp">{t('meters.e3dcProtocolRscp')}</option>
+                                        </select>
+                                        {/* The value read is derived from the meter type chosen above —
+                                            no separate (contradictory) selection. */}
+                                        <p style={helpTextStyle}>
+                                            {t('meters.e3dcReads')}:{' '}
+                                            <strong>{
+                                                formData.meter_type === 'solar_meter' ? t('meters.e3dcValuePv')
+                                                : formData.meter_type === 'battery_meter' ? t('meters.e3dcValueBattery')
+                                                : t('meters.e3dcValueGrid')
+                                            }</strong>
+                                        </p>
                                     </div>
 
                                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '14px' }}>
@@ -1948,7 +1940,7 @@ export default function MeterFormModal({
                                         </div>
                                     )}
 
-                                    {connectionConfig.e3dc_value === 'pv' && (
+                                    {formData.meter_type === 'solar_meter' && (
                                         <div style={{ marginTop: '14px' }}>
                                             <CustomCheckbox
                                                 checked={connectionConfig.e3dc_external_power === true}

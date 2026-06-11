@@ -155,7 +155,7 @@ func deviceKey(cfg e3dc.Config) string {
 func (ec *E3DCCollector) reload() {
 	// --- Meters ---
 	mrows, err := ec.db.Query(`
-		SELECT id, name, connection_config
+		SELECT id, name, meter_type, connection_config
 		FROM meters
 		WHERE is_active = 1 AND connection_type = 'e3dc'
 	`)
@@ -165,11 +165,11 @@ func (ec *E3DCCollector) reload() {
 		defer mrows.Close()
 		for mrows.Next() {
 			var id int
-			var name, cfgJSON string
-			if mrows.Scan(&id, &name, &cfgJSON) != nil {
+			var name, meterType, cfgJSON string
+			if mrows.Scan(&id, &name, &meterType, &cfgJSON) != nil {
 				continue
 			}
-			cfg, sel, perr := parseE3DCMeterConfig(cfgJSON)
+			cfg, sel, perr := parseE3DCMeterConfig(cfgJSON, meterType)
 			if perr != nil {
 				log.Printf("ERROR: E3/DC meter '%s' config: %v", name, perr)
 				continue
@@ -489,8 +489,11 @@ func (ec *E3DCCollector) GetConnectionStatus() map[string]interface{} {
 // ---- Config parsing helpers ----
 
 // parseE3DCMeterConfig extracts the e3dc.Config plus the value selector from a
-// meter's connection_config JSON. The selector lives in "e3dc_value".
-func parseE3DCMeterConfig(cfgJSON string) (e3dc.Config, string, error) {
+// meter's connection_config JSON. The selector normally lives in "e3dc_value",
+// but it is now derived from the meter's billing type so the two can't
+// contradict each other; the meterType argument is the fallback/source of truth
+// (solar_meter→pv, battery_meter→battery, everything else→grid).
+func parseE3DCMeterConfig(cfgJSON, meterType string) (e3dc.Config, string, error) {
 	var cfg e3dc.Config
 	if err := json.Unmarshal([]byte(cfgJSON), &cfg); err != nil {
 		return cfg, "", err
@@ -498,13 +501,28 @@ func parseE3DCMeterConfig(cfgJSON string) (e3dc.Config, string, error) {
 	if cfg.Protocol == "" {
 		cfg.Protocol = e3dc.ProtocolModbus
 	}
-	var extra struct {
-		Value string `json:"e3dc_value"`
-	}
-	_ = json.Unmarshal([]byte(cfgJSON), &extra)
-	sel := strings.ToLower(strings.TrimSpace(extra.Value))
-	if sel == "" {
+	// Meter type is authoritative for the standard billing roles, so a meter
+	// can never read a value that contradicts its type (and legacy rows
+	// self-correct on the next poll).
+	var sel string
+	switch meterType {
+	case "solar_meter":
+		sel = "pv"
+	case "battery_meter":
+		sel = "battery"
+	case "total_meter":
 		sel = "grid"
+	}
+	if sel == "" {
+		// Unmapped type (e.g. apartment/legacy) — fall back to the stored value.
+		var extra struct {
+			Value string `json:"e3dc_value"`
+		}
+		_ = json.Unmarshal([]byte(cfgJSON), &extra)
+		sel = strings.ToLower(strings.TrimSpace(extra.Value))
+		if sel == "" {
+			sel = "grid"
+		}
 	}
 	return cfg, sel, nil
 }
