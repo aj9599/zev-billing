@@ -826,7 +826,37 @@ func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		updateStatus.set("updating", "Building backend...", 40)
 		writeLog("Building backend...")
 		backendPath := filepath.Join(repoPath, "backend")
-		if err := runCmd("Backend build", backendPath, append(os.Environ(), "CGO_ENABLED=1"), "go", "build", "-o", "zev-billing"); err != nil {
+		// The systemd service PATH usually lacks /usr/local/go/bin (where the
+		// installer puts Go), so locate the go binary and prepend its directory
+		// to PATH for the build subprocess (go itself shells out to the C
+		// compiler, which needs a usable PATH too).
+		goBin := "go"
+		goDir := "/usr/local/go/bin"
+		if p, err := exec.LookPath("go"); err == nil {
+			goBin = p
+			goDir = filepath.Dir(p)
+		} else {
+			for _, cand := range []string{"/usr/local/go/bin/go", "/usr/lib/go/bin/go", "/snap/bin/go"} {
+				if _, statErr := os.Stat(cand); statErr == nil {
+					goBin = cand
+					goDir = filepath.Dir(cand)
+					break
+				}
+			}
+		}
+		buildEnv := append(os.Environ(), "CGO_ENABLED=1")
+		pathSet := false
+		for i, e := range buildEnv {
+			if strings.HasPrefix(e, "PATH=") {
+				buildEnv[i] = "PATH=" + goDir + ":" + strings.TrimPrefix(e, "PATH=")
+				pathSet = true
+				break
+			}
+		}
+		if !pathSet {
+			buildEnv = append(buildEnv, "PATH="+goDir+":/usr/bin:/bin")
+		}
+		if err := runCmd("Backend build", backendPath, buildEnv, goBin, "build", "-o", "zev-billing"); err != nil {
 			writeLog(err.Error())
 			updateStatus.setError(err.Error())
 			return
