@@ -28,6 +28,20 @@ func NewMeterHandler(db *sql.DB, dataCollector *services.DataCollector) *MeterHa
 	}
 }
 
+// connectionTypeNeedsRestart reports whether a meter connection type is backed
+// by a background collector that must reload its in-memory state when a meter is
+// added, changed or removed. Manual/no-collector types (e.g. "manual", "http")
+// return false. Keep this list in sync with the collectors started in
+// DataCollector.RestartUDPListeners.
+func connectionTypeNeedsRestart(connType string) bool {
+	switch connType {
+	case "udp", "loxone_api", "mqtt", "modbus_tcp", "smartme", "e3dc", "e3dc_api":
+		return true
+	default:
+		return false
+	}
+}
+
 // safeRestartCollectors ensures only one restart operation happens at a time
 func (h *MeterHandler) safeRestartCollectors(reason string) {
 	go func() {
@@ -273,7 +287,7 @@ func (h *MeterHandler) Create(w http.ResponseWriter, r *http.Request) {
 	m.ID = int(id)
 
 	// Restart collectors if needed
-	if m.ConnectionType == "udp" || m.ConnectionType == "loxone_api" || m.ConnectionType == "mqtt" {
+	if connectionTypeNeedsRestart(m.ConnectionType) {
 		h.safeRestartCollectors(fmt.Sprintf("New %s meter created (device type: %s)", m.ConnectionType, m.DeviceType))
 	}
 
@@ -319,7 +333,7 @@ func (h *MeterHandler) Update(w http.ResponseWriter, r *http.Request) {
 	m.ID = id
 
 	// Restart collectors if needed
-	if m.ConnectionType == "udp" || m.ConnectionType == "loxone_api" || m.ConnectionType == "mqtt" {
+	if connectionTypeNeedsRestart(m.ConnectionType) {
 		h.safeRestartCollectors(fmt.Sprintf("%s meter updated (device type: %s)", m.ConnectionType, m.DeviceType))
 	}
 
@@ -459,7 +473,7 @@ func (h *MeterHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Successfully deleted meter %d (%s) and %d readings", id, meterName, rowsAffected)
 
 	// Restart collectors if needed
-	if connectionType == "udp" || connectionType == "loxone_api" || connectionType == "mqtt" {
+	if connectionTypeNeedsRestart(connectionType) {
 		h.safeRestartCollectors(fmt.Sprintf("%s meter deleted", connectionType))
 	}
 
