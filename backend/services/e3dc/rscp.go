@@ -216,6 +216,9 @@ func (r *rscpClient) readWallbox(snap *Snapshot) {
 		*rscp.NewMessage(rscp.WB_INDEX, uint8(r.cfg.WallboxIndex)),
 		*rscp.NewMessage(rscp.WB_REQ_ENERGY_ALL, nil),
 		*rscp.NewMessage(rscp.WB_REQ_ENERGY_SOLAR, nil),
+		*rscp.NewMessage(rscp.WB_REQ_PM_ENERGY_L1, nil),
+		*rscp.NewMessage(rscp.WB_REQ_PM_ENERGY_L2, nil),
+		*rscp.NewMessage(rscp.WB_REQ_PM_ENERGY_L3, nil),
 		*rscp.NewMessage(rscp.WB_REQ_PM_POWER_L1, nil),
 		*rscp.NewMessage(rscp.WB_REQ_PM_POWER_L2, nil),
 		*rscp.NewMessage(rscp.WB_REQ_PM_POWER_L3, nil),
@@ -243,6 +246,19 @@ func (r *rscpClient) readWallbox(snap *Snapshot) {
 		case rscp.WB_REQ_ENERGY_SOLAR:
 			if v, ok := asFloat64(m.Value); ok {
 				snap.WallboxEnergySolarKWh = v / 1000.0
+			}
+		case rscp.WB_REQ_PM_ENERGY_L1:
+			if v, ok := asFloat64(m.Value); ok {
+				snap.WallboxPMEnergyL1 = v
+				snap.WallboxPMEnergyValid = true
+			}
+		case rscp.WB_REQ_PM_ENERGY_L2:
+			if v, ok := asFloat64(m.Value); ok {
+				snap.WallboxPMEnergyL2 = v
+			}
+		case rscp.WB_REQ_PM_ENERGY_L3:
+			if v, ok := asFloat64(m.Value); ok {
+				snap.WallboxPMEnergyL3 = v
 			}
 		case rscp.WB_REQ_PM_POWER_L1:
 			l1, _ = mustFloat(m.Value)

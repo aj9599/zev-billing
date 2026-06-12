@@ -341,6 +341,18 @@ func (ec *E3DCCollector) updateCharger(st *e3dcChargerState, snap *e3dc.Snapshot
 	st.rfid = snap.WallboxRFID
 	st.lastUpdate = now
 
+	// TEMP DIAGNOSTIC: compare the candidate lifetime-energy counters so we can
+	// pick the one matching the wallbox display. WB_ENERGY_ALL has been observed
+	// far below the real total; the built-in power meter (PM_ENERGY L1+L2+L3) is
+	// the likely true lifetime counter. Remove once the correct field is locked in.
+	if snap.WallboxPMEnergyValid {
+		pmSum := snap.WallboxPMEnergyL1 + snap.WallboxPMEnergyL2 + snap.WallboxPMEnergyL3
+		log.Printf("E3DC-DEBUG [%s] energy candidates: ENERGY_ALL=%.3f SOLAR=%.3f PM_L1=%.3f PM_L2=%.3f PM_L3=%.3f PM_SUM=%.3f session=%.3f",
+			st.name, snap.WallboxEnergyKWh, snap.WallboxEnergySolarKWh,
+			snap.WallboxPMEnergyL1, snap.WallboxPMEnergyL2, snap.WallboxPMEnergyL3,
+			pmSum, snap.WallboxSessionEnergyKWh)
+	}
+
 	boundary := ec.alignTo15(now.In(ec.localTZ))
 	if st.lastWrite.Equal(boundary) {
 		return false
