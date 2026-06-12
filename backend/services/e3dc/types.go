@@ -105,10 +105,10 @@ type Snapshot struct {
 	WallboxEnergySolarKWh float64
 	WallboxEnergyValid    bool
 
-	// Wallbox built-in power-meter per-phase lifetime energy (RSCP
-	// WB_PM_ENERGY_L1/L2/L3, Double64). The sum is a candidate for the true
-	// lifetime counter on easyConnect units, where WB_ENERGY_ALL appears to be a
-	// smaller "charged energy" value. Raw device units (kWh on known firmware).
+	// Wallbox built-in power-meter per-phase energy for the current session in Wh
+	// (RSCP WB_PM_ENERGY_L1/L2/L3, Double64). The sum is the session charged
+	// energy (retained until the next session starts); it is distinct from
+	// WB_ENERGY_ALL, which is a cumulative charged-energy counter.
 	WallboxPMEnergyL1    float64
 	WallboxPMEnergyL2    float64
 	WallboxPMEnergyL3    float64

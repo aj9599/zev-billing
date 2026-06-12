@@ -572,7 +572,7 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 		if connectionType == "e3dc_api" {
 			if e3dcData, exists := h.dataCollector.GetE3DCChargerData(chargerID); exists {
 				data.TotalEnergy = e3dcData.TotalEnergy
-				data.SessionEnergy = e3dcData.SolarEnergy
+				data.SessionEnergy = e3dcData.SessionEnergy
 				data.IsOnline = e3dcData.IsOnline
 				data.CurrentPowerKW = e3dcData.Power_kW
 				data.PowerKWh = e3dcData.TotalEnergy

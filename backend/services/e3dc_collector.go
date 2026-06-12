@@ -75,6 +75,7 @@ type e3dcChargerState struct {
 	devKey     string
 	totalKwh   float64
 	solarKwh   float64
+	sessionKwh float64 // current/last session charged energy (wallbox power meter)
 	powerKw    float64
 	charging   bool
 	connected  bool
@@ -341,16 +342,13 @@ func (ec *E3DCCollector) updateCharger(st *e3dcChargerState, snap *e3dc.Snapshot
 	st.rfid = snap.WallboxRFID
 	st.lastUpdate = now
 
-	// TEMP DIAGNOSTIC: compare the candidate lifetime-energy counters so we can
-	// pick the one matching the wallbox display. WB_ENERGY_ALL has been observed
-	// far below the real total; the built-in power meter (PM_ENERGY L1+L2+L3) is
-	// the likely true lifetime counter. Remove once the correct field is locked in.
+	// Session charged energy: the wallbox's built-in power meter reports per-phase
+	// energy for the current session (Wh), which it retains until the next session
+	// starts. Their sum is the session total — verified to match the wallbox
+	// display to the watt-hour. (WB_ENERGY_ALL is a separate cumulative counter
+	// used for billing deltas; it is not the session value.)
 	if snap.WallboxPMEnergyValid {
-		pmSum := snap.WallboxPMEnergyL1 + snap.WallboxPMEnergyL2 + snap.WallboxPMEnergyL3
-		log.Printf("E3DC-DEBUG [%s] energy candidates: ENERGY_ALL=%.3f SOLAR=%.3f PM_L1=%.3f PM_L2=%.3f PM_L3=%.3f PM_SUM=%.3f session=%.3f",
-			st.name, snap.WallboxEnergyKWh, snap.WallboxEnergySolarKWh,
-			snap.WallboxPMEnergyL1, snap.WallboxPMEnergyL2, snap.WallboxPMEnergyL3,
-			pmSum, snap.WallboxSessionEnergyKWh)
+		st.sessionKwh = (snap.WallboxPMEnergyL1 + snap.WallboxPMEnergyL2 + snap.WallboxPMEnergyL3) / 1000.0
 	}
 
 	boundary := ec.alignTo15(now.In(ec.localTZ))
@@ -453,9 +451,10 @@ func (ec *E3DCCollector) GetMeterLivePower(meterID int) (float64, float64, bool)
 // E3DCChargerData is the live wallbox snapshot for the UI.
 type E3DCChargerData struct {
 	ChargerName  string
-	TotalEnergy  float64 // kWh, lifetime
-	SolarEnergy  float64 // kWh, solar-sourced share
-	Power_kW     float64
+	TotalEnergy   float64 // kWh, cumulative charged-energy counter
+	SolarEnergy   float64 // kWh, solar-sourced share
+	SessionEnergy float64 // kWh, current/last session (wallbox power meter)
+	Power_kW      float64
 	IsOnline     bool
 	IsCharging   bool
 	IsConnected  bool
@@ -472,10 +471,11 @@ func (ec *E3DCCollector) GetChargerData(chargerID int) (*E3DCChargerData, bool) 
 		return nil, false
 	}
 	return &E3DCChargerData{
-		ChargerName: st.name,
-		TotalEnergy: st.totalKwh,
-		SolarEnergy: st.solarKwh,
-		Power_kW:    st.powerKw,
+		ChargerName:   st.name,
+		TotalEnergy:   st.totalKwh,
+		SolarEnergy:   st.solarKwh,
+		SessionEnergy: st.sessionKwh,
+		Power_kW:      st.powerKw,
 		IsOnline:    st.online,
 		IsCharging:  st.charging,
 		IsConnected: st.connected,
