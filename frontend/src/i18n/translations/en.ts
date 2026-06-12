@@ -15,6 +15,7 @@ export const en: Translations = {
   'meters.e3dcValueHome': 'Household consumption',
   'meters.e3dcValueWallbox': 'Wallbox (RSCP only)',
   'meters.batteryMeter': 'Battery (E3/DC)',
+  'meters.houseMeter': 'House usage (E3/DC)',
   'meters.e3dcReads': 'This meter reads',
   'meters.e3dcHost': 'E3/DC IP address / host',
   'meters.e3dcPort': 'Port',

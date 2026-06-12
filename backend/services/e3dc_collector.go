@@ -548,6 +548,8 @@ func parseE3DCMeterConfig(cfgJSON, meterType string) (e3dc.Config, string, error
 		sel = "pv"
 	case "battery_meter":
 		sel = "battery"
+	case "house_meter":
+		sel = "home" // household consumption — monitoring only, never billed
 	case "total_meter":
 		sel = "grid"
 	}

@@ -183,6 +183,7 @@ export default function MeterFormModal({
         { value: 'solar_meter', label: t('meters.solarMeter') },
         { value: 'apartment_meter', label: t('meters.apartmentMeter') },
         { value: 'battery_meter', label: t('meters.batteryMeter') },
+        { value: 'house_meter', label: t('meters.houseMeter') },
         { value: 'heating_meter', label: t('meters.heatingMeter') },
         { value: 'other', label: t('meters.other') }
     ];
@@ -1845,6 +1846,7 @@ export default function MeterFormModal({
                                             <strong>{
                                                 formData.meter_type === 'solar_meter' ? t('meters.e3dcValuePv')
                                                 : formData.meter_type === 'battery_meter' ? t('meters.e3dcValueBattery')
+                                                : formData.meter_type === 'house_meter' ? t('meters.e3dcValueHome')
                                                 : t('meters.e3dcValueGrid')
                                             }</strong>
                                         </p>
