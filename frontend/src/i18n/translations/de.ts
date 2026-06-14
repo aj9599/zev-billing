@@ -1408,6 +1408,15 @@ export const de: Translations = {
   'meters.virtualAdd': 'Diesen Zähler addieren',
   'meters.virtualSubtract': 'Diesen Zähler subtrahieren',
   'meters.virtualAddSource': 'Quellzähler hinzufügen',
+  // Karten-Sortierung (Zähler & Ladestationen)
+  'sort.label': 'Sortieren:',
+  'sort.custom': 'Eigene (zum Ordnen ziehen)',
+  'sort.name': 'Name (A–Z)',
+  'sort.created': 'Hinzugefügt am',
+  'sort.dragHint': 'Karten zum Umordnen ziehen',
+  'sort.type': 'Typ',
+  'sort.brand': 'Marke',
+
   'meters.virtualLivePreview': 'Live-Formel',
   'meters.virtualPreviewNote': 'Berechnet aus dem letzten Wert jedes Zählers. Aktualisierung alle 15 Minuten.',
   'meters.virtualHowItWorks': 'So funktioniert es',

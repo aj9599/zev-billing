@@ -234,6 +234,14 @@ class ApiClient {
     return this.request(`/meters/${id}`, { method: 'DELETE' });
   }
 
+  // Persist a custom display order for meter cards (ids in display order).
+  async reorderMeters(ids: number[]): Promise<{ success: boolean }> {
+    return this.request('/meters/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    });
+  }
+
   async testSmartMeConnection(config: {
     auth_type: 'basic' | 'apikey' | 'oauth';
     device_id?: string;
@@ -333,6 +341,14 @@ class ApiClient {
 
   async deleteCharger(id: number) {
     return this.request(`/chargers/${id}`, { method: 'DELETE' });
+  }
+
+  // Persist a custom display order for charger cards (ids in display order).
+  async reorderChargers(ids: number[]): Promise<{ success: boolean }> {
+    return this.request('/chargers/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    });
   }
 
   // Controllable devices (solar-driven on/off control)

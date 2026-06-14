@@ -32,7 +32,7 @@ func (h *ChargerHandler) List(w http.ResponseWriter, r *http.Request) {
 	query := `
 		SELECT id, name, brand, preset, building_id, connection_type,
 		       connection_config, supports_priority, billing_method, notes, is_active,
-		       created_at, updated_at
+		       sort_order, created_at, updated_at
 		FROM chargers
 	`
 
@@ -40,9 +40,10 @@ func (h *ChargerHandler) List(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	if buildingID != "" {
-		query += " WHERE building_id = ?"
+		query += " WHERE building_id = ? ORDER BY sort_order ASC, id ASC"
 		rows, err = h.db.Query(query, buildingID)
 	} else {
+		query += " ORDER BY sort_order ASC, id ASC"
 		rows, err = h.db.Query(query)
 	}
 
@@ -58,7 +59,7 @@ func (h *ChargerHandler) List(w http.ResponseWriter, r *http.Request) {
 		err := rows.Scan(
 			&c.ID, &c.Name, &c.Brand, &c.Preset, &c.BuildingID, &c.ConnectionType,
 			&c.ConnectionConfig, &c.SupportsPriority, &c.BillingMethod, &c.Notes, &c.IsActive,
-			&c.CreatedAt, &c.UpdatedAt,
+			&c.SortOrder, &c.CreatedAt, &c.UpdatedAt,
 		)
 		if err != nil {
 			continue
@@ -68,6 +69,48 @@ func (h *ChargerHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(chargers)
+}
+
+// Reorder persists a new display order for chargers. The client sends the ids in
+// the order they should appear; each row's sort_order is set to its position.
+func (h *ChargerHandler) Reorder(w http.ResponseWriter, r *http.Request) {
+	var req ReorderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if len(req.IDs) == 0 {
+		respondWithError(w, http.StatusBadRequest, "ids is required")
+		return
+	}
+
+	tx, err := h.db.Begin()
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Database error")
+		return
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare("UPDATE chargers SET sort_order = ? WHERE id = ?")
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Database error")
+		return
+	}
+	defer stmt.Close()
+
+	for i, id := range req.IDs {
+		if _, err := stmt.Exec(i, id); err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to update order")
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to save order")
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, map[string]interface{}{"success": true})
 }
 
 func (h *ChargerHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -136,6 +179,11 @@ func (h *ChargerHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	id, _ := result.LastInsertId()
 	c.ID = int(id)
+
+	// Append new charger at the end of the custom display order.
+	if _, err := h.db.Exec(`UPDATE chargers SET sort_order = (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM chargers c2 WHERE c2.id != ?) WHERE id = ?`, id, id); err != nil {
+		log.Printf("Warning: failed to set sort_order for new charger %d: %v", id, err)
+	}
 
 	// If it's a UDP charger, restart UDP listeners
 	if c.ConnectionType == "udp" {

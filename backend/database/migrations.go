@@ -457,6 +457,10 @@ func RunMigrations(db *sql.DB) error {
 		return err
 	}
 
+	if err := addSortOrderColumns(db); err != nil {
+		return err
+	}
+
 	if err := addDeviceControlColumns(db); err != nil {
 		return err
 	}
@@ -1231,6 +1235,37 @@ func addVATColumns(db *sql.DB) error {
 		return err
 	}
 
+	return nil
+}
+
+// addSortOrderColumns adds a user-controlled display order to meters and chargers
+// so the cards can be drag-reordered on their pages. Existing rows are seeded with
+// sort_order = id so the current (insertion) order is preserved as the initial
+// custom order.
+func addSortOrderColumns(db *sql.DB) error {
+	for _, table := range []string{"meters", "chargers"} {
+		var tableSql string
+		if err := db.QueryRow(`SELECT sql FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&tableSql); err != nil {
+			return err
+		}
+		if contains(tableSql, "sort_order") {
+			log.Printf("✓ sort_order column already exists on %s", table)
+			continue
+		}
+		log.Printf("Adding sort_order column to %s table...", table)
+		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0", table)); err != nil {
+			if contains(err.Error(), "duplicate column") {
+				log.Printf("✓ sort_order column already exists on %s", table)
+				continue
+			}
+			return fmt.Errorf("failed to add sort_order column to %s: %v", table, err)
+		}
+		// Seed with id so the existing order is preserved as the initial custom order.
+		if _, err := db.Exec(fmt.Sprintf("UPDATE %s SET sort_order = id", table)); err != nil {
+			log.Printf("Warning: failed to seed sort_order on %s: %v", table, err)
+		}
+		log.Printf("✓ sort_order column added to %s", table)
+	}
 	return nil
 }
 

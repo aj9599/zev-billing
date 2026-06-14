@@ -72,6 +72,7 @@ export interface Meter {
   replaces_meter_id?: number;
   replacement_date?: string;
   replacement_notes?: string;
+  sort_order?: number;
   created_at: string;
   updated_at: string;
 }
@@ -115,6 +116,7 @@ export interface Charger {
   billing_method?: string;
   notes: string;
   is_active: boolean;
+  sort_order?: number;
   created_at: string;
   updated_at: string;
 }

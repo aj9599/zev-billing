@@ -60,11 +60,11 @@ func (h *MeterHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	query := `
 		SELECT id, name, meter_type, building_id, user_id, apartment_unit,
-		       connection_type, connection_config, device_type, notes, 
-		       last_reading, last_reading_export, last_reading_time, 
+		       connection_type, connection_config, device_type, notes,
+		       last_reading, last_reading_export, last_reading_time,
 		       is_active, is_archived, replaced_by_meter_id,
 		       replaces_meter_id, replacement_date, replacement_notes,
-		       created_at, updated_at
+		       sort_order, created_at, updated_at
 		FROM meters
 	`
 
@@ -89,6 +89,9 @@ func (h *MeterHandler) List(w http.ResponseWriter, r *http.Request) {
 			query += condition
 		}
 	}
+
+	// Default to the user-controlled display order.
+	query += " ORDER BY sort_order ASC, id ASC"
 
 	var rows *sql.Rows
 	var err error
@@ -115,10 +118,10 @@ func (h *MeterHandler) List(w http.ResponseWriter, r *http.Request) {
 		
 		err := rows.Scan(
 			&m.ID, &m.Name, &m.MeterType, &m.BuildingID, &m.UserID, &apartmentUnit,
-			&m.ConnectionType, &m.ConnectionConfig, &deviceType, &m.Notes, 
-			&m.LastReading, &m.LastReadingExport, &m.LastReadingTime, 
+			&m.ConnectionType, &m.ConnectionConfig, &deviceType, &m.Notes,
+			&m.LastReading, &m.LastReadingExport, &m.LastReadingTime,
 			&m.IsActive, &m.IsArchived, &replacedBy, &replaces,
-			&replacementDate, &replacementNotes, &m.CreatedAt, &m.UpdatedAt,
+			&replacementDate, &replacementNotes, &m.SortOrder, &m.CreatedAt, &m.UpdatedAt,
 		)
 		if err != nil {
 			log.Printf("ERROR: Failed to scan meter row: %v", err)
@@ -285,6 +288,11 @@ func (h *MeterHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	id, _ := result.LastInsertId()
 	m.ID = int(id)
+
+	// Append new meter at the end of the custom display order.
+	if _, err := h.db.Exec(`UPDATE meters SET sort_order = (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM meters m2 WHERE m2.id != ?) WHERE id = ?`, id, id); err != nil {
+		log.Printf("Warning: failed to set sort_order for new meter %d: %v", id, err)
+	}
 
 	// Restart collectors if needed
 	if connectionTypeNeedsRestart(m.ConnectionType) {
@@ -1175,6 +1183,53 @@ func (h *MeterHandler) DiscoverSmartMeDevices(w http.ResponseWriter, r *http.Req
 
 	log.Printf("Smart-me discovery: found %d devices (auth type: %s)", len(result), req.AuthType)
 	respondWithJSON(w, http.StatusOK, result)
+}
+
+// ReorderRequest carries the meter/charger ids in their new display order.
+type ReorderRequest struct {
+	IDs []int `json:"ids"`
+}
+
+// Reorder persists a new display order for meters. The client sends the ids in
+// the order they should appear; each row's sort_order is set to its position.
+func (h *MeterHandler) Reorder(w http.ResponseWriter, r *http.Request) {
+	var req ReorderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if len(req.IDs) == 0 {
+		respondWithError(w, http.StatusBadRequest, "ids is required")
+		return
+	}
+
+	tx, err := h.db.Begin()
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Database error")
+		return
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare("UPDATE meters SET sort_order = ? WHERE id = ?")
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Database error")
+		return
+	}
+	defer stmt.Close()
+
+	for i, id := range req.IDs {
+		if _, err := stmt.Exec(i, id); err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to update order")
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to save order")
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, map[string]interface{}{"success": true})
 }
 
 // Helper functions for JSON responses

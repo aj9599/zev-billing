@@ -218,6 +218,7 @@ func main() {
 	api.HandleFunc("/meters/archived", meterHandler.GetArchivedMeters).Methods("GET")
 	api.HandleFunc("/meters/test-smartme", meterHandler.TestSmartMeConnection).Methods("POST")       // Smart-me connection test
 	api.HandleFunc("/meters/discover-smartme", meterHandler.DiscoverSmartMeDevices).Methods("POST") // Smart-me device discovery
+	api.HandleFunc("/meters/reorder", meterHandler.Reorder).Methods("POST")                          // Persist custom card order
 	api.HandleFunc("/meters", meterHandler.List).Methods("GET")
 	api.HandleFunc("/meters", meterHandler.Create).Methods("POST")
 	api.HandleFunc("/meters/{id}/deletion-impact", meterHandler.GetDeletionImpact).Methods("GET")
@@ -231,6 +232,7 @@ func main() {
 	// Charger routes - IMPORTANT: Specific routes MUST come before {id} routes
 	api.HandleFunc("/chargers/live-data", chargerHandler.GetLiveData).Methods("GET") // âœ… ADDED - Must be before {id}
 	api.HandleFunc("/chargers/sessions/latest", chargerHandler.GetLatestSessions).Methods("GET")
+	api.HandleFunc("/chargers/reorder", chargerHandler.Reorder).Methods("POST") // Persist custom card order
 	api.HandleFunc("/chargers/{id}/deletion-impact", chargerHandler.GetDeletionImpact).Methods("GET")
 	api.HandleFunc("/chargers/{id}/import-sessions", chargerHandler.ImportChargerSessionsFromCSV).Methods("POST") // NEW: CSV Import
 	api.HandleFunc("/chargers/{id}/sync-zaptec-history", chargerHandler.SyncZaptecHistory).Methods("POST")        // NEW: Zaptec API range sync

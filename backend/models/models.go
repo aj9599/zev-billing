@@ -80,6 +80,7 @@ type Meter struct {
 	ReplacesMetterID  *int       `json:"replaces_meter_id"`
 	ReplacementDate   *time.Time `json:"replacement_date"`
 	ReplacementNotes  string     `json:"replacement_notes"`
+	SortOrder         int        `json:"sort_order"`
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
 }
@@ -126,6 +127,7 @@ type Charger struct {
 	BillingMethod string    `json:"billing_method"`
 	Notes         string    `json:"notes"`
 	IsActive      bool      `json:"is_active"`
+	SortOrder     int       `json:"sort_order"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }

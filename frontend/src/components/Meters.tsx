@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Search, Zap, Wifi, WifiOff, Activity } from 'lucide-react';
 import { api } from '../api/client';
 import type { Meter, Building as BuildingType, User } from '../types';
 import { useTranslation } from '../i18n';
+import CardSortControl from './CardSortControl';
+import { sortCards, loadSortMode, type CardSortMode } from '../utils/cardSort';
 import ExportModal from './ExportModal';
 import MeterReplacementModal from './MeterReplacementModal';
 import TariffBreakdownModal from './meters/TariffBreakdownModal';
@@ -28,6 +30,53 @@ export default function Meters() {
     const [showArchived, setShowArchived] = useState(false);
     const [loading, setLoading] = useState(true);
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+    // Card sorting + drag-to-reorder (within each building)
+    const [sortMode, setSortMode] = useState<CardSortMode>(() => loadSortMode('meterSortMode'));
+    const [draggingId, setDraggingId] = useState<number | null>(null);
+    const dragRef = useRef<{ buildingId: number; index: number } | null>(null);
+
+    const changeSortMode = (mode: CardSortMode) => {
+        setSortMode(mode);
+        localStorage.setItem('meterSortMode', mode);
+    };
+
+    const sortMeters = (list: Meter[]) => sortCards(list, sortMode, {
+        name: m => m.name || '',
+        type: m => m.meter_type || '',
+        created: m => m.created_at || '',
+        order: m => m.sort_order ?? 0,
+        id: m => m.id,
+    });
+
+    const handleMeterDragStart = (buildingId: number, index: number, id: number) => {
+        dragRef.current = { buildingId, index };
+        setDraggingId(id);
+    };
+
+    const handleMeterDrop = (buildingId: number, toIndex: number) => {
+        const drag = dragRef.current;
+        dragRef.current = null;
+        setDraggingId(null);
+        if (!drag || drag.buildingId !== buildingId || drag.index === toIndex) return;
+
+        const group = sortMeters(meters.filter(m => m.building_id === buildingId));
+        const newGroup = [...group];
+        const [moved] = newGroup.splice(drag.index, 1);
+        newGroup.splice(toIndex, 0, moved);
+
+        // Build the new global id order (grouped like the render), then persist.
+        const buildingIds = Array.from(new Set(meters.map(m => m.building_id)));
+        const orderedIds: number[] = [];
+        buildingIds.forEach(bid => {
+            const g = bid === buildingId ? newGroup : sortMeters(meters.filter(m => m.building_id === bid));
+            g.forEach(m => orderedIds.push(m.id));
+        });
+
+        const orderMap = new Map(orderedIds.map((id, i) => [id, i]));
+        setMeters(prev => prev.map(m => orderMap.has(m.id) ? { ...m, sort_order: orderMap.get(m.id)! } : m));
+        api.reorderMeters(orderedIds).catch(err => console.error('Failed to save meter order:', err));
+    };
 
     // Meter replacement state
     const [showReplacementModal, setShowReplacementModal] = useState(false);
@@ -316,6 +365,13 @@ export default function Meters() {
                 />
             </div>
 
+            {/* Sort control */}
+            {filteredMeters.length > 0 && (
+                <div className="m-fade-in" style={{ animationDelay: '0.18s', display: 'flex', justifyContent: 'flex-end', marginBottom: '14px' }}>
+                    <CardSortControl value={sortMode} onChange={changeSortMode} typeLabel={t('sort.type')} isMobile={isMobile} />
+                </div>
+            )}
+
             {/* Meters grouped by building */}
             {Object.entries(groupedMeters).map(([buildingId, buildingMeters], idx) => {
                 const building = buildings.find(b => b.id === parseInt(buildingId));
@@ -354,24 +410,48 @@ export default function Meters() {
                             gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
                             gap: '16px'
                         }}>
-                            {buildingMeters.map(meter => (
-                                <MeterCard
-                                    key={meter.id}
-                                    meter={meter}
-                                    users={users}
-                                    loxoneStatus={loxoneStatus}
-                                    mqttStatus={mqttStatus}
-                                    mqttBrokerConnected={mqttBrokerConnected}
-                                    smartmeStatus={smartmeStatus}
-                                    udpStatus={udpStatus}
-                                    modbusStatus={modbusStatus}
-                                    e3dcStatus={e3dcStatus}
-                                    onEdit={handleEdit}
-                                    onReplace={handleReplaceClick}
-                                    onDelete={handleDeleteClick}
-                                    onTariffBreakdown={setTariffMeter}
-                                />
-                            ))}
+                            {sortMeters(buildingMeters).map((meter, mIdx) => {
+                                const draggable = sortMode === 'custom';
+                                return (
+                                    <div
+                                        key={meter.id}
+                                        draggable={draggable}
+                                        onDragStart={() => handleMeterDragStart(parseInt(buildingId), mIdx, meter.id)}
+                                        onDragEnd={() => { dragRef.current = null; setDraggingId(null); }}
+                                        onDragOver={(e) => { if (draggable) e.preventDefault(); }}
+                                        onDrop={() => handleMeterDrop(parseInt(buildingId), mIdx)}
+                                        style={{
+                                            position: 'relative',
+                                            cursor: draggable ? 'grab' : 'default',
+                                            opacity: draggingId === meter.id ? 0.4 : 1,
+                                            transition: 'opacity 0.15s'
+                                        }}
+                                    >
+                                        {draggable && (
+                                            <div style={{
+                                                position: 'absolute', top: '6px', left: '50%', transform: 'translateX(-50%)',
+                                                width: '36px', height: '5px', borderRadius: '3px',
+                                                backgroundColor: '#e5e7eb', zIndex: 5
+                                            }} />
+                                        )}
+                                        <MeterCard
+                                            meter={meter}
+                                            users={users}
+                                            loxoneStatus={loxoneStatus}
+                                            mqttStatus={mqttStatus}
+                                            mqttBrokerConnected={mqttBrokerConnected}
+                                            smartmeStatus={smartmeStatus}
+                                            udpStatus={udpStatus}
+                                            modbusStatus={modbusStatus}
+                                            e3dcStatus={e3dcStatus}
+                                            onEdit={handleEdit}
+                                            onReplace={handleReplaceClick}
+                                            onDelete={handleDeleteClick}
+                                            onTariffBreakdown={setTariffMeter}
+                                        />
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 );

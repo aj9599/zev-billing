@@ -1407,6 +1407,15 @@ export const en: Translations = {
   'meters.virtualAdd': 'Add this meter',
   'meters.virtualSubtract': 'Subtract this meter',
   'meters.virtualAddSource': 'Add source meter',
+  // Card sorting (meters & chargers pages)
+  'sort.label': 'Sort:',
+  'sort.custom': 'Custom (drag to order)',
+  'sort.name': 'Name (A–Z)',
+  'sort.created': 'Date added',
+  'sort.dragHint': 'Drag cards to reorder',
+  'sort.type': 'Type',
+  'sort.brand': 'Brand',
+
   'meters.virtualLivePreview': 'Live formula',
   'meters.virtualPreviewNote': 'Computed from each meter\'s latest reading. Updated every 15 minutes.',
   'meters.virtualHowItWorks': 'How it works',
