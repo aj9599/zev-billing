@@ -1468,6 +1468,84 @@ export default function MeterFormModal({
                                                     <Plus size={16} /> {t('meters.virtualAddSource')}
                                                 </button>
 
+                                                {/* Live formula preview: shows the actual expression and current result */}
+                                                {(() => {
+                                                    const picked = sources.filter(s => s.meter_id && s.meter_id > 0);
+                                                    if (picked.length === 0) return null;
+
+                                                    const terms = picked.map(s => {
+                                                        const m = meters.find(mm => mm.id === s.meter_id);
+                                                        return {
+                                                            op: s.op,
+                                                            name: m?.name || `#${s.meter_id}`,
+                                                            imp: m?.last_reading || 0,
+                                                            exp: m?.last_reading_export || 0
+                                                        };
+                                                    });
+
+                                                    let impSum = 0, expSum = 0;
+                                                    terms.forEach(tm => {
+                                                        impSum += tm.op === '-' ? -tm.imp : tm.imp;
+                                                        expSum += tm.op === '-' ? -tm.exp : tm.exp;
+                                                    });
+                                                    const hasExport = terms.some(tm => tm.exp > 0);
+
+                                                    return (
+                                                        <div style={{
+                                                            backgroundColor: '#fdf2f8',
+                                                            padding: '14px',
+                                                            borderRadius: '10px',
+                                                            border: '1px solid #fbcfe8',
+                                                            marginBottom: '14px'
+                                                        }}>
+                                                            <div style={{ fontSize: '11px', fontWeight: 700, color: '#9d174d', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+                                                                {t('meters.virtualLivePreview')}
+                                                            </div>
+                                                            {/* Expression with meter names */}
+                                                            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+                                                                {terms.map((tm, i) => (
+                                                                    <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                                                        <span style={{
+                                                                            fontSize: '16px',
+                                                                            fontWeight: 700,
+                                                                            color: tm.op === '-' ? '#ef4444' : '#10b981',
+                                                                            visibility: (i === 0 && tm.op === '+') ? 'hidden' : 'visible',
+                                                                            width: i === 0 && tm.op === '+' ? 0 : 'auto'
+                                                                        }}>
+                                                                            {tm.op === '-' ? '−' : '+'}
+                                                                        </span>
+                                                                        <span style={{
+                                                                            padding: '3px 10px',
+                                                                            backgroundColor: 'white',
+                                                                            border: '1px solid #f9a8d4',
+                                                                            borderRadius: '8px',
+                                                                            fontSize: '13px',
+                                                                            fontWeight: 600,
+                                                                            color: '#1f2937'
+                                                                        }}>
+                                                                            {tm.name}
+                                                                        </span>
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                            {/* Current computed result from latest readings */}
+                                                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
+                                                                <span style={{ fontSize: '20px', fontWeight: 700, color: '#db2777' }}>
+                                                                    = {Math.max(0, impSum).toFixed(3)} kWh
+                                                                </span>
+                                                                {hasExport && (
+                                                                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#16a34a' }}>
+                                                                        ({t('meters.export')}: {Math.max(0, expSum).toFixed(3)} kWh)
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <p style={{ fontSize: '11px', color: '#9d174d', margin: '8px 0 0 0' }}>
+                                                                {t('meters.virtualPreviewNote')}
+                                                            </p>
+                                                        </div>
+                                                    );
+                                                })()}
+
                                                 <div style={{
                                                     backgroundColor: '#f9fafb',
                                                     padding: '12px 14px',

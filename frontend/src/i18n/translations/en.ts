@@ -860,7 +860,7 @@ export const en: Translations = {
   'meters.apartmentNotSelected': 'Select an apartment first to see the linked tenant',
 
   // Connection Types
-  'meters.loxoneApiRecommended': 'Loxone WebSocket API (Recommended)',
+  'meters.loxoneApiRecommended': 'Loxone WebSocket API',
   'meters.udpAlternative': 'UDP (Legacy)',
   'meters.modbusTcp': 'Modbus TCP',
 
@@ -1407,6 +1407,8 @@ export const en: Translations = {
   'meters.virtualAdd': 'Add this meter',
   'meters.virtualSubtract': 'Subtract this meter',
   'meters.virtualAddSource': 'Add source meter',
+  'meters.virtualLivePreview': 'Live formula',
+  'meters.virtualPreviewNote': 'Computed from each meter\'s latest reading. Updated every 15 minutes.',
   'meters.virtualHowItWorks': 'How it works',
   'meters.virtualHowItWorksDesc': 'Each interval the readings of the selected meters are added (+) or subtracted (−) to produce this meter\'s value. Example: Total − Apartments = common area usage.',
   'meters.errorDeviceIdOrSerialRequired': 'Enter a device ID or a serial number.',

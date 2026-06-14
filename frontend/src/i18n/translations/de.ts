@@ -862,7 +862,7 @@ export const de: Translations = {
   'meters.apartmentNotSelected': 'Wählen Sie zuerst eine Wohnung aus, um den verknüpften Mieter zu sehen',
 
   // Connection Types
-  'meters.loxoneApiRecommended': 'Loxone WebSocket API (Empfohlen)',
+  'meters.loxoneApiRecommended': 'Loxone WebSocket API',
   'meters.udpAlternative': 'UDP (Legacy)',
   'meters.modbusTcp': 'Modbus TCP',
 
@@ -1408,6 +1408,8 @@ export const de: Translations = {
   'meters.virtualAdd': 'Diesen Zähler addieren',
   'meters.virtualSubtract': 'Diesen Zähler subtrahieren',
   'meters.virtualAddSource': 'Quellzähler hinzufügen',
+  'meters.virtualLivePreview': 'Live-Formel',
+  'meters.virtualPreviewNote': 'Berechnet aus dem letzten Wert jedes Zählers. Aktualisierung alle 15 Minuten.',
   'meters.virtualHowItWorks': 'So funktioniert es',
   'meters.virtualHowItWorksDesc': 'In jedem Intervall werden die Werte der ausgewählten Zähler addiert (+) oder subtrahiert (−), um den Wert dieses Zählers zu bilden. Beispiel: Total − Wohnungen = Allgemeinstrom.',
   'meters.errorDeviceIdOrSerialRequired': 'Geben Sie eine Geräte-ID oder eine Seriennummer ein.',
