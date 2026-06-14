@@ -1402,6 +1402,7 @@ export const de: Translations = {
   // Virtuelle (berechnete) Zähler
   'meters.virtualMeter': 'Virtueller Zähler (Berechnet)',
   'meters.virtualBadge': 'Virtuell',
+  'meters.virtualStatus': 'Berechnet (live)',
   'meters.virtualMeterDescription': 'Ein berechneter Zähler, der andere Zähler mit + / − kombiniert (wie virtuelle Zähler in Smart-me). Keine Hardware nötig.',
   'meters.virtualNoSources': 'Fügen Sie unten mindestens einen Quellzähler hinzu, um die Formel zu erstellen.',
   'meters.virtualSelectMeter': 'Zähler auswählen…',

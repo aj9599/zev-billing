@@ -251,6 +251,9 @@ export default function Meters() {
     const totalCount = activeMeters.length;
     const connectedCount = activeMeters.filter(m => {
         const id = m.id;
+        // Virtual meters are computed from other meters — they have no connection
+        // to go offline, so they always count as available.
+        if (m.connection_type === 'virtual') return true;
         if (m.connection_type === 'loxone_api') return loxoneStatus[id]?.is_connected;
         if (m.connection_type === 'mqtt') return mqttStatus[id]?.is_connected;
         if (m.connection_type === 'smartme') return smartmeStatus[id]?.is_connected;

@@ -1,4 +1,4 @@
-import { Wifi, WifiOff, Rss, AlertCircle, Cloud, Radio, Cable, BatteryCharging, Battery } from 'lucide-react';
+import { Wifi, WifiOff, Rss, AlertCircle, Cloud, Radio, Cable, BatteryCharging, Battery, Calculator } from 'lucide-react';
 import { useTranslation } from '../../i18n';
 import type { Meter } from '../../types';
 
@@ -225,6 +225,16 @@ export default function MeterConnectionStatus({
         return <ConnectionBadge
             icon={Cable} color="#9ca3af" bgColor="rgba(156, 163, 175, 0.1)"
             label={t('meters.e3dcConnecting')}
+        />;
+    }
+
+    if (meter.connection_type === 'virtual') {
+        // Computed meters have no connection — show a neutral "computed" badge
+        // (positive, never offline) with the time of the last computed value.
+        return <ConnectionBadge
+            icon={Calculator} color="#db2777" bgColor="rgba(219, 39, 119, 0.1)"
+            label={t('meters.virtualStatus')}
+            detail={meter.last_reading_time ? `${t('meters.lastUpdate')}: ${formatTime(meter.last_reading_time)}` : undefined}
         />;
     }
 

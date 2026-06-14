@@ -1401,6 +1401,7 @@ export const en: Translations = {
   // Virtual (computed) meters
   'meters.virtualMeter': 'Virtual Meter (Computed)',
   'meters.virtualBadge': 'Virtual',
+  'meters.virtualStatus': 'Computed (live)',
   'meters.virtualMeterDescription': 'A computed meter that combines other meters with + / − (like Smart-me virtual meters). No hardware needed.',
   'meters.virtualNoSources': 'Add at least one source meter below to build the formula.',
   'meters.virtualSelectMeter': 'Select a meter…',
