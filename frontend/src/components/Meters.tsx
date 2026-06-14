@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Zap, Wifi, WifiOff, Activity } from 'lucide-react';
 import { api } from '../api/client';
 import type { Meter, Building as BuildingType, User } from '../types';
 import { useTranslation } from '../i18n';
 import CardSortControl from './CardSortControl';
 import { sortCards, loadSortMode, type CardSortMode } from '../utils/cardSort';
+import { useCardDnd } from '../utils/useCardDnd';
 import ExportModal from './ExportModal';
 import MeterReplacementModal from './MeterReplacementModal';
 import TariffBreakdownModal from './meters/TariffBreakdownModal';
@@ -31,10 +32,8 @@ export default function Meters() {
     const [loading, setLoading] = useState(true);
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
-    // Card sorting + drag-to-reorder (within each building)
+    // Card sorting + live drag-to-reorder (within each building)
     const [sortMode, setSortMode] = useState<CardSortMode>(() => loadSortMode('meterSortMode'));
-    const [draggingId, setDraggingId] = useState<number | null>(null);
-    const dragRef = useRef<{ buildingId: number; index: number } | null>(null);
 
     const changeSortMode = (mode: CardSortMode) => {
         setSortMode(mode);
@@ -49,34 +48,16 @@ export default function Meters() {
         id: m => m.id,
     });
 
-    const handleMeterDragStart = (buildingId: number, index: number, id: number) => {
-        dragRef.current = { buildingId, index };
-        setDraggingId(id);
-    };
-
-    const handleMeterDrop = (buildingId: number, toIndex: number) => {
-        const drag = dragRef.current;
-        dragRef.current = null;
-        setDraggingId(null);
-        if (!drag || drag.buildingId !== buildingId || drag.index === toIndex) return;
-
-        const group = sortMeters(meters.filter(m => m.building_id === buildingId));
-        const newGroup = [...group];
-        const [moved] = newGroup.splice(drag.index, 1);
-        newGroup.splice(toIndex, 0, moved);
-
-        // Build the new global id order (grouped like the render), then persist.
-        const buildingIds = Array.from(new Set(meters.map(m => m.building_id)));
-        const orderedIds: number[] = [];
-        buildingIds.forEach(bid => {
-            const g = bid === buildingId ? newGroup : sortMeters(meters.filter(m => m.building_id === bid));
-            g.forEach(m => orderedIds.push(m.id));
-        });
-
-        const orderMap = new Map(orderedIds.map((id, i) => [id, i]));
-        setMeters(prev => prev.map(m => orderMap.has(m.id) ? { ...m, sort_order: orderMap.get(m.id)! } : m));
-        api.reorderMeters(orderedIds).catch(err => console.error('Failed to save meter order:', err));
-    };
+    const dnd = useCardDnd<Meter>({
+        items: meters,
+        enabled: sortMode === 'custom',
+        sort: sortMeters,
+        applyOrder: (ids) => {
+            const m = new Map(ids.map((id, i) => [id, i]));
+            setMeters(prev => prev.map(x => m.has(x.id) ? { ...x, sort_order: m.get(x.id)! } : x));
+        },
+        persist: (ids) => api.reorderMeters(ids).catch(err => console.error('Failed to save meter order:', err)),
+    });
 
     // Meter replacement state
     const [showReplacementModal, setShowReplacementModal] = useState(false);
@@ -408,27 +389,32 @@ export default function Meters() {
                                 {buildingMeters.length}
                             </span>
                         </h2>
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                            gridAutoRows: '1fr',
-                            gap: '16px'
-                        }}>
-                            {sortMeters(buildingMeters).map((meter, mIdx) => {
+                        <div
+                            style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                                gridAutoRows: '1fr',
+                                gap: '16px'
+                            }}
+                            onDragOver={(e) => { if (sortMode === 'custom') e.preventDefault(); }}
+                            onDrop={(e) => { if (sortMode === 'custom') { e.preventDefault(); dnd.commit(); } }}
+                        >
+                            {dnd.orderGroup(parseInt(buildingId), buildingMeters).map((meter) => {
                                 const draggable = sortMode === 'custom';
                                 return (
                                     <div
                                         key={meter.id}
                                         draggable={draggable}
-                                        onDragStart={() => handleMeterDragStart(parseInt(buildingId), mIdx, meter.id)}
-                                        onDragEnd={() => { dragRef.current = null; setDraggingId(null); }}
+                                        onDragStart={() => dnd.start(parseInt(buildingId), meter.id)}
+                                        onDragEnter={() => dnd.enter(parseInt(buildingId), meter.id)}
+                                        onDragEnd={() => dnd.end()}
                                         onDragOver={(e) => { if (draggable) e.preventDefault(); }}
-                                        onDrop={() => handleMeterDrop(parseInt(buildingId), mIdx)}
+                                        onDrop={(e) => { if (draggable) { e.preventDefault(); dnd.commit(); } }}
                                         style={{
                                             position: 'relative',
                                             height: '100%',
                                             cursor: draggable ? 'grab' : 'default',
-                                            opacity: draggingId === meter.id ? 0.4 : 1,
+                                            opacity: dnd.draggingId === meter.id ? 0.4 : 1,
                                             transition: 'opacity 0.15s'
                                         }}
                                     >

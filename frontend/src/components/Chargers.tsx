@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Car, Wifi, WifiOff, Zap, PlugZap } from 'lucide-react';
 import { api } from '../api/client';
 import type { Charger, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
 import CardSortControl from './CardSortControl';
 import { sortCards, loadSortMode, type CardSortMode } from '../utils/cardSort';
+import { useCardDnd } from '../utils/useCardDnd';
 import ExportModal from './ExportModal';
 import ChargersHeader from './chargers/ChargersHeader';
 import BuildingFilter from './chargers/BuildingFilter';
@@ -31,10 +32,8 @@ export default function Chargers() {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [openDetailId, setOpenDetailId] = useState<number | null>(null);
 
-  // Card sorting + drag-to-reorder (within each building)
+  // Card sorting + live drag-to-reorder (within each building)
   const [sortMode, setSortMode] = useState<CardSortMode>(() => loadSortMode('chargerSortMode'));
-  const [draggingId, setDraggingId] = useState<number | null>(null);
-  const dragRef = useRef<{ buildingId: number; index: number } | null>(null);
 
   const changeSortMode = (mode: CardSortMode) => {
     setSortMode(mode);
@@ -49,33 +48,16 @@ export default function Chargers() {
     id: c => c.id,
   });
 
-  const handleChargerDragStart = (buildingId: number, index: number, id: number) => {
-    dragRef.current = { buildingId, index };
-    setDraggingId(id);
-  };
-
-  const handleChargerDrop = (buildingId: number, toIndex: number) => {
-    const drag = dragRef.current;
-    dragRef.current = null;
-    setDraggingId(null);
-    if (!drag || drag.buildingId !== buildingId || drag.index === toIndex) return;
-
-    const group = sortChargers(chargers.filter(c => c.building_id === buildingId));
-    const newGroup = [...group];
-    const [moved] = newGroup.splice(drag.index, 1);
-    newGroup.splice(toIndex, 0, moved);
-
-    const buildingIds = Array.from(new Set(chargers.map(c => c.building_id)));
-    const orderedIds: number[] = [];
-    buildingIds.forEach(bid => {
-      const g = bid === buildingId ? newGroup : sortChargers(chargers.filter(c => c.building_id === bid));
-      g.forEach(c => orderedIds.push(c.id));
-    });
-
-    const orderMap = new Map(orderedIds.map((id, i) => [id, i]));
-    setChargers(prev => prev.map(c => orderMap.has(c.id) ? { ...c, sort_order: orderMap.get(c.id)! } : c));
-    api.reorderChargers(orderedIds).catch(err => console.error('Failed to save charger order:', err));
-  };
+  const dnd = useCardDnd<Charger>({
+    items: chargers,
+    enabled: sortMode === 'custom',
+    sort: sortChargers,
+    applyOrder: (ids) => {
+      const m = new Map(ids.map((id, i) => [id, i]));
+      setChargers(prev => prev.map(x => m.has(x.id) ? { ...x, sort_order: m.get(x.id)! } : x));
+    },
+    persist: (ids) => api.reorderChargers(ids).catch(err => console.error('Failed to save charger order:', err)),
+  });
 
   // Custom hooks
   const { liveData, loxoneStatus, zaptecStatus, udpChargerStatus, mqttChargerStatus, fetchStatusData } = useChargerStatus();
@@ -511,22 +493,26 @@ export default function Chargers() {
               gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
               gridAutoRows: '1fr',
               gap: '20px'
-            }}>
-              {sortChargers(buildingChargers).map((charger, cardIdx) => {
+            }}
+              onDragOver={(e) => { if (sortMode === 'custom') e.preventDefault(); }}
+              onDrop={(e) => { if (sortMode === 'custom') { e.preventDefault(); dnd.commit(); } }}
+            >
+              {dnd.orderGroup(parseInt(buildingId), buildingChargers).map((charger, cardIdx) => {
                 const draggable = sortMode === 'custom';
                 return (
                 <div
                   key={charger.id}
                   draggable={draggable}
-                  onDragStart={() => handleChargerDragStart(parseInt(buildingId), cardIdx, charger.id)}
-                  onDragEnd={() => { dragRef.current = null; setDraggingId(null); }}
+                  onDragStart={() => dnd.start(parseInt(buildingId), charger.id)}
+                  onDragEnter={() => dnd.enter(parseInt(buildingId), charger.id)}
+                  onDragEnd={() => dnd.end()}
                   onDragOver={(e) => { if (draggable) e.preventDefault(); }}
-                  onDrop={() => handleChargerDrop(parseInt(buildingId), cardIdx)}
+                  onDrop={(e) => { if (draggable) { e.preventDefault(); dnd.commit(); } }}
                   style={{
                     position: 'relative',
                     height: '100%',
                     cursor: draggable ? 'grab' : 'default',
-                    opacity: draggingId === charger.id ? 0.4 : 1,
+                    opacity: dnd.draggingId === charger.id ? 0.4 : 1,
                     animation: 'ch-fadeSlideIn 0.4s ease-out both',
                     animationDelay: `${0.3 + cardIdx * 0.05}s`
                   }}
