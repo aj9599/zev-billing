@@ -6,6 +6,7 @@ import { useTranslation } from '../i18n';
 import CardSortControl from './CardSortControl';
 import { sortCards, loadSortMode, type CardSortMode } from '../utils/cardSort';
 import { useCardDnd } from '../utils/useCardDnd';
+import { useFlipReorder } from '../utils/useFlipReorder';
 import ExportModal from './ExportModal';
 import MeterReplacementModal from './MeterReplacementModal';
 import TariffBreakdownModal from './meters/TariffBreakdownModal';
@@ -58,6 +59,9 @@ export default function Meters() {
         },
         persist: (ids) => api.reorderMeters(ids).catch(err => console.error('Failed to save meter order:', err)),
     });
+
+    // Smooth slide animation while reordering cards.
+    const flipRef = useFlipReorder<HTMLDivElement>(sortMode === 'custom');
 
     // Meter replacement state
     const [showReplacementModal, setShowReplacementModal] = useState(false);
@@ -266,7 +270,7 @@ export default function Meters() {
     }
 
     return (
-        <div className="meters-container" style={{ width: '100%', maxWidth: '100%' }}>
+        <div ref={flipRef} className="meters-container" style={{ width: '100%', maxWidth: '100%' }}>
 
             {/* Header */}
             <div className="m-fade-in">
@@ -404,6 +408,7 @@ export default function Meters() {
                                 return (
                                     <div
                                         key={meter.id}
+                                        data-flip-id={meter.id}
                                         draggable={draggable}
                                         onDragStart={() => dnd.start(parseInt(buildingId), meter.id)}
                                         onDragEnter={() => dnd.enter(parseInt(buildingId), meter.id)}

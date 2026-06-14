@@ -6,6 +6,7 @@ import { useTranslation } from '../i18n';
 import CardSortControl from './CardSortControl';
 import { sortCards, loadSortMode, type CardSortMode } from '../utils/cardSort';
 import { useCardDnd } from '../utils/useCardDnd';
+import { useFlipReorder } from '../utils/useFlipReorder';
 import ExportModal from './ExportModal';
 import ChargersHeader from './chargers/ChargersHeader';
 import BuildingFilter from './chargers/BuildingFilter';
@@ -58,6 +59,9 @@ export default function Chargers() {
     },
     persist: (ids) => api.reorderChargers(ids).catch(err => console.error('Failed to save charger order:', err)),
   });
+
+  // Smooth slide animation while reordering cards.
+  const flipRef = useFlipReorder<HTMLDivElement>(sortMode === 'custom');
 
   // Custom hooks
   const { liveData, loxoneStatus, zaptecStatus, udpChargerStatus, mqttChargerStatus, fetchStatusData } = useChargerStatus();
@@ -268,7 +272,7 @@ export default function Chargers() {
   // Loading skeleton
   if (loading) {
     return (
-      <div className="chargers-container">
+      <div ref={flipRef} className="chargers-container">
         <ChargersHeader
           onAddCharger={handleAddCharger}
           onShowInstructions={() => setShowInstructions(true)}
@@ -502,6 +506,7 @@ export default function Chargers() {
                 return (
                 <div
                   key={charger.id}
+                  data-flip-id={charger.id}
                   draggable={draggable}
                   onDragStart={() => dnd.start(parseInt(buildingId), charger.id)}
                   onDragEnter={() => dnd.enter(parseInt(buildingId), charger.id)}
