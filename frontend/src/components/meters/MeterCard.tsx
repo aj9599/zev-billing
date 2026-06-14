@@ -63,7 +63,12 @@ export default function MeterCard({
                 border: isVirtual ? '1px dashed #f472b6' : '1px solid #f0f0f0',
                 position: 'relative',
                 transition: 'all 0.2s ease',
-                opacity: meter.is_archived ? 0.7 : 1
+                opacity: meter.is_archived ? 0.7 : 1,
+                // Fill the grid cell so every card in the grid is the same height.
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                boxSizing: 'border-box'
             }}
             onMouseEnter={(e) => {
                 e.currentTarget.style.boxShadow = '0 8px 12px rgba(0,0,0,0.12)';
@@ -303,8 +308,8 @@ export default function MeterCard({
                 )}
             </div>
 
-            {/* Meter Details */}
-            <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #f3f4f6' }}>
+            {/* Meter Details (pinned to the bottom so equal-height cards align) */}
+            <div style={{ marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid #f3f4f6' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>
                         {t('meters.connection')}

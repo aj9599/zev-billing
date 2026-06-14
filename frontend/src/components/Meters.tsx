@@ -411,6 +411,7 @@ export default function Meters() {
                         <div style={{
                             display: 'grid',
                             gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                            gridAutoRows: '1fr',
                             gap: '16px'
                         }}>
                             {sortMeters(buildingMeters).map((meter, mIdx) => {
@@ -425,6 +426,7 @@ export default function Meters() {
                                         onDrop={() => handleMeterDrop(parseInt(buildingId), mIdx)}
                                         style={{
                                             position: 'relative',
+                                            height: '100%',
                                             cursor: draggable ? 'grab' : 'default',
                                             opacity: draggingId === meter.id ? 0.4 : 1,
                                             transition: 'opacity 0.15s'
