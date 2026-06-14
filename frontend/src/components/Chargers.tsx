@@ -509,6 +509,7 @@ export default function Chargers() {
             <div className="chargers-grid" style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
+              gridAutoRows: '1fr',
               gap: '20px'
             }}>
               {sortChargers(buildingChargers).map((charger, cardIdx) => {
@@ -523,6 +524,7 @@ export default function Chargers() {
                   onDrop={() => handleChargerDrop(parseInt(buildingId), cardIdx)}
                   style={{
                     position: 'relative',
+                    height: '100%',
                     cursor: draggable ? 'grab' : 'default',
                     opacity: draggingId === charger.id ? 0.4 : 1,
                     animation: 'ch-fadeSlideIn 0.4s ease-out both',

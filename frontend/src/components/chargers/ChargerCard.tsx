@@ -140,6 +140,11 @@ export default function ChargerCard({
                     border: isCharging ? `2px solid ${accentColor}` : '1px solid #e5e7eb',
                     position: 'relative',
                     transition: 'all 0.2s ease',
+                    // Fill the grid cell so every charger card is the same height.
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    boxSizing: 'border-box',
                 }}
                 onMouseEnter={(e) => {
                     e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.1)';
@@ -311,10 +316,10 @@ export default function ChargerCard({
                     </div>
                 </div>
 
-                {/* Footer: Connection + Details button */}
+                {/* Footer: Connection + Details button (pinned to bottom for equal-height cards) */}
                 <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #f3f4f6'
+                    marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid #f3f4f6'
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         {isOnline ? <Wifi size={14} color="#22c55e" /> : <WifiOff size={14} color="#ef4444" />}
