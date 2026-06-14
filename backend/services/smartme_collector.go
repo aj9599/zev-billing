@@ -164,16 +164,6 @@ func (smc *SmartMeCollector) CollectMeterNow(meterID int, meterName, configJSON 
 		return 0, 0, fmt.Errorf("failed to parse config: %v", err)
 	}
 
-	deviceID, ok := config["device_id"].(string)
-	if !ok || deviceID == "" {
-		return 0, 0, fmt.Errorf("no device_id configured")
-	}
-
-	// Validate device_id format
-	if !isValidUUID(deviceID) {
-		return 0, 0, fmt.Errorf("invalid device_id format: %s", deviceID)
-	}
-
 	// Get or create authentication
 	auth, err := smc.getAuth(config)
 	if err != nil {
@@ -185,6 +175,13 @@ func (smc *SmartMeCollector) CollectMeterNow(meterID int, meterName, configJSON 
 	if err := smc.validateAuth(auth); err != nil {
 		smc.recordFailure(meterID)
 		return 0, 0, fmt.Errorf("invalid auth configuration: %v", err)
+	}
+
+	// Resolve the device UUID (directly, or via serial number lookup)
+	deviceID, err := smc.resolveDeviceID(config, auth)
+	if err != nil {
+		smc.recordFailure(meterID)
+		return 0, 0, err
 	}
 
 	// Fetch device data with retry
@@ -453,26 +450,8 @@ func (smc *SmartMeCollector) fetchDevice(deviceID string, auth *SmartMeAuth) (*S
 	}
 
 	// Set authentication header
-	switch auth.AuthType {
-	case "basic":
-		req.SetBasicAuth(auth.Username, auth.Password)
-		
-	case "apikey":
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", auth.APIKey))
-		
-	case "oauth":
-		// Thread-safe token refresh check
-		auth.mu.Lock()
-		if time.Now().Add(5 * time.Minute).After(auth.TokenExpiry) {
-			if err := smc.refreshOAuthToken(auth); err != nil {
-				auth.mu.Unlock()
-				return nil, fmt.Errorf("failed to refresh OAuth token: %v", err)
-			}
-		}
-		token := auth.AccessToken
-		auth.mu.Unlock()
-		
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	if err := smc.applyAuthHeader(req, auth); err != nil {
+		return nil, err
 	}
 
 	req.Header.Set("Accept", "application/json")
@@ -500,6 +479,112 @@ func (smc *SmartMeCollector) fetchDevice(deviceID string, auth *SmartMeAuth) (*S
 	}
 
 	return &device, nil
+}
+
+// applyAuthHeader sets the correct Authorization header for the configured auth
+// type. Smart-me API keys use the "ApiKey" scheme (NOT "Bearer") per
+// https://dok.smart-me.com — using Bearer silently returns 401 and was the
+// reason API-key meters appeared "not working".
+func (smc *SmartMeCollector) applyAuthHeader(req *http.Request, auth *SmartMeAuth) error {
+	switch auth.AuthType {
+	case "basic":
+		req.SetBasicAuth(auth.Username, auth.Password)
+
+	case "apikey":
+		req.Header.Set("Authorization", fmt.Sprintf("ApiKey %s", auth.APIKey))
+
+	case "oauth":
+		// Thread-safe token refresh check
+		auth.mu.Lock()
+		if time.Now().Add(5 * time.Minute).After(auth.TokenExpiry) {
+			if err := smc.refreshOAuthToken(auth); err != nil {
+				auth.mu.Unlock()
+				return fmt.Errorf("failed to refresh OAuth token: %v", err)
+			}
+		}
+		token := auth.AccessToken
+		auth.mu.Unlock()
+
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+	default:
+		return fmt.Errorf("unknown auth type: %s", auth.AuthType)
+	}
+	return nil
+}
+
+// DiscoverDevices lists every device the given credentials can read. Used by the
+// meter form so the user can pick a meter by name instead of hunting for a UUID.
+// It is a config-only helper and never touches the billing data path.
+func (smc *SmartMeCollector) DiscoverDevices(config map[string]interface{}) ([]SmartMeDevice, error) {
+	auth, err := smc.getAuth(config)
+	if err != nil {
+		return nil, fmt.Errorf("authentication failed: %v", err)
+	}
+	if err := smc.validateAuth(auth); err != nil {
+		return nil, fmt.Errorf("invalid auth configuration: %v", err)
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequest("GET", "https://api.smart-me.com/Devices", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+	if err := smc.applyAuthHeader(req, auth); err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "ZEV-Data-Collector/1.0")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", readErr)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var devices []SmartMeDevice
+	if err := json.Unmarshal(body, &devices); err != nil {
+		return nil, fmt.Errorf("failed to decode device list: %v", err)
+	}
+	return devices, nil
+}
+
+// resolveDeviceID returns the device UUID to poll. If device_id is set and valid
+// it is used directly; otherwise the meter is looked up by its serial number
+// (the "backup" identifier) via the device list. This lets users who don't know
+// the UUID just enter the serial printed on the meter.
+func (smc *SmartMeCollector) resolveDeviceID(config map[string]interface{}, auth *SmartMeAuth) (string, error) {
+	deviceID := getStringFromConfig(config, "device_id", "")
+	if deviceID != "" {
+		if !isValidUUID(deviceID) {
+			return "", fmt.Errorf("invalid device_id format: %s", deviceID)
+		}
+		return deviceID, nil
+	}
+
+	serial := strings.TrimSpace(getStringFromConfig(config, "serial", ""))
+	if serial == "" {
+		return "", fmt.Errorf("no device_id or serial configured")
+	}
+
+	devices, err := smc.DiscoverDevices(config)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve serial %s: %v", serial, err)
+	}
+	for _, d := range devices {
+		if fmt.Sprintf("%d", d.Serial) == serial {
+			return d.ID, nil
+		}
+	}
+	return "", fmt.Errorf("no device found with serial %s", serial)
 }
 
 // GetMeterReading - DEPRECATED in aligned architecture
@@ -599,15 +684,6 @@ func (smc *SmartMeCollector) GetConnectionStatus() map[string]interface{} {
 
 // TestConnection tests a Smart-me configuration without saving it
 func (smc *SmartMeCollector) TestConnection(config map[string]interface{}) error {
-	deviceID, ok := config["device_id"].(string)
-	if !ok || deviceID == "" {
-		return fmt.Errorf("device_id is required")
-	}
-
-	if !isValidUUID(deviceID) {
-		return fmt.Errorf("invalid device_id format (must be UUID)")
-	}
-
 	auth, err := smc.getAuth(config)
 	if err != nil {
 		return fmt.Errorf("authentication failed: %v", err)
@@ -615,6 +691,11 @@ func (smc *SmartMeCollector) TestConnection(config map[string]interface{}) error
 
 	if err := smc.validateAuth(auth); err != nil {
 		return fmt.Errorf("invalid authentication configuration: %v", err)
+	}
+
+	deviceID, err := smc.resolveDeviceID(config, auth)
+	if err != nil {
+		return err
 	}
 
 	device, err := smc.fetchDeviceWithRetry(deviceID, auth, 2)

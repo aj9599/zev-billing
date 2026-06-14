@@ -991,6 +991,7 @@ func (h *MeterHandler) GetArchivedMeters(w http.ResponseWriter, r *http.Request)
 type TestSmartMeConnectionRequest struct {
 	AuthType     string `json:"auth_type"`
 	DeviceID     string `json:"device_id"`
+	Serial       string `json:"serial,omitempty"`
 	Username     string `json:"username,omitempty"`
 	Password     string `json:"password,omitempty"`
 	APIKey       string `json:"api_key,omitempty"`
@@ -1011,9 +1012,9 @@ func (h *MeterHandler) TestSmartMeConnection(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Validate required fields
-	if req.DeviceID == "" {
-		respondWithError(w, http.StatusBadRequest, "device_id is required")
+	// Validate required fields: either a device UUID or a serial number
+	if req.DeviceID == "" && req.Serial == "" {
+		respondWithError(w, http.StatusBadRequest, "device_id or serial is required")
 		return
 	}
 
@@ -1025,6 +1026,7 @@ func (h *MeterHandler) TestSmartMeConnection(w http.ResponseWriter, r *http.Requ
 	config := map[string]interface{}{
 		"auth_type": req.AuthType,
 		"device_id": req.DeviceID,
+		"serial":    req.Serial,
 	}
 
 	// Add auth-specific fields
@@ -1078,6 +1080,101 @@ func (h *MeterHandler) TestSmartMeConnection(w http.ResponseWriter, r *http.Requ
 		"success": true,
 		"message": "Connection test successful - device is reachable and authentication works",
 	})
+}
+
+// DiscoverSmartMeDeviceRequest carries just the credentials needed to list devices.
+type DiscoverSmartMeDeviceRequest struct {
+	AuthType     string `json:"auth_type"`
+	Username     string `json:"username,omitempty"`
+	Password     string `json:"password,omitempty"`
+	APIKey       string `json:"api_key,omitempty"`
+	ClientID     string `json:"client_id,omitempty"`
+	ClientSecret string `json:"client_secret,omitempty"`
+}
+
+// DiscoveredSmartMeDevice is the trimmed view returned to the meter form picker.
+type DiscoveredSmartMeDevice struct {
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	Serial         int64   `json:"serial"`
+	DeviceEnergyType int   `json:"device_energy_type"`
+	CounterReading float64 `json:"counter_reading"`
+	Unit           string  `json:"unit"`
+}
+
+// DiscoverSmartMeDevices lists all Smart-me devices for the supplied credentials
+// so the user can pick a meter by name instead of entering a UUID by hand.
+// Mirrors the Loxone discovery flow (POST /devices/discover).
+func (h *MeterHandler) DiscoverSmartMeDevices(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req DiscoverSmartMeDeviceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.AuthType == "" {
+		req.AuthType = "apikey"
+	}
+
+	config := map[string]interface{}{"auth_type": req.AuthType}
+	switch req.AuthType {
+	case "basic":
+		if req.Username == "" || req.Password == "" {
+			respondWithError(w, http.StatusBadRequest, "username and password are required for basic authentication")
+			return
+		}
+		config["username"] = req.Username
+		config["password"] = req.Password
+	case "apikey":
+		if req.APIKey == "" {
+			respondWithError(w, http.StatusBadRequest, "api_key is required for API key authentication")
+			return
+		}
+		config["api_key"] = req.APIKey
+	case "oauth":
+		if req.ClientID == "" || req.ClientSecret == "" {
+			respondWithError(w, http.StatusBadRequest, "client_id and client_secret are required for OAuth authentication")
+			return
+		}
+		config["client_id"] = req.ClientID
+		config["client_secret"] = req.ClientSecret
+	default:
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("invalid auth_type: %s", req.AuthType))
+		return
+	}
+
+	smartmeCollector := h.dataCollector.GetSmartMeCollector()
+	if smartmeCollector == nil {
+		respondWithError(w, http.StatusInternalServerError, "Smart-me collector not available")
+		return
+	}
+
+	devices, err := smartmeCollector.DiscoverDevices(config)
+	if err != nil {
+		log.Printf("Smart-me discovery failed: %v", err)
+		respondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	result := make([]DiscoveredSmartMeDevice, 0, len(devices))
+	for _, d := range devices {
+		result = append(result, DiscoveredSmartMeDevice{
+			ID:               d.ID,
+			Name:             d.Name,
+			Serial:           d.Serial,
+			DeviceEnergyType: d.DeviceEnergyType,
+			CounterReading:   d.CounterReading,
+			Unit:             d.CounterReadingUnit,
+		})
+	}
+
+	log.Printf("Smart-me discovery: found %d devices (auth type: %s)", len(result), req.AuthType)
+	respondWithJSON(w, http.StatusOK, result)
 }
 
 // Helper functions for JSON responses

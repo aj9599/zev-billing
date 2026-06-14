@@ -5,7 +5,7 @@ import type {
   GenerateBillsRequest, MeterReplacement, MeterReplacementRequest,
   SelfConsumptionData, SystemHealth, CostOverview, EnergyFlowData, EnergyFlowLiveData,
   EmailAlertSettings, Device, DeviceLiveStatus, DeviceSwitchEvent, LoxoneControl,
-  LicenseStatus
+  LicenseStatus, SmartMeDevice
 } from '../types';
 
 const API_BASE = '/api';
@@ -236,7 +236,8 @@ class ApiClient {
 
   async testSmartMeConnection(config: {
     auth_type: 'basic' | 'apikey' | 'oauth';
-    device_id: string;
+    device_id?: string;
+    serial?: string;
     username?: string;
     password?: string;
     api_key?: string;
@@ -244,6 +245,22 @@ class ApiClient {
     client_secret?: string;
   }): Promise<{ success: boolean; message: string }> {
     return this.request('/meters/test-smartme', {
+      method: 'POST',
+      body: JSON.stringify(config),
+    });
+  }
+
+  // Lists all Smart-me devices for the given credentials so the user can pick a
+  // meter by name (like Loxone discovery) instead of entering a UUID.
+  async discoverSmartMeDevices(config: {
+    auth_type: 'basic' | 'apikey' | 'oauth';
+    username?: string;
+    password?: string;
+    api_key?: string;
+    client_id?: string;
+    client_secret?: string;
+  }): Promise<SmartMeDevice[]> {
+    return this.request('/meters/discover-smartme', {
       method: 'POST',
       body: JSON.stringify(config),
     });

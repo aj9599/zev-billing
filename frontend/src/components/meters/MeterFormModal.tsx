@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { X, Info, AlertCircle, Wifi, Rss, Cloud, Zap, Check } from 'lucide-react';
+import { X, Info, AlertCircle, Wifi, Rss, Cloud, Zap, Check, Plus, Trash2, Calculator } from 'lucide-react';
 import { useTranslation } from '../../i18n';
-import type { Meter, Building, User, LoxoneControl } from '../../types';
+import type { Meter, Building, User, LoxoneControl, SmartMeDevice } from '../../types';
 import LoxoneDiscovery from '../LoxoneDiscovery';
+import SmartMeDiscovery from '../SmartMeDiscovery';
 
 interface ConnectionConfig {
     endpoint?: string;
@@ -40,6 +41,9 @@ interface ConnectionConfig {
     client_id?: string;
     client_secret?: string;
     device_id?: string;
+    serial?: string; // Smart-me serial number (backup identifier)
+    // Virtual (computed) meter: combine other meters with +/-
+    virtual_sources?: { meter_id: number; op: '+' | '-' }[];
     // E3/DC EMS metering (Modbus read-only, or RSCP)
     e3dc_protocol?: 'modbus' | 'rscp';
     e3dc_host?: string;
@@ -58,6 +62,7 @@ interface MeterFormModalProps {
     connectionConfig: ConnectionConfig;
     buildings: Building[];
     users: User[];
+    meters: Meter[];
     isTestingConnection: boolean;
     onSubmit: (e: React.FormEvent) => Promise<void>;
     onCancel: () => void;
@@ -139,6 +144,7 @@ export default function MeterFormModal({
     connectionConfig,
     buildings,
     users,
+    meters,
     isTestingConnection,
     onSubmit,
     onCancel,
@@ -153,6 +159,8 @@ export default function MeterFormModal({
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     // Discovered Loxone controls (auto-discovery picker). Config-only, never billing.
     const [loxoneControls, setLoxoneControls] = useState<LoxoneControl[]>([]);
+    // Discovered Smart-me devices (auto-discovery picker). Config-only, never billing.
+    const [smartmeDevices, setSmartmeDevices] = useState<SmartMeDevice[]>([]);
 
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -627,6 +635,7 @@ export default function MeterFormModal({
                                     <option value="udp">{t('meters.udpAlternative')}</option>
                                     <option value="modbus_tcp">{t('meters.modbusTcp')}</option>
                                     <option value="e3dc">E3/DC Hauskraftwerk</option>
+                                    <option value="virtual">{t('meters.virtualMeter')}</option>
                                 </select>
                             </div>
                         </div>
@@ -1149,14 +1158,51 @@ export default function MeterFormModal({
                                         </div>
                                     )}
 
-                                    {/* Device ID */}
+                                    {/* Auto-discovery: list all meters for the entered credentials */}
+                                    <SmartMeDiscovery
+                                        authType={connectionConfig.auth_type || 'apikey'}
+                                        apiKey={connectionConfig.api_key}
+                                        username={connectionConfig.username}
+                                        password={connectionConfig.password}
+                                        clientId={connectionConfig.client_id}
+                                        clientSecret={connectionConfig.client_secret}
+                                        onDevices={setSmartmeDevices}
+                                        isMobile={isMobile}
+                                    />
+                                    {smartmeDevices.length > 0 && (
+                                        <div style={{ marginBottom: '14px' }}>
+                                            <label style={labelStyle}>
+                                                {t('meters.smartmePickDevice')}
+                                            </label>
+                                            <select
+                                                value={connectionConfig.device_id || ''}
+                                                onChange={(e) => onConnectionConfigChange({
+                                                    ...connectionConfig,
+                                                    device_id: e.target.value,
+                                                    serial: '' // a picked device uses its UUID, clear serial fallback
+                                                })}
+                                                onFocus={focusHandler}
+                                                onBlur={blurHandler}
+                                                style={inputStyle(isMobile)}
+                                            >
+                                                <option value="">—</option>
+                                                {smartmeDevices.map((d) => (
+                                                    <option key={d.id} value={d.id}>
+                                                        {d.name || `Serial ${d.serial}`} · #{d.serial}
+                                                        {d.counter_reading ? ` · ${d.counter_reading.toFixed(1)} ${d.unit || 'kWh'}` : ''}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+
+                                    {/* Device ID (manual entry / picked from discovery) */}
                                     <div style={{ marginBottom: '14px' }}>
                                         <label style={labelStyle}>
-                                            {t('meters.smartmeDeviceId')} *
+                                            {t('meters.smartmeDeviceId')}
                                         </label>
                                         <input
                                             type="text"
-                                            required
                                             value={connectionConfig.device_id || ''}
                                             onChange={(e) => onConnectionConfigChange({
                                                 ...connectionConfig,
@@ -1172,12 +1218,34 @@ export default function MeterFormModal({
                                         </p>
                                     </div>
 
+                                    {/* Serial number — backup identifier when the UUID is unknown */}
+                                    <div style={{ marginBottom: '14px' }}>
+                                        <label style={labelStyle}>
+                                            {t('meters.smartmeSerial')}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={connectionConfig.serial || ''}
+                                            onChange={(e) => onConnectionConfigChange({
+                                                ...connectionConfig,
+                                                serial: e.target.value
+                                            })}
+                                            placeholder="12345678"
+                                            onFocus={focusHandler}
+                                            onBlur={blurHandler}
+                                            style={inputStyle(isMobile, true)}
+                                        />
+                                        <p style={helpTextStyle}>
+                                            {t('meters.smartmeSerialHelp')}
+                                        </p>
+                                    </div>
+
                                     {/* Test Connection */}
                                     <div style={{ marginBottom: '14px' }}>
                                         <button
                                             type="button"
                                             onClick={onTestConnection}
-                                            disabled={isTestingConnection || !connectionConfig.device_id}
+                                            disabled={isTestingConnection || (!connectionConfig.device_id && !connectionConfig.serial)}
                                             style={{
                                                 width: '100%',
                                                 padding: '12px',
@@ -1187,12 +1255,12 @@ export default function MeterFormModal({
                                                 borderRadius: '10px',
                                                 fontSize: '14px',
                                                 fontWeight: '600',
-                                                cursor: isTestingConnection || !connectionConfig.device_id ? 'not-allowed' : 'pointer',
+                                                cursor: isTestingConnection || (!connectionConfig.device_id && !connectionConfig.serial) ? 'not-allowed' : 'pointer',
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
                                                 gap: '8px',
-                                                opacity: isTestingConnection || !connectionConfig.device_id ? 0.6 : 1,
+                                                opacity: isTestingConnection || (!connectionConfig.device_id && !connectionConfig.serial) ? 0.6 : 1,
                                                 transition: 'all 0.2s'
                                             }}
                                         >
@@ -1248,6 +1316,173 @@ export default function MeterFormModal({
                                             {t('meters.smartmeFeature3')}
                                         </div>
                                     </div>
+                                </>
+                            )}
+
+                            {/* ===== Virtual (computed) Meter Configuration ===== */}
+                            {formData.connection_type === 'virtual' && (
+                                <>
+                                    <div style={{
+                                        backgroundColor: '#fef3f9',
+                                        padding: '12px 14px',
+                                        borderRadius: '10px',
+                                        marginBottom: '16px',
+                                        border: '1px solid #fbcfe8',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '10px'
+                                    }}>
+                                        <Calculator size={18} color="#db2777" />
+                                        <p style={{ fontSize: '13px', color: '#9d174d', margin: 0, fontWeight: '500' }}>
+                                            {t('meters.virtualMeterDescription')}
+                                        </p>
+                                    </div>
+
+                                    {(() => {
+                                        const sources = connectionConfig.virtual_sources || [];
+                                        // Candidate source meters: any real meter except this one and other virtual meters.
+                                        const candidates = meters.filter(m =>
+                                            m.id !== editingMeter?.id &&
+                                            m.connection_type !== 'virtual' &&
+                                            !m.is_archived
+                                        );
+
+                                        const updateSources = (next: { meter_id: number; op: '+' | '-' }[]) =>
+                                            onConnectionConfigChange({ ...connectionConfig, virtual_sources: next });
+
+                                        return (
+                                            <>
+                                                {sources.length === 0 && (
+                                                    <div style={{
+                                                        padding: '12px',
+                                                        backgroundColor: '#fffbeb',
+                                                        border: '1px solid #fde68a',
+                                                        borderRadius: '10px',
+                                                        color: '#92400e',
+                                                        fontSize: '13px',
+                                                        marginBottom: '12px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '8px'
+                                                    }}>
+                                                        <AlertCircle size={16} color="#f59e0b" />
+                                                        {t('meters.virtualNoSources')}
+                                                    </div>
+                                                )}
+
+                                                {sources.map((src, idx) => (
+                                                    <div key={idx} style={{
+                                                        display: 'flex',
+                                                        gap: '8px',
+                                                        alignItems: 'center',
+                                                        marginBottom: '10px'
+                                                    }}>
+                                                        {/* +/- operation toggle */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const next = [...sources];
+                                                                next[idx] = { ...src, op: src.op === '-' ? '+' : '-' };
+                                                                updateSources(next);
+                                                            }}
+                                                            title={src.op === '-' ? t('meters.virtualSubtract') : t('meters.virtualAdd')}
+                                                            style={{
+                                                                width: '40px',
+                                                                height: '40px',
+                                                                flexShrink: 0,
+                                                                borderRadius: '8px',
+                                                                border: 'none',
+                                                                cursor: 'pointer',
+                                                                fontSize: '20px',
+                                                                fontWeight: 700,
+                                                                color: 'white',
+                                                                backgroundColor: src.op === '-' ? '#ef4444' : '#10b981'
+                                                            }}
+                                                        >
+                                                            {src.op === '-' ? '−' : '+'}
+                                                        </button>
+
+                                                        {/* Source meter picker */}
+                                                        <select
+                                                            value={src.meter_id || 0}
+                                                            onChange={(e) => {
+                                                                const next = [...sources];
+                                                                next[idx] = { ...src, meter_id: parseInt(e.target.value) };
+                                                                updateSources(next);
+                                                            }}
+                                                            onFocus={focusHandler}
+                                                            onBlur={blurHandler}
+                                                            style={{ ...inputStyle(isMobile), flex: 1 }}
+                                                        >
+                                                            <option value={0}>{t('meters.virtualSelectMeter')}</option>
+                                                            {candidates.map(m => (
+                                                                <option key={m.id} value={m.id}>{m.name}</option>
+                                                            ))}
+                                                        </select>
+
+                                                        {/* Remove row */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => updateSources(sources.filter((_, i) => i !== idx))}
+                                                            title={t('common.delete')}
+                                                            style={{
+                                                                width: '40px',
+                                                                height: '40px',
+                                                                flexShrink: 0,
+                                                                borderRadius: '8px',
+                                                                border: 'none',
+                                                                cursor: 'pointer',
+                                                                color: '#ef4444',
+                                                                backgroundColor: 'rgba(239,68,68,0.1)',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center'
+                                                            }}
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => updateSources([...sources, { meter_id: 0, op: '+' }])}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '10px',
+                                                        marginTop: '4px',
+                                                        marginBottom: '14px',
+                                                        backgroundColor: 'white',
+                                                        color: '#db2777',
+                                                        border: '1px dashed #f9a8d4',
+                                                        borderRadius: '8px',
+                                                        fontSize: '14px',
+                                                        fontWeight: 600,
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '6px'
+                                                    }}
+                                                >
+                                                    <Plus size={16} /> {t('meters.virtualAddSource')}
+                                                </button>
+
+                                                <div style={{
+                                                    backgroundColor: '#f9fafb',
+                                                    padding: '12px 14px',
+                                                    borderRadius: '10px',
+                                                    fontSize: '12px',
+                                                    color: '#6b7280',
+                                                    border: '1px solid #e5e7eb',
+                                                    lineHeight: '1.6'
+                                                }}>
+                                                    <strong>{t('meters.virtualHowItWorks')}</strong><br />
+                                                    {t('meters.virtualHowItWorksDesc')}
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
                                 </>
                             )}
 

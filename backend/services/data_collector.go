@@ -2,6 +2,7 @@ package services
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
@@ -618,7 +619,8 @@ func (dc *DataCollector) collectAndSaveMeters() {
 	mqttMeters := []int{}
 	smartmeMeters := []int{}
 	e3dcMeters := []int{}
-	
+	virtualMeters := []int{}
+
 	meterInfo := make(map[int]struct{
 		name string
 		meterType string
@@ -661,6 +663,11 @@ func (dc *DataCollector) collectAndSaveMeters() {
 
 		case "e3dc":
 			e3dcMeters = append(e3dcMeters, id)
+
+		case "virtual":
+			// Computed meters are derived from other meters' readings; they are
+			// processed last so their sources are already updated this cycle.
+			virtualMeters = append(virtualMeters, id)
 		}
 	}
 
@@ -776,7 +783,84 @@ func (dc *DataCollector) collectAndSaveMeters() {
 		}
 	}
 
+	// Virtual meters: computed from other meters AFTER all physical meters have
+	// been read and their last_reading updated this cycle.
+	for _, meterID := range virtualMeters {
+		info := meterInfo[meterID]
+
+		var configJSON string
+		if err := dc.db.QueryRow("SELECT connection_config FROM meters WHERE id = ?", meterID).Scan(&configJSON); err != nil {
+			log.Printf("ERROR: Failed to get config for virtual meter '%s': %v", info.name, err)
+			continue
+		}
+
+		importVal, exportVal, err := dc.computeVirtualReading(configJSON)
+		if err != nil {
+			log.Printf("ERROR: Failed to compute virtual meter '%s': %v", info.name, err)
+			continue
+		}
+
+		if err := dc.saveMeterReading(meterID, info.name, currentTime, importVal, exportVal); err != nil {
+			log.Printf("ERROR: Failed to save virtual meter '%s': %v", info.name, err)
+		} else {
+			successCount++
+			log.Printf("[Virtual] ✔ Computed meter '%s': %.3f kWh import, %.3f kWh export", info.name, importVal, exportVal)
+		}
+	}
+
 	log.Printf("--- METER COLLECTION COMPLETED: %d/%d successful ---", successCount, totalCount)
+}
+
+// VirtualMeterSource is one term in a virtual meter's formula: a source meter and
+// whether its reading is added or subtracted.
+type VirtualMeterSource struct {
+	MeterID int    `json:"meter_id"`
+	Op      string `json:"op"` // "+" or "-"
+}
+
+type virtualMeterConfig struct {
+	Sources []VirtualMeterSource `json:"sources"`
+}
+
+// computeVirtualReading evaluates a virtual meter's formula against the current
+// cumulative readings of its source meters. Returns combined import and export
+// cumulative values (clamped at 0 so a difference never goes negative).
+func (dc *DataCollector) computeVirtualReading(configJSON string) (float64, float64, error) {
+	var cfg virtualMeterConfig
+	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+		return 0, 0, fmt.Errorf("failed to parse config: %v", err)
+	}
+	if len(cfg.Sources) == 0 {
+		return 0, 0, fmt.Errorf("no source meters configured")
+	}
+
+	var importTotal, exportTotal float64
+	for _, src := range cfg.Sources {
+		var lastReading, lastReadingExport float64
+		err := dc.db.QueryRow(
+			"SELECT COALESCE(last_reading, 0), COALESCE(last_reading_export, 0) FROM meters WHERE id = ?",
+			src.MeterID,
+		).Scan(&lastReading, &lastReadingExport)
+		if err != nil {
+			return 0, 0, fmt.Errorf("source meter %d not found: %v", src.MeterID, err)
+		}
+
+		if src.Op == "-" {
+			importTotal -= lastReading
+			exportTotal -= lastReadingExport
+		} else {
+			importTotal += lastReading
+			exportTotal += lastReadingExport
+		}
+	}
+
+	if importTotal < 0 {
+		importTotal = 0
+	}
+	if exportTotal < 0 {
+		exportTotal = 0
+	}
+	return importTotal, exportTotal, nil
 }
 
 func (dc *DataCollector) saveMeterReading(meterID int, meterName string, currentTime time.Time, reading float64, readingExport float64) error {
@@ -1251,6 +1335,22 @@ func (dc *DataCollector) GetLiveMeterReadings(buildingID int) ([]MeterLiveReadin
 			// Smart-me: API call (cached if recent)
 			if dc.smartmeCollector != nil && configJSON.Valid {
 				importVal, exportVal, err := dc.smartmeCollector.CollectMeterNow(meterID, name, configJSON.String)
+				if err == nil {
+					reading.TotalImportKwh = importVal
+					reading.TotalExportKwh = exportVal
+					reading.IsOnline = true
+					if isSolarMeter {
+						reading.CurrentPowerW = dc.estimatePowerFromRecentReadingsExport(meterID, exportVal)
+					} else {
+						reading.CurrentPowerW = dc.estimatePowerFromRecentReadings(meterID, importVal)
+					}
+				}
+			}
+
+		case "virtual":
+			// Virtual: computed live from the source meters' last readings.
+			if configJSON.Valid {
+				importVal, exportVal, err := dc.computeVirtualReading(configJSON.String)
 				if err == nil {
 					reading.TotalImportKwh = importVal
 					reading.TotalExportKwh = exportVal

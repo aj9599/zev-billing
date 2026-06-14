@@ -216,7 +216,8 @@ func main() {
 	// Meter routes
 	api.HandleFunc("/meters/replace", meterHandler.ReplaceMeter).Methods("POST")
 	api.HandleFunc("/meters/archived", meterHandler.GetArchivedMeters).Methods("GET")
-	api.HandleFunc("/meters/test-smartme", meterHandler.TestSmartMeConnection).Methods("POST") // Smart-me connection test
+	api.HandleFunc("/meters/test-smartme", meterHandler.TestSmartMeConnection).Methods("POST")       // Smart-me connection test
+	api.HandleFunc("/meters/discover-smartme", meterHandler.DiscoverSmartMeDevices).Methods("POST") // Smart-me device discovery
 	api.HandleFunc("/meters", meterHandler.List).Methods("GET")
 	api.HandleFunc("/meters", meterHandler.Create).Methods("POST")
 	api.HandleFunc("/meters/{id}/deletion-impact", meterHandler.GetDeletionImpact).Methods("GET")

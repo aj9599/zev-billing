@@ -208,6 +208,16 @@ export interface LoxoneControl {
   type: string;
 }
 
+// A device returned by Smart-me discovery (GET /Devices), trimmed for the picker.
+export interface SmartMeDevice {
+  id: string;
+  name: string;
+  serial: number;
+  device_energy_type: number;
+  counter_reading: number;
+  unit: string;
+}
+
 export interface DeviceSwitchEvent {
   id: number;
   device_id: number;

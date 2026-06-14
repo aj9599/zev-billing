@@ -402,6 +402,7 @@ export default function Meters() {
                     connectionConfig={connectionConfig}
                     buildings={buildings}
                     users={users}
+                    meters={meters}
                     isTestingConnection={isTestingConnection}
                     onSubmit={handleSubmit}
                     onCancel={handleCancel}

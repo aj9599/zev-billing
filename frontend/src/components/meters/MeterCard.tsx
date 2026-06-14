@@ -1,4 +1,4 @@
-import { Edit2, Trash2, RefreshCw, Building, Archive, TrendingUp, TrendingDown, Sun } from 'lucide-react';
+import { Edit2, Trash2, RefreshCw, Building, Archive, TrendingUp, TrendingDown, Sun, Calculator } from 'lucide-react';
 import { useTranslation } from '../../i18n';
 import type { Meter, User } from '../../types';
 import { getMeterTypeLabel } from './utils/meterUtils';
@@ -37,6 +37,9 @@ export default function MeterCard({
 }: MeterCardProps) {
     const { t } = useTranslation();
 
+    // Virtual (computed) meters are visually distinguished from real meters.
+    const isVirtual = meter.connection_type === 'virtual';
+
     // Find linked user
     const linkedUser = meter.apartment_unit
         ? users.find(u =>
@@ -51,11 +54,13 @@ export default function MeterCard({
     return (
         <div
             style={{
-                backgroundColor: 'white',
+                background: isVirtual
+                    ? 'linear-gradient(135deg, #fdf2f8 0%, #ffffff 55%)'
+                    : 'white',
                 borderRadius: '16px',
                 padding: '24px',
                 boxShadow: '0 4px 6px rgba(0,0,0,0.07)',
-                border: '1px solid #f0f0f0',
+                border: isVirtual ? '1px dashed #f472b6' : '1px solid #f0f0f0',
                 position: 'relative',
                 transition: 'all 0.2s ease',
                 opacity: meter.is_archived ? 0.7 : 1
@@ -213,6 +218,25 @@ export default function MeterCard({
                     {getMeterTypeLabel(meter.meter_type, t)}
                 </p>
 
+                {/* Virtual (computed) Badge */}
+                {isVirtual && (
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '4px 12px',
+                        backgroundColor: '#fce7f3',
+                        border: '1px solid #f472b6',
+                        borderRadius: '12px',
+                        marginTop: '8px'
+                    }}>
+                        <Calculator size={14} color="#db2777" />
+                        <span style={{ fontSize: '12px', fontWeight: '600', color: '#db2777' }}>
+                            {t('meters.virtualBadge')}
+                        </span>
+                    </div>
+                )}
+
                 {/* Archived Badge */}
                 {meter.is_archived && (
                     <div style={{
@@ -294,7 +318,8 @@ export default function MeterCard({
                     }}>
                         {meter.connection_type === 'loxone_api' ? t('meters.loxoneWebSocket') :
                             meter.connection_type === 'mqtt' ? 'MQTT' :
-                                meter.connection_type}
+                                meter.connection_type === 'virtual' ? t('meters.virtualBadge') :
+                                    meter.connection_type}
                     </span>
                 </div>
                 

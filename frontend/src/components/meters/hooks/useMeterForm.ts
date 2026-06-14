@@ -40,6 +40,9 @@ interface ConnectionConfig {
     client_id?: string;
     client_secret?: string;
     device_id?: string;
+    serial?: string; // Smart-me serial number (backup identifier when UUID unknown)
+    // Virtual (computed) meter: combine other meters with +/-
+    virtual_sources?: { meter_id: number; op: '+' | '-' }[];
     // E3/DC EMS metering (Modbus read-only, or RSCP)
     e3dc_protocol?: 'modbus' | 'rscp';
     e3dc_host?: string;
@@ -105,6 +108,8 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
         client_id: '',
         client_secret: '',
         device_id: '',
+        serial: '',
+        virtual_sources: [],
         e3dc_protocol: 'modbus',
         e3dc_host: '',
         e3dc_port: 502,
@@ -236,6 +241,8 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
                 client_id: config.client_id || '',
                 client_secret: config.client_secret || '',
                 device_id: config.device_id || '',
+                serial: config.serial || '',
+                virtual_sources: config.sources || [],
                 e3dc_protocol: config.e3dc_protocol || 'modbus',
                 e3dc_host: config.e3dc_host || '',
                 e3dc_port: config.e3dc_port || (config.e3dc_protocol === 'rscp' ? 5033 : 502),
@@ -254,14 +261,20 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
     };
 
     const validateSmartMeConfig = (): string | null => {
-        if (!connectionConfig.device_id || connectionConfig.device_id.trim() === '') {
-            return t('meters.errorDeviceIdRequired');
+        const hasDeviceId = !!connectionConfig.device_id && connectionConfig.device_id.trim() !== '';
+        const hasSerial = !!connectionConfig.serial && connectionConfig.serial.trim() !== '';
+
+        // Either a device UUID or a serial number must be provided.
+        if (!hasDeviceId && !hasSerial) {
+            return t('meters.errorDeviceIdOrSerialRequired');
         }
 
-        // Validate UUID format
-        const uuidRegex = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
-        if (!uuidRegex.test(connectionConfig.device_id)) {
-            return t('meters.errorInvalidDeviceIdFormat');
+        // If a UUID is given, validate its format. Serial-only is allowed.
+        if (hasDeviceId) {
+            const uuidRegex = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+            if (!uuidRegex.test(connectionConfig.device_id!)) {
+                return t('meters.errorInvalidDeviceIdFormat');
+            }
         }
 
         switch (connectionConfig.auth_type) {
@@ -307,10 +320,11 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
         setIsTestingConnection(true);
 
         try {
-            // Build config object for testing
+            // Build config object for testing (device UUID or serial number)
             const testConfig: any = {
                 auth_type: connectionConfig.auth_type,
-                device_id: connectionConfig.device_id
+                device_id: connectionConfig.device_id?.trim() || '',
+                serial: connectionConfig.serial?.trim() || ''
             };
 
             // Add auth-specific fields
@@ -412,7 +426,8 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
             // Smart-me configuration
             config = {
                 auth_type: connectionConfig.auth_type,
-                device_id: connectionConfig.device_id?.trim()
+                device_id: connectionConfig.device_id?.trim(),
+                serial: connectionConfig.serial?.trim()
             };
 
             // Add auth-specific fields
@@ -425,6 +440,15 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
                 config.client_id = connectionConfig.client_id?.trim();
                 config.client_secret = connectionConfig.client_secret?.trim();
             }
+        } else if (formData.connection_type === 'virtual') {
+            // Virtual (computed) meter: store the source meters and their +/- op.
+            const sources = (connectionConfig.virtual_sources || [])
+                .filter(s => s.meter_id && s.meter_id > 0);
+            if (sources.length === 0) {
+                alert(t('meters.errorVirtualSourcesRequired'));
+                return;
+            }
+            config = { sources } as any;
         }
 
         // Ensure device_type is set, with default fallback
