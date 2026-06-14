@@ -1408,6 +1408,9 @@ export const de: Translations = {
   'meters.virtualAdd': 'Diesen Zähler addieren',
   'meters.virtualSubtract': 'Diesen Zähler subtrahieren',
   'meters.virtualAddSource': 'Quellzähler hinzufügen',
+  'meters.virtualChannel': 'Kanal',
+  'meters.virtualChannelImport': 'Bezug (Verbrauch)',
+  'meters.virtualChannelExport': 'Einspeisung (Produktion)',
   // Karten-Sortierung (Zähler & Ladestationen)
   'sort.label': 'Sortieren:',
   'sort.custom': 'Eigene (zum Ordnen ziehen)',
@@ -1420,7 +1423,7 @@ export const de: Translations = {
   'meters.virtualLivePreview': 'Live-Formel',
   'meters.virtualPreviewNote': 'Berechnet aus dem letzten Wert jedes Zählers. Aktualisierung alle 15 Minuten.',
   'meters.virtualHowItWorks': 'So funktioniert es',
-  'meters.virtualHowItWorksDesc': 'In jedem Intervall werden die Werte der ausgewählten Zähler addiert (+) oder subtrahiert (−), um den Wert dieses Zählers zu bilden. Beispiel: Total − Wohnungen = Allgemeinstrom.',
+  'meters.virtualHowItWorksDesc': 'In jedem Intervall wird der gewählte Kanal jedes ausgewählten Zählers addiert (+) oder subtrahiert (−), um den Wert dieses Zählers zu bilden. Beispiel — Eigenverbrauch mit nur einem Hauptzähler und Solar: Hauptzähler (Bezug) + Solar (Produktion).',
   'meters.errorDeviceIdOrSerialRequired': 'Geben Sie eine Geräte-ID oder eine Seriennummer ein.',
   'meters.errorVirtualSourcesRequired': 'Fügen Sie mindestens einen Quellzähler für den virtuellen Zähler hinzu.',
 

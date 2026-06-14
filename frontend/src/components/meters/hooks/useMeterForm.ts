@@ -41,8 +41,8 @@ interface ConnectionConfig {
     client_secret?: string;
     device_id?: string;
     serial?: string; // Smart-me serial number (backup identifier when UUID unknown)
-    // Virtual (computed) meter: combine other meters with +/-
-    virtual_sources?: { meter_id: number; op: '+' | '-' }[];
+    // Virtual (computed) meter: combine other meters with +/- and a chosen channel
+    virtual_sources?: { meter_id: number; op: '+' | '-'; field?: 'import' | 'export' }[];
     // E3/DC EMS metering (Modbus read-only, or RSCP)
     e3dc_protocol?: 'modbus' | 'rscp';
     e3dc_host?: string;
@@ -443,7 +443,8 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
         } else if (formData.connection_type === 'virtual') {
             // Virtual (computed) meter: store the source meters and their +/- op.
             const sources = (connectionConfig.virtual_sources || [])
-                .filter(s => s.meter_id && s.meter_id > 0);
+                .filter(s => s.meter_id && s.meter_id > 0)
+                .map(s => ({ meter_id: s.meter_id, op: s.op, field: s.field || 'import' }));
             if (sources.length === 0) {
                 alert(t('meters.errorVirtualSourcesRequired'));
                 return;

@@ -42,8 +42,8 @@ interface ConnectionConfig {
     client_secret?: string;
     device_id?: string;
     serial?: string; // Smart-me serial number (backup identifier)
-    // Virtual (computed) meter: combine other meters with +/-
-    virtual_sources?: { meter_id: number; op: '+' | '-' }[];
+    // Virtual (computed) meter: combine other meters with +/- and a chosen channel
+    virtual_sources?: { meter_id: number; op: '+' | '-'; field?: 'import' | 'export' }[];
     // E3/DC EMS metering (Modbus read-only, or RSCP)
     e3dc_protocol?: 'modbus' | 'rscp';
     e3dc_host?: string;
@@ -1347,7 +1347,7 @@ export default function MeterFormModal({
                                             !m.is_archived
                                         );
 
-                                        const updateSources = (next: { meter_id: number; op: '+' | '-' }[]) =>
+                                        const updateSources = (next: { meter_id: number; op: '+' | '-'; field?: 'import' | 'export' }[]) =>
                                             onConnectionConfigChange({ ...connectionConfig, virtual_sources: next });
 
                                         return (
@@ -1375,6 +1375,7 @@ export default function MeterFormModal({
                                                         display: 'flex',
                                                         gap: '8px',
                                                         alignItems: 'center',
+                                                        flexWrap: 'wrap',
                                                         marginBottom: '10px'
                                                     }}>
                                                         {/* +/- operation toggle */}
@@ -1412,12 +1413,29 @@ export default function MeterFormModal({
                                                             }}
                                                             onFocus={focusHandler}
                                                             onBlur={blurHandler}
-                                                            style={{ ...inputStyle(isMobile), flex: 1 }}
+                                                            style={{ ...inputStyle(isMobile), flex: 1, minWidth: '120px' }}
                                                         >
                                                             <option value={0}>{t('meters.virtualSelectMeter')}</option>
                                                             {candidates.map(m => (
                                                                 <option key={m.id} value={m.id}>{m.name}</option>
                                                             ))}
+                                                        </select>
+
+                                                        {/* Channel: import vs export/production */}
+                                                        <select
+                                                            value={src.field || 'import'}
+                                                            onChange={(e) => {
+                                                                const next = [...sources];
+                                                                next[idx] = { ...src, field: e.target.value as 'import' | 'export' };
+                                                                updateSources(next);
+                                                            }}
+                                                            onFocus={focusHandler}
+                                                            onBlur={blurHandler}
+                                                            title={t('meters.virtualChannel')}
+                                                            style={{ ...inputStyle(isMobile), width: 'auto', minWidth: '130px', flexShrink: 0 }}
+                                                        >
+                                                            <option value="import">{t('meters.virtualChannelImport')}</option>
+                                                            <option value="export">{t('meters.virtualChannelExport')}</option>
                                                         </select>
 
                                                         {/* Remove row */}
@@ -1446,7 +1464,7 @@ export default function MeterFormModal({
 
                                                 <button
                                                     type="button"
-                                                    onClick={() => updateSources([...sources, { meter_id: 0, op: '+' }])}
+                                                    onClick={() => updateSources([...sources, { meter_id: 0, op: '+', field: 'import' }])}
                                                     style={{
                                                         width: '100%',
                                                         padding: '10px',
@@ -1475,20 +1493,20 @@ export default function MeterFormModal({
 
                                                     const terms = picked.map(s => {
                                                         const m = meters.find(mm => mm.id === s.meter_id);
+                                                        const field = s.field || 'import';
+                                                        const val = field === 'export'
+                                                            ? (m?.last_reading_export || 0)
+                                                            : (m?.last_reading || 0);
                                                         return {
                                                             op: s.op,
                                                             name: m?.name || `#${s.meter_id}`,
-                                                            imp: m?.last_reading || 0,
-                                                            exp: m?.last_reading_export || 0
+                                                            channel: field === 'export' ? t('meters.virtualChannelExport') : t('meters.virtualChannelImport'),
+                                                            val
                                                         };
                                                     });
 
-                                                    let impSum = 0, expSum = 0;
-                                                    terms.forEach(tm => {
-                                                        impSum += tm.op === '-' ? -tm.imp : tm.imp;
-                                                        expSum += tm.op === '-' ? -tm.exp : tm.exp;
-                                                    });
-                                                    const hasExport = terms.some(tm => tm.exp > 0);
+                                                    let sum = 0;
+                                                    terms.forEach(tm => { sum += tm.op === '-' ? -tm.val : tm.val; });
 
                                                     return (
                                                         <div style={{
@@ -1501,7 +1519,7 @@ export default function MeterFormModal({
                                                             <div style={{ fontSize: '11px', fontWeight: 700, color: '#9d174d', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
                                                                 {t('meters.virtualLivePreview')}
                                                             </div>
-                                                            {/* Expression with meter names */}
+                                                            {/* Expression with meter names + channel */}
                                                             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
                                                                 {terms.map((tm, i) => (
                                                                     <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
@@ -1515,6 +1533,9 @@ export default function MeterFormModal({
                                                                             {tm.op === '-' ? '−' : '+'}
                                                                         </span>
                                                                         <span style={{
+                                                                            display: 'inline-flex',
+                                                                            flexDirection: 'column',
+                                                                            alignItems: 'flex-start',
                                                                             padding: '3px 10px',
                                                                             backgroundColor: 'white',
                                                                             border: '1px solid #f9a8d4',
@@ -1524,6 +1545,7 @@ export default function MeterFormModal({
                                                                             color: '#1f2937'
                                                                         }}>
                                                                             {tm.name}
+                                                                            <span style={{ fontSize: '10px', fontWeight: 600, color: '#9d174d' }}>{tm.channel}</span>
                                                                         </span>
                                                                     </span>
                                                                 ))}
@@ -1531,13 +1553,8 @@ export default function MeterFormModal({
                                                             {/* Current computed result from latest readings */}
                                                             <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
                                                                 <span style={{ fontSize: '20px', fontWeight: 700, color: '#db2777' }}>
-                                                                    = {Math.max(0, impSum).toFixed(3)} kWh
+                                                                    = {Math.max(0, sum).toFixed(3)} kWh
                                                                 </span>
-                                                                {hasExport && (
-                                                                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#16a34a' }}>
-                                                                        ({t('meters.export')}: {Math.max(0, expSum).toFixed(3)} kWh)
-                                                                    </span>
-                                                                )}
                                                             </div>
                                                             <p style={{ fontSize: '11px', color: '#9d174d', margin: '8px 0 0 0' }}>
                                                                 {t('meters.virtualPreviewNote')}

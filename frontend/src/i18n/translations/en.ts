@@ -1407,6 +1407,9 @@ export const en: Translations = {
   'meters.virtualAdd': 'Add this meter',
   'meters.virtualSubtract': 'Subtract this meter',
   'meters.virtualAddSource': 'Add source meter',
+  'meters.virtualChannel': 'Channel',
+  'meters.virtualChannelImport': 'Import (consumption)',
+  'meters.virtualChannelExport': 'Export (production / feed-in)',
   // Card sorting (meters & chargers pages)
   'sort.label': 'Sort:',
   'sort.custom': 'Custom (drag to order)',
@@ -1419,7 +1422,7 @@ export const en: Translations = {
   'meters.virtualLivePreview': 'Live formula',
   'meters.virtualPreviewNote': 'Computed from each meter\'s latest reading. Updated every 15 minutes.',
   'meters.virtualHowItWorks': 'How it works',
-  'meters.virtualHowItWorksDesc': 'Each interval the readings of the selected meters are added (+) or subtracted (−) to produce this meter\'s value. Example: Total − Apartments = common area usage.',
+  'meters.virtualHowItWorksDesc': 'Each interval the chosen channel of every selected meter is added (+) or subtracted (−) to produce this meter\'s value. Example — your own consumption with just a main meter and solar: Main meter (Import) + Solar (Production).',
   'meters.errorDeviceIdOrSerialRequired': 'Enter a device ID or a serial number.',
   'meters.errorVirtualSourcesRequired': 'Add at least one source meter for the virtual meter.',
 

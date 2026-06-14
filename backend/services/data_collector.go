@@ -811,11 +811,14 @@ func (dc *DataCollector) collectAndSaveMeters() {
 	log.Printf("--- METER COLLECTION COMPLETED: %d/%d successful ---", successCount, totalCount)
 }
 
-// VirtualMeterSource is one term in a virtual meter's formula: a source meter and
-// whether its reading is added or subtracted.
+// VirtualMeterSource is one term in a virtual meter's formula: a source meter,
+// whether its reading is added or subtracted, and which channel (import or
+// export) of that meter to use. Field lets you mix channels — e.g. main meter
+// import + solar meter export (production) to get total household consumption.
 type VirtualMeterSource struct {
 	MeterID int    `json:"meter_id"`
-	Op      string `json:"op"` // "+" or "-"
+	Op      string `json:"op"`    // "+" or "-"
+	Field   string `json:"field"` // "import" (default) or "export"
 }
 
 type virtualMeterConfig struct {
@@ -823,8 +826,10 @@ type virtualMeterConfig struct {
 }
 
 // computeVirtualReading evaluates a virtual meter's formula against the current
-// cumulative readings of its source meters. Returns combined import and export
-// cumulative values (clamped at 0 so a difference never goes negative).
+// cumulative readings of its source meters. Each source contributes its chosen
+// channel (import = last_reading, export = last_reading_export). The result is a
+// single combined value (clamped at 0) returned as the import reading; a virtual
+// meter has no export of its own.
 func (dc *DataCollector) computeVirtualReading(configJSON string) (float64, float64, error) {
 	var cfg virtualMeterConfig
 	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
@@ -834,7 +839,7 @@ func (dc *DataCollector) computeVirtualReading(configJSON string) (float64, floa
 		return 0, 0, fmt.Errorf("no source meters configured")
 	}
 
-	var importTotal, exportTotal float64
+	var total float64
 	for _, src := range cfg.Sources {
 		var lastReading, lastReadingExport float64
 		err := dc.db.QueryRow(
@@ -845,22 +850,22 @@ func (dc *DataCollector) computeVirtualReading(configJSON string) (float64, floa
 			return 0, 0, fmt.Errorf("source meter %d not found: %v", src.MeterID, err)
 		}
 
+		val := lastReading
+		if src.Field == "export" {
+			val = lastReadingExport
+		}
+
 		if src.Op == "-" {
-			importTotal -= lastReading
-			exportTotal -= lastReadingExport
+			total -= val
 		} else {
-			importTotal += lastReading
-			exportTotal += lastReadingExport
+			total += val
 		}
 	}
 
-	if importTotal < 0 {
-		importTotal = 0
+	if total < 0 {
+		total = 0
 	}
-	if exportTotal < 0 {
-		exportTotal = 0
-	}
-	return importTotal, exportTotal, nil
+	return total, 0, nil
 }
 
 func (dc *DataCollector) saveMeterReading(meterID int, meterName string, currentTime time.Time, reading float64, readingExport float64) error {
