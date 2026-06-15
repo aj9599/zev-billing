@@ -23,6 +23,11 @@ type Config struct {
 	JWTSecret            string
 	LicensePublicKey     string
 	LicenseActivationURL string
+
+	// Automated backups (nightly VACUUM INTO snapshot with rotation).
+	BackupEnabled   bool
+	BackupHour      int // local hour 0-23 to run the daily backup
+	BackupRetention int // number of automatic backups to keep
 }
 
 func Load() *Config {
@@ -38,7 +43,20 @@ func Load() *Config {
 		// Online activation + per-device binding via the Firebase "activate" function.
 		// Defaults to the vendor function; override with LICENSE_ACTIVATION_URL.
 		LicenseActivationURL: getEnv("LICENSE_ACTIVATION_URL", defaultLicenseActivationURL),
+
+		BackupEnabled:   getEnvBool("BACKUP_ENABLED", true),
+		BackupHour:      getEnvInt("BACKUP_HOUR", 3),
+		BackupRetention: getEnvInt("BACKUP_RETENTION", 14),
 	}
+}
+
+func getEnvBool(key string, defaultValue bool) bool {
+	if value := os.Getenv(key); value != "" {
+		if b, err := strconv.ParseBool(value); err == nil {
+			return b
+		}
+	}
+	return defaultValue
 }
 
 func getEnv(key, defaultValue string) string {

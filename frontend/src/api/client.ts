@@ -811,6 +811,43 @@ class ApiClient {
     return response.json();
   }
 
+  async listBackups(): Promise<Array<{ name: string; size: number; modified: string; auto: boolean }>> {
+    return this.request('/system/backups');
+  }
+
+  async getBackupStatus(): Promise<{
+    hour: number;
+    retention: number;
+    last_run: string | null;
+    last_name: string;
+    last_error: string;
+    next_run: string;
+    directory: string;
+  }> {
+    return this.request('/system/backup/status');
+  }
+
+  async runBackupNow(): Promise<{ last_name: string; last_error: string }> {
+    return this.request('/system/backup/run', { method: 'POST' });
+  }
+
+  // Download a backup file with auth, triggering a browser save.
+  async downloadBackupFile(fileName: string): Promise<void> {
+    const response = await fetch(`${API_BASE}/system/backup/download?file=${encodeURIComponent(fileName)}`, {
+      headers: { 'Authorization': `Bearer ${this.token}` },
+    });
+    if (!response.ok) throw new Error('Download failed');
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
   // Update methods
   async checkForUpdates(): Promise<{
     updates_available: boolean;

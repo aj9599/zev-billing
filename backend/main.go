@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -123,6 +124,7 @@ func main() {
 	emailAlerter := services.NewEmailAlerter(db)
 	autoBillingScheduler.SetEmailAlerter(emailAlerter)
 	deviceController = services.NewDeviceController(db, dataCollector)
+	backupScheduler := services.NewBackupScheduler(db, cfg.BackupHour, cfg.BackupRetention)
 
 	go dataCollector.Start()
 	go autoBillingScheduler.Start()
@@ -130,6 +132,9 @@ func main() {
 	go deviceController.Start()
 	go licenseService.StartRefresher()
 	services.StartHealthHistoryCollector(db)
+	if cfg.BackupEnabled {
+		go backupScheduler.Start()
+	}
 
 	// Initialize all handlers
 	authHandler := handlers.NewAuthHandler(db, cfg.JWTSecret)
@@ -185,6 +190,19 @@ func main() {
 	api.HandleFunc("/system/backup", createBackupHandler(cfg.DatabasePath)).Methods("POST")
 	api.HandleFunc("/system/backup/download", downloadBackupHandler).Methods("GET")
 	api.HandleFunc("/system/backup/restore", restoreBackupHandler(cfg.DatabasePath)).Methods("POST")
+	api.HandleFunc("/system/backups", listBackupsHandler).Methods("GET")
+	api.HandleFunc("/system/backup/status", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(backupScheduler.Status())
+	}).Methods("GET")
+	api.HandleFunc("/system/backup/run", func(w http.ResponseWriter, r *http.Request) {
+		if err := backupScheduler.RunOnce(); err != nil {
+			http.Error(w, "Backup failed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(backupScheduler.Status())
+	}).Methods("POST")
 	api.HandleFunc("/system/update/check", checkUpdateHandler).Methods("GET")
 	api.HandleFunc("/system/update/apply", applyUpdateHandler).Methods("POST")
 	api.HandleFunc("/system/update/status", updateStatusHandler).Methods("GET")
@@ -216,9 +234,9 @@ func main() {
 	// Meter routes
 	api.HandleFunc("/meters/replace", meterHandler.ReplaceMeter).Methods("POST")
 	api.HandleFunc("/meters/archived", meterHandler.GetArchivedMeters).Methods("GET")
-	api.HandleFunc("/meters/test-smartme", meterHandler.TestSmartMeConnection).Methods("POST")       // Smart-me connection test
+	api.HandleFunc("/meters/test-smartme", meterHandler.TestSmartMeConnection).Methods("POST")      // Smart-me connection test
 	api.HandleFunc("/meters/discover-smartme", meterHandler.DiscoverSmartMeDevices).Methods("POST") // Smart-me device discovery
-	api.HandleFunc("/meters/reorder", meterHandler.Reorder).Methods("POST")                          // Persist custom card order
+	api.HandleFunc("/meters/reorder", meterHandler.Reorder).Methods("POST")                         // Persist custom card order
 	api.HandleFunc("/meters", meterHandler.List).Methods("GET")
 	api.HandleFunc("/meters", meterHandler.Create).Methods("POST")
 	api.HandleFunc("/meters/{id}/deletion-impact", meterHandler.GetDeletionImpact).Methods("GET")
@@ -234,12 +252,12 @@ func main() {
 	api.HandleFunc("/chargers/sessions/latest", chargerHandler.GetLatestSessions).Methods("GET")
 	api.HandleFunc("/chargers/reorder", chargerHandler.Reorder).Methods("POST") // Persist custom card order
 	api.HandleFunc("/chargers/{id}/deletion-impact", chargerHandler.GetDeletionImpact).Methods("GET")
-	api.HandleFunc("/chargers/{id}/import-sessions", chargerHandler.ImportChargerSessionsFromCSV).Methods("POST") // NEW: CSV Import
-	api.HandleFunc("/chargers/{id}/sync-zaptec-history", chargerHandler.SyncZaptecHistory).Methods("POST")        // NEW: Zaptec API range sync
-	api.HandleFunc("/chargers/{id}/sessions", chargerHandler.GetChargerSessions).Methods("GET")                   // NEW: Get sessions
-	api.HandleFunc("/chargers/{id}/sessions", chargerHandler.DeleteChargerSessions).Methods("DELETE")             // NEW: Delete sessions
-	api.HandleFunc("/chargers/{id}/e3dc-session-history", chargerHandler.GetE3DCSessionHistory).Methods("GET")    // E3/DC per-session history
-	api.HandleFunc("/chargers/{id}/e3dc-backfill-rescan", chargerHandler.RescanE3DCBackfill).Methods("POST")     // E3/DC rebuild backfill in range
+	api.HandleFunc("/chargers/{id}/import-sessions", chargerHandler.ImportChargerSessionsFromCSV).Methods("POST")              // NEW: CSV Import
+	api.HandleFunc("/chargers/{id}/sync-zaptec-history", chargerHandler.SyncZaptecHistory).Methods("POST")                     // NEW: Zaptec API range sync
+	api.HandleFunc("/chargers/{id}/sessions", chargerHandler.GetChargerSessions).Methods("GET")                                // NEW: Get sessions
+	api.HandleFunc("/chargers/{id}/sessions", chargerHandler.DeleteChargerSessions).Methods("DELETE")                          // NEW: Delete sessions
+	api.HandleFunc("/chargers/{id}/e3dc-session-history", chargerHandler.GetE3DCSessionHistory).Methods("GET")                 // E3/DC per-session history
+	api.HandleFunc("/chargers/{id}/e3dc-backfill-rescan", chargerHandler.RescanE3DCBackfill).Methods("POST")                   // E3/DC rebuild backfill in range
 	api.HandleFunc("/chargers/{id}/e3dc-session-history/{sessionId}/assign", chargerHandler.AssignE3DCSession).Methods("POST") // E3/DC manual RFID/user assignment
 	api.HandleFunc("/chargers", chargerHandler.List).Methods("GET")
 	api.HandleFunc("/chargers", chargerHandler.Create).Methods("POST")
@@ -364,6 +382,11 @@ func main() {
 			deviceController.Stop()
 		}
 
+		// Stop backup scheduler
+		if backupScheduler != nil {
+			backupScheduler.Stop()
+		}
+
 		// Create a deadline for shutdown
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -444,6 +467,38 @@ func rebootHandler(w http.ResponseWriter, r *http.Request) {
 			os.Exit(0)
 		}
 	}()
+}
+
+// listBackupsHandler returns all backup files (manual + automatic) newest-first.
+func listBackupsHandler(w http.ResponseWriter, r *http.Request) {
+	dir := services.BackupDir()
+	type backupFile struct {
+		Name     string `json:"name"`
+		Size     int64  `json:"size"`
+		Modified string `json:"modified"`
+		Auto     bool   `json:"auto"`
+	}
+	files := []backupFile{}
+	if entries, err := os.ReadDir(dir); err == nil {
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".db") {
+				continue
+			}
+			info, ierr := e.Info()
+			if ierr != nil {
+				continue
+			}
+			files = append(files, backupFile{
+				Name:     e.Name(),
+				Size:     info.Size(),
+				Modified: info.ModTime().Format(time.RFC3339),
+				Auto:     strings.HasPrefix(e.Name(), "zev-billing-auto_"),
+			})
+		}
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].Modified > files[j].Modified })
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(files)
 }
 
 // Backup handler

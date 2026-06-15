@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Lock, Key, Shield, CheckCircle, RefreshCw, Ban, Database, Activity, Settings as SettingsIcon, Lightbulb } from 'lucide-react';
 import { api } from '../api/client';
 import { useTranslation } from '../i18n';
+import BackupsCard from './BackupsCard';
 
 export default function Settings() {
   const { t } = useTranslation();
@@ -311,6 +312,9 @@ export default function Settings() {
             </form>
           </div>
         </div>
+
+        {/* Backups Card */}
+        <BackupsCard t={t} />
 
         {/* Security Tips Card */}
         <div className="settings-card" style={{
