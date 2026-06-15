@@ -1770,6 +1770,8 @@ export const en: Translations = {
   'chargers.status.chargingInProgress': 'Charging in progress',
   'chargers.status.chargingFinished': 'Charging finished',
   'chargers.status.waitingForAuth': 'Waiting for authentication',
+  'chargers.status.vehicleConnected': 'Vehicle connected, ready to charge',
+  'chargers.rfidTag': 'RFID card',
   'chargers.status.noCarConnected': 'No car connected',
   'chargers.status.ready': 'Ready to charge',
   'chargers.status.chargingDesc': 'Vehicle is charging with optimized power flow',

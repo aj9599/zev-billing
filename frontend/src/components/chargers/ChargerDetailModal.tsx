@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Battery, TrendingUp, TrendingDown, Gauge, Activity, Calendar, BarChart3, Clock, User, Zap, Wifi, WifiOff } from 'lucide-react';
+import { X, Battery, TrendingUp, TrendingDown, Gauge, Activity, Calendar, BarChart3, Clock, User, Zap, Wifi, WifiOff, CreditCard } from 'lucide-react';
 import type { Charger } from '../../types';
 import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus } from './hooks/useChargerStatus';
 import { getStateDisplay, getModeDisplay } from './utils/chargerUtils';
@@ -408,6 +408,17 @@ export default function ChargerDetailModal({
                             {modeDisplay}
                         </span>
                     </div>
+                    {liveData?.rfid && (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>
+                                <CreditCard size={13} color="#7c3aed" />
+                                {t('chargers.rfidTag')}
+                            </span>
+                            <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: '700', fontFamily: 'monospace', backgroundColor: 'rgba(124,58,237,0.1)', color: '#5b21b6' }} title={liveData.rfid}>
+                                {liveData.rfid}
+                            </span>
+                        </div>
+                    )}
                     {isConnected !== undefined && (
                         <div style={{
                             display: 'flex', alignItems: 'center', gap: '8px',

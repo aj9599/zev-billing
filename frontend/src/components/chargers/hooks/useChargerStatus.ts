@@ -16,6 +16,7 @@ export interface LiveChargerData {
   voltage?: number;
   current?: number;
   state_description?: string;
+  rfid?: string;
   live_session?: LiveSessionData;
   // Loxone enhanced live data (matches backend JSON tags)
   last_session_energy?: number;

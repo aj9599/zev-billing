@@ -499,6 +499,7 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 		CurrentPowerKW   float64          `json:"current_power_kw,omitempty"`
 		Voltage          float64          `json:"voltage,omitempty"`
 		Current          float64          `json:"current,omitempty"`
+		RFID             string           `json:"rfid,omitempty"`
 		LiveSession      *LiveSessionData `json:"live_session,omitempty"`
 
 		// Enhanced Loxone statistics
@@ -624,6 +625,7 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 				data.IsOnline = e3dcData.IsOnline
 				data.CurrentPowerKW = e3dcData.Power_kW
 				data.PowerKWh = e3dcData.TotalEnergy
+				data.RFID = e3dcData.RFID
 				if e3dcData.IsCharging {
 					data.State = "3"
 				} else if e3dcData.IsConnected {

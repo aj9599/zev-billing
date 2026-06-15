@@ -1,4 +1,4 @@
-import { Edit2, Trash2, Wifi, WifiOff, Battery, TrendingUp, Info, History } from 'lucide-react';
+import { Edit2, Trash2, Wifi, WifiOff, Battery, TrendingUp, Info, History, CreditCard } from 'lucide-react';
 import type { Charger } from '../../types';
 import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus, GenericChargerConnectionStatus } from './hooks/useChargerStatus';
 import { getPreset } from '../chargerPresets';
@@ -117,10 +117,17 @@ export default function ChargerCard({
     const accentBg = isCharging ? '#d1fae5' : isCompleted ? '#dbeafe' : isAwaitingStart ? '#fef3c7' : '#f3f4f6';
     const accentText = isCharging ? '#059669' : isCompleted ? '#2563eb' : isAwaitingStart ? '#d97706' : '#6b7280';
 
-    // Status text
+    // RFID of the card on the active session (E3/DC). Empty until a card is read.
+    const isE3dc = charger.connection_type === 'e3dc_api';
+    const rfid = liveData?.rfid;
+
+    // Status text. For E3/DC "awaiting start" (vehicle connected, state 2) there is
+    // no separate authorization step: once a card has been read the vehicle is
+    // simply connected; only when no card is present yet is it "waiting for auth".
     const statusText = isCharging ? t('chargers.status.chargingInProgress')
         : isCompleted ? t('chargers.status.chargingFinished')
-            : isAwaitingStart ? t('chargers.status.waitingForAuth')
+            : isAwaitingStart
+                ? (isE3dc && rfid ? t('chargers.status.vehicleConnected') : t('chargers.status.waitingForAuth'))
                 : isDisconnected ? t('chargers.status.noCarConnected')
                     : t('chargers.status.ready');
 
@@ -304,7 +311,22 @@ export default function ChargerCard({
                             </div>
                         )}
 
-                        {isAwaitingStart && sessionEnergy === 0 && (
+                        {rfid && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', minWidth: 0 }}>
+                                <CreditCard size={13} color="#7c3aed" style={{ flexShrink: 0 }} />
+                                <span style={{ fontSize: '11px', color: '#7c3aed', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px', flexShrink: 0 }}>
+                                    {t('chargers.rfidTag')}:
+                                </span>
+                                <span style={{
+                                    fontSize: '12px', fontWeight: '700', color: '#5b21b6',
+                                    fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                                }} title={rfid}>
+                                    {rfid}
+                                </span>
+                            </div>
+                        )}
+
+                        {isAwaitingStart && sessionEnergy === 0 && !rfid && (
                             <div style={{
                                 padding: '6px 10px', backgroundColor: 'rgba(251,191,36,0.1)',
                                 borderRadius: '8px', border: '1px solid rgba(251,191,36,0.25)',

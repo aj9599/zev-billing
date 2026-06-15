@@ -1771,6 +1771,8 @@ export const de: Translations = {
   'chargers.status.chargingInProgress': 'Ladevorgang läuft',
   'chargers.status.chargingFinished': 'Ladevorgang abgeschlossen',
   'chargers.status.waitingForAuth': 'Warte auf Autorisierung',
+  'chargers.status.vehicleConnected': 'Fahrzeug angeschlossen, ladebereit',
+  'chargers.rfidTag': 'RFID-Karte',
   'chargers.status.noCarConnected': 'Kein Fahrzeug angeschlossen',
   'chargers.status.ready': 'Bereit zum Laden',
   'chargers.status.chargingDesc': 'Fahrzeug wird mit optimiertem Stromfluss geladen',
