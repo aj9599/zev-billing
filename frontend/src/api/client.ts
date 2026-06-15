@@ -895,6 +895,74 @@ class ApiClient {
   async testHealthReport(): Promise<{ status: string; message: string }> {
     return this.request('/settings/email-alerts/test-health', { method: 'POST' });
   }
+
+  // --- Admin: tenant portal access tokens ---
+  async getUserPortalToken(userId: number): Promise<{ token: string }> {
+    return this.request(`/users/${userId}/portal-token`);
+  }
+
+  async generateUserPortalToken(userId: number): Promise<{ token: string }> {
+    return this.request(`/users/${userId}/portal-token`, { method: 'POST' });
+  }
+
+  async revokeUserPortalToken(userId: number): Promise<{ status: string }> {
+    return this.request(`/users/${userId}/portal-token`, { method: 'DELETE' });
+  }
+
+  // --- Tenant portal (uses a separate 'portal_token', not the admin token) ---
+  async portalLogin(code: string): Promise<{ token: string; name: string }> {
+    const res = await fetch(`${API_BASE}/portal/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    if (!res.ok) throw new Error((await res.text()) || 'Login failed');
+    return res.json();
+  }
+
+  private async portalRequest(path: string): Promise<any> {
+    const token = localStorage.getItem('portal_token');
+    const res = await fetch(`${API_BASE}/portal${path}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (res.status === 401 || res.status === 403) throw new Error('unauthorized');
+    if (!res.ok) throw new Error((await res.text()) || 'Request failed');
+    return res.json();
+  }
+
+  async portalMe(): Promise<{ name: string; email: string; apartment: string; building: string }> {
+    return this.portalRequest('/me');
+  }
+
+  async portalInvoices(): Promise<Array<{
+    id: number; invoice_number: string; period_start: string; period_end: string;
+    total_amount: number; currency: string; status: string; has_pdf: boolean;
+  }>> {
+    return this.portalRequest('/invoices');
+  }
+
+  async portalCharging(): Promise<Array<{
+    start_time: string; end_time: string; total_kwh: number; solar_kwh: number; grid_kwh: number;
+  }>> {
+    return this.portalRequest('/charging');
+  }
+
+  async portalDownloadInvoice(id: number, invoiceNumber: string): Promise<void> {
+    const token = localStorage.getItem('portal_token');
+    const res = await fetch(`${API_BASE}/portal/invoices/${id}/pdf`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Download failed');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${invoiceNumber}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
 }
 
 export const api = new ApiClient();

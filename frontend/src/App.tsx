@@ -17,6 +17,7 @@ import EmailSettings from './components/EmailSettings';
 import AdminLogs from './components/AdminLogs';
 import CSVUpload from './components/CSVUpload';
 import License from './components/License';
+import TenantPortal from './components/TenantPortal';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
@@ -27,6 +28,21 @@ function App() {
     const token = localStorage.getItem('token');
     setIsAuthenticated(!!token);
   }, []);
+
+  // Tenant self-service portal lives entirely outside the admin auth gate; it
+  // manages its own access token ('portal_token').
+  if (window.location.pathname.startsWith('/portal')) {
+    return (
+      <I18nProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/portal" element={<TenantPortal />} />
+            <Route path="*" element={<Navigate to="/portal" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </I18nProvider>
+    );
+  }
 
   if (!isAuthenticated) {
     return (

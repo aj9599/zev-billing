@@ -1,8 +1,10 @@
-import { UsersIcon, CheckCircle, XCircle, Archive, Edit2, Trash2, MapPin, CreditCard, Home, Calendar } from 'lucide-react';
+import { useState } from 'react';
+import { UsersIcon, CheckCircle, XCircle, Archive, Edit2, Trash2, MapPin, CreditCard, Home, Calendar, KeyRound } from 'lucide-react';
 import type { User as UserType, Building as BuildingType } from '../../types';
 import { filterUsers, getBuildingName } from './utils/userUtils';
 import { formatRentPeriod } from './utils/dateUtils';
 import { ActionBtn, UserMobileCard } from './AdminUsersSection';
+import PortalLinkModal from './PortalLinkModal';
 
 interface RegularUsersSectionProps {
   users: UserType[];
@@ -31,6 +33,7 @@ export default function RegularUsersSection({
 }: RegularUsersSectionProps) {
   const filteredUsers = filterUsers(users, buildings, selectedBuildingId, searchQuery, showArchive);
   const regularUsers = filteredUsers.filter(u => u.user_type === 'regular');
+  const [portalUser, setPortalUser] = useState<UserType | null>(null);
 
   return (
     <div>
@@ -176,6 +179,7 @@ export default function RegularUsersSection({
                       onClick={() => handleToggleActive(user)}
                       title={user.is_active ? t('users.deactivate') : t('users.activate')}
                     />
+                    <ActionBtn icon={KeyRound} color="#667eea" onClick={() => setPortalUser(user)} title={t('portal.admin.title')} />
                     <ActionBtn icon={Edit2} color="#3b82f6" onClick={() => handleEdit(user)} title={t('common.edit')} />
                     <ActionBtn icon={Trash2} color="#ef4444" onClick={() => handleDelete(user.id)} title={t('common.delete')} />
                   </div>
@@ -237,6 +241,15 @@ export default function RegularUsersSection({
           </div>
         )}
       </div>
+
+      {portalUser && (
+        <PortalLinkModal
+          userId={portalUser.id}
+          userName={`${portalUser.first_name} ${portalUser.last_name}`}
+          onClose={() => setPortalUser(null)}
+          t={t}
+        />
+      )}
     </div>
   );
 }
