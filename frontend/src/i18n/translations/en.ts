@@ -270,6 +270,10 @@ export const en: Translations = {
   'csvUpload.addRow': 'Add Row',
   'csvUpload.download': 'Download',
   'csvUpload.importSessions': 'Import {{count}} Sessions',
+  'csvUpload.e3dcDetected': 'E3/DC session export detected — it will be imported as charging history. Pick the E3/DC charger and click Import.',
+  'csvUpload.e3dcInfo': 'This E3/DC export has no editable preview. Each session is spread across 15-minute slots and billed at the grid rate; only periods before existing live data are filled, and live data is left untouched.',
+  'csvUpload.importE3dcButton': 'Import E3/DC history',
+  'csvUpload.e3dcImportSuccess': 'Imported {sessions} session(s), {kwh} kWh ({from} → {to}). Only periods before live data were filled.',
   'csvUpload.processing': 'Processing...',
 
   // ============================================================================

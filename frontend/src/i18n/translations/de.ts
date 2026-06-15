@@ -270,6 +270,10 @@ export const de: Translations = {
   'csvUpload.addRow': 'Zeile hinzufügen',
   'csvUpload.download': 'Herunterladen',
   'csvUpload.importSessions': '{{count}} Sitzungen importieren',
+  'csvUpload.e3dcDetected': 'E3/DC-Sitzungsexport erkannt — wird als Ladeverlauf importiert. Wählen Sie das E3/DC-Ladegerät und klicken Sie auf Importieren.',
+  'csvUpload.e3dcInfo': 'Dieser E3/DC-Export hat keine bearbeitbare Vorschau. Jede Sitzung wird auf 15-Minuten-Slots verteilt und zum Netztarif abgerechnet; nur Zeiträume vor den vorhandenen Live-Daten werden gefüllt, Live-Daten bleiben unberührt.',
+  'csvUpload.importE3dcButton': 'E3/DC-Verlauf importieren',
+  'csvUpload.e3dcImportSuccess': '{sessions} Sitzung(en) importiert, {kwh} kWh ({from} → {to}). Nur Zeiträume vor den Live-Daten wurden gefüllt.',
   'csvUpload.processing': 'Wird verarbeitet...',
 
   // ============================================================================

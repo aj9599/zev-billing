@@ -24,6 +24,9 @@ export default function CSVUpload() {
   const [csvData, setCsvData] = useState<CSVRow[]>([]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
+  // True when the selected file is a myE3DC session export (different format —
+  // handled by the dedicated importer, not the editable generic preview).
+  const [isE3dc, setIsE3dc] = useState(false);
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [editedData, setEditedData] = useState<CSVRow>({});
 
@@ -119,8 +122,23 @@ export default function CSVUpload() {
   const parseCSV = async (file: File) => {
     try {
       const text = await file.text();
+
+      // Detect a myE3DC session export (German format with quoted decimal commas).
+      // It can't go through the generic comma-split editor, so route it to the
+      // dedicated importer and skip the editable preview entirely.
+      if (text.includes('Zeitraum') && (text.includes('Geladen - kWh') || text.includes('Authentifizierung'))) {
+        setIsE3dc(true);
+        setShowPreview(false);
+        setCsvData([]);
+        setCsvHeaders([]);
+        setMessage(t('csvUpload.e3dcDetected'));
+        setMessageType('info');
+        return;
+      }
+      setIsE3dc(false);
+
       const lines = text.split('\n').filter(line => line.trim());
-      
+
       if (lines.length < 2) {
         setMessage(t('csvUpload.csvEmpty'));
         setMessageType('error');
@@ -219,14 +237,46 @@ export default function CSVUpload() {
   };
 
   const handleUpload = async () => {
-    if (csvData.length === 0) {
-      setMessage(t('csvUpload.noDataToUpload'));
+    if (!selectedCharger) {
+      setMessage(t('csvUpload.pleaseSelectCharger'));
       setMessageType('error');
       return;
     }
 
-    if (!selectedCharger) {
-      setMessage(t('csvUpload.pleaseSelectCharger'));
+    // E3/DC export → dedicated importer (sends the original file untouched).
+    if (isE3dc) {
+      if (!selectedFile) {
+        setMessage(t('csvUpload.noDataToUpload'));
+        setMessageType('error');
+        return;
+      }
+      setUploading(true);
+      setMessage(t('csvUpload.uploadingProcessing'));
+      setMessageType('info');
+      try {
+        const res = await api.importE3dcSessionsCSV(selectedCharger, selectedFile);
+        setMessage(t('csvUpload.e3dcImportSuccess')
+          .replace('{sessions}', String(res.sessions_imported))
+          .replace('{kwh}', res.total_kwh.toFixed(1))
+          .replace('{from}', res.from)
+          .replace('{to}', res.to));
+        setMessageType('success');
+        setSelectedFile(null);
+        setSelectedCharger(null);
+        setIsE3dc(false);
+        const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+        if (fileInput) fileInput.value = '';
+      } catch (err: any) {
+        setMessage(t('csvUpload.importFailed').replace('{error}', err?.message || String(err)));
+        setMessageType('error');
+      } finally {
+        setUploading(false);
+      }
+      return;
+    }
+
+    if (csvData.length === 0) {
+      setMessage(t('csvUpload.noDataToUpload'));
       setMessageType('error');
       return;
     }
@@ -287,6 +337,7 @@ export default function CSVUpload() {
   };
 
   const selectedChargerData = chargers.find(c => c.id === selectedCharger);
+  const uploadDisabled = uploading || !selectedCharger || (isE3dc ? !selectedFile : csvData.length === 0);
 
   return (
     <div className="csv-upload-container" style={{ width: '100%', maxWidth: '100%' }}>
@@ -584,21 +635,32 @@ export default function CSVUpload() {
             </div>
           )}
 
+          {isE3dc && (
+            <div style={{
+              display: 'flex', gap: '10px', alignItems: 'flex-start',
+              padding: '14px 16px', marginBottom: '16px', borderRadius: '12px',
+              backgroundColor: '#eef2ff', border: '1px solid #c7d2fe', color: '#3730a3', fontSize: '14px'
+            }}>
+              <FileSpreadsheet size={18} style={{ flexShrink: 0, marginTop: 2 }} />
+              <span>{t('csvUpload.e3dcInfo')}</span>
+            </div>
+          )}
+
           <button
             onClick={handleUpload}
-            disabled={csvData.length === 0 || !selectedCharger || uploading}
+            disabled={uploadDisabled}
             style={{
-              width: '100%', 
-              padding: '16px', 
-              background: (csvData.length === 0 || !selectedCharger || uploading) ? '#9ca3af' : '#667eea',
+              width: '100%',
+              padding: '16px',
+              background: uploadDisabled ? '#9ca3af' : '#667eea',
               color: 'white',
-              border: 'none', 
-              borderRadius: '12px', 
-              fontSize: '16px', 
+              border: 'none',
+              borderRadius: '12px',
+              fontSize: '16px',
               fontWeight: '700',
-              cursor: (csvData.length === 0 || !selectedCharger || uploading) ? 'not-allowed' : 'pointer',
+              cursor: uploadDisabled ? 'not-allowed' : 'pointer',
               transition: 'all 0.3s ease',
-              boxShadow: (csvData.length === 0 || !selectedCharger || uploading) ? 'none' : '0 8px 20px rgba(102, 126, 234, 0.3)',
+              boxShadow: uploadDisabled ? 'none' : '0 8px 20px rgba(102, 126, 234, 0.3)',
               letterSpacing: '0.5px',
               display: 'flex',
               alignItems: 'center',
@@ -621,7 +683,7 @@ export default function CSVUpload() {
             ) : (
               <>
                 <Upload size={20} />
-                {t('csvUpload.importSessions').replace('{count}', csvData.length.toString())}
+                {isE3dc ? t('csvUpload.importE3dcButton') : t('csvUpload.importSessions').replace('{count}', csvData.length.toString())}
               </>
             )}
           </button>
