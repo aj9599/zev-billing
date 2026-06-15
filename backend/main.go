@@ -153,6 +153,7 @@ func main() {
 	emailAlertHandler := handlers.NewEmailAlertHandler(db, emailAlerter)
 	billLayoutHandler := handlers.NewBillLayoutHandler(db)
 	licenseHandler := handlers.NewLicenseHandler(licenseService)
+	portalHandler := handlers.NewPortalHandler(db, cfg.JWTSecret)
 
 	r := mux.NewRouter()
 
@@ -169,6 +170,17 @@ func main() {
 	// Webhook routes for receiving data from devices (NO AUTHENTICATION)
 	r.HandleFunc("/webhook/meter", webhookHandler.ReceiveMeterReading).Methods("GET", "POST")
 	r.HandleFunc("/webhook/charger", webhookHandler.ReceiveChargerData).Methods("GET", "POST")
+
+	// Tenant portal: public login (access code → tenant JWT), then a tenant-only
+	// subrouter. Registered BEFORE the /api admin subrouter so portal requests
+	// are not caught by the admin AuthMiddleware (which rejects tenant tokens).
+	r.HandleFunc("/api/portal/login", portalHandler.Login).Methods("POST")
+	portal := r.PathPrefix("/api/portal").Subrouter()
+	portal.Use(middleware.PortalMiddleware(cfg.JWTSecret))
+	portal.HandleFunc("/me", portalHandler.Me).Methods("GET")
+	portal.HandleFunc("/invoices", portalHandler.Invoices).Methods("GET")
+	portal.HandleFunc("/invoices/{id}/pdf", portalHandler.InvoicePDF).Methods("GET")
+	portal.HandleFunc("/charging", portalHandler.Charging).Methods("GET")
 
 	// Protected API routes (authentication required)
 	api := r.PathPrefix("/api").Subrouter()
@@ -222,6 +234,9 @@ func main() {
 	api.HandleFunc("/users/{id}", userHandler.Get).Methods("GET")
 	api.HandleFunc("/users/{id}", userHandler.Update).Methods("PUT")
 	api.HandleFunc("/users/{id}", userHandler.Delete).Methods("DELETE")
+	api.HandleFunc("/users/{id}/portal-token", portalHandler.GetToken).Methods("GET")
+	api.HandleFunc("/users/{id}/portal-token", portalHandler.GenerateToken).Methods("POST")
+	api.HandleFunc("/users/{id}/portal-token", portalHandler.RevokeToken).Methods("DELETE")
 	api.HandleFunc("/users/admin-for-buildings", userHandler.GetAdminUsersForBuildings).Methods("GET")
 
 	// Building routes

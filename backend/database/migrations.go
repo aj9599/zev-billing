@@ -546,7 +546,38 @@ func RunMigrations(db *sql.DB) error {
 		return err
 	}
 
+	// Tenant self-service portal: per-user access token (admin-issued link/code).
+	if err := addPortalTokenColumn(db); err != nil {
+		return err
+	}
+
 	return createDefaultAdmin(db)
+}
+
+// addPortalTokenColumn adds users.portal_token, the secret an admin issues so a
+// tenant can log into the read-only self-service portal. A partial unique index
+// keeps tokens unique while allowing many users to have none (NULL).
+func addPortalTokenColumn(db *sql.DB) error {
+	var usersSQL string
+	err := db.QueryRow(`SELECT sql FROM sqlite_master WHERE type='table' AND name='users'`).Scan(&usersSQL)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !contains(usersSQL, "portal_token") {
+		if _, err := db.Exec(`ALTER TABLE users ADD COLUMN portal_token TEXT`); err != nil {
+			if !contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("failed to add portal_token column: %v", err)
+			}
+		}
+		log.Println("✓ users.portal_token column added")
+	}
+	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_portal_token ON users(portal_token) WHERE portal_token IS NOT NULL`); err != nil {
+		log.Printf("portal_token index warning: %v", err)
+	}
+	return nil
 }
 
 // addAppLicenseActivationColumns adds the columns used by online (Firebase)
