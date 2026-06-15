@@ -66,6 +66,8 @@ export default function E3dcHistoryModal({ charger, onClose, t }: E3dcHistoryMod
   // Users (for the assignment dropdown) + per-session save state.
   const [users, setUsers] = useState<User[]>([]);
   const [savingId, setSavingId] = useState<number | null>(null);
+  // Pending reassignment awaiting confirmation (only when overwriting/clearing).
+  const [pendingAssign, setPendingAssign] = useState<{ session: E3dcSession; userId: string } | null>(null);
 
   const loadSessions = useCallback(async () => {
     setLoading(true);
@@ -101,6 +103,26 @@ export default function E3dcHistoryModal({ charger, onClose, t }: E3dcHistoryMod
     }
     return m;
   }, [users]);
+
+  // Human label for an RFID token: the owning tenant's name, else the raw token,
+  // else "Unassigned".
+  const labelFor = (rfid: string): string => {
+    if (!rfid) return t('chargers.history.unassigned');
+    const u = userByRfid.get(rfid);
+    return u ? `${u.first_name} ${u.last_name}` : rfid;
+  };
+
+  // Dropdown change: confirm first only when overwriting a different existing
+  // assignment (or clearing one); a fresh assignment saves immediately.
+  const requestAssign = (session: E3dcSession, userId: string) => {
+    const newRfid = userId ? firstRfid(users.find((u) => String(u.id) === userId)!) : '';
+    if (newRfid === session.rfid) return; // no change
+    if (session.rfid) {
+      setPendingAssign({ session, userId }); // overwriting/clearing → confirm
+      return;
+    }
+    assignUser(session, userId);
+  };
 
   const assignUser = async (session: E3dcSession, userId: string) => {
     const rfid = userId ? firstRfid(users.find((u) => String(u.id) === userId)!) : '';
@@ -364,7 +386,7 @@ export default function E3dcHistoryModal({ charger, onClose, t }: E3dcHistoryMod
                       <select
                         value={userByRfid.get(s.rfid)?.id ?? ''}
                         disabled={savingId === s.id}
-                        onChange={(e) => assignUser(s, e.target.value)}
+                        onChange={(e) => requestAssign(s, e.target.value)}
                         style={{
                           fontSize: 12, fontWeight: 600, color: '#5b21b6',
                           border: '1px solid #e9d5ff', borderRadius: 7, padding: '3px 6px',
@@ -389,6 +411,58 @@ export default function E3dcHistoryModal({ charger, onClose, t }: E3dcHistoryMod
           </div>
         </div>
       </div>
+
+      {pendingAssign && (() => {
+        const s = pendingAssign.session;
+        const newUser = pendingAssign.userId ? users.find((u) => String(u.id) === pendingAssign.userId) : null;
+        const currentLabel = labelFor(s.rfid);
+        const newLabel = newUser ? `${newUser.first_name} ${newUser.last_name}` : t('chargers.history.unassigned');
+        return (
+          <div
+            onClick={(e) => { e.stopPropagation(); setPendingAssign(null); }}
+            style={{
+              position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2100, padding: 16
+            }}
+          >
+            <div onClick={(e) => e.stopPropagation()} style={{
+              backgroundColor: 'white', borderRadius: 14, padding: 22, maxWidth: 400, width: '100%',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.25)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                <div style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <AlertTriangle size={17} color="#d97706" />
+                </div>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1f2937' }}>{t('chargers.history.reassignTitle')}</h3>
+              </div>
+              <p style={{ margin: '0 0 18px 0', fontSize: 13.5, color: '#4b5563', lineHeight: 1.55 }}>
+                {t('chargers.history.reassignBody').replace('{current}', currentLabel).replace('{new}', newLabel)}
+              </p>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  onClick={() => { const p = pendingAssign; setPendingAssign(null); assignUser(p.session, p.userId); }}
+                  style={{
+                    flex: 1, padding: '10px 16px', borderRadius: 9, border: 'none',
+                    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                    color: 'white', fontSize: 13.5, fontWeight: 600, cursor: 'pointer'
+                  }}
+                >
+                  {t('chargers.history.reassignConfirm')}
+                </button>
+                <button
+                  onClick={() => setPendingAssign(null)}
+                  style={{
+                    padding: '10px 16px', borderRadius: 9, backgroundColor: 'white', color: '#6b7280',
+                    border: '1px solid #e5e7eb', fontSize: 13.5, fontWeight: 600, cursor: 'pointer'
+                  }}
+                >
+                  {t('common.cancel')}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 
