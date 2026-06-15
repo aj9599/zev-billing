@@ -238,6 +238,7 @@ func main() {
 	api.HandleFunc("/chargers/{id}/sync-zaptec-history", chargerHandler.SyncZaptecHistory).Methods("POST")        // NEW: Zaptec API range sync
 	api.HandleFunc("/chargers/{id}/sessions", chargerHandler.GetChargerSessions).Methods("GET")                   // NEW: Get sessions
 	api.HandleFunc("/chargers/{id}/sessions", chargerHandler.DeleteChargerSessions).Methods("DELETE")             // NEW: Delete sessions
+	api.HandleFunc("/chargers/{id}/e3dc-session-history", chargerHandler.GetE3DCSessionHistory).Methods("GET")    // E3/DC per-session history
 	api.HandleFunc("/chargers", chargerHandler.List).Methods("GET")
 	api.HandleFunc("/chargers", chargerHandler.Create).Methods("POST")
 	api.HandleFunc("/chargers/{id}", chargerHandler.Get).Methods("GET")

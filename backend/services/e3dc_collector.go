@@ -89,6 +89,16 @@ type e3dcChargerState struct {
 	lastUpdate time.Time
 	lastWrite  time.Time // last 15-min boundary written
 
+	// Device-sourced session history capture. The current session is upserted
+	// into e3dc_session_history keyed by curSessionKey; once the session ends it
+	// stops changing and the row is its final record. histBackfilled guards the
+	// one-time reconstruction of older sessions from the 15-min rows.
+	curSessionKey    string
+	curSessionStart  time.Time
+	lastHistTotal    float64
+	lastHistCharging bool
+	histBackfilled   bool
+
 	// mode_based billing: classify each 15-min slot as solar or grid from the
 	// E3/DC's own per-slot solar/total energy delta.
 	billingMode  string // "solar_split" | "mode_based"
@@ -223,9 +233,13 @@ func (ec *E3DCCollector) reload() {
 				cfg.Protocol = e3dc.ProtocolRSCP
 			}
 			key := ec.ensureClient(cfg)
+			st := &e3dcChargerState{chargerID: id, name: name, cfg: cfg, devKey: key, billingMode: billingMethod}
 			ec.mu.Lock()
-			ec.chargers[id] = &e3dcChargerState{chargerID: id, name: name, cfg: cfg, devKey: key, billingMode: billingMethod}
+			ec.chargers[id] = st
 			ec.mu.Unlock()
+			// One-time reconstruction of older sessions from the 15-min rows (runs
+			// before the first poll; no-op if device history already exists).
+			ec.backfillCharger(st)
 			log.Printf("E3/DC charger loaded: '%s' (wallbox %d via %s:%d)", name, cfg.WallboxIndex, cfg.Host, cfg.Port)
 		}
 	}
@@ -290,17 +304,227 @@ func (ec *E3DCCollector) pollAll() {
 		ec.updateMeter(st, snap, now)
 	}
 	chargersToWrite := []*e3dcChargerState{}
+	sessionUpserts := []*e3dcSessionUpsert{}
 	for _, st := range ec.chargers {
 		snap := snaps[st.devKey]
+		if snap != nil {
+			if up := ec.trackSession(st, snap, now); up != nil {
+				sessionUpserts = append(sessionUpserts, up)
+			}
+		}
 		if ec.updateCharger(st, snap, now) {
 			chargersToWrite = append(chargersToWrite, st)
 		}
 	}
 	ec.mu.Unlock()
 
-	// Write 15-min charger snapshots outside the lock (DB I/O).
+	// Write 15-min charger snapshots + session-history rows outside the lock (DB I/O).
 	for _, st := range chargersToWrite {
 		ec.writeChargerBoundary(st)
+	}
+	for _, up := range sessionUpserts {
+		ec.writeSessionHistory(up)
+	}
+}
+
+// e3dcSessionUpsert is one completed/in-progress session to persist.
+type e3dcSessionUpsert struct {
+	chargerID int
+	key       string
+	start     time.Time
+	end       time.Time
+	total     float64
+	solar     float64
+	grid      float64
+	rfid      string
+}
+
+// trackSession follows the device's current session (via WB_SESSION) and returns
+// a row to upsert into e3dc_session_history when it changes. The session is keyed
+// by the device session id (preferred) or its start time, so a new session yields
+// a new row and the previous one is left as its final record. Caller holds ec.mu.
+func (ec *E3DCCollector) trackSession(st *e3dcChargerState, snap *e3dc.Snapshot, now time.Time) *e3dcSessionUpsert {
+	// A stable identity is required to dedupe; without one (older firmware) we
+	// can't record device sessions and rely on the backfill instead.
+	key := ""
+	if snap.WallboxSessionID != 0 {
+		key = fmt.Sprintf("id-%d", snap.WallboxSessionID)
+	} else if !snap.WallboxSessionStartTime.IsZero() {
+		key = fmt.Sprintf("st-%d", snap.WallboxSessionStartTime.Unix())
+	}
+	total := snap.WallboxSessionEnergyKWh
+	if key == "" || total <= 0 {
+		return nil
+	}
+
+	solar := snap.WallboxSessionSolarKWh
+	if solar < 0 {
+		solar = 0
+	}
+	if solar > total {
+		solar = total
+	}
+
+	// New session: anchor its start (device time if present, else observed now).
+	if key != st.curSessionKey {
+		st.curSessionKey = key
+		start := snap.WallboxSessionStartTime
+		if start.IsZero() {
+			start = now
+		}
+		st.curSessionStart = start
+		st.lastHistTotal = -1 // force the first write for this session
+	}
+
+	end := snap.WallboxSessionEndTime
+	if end.IsZero() || end.Before(st.curSessionStart) {
+		end = now // still active (or no device end) → grows with each write
+	}
+
+	// Only write on a real change: new session, energy grew, or charging just
+	// stopped (captures the final end time). Avoids rewriting an idle session.
+	changed := total != st.lastHistTotal || (st.lastHistCharging && !snap.WallboxCharging)
+	st.lastHistCharging = snap.WallboxCharging
+	if !changed {
+		return nil
+	}
+	st.lastHistTotal = total
+
+	return &e3dcSessionUpsert{
+		chargerID: st.chargerID,
+		key:       key,
+		start:     st.curSessionStart,
+		end:       end,
+		total:     total,
+		solar:     solar,
+		grid:      total - solar,
+		rfid:      snap.WallboxRFID,
+	}
+}
+
+// backfillCharger reconstructs past charging sessions from the 15-min
+// charger_sessions rows into e3dc_session_history (source='backfill'). It runs
+// once per charger and is skipped entirely if any history already exists, so it
+// never clobbers device-sourced rows. Per-session solar/grid is only available
+// for mode_based chargers (which record a per-slot mode); for others only the
+// total is reconstructed.
+func (ec *E3DCCollector) backfillCharger(st *e3dcChargerState) {
+	if st.histBackfilled {
+		return
+	}
+	st.histBackfilled = true
+
+	var existing int
+	if err := ec.db.QueryRow(`SELECT COUNT(*) FROM e3dc_session_history WHERE charger_id = ?`, st.chargerID).Scan(&existing); err != nil {
+		log.Printf("E3/DC: backfill check failed for charger %d: %v", st.chargerID, err)
+		return
+	}
+	if existing > 0 {
+		return
+	}
+
+	rows, err := ec.db.Query(`
+		SELECT session_time, power_kwh, COALESCE(mode,''), COALESCE(state,''), COALESCE(user_id,'')
+		FROM charger_sessions
+		WHERE charger_id = ?
+		ORDER BY session_time ASC
+	`, st.chargerID)
+	if err != nil {
+		log.Printf("E3/DC: backfill query failed for charger %d: %v", st.chargerID, err)
+		return
+	}
+	defer rows.Close()
+
+	type slot struct {
+		t     time.Time
+		total float64
+		mode  string
+		state string
+		rfid  string
+	}
+	var slots []slot
+	for rows.Next() {
+		var s slot
+		if rows.Scan(&s.t, &s.total, &s.mode, &s.state, &s.rfid) != nil {
+			continue
+		}
+		slots = append(slots, s)
+	}
+
+	// Group contiguous charging slots (state '3') into sessions; a session breaks
+	// on an idle slot or a change of RFID (a different card = a different car).
+	count := 0
+	for i := 0; i < len(slots); {
+		if slots[i].state != "3" {
+			i++
+			continue
+		}
+		j := i
+		for j+1 < len(slots) && slots[j+1].state == "3" && slots[j+1].rfid == slots[i].rfid {
+			j++
+		}
+		// power_kwh is cumulative; the run's energy is the delta from the slot
+		// just before it started. Sum per-slot deltas into solar/grid by mode.
+		base := slots[i].total
+		if i > 0 {
+			base = slots[i-1].total
+		}
+		var solar, grid float64
+		prev := base
+		for k := i; k <= j; k++ {
+			d := slots[k].total - prev
+			if d < 0 {
+				d = 0
+			}
+			switch slots[k].mode {
+			case "grid":
+				grid += d
+			case "solar":
+				solar += d
+			}
+			prev = slots[k].total
+		}
+		total := slots[j].total - base
+		if total < 0 {
+			total = 0
+		}
+		if total > 0 {
+			start := slots[i].t
+			end := slots[j].t.Add(15 * time.Minute)
+			key := fmt.Sprintf("bf-%d", start.Unix())
+			if _, err := ec.db.Exec(`
+				INSERT OR IGNORE INTO e3dc_session_history
+					(charger_id, session_key, start_time, end_time, total_kwh, solar_kwh, grid_kwh, rfid, source)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'backfill')
+			`, st.chargerID, key, start, end, total, solar, grid, slots[i].rfid); err != nil {
+				log.Printf("E3/DC: backfill insert failed for charger %d: %v", st.chargerID, err)
+			} else {
+				count++
+			}
+		}
+		i = j + 1
+	}
+	if count > 0 {
+		log.Printf("E3/DC: backfilled %d session(s) for charger %d from 15-min rows", count, st.chargerID)
+	}
+}
+
+// writeSessionHistory upserts one device session. start_time is set only on
+// insert; later polls update the end/energy/rfid in place.
+func (ec *E3DCCollector) writeSessionHistory(s *e3dcSessionUpsert) {
+	_, err := ec.db.Exec(`
+		INSERT INTO e3dc_session_history
+			(charger_id, session_key, start_time, end_time, total_kwh, solar_kwh, grid_kwh, rfid, source)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'device')
+		ON CONFLICT(charger_id, session_key) DO UPDATE SET
+			end_time  = excluded.end_time,
+			total_kwh = excluded.total_kwh,
+			solar_kwh = excluded.solar_kwh,
+			grid_kwh  = excluded.grid_kwh,
+			rfid      = excluded.rfid
+	`, s.chargerID, s.key, s.start, s.end, s.total, s.solar, s.grid, s.rfid)
+	if err != nil {
+		log.Printf("E3/DC: failed to write session history (charger %d, %s): %v", s.chargerID, s.key, err)
 	}
 }
 

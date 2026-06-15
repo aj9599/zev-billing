@@ -152,6 +152,30 @@ func RunMigrations(db *sql.DB) error {
 			FOREIGN KEY (charger_id) REFERENCES chargers(id)
 		)`,
 
+		// E3/DC per-session charging history. The integrated wallbox exposes only
+		// the current/last session over RSCP (no bulk export), so the collector
+		// records each session here as it completes (source='device'); older
+		// sessions are reconstructed once from the 15-min charger_sessions rows
+		// (source='backfill'). session_key is the device session id (or a synthetic
+		// 'bf-<unix>' for backfill); the UNIQUE constraint keeps writes idempotent.
+		`CREATE TABLE IF NOT EXISTS e3dc_session_history (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			charger_id INTEGER NOT NULL,
+			session_key TEXT NOT NULL,
+			start_time DATETIME,
+			end_time DATETIME,
+			total_kwh REAL DEFAULT 0,
+			solar_kwh REAL DEFAULT 0,
+			grid_kwh REAL DEFAULT 0,
+			rfid TEXT,
+			source TEXT DEFAULT 'device',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(charger_id, session_key),
+			FOREIGN KEY (charger_id) REFERENCES chargers(id) ON DELETE CASCADE
+		)`,
+
+		`CREATE INDEX IF NOT EXISTS idx_e3dc_session_history_charger ON e3dc_session_history(charger_id, start_time DESC)`,
+
 		`CREATE TABLE IF NOT EXISTS charger_stats (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			charger_id INTEGER NOT NULL UNIQUE,

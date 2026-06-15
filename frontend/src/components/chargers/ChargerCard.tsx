@@ -15,6 +15,7 @@ interface ChargerCardProps {
     onEdit: () => void;
     onDelete: () => void;
     onSyncHistory?: () => void;
+    onShowHistory?: () => void;
     isDetailOpen: boolean;
     onShowDetail: (show: boolean) => void;
     t: (key: string) => string;
@@ -30,6 +31,7 @@ export default function ChargerCard({
     onEdit,
     onDelete,
     onSyncHistory,
+    onShowHistory,
     isDetailOpen,
     onShowDetail,
     t
@@ -212,6 +214,19 @@ export default function ChargerCard({
                             }}
                                 onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(168,85,247,0.15)'; }}
                                 onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'rgba(168,85,247,0.08)'; }}
+                            >
+                                <History size={13} />
+                            </button>
+                        )}
+                        {charger.connection_type === 'e3dc_api' && onShowHistory && (
+                            <button onClick={onShowHistory} title={t('chargers.chargingHistory')} style={{
+                                width: '28px', height: '28px', borderRadius: '8px', border: 'none',
+                                backgroundColor: 'rgba(245,158,11,0.1)', color: '#d97706',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                cursor: 'pointer', transition: 'all 0.15s', flexShrink: 0
+                            }}
+                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(245,158,11,0.2)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'rgba(245,158,11,0.1)'; }}
                             >
                                 <History size={13} />
                             </button>

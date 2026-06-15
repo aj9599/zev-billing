@@ -198,6 +198,43 @@ func (r *rscpClient) readWallboxSession(snap *Snapshot) {
 			snap.WallboxSessionSolarKWh = f / 1000.0
 		}
 	}
+	if v, found := findTag(inner, rscp.WB_SESSION_ID); found {
+		if f, ok := asFloat64(v); ok {
+			snap.WallboxSessionID = uint64(f)
+		}
+	}
+	if v, found := findTag(inner, rscp.WB_SESSION_START_TIME); found {
+		if ts, ok := asTime(v); ok {
+			snap.WallboxSessionStartTime = ts
+		}
+	}
+	if v, found := findTag(inner, rscp.WB_SESSION_END_TIME); found {
+		if ts, ok := asTime(v); ok {
+			snap.WallboxSessionEndTime = ts
+		}
+	}
+}
+
+// asTime converts an RSCP message value to a time.Time. The device usually sends
+// a Timestamp (decoded to time.Time); a numeric value is treated as Unix seconds.
+// Returns ok=false for zero/empty values.
+func asTime(v interface{}) (time.Time, bool) {
+	switch t := v.(type) {
+	case time.Time:
+		if t.IsZero() {
+			return time.Time{}, false
+		}
+		return t, true
+	case *time.Time:
+		if t == nil || t.IsZero() {
+			return time.Time{}, false
+		}
+		return *t, true
+	}
+	if f, ok := asFloat64(v); ok && f > 0 {
+		return time.Unix(int64(f), 0), true
+	}
+	return time.Time{}, false
 }
 
 // findTag recursively searches a (possibly nested) slice of RSCP messages for

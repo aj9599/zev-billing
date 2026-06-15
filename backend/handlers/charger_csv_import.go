@@ -314,6 +314,63 @@ func (h *ChargerHandler) GetChargerSessions(w http.ResponseWriter, r *http.Reque
 	json.NewEncoder(w).Encode(sessions)
 }
 
+// GetE3DCSessionHistory returns the per-session charging history for an E3/DC
+// charger (device-captured or backfilled), newest first.
+func (h *ChargerHandler) GetE3DCSessionHistory(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	chargerID, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Invalid charger ID", http.StatusBadRequest)
+		return
+	}
+
+	limit := 200
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 {
+			limit = n
+		}
+	}
+
+	rows, err := h.db.Query(`
+		SELECT id, session_key, start_time, end_time, total_kwh, solar_kwh, grid_kwh, COALESCE(rfid,''), COALESCE(source,'device')
+		FROM e3dc_session_history
+		WHERE charger_id = ?
+		ORDER BY start_time DESC
+		LIMIT ?
+	`, chargerID, limit)
+	if err != nil {
+		log.Printf("Failed to fetch e3dc session history: %v", err)
+		http.Error(w, "Failed to fetch history", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type Session struct {
+		ID        int       `json:"id"`
+		Key       string    `json:"session_key"`
+		StartTime time.Time `json:"start_time"`
+		EndTime   time.Time `json:"end_time"`
+		TotalKWh  float64   `json:"total_kwh"`
+		SolarKWh  float64   `json:"solar_kwh"`
+		GridKWh   float64   `json:"grid_kwh"`
+		RFID      string    `json:"rfid"`
+		Source    string    `json:"source"`
+	}
+
+	sessions := []Session{}
+	for rows.Next() {
+		var s Session
+		if err := rows.Scan(&s.ID, &s.Key, &s.StartTime, &s.EndTime, &s.TotalKWh, &s.SolarKWh, &s.GridKWh, &s.RFID, &s.Source); err != nil {
+			log.Printf("Failed to scan e3dc session: %v", err)
+			continue
+		}
+		sessions = append(sessions, s)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(sessions)
+}
+
 // DeleteChargerSessions deletes all sessions for a specific charger
 func (h *ChargerHandler) DeleteChargerSessions(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)

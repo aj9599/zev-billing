@@ -128,6 +128,13 @@ type Snapshot struct {
 	WallboxSessionEnergyKWh float64
 	WallboxSessionSolarKWh  float64
 
+	// Session identity/timing (RSCP WB_SESSION_ID/START_TIME/END_TIME). Used to
+	// detect when one session ends and another begins so completed sessions can
+	// be recorded. ID is 0 and times are zero when unavailable.
+	WallboxSessionID        uint64
+	WallboxSessionStartTime time.Time
+	WallboxSessionEndTime   time.Time
+
 	Timestamp time.Time
 }
 

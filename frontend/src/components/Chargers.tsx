@@ -15,6 +15,7 @@ import InstructionsModal from './chargers/InstructionsModal';
 import DeleteConfirmationModal from './chargers/DeleteConfirmationModal';
 import ChargerFormModal from './chargers/ChargerFormModal';
 import ZaptecHistorySyncModal from './chargers/ZaptecHistorySyncModal';
+import E3dcHistoryModal from './chargers/E3dcHistoryModal';
 import { useChargerStatus } from './chargers/hooks/useChargerStatus';
 import { useChargerDeletion } from './chargers/hooks/useChargerDeletion';
 import { useChargerForm } from './chargers/hooks/useChargerForm';
@@ -29,6 +30,7 @@ export default function Chargers() {
   const [showInstructions, setShowInstructions] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [syncTargetCharger, setSyncTargetCharger] = useState<Charger | null>(null);
+  const [historyCharger, setHistoryCharger] = useState<Charger | null>(null);
   const [loading, setLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [openDetailId, setOpenDetailId] = useState<number | null>(null);
@@ -539,6 +541,7 @@ export default function Chargers() {
                     onEdit={() => handleEdit(charger)}
                     onDelete={() => handleDeleteClick(charger)}
                     onSyncHistory={() => setSyncTargetCharger(charger)}
+                    onShowHistory={() => setHistoryCharger(charger)}
                     isDetailOpen={openDetailId === charger.id}
                     onShowDetail={(show) => setOpenDetailId(show ? charger.id : null)}
                     t={t}
@@ -621,6 +624,14 @@ export default function Chargers() {
           charger={syncTargetCharger}
           onClose={() => setSyncTargetCharger(null)}
           onDone={() => fetchStatusData()}
+          t={t}
+        />
+      )}
+
+      {historyCharger && (
+        <E3dcHistoryModal
+          charger={historyCharger}
+          onClose={() => setHistoryCharger(null)}
           t={t}
         />
       )}

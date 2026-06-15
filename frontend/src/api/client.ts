@@ -460,6 +460,21 @@ class ApiClient {
     return this.request(`/chargers/${chargerId}/sessions?limit=${limit}`);
   }
 
+  // E3/DC per-session charging history (device-captured + backfilled).
+  async getE3dcSessionHistory(chargerId: number, limit: number = 200): Promise<Array<{
+    id: number;
+    session_key: string;
+    start_time: string;
+    end_time: string;
+    total_kwh: number;
+    solar_kwh: number;
+    grid_kwh: number;
+    rfid: string;
+    source: string;
+  }>> {
+    return this.request(`/chargers/${chargerId}/e3dc-session-history?limit=${limit}`);
+  }
+
   // NEW: Delete all sessions for a charger
   async deleteChargerSessions(chargerId: number): Promise<{
     status: string;
