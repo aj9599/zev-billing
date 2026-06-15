@@ -402,36 +402,31 @@ func (ec *E3DCCollector) trackSession(st *e3dcChargerState, snap *e3dc.Snapshot,
 	}
 }
 
-// backfillCharger reconstructs past charging sessions from the 15-min
-// charger_sessions rows into e3dc_session_history (source='backfill'). It runs
-// once per charger and is skipped entirely if any history already exists, so it
-// never clobbers device-sourced rows. Per-session solar/grid is only available
-// for mode_based chargers (which record a per-slot mode); for others only the
-// total is reconstructed.
-func (ec *E3DCCollector) backfillCharger(st *e3dcChargerState) {
-	if st.histBackfilled {
-		return
-	}
-	st.histBackfilled = true
+// e3dcReconstructed is a charging session rebuilt from the 15-min rows.
+type e3dcReconstructed struct {
+	start time.Time
+	end   time.Time
+	total float64
+	solar float64
+	grid  float64
+	rfid  string
+}
 
-	var existing int
-	if err := ec.db.QueryRow(`SELECT COUNT(*) FROM e3dc_session_history WHERE charger_id = ?`, st.chargerID).Scan(&existing); err != nil {
-		log.Printf("E3/DC: backfill check failed for charger %d: %v", st.chargerID, err)
-		return
-	}
-	if existing > 0 {
-		return
-	}
-
+// reconstructSessions rebuilds charging sessions for a charger from its 15-min
+// charger_sessions rows: contiguous state='3' runs become sessions (broken on an
+// idle slot or a change of RFID), with energy from the cumulative power_kwh delta
+// and solar/grid summed from each slot's mode (only set for mode_based chargers).
+// It always reads the full history so energy baselines are correct; callers
+// filter by date range as needed.
+func (ec *E3DCCollector) reconstructSessions(chargerID int) ([]e3dcReconstructed, error) {
 	rows, err := ec.db.Query(`
 		SELECT session_time, power_kwh, COALESCE(mode,''), COALESCE(state,''), COALESCE(user_id,'')
 		FROM charger_sessions
 		WHERE charger_id = ?
 		ORDER BY session_time ASC
-	`, st.chargerID)
+	`, chargerID)
 	if err != nil {
-		log.Printf("E3/DC: backfill query failed for charger %d: %v", st.chargerID, err)
-		return
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -451,9 +446,7 @@ func (ec *E3DCCollector) backfillCharger(st *e3dcChargerState) {
 		slots = append(slots, s)
 	}
 
-	// Group contiguous charging slots (state '3') into sessions; a session breaks
-	// on an idle slot or a change of RFID (a different card = a different car).
-	count := 0
+	var out []e3dcReconstructed
 	for i := 0; i < len(slots); {
 		if slots[i].state != "3" {
 			i++
@@ -489,24 +482,135 @@ func (ec *E3DCCollector) backfillCharger(st *e3dcChargerState) {
 			total = 0
 		}
 		if total > 0 {
-			start := slots[i].t
-			end := slots[j].t.Add(15 * time.Minute)
-			key := fmt.Sprintf("bf-%d", start.Unix())
-			if _, err := ec.db.Exec(`
-				INSERT OR IGNORE INTO e3dc_session_history
-					(charger_id, session_key, start_time, end_time, total_kwh, solar_kwh, grid_kwh, rfid, source)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'backfill')
-			`, st.chargerID, key, start, end, total, solar, grid, slots[i].rfid); err != nil {
-				log.Printf("E3/DC: backfill insert failed for charger %d: %v", st.chargerID, err)
-			} else {
-				count++
-			}
+			out = append(out, e3dcReconstructed{
+				start: slots[i].t,
+				end:   slots[j].t.Add(15 * time.Minute),
+				total: total, solar: solar, grid: grid,
+				rfid: slots[i].rfid,
+			})
 		}
 		i = j + 1
+	}
+	return out, nil
+}
+
+// insertBackfillSession writes one reconstructed session (INSERT OR IGNORE, so it
+// never overwrites an existing row). Returns true when a new row was inserted.
+func (ec *E3DCCollector) insertBackfillSession(chargerID int, s e3dcReconstructed) bool {
+	key := fmt.Sprintf("bf-%d", s.start.Unix())
+	res, err := ec.db.Exec(`
+		INSERT OR IGNORE INTO e3dc_session_history
+			(charger_id, session_key, start_time, end_time, total_kwh, solar_kwh, grid_kwh, rfid, source)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'backfill')
+	`, chargerID, key, s.start, s.end, s.total, s.solar, s.grid, s.rfid)
+	if err != nil {
+		log.Printf("E3/DC: backfill insert failed for charger %d: %v", chargerID, err)
+		return false
+	}
+	n, _ := res.RowsAffected()
+	return n > 0
+}
+
+// backfillCharger reconstructs past charging sessions into e3dc_session_history
+// (source='backfill') once per charger. It is skipped entirely if any history
+// already exists, so it never clobbers device-sourced rows. Per-session solar/
+// grid is only available for mode_based chargers (which record a per-slot mode).
+func (ec *E3DCCollector) backfillCharger(st *e3dcChargerState) {
+	if st.histBackfilled {
+		return
+	}
+	st.histBackfilled = true
+
+	var existing int
+	if err := ec.db.QueryRow(`SELECT COUNT(*) FROM e3dc_session_history WHERE charger_id = ?`, st.chargerID).Scan(&existing); err != nil {
+		log.Printf("E3/DC: backfill check failed for charger %d: %v", st.chargerID, err)
+		return
+	}
+	if existing > 0 {
+		return
+	}
+
+	sessions, err := ec.reconstructSessions(st.chargerID)
+	if err != nil {
+		log.Printf("E3/DC: backfill query failed for charger %d: %v", st.chargerID, err)
+		return
+	}
+	count := 0
+	for _, s := range sessions {
+		if ec.insertBackfillSession(st.chargerID, s) {
+			count++
+		}
 	}
 	if count > 0 {
 		log.Printf("E3/DC: backfilled %d session(s) for charger %d from 15-min rows", count, st.chargerID)
 	}
+}
+
+// RescanBackfill rebuilds the reconstructed (source='backfill') history for a
+// charger within [from, to). It is deliberately conservative so it can never
+// destroy good data:
+//   - device-captured rows (source='device') are NEVER deleted or modified;
+//   - only backfill rows whose start falls inside the window are removed, then
+//     re-reconstructed from the 15-min rows;
+//   - a reconstructed session overlapping any device session is skipped, so we
+//     never duplicate a session the wallbox already recorded accurately.
+//
+// RFID is only recovered where the underlying 15-min rows actually have it;
+// periods recorded before RFID reading worked stay without a card.
+func (ec *E3DCCollector) RescanBackfill(chargerID int, from, to time.Time) (deleted int, inserted int, err error) {
+	res, err := ec.db.Exec(`
+		DELETE FROM e3dc_session_history
+		WHERE charger_id = ? AND source = 'backfill' AND start_time >= ? AND start_time < ?
+	`, chargerID, from, to)
+	if err != nil {
+		return 0, 0, err
+	}
+	if d, e := res.RowsAffected(); e == nil {
+		deleted = int(d)
+	}
+
+	// Device sessions overlapping the window — reconstructed sessions that clash
+	// with these are skipped (the device row is authoritative).
+	type span struct{ start, end time.Time }
+	var devSpans []span
+	if drows, derr := ec.db.Query(`
+		SELECT start_time, end_time FROM e3dc_session_history
+		WHERE charger_id = ? AND source = 'device'
+	`, chargerID); derr == nil {
+		for drows.Next() {
+			var sp span
+			if drows.Scan(&sp.start, &sp.end) == nil {
+				devSpans = append(devSpans, sp)
+			}
+		}
+		drows.Close()
+	}
+
+	sessions, err := ec.reconstructSessions(chargerID)
+	if err != nil {
+		return deleted, 0, err
+	}
+	for _, s := range sessions {
+		if s.start.Before(from) || !s.start.Before(to) {
+			continue // outside the requested window
+		}
+		overlap := false
+		for _, sp := range devSpans {
+			if !sp.end.IsZero() && s.start.Before(sp.end) && s.end.After(sp.start) {
+				overlap = true
+				break
+			}
+		}
+		if overlap {
+			continue
+		}
+		if ec.insertBackfillSession(chargerID, s) {
+			inserted++
+		}
+	}
+	log.Printf("E3/DC: rescan backfill charger %d [%s..%s): deleted=%d inserted=%d",
+		chargerID, from.Format("2006-01-02"), to.Format("2006-01-02"), deleted, inserted)
+	return deleted, inserted, nil
 }
 
 // writeSessionHistory upserts one device session. start_time is set only on

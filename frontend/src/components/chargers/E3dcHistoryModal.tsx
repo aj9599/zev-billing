@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, History, Sun, Zap, Battery, CreditCard, Clock, AlertTriangle } from 'lucide-react';
+import { X, History, Sun, Zap, Battery, CreditCard, Clock, AlertTriangle, RefreshCw, Calendar, CheckCircle } from 'lucide-react';
 import { api } from '../../api/client';
 import type { Charger } from '../../types';
 
@@ -49,20 +49,46 @@ export default function E3dcHistoryModal({ charger, onClose, t }: E3dcHistoryMod
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const data = await api.getE3dcSessionHistory(charger.id);
-        if (active) setSessions(data ?? []);
-      } catch (e: any) {
-        if (active) setError(e?.message || String(e));
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => { active = false; };
+  // Rescan (rebuild reconstructed history) panel state.
+  const today = new Date().toISOString().slice(0, 10);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const [showRescan, setShowRescan] = useState(false);
+  const [rFrom, setRFrom] = useState(thirtyDaysAgo);
+  const [rTo, setRTo] = useState(today);
+  const [rescanning, setRescanning] = useState(false);
+  const [rescanResult, setRescanResult] = useState<{ deleted: number; inserted: number } | null>(null);
+  const [rescanError, setRescanError] = useState<string | null>(null);
+
+  const loadSessions = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await api.getE3dcSessionHistory(charger.id);
+      setSessions(data ?? []);
+    } catch (e: any) {
+      setError(e?.message || String(e));
+    } finally {
+      setLoading(false);
+    }
   }, [charger.id]);
+
+  useEffect(() => { loadSessions(); }, [loadSessions]);
+
+  const handleRescan = async () => {
+    if (!rFrom || !rTo) return;
+    setRescanning(true);
+    setRescanError(null);
+    setRescanResult(null);
+    try {
+      const res = await api.rescanE3dcBackfill(charger.id, rFrom, rTo);
+      setRescanResult({ deleted: res.deleted, inserted: res.inserted });
+      await loadSessions(); // refresh the list with the rebuilt rows
+    } catch (e: any) {
+      setRescanError(e?.message || String(e));
+    } finally {
+      setRescanning(false);
+    }
+  };
 
   useEffect(() => {
     const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -112,14 +138,94 @@ export default function E3dcHistoryModal({ charger, onClose, t }: E3dcHistoryMod
               <p style={{ margin: 0, fontSize: 12, color: '#6b7280' }}>{charger.name}</p>
             </div>
           </div>
-          <button onClick={onClose} style={{
-            width: 30, height: 30, borderRadius: 8, border: 'none',
-            backgroundColor: '#f3f4f6', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-          }}>
-            <X size={16} color="#6b7280" />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => { setShowRescan((v) => !v); setRescanResult(null); setRescanError(null); }}
+              title={t('chargers.history.rebuild')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 8,
+                border: '1px solid #fde68a', backgroundColor: showRescan ? '#fef3c7' : '#fffbeb',
+                color: '#b45309', fontSize: 12, fontWeight: 600, cursor: 'pointer'
+              }}
+            >
+              <RefreshCw size={14} />
+              {t('chargers.history.rebuild')}
+            </button>
+            <button onClick={onClose} style={{
+              width: 30, height: 30, borderRadius: 8, border: 'none',
+              backgroundColor: '#f3f4f6', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+              <X size={16} color="#6b7280" />
+            </button>
+          </div>
         </div>
+
+        {/* Rescan / rebuild panel */}
+        {showRescan && (
+          <div style={{ padding: '16px 22px', backgroundColor: '#fffbeb', borderBottom: '1px solid #fde68a' }}>
+            <div style={{
+              display: 'flex', gap: 10, padding: '12px 14px', marginBottom: 14,
+              backgroundColor: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 10,
+              fontSize: 12.5, color: '#92400e', alignItems: 'flex-start', lineHeight: 1.5
+            }}>
+              <AlertTriangle size={16} style={{ marginTop: 1, flexShrink: 0 }} />
+              <span>{t('chargers.history.rebuildWarning')}</span>
+            </div>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontWeight: 600, fontSize: 13, color: '#374151' }}>
+              <Calendar size={14} color="#d97706" />
+              {t('export.dateRange') || 'Date range'}
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 12, color: '#6b7280', fontWeight: 500 }}>{t('export.startDate')}</label>
+                <input type="date" value={rFrom} max={rTo} disabled={rescanning}
+                  onChange={(e) => setRFrom(e.target.value)} style={dateInputStyle} />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 12, color: '#6b7280', fontWeight: 500 }}>{t('export.endDate')}</label>
+                <input type="date" value={rTo} min={rFrom} disabled={rescanning}
+                  onChange={(e) => setRTo(e.target.value)} style={dateInputStyle} />
+              </div>
+              <button
+                onClick={handleRescan}
+                disabled={rescanning || !rFrom || !rTo}
+                style={{
+                  padding: '9px 16px', borderRadius: 8, border: 'none',
+                  background: rescanning ? '#9ca3af' : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                  color: 'white', fontSize: 13, fontWeight: 600,
+                  cursor: rescanning ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap'
+                }}
+              >
+                <RefreshCw size={14} />
+                {rescanning ? t('chargers.history.rebuilding') : t('chargers.history.rebuildConfirm')}
+              </button>
+            </div>
+
+            {rescanResult && (
+              <div style={{
+                marginTop: 12, padding: '10px 14px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0',
+                borderRadius: 10, color: '#166534', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8
+              }}>
+                <CheckCircle size={15} />
+                {t('chargers.history.rebuildDone')
+                  .replace('{inserted}', String(rescanResult.inserted))
+                  .replace('{deleted}', String(rescanResult.deleted))}
+              </div>
+            )}
+            {rescanError && (
+              <div style={{
+                marginTop: 12, padding: '10px 14px', backgroundColor: '#fef2f2', border: '1px solid #fecaca',
+                borderRadius: 10, color: '#b91c1c', fontSize: 13, display: 'flex', alignItems: 'flex-start', gap: 8
+              }}>
+                <AlertTriangle size={15} style={{ marginTop: 1, flexShrink: 0 }} />
+                <span style={{ wordBreak: 'break-word' }}>{rescanError}</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Summary */}
         {sessions.length > 0 && (
@@ -230,3 +336,8 @@ export default function E3dcHistoryModal({ charger, onClose, t }: E3dcHistoryMod
 
   return createPortal(content, document.body);
 }
+
+const dateInputStyle: React.CSSProperties = {
+  width: '100%', padding: '8px 10px', border: '1px solid #e5e7eb',
+  borderRadius: 8, fontSize: 13, color: '#1f2937', backgroundColor: 'white', outline: 'none'
+};

@@ -475,6 +475,19 @@ class ApiClient {
     return this.request(`/chargers/${chargerId}/e3dc-session-history?limit=${limit}`);
   }
 
+  // Rebuild the reconstructed (backfill) E3/DC history for a date range. Device-
+  // captured sessions are never touched; only backfill rows in the window change.
+  async rescanE3dcBackfill(chargerId: number, from: string, to: string): Promise<{
+    status: string;
+    deleted: number;
+    inserted: number;
+  }> {
+    return this.request(`/chargers/${chargerId}/e3dc-backfill-rescan`, {
+      method: 'POST',
+      body: JSON.stringify({ from, to }),
+    });
+  }
+
   // NEW: Delete all sessions for a charger
   async deleteChargerSessions(chargerId: number): Promise<{
     status: string;

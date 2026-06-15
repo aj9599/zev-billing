@@ -483,6 +483,15 @@ func (dc *DataCollector) GetE3DCChargerData(chargerID int) (*E3DCChargerData, bo
 	return dc.e3dcCollector.GetChargerData(chargerID)
 }
 
+// RescanE3DCBackfill rebuilds reconstructed E3/DC session history for a charger
+// within [from, to), without touching device-captured rows.
+func (dc *DataCollector) RescanE3DCBackfill(chargerID int, from, to time.Time) (int, int, error) {
+	if dc.e3dcCollector == nil {
+		return 0, 0, fmt.Errorf("e3dc collector not running")
+	}
+	return dc.e3dcCollector.RescanBackfill(chargerID, from, to)
+}
+
 func (dc *DataCollector) collectAndSaveAllData() {
 	dc.collectingMu.Lock()
 	dc.isCollecting = true

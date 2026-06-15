@@ -371,6 +371,65 @@ func (h *ChargerHandler) GetE3DCSessionHistory(w http.ResponseWriter, r *http.Re
 	json.NewEncoder(w).Encode(sessions)
 }
 
+// RescanE3DCBackfill rebuilds the reconstructed (backfill) charging history for
+// an E3/DC charger within a date range. Device-captured sessions are never
+// touched; only backfill rows in the window are rebuilt from the 15-min data.
+func (h *ChargerHandler) RescanE3DCBackfill(w http.ResponseWriter, r *http.Request) {
+	chargerID, err := strconv.Atoi(mux.Vars(r)["id"])
+	if err != nil {
+		http.Error(w, "Invalid charger ID", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.From == "" || req.To == "" {
+		http.Error(w, "Both 'from' and 'to' (YYYY-MM-DD) are required", http.StatusBadRequest)
+		return
+	}
+
+	from, err := time.ParseInLocation("2006-01-02", req.From, time.Local)
+	if err != nil {
+		http.Error(w, "Invalid 'from' date (YYYY-MM-DD)", http.StatusBadRequest)
+		return
+	}
+	to, err := time.ParseInLocation("2006-01-02", req.To, time.Local)
+	if err != nil {
+		http.Error(w, "Invalid 'to' date (YYYY-MM-DD)", http.StatusBadRequest)
+		return
+	}
+	to = to.Add(24 * time.Hour) // make 'to' inclusive of the whole day
+	if !to.After(from) {
+		http.Error(w, "'to' must be on or after 'from'", http.StatusBadRequest)
+		return
+	}
+
+	if h.dataCollector == nil {
+		http.Error(w, "Data collector not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	deleted, inserted, err := h.dataCollector.RescanE3DCBackfill(chargerID, from, to)
+	if err != nil {
+		log.Printf("ERROR: E3/DC backfill rescan failed for charger %d: %v", chargerID, err)
+		http.Error(w, "Rescan failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":   "ok",
+		"deleted":  deleted,
+		"inserted": inserted,
+	})
+}
+
 // DeleteChargerSessions deletes all sessions for a specific charger
 func (h *ChargerHandler) DeleteChargerSessions(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
