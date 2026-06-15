@@ -42,6 +42,10 @@ const CHARGER_COLORS = [
 const FIXED_COLORS: Record<string, string> = {
   'solar_meter': '#fbbf24',
   'total_meter': '#3b82f6',
+  'heating_meter': '#ef4444',
+  'house_meter': '#14b8a6',
+  'battery_meter': '#a855f7',
+  'other': '#f97316',
   'default': '#6b7280'
 };
 

@@ -535,7 +535,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			FROM meters m
 			WHERE m.building_id = ? 
 			AND COALESCE(m.is_active, 1) = 1
-			AND m.meter_type IN ('apartment_meter', 'solar_meter', 'total_meter')
+			AND m.meter_type IN ('apartment_meter', 'solar_meter', 'total_meter', 'heating_meter', 'house_meter', 'battery_meter', 'other')
 			ORDER BY m.meter_type, m.name
 		`, bi.id)
 
