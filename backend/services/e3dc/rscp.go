@@ -3,6 +3,8 @@ package e3dc
 import (
 	"encoding/hex"
 	"fmt"
+	"log"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -10,6 +12,27 @@ import (
 
 	"github.com/spali/go-rscp/rscp"
 )
+
+// debugEnabled turns on verbose RSCP response dumps (set E3DC_DEBUG=1). Use it
+// once against real hardware to confirm the wallbox status/session layout.
+func debugEnabled() bool { return os.Getenv("E3DC_DEBUG") == "1" }
+
+// dumpMessage renders an RSCP message tree for diagnostics.
+func dumpMessage(m rscp.Message, depth int) string {
+	indent := strings.Repeat("  ", depth)
+	switch v := m.Value.(type) {
+	case []rscp.Message:
+		s := fmt.Sprintf("%s%v (container, %d)\n", indent, m.Tag, len(v))
+		for i := range v {
+			s += dumpMessage(v[i], depth+1)
+		}
+		return s
+	case []byte:
+		return fmt.Sprintf("%s%v = bytes[%d] %s\n", indent, m.Tag, len(v), hex.EncodeToString(v))
+	default:
+		return fmt.Sprintf("%s%v = %v\n", indent, m.Tag, m.Value)
+	}
+}
 
 // responseFlag is bit 23 of a tag; set in response tags, clear in request tags.
 const responseFlag = rscp.Tag(1 << 23)
@@ -147,13 +170,16 @@ func (r *rscpClient) Read() (*Snapshot, error) {
 // readWallboxSession reads the current charging session's RFID token and
 // solar/total energy. Non-fatal: failures leave the session fields empty.
 func (r *rscpClient) readWallboxSession(snap *Snapshot) {
-	container := rscp.NewMessage(rscp.WB_REQ_DATA, []rscp.Message{
-		*rscp.NewMessage(rscp.WB_INDEX, uint8(r.cfg.WallboxIndex)),
-		*rscp.NewMessage(rscp.WB_REQ_SESSION, nil),
-	})
-	res, err := r.send(*container)
+	// WB_REQ_SESSION is a top-level query for the *current* session — it is NOT
+	// wrapped in a WB_REQ_DATA/WB_INDEX container (evcc sends it bare, and the
+	// device ignores the wrapped form). The response is a container of session
+	// fields.
+	res, err := r.send(*rscp.NewMessage(rscp.WB_REQ_SESSION, nil))
 	if err != nil {
 		return
+	}
+	if debugEnabled() {
+		log.Printf("e3dc rscp WB_REQ_SESSION response:\n%s", dumpMessage(*res, 0))
 	}
 	inner, ok := res.Value.([]rscp.Message)
 	if !ok {
@@ -229,6 +255,9 @@ func (r *rscpClient) readWallbox(snap *Snapshot) {
 	if err != nil {
 		return
 	}
+	if debugEnabled() {
+		log.Printf("e3dc rscp WB_REQ_DATA response:\n%s", dumpMessage(*res, 0))
+	}
 	inner, ok := res.Value.([]rscp.Message)
 	if !ok {
 		return
@@ -266,24 +295,45 @@ func (r *rscpClient) readWallbox(snap *Snapshot) {
 			l2, _ = mustFloat(m.Value)
 		case rscp.WB_REQ_PM_POWER_L3:
 			l3, _ = mustFloat(m.Value)
-		case rscp.WB_REQ_EXTERN_DATA_ALG:
+		case rscp.WB_REQ_EXTERN_DATA_ALG, rscp.WB_EXTERN_DATA_ALG:
 			parseWallboxStatus(m.Value, snap)
 		}
 	}
 	snap.WallboxPowerW = l1 + l2 + l3
 }
 
-// parseWallboxStatus decodes the WB_EXTERN_DATA_ALG byte array. Byte index 2 is
-// a status bitfield: bit5 (0x20) = charging, bit3 (0x08) = vehicle connected.
+// parseWallboxStatus decodes the WB_EXTERN_DATA_ALG status byte array. In
+// go-rscp v0.2.2 WB_EXTERN_DATA_ALG is a Container, so the raw bytes are nested
+// one or two levels deep (evcc reaches them via rscpContainer→rscpContainer→
+// rscpBytes); on some firmwares the value is a plain byte array. findBytes
+// handles both. Byte index 2 is a status bitfield matching evcc:
+// bit5 (0x20) = charging (StatusC), bit3 (0x08) = vehicle connected (StatusB).
 func parseWallboxStatus(v interface{}, snap *Snapshot) {
-	b, ok := v.([]byte)
-	if !ok || len(b) < 3 {
+	b := findBytes(v)
+	if len(b) < 3 {
 		return
 	}
 	status := b[2]
 	snap.WallboxConnected = status&0x08 != 0
 	snap.WallboxCharging = status&0x20 != 0
 	snap.WallboxStatusOK = true
+}
+
+// findBytes recursively descends a possibly-nested RSCP value and returns the
+// first []byte it finds. Used to reach the status byte array inside the
+// WB_EXTERN_DATA_ALG container regardless of how deeply the firmware nests it.
+func findBytes(v interface{}) []byte {
+	switch t := v.(type) {
+	case []byte:
+		return t
+	case []rscp.Message:
+		for i := range t {
+			if b := findBytes(t[i].Value); b != nil {
+				return b
+			}
+		}
+	}
+	return nil
 }
 
 func (r *rscpClient) CanControl() bool { return true }
