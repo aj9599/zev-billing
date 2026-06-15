@@ -455,6 +455,29 @@ class ApiClient {
     return response.json();
   }
 
+  // Backfill history from an E3/DC wallbox session export (myE3DC CSV).
+  async importE3dcSessionsCSV(chargerId: number, file: File): Promise<{
+    status: string;
+    sessions_imported: number;
+    slots_written: number;
+    total_kwh: number;
+    skipped: number;
+    from: string;
+    to: string;
+  }> {
+    const formData = new FormData();
+    formData.append('csv', file);
+    const response = await fetch(`${this.getBaseUrl()}/chargers/${chargerId}/import-e3dc-csv`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${this.token}` },
+      body: formData,
+    });
+    if (!response.ok) {
+      throw new Error((await response.text()) || 'Import failed');
+    }
+    return response.json();
+  }
+
   // NEW: Get sessions for a charger
   async getChargerSessions(chargerId: number, limit: number = 100): Promise<any[]> {
     return this.request(`/chargers/${chargerId}/sessions?limit=${limit}`);

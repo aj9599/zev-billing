@@ -268,6 +268,7 @@ func main() {
 	api.HandleFunc("/chargers/reorder", chargerHandler.Reorder).Methods("POST") // Persist custom card order
 	api.HandleFunc("/chargers/{id}/deletion-impact", chargerHandler.GetDeletionImpact).Methods("GET")
 	api.HandleFunc("/chargers/{id}/import-sessions", chargerHandler.ImportChargerSessionsFromCSV).Methods("POST")              // NEW: CSV Import
+	api.HandleFunc("/chargers/{id}/import-e3dc-csv", chargerHandler.ImportE3DCSessionsCSV).Methods("POST")                     // E3/DC session export backfill
 	api.HandleFunc("/chargers/{id}/sync-zaptec-history", chargerHandler.SyncZaptecHistory).Methods("POST")                     // NEW: Zaptec API range sync
 	api.HandleFunc("/chargers/{id}/sessions", chargerHandler.GetChargerSessions).Methods("GET")                                // NEW: Get sessions
 	api.HandleFunc("/chargers/{id}/sessions", chargerHandler.DeleteChargerSessions).Methods("DELETE")                          // NEW: Delete sessions

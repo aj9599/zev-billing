@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, History, Sun, Zap, Battery, Clock, AlertTriangle, RefreshCw, Calendar, CheckCircle, User as UserIcon } from 'lucide-react';
+import { X, History, Sun, Zap, Battery, Clock, AlertTriangle, RefreshCw, Calendar, CheckCircle, User as UserIcon, Upload } from 'lucide-react';
 import { api } from '../../api/client';
 import type { Charger, User } from '../../types';
 
@@ -62,6 +62,11 @@ export default function E3dcHistoryModal({ charger, onClose, t }: E3dcHistoryMod
   const [rescanning, setRescanning] = useState(false);
   const [rescanResult, setRescanResult] = useState<{ deleted: number; inserted: number } | null>(null);
   const [rescanError, setRescanError] = useState<string | null>(null);
+
+  // E3/DC CSV import.
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
 
   // Users (for the assignment dropdown) + per-session save state.
   const [users, setUsers] = useState<User[]>([]);
@@ -154,6 +159,27 @@ export default function E3dcHistoryModal({ charger, onClose, t }: E3dcHistoryMod
     }
   };
 
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) e.target.value = ''; // allow re-selecting the same file later
+    if (!file) return;
+    setImporting(true);
+    setImportMsg(null);
+    try {
+      const res = await api.importE3dcSessionsCSV(charger.id, file);
+      setImportMsg(t('chargers.history.importDone')
+        .replace('{sessions}', String(res.sessions_imported))
+        .replace('{kwh}', res.total_kwh.toFixed(1))
+        .replace('{from}', res.from)
+        .replace('{to}', res.to));
+      await loadSessions();
+    } catch (err: any) {
+      setImportMsg(t('chargers.history.importFailed') + ': ' + (err?.message || String(err)));
+    } finally {
+      setImporting(false);
+    }
+  };
+
   useEffect(() => {
     const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onEsc);
@@ -203,6 +229,20 @@ export default function E3dcHistoryModal({ charger, onClose, t }: E3dcHistoryMod
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input ref={fileRef} type="file" accept=".csv" onChange={handleImportFile} style={{ display: 'none' }} />
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={importing}
+              title={t('chargers.history.import')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 8,
+                border: '1px solid #c7d2fe', backgroundColor: '#eef2ff',
+                color: '#4338ca', fontSize: 12, fontWeight: 600, cursor: importing ? 'wait' : 'pointer'
+              }}
+            >
+              <Upload size={14} />
+              {importing ? t('chargers.history.importing') : t('chargers.history.import')}
+            </button>
             <button
               onClick={() => { setShowRescan((v) => !v); setRescanResult(null); setRescanError(null); }}
               title={t('chargers.history.rebuild')}
@@ -306,6 +346,14 @@ export default function E3dcHistoryModal({ charger, onClose, t }: E3dcHistoryMod
 
         {/* Body */}
         <div style={{ padding: '16px 22px', overflowY: 'auto', flex: 1 }}>
+          {importMsg && (
+            <div style={{
+              display: 'flex', gap: 8, padding: '10px 14px', marginBottom: 14, borderRadius: 10,
+              background: '#eef2ff', border: '1px solid #c7d2fe', color: '#3730a3', fontSize: 13, alignItems: 'center'
+            }}>
+              <Upload size={15} style={{ flexShrink: 0 }} /> {importMsg}
+            </div>
+          )}
           {loading && (
             <div style={{ textAlign: 'center', color: '#6b7280', padding: '40px 0', fontSize: 14 }}>
               {t('common.loading') || 'Loading…'}
