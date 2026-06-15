@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import * as React from 'react';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { Users, Building, Zap, Car, Sun, Battery, LayoutDashboard, Home, Eye, EyeOff, ChevronDown, ChevronRight, Activity, DollarSign, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
+import { Users, Building, Zap, Car, Sun, Battery, Flame, LayoutDashboard, Home, Eye, EyeOff, ChevronDown, ChevronRight, Activity, DollarSign, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 import { api } from '../api/client';
 import type { DashboardStats, SelfConsumptionData, SystemHealth, CostOverview, EnergyFlowData, EnergyFlowLiveData } from '../types';
 import { useTranslation } from '../i18n';
@@ -102,8 +102,16 @@ function getMeterTypeIcon(meterType: string, t: any): { Icon: any; label: string
       return { Icon: Home, label: t('dashboard.meterTypes.apartment') };
     case 'total_meter':
       return { Icon: Zap, label: t('dashboard.meterTypes.total') };
+    case 'heating_meter':
+      return { Icon: Flame, label: t('meters.heatingMeter') };
+    case 'house_meter':
+      return { Icon: Home, label: t('meters.houseMeter') };
+    case 'battery_meter':
+      return { Icon: Battery, label: t('meters.batteryMeter') };
+    case 'other':
+      return { Icon: Zap, label: t('meters.other') };
     default:
-      return { Icon: Zap, label: meterType.replace('_', ' ') };
+      return { Icon: Zap, label: meterType.replace(/_/g, ' ') };
   }
 }
 
@@ -1275,8 +1283,6 @@ export default function Dashboard() {
 
                   meters.forEach(meter => {
                     const readings = meter.data || [];
-                    const isSolar = meter.meter_type === 'solar_meter';
-                    const isCharger = meter.meter_type === 'charger';
 
                     readings.forEach(reading => {
                       const roundedDate = roundToNearest15Minutes(reading.timestamp);
@@ -1294,9 +1300,11 @@ export default function Dashboard() {
                       const meterKey = getMeterUniqueKey(meter);
                       const current = timeMap.get(timestampKey);
 
-                      if (isCharger || isSolar || reading.power !== 0) {
-                        current[meterKey] = reading.power;
-                      }
+                      // Record every meter's reading so each meter gets its own
+                      // line/area — even ones that read 0 W at sample time (e.g. an
+                      // idle heating meter). Previously a 0 reading on a non-charger/
+                      // non-solar meter was dropped, hiding the meter from the chart.
+                      current[meterKey] = reading.power;
                     });
                   });
 
