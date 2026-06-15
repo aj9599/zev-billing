@@ -495,6 +495,8 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 		LastUpdate       string           `json:"last_update"`
 		TotalEnergy      float64          `json:"total_energy,omitempty"`
 		SessionEnergy    float64          `json:"session_energy,omitempty"`
+		SessionSolar     float64          `json:"session_solar_kwh,omitempty"`
+		SessionGrid      float64          `json:"session_grid_kwh,omitempty"`
 		IsOnline         bool             `json:"is_online,omitempty"`
 		CurrentPowerKW   float64          `json:"current_power_kw,omitempty"`
 		Voltage          float64          `json:"voltage,omitempty"`
@@ -622,6 +624,8 @@ func (h *ChargerHandler) GetLiveData(w http.ResponseWriter, r *http.Request) {
 			if e3dcData, exists := h.dataCollector.GetE3DCChargerData(chargerID); exists {
 				data.TotalEnergy = e3dcData.TotalEnergy
 				data.SessionEnergy = e3dcData.SessionEnergy
+				data.SessionSolar = e3dcData.SessionSolarEnergy
+				data.SessionGrid = e3dcData.SessionGridEnergy
 				data.IsOnline = e3dcData.IsOnline
 				data.CurrentPowerKW = e3dcData.Power_kW
 				data.PowerKWh = e3dcData.TotalEnergy

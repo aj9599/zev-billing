@@ -1,4 +1,4 @@
-import { Edit2, Trash2, Wifi, WifiOff, Battery, TrendingUp, Info, History, CreditCard } from 'lucide-react';
+import { Edit2, Trash2, Wifi, WifiOff, Battery, TrendingUp, Info, History, CreditCard, Sun, Zap } from 'lucide-react';
 import type { Charger } from '../../types';
 import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus, GenericChargerConnectionStatus } from './hooks/useChargerStatus';
 import { getPreset } from '../chargerPresets';
@@ -120,6 +120,12 @@ export default function ChargerCard({
     // RFID of the card on the active session (E3/DC). Empty until a card is read.
     const isE3dc = charger.connection_type === 'e3dc_api';
     const rfid = liveData?.rfid;
+
+    // E3/DC reports the session's solar vs grid split from its own accounting
+    // (the same basis as mode_based billing). Shown as current or last session.
+    const sessionSolar = liveData?.session_solar_kwh ?? 0;
+    const sessionGrid = liveData?.session_grid_kwh ?? 0;
+    const hasSessionSplit = isE3dc && (sessionSolar > 0 || sessionGrid > 0);
 
     // Status text. For E3/DC "awaiting start" (vehicle connected, state 2) there is
     // no separate authorization step: once a card has been read the vehicle is
@@ -307,6 +313,29 @@ export default function ChargerCard({
                                 </div>
                                 <span style={{ fontSize: '16px', fontWeight: '700', color: isCharging ? '#16a34a' : '#374151' }}>
                                     {displaySessionEnergy.toFixed(3)} <span style={{ fontSize: '12px', fontWeight: '600', color: '#9ca3af' }}>kWh</span>
+                                </span>
+                            </div>
+                        )}
+
+                        {hasSessionSplit && (
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                <span style={{
+                                    display: 'flex', alignItems: 'center', gap: '4px',
+                                    padding: '3px 8px', borderRadius: '7px',
+                                    backgroundColor: 'rgba(245,158,11,0.12)', color: '#b45309',
+                                    fontSize: '11px', fontWeight: '700'
+                                }}>
+                                    <Sun size={12} color="#f59e0b" />
+                                    {t('chargers.session.solar')} {sessionSolar.toFixed(2)} kWh
+                                </span>
+                                <span style={{
+                                    display: 'flex', alignItems: 'center', gap: '4px',
+                                    padding: '3px 8px', borderRadius: '7px',
+                                    backgroundColor: 'rgba(100,116,139,0.12)', color: '#475569',
+                                    fontSize: '11px', fontWeight: '700'
+                                }}>
+                                    <Zap size={12} color="#64748b" />
+                                    {t('chargers.session.grid')} {sessionGrid.toFixed(2)} kWh
                                 </span>
                             </div>
                         )}

@@ -11,6 +11,8 @@ export interface LiveChargerData {
   // Zaptec-specific enhanced data
   total_energy?: number;
   session_energy?: number;
+  session_solar_kwh?: number;
+  session_grid_kwh?: number;
   is_online?: boolean;
   current_power_kw?: number;
   voltage?: number;

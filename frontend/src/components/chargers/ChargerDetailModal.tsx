@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Battery, TrendingUp, TrendingDown, Gauge, Activity, Calendar, BarChart3, Clock, User, Zap, Wifi, WifiOff, CreditCard } from 'lucide-react';
+import { X, Battery, TrendingUp, TrendingDown, Gauge, Activity, Calendar, BarChart3, Clock, User, Zap, Wifi, WifiOff, CreditCard, Sun } from 'lucide-react';
 import type { Charger } from '../../types';
 import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus } from './hooks/useChargerStatus';
 import { getStateDisplay, getModeDisplay } from './utils/chargerUtils';
@@ -94,6 +94,12 @@ export default function ChargerDetailModal({
     const modeValue = liveData?.mode ?? '1';
     const modeDisplay = getModeDisplay(charger, modeValue, t);
     const stateDisplay = getStateDisplay(charger, stateValue, t);
+
+    // E3/DC session solar/grid split (from the E3/DC's own accounting).
+    const isE3dc = charger.connection_type === 'e3dc_api';
+    const sessionSolar = liveData?.session_solar_kwh ?? 0;
+    const sessionGrid = liveData?.session_grid_kwh ?? 0;
+    const hasSessionSplit = isE3dc && (sessionSolar > 0 || sessionGrid > 0);
 
     const hasEnhancedStats = charger.connection_type === 'loxone_api' && (
         liveData?.weekly_energy !== undefined ||
@@ -270,6 +276,41 @@ export default function ChargerDetailModal({
                         </div>
                     )}
                 </div>
+
+                {/* E3/DC session solar/grid split */}
+                {hasSessionSplit && (
+                    <div style={{
+                        padding: '14px', backgroundColor: '#fffbeb', borderRadius: '14px',
+                        border: '1px solid #fde68a', marginBottom: '20px'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+                            <Sun size={14} color="#f59e0b" />
+                            <span style={{ fontSize: '12px', fontWeight: '700', color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                {isCharging ? t('chargers.energy.currentSession') : t('chargers.energy.lastSession')} — {t('chargers.session.splitTitle')}
+                            </span>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                            <div style={{ padding: '12px', backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: '12px', border: '1px solid #fcd34d' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px' }}>
+                                    <Sun size={13} color="#f59e0b" />
+                                    <span style={{ fontSize: '11px', fontWeight: '700', color: '#b45309', textTransform: 'uppercase' }}>{t('chargers.session.solar')}</span>
+                                </div>
+                                <div style={{ fontSize: '20px', fontWeight: '700', color: '#1f2937' }}>
+                                    {sessionSolar.toFixed(3)} <span style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280' }}>kWh</span>
+                                </div>
+                            </div>
+                            <div style={{ padding: '12px', backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px' }}>
+                                    <Zap size={13} color="#64748b" />
+                                    <span style={{ fontSize: '11px', fontWeight: '700', color: '#475569', textTransform: 'uppercase' }}>{t('chargers.session.grid')}</span>
+                                </div>
+                                <div style={{ fontSize: '20px', fontWeight: '700', color: '#1f2937' }}>
+                                    {sessionGrid.toFixed(3)} <span style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280' }}>kWh</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Active Session Info */}
                 {liveSession && sessionEnergy > 0 && (
