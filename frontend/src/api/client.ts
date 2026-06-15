@@ -488,6 +488,18 @@ class ApiClient {
     });
   }
 
+  // Assign (or clear) the RFID/user for one E3/DC history session. Also updates
+  // the underlying 15-min rows so billing attributes the energy. rfid='' clears.
+  async assignE3dcSession(chargerId: number, sessionId: number, rfid: string): Promise<{
+    status: string;
+    sessions_updated: number;
+  }> {
+    return this.request(`/chargers/${chargerId}/e3dc-session-history/${sessionId}/assign`, {
+      method: 'POST',
+      body: JSON.stringify({ rfid }),
+    });
+  }
+
   // NEW: Delete all sessions for a charger
   async deleteChargerSessions(chargerId: number): Promise<{
     status: string;

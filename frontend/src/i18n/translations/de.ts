@@ -1787,6 +1787,8 @@ export const de: Translations = {
   'chargers.history.rebuilding': 'Wird aufgebaut…',
   'chargers.history.rebuildWarning': 'Dies baut die rekonstruierten Sitzungen für den gewählten Zeitraum aus den 15-Minuten-Daten neu auf. Live vom Ladegerät erfasste Sitzungen werden nie geändert, und Daten ausserhalb des Zeitraums bleiben unberührt. Hinweis: RFID kann nur für Zeiträume wiederhergestellt werden, in denen sie tatsächlich aufgezeichnet wurde — ältere Daten ohne Karte bleiben ohne Karte.',
   'chargers.history.rebuildDone': 'Fertig — {inserted} Sitzung(en) neu aufgebaut, {deleted} alte Einträge ersetzt.',
+  'chargers.history.unassigned': 'Nicht zugewiesen',
+  'chargers.history.assignFailed': 'Benutzer konnte nicht zugewiesen werden',
   'chargers.status.noCarConnected': 'Kein Fahrzeug angeschlossen',
   'chargers.status.ready': 'Bereit zum Laden',
   'chargers.status.chargingDesc': 'Fahrzeug wird mit optimiertem Stromfluss geladen',

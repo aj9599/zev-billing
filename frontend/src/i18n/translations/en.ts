@@ -1786,6 +1786,8 @@ export const en: Translations = {
   'chargers.history.rebuilding': 'Rebuilding…',
   'chargers.history.rebuildWarning': 'This rebuilds the reconstructed sessions for the selected date range from the 15-minute records. Sessions captured live from the charger are never changed, and dates outside the range stay untouched. Note: RFID can only be restored for periods where it was actually recorded — older data without a card stays without one.',
   'chargers.history.rebuildDone': 'Done — {inserted} session(s) rebuilt, {deleted} old entr(ies) replaced.',
+  'chargers.history.unassigned': 'Unassigned',
+  'chargers.history.assignFailed': 'Failed to assign user',
   'chargers.status.noCarConnected': 'No car connected',
   'chargers.status.ready': 'Ready to charge',
   'chargers.status.chargingDesc': 'Vehicle is charging with optimized power flow',

@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, History, Sun, Zap, Battery, CreditCard, Clock, AlertTriangle, RefreshCw, Calendar, CheckCircle } from 'lucide-react';
+import { X, History, Sun, Zap, Battery, Clock, AlertTriangle, RefreshCw, Calendar, CheckCircle, User as UserIcon } from 'lucide-react';
 import { api } from '../../api/client';
-import type { Charger } from '../../types';
+import type { Charger, User } from '../../types';
+
+// First RFID token from a user's comma-separated card list (charger_ids holds
+// the RFID cards for RFID-attributed chargers like E3/DC).
+const firstRfid = (u: User): string => (u.charger_ids || '').split(',').map((s) => s.trim()).filter(Boolean)[0] || '';
 
 interface E3dcHistoryModalProps {
   charger: Charger;
@@ -59,6 +63,10 @@ export default function E3dcHistoryModal({ charger, onClose, t }: E3dcHistoryMod
   const [rescanResult, setRescanResult] = useState<{ deleted: number; inserted: number } | null>(null);
   const [rescanError, setRescanError] = useState<string | null>(null);
 
+  // Users (for the assignment dropdown) + per-session save state.
+  const [users, setUsers] = useState<User[]>([]);
+  const [savingId, setSavingId] = useState<number | null>(null);
+
   const loadSessions = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -73,6 +81,40 @@ export default function E3dcHistoryModal({ charger, onClose, t }: E3dcHistoryMod
   }, [charger.id]);
 
   useEffect(() => { loadSessions(); }, [loadSessions]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const all = await api.getUsers(charger.building_id);
+        setUsers((all ?? []).filter((u) => firstRfid(u)));
+      } catch { /* dropdown just stays empty */ }
+    })();
+  }, [charger.building_id]);
+
+  // Map an RFID token to the owning user, so a session shows who it belongs to.
+  const userByRfid = useMemo(() => {
+    const m = new Map<string, User>();
+    for (const u of users) {
+      for (const tok of (u.charger_ids || '').split(',').map((s) => s.trim()).filter(Boolean)) {
+        if (!m.has(tok)) m.set(tok, u);
+      }
+    }
+    return m;
+  }, [users]);
+
+  const assignUser = async (session: E3dcSession, userId: string) => {
+    const rfid = userId ? firstRfid(users.find((u) => String(u.id) === userId)!) : '';
+    setSavingId(session.id);
+    try {
+      await api.assignE3dcSession(charger.id, session.id, rfid);
+      // Reflect locally without a full reload.
+      setSessions((prev) => prev.map((s) => (s.id === session.id ? { ...s, rfid } : s)));
+    } catch (e: any) {
+      alert(t('chargers.history.assignFailed') + ': ' + (e?.message || String(e)));
+    } finally {
+      setSavingId(null);
+    }
+  };
 
   const handleRescan = async () => {
     if (!rFrom || !rTo) return;
@@ -315,15 +357,31 @@ export default function E3dcHistoryModal({ charger, onClose, t }: E3dcHistoryMod
                         </span>
                       </>
                     )}
-                    {s.rfid && (
-                      <span style={{
-                        display: 'flex', alignItems: 'center', gap: 4, padding: '4px 9px', borderRadius: 7,
-                        backgroundColor: 'rgba(124,58,237,0.1)', color: '#5b21b6', fontSize: 12, fontWeight: 700,
-                        fontFamily: 'monospace'
-                      }} title={s.rfid}>
-                        <CreditCard size={12} color="#7c3aed" /> {s.rfid}
-                      </span>
-                    )}
+                    {/* User assignment — pick the tenant; sets the RFID on this
+                        session and the underlying 15-min rows so billing follows. */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <UserIcon size={12} color="#7c3aed" />
+                      <select
+                        value={userByRfid.get(s.rfid)?.id ?? ''}
+                        disabled={savingId === s.id}
+                        onChange={(e) => assignUser(s, e.target.value)}
+                        style={{
+                          fontSize: 12, fontWeight: 600, color: '#5b21b6',
+                          border: '1px solid #e9d5ff', borderRadius: 7, padding: '3px 6px',
+                          backgroundColor: 'white', cursor: savingId === s.id ? 'wait' : 'pointer', maxWidth: 200
+                        }}
+                      >
+                        <option value="">{t('chargers.history.unassigned')}</option>
+                        {users.map((u) => (
+                          <option key={u.id} value={u.id}>{u.first_name} {u.last_name}</option>
+                        ))}
+                      </select>
+                      {s.rfid && !userByRfid.has(s.rfid) && (
+                        <span style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }} title={s.rfid}>
+                          {s.rfid}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               );

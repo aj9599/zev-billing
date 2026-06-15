@@ -371,6 +371,76 @@ func (h *ChargerHandler) GetE3DCSessionHistory(w http.ResponseWriter, r *http.Re
 	json.NewEncoder(w).Encode(sessions)
 }
 
+// AssignE3DCSession sets (or clears) the RFID/user for one E3/DC history session
+// AND the underlying 15-min charger_sessions rows in that session's time window,
+// so billing attributes the energy to the chosen tenant. Pass an empty rfid to
+// unassign. This is the manual fix for sessions recorded without a card.
+func (h *ChargerHandler) AssignE3DCSession(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	chargerID, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Invalid charger ID", http.StatusBadRequest)
+		return
+	}
+	sessionID, err := strconv.Atoi(vars["sessionId"])
+	if err != nil {
+		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		RFID string `json:"rfid"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	rfid := strings.TrimSpace(req.RFID)
+
+	// Look up the session window.
+	var start, end time.Time
+	err = h.db.QueryRow(`
+		SELECT start_time, end_time FROM e3dc_session_history WHERE id = ? AND charger_id = ?
+	`, sessionID, chargerID).Scan(&start, &end)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Session not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		log.Printf("AssignE3DCSession lookup failed: %v", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	// Update the history row (what the modal shows).
+	if _, err := h.db.Exec(`UPDATE e3dc_session_history SET rfid = ? WHERE id = ?`, rfid, sessionID); err != nil {
+		log.Printf("AssignE3DCSession history update failed: %v", err)
+		http.Error(w, "Failed to update session", http.StatusInternalServerError)
+		return
+	}
+
+	// Update the underlying 15-min rows in the session window so billing follows.
+	var updated int64
+	if !end.IsZero() && end.After(start) {
+		res, err := h.db.Exec(`
+			UPDATE charger_sessions SET user_id = ?
+			WHERE charger_id = ? AND session_time >= ? AND session_time < ?
+		`, rfid, chargerID, start, end)
+		if err != nil {
+			log.Printf("AssignE3DCSession charger_sessions update failed: %v", err)
+			http.Error(w, "Failed to update billing rows", http.StatusInternalServerError)
+			return
+		}
+		updated, _ = res.RowsAffected()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":           "ok",
+		"sessions_updated": updated,
+	})
+}
+
 // RescanE3DCBackfill rebuilds the reconstructed (backfill) charging history for
 // an E3/DC charger within a date range. Device-captured sessions are never
 // touched; only backfill rows in the window are rebuilt from the 15-min data.

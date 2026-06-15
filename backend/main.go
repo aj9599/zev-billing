@@ -240,6 +240,7 @@ func main() {
 	api.HandleFunc("/chargers/{id}/sessions", chargerHandler.DeleteChargerSessions).Methods("DELETE")             // NEW: Delete sessions
 	api.HandleFunc("/chargers/{id}/e3dc-session-history", chargerHandler.GetE3DCSessionHistory).Methods("GET")    // E3/DC per-session history
 	api.HandleFunc("/chargers/{id}/e3dc-backfill-rescan", chargerHandler.RescanE3DCBackfill).Methods("POST")     // E3/DC rebuild backfill in range
+	api.HandleFunc("/chargers/{id}/e3dc-session-history/{sessionId}/assign", chargerHandler.AssignE3DCSession).Methods("POST") // E3/DC manual RFID/user assignment
 	api.HandleFunc("/chargers", chargerHandler.List).Methods("GET")
 	api.HandleFunc("/chargers", chargerHandler.Create).Methods("POST")
 	api.HandleFunc("/chargers/{id}", chargerHandler.Get).Methods("GET")
