@@ -27,7 +27,7 @@ func NewDashboardHandler(db *sql.DB, dataCollector *services.DataCollector) *Das
 func roundTo15Min(t time.Time) time.Time {
 	minutes := t.Minute()
 	var roundedMinutes int
-	
+
 	if minutes < 8 {
 		roundedMinutes = 0
 	} else if minutes < 23 {
@@ -39,7 +39,7 @@ func roundTo15Min(t time.Time) time.Time {
 	} else {
 		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour()+1, 0, 0, 0, t.Location())
 	}
-	
+
 	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), roundedMinutes, 0, 0, t.Location())
 }
 
@@ -61,46 +61,46 @@ func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error counting users: %v", err)
 		stats.TotalUsers = 0
 	}
-	
+
 	// Count regular users
 	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users WHERE COALESCE(user_type, 'regular') = 'regular'").Scan(&stats.RegularUsers); err != nil {
 		log.Printf("Error counting regular users: %v", err)
 		stats.RegularUsers = 0
 	}
-	
+
 	// Count admin users
 	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users WHERE user_type = 'administration'").Scan(&stats.AdminUsers); err != nil {
 		log.Printf("Error counting admin users: %v", err)
 		stats.AdminUsers = 0
 	}
-	
+
 	// Count buildings (excluding groups/complexes)
 	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM buildings WHERE COALESCE(is_group, 0) = 0").Scan(&stats.TotalBuildings); err != nil {
 		log.Printf("Error counting buildings: %v", err)
 		stats.TotalBuildings = 0
 	}
-	
+
 	// Count complexes (building groups)
 	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM buildings WHERE is_group = 1").Scan(&stats.TotalComplexes); err != nil {
 		log.Printf("Error counting complexes: %v", err)
 		stats.TotalComplexes = 0
 	}
-	
+
 	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM meters").Scan(&stats.TotalMeters); err != nil {
 		log.Printf("Error counting meters: %v", err)
 		stats.TotalMeters = 0
 	}
-	
+
 	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM chargers").Scan(&stats.TotalChargers); err != nil {
 		log.Printf("Error counting chargers: %v", err)
 		stats.TotalChargers = 0
 	}
-	
+
 	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM meters WHERE is_active = 1").Scan(&stats.ActiveMeters); err != nil {
 		log.Printf("Error counting active meters: %v", err)
 		stats.ActiveMeters = 0
 	}
-	
+
 	if err := h.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM chargers WHERE is_active = 1").Scan(&stats.ActiveChargers); err != nil {
 		log.Printf("Error counting active chargers: %v", err)
 		stats.ActiveChargers = 0
@@ -297,15 +297,15 @@ func calculateTotalSolarExport(db *sql.DB, ctx context.Context, meterTypes []str
 		placeholders[i] = "?"
 		args[i] = mt
 	}
-	
+
 	meterTypeFilter := strings.Join(placeholders, ",")
-	
+
 	meterQuery := fmt.Sprintf(`
 		SELECT id FROM meters 
 		WHERE meter_type IN (%s) 
 		AND COALESCE(is_active, 1) = 1
 	`, meterTypeFilter)
-	
+
 	meterRows, err := db.QueryContext(ctx, meterQuery, args...)
 	if err != nil {
 		log.Printf("Error querying solar meters: %v", err)
@@ -349,7 +349,7 @@ func calculateTotalChargingConsumption(db *sql.DB, ctx context.Context, periodSt
 	defer chargerRows.Close()
 
 	totalConsumption := 0.0
-	
+
 	for chargerRows.Next() {
 		var chargerID int
 		if err := chargerRows.Scan(&chargerID); err != nil {
@@ -406,7 +406,7 @@ func (h *DashboardHandler) GetConsumption(w http.ResponseWriter, r *http.Request
 		startTime = now.Add(-24 * time.Hour)
 	}
 
-	log.Printf("GetConsumption: period=%s, startTime=%s, endTime=%s", 
+	log.Printf("GetConsumption: period=%s, startTime=%s, endTime=%s",
 		period, startTime.Format("2006-01-02 15:04:05"), now.Format("2006-01-02 15:04:05"))
 
 	rows, err := h.db.QueryContext(ctx, `
@@ -469,7 +469,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		startTime = now.Add(-24 * time.Hour)
 	}
 
-	log.Printf("GetConsumptionByBuilding: period=%s, startTime=%s, endTime=%s", 
+	log.Printf("GetConsumptionByBuilding: period=%s, startTime=%s, endTime=%s",
 		period, startTime.Format("2006-01-02 15:04:05"), now.Format("2006-01-02 15:04:05"))
 
 	buildingRows, err := h.db.QueryContext(ctx, `
@@ -490,7 +490,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		name string
 	}
 	buildingInfos := []buildingInfo{}
-	
+
 	for buildingRows.Next() {
 		var bi buildingInfo
 		if err := buildingRows.Scan(&bi.id, &bi.name); err != nil {
@@ -500,15 +500,15 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		buildingInfos = append(buildingInfos, bi)
 	}
 	buildingRows.Close()
-	
+
 	log.Printf("Found %d buildings to process", len(buildingInfos))
 
 	type MeterData struct {
-		MeterID   int                        `json:"meter_id"`
-		MeterName string                     `json:"meter_name"`
-		MeterType string                     `json:"meter_type"`
-		UserName  string                     `json:"user_name,omitempty"`
-		Data      []models.ConsumptionData   `json:"data"`
+		MeterID   int                      `json:"meter_id"`
+		MeterName string                   `json:"meter_name"`
+		MeterType string                   `json:"meter_type"`
+		UserName  string                   `json:"user_name,omitempty"`
+		Data      []models.ConsumptionData `json:"data"`
 	}
 
 	type BuildingConsumption struct {
@@ -546,13 +546,13 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 		}
 
 		type meterInfo struct {
-			id       int
-			name     string
+			id        int
+			name      string
 			meterType string
-			userID   sql.NullInt64
+			userID    sql.NullInt64
 		}
 		meterInfos := []meterInfo{}
-		
+
 		for meterRows.Next() {
 			var mi meterInfo
 			if err := meterRows.Scan(&mi.id, &mi.name, &mi.meterType, &mi.userID); err != nil {
@@ -562,7 +562,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			meterInfos = append(meterInfos, mi)
 		}
 		meterRows.Close()
-		
+
 		log.Printf("  Found %d meters for building %d", len(meterInfos), bi.id)
 
 		for _, mi := range meterInfos {
@@ -575,7 +575,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					FROM users 
 					WHERE id = ?
 				`, mi.userID.Int64).Scan(&userName)
-				
+
 				if err != nil && err != sql.ErrNoRows {
 					log.Printf("    Error getting user name for user %d: %v", mi.userID.Int64, err)
 				}
@@ -619,7 +619,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				building.Meters = append(building.Meters, meterData)
 				continue
 			}
-			
+
 			for dataRows.Next() {
 				var timestamp time.Time
 				var powerKwh, consumptionKwh float64
@@ -631,12 +631,12 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				// Power (W) = Energy (kWh) / Time (h) * 1000
 				// Time = 15 min = 0.25 h
 				powerW := (consumptionKwh / 0.25) * 1000
-				
+
 				// For solar meters, make power negative to show as generation/export
 				if mi.meterType == "solar_meter" {
 					powerW = -powerW
 				}
-				
+
 				meterData.Data = append(meterData.Data, models.ConsumptionData{
 					Timestamp: timestamp,
 					Power:     powerW,
@@ -668,7 +668,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				name string
 			}
 			chargerInfos := []chargerInfo{}
-			
+
 			for chargerRows.Next() {
 				var ci chargerInfo
 				if err := chargerRows.Scan(&ci.id, &ci.name); err != nil {
@@ -678,7 +678,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				chargerInfos = append(chargerInfos, ci)
 			}
 			chargerRows.Close()
-			
+
 			log.Printf("  Found %d chargers for building %d", len(chargerInfos), bi.id)
 
 			for _, ci := range chargerInfos {
@@ -697,7 +697,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					AND state != '1'
 					ORDER BY session_time ASC
 				`, ci.id, startTime, now)
-				
+
 				if err == nil {
 					sessionCount := 0
 					for allSessionRows.Next() {
@@ -710,8 +710,8 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 							sessionTimes[timeKey] = true
 							sessionCount++
 							if sessionCount <= 5 {
-								log.Printf("      ðŸ” Session at %s rounds to %s (key: %s)", 
-									sessionTime.Format("15:04:05"), 
+								log.Printf("      ðŸ” Session at %s rounds to %s (key: %s)",
+									sessionTime.Format("15:04:05"),
 									rounded.Format("15:04:05"),
 									timeKey)
 							}
@@ -720,7 +720,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					allSessionRows.Close()
 					log.Printf("      Found %d session times, %d unique 15-min intervals to exclude", sessionCount, len(sessionTimes))
 				}
-				
+
 				// Generate 0W baseline at 15-minute intervals, but SKIP times where sessions exist
 				baselineData := []models.ConsumptionData{}
 				currentTime := roundTo15Min(startTime)
@@ -729,7 +729,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				for currentTime.Before(roundedNow) {
 					// Create time key for lookup (without timezone)
 					timeKey := currentTime.Format("2006-01-02T15:04:05")
-					
+
 					// Only add baseline point if NO session at this time
 					if !sessionTimes[timeKey] {
 						baselineData = append(baselineData, models.ConsumptionData{
@@ -740,14 +740,14 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					} else {
 						excludedCount++
 						if excludedCount <= 5 {
-							log.Printf("      â­ï¸  Skipping baseline at %s (key: %s - session exists)", 
+							log.Printf("      â­ï¸  Skipping baseline at %s (key: %s - session exists)",
 								currentTime.Format("15:04:05"),
 								timeKey)
 						}
 					}
 					currentTime = currentTime.Add(15 * time.Minute)
 				}
-				
+
 				// Only add baseline if there are any 0W points
 				if len(baselineData) > 0 {
 					baselineMeter := MeterData{
@@ -785,36 +785,36 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					userName   string
 				}
 				userInfos := []userInfo{}
-				
-					for userRows.Next() {
-						var rfidOrUserID string
-						if err := userRows.Scan(&rfidOrUserID); err != nil {
-							continue
-						}
-						
-						// Try to map RFID tag to actual user
-						var actualUserID int
-						var actualUserName string
-						var found bool
-						
-						// If user_id is empty (Zaptec), use charger name as display name
-						if rfidOrUserID == "" {
-							actualUserName = ci.name
-							actualUserID = 0
-							found = true
-							log.Printf("      Empty user_id (Zaptec charger) - using charger name: '%s'", actualUserName)
-						} else {
+
+				for userRows.Next() {
+					var rfidOrUserID string
+					if err := userRows.Scan(&rfidOrUserID); err != nil {
+						continue
+					}
+
+					// Try to map RFID tag to actual user
+					var actualUserID int
+					var actualUserName string
+					var found bool
+
+					// If user_id is empty (Zaptec), use charger name as display name
+					if rfidOrUserID == "" {
+						actualUserName = ci.name
+						actualUserID = 0
+						found = true
+						log.Printf("      Empty user_id (Zaptec charger) - using charger name: '%s'", actualUserName)
+					} else {
 						log.Printf("      Looking up RFID/UserID: '%s'", rfidOrUserID)
-						
+
 						// Try multiple patterns for charger_ids field
 						patterns := []string{
-							rfidOrUserID,                    // Exact: "2"
-							"%" + rfidOrUserID + ",%",       // Start: "2,3"
-							"%," + rfidOrUserID + ",%",      // Middle: "1,2,3"
-							"%," + rfidOrUserID,             // End: "1,2"
-							"%\"" + rfidOrUserID + "\"%",    // JSON: ["2"]
+							rfidOrUserID,                 // Exact: "2"
+							"%" + rfidOrUserID + ",%",    // Start: "2,3"
+							"%," + rfidOrUserID + ",%",   // Middle: "1,2,3"
+							"%," + rfidOrUserID,          // End: "1,2"
+							"%\"" + rfidOrUserID + "\"%", // JSON: ["2"]
 						}
-						
+
 						for _, pattern := range patterns {
 							err := h.db.QueryRowContext(ctx, `
 								SELECT id, first_name || ' ' || last_name 
@@ -822,20 +822,20 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 								WHERE charger_ids = ? OR charger_ids LIKE ?
 								LIMIT 1
 							`, rfidOrUserID, pattern).Scan(&actualUserID, &actualUserName)
-							
+
 							if err == nil {
 								found = true
 								log.Printf("      âœ… Mapped RFID '%s' to user %d (%s)", rfidOrUserID, actualUserID, actualUserName)
 								break
 							}
 						}
-						
+
 						// If not found in charger_ids, show as Unknown User
 						if !found {
 							actualUserName = fmt.Sprintf("Unknown User (RFID %s)", rfidOrUserID)
 							actualUserID = 0 // No actual user
 							log.Printf("      âš ï¸  RFID '%s' not found in any user's charger_ids - showing as Unknown User", rfidOrUserID)
-							
+
 							// DEBUG: Show what charger_ids exist in database to help diagnose
 							debugRows, debugErr := h.db.QueryContext(ctx, `
 								SELECT id, first_name || ' ' || last_name, charger_ids 
@@ -860,14 +860,14 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 								debugRows.Close()
 							}
 						}
-						}
-						
-						userInfos = append(userInfos, userInfo{
-							userID:     rfidOrUserID,
-							actualUser: actualUserID,
-							userName:   actualUserName,
-						})
 					}
+
+					userInfos = append(userInfos, userInfo{
+						userID:     rfidOrUserID,
+						actualUser: actualUserID,
+						userName:   actualUserName,
+					})
+				}
 				userRows.Close()
 
 				log.Printf("    Found %d users with sessions for charger %d", len(userInfos), ci.id)
@@ -898,12 +898,12 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					consumptionData := []models.ConsumptionData{}
 					var previousPower float64
 					var hasPrevious bool
-					
+
 					for sessionRows.Next() {
 						var timestamp time.Time
 						var powerKwh float64
 						var state string
-						
+
 						if err := sessionRows.Scan(&timestamp, &powerKwh, &state); err != nil {
 							continue
 						}
@@ -922,7 +922,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 
 						// Calculate consumption
 						consumptionKwh := powerKwh - previousPower
-						
+
 						// Check for unrealistic jumps that indicate post-session accumulation
 						// If the consumption is more than 10 kWh in 15 minutes (40 kW average), it's likely a spike
 						if consumptionKwh > 10.0 {
@@ -930,7 +930,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 							// Don't update previousPower, so next reading will be calculated from last valid point
 							continue
 						}
-						
+
 						if consumptionKwh < 0 {
 							// Meter reset
 							log.Printf("      Meter reset detected at %s", timestamp.Format("15:04"))
@@ -940,7 +940,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 
 						// Convert consumption (kWh over 15 min) to power (W)
 						powerW := (consumptionKwh / 0.25) * 1000
-						
+
 						// Cap unrealistic values
 						if powerW > 50000 {
 							powerW = 50000
@@ -1103,6 +1103,31 @@ func (h *DashboardHandler) GetSelfConsumption(w http.ResponseWriter, r *http.Req
 	json.NewEncoder(w).Encode(data)
 }
 
+// chargerLiveOnline returns the live reachability of an API-connected charger
+// from the data collector (the same source the charger card uses), and whether a
+// fresh status was available. For non-API chargers or when no fresh reading
+// exists it returns ok=false so the caller falls back to session recency.
+func (h *DashboardHandler) chargerLiveOnline(connType string, id int) (online bool, ok bool) {
+	if h.dataCollector == nil {
+		return false, false
+	}
+	switch connType {
+	case "e3dc_api":
+		if d, found := h.dataCollector.GetE3DCChargerData(id); found {
+			return d.IsOnline, true
+		}
+	case "zaptec_api":
+		if d, found := h.dataCollector.GetZaptecChargerData(id); found {
+			return d.IsOnline, true
+		}
+	case "loxone_api":
+		if d, found := h.dataCollector.GetLoxoneChargerLiveData(id); found {
+			return d.IsOnline, true
+		}
+	}
+	return false, false
+}
+
 func (h *DashboardHandler) GetSystemHealth(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -1166,7 +1191,7 @@ func (h *DashboardHandler) GetSystemHealth(w http.ResponseWriter, r *http.Reques
 
 	// Query chargers with their latest session time
 	chargerRows, err := h.db.QueryContext(ctx, `
-		SELECT c.id, c.name, COALESCE(b.name, ''), COALESCE(c.is_active, 1),
+		SELECT c.id, c.name, COALESCE(b.name, ''), COALESCE(c.is_active, 1), COALESCE(c.connection_type, ''),
 			(SELECT MAX(session_time) FROM charger_sessions WHERE charger_id = c.id)
 		FROM chargers c
 		LEFT JOIN buildings b ON c.building_id = b.id
@@ -1179,7 +1204,8 @@ func (h *DashboardHandler) GetSystemHealth(w http.ResponseWriter, r *http.Reques
 			var d models.DeviceHealth
 			var lastReading sql.NullTime
 			var isActive int
-			if err := chargerRows.Scan(&d.ID, &d.Name, &d.BuildingName, &isActive, &lastReading); err != nil {
+			var connType string
+			if err := chargerRows.Scan(&d.ID, &d.Name, &d.BuildingName, &isActive, &connType, &lastReading); err != nil {
 				continue
 			}
 			d.Type = "charger"
@@ -1190,8 +1216,20 @@ func (h *DashboardHandler) GetSystemHealth(w http.ResponseWriter, r *http.Reques
 				d.LastReading = &t
 			}
 
+			// API-connected chargers (e3dc/zaptec/loxone) report a real live
+			// reachability that the 15-min charger_sessions cadence doesn't — use
+			// it so this overview matches the charger card. Fall back to session
+			// recency for push-based chargers (webhook/udp/mqtt) or when the
+			// collector has no fresh reading.
+			liveOnline, liveKnown := h.chargerLiveOnline(connType, d.ID)
 			if !d.IsActive {
 				d.Status = "offline"
+			} else if liveKnown {
+				if liveOnline {
+					d.Status = "online"
+				} else {
+					d.Status = "offline"
+				}
 			} else if d.LastReading == nil {
 				d.Status = "offline"
 			} else {
@@ -1412,6 +1450,7 @@ func calcMeterConsumption(db *sql.DB, ctx context.Context, meterID int, column s
 // - total_meter (grid): Measures what flows in/out from the public grid
 //   - Import (power_kwh): Energy drawn FROM the grid
 //   - Export (power_kwh_export): Energy sent TO the grid (excess solar)
+//
 // - solar_meter: Measures solar production (power_kwh_export = generation)
 // - apartment_meter: Measures individual apartment consumption (for billing)
 // - Building consumption = Grid Import + Solar Self-Consumed
@@ -1653,12 +1692,12 @@ func (h *DashboardHandler) GetEnergyFlow(w http.ResponseWriter, r *http.Request)
 // rendered as all-zeros.
 //
 // ZEV Energy Flow Model:
-// - total_meter (grid): import = positive, export = negative.
-// - solar_meter: production (always positive).
-// - charger_sessions: live charging power inferred from the kWh delta across
-//   the most recent 15-min slot.
-// - Building consumption = Grid Import + Solar Self-Consumed
-//                        = Grid Import + (Solar - Grid Export)
+//   - total_meter (grid): import = positive, export = negative.
+//   - solar_meter: production (always positive).
+//   - charger_sessions: live charging power inferred from the kWh delta across
+//     the most recent 15-min slot.
+//   - Building consumption = Grid Import + Solar Self-Consumed
+//     = Grid Import + (Solar - Grid Export)
 func (h *DashboardHandler) GetEnergyFlowLive(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if rec := recover(); rec != nil {
