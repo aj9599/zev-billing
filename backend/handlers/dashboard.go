@@ -1103,6 +1103,30 @@ func (h *DashboardHandler) GetSelfConsumption(w http.ResponseWriter, r *http.Req
 	json.NewEncoder(w).Encode(data)
 }
 
+// parseFlexibleTime parses the various datetime string formats SQLite/Go may
+// store, returning ok=false for empty or unparseable (e.g. junk) values.
+func parseFlexibleTime(s string) (time.Time, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}, false
+	}
+	layouts := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02 15:04:05.999999999-07:00",
+		"2006-01-02 15:04:05-07:00",
+		"2006-01-02 15:04:05.999999999",
+		"2006-01-02 15:04:05",
+		"2006-01-02T15:04:05Z07:00",
+	}
+	for _, l := range layouts {
+		if t, err := time.Parse(l, s); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
 // chargerLiveOnline returns the live reachability of an API-connected charger
 // from the data collector (the same source the charger card uses), and whether a
 // fresh status was available. For non-API chargers or when no fresh reading
@@ -1200,20 +1224,28 @@ func (h *DashboardHandler) GetSystemHealth(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		log.Printf("Error querying chargers for health: %v", err)
 	} else {
+		rowCount := 0
 		for chargerRows.Next() {
+			rowCount++
 			var d models.DeviceHealth
-			var lastReading sql.NullTime
+			// MAX(session_time) is scanned as text and parsed leniently: an earlier
+			// bad CSV import could have written non-date junk into session_time, and
+			// scanning that straight into a time.Time would fail and silently drop
+			// the whole charger from this overview.
+			var lastReading sql.NullString
 			var isActive int
 			var connType string
 			if err := chargerRows.Scan(&d.ID, &d.Name, &d.BuildingName, &isActive, &connType, &lastReading); err != nil {
+				log.Printf("SystemHealth: charger row %d scan failed: %v", rowCount, err)
 				continue
 			}
 			d.Type = "charger"
 			d.MeterType = "charger"
 			d.IsActive = isActive == 1
 			if lastReading.Valid {
-				t := lastReading.Time
-				d.LastReading = &t
+				if t, ok := parseFlexibleTime(lastReading.String); ok {
+					d.LastReading = &t
+				}
 			}
 
 			// API-connected chargers (e3dc/zaptec/loxone) report a real live
