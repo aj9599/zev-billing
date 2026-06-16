@@ -1275,9 +1275,6 @@ func (h *DashboardHandler) GetSystemHealth(w http.ResponseWriter, r *http.Reques
 				}
 			}
 
-			log.Printf("SystemHealth charger %q (id=%d type=%q active=%v): liveKnown=%v liveOnline=%v lastReading=%v -> status=%s",
-				d.Name, d.ID, connType, d.IsActive, liveKnown, liveOnline, d.LastReading, d.Status)
-
 			health.Devices = append(health.Devices, d)
 		}
 		chargerRows.Close()
