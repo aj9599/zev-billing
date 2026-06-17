@@ -398,7 +398,8 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
                 port: connectionConfig.port || 1502,
                 unit_id: connectionConfig.unit_id || 71,
                 function_code: 3,
-                data_type: 'float32',
+                // Kostal encodes 32-bit registers word-swapped (evcc "float32s").
+                data_type: 'float32s',
                 // Kostal "Total yield" register (Wh) — fixed, not user-editable.
                 register_address: 1056,
                 register_count: 2,

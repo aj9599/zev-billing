@@ -99,7 +99,7 @@ func (mc *ModbusCollector) initializeModbusConnections() {
 	
 	// Query all active Modbus TCP meters
 	rows, err := mc.db.Query(`
-		SELECT id, name, connection_config
+		SELECT id, name, connection_type, connection_config
 		FROM meters
 		WHERE is_active = 1 AND connection_type IN ('modbus_tcp', 'kostal')
 	`)
@@ -108,19 +108,29 @@ func (mc *ModbusCollector) initializeModbusConnections() {
 		return
 	}
 	defer rows.Close()
-	
+
 	configs := []ModbusMeterConfig{}
 	for rows.Next() {
 		var id int
-		var name, configJSON string
-		if err := rows.Scan(&id, &name, &configJSON); err != nil {
+		var name, connType, configJSON string
+		if err := rows.Scan(&id, &name, &connType, &configJSON); err != nil {
 			continue
 		}
-		
+
 		config, err := parseModbusConfig(configJSON)
 		if err != nil {
 			log.Printf("ERROR: Failed to parse Modbus config for meter '%s': %v", name, err)
 			continue
+		}
+
+		// Kostal inverters encode 32-bit registers word-swapped ("float32s")
+		// and report energy in Wh. Force these regardless of stored config so
+		// existing Kostal meters decode correctly without being re-saved.
+		if connType == "kostal" {
+			config.DataType = "float32s"
+			if config.Scale == 0 || config.Scale == 1 {
+				config.Scale = 0.001
+			}
 		}
 		
 		config.MeterID = id
@@ -454,7 +464,17 @@ func (c *ModbusClient) parseValue(data []byte) (float64, error) {
 		}
 		bits := binary.BigEndian.Uint32(data)
 		return float64(math.Float32frombits(bits)), nil
-		
+
+	case "float32s":
+		// Word-swapped float32 (e.g. Kostal): the two 16-bit registers arrive
+		// low-word-first. Swap them, then decode as big-endian float32.
+		if len(data) < 4 {
+			return 0, fmt.Errorf("insufficient data for float32s: got %d bytes", len(data))
+		}
+		swapped := []byte{data[2], data[3], data[0], data[1]}
+		bits := binary.BigEndian.Uint32(swapped)
+		return float64(math.Float32frombits(bits)), nil
+
 	case "float64":
 		if len(data) < 8 {
 			return 0, fmt.Errorf("insufficient data for float64: got %d bytes", len(data))
