@@ -341,12 +341,21 @@ func (mc *ModbusCollector) Stop() {
 // ModbusClient methods
 
 func (c *ModbusClient) connect() error {
+	// Always drop any previous socket before opening a new one. Devices that
+	// allow only ONE Modbus TCP client (e.g. Kostal inverters: "only a single
+	// system may access the inverter") will refuse a new connection while a
+	// stale/half-open one still occupies their single slot. Closing first frees
+	// that slot so reconnection actually succeeds.
+	if c.handler != nil {
+		c.handler.Close()
+	}
+
 	if err := c.handler.Connect(); err != nil {
 		c.isConnected = false
 		c.lastError = err.Error()
 		return err
 	}
-	
+
 	c.client = modbus.NewClient(c.handler)
 	c.isConnected = true
 	c.lastError = ""
@@ -375,6 +384,11 @@ func (c *ModbusClient) readValues() (float64, float64, error) {
 	if err != nil {
 		c.isConnected = false
 		c.lastError = err.Error()
+		// Close the socket so the next attempt reconnects cleanly and, on
+		// single-connection devices, releases the inverter's only Modbus slot.
+		if c.handler != nil {
+			c.handler.Close()
+		}
 		log.Printf("ERROR: Modbus read failed for '%s': %v", c.meterName, err)
 		return 0, 0, err
 	}
