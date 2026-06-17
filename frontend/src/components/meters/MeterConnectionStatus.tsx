@@ -172,7 +172,12 @@ export default function MeterConnectionStatus({
     if (meter.connection_type === 'modbus_tcp' || meter.connection_type === 'kostal') {
         const status = modbusStatus[meter.id];
         if (status) {
-            if (status.is_connected) {
+            // A zero/never-set timestamp renders as a nonsense local time (e.g.
+            // 00:34:08 in CH, the historical Zurich LMT offset). Treat anything
+            // before year 2000 as "no successful reading yet" so a TCP-only
+            // connection isn't shown as healthy.
+            const validUpdate = !!status.last_update && new Date(status.last_update).getFullYear() > 2000;
+            if (status.is_connected && validUpdate) {
                 return <ConnectionBadge
                     icon={Cable} color="#22c55e" bgColor="rgba(34, 197, 94, 0.1)"
                     label={t('meters.modbusConnected')}
@@ -180,10 +185,21 @@ export default function MeterConnectionStatus({
                     detail2={`${t('meters.lastUpdate')}: ${formatTime(status.last_update)}`}
                 />;
             }
+            // TCP reachable but the register read failed — surface the actual
+            // Modbus error (e.g. "illegal data address") so it can be diagnosed.
+            if (status.last_error) {
+                return <ConnectionBadge
+                    icon={Cable} color="#ef4444" bgColor="rgba(239, 68, 68, 0.1)"
+                    label={t('meters.modbusReadError')}
+                    detail={status.ip_address}
+                    detail2={status.last_error}
+                />;
+            }
+            // Connected, but no successful register read has happened yet.
             return <ConnectionBadge
-                icon={Cable} color="#ef4444" bgColor="rgba(239, 68, 68, 0.1)"
-                label={t('meters.modbusDisconnected')}
-                detail={status.last_error}
+                icon={Cable} color="#f59e0b" bgColor="rgba(251, 191, 36, 0.1)"
+                label={t('meters.modbusNoData')}
+                detail={status.ip_address}
             />;
         }
         return <ConnectionBadge
