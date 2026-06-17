@@ -1,4 +1,4 @@
-import { Edit2, Trash2, Sun, Zap, Building2, Car, ArrowRight, Layers, Home } from 'lucide-react';
+import { Edit2, Trash2, Sun, Zap, Building2, Car, ArrowRight, Layers, Home, Battery, BatteryCharging } from 'lucide-react';
 import { useTranslation } from '../../../i18n';
 import { api } from '../../../api/client';
 import { useBuildingConsumption } from '../hooks/useBuildingConsumption';
@@ -39,7 +39,11 @@ export default function EnergyFlowCard({
   const hasSolar = hasSolarMeter(building.id, meters);
   const isExporting = consumption.gridPower < 0;
   const hasCharging = consumption.charging > 0;
-  const hasData = consumption.actualHouseConsumption > 0 || consumption.solarProduction > 0 || Math.abs(consumption.gridPower) > 0;
+  // Battery flow state (net > 0 = charging, < 0 = discharging).
+  const batteryPower = Math.abs(consumption.batteryNet);
+  const batteryCharging = consumption.batteryNet > 0.0001;
+  const batteryDischarging = consumption.batteryNet < -0.0001;
+  const hasData = consumption.actualHouseConsumption > 0 || consumption.solarProduction > 0 || Math.abs(consumption.gridPower) > 0 || (consumption.hasBattery && batteryPower > 0);
 
   // Calculate solar coverage
   const solarCoverage = consumption.actualHouseConsumption > 0 && consumption.solarProduction > 0
@@ -116,6 +120,32 @@ export default function EnergyFlowCard({
                   isMobile={isMobile}
                 />
                 <FlowArrow color={consumption.solarProduction > 0 ? '#f59e0b' : '#e5e7eb'} isMobile={isMobile} />
+              </>
+            )}
+
+            {/* Battery node — sits on the bus feeding the house. Arrow points
+                toward the house when discharging, back toward the battery when
+                charging. */}
+            {consumption.hasBattery && (
+              <>
+                <EnergyNode
+                  icon={batteryCharging ? BatteryCharging : Battery}
+                  label={
+                    batteryCharging ? t('buildings.energyFlow.batteryCharging')
+                    : batteryDischarging ? t('buildings.energyFlow.batteryDischarging')
+                    : t('buildings.energyFlow.battery')
+                  }
+                  value={formatPower(batteryPower)}
+                  color={batteryCharging ? '#10b981' : '#14b8a6'}
+                  bgColor={batteryCharging ? '#dcfce7' : '#ccfbf1'}
+                  active={batteryPower > 0.0001}
+                  isMobile={isMobile}
+                />
+                <FlowArrow
+                  color={batteryPower > 0.0001 ? (batteryCharging ? '#10b981' : '#14b8a6') : '#e5e7eb'}
+                  reverse={batteryCharging}
+                  isMobile={isMobile}
+                />
               </>
             )}
 
@@ -239,6 +269,9 @@ export default function EnergyFlowCard({
         )}
         {hasSolar && (
           <StatChip icon={Sun} label="Solar" value={buildingMeters.filter(m => m.meter_type === 'solar_meter').length} color="#f59e0b" />
+        )}
+        {buildingMeters.some(m => m.meter_type === 'battery_meter') && (
+          <StatChip icon={Battery} label={t('buildings.energyFlow.battery')} value={buildingMeters.filter(m => m.meter_type === 'battery_meter').length} color="#14b8a6" />
         )}
       </div>
 

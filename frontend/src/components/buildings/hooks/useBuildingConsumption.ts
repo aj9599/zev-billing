@@ -11,6 +11,12 @@ interface ConsumptionResult {
   solarToGrid: number;
   solarToHouse: number;
   gridToHouse: number;
+  // Battery (kW): charge = energy stored, discharge = energy supplied to house.
+  // batteryNet > 0 = charging, < 0 = discharging.
+  batteryCharge: number;
+  batteryDischarge: number;
+  batteryNet: number;
+  hasBattery: boolean;
 }
 
 export function useBuildingConsumption(consumptionData: BuildingConsumption[]) {
@@ -27,7 +33,11 @@ export function useBuildingConsumption(consumptionData: BuildingConsumption[]) {
         solarConsumption: 0,
         solarToGrid: 0,
         solarToHouse: 0,
-        gridToHouse: 0
+        gridToHouse: 0,
+        batteryCharge: 0,
+        batteryDischarge: 0,
+        batteryNet: 0,
+        hasBattery: false
       };
     }
 
@@ -37,6 +47,15 @@ export function useBuildingConsumption(consumptionData: BuildingConsumption[]) {
     let solarMeterImport = 0;
     let solarMeterExport = 0;
     let charging = 0;
+    let batteryCharge = 0;
+    let batteryDischarge = 0;
+    let hasBattery = false;
+
+    // Latest value of a given source series within a meter's data.
+    const latestBySource = (meter: typeof buildingMeters[number], source: string) => {
+      const pts = (meter.data || []).filter(d => d.source === source);
+      return pts.length ? pts[pts.length - 1].power / 1000 : 0; // W → kW
+    };
 
     buildingMeters.forEach(meter => {
       const latestData = meter.data?.[meter.data.length - 1];
@@ -59,10 +78,18 @@ export function useBuildingConsumption(consumptionData: BuildingConsumption[]) {
         if (exportData) {
           solarMeterExport += exportData.power / 1000;
         }
+      } else if (meter.meter_type === 'battery_meter') {
+        // Battery: discharge feeds the house (series "battery_meter"),
+        // charge stores energy from the bus (series "battery_meter_charge").
+        hasBattery = true;
+        batteryDischarge += latestBySource(meter, 'battery_meter');
+        batteryCharge += latestBySource(meter, 'battery_meter_charge');
       } else if (meter.meter_type === 'charger') {
         charging += latestData.power / 1000;
       }
     });
+
+    const batteryNet = batteryCharge - batteryDischarge; // + = charging
 
     // Determine solar behavior: producing (export > import) or consuming (import > export)
     const solarNetProduction = solarMeterExport - solarMeterImport;
@@ -99,6 +126,13 @@ export function useBuildingConsumption(consumptionData: BuildingConsumption[]) {
       actualHouseConsumption = gridToHouse + solarConsumption;
     }
 
+    // Full energy balance so battery flow is reflected in house consumption.
+    // The bus balances to: house = solar + gridNet − batteryNet (+ any solar
+    // self-consumption). Without this, a house running off the battery with
+    // only a few watts from the grid would read as a few watts of consumption.
+    // (The branch attribution above is retained only for the solar/grid arrows.)
+    actualHouseConsumption = Math.max(0, solarProduction + solarConsumption + gridNet - batteryNet);
+
     return {
       total: totalMeterImport,
       solar: solarNetProduction, // Positive = producing, Negative = consuming
@@ -109,7 +143,11 @@ export function useBuildingConsumption(consumptionData: BuildingConsumption[]) {
       solarConsumption,
       solarToGrid,
       solarToHouse,
-      gridToHouse
+      gridToHouse,
+      batteryCharge,
+      batteryDischarge,
+      batteryNet,
+      hasBattery
     };
   };
 

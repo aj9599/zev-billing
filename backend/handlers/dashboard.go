@@ -645,6 +645,36 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			}
 			dataRows.Close()
 
+			// Battery meters also report charging energy in the export column
+			// (convention: import = discharge → house, export = charge ← bus).
+			// Emit charging as a second series so the energy-flow view can show
+			// charge vs discharge and balance house consumption correctly.
+			if mi.meterType == "battery_meter" {
+				chargeRows, cErr := h.db.QueryContext(ctx, `
+					SELECT reading_time, consumption_export
+					FROM meter_readings
+					WHERE meter_id = ?
+					AND reading_time >= ?
+					AND reading_time <= ?
+					ORDER BY reading_time ASC
+				`, mi.id, startTime, now)
+				if cErr == nil {
+					for chargeRows.Next() {
+						var ts time.Time
+						var consExport float64
+						if err := chargeRows.Scan(&ts, &consExport); err != nil {
+							continue
+						}
+						meterData.Data = append(meterData.Data, models.ConsumptionData{
+							Timestamp: ts,
+							Power:     (consExport / 0.25) * 1000, // kWh/15min → W
+							Source:    "battery_meter_charge",
+						})
+					}
+					chargeRows.Close()
+				}
+			}
+
 			log.Printf("    Meter ID: %d has %d data points at 15-min intervals", mi.id, len(meterData.Data))
 
 			building.Meters = append(building.Meters, meterData)

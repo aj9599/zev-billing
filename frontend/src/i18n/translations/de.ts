@@ -736,6 +736,9 @@ export const de: Translations = {
   // Energy Flow
   'buildings.energyFlow.solar': 'Solar',
   'buildings.energyFlow.consumption': 'Gebäude',
+  'buildings.energyFlow.battery': 'Batterie',
+  'buildings.energyFlow.batteryCharging': 'Lädt',
+  'buildings.energyFlow.batteryDischarging': 'Entlädt',
   'buildings.energyFlow.grid': 'Netz',
   'buildings.energyFlow.production': 'Produziert',
   'buildings.energyFlow.productiontogrid': 'Beziehe vom Netz',
