@@ -500,6 +500,11 @@ export const en: Translations = {
   'dashboard.lastReading': 'Last reading',
   'dashboard.ago': 'ago',
   'dashboard.allDevicesOnline': 'All devices reporting normally',
+  'dashboard.allOperational': 'All systems operational',
+  'dashboard.devicesOnline': 'Online',
+  'dashboard.metersLabel': 'Meters',
+  'dashboard.chargersLabel': 'Chargers',
+  'dashboard.lastUpdate': 'Last update',
   'dashboard.deviceIssues': 'devices need attention',
 
   // Cost overview

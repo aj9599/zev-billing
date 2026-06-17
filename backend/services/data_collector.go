@@ -794,7 +794,15 @@ func (dc *DataCollector) collectAndSaveMeters() {
 	}
 
 	// Virtual meters: computed from other meters AFTER all physical meters have
-	// been read and their last_reading updated this cycle.
+	// been read this cycle. Modbus/UDP/MQTT/Smart-me/E3-DC sources were already
+	// saved above (synchronously), but Loxone meters are written by their own
+	// WebSocket goroutine, so the current-bucket row may not exist yet at this
+	// instant. Wait (bounded) for those rows, then compute from the readings at
+	// THIS cycle's timestamp — otherwise the virtual meter would copy the source's
+	// previous value and lag one 15-minute interval behind on the chart.
+	if len(virtualMeters) > 0 {
+		dc.waitForAsyncVirtualSources(virtualMeters, currentTime)
+	}
 	for _, meterID := range virtualMeters {
 		info := meterInfo[meterID]
 
@@ -804,7 +812,7 @@ func (dc *DataCollector) collectAndSaveMeters() {
 			continue
 		}
 
-		importVal, exportVal, err := dc.computeVirtualReading(configJSON)
+		importVal, exportVal, err := dc.computeVirtualReadingAt(configJSON, currentTime)
 		if err != nil {
 			log.Printf("ERROR: Failed to compute virtual meter '%s': %v", info.name, err)
 			continue
@@ -876,6 +884,115 @@ func (dc *DataCollector) computeVirtualReading(configJSON string) (float64, floa
 		total = 0
 	}
 	return total, 0, nil
+}
+
+// computeVirtualReadingAt evaluates a virtual meter's formula against its source
+// meters' stored readings at a specific timestamp (this collection cycle's
+// quarter-hour bucket). This keeps the virtual meter aligned in time with its
+// sources on the chart. If a source has no row at that exact time (e.g. it did
+// not report this cycle), it falls back to that source's live cumulative
+// last_reading so the virtual meter still produces a value.
+func (dc *DataCollector) computeVirtualReadingAt(configJSON string, at time.Time) (float64, float64, error) {
+	var cfg virtualMeterConfig
+	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+		return 0, 0, fmt.Errorf("failed to parse config: %v", err)
+	}
+	if len(cfg.Sources) == 0 {
+		return 0, 0, fmt.Errorf("no source meters configured")
+	}
+
+	var total float64
+	for _, src := range cfg.Sources {
+		var lastReading, lastReadingExport float64
+
+		// Prefer this cycle's reading so the virtual meter is time-aligned.
+		err := dc.db.QueryRow(
+			"SELECT power_kwh, COALESCE(power_kwh_export, 0) FROM meter_readings WHERE meter_id = ? AND reading_time = ?",
+			src.MeterID, at,
+		).Scan(&lastReading, &lastReadingExport)
+		if err != nil {
+			// Fall back to the live cumulative reading if the current bucket
+			// isn't available for this source.
+			if fErr := dc.db.QueryRow(
+				"SELECT COALESCE(last_reading, 0), COALESCE(last_reading_export, 0) FROM meters WHERE id = ?",
+				src.MeterID,
+			).Scan(&lastReading, &lastReadingExport); fErr != nil {
+				return 0, 0, fmt.Errorf("source meter %d not found: %v", src.MeterID, fErr)
+			}
+		}
+
+		val := lastReading
+		if src.Field == "export" {
+			val = lastReadingExport
+		}
+
+		if src.Op == "-" {
+			total -= val
+		} else {
+			total += val
+		}
+	}
+
+	if total < 0 {
+		total = 0
+	}
+	return total, 0, nil
+}
+
+// waitForAsyncVirtualSources blocks (bounded) until every Loxone source meter
+// referenced by the given virtual meters has a stored reading at time `at`.
+// Loxone meters are persisted asynchronously by their WebSocket goroutine; all
+// other source types are already saved synchronously before the virtual pass,
+// so only Loxone sources are awaited here.
+func (dc *DataCollector) waitForAsyncVirtualSources(virtualMeterIDs []int, at time.Time) {
+	wanted := make(map[int]bool)
+	for _, vid := range virtualMeterIDs {
+		var configJSON string
+		if err := dc.db.QueryRow("SELECT connection_config FROM meters WHERE id = ?", vid).Scan(&configJSON); err != nil {
+			continue
+		}
+		var cfg virtualMeterConfig
+		if json.Unmarshal([]byte(configJSON), &cfg) != nil {
+			continue
+		}
+		for _, src := range cfg.Sources {
+			var connType string
+			var isActive bool
+			if err := dc.db.QueryRow(
+				"SELECT connection_type, is_active FROM meters WHERE id = ?", src.MeterID,
+			).Scan(&connType, &isActive); err == nil && isActive && connType == "loxone_api" {
+				wanted[src.MeterID] = true
+			}
+		}
+	}
+	if len(wanted) == 0 {
+		return
+	}
+
+	// Loxone usually writes within a few seconds of the boundary; cap the wait so
+	// a slow/offline source can't stall the cycle (we then compute with fallback).
+	deadline := time.Now().Add(90 * time.Second)
+	for {
+		missing := 0
+		for id := range wanted {
+			var n int
+			dc.db.QueryRow(
+				"SELECT COUNT(1) FROM meter_readings WHERE meter_id = ? AND reading_time = ?", id, at,
+			).Scan(&n)
+			if n == 0 {
+				missing++
+			}
+		}
+		if missing == 0 {
+			log.Printf("[Virtual] All %d Loxone source meter(s) have a reading at %s", len(wanted), at.Format("15:04"))
+			return
+		}
+		if time.Now().After(deadline) {
+			log.Printf("[Virtual] WARNING: %d Loxone source meter(s) missing a reading at %s after wait; computing with fallback", missing, at.Format("15:04"))
+			return
+		}
+		time.Sleep(3 * time.Second)
+	}
 }
 
 func (dc *DataCollector) saveMeterReading(meterID int, meterName string, currentTime time.Time, reading float64, readingExport float64) error {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import * as React from 'react';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { Users, Building, Zap, Car, Sun, Battery, Flame, LayoutDashboard, Home, Eye, EyeOff, ChevronDown, ChevronRight, Activity, DollarSign, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
+import { Users, Building, Zap, Car, Sun, Battery, Flame, LayoutDashboard, Home, Eye, EyeOff, ChevronDown, ChevronRight, Activity, DollarSign, Wifi, WifiOff, AlertTriangle, CheckCircle2, Clock, Gauge } from 'lucide-react';
 import { api } from '../api/client';
 import type { DashboardStats, SelfConsumptionData, SystemHealth, CostOverview, EnergyFlowData, EnergyFlowLiveData } from '../types';
 import { useTranslation } from '../i18n';
@@ -1043,11 +1043,57 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {healthIssues === 0 && (
-              <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '8px' }}>
-                {t('dashboard.allDevicesOnline')}
-              </div>
-            )}
+            {healthIssues === 0 && (() => {
+              const meterCount = systemHealth.devices.filter(d => d.type === 'meter').length;
+              const chargerCount = systemHealth.devices.filter(d => d.type === 'charger').length;
+              // ISO timestamps sort lexically, so the max string is the freshest reading.
+              const freshest = systemHealth.devices
+                .map(d => d.last_reading)
+                .filter((v): v is string => !!v)
+                .sort()
+                .pop();
+
+              const chip = (icon: React.ReactNode, label: string, value: string) => (
+                <div style={{
+                  flex: '1 1 90px', padding: '10px 12px', backgroundColor: '#f9fafb',
+                  borderRadius: '8px', border: '1px solid #f0f0f0'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#9ca3af', fontSize: '11px', fontWeight: 600, marginBottom: '4px' }}>
+                    {icon}{label}
+                  </div>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: '#1f2937' }}>{value}</div>
+                </div>
+              );
+
+              return (
+                <div style={{ marginTop: '8px' }}>
+                  {/* Always-present "operational" banner */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    padding: '12px 14px', backgroundColor: '#f0fdf4',
+                    border: '1px solid #bbf7d0', borderRadius: '10px', marginBottom: '12px'
+                  }}>
+                    <CheckCircle2 size={20} color="#16a34a" />
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#15803d' }}>
+                        {t('dashboard.allOperational')}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#16a34a' }}>
+                        {t('dashboard.allDevicesOnline')}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Live summary chips */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {chip(<Wifi size={13} color="#22c55e" />, t('dashboard.devicesOnline'), String(systemHealth.online_count))}
+                    {meterCount > 0 && chip(<Gauge size={13} color="#3b82f6" />, t('dashboard.metersLabel'), String(meterCount))}
+                    {chargerCount > 0 && chip(<Car size={13} color="#8b5cf6" />, t('dashboard.chargersLabel'), String(chargerCount))}
+                    {chip(<Clock size={13} color="#6b7280" />, t('dashboard.lastUpdate'), freshest ? `${timeAgo(freshest)} ${t('dashboard.ago')}` : '—')}
+                  </div>
+                </div>
+              );
+            })()}
 
             {healthExpanded && healthIssues > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

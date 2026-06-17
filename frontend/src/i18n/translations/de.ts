@@ -501,6 +501,11 @@ export const de: Translations = {
   'dashboard.lastReading': 'Letzte Messung',
   'dashboard.ago': 'her',
   'dashboard.allDevicesOnline': 'Alle Geräte melden normal',
+  'dashboard.allOperational': 'Alle Systeme betriebsbereit',
+  'dashboard.devicesOnline': 'Online',
+  'dashboard.metersLabel': 'Zähler',
+  'dashboard.chargersLabel': 'Ladestationen',
+  'dashboard.lastUpdate': 'Letzte Aktualisierung',
   'dashboard.deviceIssues': 'Geräte benötigen Aufmerksamkeit',
 
   // Kostenübersicht
