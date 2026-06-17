@@ -45,6 +45,26 @@ export default function MeterCard({
     const isNonMid = !isVirtual && meter.is_mid_certified === false;
     const isMid = !isVirtual && !isNonMid;
 
+    // Data freshness — independent of the "Active" config flag and the billing
+    // colour. A meter can be Active yet not actually reading (e.g. a Modbus
+    // read timing out), so we surface whether real data is arriving. A
+    // never-set timestamp parses to year 1 (renders as a nonsense local time),
+    // so anything before 2000 counts as "never reported".
+    const lastTs = meter.last_reading_time;
+    const hasReading = !!lastTs && new Date(lastTs).getFullYear() > 2000;
+    const ageMinutes = hasReading ? (Date.now() - new Date(lastTs as string).getTime()) / 60000 : Infinity;
+    // Meters poll every 15 min; flag as stale after ~2.5 missed cycles.
+    const isStale = ageMinutes > 40;
+    const timeAgo = (iso: string) => {
+        const sec = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+        if (sec < 60) return `${sec}s`;
+        const min = Math.floor(sec / 60);
+        if (min < 60) return `${min}m`;
+        const hr = Math.floor(min / 60);
+        if (hr < 24) return `${hr}h`;
+        return `${Math.floor(hr / 24)}d`;
+    };
+
     // Find linked user
     const linkedUser = meter.apartment_unit
         ? users.find(u =>
@@ -447,6 +467,34 @@ export default function MeterCard({
                     </div>
                 )}
                 
+                {/* Data freshness — shows whether readings are actually arriving,
+                    regardless of the Active flag. Hidden for inactive meters
+                    (intentionally not collected). */}
+                {meter.is_active && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                        <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>
+                            {t('meters.lastUpdate')}
+                        </span>
+                        {(() => {
+                            const color = !hasReading ? '#ef4444' : isStale ? '#d97706' : '#22c55e';
+                            const bg = !hasReading ? 'rgba(239,68,68,0.1)' : isStale ? 'rgba(217,119,6,0.12)' : 'rgba(34,197,94,0.1)';
+                            const text = !hasReading
+                                ? t('meters.noDataYet')
+                                : `${timeAgo(lastTs as string)} ${t('dashboard.ago')}`;
+                            return (
+                                <span style={{
+                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                    padding: '4px 12px', borderRadius: '20px',
+                                    fontSize: '12px', fontWeight: 600, color, backgroundColor: bg
+                                }}>
+                                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: color, display: 'inline-block' }} />
+                                    {text}
+                                </span>
+                            );
+                        })()}
+                    </div>
+                )}
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '500' }}>
                         {t('common.status')}

@@ -941,6 +941,7 @@ export const de: Translations = {
   // Modbus Verbindungsstatus
   'meters.modbusConnected': 'Modbus Verbunden',
   'meters.modbusReadError': 'Modbus Lesefehler',
+  'meters.noDataYet': 'Noch keine Daten',
   'meters.modbusNoData': 'Verbunden — warte auf erste Messung',
   'meters.modbusDisconnected': 'Modbus Getrennt',
   'meters.modbusConnecting': 'Modbus Verbinde...',
