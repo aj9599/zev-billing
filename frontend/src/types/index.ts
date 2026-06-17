@@ -66,6 +66,7 @@ export interface Meter {
   last_reading_time?: string;
   last_reading_export?: number; // NEW: Export/return energy
   is_active: boolean;
+  is_mid_certified?: boolean; // NEW: MID-certified (billing-valid) vs. monitoring-only
   is_shared: boolean;
   is_archived: boolean;
   replaced_by_meter_id?: number;

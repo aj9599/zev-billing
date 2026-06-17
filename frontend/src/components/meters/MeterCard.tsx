@@ -1,4 +1,4 @@
-import { Edit2, Trash2, RefreshCw, Building, Archive, TrendingUp, TrendingDown, Sun, Calculator } from 'lucide-react';
+import { Edit2, Trash2, RefreshCw, Building, Archive, TrendingUp, TrendingDown, Sun, Calculator, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { useTranslation } from '../../i18n';
 import type { Meter, User } from '../../types';
 import { getMeterTypeLabel } from './utils/meterUtils';
@@ -37,8 +37,13 @@ export default function MeterCard({
 }: MeterCardProps) {
     const { t } = useTranslation();
 
-    // Virtual (computed) meters are visually distinguished from real meters.
+    // Meters are colour-coded by billing role:
+    //   • virtual (computed)      → pink/red  (never a physical billing meter)
+    //   • physical, MID-certified → green     (valid for billing)
+    //   • physical, not certified → yellow    (monitoring only, e.g. a solar inverter)
     const isVirtual = meter.connection_type === 'virtual';
+    const isNonMid = !isVirtual && meter.is_mid_certified === false;
+    const isMid = !isVirtual && !isNonMid;
 
     // Find linked user
     const linkedUser = meter.apartment_unit
@@ -56,11 +61,19 @@ export default function MeterCard({
             style={{
                 background: isVirtual
                     ? 'linear-gradient(135deg, #fdf2f8 0%, #ffffff 55%)'
-                    : 'white',
+                    : isNonMid
+                        ? 'linear-gradient(135deg, #fffbeb 0%, #ffffff 55%)'
+                        : 'white',
                 borderRadius: '16px',
                 padding: '24px',
                 boxShadow: '0 4px 6px rgba(0,0,0,0.07)',
-                border: isVirtual ? '1px dashed #f472b6' : '1px solid #f0f0f0',
+                border: isVirtual
+                    ? '1px dashed #f472b6'
+                    : isNonMid
+                        ? '1px solid #fcd34d'
+                        : '1px solid #f0f0f0',
+                // Green accent strip down the left edge marks billing-valid meters.
+                borderLeft: isMid ? '4px solid #22c55e' : undefined,
                 position: 'relative',
                 transition: 'all 0.2s ease',
                 opacity: meter.is_archived ? 0.7 : 1,
@@ -238,6 +251,44 @@ export default function MeterCard({
                         <Calculator size={14} color="#db2777" />
                         <span style={{ fontSize: '12px', fontWeight: '600', color: '#db2777' }}>
                             {t('meters.virtualBadge')}
+                        </span>
+                    </div>
+                )}
+
+                {/* MID-certified Badge (green) — billing-valid physical meter */}
+                {isMid && (
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '4px 12px',
+                        backgroundColor: '#dcfce7',
+                        border: '1px solid #86efac',
+                        borderRadius: '12px',
+                        marginTop: '8px'
+                    }}>
+                        <ShieldCheck size={14} color="#16a34a" />
+                        <span style={{ fontSize: '12px', fontWeight: '600', color: '#16a34a' }}>
+                            {t('meters.midBadge')}
+                        </span>
+                    </div>
+                )}
+
+                {/* Not MID-certified Badge (yellow) — monitoring only, not for billing */}
+                {isNonMid && (
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '4px 12px',
+                        backgroundColor: '#fef3c7',
+                        border: '1px solid #fcd34d',
+                        borderRadius: '12px',
+                        marginTop: '8px'
+                    }}>
+                        <ShieldAlert size={14} color="#d97706" />
+                        <span style={{ fontSize: '12px', fontWeight: '600', color: '#d97706' }}>
+                            {t('meters.nonMidBadge')}
                         </span>
                     </div>
                 )}

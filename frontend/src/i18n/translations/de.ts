@@ -897,6 +897,16 @@ export const de: Translations = {
   'meters.loxoneApiRecommended': 'Loxone WebSocket API',
   'meters.udpAlternative': 'UDP (Legacy)',
   'meters.modbusTcp': 'Modbus TCP',
+  'meters.kostalInverter': 'Kostal Wechselrichter (Modbus TCP)',
+  'meters.kostalDescription': 'Liest den PV-Gesamtertrag eines Kostal Plenticore/PIKO Wechselrichters über Modbus TCP. Am besten als Solarzähler zur Überwachung (Wechselrichter sind nicht MID-geeicht und nicht für die Abrechnung zugelassen).',
+  'meters.kostalUnitIdHelp': 'Kostal Modbus-Unit-/Slave-ID. Standard ist 71 — nur ändern, wenn am Wechselrichter angepasst.',
+  'meters.kostalReadsTitle': 'Was gelesen wird',
+  'meters.kostalReadsBody': 'Der kumulierte Gesamtertrag des Wechselrichters (Register «Total yield», Wh) wird gelesen und automatisch in kWh umgerechnet. Aktivieren Sie zuerst Modbus TCP am Wechselrichter (Einstellungen → Modbus/SunSpec). Es darf jeweils nur ein System den Wechselrichter abfragen.',
+  'meters.midCertified': 'MID-geeicht (für Abrechnung gültig)',
+  'meters.midCertifiedHelp': 'Dies ist ein geeichter, eichrechtskonformer Zähler. Seine Messwerte dürfen für die Abrechnung verwendet werden.',
+  'meters.midNotCertifiedHelp': 'Nicht geeicht — nur zur Überwachung. Messwerte sollten nicht für die rechtsverbindliche Abrechnung verwendet werden (z. B. Auslesung eines Solar-Wechselrichters).',
+  'meters.midBadge': 'MID · Abrechnung',
+  'meters.nonMidBadge': 'Nicht MID — Überwachung',
 
   // Loxone Connection
   'meters.loxoneApiDescription': 'Sichere Echtzeit-WebSocket-Verbindung zum Loxone Miniserver',

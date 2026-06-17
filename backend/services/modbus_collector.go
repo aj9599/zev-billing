@@ -34,6 +34,7 @@ type ModbusClient struct {
 	unitID               byte
 	functionCode         byte
 	dataType             string
+	scale                float64
 	hasExportRegister    bool
 	exportRegisterAddr   uint16
 	isConnected          bool
@@ -54,6 +55,10 @@ type ModbusMeterConfig struct {
 	UnitID               int
 	FunctionCode         int
 	DataType             string
+	// Scale multiplies every raw register value. Used e.g. for the Kostal
+	// inverter whose "total yield" register reports Wh (scale 0.001 → kWh).
+	// Defaults to 1.0 (no scaling) for plain Modbus TCP meters.
+	Scale                float64
 	HasExportRegister    bool
 	ExportRegisterAddr   int
 }
@@ -96,7 +101,7 @@ func (mc *ModbusCollector) initializeModbusConnections() {
 	rows, err := mc.db.Query(`
 		SELECT id, name, connection_config
 		FROM meters
-		WHERE is_active = 1 AND connection_type = 'modbus_tcp'
+		WHERE is_active = 1 AND connection_type IN ('modbus_tcp', 'kostal')
 	`)
 	if err != nil {
 		log.Printf("ERROR: Failed to query Modbus meters: %v", err)
@@ -159,6 +164,7 @@ func (mc *ModbusCollector) createModbusClient(config ModbusMeterConfig) *ModbusC
 		unitID:             byte(config.UnitID),
 		functionCode:       byte(config.FunctionCode),
 		dataType:           config.DataType,
+		scale:              config.Scale,
 		hasExportRegister:  config.HasExportRegister,
 		exportRegisterAddr: uint16(config.ExportRegisterAddr),
 		isConnected:        false,
@@ -357,6 +363,13 @@ func (c *ModbusClient) readValues() (float64, float64, error) {
 		}
 	}
 	
+	// Apply the configured scale factor (default 1.0 = no scaling). Kostal
+	// inverters, for example, report Wh and need scale 0.001 to become kWh.
+	scale := c.scale
+	if scale == 0 {
+		scale = 1.0
+	}
+
 	// Read import energy
 	importValue, err := c.readRegister(c.registerAddress, c.registerCount)
 	if err != nil {
@@ -365,7 +378,8 @@ func (c *ModbusClient) readValues() (float64, float64, error) {
 		log.Printf("ERROR: Modbus read failed for '%s': %v", c.meterName, err)
 		return 0, 0, err
 	}
-	
+	importValue *= scale
+
 	// Read export energy if available
 	var exportValue float64
 	if c.hasExportRegister {
@@ -373,6 +387,8 @@ func (c *ModbusClient) readValues() (float64, float64, error) {
 		if err != nil {
 			log.Printf("WARNING: Export register read failed for '%s': %v (continuing with import only)", c.meterName, err)
 			exportValue = 0 // Continue even if export fails
+		} else {
+			exportValue *= scale
 		}
 	}
 	
@@ -481,6 +497,7 @@ func parseModbusConfig(configJSON string) (ModbusMeterConfig, error) {
 		UnitID:             1,
 		FunctionCode:       3,
 		DataType:           "float32",
+		Scale:              1.0,
 		HasExportRegister:  false,
 		ExportRegisterAddr: 0,
 	}
@@ -511,6 +528,10 @@ func parseModbusConfig(configJSON string) (ModbusMeterConfig, error) {
 	
 	if dataType, ok := rawConfig["data_type"].(string); ok {
 		result.DataType = dataType
+	}
+
+	if scale, ok := rawConfig["scale"].(float64); ok && scale != 0 {
+		result.Scale = scale
 	}
 	
 	if hasExport, ok := rawConfig["has_export_register"].(bool); ok {

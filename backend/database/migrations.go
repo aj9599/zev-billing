@@ -473,6 +473,10 @@ func RunMigrations(db *sql.DB) error {
 		return err
 	}
 
+	if err := addMidCertifiedColumn(db); err != nil {
+		return err
+	}
+
 	if err := addVZEVColumns(db); err != nil {
 		return err
 	}
@@ -912,6 +916,36 @@ func addDeviceTypeColumn(db *sql.DB) error {
 		log.Println("✓ device_type column already exists")
 	}
 
+	return nil
+}
+
+// addMidCertifiedColumn adds the is_mid_certified flag to the meters table.
+// Defaults to 1 (true) so all pre-existing meters remain billing-valid and keep
+// rendering as "billing" (green) — only newly flagged meters become non-MID.
+func addMidCertifiedColumn(db *sql.DB) error {
+	var metersSql string
+	err := db.QueryRow(`
+		SELECT sql FROM sqlite_master
+		WHERE type='table' AND name='meters'
+	`).Scan(&metersSql)
+	if err != nil {
+		return err
+	}
+
+	if contains(metersSql, "is_mid_certified") {
+		log.Println("✓ is_mid_certified column already exists")
+		return nil
+	}
+
+	log.Println("Adding is_mid_certified column to meters table...")
+	if _, err := db.Exec(`ALTER TABLE meters ADD COLUMN is_mid_certified INTEGER DEFAULT 1`); err != nil {
+		if contains(err.Error(), "duplicate column") {
+			log.Println("✓ is_mid_certified column already exists")
+			return nil
+		}
+		return fmt.Errorf("failed to add is_mid_certified column: %v", err)
+	}
+	log.Println("✓ is_mid_certified column added successfully")
 	return nil
 }
 

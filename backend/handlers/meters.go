@@ -35,7 +35,7 @@ func NewMeterHandler(db *sql.DB, dataCollector *services.DataCollector) *MeterHa
 // DataCollector.RestartUDPListeners.
 func connectionTypeNeedsRestart(connType string) bool {
 	switch connType {
-	case "udp", "loxone_api", "mqtt", "modbus_tcp", "smartme", "e3dc", "e3dc_api":
+	case "udp", "loxone_api", "mqtt", "modbus_tcp", "kostal", "smartme", "e3dc", "e3dc_api":
 		return true
 	default:
 		return false
@@ -62,7 +62,7 @@ func (h *MeterHandler) List(w http.ResponseWriter, r *http.Request) {
 		SELECT id, name, meter_type, building_id, user_id, apartment_unit,
 		       connection_type, connection_config, device_type, notes,
 		       last_reading, last_reading_export, last_reading_time,
-		       is_active, is_archived, replaced_by_meter_id,
+		       is_active, is_mid_certified, is_archived, replaced_by_meter_id,
 		       replaces_meter_id, replacement_date, replacement_notes,
 		       sort_order, created_at, updated_at
 		FROM meters
@@ -120,7 +120,7 @@ func (h *MeterHandler) List(w http.ResponseWriter, r *http.Request) {
 			&m.ID, &m.Name, &m.MeterType, &m.BuildingID, &m.UserID, &apartmentUnit,
 			&m.ConnectionType, &m.ConnectionConfig, &deviceType, &m.Notes,
 			&m.LastReading, &m.LastReadingExport, &m.LastReadingTime,
-			&m.IsActive, &m.IsArchived, &replacedBy, &replaces,
+			&m.IsActive, &m.IsMidCertified, &m.IsArchived, &replacedBy, &replaces,
 			&replacementDate, &replacementNotes, &m.SortOrder, &m.CreatedAt, &m.UpdatedAt,
 		)
 		if err != nil {
@@ -173,15 +173,15 @@ func (h *MeterHandler) Get(w http.ResponseWriter, r *http.Request) {
 		SELECT id, name, meter_type, building_id, user_id, apartment_unit,
 		       connection_type, connection_config, device_type, notes, 
 		       last_reading, last_reading_export, last_reading_time, 
-		       is_active, is_archived, replaced_by_meter_id,
+		       is_active, is_mid_certified, is_archived, replaced_by_meter_id,
 		       replaces_meter_id, replacement_date, replacement_notes,
 		       created_at, updated_at
 		FROM meters WHERE id = ?
 	`, id).Scan(
 		&m.ID, &m.Name, &m.MeterType, &m.BuildingID, &m.UserID, &apartmentUnit,
 		&m.ConnectionType, &m.ConnectionConfig, &deviceType, &m.Notes, 
-		&m.LastReading, &m.LastReadingExport, &m.LastReadingTime, 
-		&m.IsActive, &m.IsArchived, &replacedBy, &replaces,
+		&m.LastReading, &m.LastReadingExport, &m.LastReadingTime,
+		&m.IsActive, &m.IsMidCertified, &m.IsArchived, &replacedBy, &replaces,
 		&replacementDate, &replacementNotes, &m.CreatedAt, &m.UpdatedAt,
 	)
 
@@ -275,10 +275,10 @@ func (h *MeterHandler) Create(w http.ResponseWriter, r *http.Request) {
 	result, err := h.db.Exec(`
 		INSERT INTO meters (
 			name, meter_type, building_id, user_id, apartment_unit,
-			connection_type, connection_config, device_type, notes, is_active
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			connection_type, connection_config, device_type, notes, is_active, is_mid_certified
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, m.Name, m.MeterType, m.BuildingID, m.UserID, m.ApartmentUnit,
-		m.ConnectionType, m.ConnectionConfig, m.DeviceType, m.Notes, m.IsActive)
+		m.ConnectionType, m.ConnectionConfig, m.DeviceType, m.Notes, m.IsActive, m.IsMidCertified)
 
 	if err != nil {
 		log.Printf("ERROR: Failed to create meter: %v", err)
@@ -326,11 +326,11 @@ func (h *MeterHandler) Update(w http.ResponseWriter, r *http.Request) {
 	_, err = h.db.Exec(`
 		UPDATE meters SET
 			name = ?, meter_type = ?, building_id = ?, user_id = ?, 
-			apartment_unit = ?, connection_type = ?, connection_config = ?, 
-			device_type = ?, notes = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
+			apartment_unit = ?, connection_type = ?, connection_config = ?,
+			device_type = ?, notes = ?, is_active = ?, is_mid_certified = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`, m.Name, m.MeterType, m.BuildingID, m.UserID, m.ApartmentUnit,
-		m.ConnectionType, m.ConnectionConfig, m.DeviceType, m.Notes, m.IsActive, id)
+		m.ConnectionType, m.ConnectionConfig, m.DeviceType, m.Notes, m.IsActive, m.IsMidCertified, id)
 
 	if err != nil {
 		log.Printf("ERROR: Failed to update meter: %v", err)

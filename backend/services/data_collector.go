@@ -396,7 +396,7 @@ func (dc *DataCollector) logSystemStatus() {
 	var loxoneChargerCount, udpChargerCount, mqttChargerCount, zaptecChargerCount int
 	
 	dc.db.QueryRow("SELECT COUNT(*) FROM meters WHERE is_active = 1 AND connection_type = 'loxone_api'").Scan(&loxoneMeterCount)
-	dc.db.QueryRow("SELECT COUNT(*) FROM meters WHERE is_active = 1 AND connection_type = 'modbus_tcp'").Scan(&modbusMeterCount)
+	dc.db.QueryRow("SELECT COUNT(*) FROM meters WHERE is_active = 1 AND connection_type IN ('modbus_tcp', 'kostal')").Scan(&modbusMeterCount)
 	dc.db.QueryRow("SELECT COUNT(*) FROM meters WHERE is_active = 1 AND connection_type = 'udp'").Scan(&udpMeterCount)
 	dc.db.QueryRow("SELECT COUNT(*) FROM meters WHERE is_active = 1 AND connection_type = 'mqtt'").Scan(&mqttMeterCount)
 	dc.db.QueryRow("SELECT COUNT(*) FROM meters WHERE is_active = 1 AND connection_type = 'smartme'").Scan(&smartmeMeterCount)
@@ -658,9 +658,10 @@ func (dc *DataCollector) collectAndSaveMeters() {
 				totalCount, totalCount, name)
 			continue
 			
-		case "modbus_tcp":
+		case "modbus_tcp", "kostal":
+			// Kostal inverters are read over Modbus TCP by the same collector.
 			modbusMeters = append(modbusMeters, id)
-			
+
 		case "udp":
 			udpMeters = append(udpMeters, id)
 			
@@ -1266,8 +1267,9 @@ func (dc *DataCollector) GetLiveMeterReadings(buildingID int) ([]MeterLiveReadin
 				}
 			}
 
-		case "modbus_tcp":
-			// Modbus: read directly (this is fast, just a TCP read)
+		case "modbus_tcp", "kostal":
+			// Modbus: read directly (this is fast, just a TCP read).
+			// Kostal inverters share the Modbus collector.
 			if dc.modbusCollector != nil {
 				importVal, exportVal, err := dc.modbusCollector.ReadMeter(meterID)
 				if err == nil {

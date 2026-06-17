@@ -895,6 +895,16 @@ export const en: Translations = {
   'meters.loxoneApiRecommended': 'Loxone WebSocket API',
   'meters.udpAlternative': 'UDP (Legacy)',
   'meters.modbusTcp': 'Modbus TCP',
+  'meters.kostalInverter': 'Kostal Inverter (Modbus TCP)',
+  'meters.kostalDescription': 'Reads total PV yield from a Kostal Plenticore/PIKO inverter over Modbus TCP. Best used as a solar meter for monitoring (inverters are not MID-certified for billing).',
+  'meters.kostalUnitIdHelp': 'Kostal Modbus unit/slave ID. Default is 71 — only change this if you adjusted it on the inverter.',
+  'meters.kostalReadsTitle': 'What this reads',
+  'meters.kostalReadsBody': 'The inverter\'s cumulative total yield (Total yield register, Wh) is read and converted to kWh automatically. Enable Modbus TCP on the inverter (Settings → Modbus/SunSpec) first. Only one system may poll the inverter at a time.',
+  'meters.midCertified': 'MID-certified (valid for billing)',
+  'meters.midCertifiedHelp': 'This is a certified meter (eichrechtskonform). Its readings may be used for billing.',
+  'meters.midNotCertifiedHelp': 'Not certified — for monitoring only. Readings should not be used for legally binding billing (e.g. a solar inverter read-out).',
+  'meters.midBadge': 'MID · Billing',
+  'meters.nonMidBadge': 'Not MID — monitoring',
 
   // Loxone Connection
   'meters.loxoneApiDescription': 'Secure real-time WebSocket connection to Loxone Miniserver',

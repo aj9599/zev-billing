@@ -14,6 +14,7 @@ interface ConnectionConfig {
     unit_id?: number;
     function_code?: number;
     data_type?: string;
+    scale?: number; // multiplier for raw Modbus values (Kostal: 0.001 Wh→kWh)
     has_export_register?: boolean;
     export_register_address?: number;
     listen_port?: number;
@@ -70,7 +71,8 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
         connection_config: '{}',
         device_type: 'generic',
         notes: '',
-        is_active: true
+        is_active: true,
+        is_mid_certified: true
     });
     const [connectionConfig, setConnectionConfig] = useState<ConnectionConfig>({
         endpoint: '',
@@ -215,6 +217,7 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
                 unit_id: config.unit_id || 1,
                 function_code: config.function_code || 3,
                 data_type: config.data_type || 'float32',
+                scale: config.scale || 1,
                 has_export_register: config.has_export_register || false,
                 export_register_address: config.export_register_address || 0,
                 listen_port: config.listen_port || 8888,
@@ -385,6 +388,22 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
                 register_count: connectionConfig.register_count,
                 has_export_register: connectionConfig.has_export_register,
                 export_register_address: connectionConfig.export_register_address
+            };
+        } else if (formData.connection_type === 'kostal') {
+            // Kostal inverter (Plenticore/PIKO) over Modbus TCP. We preset the
+            // SunSpec/Kostal "Total yield" energy register (1056, float32, Wh) and
+            // scale to kWh. The user only provides IP + (optionally) port/unit id.
+            config = {
+                ip_address: connectionConfig.ip_address,
+                port: connectionConfig.port || 1502,
+                unit_id: connectionConfig.unit_id || 71,
+                function_code: 3,
+                data_type: 'float32',
+                // Kostal "Total yield" register (Wh) — fixed, not user-editable.
+                register_address: 1056,
+                register_count: 2,
+                scale: connectionConfig.scale || 0.001,
+                has_export_register: false
             };
         } else if (formData.connection_type === 'udp') {
             config = {

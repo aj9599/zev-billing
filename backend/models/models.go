@@ -75,6 +75,12 @@ type Meter struct {
 	LastReadingTime   *time.Time `json:"last_reading_time"`
 	LastReadingExport float64    `json:"last_reading_export"`
 	IsActive          bool       `json:"is_active"`
+	// IsMidCertified marks a physical meter as MID-certified (eichrechtskonform)
+	// and therefore valid for billing. Non-certified meters (e.g. a solar inverter
+	// read-out like Kostal) can still be monitored but are flagged in the UI.
+	// Virtual (computed) meters ignore this flag. Defaults to true so existing
+	// meters keep their billing behaviour.
+	IsMidCertified    bool       `json:"is_mid_certified"`
 	IsArchived        bool       `json:"is_archived"`
 	ReplacedByMeterID *int       `json:"replaced_by_meter_id"`
 	ReplacesMetterID  *int       `json:"replaces_meter_id"`

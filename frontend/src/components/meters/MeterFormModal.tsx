@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Info, AlertCircle, Wifi, Rss, Cloud, Zap, Check, Plus, Trash2, Calculator } from 'lucide-react';
+import { X, Info, AlertCircle, Wifi, Rss, Cloud, Zap, Check, Plus, Trash2, Calculator, Cable, ShieldCheck } from 'lucide-react';
 import { useTranslation } from '../../i18n';
 import type { Meter, Building, User, LoxoneControl, SmartMeDevice } from '../../types';
 import LoxoneDiscovery from '../LoxoneDiscovery';
@@ -15,6 +15,7 @@ interface ConnectionConfig {
     unit_id?: number;
     function_code?: number;
     data_type?: string;
+    scale?: number; // multiplier for raw Modbus values (Kostal: 0.001 Wh→kWh)
     has_export_register?: boolean;
     export_register_address?: number;
     listen_port?: number;
@@ -212,6 +213,16 @@ export default function MeterFormModal({
 
     const handleConnectionTypeChange = (connectionType: string) => {
         onFormDataChange({ ...formData, connection_type: connectionType });
+        // Seed Kostal-specific Modbus defaults (port 1502, unit 71, Wh→kWh scale)
+        // so the form doesn't carry over the generic Modbus TCP defaults (502/1).
+        if (connectionType === 'kostal') {
+            onConnectionConfigChange({
+                ...connectionConfig,
+                port: 1502,
+                unit_id: 71,
+                scale: 0.001
+            });
+        }
         // Auto-generate MQTT topic when switching to MQTT
         if (connectionType === 'mqtt' && formData.name) {
             const building = buildings.find(b => b.id === formData.building_id);
@@ -634,6 +645,7 @@ export default function MeterFormModal({
                                     <option value="mqtt">{t('meters.mqttProtocol')}</option>
                                     <option value="udp">{t('meters.udpAlternative')}</option>
                                     <option value="modbus_tcp">{t('meters.modbusTcp')}</option>
+                                    <option value="kostal">{t('meters.kostalInverter')}</option>
                                     <option value="e3dc">E3/DC Hauskraftwerk</option>
                                     <option value="virtual">{t('meters.virtualMeter')}</option>
                                 </select>
@@ -2145,6 +2157,89 @@ export default function MeterFormModal({
                                 </>
                             )}
 
+                            {/* ===== Kostal Inverter Configuration ===== */}
+                            {formData.connection_type === 'kostal' && (
+                                <>
+                                    <div style={{
+                                        backgroundColor: '#eff6ff',
+                                        padding: '12px 14px',
+                                        borderRadius: '10px',
+                                        marginBottom: '16px',
+                                        border: '1px solid #bfdbfe',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '10px'
+                                    }}>
+                                        <Cable size={18} color="#3b82f6" />
+                                        <p style={{ fontSize: '13px', color: '#1e40af', margin: 0, fontWeight: '500' }}>
+                                            {t('meters.kostalDescription')}
+                                        </p>
+                                    </div>
+
+                                    {/* IP + Port */}
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr',
+                                        gap: '12px',
+                                        marginBottom: '14px'
+                                    }}>
+                                        <div>
+                                            <label style={labelStyle}>{t('meters.ipAddress')} *</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={connectionConfig.ip_address || ''}
+                                                onChange={(e) => onConnectionConfigChange({ ...connectionConfig, ip_address: e.target.value })}
+                                                placeholder="192.168.1.100"
+                                                onFocus={focusHandler}
+                                                onBlur={blurHandler}
+                                                style={inputStyle(isMobile)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={labelStyle}>{t('meters.port')}</label>
+                                            <input
+                                                type="number"
+                                                value={connectionConfig.port ?? 1502}
+                                                onChange={(e) => onConnectionConfigChange({ ...connectionConfig, port: parseInt(e.target.value) || 1502 })}
+                                                placeholder="1502"
+                                                onFocus={focusHandler}
+                                                onBlur={blurHandler}
+                                                style={inputStyle(isMobile)}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Unit ID */}
+                                    <div style={{ marginBottom: '14px' }}>
+                                        <label style={labelStyle}>{t('meters.modbusUnitId')}</label>
+                                        <input
+                                            type="number"
+                                            value={connectionConfig.unit_id ?? 71}
+                                            onChange={(e) => onConnectionConfigChange({ ...connectionConfig, unit_id: parseInt(e.target.value) || 71 })}
+                                            placeholder="71"
+                                            onFocus={focusHandler}
+                                            onBlur={blurHandler}
+                                            style={inputStyle(isMobile)}
+                                        />
+                                        <p style={helpTextStyle}>{t('meters.kostalUnitIdHelp')}</p>
+                                    </div>
+
+                                    <div style={{
+                                        backgroundColor: '#f9fafb',
+                                        padding: '14px',
+                                        borderRadius: '10px',
+                                        fontSize: '12px',
+                                        border: '1px solid #e5e7eb',
+                                        lineHeight: '1.6',
+                                        color: '#6b7280'
+                                    }}>
+                                        <strong>{t('meters.kostalReadsTitle')}</strong><br />
+                                        {t('meters.kostalReadsBody')}
+                                    </div>
+                                </>
+                            )}
+
                             {/* ===== E3/DC Hauskraftwerk Configuration ===== */}
                             {formData.connection_type === 'e3dc' && (
                                 <>
@@ -2315,6 +2410,34 @@ export default function MeterFormModal({
                                     label={t('meters.activeCollectData')}
                                 />
                             </div>
+
+                            {/* MID-certified Checkbox — billing validity.
+                                Not shown for virtual (computed) meters, which are
+                                never physical billing meters. */}
+                            {formData.connection_type !== 'virtual' && (
+                                <div style={{
+                                    marginBottom: '14px',
+                                    padding: '14px',
+                                    borderRadius: '10px',
+                                    border: `1px solid ${formData.is_mid_certified !== false ? '#bbf7d0' : '#fde68a'}`,
+                                    backgroundColor: formData.is_mid_certified !== false ? '#f0fdf4' : '#fffbeb'
+                                }}>
+                                    <CustomCheckbox
+                                        checked={formData.is_mid_certified !== false}
+                                        onChange={(checked) => onFormDataChange({
+                                            ...formData,
+                                            is_mid_certified: checked
+                                        })}
+                                        label={t('meters.midCertified')}
+                                    />
+                                    <p style={{ ...helpTextStyle, marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <ShieldCheck size={13} color={formData.is_mid_certified !== false ? '#16a34a' : '#d97706'} />
+                                        {formData.is_mid_certified !== false
+                                            ? t('meters.midCertifiedHelp')
+                                            : t('meters.midNotCertifiedHelp')}
+                                    </p>
+                                </div>
+                            )}
 
                             {/* Notes */}
                             <div>

@@ -169,7 +169,7 @@ export default function MeterConnectionStatus({
         />;
     }
 
-    if (meter.connection_type === 'modbus_tcp') {
+    if (meter.connection_type === 'modbus_tcp' || meter.connection_type === 'kostal') {
         const status = modbusStatus[meter.id];
         if (status) {
             if (status.is_connected) {
