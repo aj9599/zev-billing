@@ -200,10 +200,11 @@ export default function Chargers() {
   // Stats
   const totalChargers = chargers.length;
   const onlineChargers = chargers.filter(c => {
-    if (c.connection_type === 'zaptec_api') return zaptecStatus[c.id]?.is_connected;
-    if (c.connection_type === 'loxone_api') return loxoneStatus[c.id]?.is_connected;
+    if (c.connection_type === 'zaptec_api') return zaptecStatus[c.id]?.is_connected ?? liveData[c.id]?.is_online;
+    if (c.connection_type === 'loxone_api') return loxoneStatus[c.id]?.is_connected ?? liveData[c.id]?.is_online;
     if (c.connection_type === 'udp') return udpChargerStatus[c.id]?.is_connected;
     if (c.connection_type === 'mqtt') return mqttChargerStatus[c.id]?.is_connected;
+    if (c.connection_type === 'e3dc_api') return liveData[c.id]?.is_online;
     return false;
   }).length;
   const offlineChargers = totalChargers - onlineChargers;
