@@ -399,13 +399,14 @@ export default function MeterCard({
                     </span>
                 </div>
                 
-                {/* Energy Readings - Import & Export (only for total_meter and solar_meter) */}
-                {(meter.meter_type === 'total_meter' || meter.meter_type === 'solar_meter') ? (
-                    <div style={{ 
-                        display: 'grid', 
-                        gridTemplateColumns: '1fr 1fr', 
+                {/* Energy Readings */}
+                {meter.meter_type === 'total_meter' ? (
+                    /* Grid meters move energy both ways — show import + export. */
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
                         gap: '12px',
-                        marginBottom: '12px' 
+                        marginBottom: '12px'
                     }}>
                         {/* Import Energy */}
                         <div style={{
@@ -414,9 +415,9 @@ export default function MeterCard({
                             borderRadius: '8px',
                             border: '1px solid #e0f2fe'
                         }}>
-                            <div style={{ 
-                                display: 'flex', 
-                                alignItems: 'center', 
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
                                 gap: '6px',
                                 marginBottom: '4px'
                             }}>
@@ -429,7 +430,7 @@ export default function MeterCard({
                                 {meter.last_reading ? `${meter.last_reading.toFixed(3)} kWh` : '-'}
                             </div>
                         </div>
-                        
+
                         {/* Export Energy */}
                         <div style={{
                             padding: '10px',
@@ -437,9 +438,9 @@ export default function MeterCard({
                             borderRadius: '8px',
                             border: '1px solid #dcfce7'
                         }}>
-                            <div style={{ 
-                                display: 'flex', 
-                                alignItems: 'center', 
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
                                 gap: '6px',
                                 marginBottom: '4px'
                             }}>
@@ -451,6 +452,26 @@ export default function MeterCard({
                             <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
                                 {meter.last_reading_export ? `${meter.last_reading_export.toFixed(3)} kWh` : '0.000 kWh'}
                             </div>
+                        </div>
+                    </div>
+                ) : meter.meter_type === 'solar_meter' ? (
+                    /* Solar meters/inverters only produce energy — show production
+                       (stored in the export column); a solar source has no import. */
+                    <div style={{
+                        padding: '10px',
+                        backgroundColor: '#f0fdf4',
+                        borderRadius: '8px',
+                        border: '1px solid #dcfce7',
+                        marginBottom: '12px'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                            <Sun size={14} style={{ color: '#16a34a' }} />
+                            <span style={{ fontSize: '11px', color: '#15803d', fontWeight: '600' }}>
+                                {t('meters.production')}
+                            </span>
+                        </div>
+                        <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
+                            {meter.last_reading_export ? `${meter.last_reading_export.toFixed(3)} kWh` : '0.000 kWh'}
                         </div>
                     </div>
                 ) : (

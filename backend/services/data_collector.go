@@ -688,8 +688,17 @@ func (dc *DataCollector) collectAndSaveMeters() {
 		
 		for meterID, readings := range modbusReadings {
 			info := meterInfo[meterID]
-			if readings.Import > 0 {
-				if err := dc.saveMeterReading(meterID, info.name, currentTime, readings.Import, readings.Export); err != nil {
+			importVal, exportVal := readings.Import, readings.Export
+			// Solar meters track production in the EXPORT column (same convention
+			// as the E3/DC PV integration, and what billing reads as solar
+			// production). A single-register source like a Kostal inverter
+			// reports its total yield as its only value, so move it into export.
+			if info.meterType == "solar_meter" && exportVal == 0 && importVal > 0 {
+				exportVal = importVal
+				importVal = 0
+			}
+			if importVal > 0 || exportVal > 0 {
+				if err := dc.saveMeterReading(meterID, info.name, currentTime, importVal, exportVal); err != nil {
 					log.Printf("ERROR: Failed to save Modbus meter '%s': %v", info.name, err)
 				} else {
 					successCount++

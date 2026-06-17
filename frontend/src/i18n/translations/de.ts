@@ -1291,6 +1291,7 @@ export const de: Translations = {
   'meters.loxoneWebSocket': 'Loxone WebSocket',
   'meters.import': 'Import',
   'meters.export': 'Export',
+  'meters.production': 'Produktion',
 
   // Instructions Modal - Modbus Section
   'meters.instructions.modbusSubtitle': 'Modbus TCP - Professionelles Industrieprotokoll',
