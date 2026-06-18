@@ -1395,6 +1395,17 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 		log.Printf("  [CHARGING] Calculating for period: %s to %s (mode=%s)", start.Format("2006-01-02"), end.Format("2006-01-02"), scope.Mode)
 		chargingSegs, firstSessionOverall, lastSessionOverall := bs.computeCharging(buildingID, scope.Mode, userPeriod.ChargerIDs, 0, segments, start, end)
 		totalAmount += appendChargingItems(&items, chargingSegs, firstSessionOverall, lastSessionOverall, multiSeg, tr, tr.CarCharging)
+
+		// Flag the invoice for review if a charger counter reset/glitch occurred in
+		// the period — charging is held through such dips, so the number may need a
+		// manual sanity check before sending.
+		if bs.chargingCounterResetDetected(buildingID, scope, userPeriod.ChargerIDs, start, end) {
+			log.Printf("  [CHARGING] ⚠️ Counter reset/glitch detected in period — flagging invoice for review")
+			items = append(items, models.InvoiceItem{
+				Description: tr.ChargerCounterResetWarning,
+				ItemType:    "charging_warning",
+			})
+		}
 	}
 
 	// Shared meters and custom items ARE pro-rated by days
@@ -1993,6 +2004,9 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 		}
 		chargingSegs, firstSessionOverall, lastSessionOverall := bs.computeCharging(buildingID, BillingModeApartments, userPeriod.ChargerIDs, 0, segs, winStart, winEnd)
 		totalAmount += appendChargingItems(&items, chargingSegs, firstSessionOverall, lastSessionOverall, multiSeg, tr, tr.CarCharging)
+		if bs.chargingCounterResetDetected(buildingID, BillingScope{Mode: BillingModeApartments}, userPeriod.ChargerIDs, winStart, winEnd) {
+			items = append(items, models.InvoiceItem{Description: tr.ChargerCounterResetWarning, ItemType: "charging_warning"})
+		}
 	}
 
 	// Shared meters and custom items (pro-rated)
@@ -3255,6 +3269,67 @@ type chargingSeg struct {
 	splitGrid        float64 // solar-split grid kWh           (CarChargingPriorityPrice)
 }
 
+// chargingCounterResetDetected reports whether any charger counter relevant to this
+// invoice went backwards within the period (a reset/glitch). Billing holds through
+// such dips rather than re-baselining, which is correct for the common transient-glitch
+// case but can under-count a genuine reset — so the invoice is flagged for a fairness
+// review instead of trusting the number silently. Selection mirrors computeCharging:
+// by charger_id for building/charger scope, by RFID otherwise.
+func (bs *BillingService) chargingCounterResetDetected(buildingID int, scope BillingScope, rfids string, start, end time.Time) bool {
+	var where string
+	var args []interface{}
+	switch {
+	case scope.Mode == BillingModeCharger && scope.ChargerID != nil:
+		where = "cs.charger_id = ?"
+		args = append(args, *scope.ChargerID)
+	case scope.Mode == BillingModeBuilding:
+		where = "c.building_id = ?"
+		args = append(args, buildingID)
+	default:
+		rfidList := cleanRfidList(rfids)
+		if len(rfidList) == 0 {
+			return false
+		}
+		ph := make([]string, len(rfidList))
+		for i, r := range rfidList {
+			ph[i] = "?"
+			args = append(args, r)
+		}
+		where = "cs.user_id IN (" + strings.Join(ph, ",") + ")"
+	}
+	args = append(args, start, end)
+
+	rows, err := bs.db.Query(fmt.Sprintf(`
+		SELECT cs.charger_id, cs.power_kwh
+		FROM charger_sessions cs
+		JOIN chargers c ON c.id = cs.charger_id
+		WHERE %s AND cs.session_time >= ? AND cs.session_time <= ?
+		ORDER BY cs.charger_id, cs.session_time
+	`, where), args...)
+	if err != nil {
+		log.Printf("  [CHARGING] reset-detector query failed: %v", err)
+		return false
+	}
+	defer rows.Close()
+
+	prev := map[int]float64{}
+	seen := map[int]bool{}
+	for rows.Next() {
+		var cid int
+		var p float64
+		if err := rows.Scan(&cid, &p); err != nil {
+			continue
+		}
+		// A meaningful backward step in a cumulative counter = reset/glitch.
+		if seen[cid] && p < prev[cid]-0.5 {
+			return true
+		}
+		prev[cid] = p
+		seen[cid] = true
+	}
+	return false
+}
+
 // computeCharging gathers charging energy per price segment for the given selection,
 // keeping mode-based and solar-split chargers separate so each is priced correctly.
 // scopeMode is "" / BillingModeApartments (RFID), BillingModeBuilding (all chargers),
@@ -3425,9 +3500,13 @@ func (bs *BillingService) generateChargerOnlyInvoice(userPeriod UserPeriod, buil
 	// Compute charging per price segment (clipped to the user's billing period) so a
 	// bill that spans a price change is priced correctly. Routes to the solar split
 	// or mode-based billing based on this charger's billing_method.
+	chargerID2 := chargerID
 	chargingSegs, firstSessionOverall, lastSessionOverall := bs.computeCharging(buildingID, BillingModeCharger, "", chargerID, segments, start, end)
 	log.Printf("  [CHARGER-ONLY] Charger %d (%s): %d segment(s)", chargerID, chargerName, len(chargingSegs))
 	totalAmount += appendChargingItems(&items, chargingSegs, firstSessionOverall, lastSessionOverall, multiSeg, tr, fmt.Sprintf("%s: %s", tr.CarCharging, chargerName))
+	if bs.chargingCounterResetDetected(buildingID, BillingScope{Mode: BillingModeCharger, ChargerID: &chargerID2}, "", start, end) {
+		items = append(items, models.InvoiceItem{Description: tr.ChargerCounterResetWarning, ItemType: "charging_warning"})
+	}
 
 	if len(customItemIDs) > 0 {
 		customItems, customCost, err := bs.getCustomLineItemsWithTranslations(buildingID, tr, userPeriod.ProrationFactor, fullStart, fullEnd, customItemIDs)

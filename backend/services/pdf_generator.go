@@ -1119,6 +1119,14 @@ func (pg *PDFGenerator) generateItemHTML(item map[string]interface{}, currency s
 			</td>
 		</tr>`, description)
 
+	case "charging_warning":
+		// Prominent warning: a charger counter reset/glitch occurred in the period.
+		return fmt.Sprintf(`<tr class="charging-warning">
+			<td colspan="2" style="background-color: #fde8e8; color: #9b1c1c; padding: 10px 16px; border-left: 4px solid #e02424; border-radius: 4px; font-size: 13px;">
+				%s
+			</td>
+		</tr>`, description)
+
 	case "vzev_breakdown_header":
 		// Header for the vZEV energy breakdown section
 		return fmt.Sprintf(`<tr class="section-separator"><td colspan="2"></td></tr><tr class="vzev-breakdown-header">
