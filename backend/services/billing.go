@@ -2637,14 +2637,16 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 			consumption := session.PowerKwh - previousPower
 
 			if consumption < 0 {
-				// power_kwh is a cumulative counter. A genuine reset (new charger /
-				// firmware reset, e.g. an E3/DC wallbox rolling over) drops the
-				// counter to near zero OR to a small fraction of the previous total —
-				// re-baseline at the new value and keep billing the fresh climb. A
-				// small non-zero drop is a sync/corruption artifact; hold the previous
-				// high so the recovery isn't double-counted (the sanity cap trims any
-				// over-count).
-				if session.PowerKwh < 1.0 || session.PowerKwh < previousPower*0.5 {
+				// power_kwh is a cumulative counter. Only a drop back to ~0 (a brand
+				// new / fully reset counter) re-baselines. A drop to a non-zero value
+				// is treated as a TRANSIENT glitch — e.g. an E3/DC wallbox briefly
+				// reporting a low value during a reboot, then recovering to its true
+				// total. We HOLD the previous high so the recovery is not billed as a
+				// phantom climb; only genuinely new energy above that high is charged.
+				// (Trade-off: a real permanent reset to a large non-zero value would
+				// under-count until the counter climbs past the old high. E3/DC resets
+				// observed in practice are transient and recover, so holding is safer.)
+				if session.PowerKwh < 1.0 {
 					if shouldLog {
 						log.Printf("  [CHARGING]     [%d] NEGATIVE consumption %.3f kWh - counter reset, re-baselining at %.3f",
 							sessionNum, consumption, session.PowerKwh)
@@ -2871,11 +2873,11 @@ func (bs *BillingService) calculateChargingFiltered(buildingID int, filter charg
 			lastBillablePower = s.PowerKwh
 			delta := s.PowerKwh - prevPower
 			if delta < 0 {
-				// Cumulative counter dropped. Re-baseline on a genuine reset (back to
-				// ~0 or to a small fraction of the previous total — e.g. an E3/DC
-				// wallbox rollover). For a small non-zero drop, hold the previous high
-				// so the climb back up isn't billed a second time.
-				if s.PowerKwh < 1.0 || s.PowerKwh < prevPower*0.5 {
+				// Cumulative counter dropped. Only a drop back to ~0 re-baselines; a
+				// non-zero drop is treated as a transient glitch (e.g. an E3/DC wallbox
+				// briefly reporting low during a reboot then recovering) — hold the
+				// previous high so the recovery isn't billed as a phantom climb.
+				if s.PowerKwh < 1.0 {
 					prevPower = s.PowerKwh
 					genuineReset = true
 				}
@@ -3063,10 +3065,9 @@ func (bs *BillingService) chargerIntervalKwh(buildingID int, filter chargerSessi
 			lastBillable = s.power
 			delta := s.power - prevPower
 			if delta < 0 {
-				// Reset (back to ~0 or to a small fraction of the previous total)
-				// re-baselines; a small spurious drop holds the previous high so the
-				// climb back isn't billed twice.
-				if s.power < 1.0 || s.power < prevPower*0.5 {
+				// Only a drop back to ~0 re-baselines; a non-zero drop is a transient
+				// glitch — hold the previous high so the recovery isn't billed twice.
+				if s.power < 1.0 {
 					prevPower = s.power
 					genuineReset = true
 				}
