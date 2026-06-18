@@ -2637,14 +2637,16 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 			consumption := session.PowerKwh - previousPower
 
 			if consumption < 0 {
-				// power_kwh is a cumulative counter. A genuine reset goes back to
-				// near zero (new charger / firmware reset). A non-zero drop is a
-				// sync/corruption artifact — re-baselining at the low value caused
-				// the climb back up to be billed a second time. Hold the previous
-				// high so the recovery isn't double-counted.
-				if session.PowerKwh < 1.0 {
+				// power_kwh is a cumulative counter. A genuine reset (new charger /
+				// firmware reset, e.g. an E3/DC wallbox rolling over) drops the
+				// counter to near zero OR to a small fraction of the previous total —
+				// re-baseline at the new value and keep billing the fresh climb. A
+				// small non-zero drop is a sync/corruption artifact; hold the previous
+				// high so the recovery isn't double-counted (the sanity cap trims any
+				// over-count).
+				if session.PowerKwh < 1.0 || session.PowerKwh < previousPower*0.5 {
 					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] NEGATIVE consumption %.3f kWh - genuine reset, re-baselining at %.3f",
+						log.Printf("  [CHARGING]     [%d] NEGATIVE consumption %.3f kWh - counter reset, re-baselining at %.3f",
 							sessionNum, consumption, session.PowerKwh)
 					}
 					previousPower = session.PowerKwh
@@ -2697,10 +2699,10 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 		if hasPreviousPower && !genuineReset {
 			chargerTotal := chargerNormal + chargerPriority
 			bound := lastBillablePower - firstBillablePower
-			if bound < 0 {
-				bound = 0
-			}
-			if chargerTotal > bound+0.001 {
+			// A negative bound means the counter ended lower than it started — an
+			// unflagged mid-period reset. (last − first) is meaningless then, so trust
+			// the per-interval delta sum instead of scaling the charge to zero.
+			if bound >= 0 && chargerTotal > bound+0.001 {
 				factor := 0.0
 				if chargerTotal > 0 {
 					factor = bound / chargerTotal
@@ -2869,10 +2871,11 @@ func (bs *BillingService) calculateChargingFiltered(buildingID int, filter charg
 			lastBillablePower = s.PowerKwh
 			delta := s.PowerKwh - prevPower
 			if delta < 0 {
-				// Cumulative counter dropped. Only re-baseline on a genuine reset
-				// (back to ~0). For a non-zero drop, hold the previous high so the
-				// climb back up isn't billed a second time.
-				if s.PowerKwh < 1.0 {
+				// Cumulative counter dropped. Re-baseline on a genuine reset (back to
+				// ~0 or to a small fraction of the previous total — e.g. an E3/DC
+				// wallbox rollover). For a small non-zero drop, hold the previous high
+				// so the climb back up isn't billed a second time.
+				if s.PowerKwh < 1.0 || s.PowerKwh < prevPower*0.5 {
 					prevPower = s.PowerKwh
 					genuineReset = true
 				}
@@ -2896,10 +2899,9 @@ func (bs *BillingService) calculateChargingFiltered(buildingID int, filter charg
 		chargerTotal := chargerNormal + chargerPriority
 		if hasPrev && !genuineReset {
 			bound := lastBillablePower - firstBillablePower
-			if bound < 0 {
-				bound = 0
-			}
-			if chargerTotal > bound+0.001 {
+			// Negative bound = unflagged mid-period reset; (last − first) is
+			// meaningless, so trust the delta sum rather than scaling to zero.
+			if bound >= 0 && chargerTotal > bound+0.001 {
 				factor := 0.0
 				if chargerTotal > 0 {
 					factor = bound / chargerTotal
@@ -3061,9 +3063,10 @@ func (bs *BillingService) chargerIntervalKwh(buildingID int, filter chargerSessi
 			lastBillable = s.power
 			delta := s.power - prevPower
 			if delta < 0 {
-				// Genuine reset (back to ~0) re-baselines; a spurious non-zero drop
-				// holds the previous high so the climb back isn't billed twice.
-				if s.power < 1.0 {
+				// Reset (back to ~0 or to a small fraction of the previous total)
+				// re-baselines; a small spurious drop holds the previous high so the
+				// climb back isn't billed twice.
+				if s.power < 1.0 || s.power < prevPower*0.5 {
 					prevPower = s.power
 					genuineReset = true
 				}
@@ -3076,16 +3079,15 @@ func (bs *BillingService) chargerIntervalKwh(buildingID int, filter chargerSessi
 		}
 
 		// Per-charger sanity cap: total cannot exceed (last − first) reading.
+		// Skipped on a mid-period reset (negative bound), where that ceiling is
+		// invalid — trust the per-interval delta sum instead of scaling to zero.
 		if hasPrev && !genuineReset {
 			var sum float64
 			for _, v := range perInterval {
 				sum += v
 			}
 			bound := lastBillable - firstBillable
-			if bound < 0 {
-				bound = 0
-			}
-			if sum > bound+0.001 && sum > 0 {
+			if bound >= 0 && sum > bound+0.001 && sum > 0 {
 				factor := bound / sum
 				for ts := range perInterval {
 					perInterval[ts] *= factor
