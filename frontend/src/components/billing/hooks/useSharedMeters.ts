@@ -43,11 +43,14 @@ export function useSharedMeters() {
       setConfigs(configsData);
       setBuildings(buildingsData.filter((b: Building) => !b.is_group));
       
-      // Only show Heating and Other meters (exclude Apartment, Solar, Total)
+      // Only show Heating and Other meters (exclude Apartment, Solar, Total, etc.)
+      // NOTE: the meter type stored is 'heating_meter' (with the _meter suffix), so we
+      // must match that exact value — matching 'heating' silently found nothing, which
+      // is why heating meters never appeared in the shared-meter picker.
       const filteredMeters = metersData.filter((m: Meter) => {
-        if (m.user_id) return false; // Exclude user-specific meters
+        if (m.user_id) return false; // Exclude tenant-assigned meters
         const meterType = m.meter_type?.toLowerCase() || '';
-        return meterType === 'heating' || meterType === 'other';
+        return meterType === 'heating_meter' || meterType === 'other';
       });
       setMeters(filteredMeters);
       setUsers(usersData.filter((u: User) => u.is_active));

@@ -1061,6 +1061,40 @@ func addExportColumns(db *sql.DB) error {
 		}
 	}
 
+	// Backfill apartment-meter ↔ tenant links. An apartment meter can be assigned to
+	// a tenant two ways: directly via meters.user_id, or implicitly via a matching
+	// apartment_unit. The UI shows the implicit link, but billing attributes
+	// consumption strictly by meters.user_id — so a meter created (and given an
+	// apartment_unit) BEFORE its tenant existed stays user_id = NULL and produces a
+	// CHF 0.00 bill even though the meter card shows it as assigned. Heal those rows
+	// by pointing user_id at the active tenant occupying the same apartment.
+	res, err := db.Exec(`
+		UPDATE meters
+		SET user_id = (
+			SELECT u.id FROM users u
+			WHERE u.building_id = meters.building_id
+			  AND u.apartment_unit = meters.apartment_unit
+			  AND u.is_active = 1
+			ORDER BY u.id LIMIT 1
+		)
+		WHERE meter_type = 'apartment_meter'
+		  AND user_id IS NULL
+		  AND apartment_unit IS NOT NULL
+		  AND apartment_unit != ''
+		  AND EXISTS (
+			SELECT 1 FROM users u2
+			WHERE u2.building_id = meters.building_id
+			  AND u2.apartment_unit = meters.apartment_unit
+			  AND u2.is_active = 1
+		  )
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to backfill apartment meter user links: %v", err)
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		log.Printf("✓ Linked %d apartment meter(s) to their tenant by apartment unit", n)
+	}
+
 	return nil
 }
 

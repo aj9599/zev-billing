@@ -77,7 +77,7 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 			&u.ID, &u.FirstName, &u.LastName, &u.Email, &u.Phone,
 			&u.AddressStreet, &u.AddressCity, &u.AddressZip, &u.AddressCountry,
 			&u.BankName, &u.BankIBAN, &u.BankAccountHolder, &u.ChargerIDs,
-			&u.Notes, &u.BuildingID, &apartmentUnit, &userType, &managedBuildings, 
+			&u.Notes, &u.BuildingID, &apartmentUnit, &userType, &managedBuildings,
 			&language, &isActive, &rentStartDate, &rentEndDate, &u.CreatedAt, &u.UpdatedAt,
 		)
 		if err != nil {
@@ -164,7 +164,7 @@ func (h *UserHandler) Get(w http.ResponseWriter, r *http.Request) {
 		&u.ID, &u.FirstName, &u.LastName, &u.Email, &u.Phone,
 		&u.AddressStreet, &u.AddressCity, &u.AddressZip, &u.AddressCountry,
 		&u.BankName, &u.BankIBAN, &u.BankAccountHolder, &u.ChargerIDs,
-		&u.Notes, &u.BuildingID, &apartmentUnit, &userType, &managedBuildings, 
+		&u.Notes, &u.BuildingID, &apartmentUnit, &userType, &managedBuildings,
 		&language, &isActive, &rentStartDate, &rentEndDate, &u.CreatedAt, &u.UpdatedAt,
 	)
 
@@ -298,9 +298,9 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 					OR (rent_start_date <= ? AND rent_end_date >= ?)
 					OR (rent_start_date >= ? AND rent_end_date <= ?)
 				)
-			`, u.BuildingID, u.ApartmentUnit, 0, *u.RentStartDate, *u.RentStartDate, 
-			   *u.RentEndDate, *u.RentEndDate, *u.RentStartDate, *u.RentEndDate).Scan(&overlappingUserID)
-			
+			`, u.BuildingID, u.ApartmentUnit, 0, *u.RentStartDate, *u.RentStartDate,
+				*u.RentEndDate, *u.RentEndDate, *u.RentStartDate, *u.RentEndDate).Scan(&overlappingUserID)
+
 			if err != sql.ErrNoRows {
 				if err == nil {
 					http.Error(w, "This apartment already has a user during this rent period", http.StatusBadRequest)
@@ -317,7 +317,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		SELECT id FROM users 
 		WHERE email = ? AND user_type = ?
 	`, u.Email, u.UserType).Scan(&existingUserID)
-	
+
 	if err != sql.ErrNoRows {
 		if err == nil {
 			http.Error(w, "A user with this email and user type already exists", http.StatusBadRequest)
@@ -333,7 +333,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 			SELECT id FROM users 
 			WHERE building_id = ? AND apartment_unit = ? AND is_active = 1 AND id != ?
 		`, u.BuildingID, u.ApartmentUnit, 0).Scan(&existingUserID)
-		
+
 		if err != sql.ErrNoRows {
 			if err == nil {
 				http.Error(w, "This apartment is already occupied by an active user", http.StatusBadRequest)
@@ -346,7 +346,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Handle rent dates properly - ensure empty strings don't get saved
 	var rentStartToSave interface{}
 	var rentEndToSave interface{}
-	
+
 	if u.UserType == "regular" {
 		// For regular users, rent dates should be set
 		if u.RentStartDate != nil && *u.RentStartDate != "" {
@@ -356,7 +356,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 			rentStartToSave = nil
 			log.Printf("WARNING: Creating regular user with empty/nil rent_start_date")
 		}
-		
+
 		if u.RentEndDate != nil && *u.RentEndDate != "" {
 			rentEndToSave = *u.RentEndDate
 			log.Printf("Creating user with rent_end_date: %s", *u.RentEndDate)
@@ -383,7 +383,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 	`, u.FirstName, u.LastName, u.Email, u.Phone,
 		u.AddressStreet, u.AddressCity, u.AddressZip, u.AddressCountry,
 		u.BankName, u.BankIBAN, u.BankAccountHolder, u.ChargerIDs,
-		u.Notes, u.BuildingID, u.ApartmentUnit, u.UserType, u.ManagedBuildings, 
+		u.Notes, u.BuildingID, u.ApartmentUnit, u.UserType, u.ManagedBuildings,
 		u.Language, isActiveVal, rentStartToSave, rentEndToSave)
 
 	if err != nil {
@@ -396,9 +396,40 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 	u.ID = int(id)
 	u.IsActive = isActiveVal == 1
 
+	// Claim the apartment's meter(s) for this tenant so billing (which attributes
+	// consumption by meters.user_id) works even when the meter was created before
+	// the tenant existed.
+	h.linkApartmentMeters(u.ID, u.BuildingID, u.ApartmentUnit, isActiveVal == 1)
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(u)
+}
+
+// linkApartmentMeters points any unlinked apartment meter in the given building and
+// apartment unit at this user, so the implicit apartment_unit assignment shown in the
+// UI becomes the explicit meters.user_id link that billing relies on. It only claims
+// meters that are currently unlinked (user_id IS NULL) to avoid stealing a meter from
+// another tenant. No-op for inactive users or users without an apartment unit.
+func (h *UserHandler) linkApartmentMeters(userID int, buildingID *int, apartmentUnit string, isActive bool) {
+	if !isActive || apartmentUnit == "" || buildingID == nil || *buildingID == 0 {
+		return
+	}
+	res, err := h.db.Exec(`
+		UPDATE meters
+		SET user_id = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE meter_type = 'apartment_meter'
+		  AND building_id = ?
+		  AND apartment_unit = ?
+		  AND user_id IS NULL
+	`, userID, *buildingID, apartmentUnit)
+	if err != nil {
+		log.Printf("WARNING: failed to link apartment meters for user %d (building %d, unit %q): %v", userID, *buildingID, apartmentUnit, err)
+		return
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		log.Printf("Linked %d apartment meter(s) to user %d (building %d, unit %q)", n, userID, *buildingID, apartmentUnit)
+	}
 }
 
 func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -475,9 +506,9 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 					OR (rent_start_date <= ? AND rent_end_date >= ?)
 					OR (rent_start_date >= ? AND rent_end_date <= ?)
 				)
-			`, u.BuildingID, u.ApartmentUnit, id, *u.RentStartDate, *u.RentStartDate, 
-			   *u.RentEndDate, *u.RentEndDate, *u.RentStartDate, *u.RentEndDate).Scan(&overlappingUserID)
-			
+			`, u.BuildingID, u.ApartmentUnit, id, *u.RentStartDate, *u.RentStartDate,
+				*u.RentEndDate, *u.RentEndDate, *u.RentStartDate, *u.RentEndDate).Scan(&overlappingUserID)
+
 			if err != sql.ErrNoRows {
 				if err == nil {
 					http.Error(w, "This apartment already has a user during this rent period", http.StatusBadRequest)
@@ -494,7 +525,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 		SELECT id FROM users 
 		WHERE email = ? AND user_type = ? AND id != ?
 	`, u.Email, u.UserType, id).Scan(&existingUserID)
-	
+
 	if err != sql.ErrNoRows {
 		if err == nil {
 			http.Error(w, "A user with this email and user type already exists", http.StatusBadRequest)
@@ -510,7 +541,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 			SELECT id FROM users 
 			WHERE building_id = ? AND apartment_unit = ? AND is_active = 1 AND id != ?
 		`, u.BuildingID, u.ApartmentUnit, id).Scan(&existingUserID)
-		
+
 		if err != sql.ErrNoRows {
 			if err == nil {
 				http.Error(w, "This apartment is already occupied by an active user", http.StatusBadRequest)
@@ -523,7 +554,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Handle rent dates properly - ensure empty strings don't get saved
 	var rentStartToSave interface{}
 	var rentEndToSave interface{}
-	
+
 	if u.UserType == "regular" {
 		// For regular users, rent dates should be set
 		if u.RentStartDate != nil && *u.RentStartDate != "" {
@@ -533,7 +564,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 			rentStartToSave = nil
 			log.Printf("WARNING: Regular user %d has empty/nil rent_start_date", id)
 		}
-		
+
 		if u.RentEndDate != nil && *u.RentEndDate != "" {
 			rentEndToSave = *u.RentEndDate
 			log.Printf("Saving rent_end_date for user %d: %s", id, *u.RentEndDate)
@@ -561,7 +592,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 	`, u.FirstName, u.LastName, u.Email, u.Phone,
 		u.AddressStreet, u.AddressCity, u.AddressZip, u.AddressCountry,
 		u.BankName, u.BankIBAN, u.BankAccountHolder, u.ChargerIDs,
-		u.Notes, u.BuildingID, u.ApartmentUnit, u.UserType, 
+		u.Notes, u.BuildingID, u.ApartmentUnit, u.UserType,
 		u.ManagedBuildings, u.Language, isActiveVal, rentStartToSave, rentEndToSave, id)
 
 	if err != nil {
@@ -572,6 +603,9 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	u.ID = id
 	u.IsActive = isActiveVal == 1
+
+	// Keep the apartment's meter link in sync with the tenant's apartment unit.
+	h.linkApartmentMeters(u.ID, u.BuildingID, u.ApartmentUnit, isActiveVal == 1)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(u)
@@ -780,7 +814,7 @@ func (h *UserHandler) GetAdminUsersForBuildings(w http.ResponseWriter, r *http.R
 			// Check if any of the managed buildings match our relevant building IDs
 			for _, managedID := range managedBuildingIDs {
 				if allRelevantBuildingIDs[managedID] {
-					log.Printf("Ã¢Å“â€œ Admin user %s %s (ID: %d) manages building/complex %d", 
+					log.Printf("Ã¢Å“â€œ Admin user %s %s (ID: %d) manages building/complex %d",
 						u.FirstName, u.LastName, u.ID, managedID)
 					matchingUsers = append(matchingUsers, u)
 					break
@@ -796,7 +830,7 @@ func (h *UserHandler) GetAdminUsersForBuildings(w http.ResponseWriter, r *http.R
 	if len(matchingUsers) > 0 {
 		log.Printf("Returning %d admin user(s) with banking details", len(matchingUsers))
 		for _, u := range matchingUsers {
-			log.Printf("  - %s %s (%s), IBAN: %s", u.FirstName, u.LastName, u.Email, 
+			log.Printf("  - %s %s (%s), IBAN: %s", u.FirstName, u.LastName, u.Email,
 				func() string {
 					if u.BankIBAN != "" {
 						return "present"
