@@ -267,7 +267,7 @@ func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 		customItemIDs = []int{}
 	}
 
-	invoices, err := h.billingService.GenerateBillsWithOptions(
+	invoices, skipped, err := h.billingService.GenerateBillsWithOptions(
 		req.BuildingIDs,
 		req.UserIDs,
 		req.StartDate,
@@ -287,7 +287,21 @@ func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Generated %d invoices, now creating PDFs...", len(invoices))
+	// If every selected tenant was skipped (e.g. all would be 0.00), treat the whole
+	// run as a failure with a descriptive message rather than reporting "success, 0 bills".
+	if len(invoices) == 0 && len(skipped) > 0 {
+		var reasons []string
+		for _, sk := range skipped {
+			reasons = append(reasons, fmt.Sprintf("%s — %s", sk.UserName, sk.Reason))
+		}
+		msg := "No invoices were created. " + strings.Join(reasons, "; ")
+		log.Printf("ERROR: %s", msg)
+		h.logToDatabase("Bill Generation Failed", fmt.Sprintf("Period: %s to %s — %s", req.StartDate, req.EndDate, msg), getClientIP(r))
+		http.Error(w, msg, http.StatusUnprocessableEntity)
+		return
+	}
+
+	log.Printf("Generated %d invoices (%d skipped), now creating PDFs...", len(invoices), len(skipped))
 
 	// Prepare sender and banking info for PDF generation
 	senderInfo := services.SenderInfo{
@@ -347,7 +361,10 @@ func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(invoices)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"invoices": invoices,
+		"skipped":  skipped,
+	})
 }
 
 // Helper function to load full invoice with items and user

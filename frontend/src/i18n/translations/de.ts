@@ -2112,6 +2112,7 @@ export const de: Translations = {
 
   // Messages
   'billConfig.successMessage': 'Erfolgreich erstellt',
+  'billConfig.skippedNotice': 'Mieter übersprungen (keine Rechnung erstellt)',
   'billConfig.errorMessage': 'Erstellen der Rechnungen fehlgeschlagen',
 
   // BillConfiguration.tsx - vZEV Mode Indicators (German)
@@ -2171,6 +2172,16 @@ export const de: Translations = {
   'sharedMeters.meterName': 'Zählername',
   'sharedMeters.building': 'Gebäude',
   'sharedMeters.unitPrice': 'Einheitspreis',
+  'sharedMeters.solarPrice': 'Solarpreis',
+  'sharedMeters.gridPrice': 'Netzpreis',
+  'sharedMeters.pricingMode.label': 'Preismodell',
+  'sharedMeters.pricingMode.single': 'Einzelpreis',
+  'sharedMeters.pricingMode.solar_grid_custom': 'Solar / Netz – eigene Preise',
+  'sharedMeters.pricingMode.solar_grid_pricing': 'Solar / Netz – aus Preiskonfiguration',
+  'sharedMeters.pricingModeDesc.single': 'Ein einheitlicher Preis pro kWh für den gesamten Zählerverbrauch.',
+  'sharedMeters.pricingModeDesc.solar_grid_custom': 'Verbrauch in Solar und Netz aufteilen (wie eine Wohnung) und je mit eigenen Tarifen verrechnen.',
+  'sharedMeters.pricingModeDesc.solar_grid_pricing': 'Verbrauch in Solar und Netz aufteilen und je mit den Preisen aus der Gebäude-Preiskonfiguration verrechnen.',
+  'sharedMeters.pricingFromConfigNote': 'Solar- und Netz-kWh werden mit der Preiskonfiguration des Gebäudes für den Abrechnungszeitraum verrechnet.',
   'sharedMeters.meter': 'Zähler',
   'sharedMeters.selectBuilding': 'Wählen Sie ein Gebäude...',
   'sharedMeters.selectMeter': 'Wählen Sie einen Zähler...',

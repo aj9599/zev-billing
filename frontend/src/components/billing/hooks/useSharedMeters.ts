@@ -10,6 +10,9 @@ interface SharedMeterFormData {
   meter_name: string;
   split_type: 'equal' | 'custom';
   unit_price: number;
+  pricing_mode: 'single' | 'solar_grid_custom' | 'solar_grid_pricing';
+  solar_price: number;
+  grid_price: number;
   custom_splits?: Record<number, number>;
 }
 

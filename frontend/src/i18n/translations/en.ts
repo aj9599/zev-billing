@@ -2111,6 +2111,7 @@ export const en: Translations = {
 
   // Messages
   'billConfig.successMessage': 'Successfully generated',
+  'billConfig.skippedNotice': 'tenant(s) skipped (no invoice created)',
   'billConfig.errorMessage': 'Failed to generate bills',
 
   // BillConfiguration.tsx - vZEV Mode Indicators
@@ -2169,6 +2170,16 @@ export const en: Translations = {
   'sharedMeters.meterName': 'Meter Name',
   'sharedMeters.building': 'Building',
   'sharedMeters.unitPrice': 'Unit Price',
+  'sharedMeters.solarPrice': 'Solar Price',
+  'sharedMeters.gridPrice': 'Grid Price',
+  'sharedMeters.pricingMode.label': 'Pricing',
+  'sharedMeters.pricingMode.single': 'Single price',
+  'sharedMeters.pricingMode.solar_grid_custom': 'Solar / grid – own prices',
+  'sharedMeters.pricingMode.solar_grid_pricing': 'Solar / grid – from pricing config',
+  'sharedMeters.pricingModeDesc.single': 'One flat price per kWh for all of the meter\'s consumption.',
+  'sharedMeters.pricingModeDesc.solar_grid_custom': 'Split the consumption into solar and grid (like an apartment) and price each with your own rates.',
+  'sharedMeters.pricingModeDesc.solar_grid_pricing': 'Split the consumption into solar and grid and price each using the building\'s pricing configuration.',
+  'sharedMeters.pricingFromConfigNote': 'Solar and grid kWh are priced from the building\'s pricing configuration for the billing period.',
   'sharedMeters.meter': 'Meter',
   'sharedMeters.selectBuilding': 'Select a building...',
   'sharedMeters.selectMeter': 'Select a meter...',

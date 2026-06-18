@@ -25,15 +25,35 @@ type SharedMeterConfig struct {
 	MeterName  string  `json:"meter_name"`
 	SplitType  string  `json:"split_type"`
 	UnitPrice  float64 `json:"unit_price"`
-	CreatedAt  string  `json:"created_at"`
-	UpdatedAt  string  `json:"updated_at"`
+	// PricingMode controls how the meter's consumption is priced before it is
+	// split among units:
+	//   single              – flat UnitPrice per kWh (legacy behaviour)
+	//   solar_grid_custom    – proportional solar/grid split priced with SolarPrice/GridPrice
+	//   solar_grid_pricing   – proportional solar/grid split priced from the building pricing config
+	PricingMode string  `json:"pricing_mode"`
+	SolarPrice  float64 `json:"solar_price"`
+	GridPrice   float64 `json:"grid_price"`
+	CreatedAt   string  `json:"created_at"`
+	UpdatedAt   string  `json:"updated_at"`
+}
+
+// validPricingMode reports whether m is one of the supported pricing modes.
+// An empty value is treated as "single" for backward compatibility.
+func validPricingMode(m string) bool {
+	switch m {
+	case "", "single", "solar_grid_custom", "solar_grid_pricing":
+		return true
+	default:
+		return false
+	}
 }
 
 func (h *SharedMeterHandler) List(w http.ResponseWriter, r *http.Request) {
 	buildingID := r.URL.Query().Get("building_id")
 
 	query := `
-		SELECT id, meter_id, building_id, meter_name, split_type, unit_price, created_at, updated_at
+		SELECT id, meter_id, building_id, meter_name, split_type, unit_price,
+		       pricing_mode, solar_price, grid_price, created_at, updated_at
 		FROM shared_meter_configs
 		WHERE 1=1
 	`
@@ -59,7 +79,8 @@ func (h *SharedMeterHandler) List(w http.ResponseWriter, r *http.Request) {
 		var c SharedMeterConfig
 		err := rows.Scan(
 			&c.ID, &c.MeterID, &c.BuildingID, &c.MeterName,
-			&c.SplitType, &c.UnitPrice, &c.CreatedAt, &c.UpdatedAt,
+			&c.SplitType, &c.UnitPrice, &c.PricingMode, &c.SolarPrice, &c.GridPrice,
+			&c.CreatedAt, &c.UpdatedAt,
 		)
 		if err == nil {
 			configs = append(configs, c)
@@ -82,12 +103,14 @@ func (h *SharedMeterHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	var c SharedMeterConfig
 	err = h.db.QueryRow(`
-		SELECT id, meter_id, building_id, meter_name, split_type, unit_price, created_at, updated_at
+		SELECT id, meter_id, building_id, meter_name, split_type, unit_price,
+		       pricing_mode, solar_price, grid_price, created_at, updated_at
 		FROM shared_meter_configs
 		WHERE id = ?
 	`, id).Scan(
 		&c.ID, &c.MeterID, &c.BuildingID, &c.MeterName,
-		&c.SplitType, &c.UnitPrice, &c.CreatedAt, &c.UpdatedAt,
+		&c.SplitType, &c.UnitPrice, &c.PricingMode, &c.SolarPrice, &c.GridPrice,
+		&c.CreatedAt, &c.UpdatedAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -118,6 +141,15 @@ func (h *SharedMeterHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate pricing mode
+	if !validPricingMode(c.PricingMode) {
+		http.Error(w, "Invalid pricing_mode. Must be: single, solar_grid_custom, or solar_grid_pricing", http.StatusBadRequest)
+		return
+	}
+	if c.PricingMode == "" {
+		c.PricingMode = "single"
+	}
+
 	// Get meter name if not provided
 	if c.MeterName == "" && c.MeterID > 0 {
 		var meterName string
@@ -129,9 +161,11 @@ func (h *SharedMeterHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.db.Exec(`
 		INSERT INTO shared_meter_configs (
-			meter_id, building_id, meter_name, split_type, unit_price
-		) VALUES (?, ?, ?, ?, ?)
-	`, c.MeterID, c.BuildingID, c.MeterName, c.SplitType, c.UnitPrice)
+			meter_id, building_id, meter_name, split_type, unit_price,
+			pricing_mode, solar_price, grid_price
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, c.MeterID, c.BuildingID, c.MeterName, c.SplitType, c.UnitPrice,
+		c.PricingMode, c.SolarPrice, c.GridPrice)
 
 	if err != nil {
 		log.Printf("ERROR: Failed to create shared meter config: %v", err)
@@ -178,12 +212,23 @@ func (h *SharedMeterHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate pricing mode
+	if !validPricingMode(c.PricingMode) {
+		http.Error(w, "Invalid pricing_mode. Must be: single, solar_grid_custom, or solar_grid_pricing", http.StatusBadRequest)
+		return
+	}
+	if c.PricingMode == "" {
+		c.PricingMode = "single"
+	}
+
 	_, err = h.db.Exec(`
 		UPDATE shared_meter_configs SET
-			meter_id = ?, building_id = ?, meter_name = ?, 
-			split_type = ?, unit_price = ?, updated_at = CURRENT_TIMESTAMP
+			meter_id = ?, building_id = ?, meter_name = ?,
+			split_type = ?, unit_price = ?, pricing_mode = ?, solar_price = ?, grid_price = ?,
+			updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
-	`, c.MeterID, c.BuildingID, c.MeterName, c.SplitType, c.UnitPrice, id)
+	`, c.MeterID, c.BuildingID, c.MeterName, c.SplitType, c.UnitPrice,
+		c.PricingMode, c.SolarPrice, c.GridPrice, id)
 
 	if err != nil {
 		log.Printf("ERROR: Failed to update shared meter config: %v", err)

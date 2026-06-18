@@ -37,25 +37,36 @@ export interface ValidationErrors {
       meter_id: number;
       unit_price: number;
       split_type: string;
+      pricing_mode?: 'single' | 'solar_grid_custom' | 'solar_grid_pricing';
+      solar_price?: number;
+      grid_price?: number;
       custom_splits?: Record<number, number>;
     },
     buildingUserCount: number,
     t: (key: string) => string
   ): ValidationErrors => {
     const errors: ValidationErrors = {};
-  
+
     if (!formData.building_id) {
       errors.building_id = t('sharedMeters.validation.selectBuilding');
     }
-  
+
     if (!formData.meter_id) {
       errors.meter_id = t('sharedMeters.validation.selectMeter');
     }
-  
-    if (formData.unit_price <= 0) {
-      errors.unit_price = t('sharedMeters.validation.pricePositive');
+
+    const pricingMode = formData.pricing_mode || 'single';
+    if (pricingMode === 'single') {
+      if (formData.unit_price <= 0) {
+        errors.unit_price = t('sharedMeters.validation.pricePositive');
+      }
+    } else if (pricingMode === 'solar_grid_custom') {
+      if (!formData.solar_price || formData.solar_price <= 0 || !formData.grid_price || formData.grid_price <= 0) {
+        errors.unit_price = t('sharedMeters.validation.pricePositive');
+      }
     }
-  
+    // solar_grid_pricing draws its prices from the building pricing config — nothing extra to validate.
+
     // Validate custom splits if split_type is custom
     if (formData.split_type === 'custom' && formData.custom_splits) {
       const totalPercentage = Object.values(formData.custom_splits).reduce(

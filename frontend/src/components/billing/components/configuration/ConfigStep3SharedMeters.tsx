@@ -85,7 +85,13 @@ export default function ConfigStep3SharedMeters({
                     {meter.meter_name}
                   </div>
                   <div style={{ fontSize: '13px', color: '#6c757d' }}>
-                    {building?.name} • {meter.split_type} {t('billConfig.step3.split')} • CHF {meter.unit_price.toFixed(3)}/kWh
+                    {building?.name} • {meter.split_type} {t('billConfig.step3.split')} • {
+                      meter.pricing_mode === 'solar_grid_custom'
+                        ? `${t('sharedMeters.solarPrice')} ${meter.solar_price.toFixed(3)} / ${t('sharedMeters.gridPrice')} ${meter.grid_price.toFixed(3)}`
+                        : meter.pricing_mode === 'solar_grid_pricing'
+                        ? t('sharedMeters.pricingMode.solar_grid_pricing')
+                        : `CHF ${meter.unit_price.toFixed(3)}/kWh`
+                    }
                   </div>
                 </div>
               </label>

@@ -95,6 +95,31 @@ type BillingScope struct {
 	ChargerID *int   // required when Mode == BillingModeCharger
 }
 
+// SkippedBill records a tenant whose invoice was deliberately NOT created, so the
+// caller/UI can report it instead of the failure passing silently.
+type SkippedBill struct {
+	UserID     int    `json:"user_id"`
+	UserName   string `json:"user_name"`
+	BuildingID int    `json:"building_id"`
+	Reason     string `json:"reason"`
+}
+
+// zeroBillEpsilon is the threshold below which an invoice total is treated as zero.
+// A genuinely-zero bill is almost always a data problem, not a free period.
+const zeroBillEpsilon = 0.005
+
+// zeroBillReason returns an actionable explanation for why a bill came out to zero,
+// used when blocking the creation of a useless 0.00 invoice.
+func zeroBillReason(meterName string, consumption float64) string {
+	if meterName == "" || meterName == "Unknown Meter" {
+		return "no apartment meter is linked to this tenant, so no consumption could be billed — link the tenant's meter and retry"
+	}
+	if consumption <= 0 {
+		return fmt.Sprintf("no metered consumption found for meter %q in this period — check that 15-minute readings exist for the period and the meter is linked to the tenant", meterName)
+	}
+	return "all tariffs/prices for this period evaluate to zero — check the building's pricing configuration"
+}
+
 // PriceSegment is a contiguous sub-period of a billing run during which a
 // single set of billing settings (prices) is in force. A bill that spans a
 // price change is built from multiple segments.
@@ -289,11 +314,14 @@ func (bs *BillingService) loadPriceSegments(buildingID int, start, end time.Time
 // customItemIDs: if nil or empty, no custom items are included. Pass specific IDs to include those items.
 func (bs *BillingService) GenerateBills(buildingIDs, userIDs []int, startDate, endDate string, isVZEV bool) ([]models.Invoice, error) {
 	// Call with empty custom item IDs for backward compatibility (no custom items)
-	return bs.GenerateBillsWithOptions(buildingIDs, userIDs, startDate, endDate, isVZEV, nil, BillingScope{})
+	invoices, _, err := bs.GenerateBillsWithOptions(buildingIDs, userIDs, startDate, endDate, isVZEV, nil, BillingScope{})
+	return invoices, err
 }
 
 // GenerateBillsWithOptions generates bills with custom item selection and an optional billing scope.
-func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, startDate, endDate string, isVZEV bool, customItemIDs []int, scope BillingScope) ([]models.Invoice, error) {
+// It returns the invoices created, plus any tenants whose bills were deliberately
+// skipped (e.g. a would-be 0.00 invoice) so the caller can report them.
+func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, startDate, endDate string, isVZEV bool, customItemIDs []int, scope BillingScope) ([]models.Invoice, []SkippedBill, error) {
 	log.Printf("=== BILL GENERATION START ===")
 	log.Printf("Mode: %s, Buildings: %v, Users: %v, Period: %s to %s",
 		func() string {
@@ -307,17 +335,18 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 	log.Printf("Custom Item IDs: %v", customItemIDs)
 
 	invoices := []models.Invoice{}
+	skipped := []SkippedBill{}
 
 	start, err := time.Parse("2006-01-02", startDate)
 	if err != nil {
-		return nil, fmt.Errorf("invalid start date: %v", err)
+		return nil, nil, fmt.Errorf("invalid start date: %v", err)
 	}
 	// Set start to beginning of day (00:00:00)
 	start = time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, start.Location())
 
 	end, err := time.Parse("2006-01-02", endDate)
 	if err != nil {
-		return nil, fmt.Errorf("invalid end date: %v", err)
+		return nil, nil, fmt.Errorf("invalid end date: %v", err)
 	}
 	// Set end to 00:00:00 of the NEXT day (inclusive of full end date)
 	end = time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, end.Location()).Add(24 * time.Hour)
@@ -348,7 +377,7 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 		errorMsg := fmt.Sprintf("Pricing problem for the following building(s): %s. Please configure pricing in the Pricing section for the full billing period.",
 			strings.Join(buildingsWithoutPricing, "; "))
 		log.Printf("ERROR: %s", errorMsg)
-		return nil, fmt.Errorf("%s", errorMsg)
+		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
 	for _, buildingID := range buildingIDs {
@@ -383,12 +412,13 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 		case isVZEV && isComplex:
 			// vZEV: Virtual allocation between buildings in complex
 			log.Printf("Using vZEV billing logic for complex %d", buildingID)
-			complexInvoices, err := bs.generateVZEVBillsWithOptions(buildingID, groupBuildings, userIDs, start, end, segments, customItemIDs)
+			complexInvoices, complexSkipped, err := bs.generateVZEVBillsWithOptions(buildingID, groupBuildings, userIDs, start, end, segments, customItemIDs)
 			if err != nil {
 				log.Printf("ERROR: vZEV billing failed: %v", err)
 				continue
 			}
 			invoices = append(invoices, complexInvoices...)
+			skipped = append(skipped, complexSkipped...)
 
 		case scope.Mode == BillingModeCharger:
 			// Single-charger bill — only the specified charger's consumption is billed.
@@ -406,6 +436,7 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 				invoice, err := bs.generateChargerOnlyInvoice(userPeriod, buildingID, *scope.ChargerID, start, end, segments, customItemIDs)
 				if err != nil {
 					log.Printf("ERROR: Failed to generate charger-only invoice for user %d: %v", userPeriod.UserID, err)
+					skipped = append(skipped, newSkippedBill(userPeriod, buildingID, err))
 					continue
 				}
 				invoices = append(invoices, *invoice)
@@ -423,6 +454,7 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 				invoice, err := bs.generateUserInvoiceForPeriodWithOptionsAndScope(userPeriod, buildingID, start, end, segments, customItemIDs, scope)
 				if err != nil {
 					log.Printf("ERROR: Failed to generate invoice for user %d: %v", userPeriod.UserID, err)
+					skipped = append(skipped, newSkippedBill(userPeriod, buildingID, err))
 					continue
 				}
 				invoices = append(invoices, *invoice)
@@ -441,6 +473,7 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 				invoice, err := bs.generateUserInvoiceForPeriodWithOptions(userPeriod, buildingID, start, end, segments, customItemIDs)
 				if err != nil {
 					log.Printf("ERROR: Failed to generate invoice for user %d: %v", userPeriod.UserID, err)
+					skipped = append(skipped, newSkippedBill(userPeriod, buildingID, err))
 					continue
 				}
 				invoices = append(invoices, *invoice)
@@ -448,8 +481,23 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 		}
 	}
 
-	log.Printf("\n=== BILL GENERATION COMPLETE: %d total invoices ===\n", len(invoices))
-	return invoices, nil
+	log.Printf("\n=== BILL GENERATION COMPLETE: %d total invoices, %d skipped ===\n", len(invoices), len(skipped))
+	return invoices, skipped, nil
+}
+
+// newSkippedBill builds a SkippedBill report entry from a tenant and the error that
+// prevented their invoice from being created.
+func newSkippedBill(up UserPeriod, buildingID int, err error) SkippedBill {
+	name := strings.TrimSpace(up.FirstName + " " + up.LastName)
+	if name == "" {
+		name = fmt.Sprintf("User #%d", up.UserID)
+	}
+	return SkippedBill{
+		UserID:     up.UserID,
+		UserName:   name,
+		BuildingID: buildingID,
+		Reason:     err.Error(),
+	}
 }
 
 // getUserPeriodsForBilling returns all user periods that overlap with the billing period
@@ -600,9 +648,120 @@ func formatDateOrEmpty(t time.Time) string {
 	return t.Format("2006-01-02")
 }
 
-func (bs *BillingService) calculateSharedMeterCosts(buildingID int, start, end time.Time, userID int, totalActiveUsers int) ([]models.InvoiceItem, float64, error) {
-	tr := GetTranslations("de")
-	return bs.calculateSharedMeterCostsWithTranslations(buildingID, start, end, userID, totalActiveUsers, tr, "CHF", 1.0)
+// buildingIntervalAggregates returns, per fixed 15-minute interval, the building's
+// pooled consumption and solar production used for solar allocation. The pool
+// mirrors calculateZEVConsumption exactly: apartment meters + solar-split chargers
+// + solar-priced split meters all draw from the same solar production, so the
+// denominator used to split a shared meter's solar matches the one apartments use.
+func (bs *BillingService) buildingIntervalAggregates(buildingID int, start, end time.Time) map[time.Time]*BuildingIntervalAgg {
+	agg := make(map[time.Time]*BuildingIntervalAgg)
+	get := func(ts time.Time) *BuildingIntervalAgg {
+		if agg[ts] == nil {
+			agg[ts] = &BuildingIntervalAgg{}
+		}
+		return agg[ts]
+	}
+
+	rows, err := bs.db.Query(`
+		SELECT m.meter_type, mr.reading_time, COALESCE(mr.consumption_kwh, 0), COALESCE(mr.consumption_export, 0)
+		FROM meter_readings mr
+		JOIN meters m ON mr.meter_id = m.id
+		WHERE m.building_id = ?
+		  AND m.meter_type IN ('apartment_meter', 'solar_meter')
+		  AND mr.reading_time >= ? AND mr.reading_time <= ?
+	`, buildingID, start, end)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var mt string
+			var t time.Time
+			var cons, exp float64
+			if err := rows.Scan(&mt, &t, &cons, &exp); err != nil {
+				continue
+			}
+			ts := floorTo15min(t)
+			switch mt {
+			case "apartment_meter":
+				get(ts).TotalConsumption += cons
+			case "solar_meter":
+				get(ts).SolarProduction += exp
+			}
+		}
+	} else {
+		log.Printf("    [POOL] ERROR querying building aggregates: %v", err)
+	}
+
+	// Solar-split chargers participate in the building consumption pool.
+	if splitIDs := bs.solarSplitChargerIDsForBuilding(buildingID); len(splitIDs) > 0 {
+		chargerIntervals, _, _ := bs.chargerIntervalKwh(buildingID, chargerSessionFilter{
+			useChargerIDs: true,
+			chargerIDs:    splitIDs,
+		}, start, end, true)
+		for ts, kwh := range chargerIntervals {
+			get(ts).TotalConsumption += kwh
+		}
+	}
+
+	// Solar-priced split meters participate in the building consumption pool.
+	for ts, kwh := range bs.solarModeSplitMeterIntervals(buildingID, start, end) {
+		get(ts).TotalConsumption += kwh
+	}
+
+	return agg
+}
+
+// solarModeSplitMeterIntervals returns, per fixed 15-minute interval, the combined
+// consumption of all split meters in the building configured with a solar/grid
+// pricing mode. These meters draw from the shared solar pool just like apartments.
+func (bs *BillingService) solarModeSplitMeterIntervals(buildingID int, start, end time.Time) map[time.Time]float64 {
+	out := map[time.Time]float64{}
+	rows, err := bs.db.Query(`
+		SELECT mr.reading_time, COALESCE(mr.consumption_kwh, 0)
+		FROM meter_readings mr
+		JOIN shared_meter_configs smc ON smc.meter_id = mr.meter_id
+		WHERE smc.building_id = ?
+		  AND smc.pricing_mode IN ('solar_grid_custom', 'solar_grid_pricing')
+		  AND mr.reading_time >= ? AND mr.reading_time <= ?
+	`, buildingID, start, end)
+	if err != nil {
+		log.Printf("    [POOL] ERROR querying solar-mode split meters: %v", err)
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var t time.Time
+		var cons float64
+		if err := rows.Scan(&t, &cons); err != nil {
+			continue
+		}
+		out[floorTo15min(t)] += cons
+	}
+	return out
+}
+
+// splitMeterIntervalConsumption returns one split meter's own consumption per fixed
+// 15-minute interval over [start, end].
+func (bs *BillingService) splitMeterIntervalConsumption(meterID int, start, end time.Time) map[time.Time]float64 {
+	out := map[time.Time]float64{}
+	rows, err := bs.db.Query(`
+		SELECT reading_time, COALESCE(consumption_kwh, 0)
+		FROM meter_readings
+		WHERE meter_id = ? AND reading_time >= ? AND reading_time <= ?
+	`, meterID, start, end)
+	if err != nil {
+		log.Printf("  [SHARED METERS] ERROR querying meter %d intervals: %v", meterID, err)
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var t time.Time
+		var cons float64
+		if err := rows.Scan(&t, &cons); err != nil {
+			continue
+		}
+		out[floorTo15min(t)] += cons
+	}
+	return out
 }
 
 func (bs *BillingService) getCustomLineItems(buildingID int) ([]models.InvoiceItem, float64, error) {
@@ -610,11 +769,12 @@ func (bs *BillingService) getCustomLineItems(buildingID int) ([]models.InvoiceIt
 	return bs.getCustomLineItemsWithTranslations(buildingID, tr, 1.0, time.Now(), time.Now(), nil)
 }
 
-func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID int, start, end time.Time, userID int, totalActiveUsers int, tr InvoiceTranslations, currency string, prorationFactor float64) ([]models.InvoiceItem, float64, error) {
+func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID int, start, end time.Time, userID int, totalActiveUsers int, tr InvoiceTranslations, currency string, prorationFactor float64, primary models.BillingSettings) ([]models.InvoiceItem, float64, error) {
 	log.Printf("  [SHARED METERS] Calculating shared meter costs for building %d, user %d (%d active users, proration: %.3f)", buildingID, userID, totalActiveUsers, prorationFactor)
 
 	rows, err := bs.db.Query(`
-		SELECT id, meter_id, meter_name, split_type, unit_price
+		SELECT id, meter_id, meter_name, split_type, unit_price,
+		       COALESCE(pricing_mode, 'single'), COALESCE(solar_price, 0), COALESCE(grid_price, 0)
 		FROM shared_meter_configs
 		WHERE building_id = ?
 	`, buildingID)
@@ -624,59 +784,107 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 	}
 	defer rows.Close()
 
+	// Building-wide solar pool is only needed for solar/grid pricing modes; load it
+	// lazily and reuse across configs.
+	var poolAgg map[time.Time]*BuildingIntervalAgg
+
 	items := []models.InvoiceItem{}
 	totalCost := 0.0
 	configCount := 0
 
 	for rows.Next() {
 		var configID, meterID int
-		var meterName, splitType string
-		var unitPrice float64
+		var meterName, splitType, pricingMode string
+		var unitPrice, solarPrice, gridPrice float64
 
-		if err := rows.Scan(&configID, &meterID, &meterName, &splitType, &unitPrice); err != nil {
+		if err := rows.Scan(&configID, &meterID, &meterName, &splitType, &unitPrice, &pricingMode, &solarPrice, &gridPrice); err != nil {
 			log.Printf("  [SHARED METERS] ERROR: Failed to scan config row: %v", err)
 			continue
 		}
+		if pricingMode == "" {
+			pricingMode = "single"
+		}
 
 		configCount++
-		log.Printf("  [SHARED METERS] Config #%d: Meter '%s' (ID %d), split=%s, price=%.3f",
-			configCount, meterName, meterID, splitType, unitPrice)
+		log.Printf("  [SHARED METERS] Config #%d: Meter '%s' (ID %d), split=%s, pricing=%s, price=%.3f",
+			configCount, meterName, meterID, splitType, pricingMode, unitPrice)
 
-		var readingFrom, readingTo float64
-		err := bs.db.QueryRow(`
-			SELECT 
-				COALESCE(
-					(SELECT reading FROM meter_readings 
-					 WHERE meter_id = ? AND timestamp <= ? 
-					 ORDER BY timestamp DESC LIMIT 1), 
-					0
-				) as reading_from,
-				COALESCE(
-					(SELECT reading FROM meter_readings 
-					 WHERE meter_id = ? AND timestamp <= ? 
-					 ORDER BY timestamp DESC LIMIT 1), 
-					0
-				) as reading_to
-		`, meterID, start, meterID, end).Scan(&readingFrom, &readingTo)
+		var consumption, totalMeterCost, solarKWh, gridKWh float64
+		var costDetail string
 
-		if err != nil {
-			log.Printf("  [SHARED METERS] ERROR: Failed to get meter readings: %v", err)
-			continue
+		if pricingMode == "solar_grid_custom" || pricingMode == "solar_grid_pricing" {
+			// Proportional solar/grid split: the meter draws from the building solar
+			// pool each 15-min interval, the rest is grid. Mirrors apartment billing.
+			if poolAgg == nil {
+				poolAgg = bs.buildingIntervalAggregates(buildingID, start, end)
+			}
+			for ts, cons := range bs.splitMeterIntervalConsumption(meterID, start, end) {
+				var bCons, sProd float64
+				if a := poolAgg[ts]; a != nil {
+					bCons = a.TotalConsumption
+					sProd = a.SolarProduction
+				}
+				solar, grid := SplitSolarGrid(cons, bCons, sProd)
+				solarKWh += solar
+				gridKWh += grid
+			}
+			consumption = solarKWh + gridKWh
+			if consumption <= 0 {
+				log.Printf("  [SHARED METERS] WARNING: Meter '%s' has no interval consumption for solar/grid split - skipping", meterName)
+				continue
+			}
+
+			solarRate, gridRate := solarPrice, gridPrice
+			if pricingMode == "solar_grid_pricing" {
+				solarRate = primary.SolarPowerPrice
+				gridRate = primary.NormalPowerPrice
+			}
+			totalMeterCost = solarKWh*solarRate + gridKWh*gridRate
+			costDetail = fmt.Sprintf("%.3f kWh (%s %.3f × %.3f + %s %.3f × %.3f) = %.3f %s",
+				consumption, tr.SolarPower, solarKWh, solarRate, tr.NormalPowerGrid, gridKWh, gridRate, totalMeterCost, currency)
+
+			log.Printf("  [SHARED METERS]   Solar/grid split: %.3f kWh solar @ %.3f + %.3f kWh grid @ %.3f = %.3f",
+				solarKWh, solarRate, gridKWh, gridRate, totalMeterCost)
+		} else {
+			// Flat (single) price from cumulative meter readings.
+			var readingFrom, readingTo float64
+			err := bs.db.QueryRow(`
+				SELECT
+					COALESCE(
+						(SELECT power_kwh FROM meter_readings
+						 WHERE meter_id = ? AND reading_time <= ?
+						 ORDER BY reading_time DESC LIMIT 1),
+						0
+					) as reading_from,
+					COALESCE(
+						(SELECT power_kwh FROM meter_readings
+						 WHERE meter_id = ? AND reading_time <= ?
+						 ORDER BY reading_time DESC LIMIT 1),
+						0
+					) as reading_to
+			`, meterID, start, meterID, end).Scan(&readingFrom, &readingTo)
+
+			if err != nil {
+				log.Printf("  [SHARED METERS] ERROR: Failed to get meter readings: %v", err)
+				continue
+			}
+
+			if readingFrom >= readingTo {
+				log.Printf("  [SHARED METERS] WARNING: Invalid readings (from=%.3f, to=%.3f) - skipping",
+					readingFrom, readingTo)
+				continue
+			}
+
+			consumption = readingTo - readingFrom
+			totalMeterCost = consumption * unitPrice
+			costDetail = fmt.Sprintf("%s: %.3f kWh × %.3f %s/kWh = %.3f %s",
+				tr.TotalConsumption, consumption, unitPrice, currency, totalMeterCost, currency)
+
+			log.Printf("  [SHARED METERS]   Readings: %.3f → %.3f kWh (consumption: %.3f kWh)",
+				readingFrom, readingTo, consumption)
+			log.Printf("  [SHARED METERS]   Total meter cost: %.3f × %.3f = %.3f",
+				consumption, unitPrice, totalMeterCost)
 		}
-
-		if readingFrom >= readingTo {
-			log.Printf("  [SHARED METERS] WARNING: Invalid readings (from=%.3f, to=%.3f) - skipping",
-				readingFrom, readingTo)
-			continue
-		}
-
-		consumption := readingTo - readingFrom
-		totalMeterCost := consumption * unitPrice
-
-		log.Printf("  [SHARED METERS]   Readings: %.3f → %.3f kWh (consumption: %.3f kWh)",
-			readingFrom, readingTo, consumption)
-		log.Printf("  [SHARED METERS]   Total meter cost: %.3f × %.3f = %.3f",
-			consumption, unitPrice, totalMeterCost)
 
 		var userShare float64
 		var splitDescription string
@@ -768,7 +976,7 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 		})
 
 		items = append(items, models.InvoiceItem{
-			Description: fmt.Sprintf("  %s: %.3f kWh × %.3f %s/kWh = %.3f %s", tr.TotalConsumption, consumption, unitPrice, currency, totalMeterCost, currency),
+			Description: fmt.Sprintf("  %s", costDetail),
 			Quantity:    0,
 			UnitPrice:   0,
 			TotalPrice:  0,
@@ -1198,7 +1406,7 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 
 	log.Printf("  Checking for shared meters (pro-rated by %.1f%% of period)...", userPeriod.ProrationFactor*100)
 	sharedMeterItems, sharedMeterCost, err := bs.calculateSharedMeterCostsWithTranslations(
-		buildingID, start, end, userPeriod.UserID, totalActiveUsers, tr, primary.Currency, userPeriod.ProrationFactor,
+		buildingID, start, end, userPeriod.UserID, totalActiveUsers, tr, primary.Currency, userPeriod.ProrationFactor, primary,
 	)
 	if err != nil {
 		log.Printf("  WARNING: Failed to calculate shared meter costs: %v", err)
@@ -1223,6 +1431,14 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 	// invoice/PDF can render it. gross becomes the stored total (and QR amount).
 	netAmount, vatAmount, grossAmount := vatBreakdown(totalAmount, primary)
 	totalAmount = grossAmount
+
+	// SAFETY: never persist a 0.00 invoice. A zero total almost always signals a data
+	// problem (meter not linked, no readings, zero-priced tariffs) rather than a
+	// genuinely free period — block it with an actionable error instead.
+	if grossAmount <= zeroBillEpsilon {
+		return nil, fmt.Errorf("%s 0.00 invoice not created for %s %s: %s",
+			primary.Currency, userPeriod.FirstName, userPeriod.LastName, zeroBillReason(meterName, totalConsumption))
+	}
 
 	log.Printf("  INVOICE TOTAL: %s %.3f (net %.3f, VAT %.3f @ %.1f%%)", primary.Currency, totalAmount, netAmount, vatAmount, primary.VATRate)
 	log.Printf("  INVOICE NUMBER: %s (Year: %d)", invoiceNumber, invoiceYear)
@@ -1275,7 +1491,7 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 }
 
 // generateVZEVBillsWithOptions handles virtual energy allocation with custom item selection
-func (bs *BillingService) generateVZEVBillsWithOptions(complexID int, groupBuildingsJSON string, userIDs []int, start, end time.Time, segments []PriceSegment, customItemIDs []int) ([]models.Invoice, error) {
+func (bs *BillingService) generateVZEVBillsWithOptions(complexID int, groupBuildingsJSON string, userIDs []int, start, end time.Time, segments []PriceSegment, customItemIDs []int) ([]models.Invoice, []SkippedBill, error) {
 	log.Printf("\n=== vZEV BILLING START ===")
 	log.Printf("Complex ID: %d, Period: %s to %s", complexID, start.Format("2006-01-02"), end.Format("2006-01-02"))
 
@@ -1283,12 +1499,12 @@ func (bs *BillingService) generateVZEVBillsWithOptions(complexID int, groupBuild
 	var groupBuildings []int
 	if groupBuildingsJSON != "" {
 		if err := json.Unmarshal([]byte(groupBuildingsJSON), &groupBuildings); err != nil {
-			return nil, fmt.Errorf("failed to parse group buildings: %v", err)
+			return nil, nil, fmt.Errorf("failed to parse group buildings: %v", err)
 		}
 	}
 
 	if len(groupBuildings) == 0 {
-		return nil, fmt.Errorf("no buildings in complex group")
+		return nil, nil, fmt.Errorf("no buildings in complex group")
 	}
 
 	log.Printf("Complex contains %d buildings: %v", len(groupBuildings), groupBuildings)
@@ -1355,6 +1571,7 @@ func (bs *BillingService) generateVZEVBillsWithOptions(complexID int, groupBuild
 
 	// Generate invoices for each user
 	invoices := []models.Invoice{}
+	skipped := []SkippedBill{}
 
 	for _, userInfo := range allUsers {
 		segResults := userSegmentResults[userInfo.UserID]
@@ -1373,14 +1590,15 @@ func (bs *BillingService) generateVZEVBillsWithOptions(complexID int, groupBuild
 
 		if err != nil {
 			log.Printf("ERROR: Failed to generate vZEV invoice for user %d: %v", userInfo.UserID, err)
+			skipped = append(skipped, newSkippedBill(userInfo.UserPeriod, userInfo.BuildingID, err))
 			continue
 		}
 
 		invoices = append(invoices, *invoice)
 	}
 
-	log.Printf("\n=== vZEV BILLING COMPLETE: %d invoices ===", len(invoices))
-	return invoices, nil
+	log.Printf("\n=== vZEV BILLING COMPLETE: %d invoices, %d skipped ===", len(invoices), len(skipped))
+	return invoices, skipped, nil
 }
 
 // vzevSegmentResult pairs a price segment with the vZEV energy allocation
@@ -1784,7 +2002,7 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 	}
 
 	sharedMeterItems, sharedMeterCost, _ := bs.calculateSharedMeterCostsWithTranslations(
-		buildingID, start, end, userPeriod.UserID, totalActiveUsers, tr, primary.Currency, userPeriod.ProrationFactor,
+		buildingID, start, end, userPeriod.UserID, totalActiveUsers, tr, primary.Currency, userPeriod.ProrationFactor, primary,
 	)
 	if len(sharedMeterItems) > 0 {
 		items = append(items, sharedMeterItems...)
@@ -1801,6 +2019,12 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 	// Resolve VAT (MwSt.) from the primary segment; gross becomes the stored total.
 	netAmount, vatAmount, grossAmount := vatBreakdown(totalAmount, primary)
 	totalAmount = grossAmount
+
+	// SAFETY: never persist a 0.00 vZEV invoice (see generateUserInvoiceForPeriodWithOptionsAndScope).
+	if grossAmount <= zeroBillEpsilon {
+		return nil, fmt.Errorf("%s 0.00 invoice not created for %s %s: no billable consumption found for this period — check meter linkage, readings and pricing",
+			primary.Currency, userPeriod.FirstName, userPeriod.LastName)
+	}
 
 	// Create invoice record
 	result, err := bs.db.Exec(`
@@ -2018,6 +2242,20 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 			intervalData[ts].BuildingConsumption += kwh
 		}
 		log.Printf("    [ZEV] Added %d solar-split charger interval(s) to building pool", len(chargerIntervals))
+	}
+
+	// Solar-priced split meters (e.g. a heating meter billed on a solar/grid split)
+	// join the building consumption pool too, so apartments and split meters share
+	// the same solar production. Single-price split meters do NOT draw solar and are
+	// intentionally excluded.
+	if splitMeterIntervals := bs.solarModeSplitMeterIntervals(buildingID, start, end); len(splitMeterIntervals) > 0 {
+		for ts, kwh := range splitMeterIntervals {
+			if intervalData[ts] == nil {
+				intervalData[ts] = &IntervalData{}
+			}
+			intervalData[ts].BuildingConsumption += kwh
+		}
+		log.Printf("    [ZEV] Added %d solar-mode split-meter interval(s) to building pool", len(splitMeterIntervals))
 	}
 
 	totalNormal := 0.0
@@ -3201,6 +3439,12 @@ func (bs *BillingService) generateChargerOnlyInvoice(userPeriod UserPeriod, buil
 	// Resolve VAT (MwSt.) from the primary segment; gross becomes the stored total.
 	netAmount, vatAmount, grossAmount := vatBreakdown(totalAmount, primary)
 	totalAmount = grossAmount
+
+	// SAFETY: never persist a 0.00 charger invoice (see generateUserInvoiceForPeriodWithOptionsAndScope).
+	if grossAmount <= zeroBillEpsilon {
+		return nil, fmt.Errorf("%s 0.00 invoice not created for %s %s: no charging sessions found for this charger in the period",
+			primary.Currency, userPeriod.FirstName, userPeriod.LastName)
+	}
 
 	result, err := bs.db.Exec(`
 		INSERT INTO invoices (

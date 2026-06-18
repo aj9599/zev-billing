@@ -278,6 +278,8 @@ export interface InvoiceItem {
   item_type: string;
 }
 
+export type SharedMeterPricingMode = 'single' | 'solar_grid_custom' | 'solar_grid_pricing';
+
 export interface SharedMeterConfig {
   id: number;
   meter_id: number;
@@ -285,6 +287,13 @@ export interface SharedMeterConfig {
   meter_name: string;
   split_type: 'equal' | 'by_area' | 'by_units' | 'custom';
   unit_price: number;
+  // How the meter's kWh are priced before being split among units:
+  //   single             – flat unit_price per kWh
+  //   solar_grid_custom   – proportional solar/grid split priced with solar_price/grid_price
+  //   solar_grid_pricing  – proportional solar/grid split priced from the building pricing config
+  pricing_mode: SharedMeterPricingMode;
+  solar_price: number;
+  grid_price: number;
   created_at: string;
   updated_at: string;
 }
@@ -336,6 +345,19 @@ export interface GenerateBillsRequest {
   // 'charger'   bills only one specific charger to one user.
   billing_mode?: BillingMode;
   charger_id?: number;
+}
+
+// A tenant whose bill was deliberately not created (e.g. a would-be CHF 0.00 invoice).
+export interface SkippedBill {
+  user_id: number;
+  user_name: string;
+  building_id: number;
+  reason: string;
+}
+
+export interface GenerateBillsResult {
+  invoices: Invoice[];
+  skipped: SkippedBill[];
 }
 
 export interface ApartmentSelection {

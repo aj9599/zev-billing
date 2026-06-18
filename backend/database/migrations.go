@@ -374,6 +374,9 @@ func RunMigrations(db *sql.DB) error {
 			meter_name TEXT NOT NULL,
 			split_type TEXT NOT NULL CHECK(split_type IN ('equal', 'by_area', 'by_units', 'custom')),
 			unit_price REAL NOT NULL CHECK(unit_price >= 0),
+			pricing_mode TEXT NOT NULL DEFAULT 'single' CHECK(pricing_mode IN ('single', 'solar_grid_custom', 'solar_grid_pricing')),
+			solar_price REAL NOT NULL DEFAULT 0 CHECK(solar_price >= 0),
+			grid_price REAL NOT NULL DEFAULT 0 CHECK(grid_price >= 0),
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (meter_id) REFERENCES meters(id) ON DELETE CASCADE,
@@ -1022,6 +1025,40 @@ func addExportColumns(db *sql.DB) error {
 		}
 	} else {
 		log.Println("✓ consumption_export column already exists")
+	}
+
+	// Split-meter (shared meter) pricing modes: let a shared meter be billed by a
+	// flat price (single), a solar/grid split with its own prices (solar_grid_custom),
+	// or a solar/grid split using the building's pricing config (solar_grid_pricing).
+	var sharedConfigsSql string
+	err = db.QueryRow(`
+		SELECT COALESCE((SELECT sql FROM sqlite_master WHERE type='table' AND name='shared_meter_configs'), '')
+	`).Scan(&sharedConfigsSql)
+	if err != nil {
+		return err
+	}
+	if sharedConfigsSql != "" {
+		sharedMeterColumns := []struct{ name, ddl string }{
+			{"pricing_mode", "ALTER TABLE shared_meter_configs ADD COLUMN pricing_mode TEXT NOT NULL DEFAULT 'single'"},
+			{"solar_price", "ALTER TABLE shared_meter_configs ADD COLUMN solar_price REAL NOT NULL DEFAULT 0"},
+			{"grid_price", "ALTER TABLE shared_meter_configs ADD COLUMN grid_price REAL NOT NULL DEFAULT 0"},
+		}
+		for _, col := range sharedMeterColumns {
+			if contains(sharedConfigsSql, col.name) {
+				log.Printf("✓ shared_meter_configs.%s column already exists", col.name)
+				continue
+			}
+			log.Printf("Adding %s column to shared_meter_configs table...", col.name)
+			if _, err := db.Exec(col.ddl); err != nil {
+				if contains(err.Error(), "duplicate column") {
+					log.Printf("✓ shared_meter_configs.%s column already exists", col.name)
+				} else {
+					return fmt.Errorf("failed to add %s column: %v", col.name, err)
+				}
+			} else {
+				log.Printf("✓ shared_meter_configs.%s column added successfully", col.name)
+			}
+		}
 	}
 
 	return nil

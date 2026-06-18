@@ -2,7 +2,7 @@ import type {
   User, Building, Meter, Charger, BillingSettings,
   Invoice, DashboardStats, ConsumptionData, AdminLog,
   BuildingConsumption, SharedMeterConfig, CustomLineItem,
-  GenerateBillsRequest, MeterReplacement, MeterReplacementRequest,
+  GenerateBillsRequest, GenerateBillsResult, MeterReplacement, MeterReplacementRequest,
   SelfConsumptionData, SystemHealth, CostOverview, EnergyFlowData, EnergyFlowLiveData,
   EmailAlertSettings, Device, DeviceLiveStatus, DeviceSwitchEvent, LoxoneControl,
   LicenseStatus, SmartMeDevice
@@ -577,7 +577,7 @@ class ApiClient {
     return this.request(`/billing/settings/${id}`, { method: 'DELETE' });
   }
 
-  async generateBills(data: GenerateBillsRequest): Promise<Invoice[]> {
+  async generateBills(data: GenerateBillsRequest): Promise<GenerateBillsResult> {
     return this.request('/billing/generate', {
       method: 'POST',
       body: JSON.stringify(data),

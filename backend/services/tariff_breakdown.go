@@ -92,7 +92,37 @@ func LoadBuildingIntervalAggregates(db *sql.DB, buildingID int, startDate, endDa
 			agg[ts].SolarProduction += consumptionExport
 		}
 	}
-	return agg, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Solar-priced split meters (e.g. a heating meter on a solar/grid split) draw from
+	// the same solar pool, so they must be added to the building consumption total here
+	// to keep this breakdown consistent with how billing allocates solar.
+	splitRows, err := db.Query(`
+		SELECT mr.reading_time, COALESCE(mr.consumption_kwh, 0)
+		FROM meter_readings mr
+		JOIN shared_meter_configs smc ON smc.meter_id = mr.meter_id
+		WHERE smc.building_id = ?
+		  AND smc.pricing_mode IN ('solar_grid_custom', 'solar_grid_pricing')
+		  AND substr(mr.reading_time, 1, 10) BETWEEN ? AND ?
+	`, buildingID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+	defer splitRows.Close()
+	for splitRows.Next() {
+		var ts string
+		var consumption float64
+		if err := splitRows.Scan(&ts, &consumption); err != nil {
+			continue
+		}
+		if agg[ts] == nil {
+			agg[ts] = &BuildingIntervalAgg{}
+		}
+		agg[ts].TotalConsumption += consumption
+	}
+	return agg, splitRows.Err()
 }
 
 // ComputeMeterTariffBreakdown computes the per-interval solar/grid split for a

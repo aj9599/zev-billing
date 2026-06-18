@@ -263,7 +263,7 @@ func (s *AutoBillingScheduler) runConfig(id int, advanceSchedule bool) (*RunConf
 	log.Printf("Generating bills for period: %s to %s (vZEV mode: %v, scope: %q, charger: %v)",
 		result.PeriodStart, result.PeriodEnd, isVZEV, scope.Mode, scope.ChargerID)
 
-	invoices, err := s.billingService.GenerateBillsWithOptions(buildingIDs, userIDs,
+	invoices, skipped, err := s.billingService.GenerateBillsWithOptions(buildingIDs, userIDs,
 		result.PeriodStart, result.PeriodEnd, isVZEV, customItemIDs, scope)
 
 	if err != nil {
@@ -271,6 +271,12 @@ func (s *AutoBillingScheduler) runConfig(id int, advanceSchedule bool) (*RunConf
 	}
 
 	result.InvoicesGenerated = len(invoices)
+	if len(skipped) > 0 {
+		log.Printf("WARNING: %d tenant invoice(s) skipped during scheduled billing for config %s:", len(skipped), name)
+		for _, sk := range skipped {
+			log.Printf("  - %s: %s", sk.UserName, sk.Reason)
+		}
+	}
 	log.Printf("SUCCESS: Generated %d invoices for config %s", len(invoices), name)
 
 	senderInfo := SenderInfo{

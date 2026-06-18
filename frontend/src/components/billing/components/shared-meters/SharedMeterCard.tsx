@@ -67,7 +67,11 @@ export default function SharedMeterCard({
         fontWeight: '600',
         color: '#1f2937'
       }}>
-        CHF {config.unit_price.toFixed(3)}/kWh
+        {config.pricing_mode === 'solar_grid_custom'
+          ? `${t('sharedMeters.solarPrice')} ${config.solar_price.toFixed(3)} / ${t('sharedMeters.gridPrice')} ${config.grid_price.toFixed(3)}`
+          : config.pricing_mode === 'solar_grid_pricing'
+          ? t('sharedMeters.pricingMode.solar_grid_pricing')
+          : `CHF ${config.unit_price.toFixed(3)}/kWh`}
       </td>
       <td style={{ padding: '12px', textAlign: 'right' }}>
         <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>

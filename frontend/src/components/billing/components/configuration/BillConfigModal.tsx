@@ -389,10 +389,16 @@ export default function BillConfigModal({
       };
 
       const result = await generateBills(finalConfig);
-      alert(
+      const invoiceCount = result.invoices.length;
+      let message =
         t('billConfig.successMessage') +
-        ` ${result.length} ${result.length === 1 ? t('billing.invoice') : t('billing.invoicesPlural')}!`
-      );
+        ` ${invoiceCount} ${invoiceCount === 1 ? t('billing.invoice') : t('billing.invoicesPlural')}!`;
+      if (result.skipped && result.skipped.length > 0) {
+        message +=
+          `\n\n⚠️ ${result.skipped.length} ${t('billConfig.skippedNotice')}:\n` +
+          result.skipped.map(s => `• ${s.user_name}: ${s.reason}`).join('\n');
+      }
+      alert(message);
       onSuccess();
       onClose();
       resetConfiguration();

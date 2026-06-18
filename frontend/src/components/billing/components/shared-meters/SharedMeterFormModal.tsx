@@ -34,6 +34,9 @@ export default function SharedMeterFormModal({
     meter_name: '',
     split_type: 'equal' as 'equal' | 'custom',
     unit_price: 0,
+    pricing_mode: 'single' as 'single' | 'solar_grid_custom' | 'solar_grid_pricing',
+    solar_price: 0,
+    grid_price: 0,
     custom_splits: {} as Record<number, number>
   });
 
@@ -47,6 +50,9 @@ export default function SharedMeterFormModal({
           ? editingConfig.split_type
           : 'equal',
         unit_price: editingConfig.unit_price,
+        pricing_mode: editingConfig.pricing_mode || 'single',
+        solar_price: editingConfig.solar_price || 0,
+        grid_price: editingConfig.grid_price || 0,
         custom_splits: (editingConfig as any).custom_splits || {}
       });
     }
@@ -102,7 +108,11 @@ export default function SharedMeterFormModal({
   const buildingUsers = formData.building_id ? getBuildingUsers(formData.building_id) : [];
   const buildingMeters = formData.building_id ? getMetersForBuilding(formData.building_id) : [];
 
-  const isFormValid = formData.building_id && formData.meter_id && formData.unit_price > 0 && !saving;
+  const isPricingValid =
+    formData.pricing_mode === 'single' ? formData.unit_price > 0
+    : formData.pricing_mode === 'solar_grid_custom' ? (formData.solar_price > 0 && formData.grid_price > 0)
+    : true; // solar_grid_pricing uses the building pricing config
+  const isFormValid = !!(formData.building_id && formData.meter_id && isPricingValid && !saving);
 
   return (
     <div style={{
@@ -376,43 +386,192 @@ export default function SharedMeterFormModal({
               />
             )}
 
-            {/* Unit Price */}
+            {/* Pricing Mode Selection */}
             <div style={{
               backgroundColor: 'white',
               borderRadius: '12px',
               border: '1px solid #e5e7eb',
-              padding: '16px'
+              padding: '16px',
+              marginBottom: '16px'
             }}>
               <label style={{
                 display: 'block',
-                marginBottom: '8px',
+                marginBottom: '10px',
                 fontSize: '13px',
                 fontWeight: '600',
                 color: '#374151',
                 textTransform: 'uppercase',
                 letterSpacing: '0.5px'
               }}>
-                {t('sharedMeters.unitPrice')} (CHF/kWh) <span style={{ color: '#ef4444' }}>*</span>
+                {t('sharedMeters.pricingMode.label')} <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              <input
-                type="number"
-                step="0.001"
-                min="0"
-                value={formData.unit_price || ''}
-                onChange={(e) => setFormData({ ...formData, unit_price: parseFloat(e.target.value) || 0 })}
-                placeholder="0.250"
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  transition: 'border-color 0.2s'
-                }}
-                onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
-              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {(['single', 'solar_grid_custom', 'solar_grid_pricing'] as const).map(mode => (
+                  <label
+                    key={mode}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'start',
+                      gap: '10px',
+                      padding: '12px',
+                      border: `1px solid ${formData.pricing_mode === mode ? '#667eea' : '#e5e7eb'}`,
+                      borderRadius: '10px',
+                      cursor: 'pointer',
+                      backgroundColor: formData.pricing_mode === mode ? '#667eea08' : 'white',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="pricing_mode"
+                      value={mode}
+                      checked={formData.pricing_mode === mode}
+                      onChange={(e) => setFormData({ ...formData, pricing_mode: e.target.value as any })}
+                      style={{ marginTop: '2px', cursor: 'pointer', accentColor: '#667eea' }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <strong style={{ fontSize: '13px', display: 'block', marginBottom: '2px', color: '#1f2937' }}>
+                        {t(`sharedMeters.pricingMode.${mode}`)}
+                      </strong>
+                      <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0, lineHeight: '1.4' }}>
+                        {t(`sharedMeters.pricingModeDesc.${mode}`)}
+                      </p>
+                    </div>
+                  </label>
+                ))}
+              </div>
             </div>
+
+            {/* Prices (conditional on pricing mode) */}
+            {formData.pricing_mode === 'single' && (
+              <div style={{
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                border: '1px solid #e5e7eb',
+                padding: '16px'
+              }}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}>
+                  {t('sharedMeters.unitPrice')} (CHF/kWh) <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.001"
+                  min="0"
+                  value={formData.unit_price || ''}
+                  onChange={(e) => setFormData({ ...formData, unit_price: parseFloat(e.target.value) || 0 })}
+                  placeholder="0.250"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    transition: 'border-color 0.2s'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                  onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                />
+              </div>
+            )}
+
+            {formData.pricing_mode === 'solar_grid_custom' && (
+              <div style={{
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                border: '1px solid #e5e7eb',
+                padding: '16px',
+                display: 'flex',
+                gap: '12px'
+              }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{
+                    display: 'block',
+                    marginBottom: '8px',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    color: '#374151',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}>
+                    {t('sharedMeters.solarPrice')} (CHF/kWh) <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    value={formData.solar_price || ''}
+                    onChange={(e) => setFormData({ ...formData, solar_price: parseFloat(e.target.value) || 0 })}
+                    placeholder="0.150"
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      transition: 'border-color 0.2s'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                    onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{
+                    display: 'block',
+                    marginBottom: '8px',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    color: '#374151',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}>
+                    {t('sharedMeters.gridPrice')} (CHF/kWh) <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    value={formData.grid_price || ''}
+                    onChange={(e) => setFormData({ ...formData, grid_price: parseFloat(e.target.value) || 0 })}
+                    placeholder="0.250"
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      transition: 'border-color 0.2s'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                    onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                  />
+                </div>
+              </div>
+            )}
+
+            {formData.pricing_mode === 'solar_grid_pricing' && (
+              <div style={{
+                backgroundColor: '#eff6ff',
+                borderRadius: '12px',
+                border: '1px solid #bfdbfe',
+                padding: '14px 16px',
+                fontSize: '13px',
+                color: '#1e40af',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <AlertCircle size={16} />
+                {t('sharedMeters.pricingFromConfigNote')}
+              </div>
+            )}
           </form>
         </div>
 
