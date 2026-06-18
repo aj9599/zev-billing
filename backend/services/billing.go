@@ -2597,6 +2597,8 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 		var hasPreviousPower bool
 		var firstBillablePower, lastBillablePower float64
 		var genuineReset bool
+		var inDip bool
+		var preDipHigh float64
 
 		chargerBillable := 0
 		chargerSkipped := 0
@@ -2651,26 +2653,37 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 			consumption := session.PowerKwh - previousPower
 
 			if consumption < 0 {
-				// power_kwh is a cumulative counter. Only a drop back to ~0 (a brand
-				// new / fully reset counter) re-baselines. A drop to a non-zero value
-				// is treated as a TRANSIENT glitch — e.g. an E3/DC wallbox briefly
-				// reporting a low value during a reboot, then recovering to its true
-				// total. We HOLD the previous high so the recovery is not billed as a
-				// phantom climb; only genuinely new energy above that high is charged.
-				// (Trade-off: a real permanent reset to a large non-zero value would
-				// under-count until the counter climbs past the old high. E3/DC resets
-				// observed in practice are transient and recover, so holding is safer.)
-				if session.PowerKwh < 1.0 {
-					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] NEGATIVE consumption %.3f kWh - counter reset, re-baselining at %.3f",
-							sessionNum, consumption, session.PowerKwh)
-					}
-					previousPower = session.PowerKwh
-					genuineReset = true
-				} else if shouldLog {
-					log.Printf("  [CHARGING]     [%d] NEGATIVE consumption %.3f kWh (spurious drop %.3f → %.3f) - holding baseline at %.3f",
-						sessionNum, consumption, previousPower, session.PowerKwh, previousPower)
+				// Cumulative counter dropped — a reset or a transient glitch (e.g. an
+				// E3/DC wallbox briefly reporting a low value during a reboot). Remember
+				// the high we dropped from, re-baseline at the low value, and KEEP
+				// billing the climb from here. This way energy charged DURING the glitch
+				// is still split solar/grid by each 15-min slot's own mode, instead of
+				// being lumped onto a single mode at the recovery moment.
+				if !inDip {
+					preDipHigh = previousPower
+					inDip = true
 				}
+				genuineReset = true
+				previousPower = session.PowerKwh
+				if shouldLog {
+					log.Printf("  [CHARGING]     [%d] NEGATIVE consumption %.3f kWh - counter dip/reset, re-baselining at %.3f (pre-dip high %.3f)",
+						sessionNum, consumption, session.PowerKwh, preDipHigh)
+				}
+				continue
+			}
+
+			// Recovery from a transient glitch: the counter jumps back up to (at least)
+			// the value it dropped from. That jump is the device catching up to its true
+			// total, NOT real energy — re-baseline without billing it. For a genuine
+			// reset to ~0 the counter never returns to preDipHigh, so its climb keeps
+			// being billed normally above.
+			if inDip && session.PowerKwh >= preDipHigh-0.001 {
+				if shouldLog {
+					log.Printf("  [CHARGING]     [%d] Counter recovered to %.3f (≥ pre-dip high %.3f) - phantom jump, not billed",
+						sessionNum, session.PowerKwh, preDipHigh)
+				}
+				inDip = false
+				previousPower = session.PowerKwh
 				continue
 			}
 
@@ -2866,6 +2879,8 @@ func (bs *BillingService) calculateChargingFiltered(buildingID int, filter charg
 		var hasPrev bool
 		var firstBillablePower, lastBillablePower float64
 		var genuineReset bool
+		var inDip bool
+		var preDipHigh float64
 		var chargerNormal, chargerPriority float64
 		for _, s := range sessions {
 			if s.State == cfg.StateIdle {
@@ -2887,14 +2902,22 @@ func (bs *BillingService) calculateChargingFiltered(buildingID int, filter charg
 			lastBillablePower = s.PowerKwh
 			delta := s.PowerKwh - prevPower
 			if delta < 0 {
-				// Cumulative counter dropped. Only a drop back to ~0 re-baselines; a
-				// non-zero drop is treated as a transient glitch (e.g. an E3/DC wallbox
-				// briefly reporting low during a reboot then recovering) — hold the
-				// previous high so the recovery isn't billed as a phantom climb.
-				if s.PowerKwh < 1.0 {
-					prevPower = s.PowerKwh
-					genuineReset = true
+				// Counter dropped (reset or transient glitch). Re-baseline at the low
+				// value and keep billing the climb so glitch-window energy is still
+				// split by each slot's mode. Remember the high we dropped from.
+				if !inDip {
+					preDipHigh = prevPower
+					inDip = true
 				}
+				genuineReset = true
+				prevPower = s.PowerKwh
+				continue
+			}
+			// Recovery: counter jumps back to its pre-dip track — phantom catch-up,
+			// not real energy, so don't bill it.
+			if inDip && s.PowerKwh >= preDipHigh-0.001 {
+				inDip = false
+				prevPower = s.PowerKwh
 				continue
 			}
 			if delta > 0 {
@@ -3056,7 +3079,8 @@ func (bs *BillingService) chargerIntervalKwh(buildingID int, filter chargerSessi
 	for id, sessions := range byCharger {
 		stateIdle := idleByCharger[id]
 		var prevPower, firstBillable, lastBillable float64
-		var hasPrev, genuineReset bool
+		var hasPrev, genuineReset, inDip bool
+		var preDipHigh float64
 		perInterval := make(map[time.Time]float64)
 
 		for _, s := range sessions {
@@ -3079,12 +3103,20 @@ func (bs *BillingService) chargerIntervalKwh(buildingID int, filter chargerSessi
 			lastBillable = s.power
 			delta := s.power - prevPower
 			if delta < 0 {
-				// Only a drop back to ~0 re-baselines; a non-zero drop is a transient
-				// glitch — hold the previous high so the recovery isn't billed twice.
-				if s.power < 1.0 {
-					prevPower = s.power
-					genuineReset = true
+				// Counter dropped (reset/glitch). Re-baseline at the low value and keep
+				// crediting the climb to its real intervals; remember the pre-dip high.
+				if !inDip {
+					preDipHigh = prevPower
+					inDip = true
 				}
+				genuineReset = true
+				prevPower = s.power
+				continue
+			}
+			// Recovery to the pre-dip track — phantom catch-up, not real energy.
+			if inDip && s.power >= preDipHigh-0.001 {
+				inDip = false
+				prevPower = s.power
 				continue
 			}
 			if delta > 0 {
