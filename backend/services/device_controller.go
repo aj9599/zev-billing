@@ -27,6 +27,14 @@ type deviceRuntime struct {
 	candidateDesired bool
 	candidateSince   time.Time
 
+	// commandedOn is the last on/off state the controller itself drove the device
+	// to. baselineSet becomes true once we have a trustworthy reference (first
+	// known read or first command). Together they let us tell an externally-made
+	// change (Loxone UI, Shelly app, physical switch) apart from our own, so a
+	// manual switch-on isn't immediately undone by solar control.
+	commandedOn bool
+	baselineSet bool
+
 	// accumulated ON time today, for the runtime guarantee (#2)
 	onSecondsToday float64
 	accrualDay     string
@@ -295,6 +303,7 @@ func (c *DeviceController) apply(d models.Device, desired, forced bool, reason s
 	// Best-effort actual-state read (also gives us "online"). For drivers that
 	// can't report a trustworthy state (e.g. Loxone over HTTP) known=false, so we
 	// keep the controller's own commanded state rather than clobbering it.
+	readKnown := false
 	if actual, known, rerr := driver.ReadState(); rerr == nil {
 		// Best-effort live power for PM devices (display only).
 		var pw, ew float64
@@ -308,7 +317,14 @@ func (c *DeviceController) apply(d models.Device, desired, forced bool, reason s
 		rt.online = true
 		rt.lastError = ""
 		if known {
+			readKnown = true
 			rt.lastKnownOn = actual
+			// First trustworthy observation establishes the reference state, so a
+			// device already running at boot isn't mistaken for an external change.
+			if !rt.baselineSet {
+				rt.baselineSet = true
+				rt.commandedOn = actual
+			}
 		}
 		if pk {
 			rt.powerW = pw
@@ -325,11 +341,26 @@ func (c *DeviceController) apply(d models.Device, desired, forced bool, reason s
 
 	c.mu.Lock()
 	current := rt.lastKnownOn
+	commandedOn := rt.commandedOn
 	c.mu.Unlock()
 
 	if desired == current {
 		c.mu.Lock()
 		rt.candidateSince = time.Time{} // clear pending change
+		c.mu.Unlock()
+		return
+	}
+
+	// Respect a manual switch-on. In auto mode, if the device is physically ON but
+	// solar control wants it OFF and the controller never commanded it on, a human
+	// turned it on (Loxone UI, Shelly app, physical switch) — hold it on instead of
+	// fighting them. When they switch it back off, current==desired again and solar
+	// control resumes automatically. Only possible for drivers that report state.
+	if !desired && current && readKnown && d.ControlMode == "auto" && !commandedOn {
+		c.mu.Lock()
+		rt.reason = "manual switch-on respected (off-threshold not met)"
+		rt.desiredOn = true
+		rt.candidateSince = time.Time{}
 		c.mu.Unlock()
 		return
 	}
@@ -502,6 +533,8 @@ func (c *DeviceController) switchDevice(d models.Device, driver DeviceDriver, on
 	rt := c.runtimeFor(d.ID)
 	if err == nil {
 		rt.lastKnownOn = on
+		rt.commandedOn = on // this state is controller-driven, not external
+		rt.baselineSet = true
 		rt.lastSwitchAt = now
 		rt.candidateSince = time.Time{}
 		rt.lastError = ""
