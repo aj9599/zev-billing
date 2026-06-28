@@ -156,9 +156,13 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 		device.LastChargeKwh = chargeReading
 		device.LastDischKwh = dischargeReading
 
-		// Persist charge as import, discharge as export (cumulative counters).
-		device.LastReading = chargeReading
-		device.LastReadingExport = dischargeReading
+		// Persist DISCHARGE as the import/main register and CHARGE as the export
+		// register. This matches the E3/DC battery convention so the building
+		// energy-flow draws the direction correctly: the main series (battery_meter)
+		// is the discharge that feeds the house, the export series
+		// (battery_meter_charge) is the charge that stores energy from solar/grid.
+		device.LastReading = dischargeReading
+		device.LastReadingExport = chargeReading
 		device.LastUpdate = time.Now()
 		device.ReadingGaps = 0
 		device.LivePowerTime = time.Now()
@@ -169,7 +173,7 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 			log.Printf("   ⚡ Battery power (output0/Pf): %.1f W", device.BatteryPowerW)
 		}
 
-		reading = chargeReading
+		reading = dischargeReading
 
 	} else if device.LoxoneMode == "energy_meter_block" {
 		// ENERGY METER BLOCK MODE - Single value from output1 (Mr)
