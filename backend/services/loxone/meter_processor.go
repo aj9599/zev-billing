@@ -137,10 +137,11 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 			device.SocPct = soc
 		}
 
-		// Power flow (Pf) is in kW → convert to W. Sign convention here:
-		// Pf > 0 = charging (Mrc grows), Pf < 0 = discharging (Mrd grows).
+		// Power flow (Pf) is in kW → convert to W. On the Loxone battery block a
+		// POSITIVE Pf means the battery is discharging (delivering power), so we
+		// negate it to keep our convention of BatteryPowerW > 0 = charging.
 		if pf, ok := parseOut("output0"); ok {
-			device.BatteryPowerW = pf * 1000
+			device.BatteryPowerW = -pf * 1000
 		}
 
 		// Fallback direction from which counter advanced since the last read,

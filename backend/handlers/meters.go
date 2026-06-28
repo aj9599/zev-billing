@@ -349,6 +349,69 @@ func (h *MeterHandler) Update(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(m)
 }
 
+// setArchived sets a meter's is_archived flag. When archiving, the meter is also
+// deactivated so collectors stop polling it; unarchiving leaves it inactive so the
+// user can deliberately re-enable it.
+func (h *MeterHandler) setArchived(w http.ResponseWriter, r *http.Request, archived bool) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	var connectionType string
+	err = h.db.QueryRow("SELECT connection_type FROM meters WHERE id = ?", id).Scan(&connectionType)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Meter not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	if archived {
+		_, err = h.db.Exec(`
+			UPDATE meters SET is_archived = 1, is_active = 0, updated_at = CURRENT_TIMESTAMP
+			WHERE id = ?
+		`, id)
+	} else {
+		_, err = h.db.Exec(`
+			UPDATE meters SET is_archived = 0, updated_at = CURRENT_TIMESTAMP
+			WHERE id = ?
+		`, id)
+	}
+	if err != nil {
+		log.Printf("ERROR: Failed to set archive state for meter %d: %v", id, err)
+		http.Error(w, "Failed to update meter", http.StatusInternalServerError)
+		return
+	}
+
+	// Archiving deactivates the meter, so collectors must be refreshed to drop it.
+	if connectionTypeNeedsRestart(connectionType) {
+		action := "archived"
+		if !archived {
+			action = "unarchived"
+		}
+		h.safeRestartCollectors(fmt.Sprintf("meter %d %s", id, action))
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "id": id, "is_archived": archived})
+}
+
+// Archive marks a meter as archived (e.g. an old meter superseded by a new one
+// that was added manually instead of via the replace flow).
+func (h *MeterHandler) Archive(w http.ResponseWriter, r *http.Request) {
+	h.setArchived(w, r, true)
+}
+
+// Unarchive restores an archived meter (it stays inactive until re-enabled).
+func (h *MeterHandler) Unarchive(w http.ResponseWriter, r *http.Request) {
+	h.setArchived(w, r, false)
+}
+
 func (h *MeterHandler) GetDeletionImpact(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, err := strconv.Atoi(vars["id"])

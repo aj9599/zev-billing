@@ -14,7 +14,7 @@ export const en: Translations = {
   'meters.e3dcValueBattery': 'Battery (charge / discharge)',
   'meters.e3dcValueHome': 'Household consumption',
   'meters.e3dcValueWallbox': 'Wallbox (RSCP only)',
-  'meters.batteryMeter': 'Battery (E3/DC)',
+  'meters.batteryMeter': 'Battery',
   'meters.houseMeter': 'House usage (E3/DC)',
   'meters.e3dcReads': 'This meter reads',
   'meters.e3dcHost': 'E3/DC IP address / host',
@@ -1287,6 +1287,11 @@ export const en: Translations = {
 
   // Meter Card
   'meters.replaceMeter': 'Replace Meter',
+  'meters.archiveMeter': 'Archive Meter',
+  'meters.unarchiveMeter': 'Restore Meter',
+  'meters.confirmArchive': 'Archive this meter? It will be deactivated and moved to the archived list.',
+  'meters.archiveFailed': 'Failed to archive meter',
+  'meters.unarchiveFailed': 'Failed to restore meter',
   'meters.archived': 'ARCHIVED',
   'meters.replacedBy': 'Replaced by',
   'meters.loxoneWebSocket': 'Loxone WebSocket',

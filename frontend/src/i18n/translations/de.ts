@@ -14,7 +14,7 @@ export const de: Translations = {
   'meters.e3dcValueBattery': 'Batterie (Laden / Entladen)',
   'meters.e3dcValueHome': 'Hausverbrauch',
   'meters.e3dcValueWallbox': 'Wallbox (nur RSCP)',
-  'meters.batteryMeter': 'Batterie (E3/DC)',
+  'meters.batteryMeter': 'Batterie',
   'meters.houseMeter': 'Hausverbrauch (E3/DC)',
   'meters.e3dcReads': 'Dieser Zähler liest',
   'meters.e3dcHost': 'E3/DC IP-Adresse / Host',
@@ -1289,6 +1289,11 @@ export const de: Translations = {
 
   // Meter Card
   'meters.replaceMeter': 'Zähler ersetzen',
+  'meters.archiveMeter': 'Zähler archivieren',
+  'meters.unarchiveMeter': 'Zähler wiederherstellen',
+  'meters.confirmArchive': 'Diesen Zähler archivieren? Er wird deaktiviert und in die Archivliste verschoben.',
+  'meters.archiveFailed': 'Zähler konnte nicht archiviert werden',
+  'meters.unarchiveFailed': 'Zähler konnte nicht wiederhergestellt werden',
   'meters.archived': 'ARCHIVIERT',
   'meters.replacedBy': 'Ersetzt durch',
   'meters.loxoneWebSocket': 'Loxone WebSocket',

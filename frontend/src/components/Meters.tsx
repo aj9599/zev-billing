@@ -152,6 +152,31 @@ export default function Meters() {
         fetchConnectionStatus();
     };
 
+    const handleArchiveClick = async (meter: Meter) => {
+        if (!confirm(t('meters.confirmArchive') || `Archive "${meter.name}"? It will be deactivated and hidden from the active list.`)) {
+            return;
+        }
+        try {
+            await api.archiveMeter(meter.id);
+            loadData();
+            fetchConnectionStatus();
+        } catch (err) {
+            console.error('Failed to archive meter:', err);
+            alert(t('meters.archiveFailed') || 'Failed to archive meter');
+        }
+    };
+
+    const handleUnarchiveClick = async (meter: Meter) => {
+        try {
+            await api.unarchiveMeter(meter.id);
+            loadData();
+            fetchConnectionStatus();
+        } catch (err) {
+            console.error('Failed to unarchive meter:', err);
+            alert(t('meters.unarchiveFailed') || 'Failed to restore meter');
+        }
+    };
+
     const handleExport = async (startDate: string, endDate: string, meterId?: number, meterIds?: number[]) => {
         try {
             const params = new URLSearchParams({
@@ -442,6 +467,8 @@ export default function Meters() {
                                             e3dcStatus={e3dcStatus}
                                             onEdit={handleEdit}
                                             onReplace={handleReplaceClick}
+                                            onArchive={handleArchiveClick}
+                                            onUnarchive={handleUnarchiveClick}
                                             onDelete={handleDeleteClick}
                                             onTariffBreakdown={setTariffMeter}
                                         />

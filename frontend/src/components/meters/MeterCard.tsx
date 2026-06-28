@@ -1,4 +1,4 @@
-import { Edit2, Trash2, RefreshCw, Building, Archive, TrendingUp, TrendingDown, Sun, Calculator, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { Edit2, Trash2, RefreshCw, Building, Archive, ArchiveRestore, TrendingUp, TrendingDown, Sun, Calculator, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { useTranslation } from '../../i18n';
 import type { Meter, User } from '../../types';
 import { getMeterTypeLabel } from './utils/meterUtils';
@@ -16,6 +16,8 @@ interface MeterCardProps {
     e3dcStatus?: any;
     onEdit: (meter: Meter) => void;
     onReplace: (meter: Meter) => void;
+    onArchive: (meter: Meter) => void;
+    onUnarchive: (meter: Meter) => void;
     onDelete: (meter: Meter) => void;
     onTariffBreakdown: (meter: Meter) => void;
 }
@@ -32,6 +34,8 @@ export default function MeterCard({
     e3dcStatus,
     onEdit,
     onReplace,
+    onArchive,
+    onUnarchive,
     onDelete,
     onTariffBreakdown
 }: MeterCardProps) {
@@ -205,6 +209,64 @@ export default function MeterCard({
                         title={t('meters.replaceMeter')}
                     >
                         <RefreshCw size={16} />
+                    </button>
+                )}
+
+                {!meter.is_archived ? (
+                    <button
+                        onClick={() => onArchive(meter)}
+                        style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            border: 'none',
+                            backgroundColor: 'rgba(107, 114, 128, 0.1)',
+                            color: '#6b7280',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(107, 114, 128, 0.2)';
+                            e.currentTarget.style.transform = 'scale(1.1)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(107, 114, 128, 0.1)';
+                            e.currentTarget.style.transform = 'scale(1)';
+                        }}
+                        title={t('meters.archiveMeter')}
+                    >
+                        <Archive size={16} />
+                    </button>
+                ) : (
+                    <button
+                        onClick={() => onUnarchive(meter)}
+                        style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            border: 'none',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            color: '#10b981',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.2)';
+                            e.currentTarget.style.transform = 'scale(1.1)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
+                            e.currentTarget.style.transform = 'scale(1)';
+                        }}
+                        title={t('meters.unarchiveMeter')}
+                    >
+                        <ArchiveRestore size={16} />
                     </button>
                 )}
 

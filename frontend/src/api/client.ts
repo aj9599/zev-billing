@@ -234,6 +234,16 @@ class ApiClient {
     return this.request(`/meters/${id}`, { method: 'DELETE' });
   }
 
+  // Archive a meter (e.g. an old one superseded by a manually added new meter).
+  // Archiving also deactivates it so collectors stop polling.
+  async archiveMeter(id: number): Promise<{ success: boolean; id: number; is_archived: boolean }> {
+    return this.request(`/meters/${id}/archive`, { method: 'POST' });
+  }
+
+  async unarchiveMeter(id: number): Promise<{ success: boolean; id: number; is_archived: boolean }> {
+    return this.request(`/meters/${id}/unarchive`, { method: 'POST' });
+  }
+
   // Persist a custom display order for meter cards (ids in display order).
   async reorderMeters(ids: number[]): Promise<{ success: boolean }> {
     return this.request('/meters/reorder', {
