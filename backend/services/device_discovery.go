@@ -65,12 +65,19 @@ func DiscoverLoxoneControls(host, user, pass, category string) ([]LoxoneControl,
 
 	switchOnly := strings.TrimSpace(strings.ToLower(category)) == "" ||
 		strings.EqualFold(category, "switch")
+	// Meter picker: only show meter-type controls (Meter, EnergyMeter, …) so the
+	// list isn't cluttered with switches, lights, blinds and other controls.
+	// Loxone names every metering block with "Meter" in its control type.
+	meterOnly := strings.EqualFold(category, "meter")
 
 	out := []LoxoneControl{}
 	for _, c := range s.Controls {
 		// Switchable-only for the Devices page; everything else gets the full
 		// list so meters/chargers can be identified by name.
 		if switchOnly && !loxoneSwitchableTypes[c.Type] {
+			continue
+		}
+		if meterOnly && !strings.Contains(strings.ToLower(c.Type), "meter") {
 			continue
 		}
 		uuid := c.UUIDAction

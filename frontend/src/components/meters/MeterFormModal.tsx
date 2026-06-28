@@ -26,7 +26,7 @@ interface ConnectionConfig {
     loxone_username?: string;
     loxone_password?: string;
     loxone_device_id?: string;
-    loxone_mode?: 'meter_block' | 'energy_meter_block' | 'virtual_output_dual' | 'virtual_output_single';
+    loxone_mode?: 'meter_block' | 'energy_meter_block' | 'virtual_output_dual' | 'virtual_output_single' | 'battery_block';
     loxone_export_device_id?: string;
     mqtt_topic?: string;
     mqtt_broker?: string;
@@ -171,10 +171,18 @@ export default function MeterFormModal({
 
     // Helper to check if meter type supports export
     const supportsExport = formData.meter_type === 'total_meter' || formData.meter_type === 'solar_meter';
+    const isBattery = formData.meter_type === 'battery_meter';
+
+    // Default Loxone mode for the current meter type.
+    const defaultLoxoneMode = isBattery ? 'battery_block' : supportsExport ? 'meter_block' : 'energy_meter_block';
 
     // Helper to get available modes for current meter type
     const getAvailableModes = () => {
-        if (supportsExport) {
+        if (isBattery) {
+            return [
+                { value: 'battery_block', label: t('meters.loxoneModeBatteryBlock') }
+            ];
+        } else if (supportsExport) {
             return [
                 { value: 'meter_block', label: t('meters.loxoneModeMeterBlock') },
                 { value: 'virtual_output_dual', label: t('meters.loxoneModeVirtualOutputDual') }
@@ -186,6 +194,18 @@ export default function MeterFormModal({
             ];
         }
     };
+
+    // Keep the Loxone mode valid for the chosen meter type. Switching to/from a
+    // battery meter (whose only mode is battery_block) must not leave a stale
+    // mode like meter_block in the config — the backend keys SoC parsing off it.
+    useEffect(() => {
+        if (formData.connection_type !== 'loxone_api') return;
+        const valid = getAvailableModes().map(m => m.value);
+        if (connectionConfig.loxone_mode && !valid.includes(connectionConfig.loxone_mode)) {
+            onConnectionConfigChange({ ...connectionConfig, loxone_mode: defaultLoxoneMode as any });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [formData.meter_type, formData.connection_type]);
 
     const meterTypes = [
         { value: 'total_meter', label: t('meters.totalMeter') },
@@ -789,7 +809,7 @@ export default function MeterFormModal({
                                         </label>
                                         <select
                                             required
-                                            value={connectionConfig.loxone_mode || (supportsExport ? 'meter_block' : 'energy_meter_block')}
+                                            value={connectionConfig.loxone_mode || defaultLoxoneMode}
                                             onChange={(e) => onConnectionConfigChange({
                                                 ...connectionConfig,
                                                 loxone_mode: e.target.value as any
@@ -807,6 +827,7 @@ export default function MeterFormModal({
                                             {connectionConfig.loxone_mode === 'energy_meter_block' && t('meters.loxoneModeEnergyMeterBlockHelp')}
                                             {connectionConfig.loxone_mode === 'virtual_output_dual' && t('meters.loxoneModeVirtualOutputDualHelp')}
                                             {connectionConfig.loxone_mode === 'virtual_output_single' && t('meters.loxoneModeVirtualOutputSingleHelp')}
+                                            {connectionConfig.loxone_mode === 'battery_block' && t('meters.loxoneModeBatteryBlockHelp')}
                                         </p>
                                     </div>
 
@@ -817,9 +838,11 @@ export default function MeterFormModal({
                                                 ? t('meters.loxoneMeterUuid')
                                                 : connectionConfig.loxone_mode === 'energy_meter_block'
                                                     ? t('meters.loxoneEnergyMeterUuid')
-                                                    : connectionConfig.loxone_mode === 'virtual_output_dual'
-                                                        ? t('meters.loxoneDeviceUuidImport')
-                                                        : t('meters.loxoneVirtualOutputUuid')
+                                                    : connectionConfig.loxone_mode === 'battery_block'
+                                                        ? t('meters.loxoneBatteryUuid')
+                                                        : connectionConfig.loxone_mode === 'virtual_output_dual'
+                                                            ? t('meters.loxoneDeviceUuidImport')
+                                                            : t('meters.loxoneVirtualOutputUuid')
                                             } *
                                         </label>
                                         <input

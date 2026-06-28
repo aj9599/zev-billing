@@ -151,7 +151,7 @@ func (lc *LoxoneCollector) GetConnectionStatus() map[string]interface{} {
 			}
 
 			if device.Type == "meter" {
-				meterStatus[device.ID] = map[string]interface{}{
+				m := map[string]interface{}{
 					"device_id":              device.DeviceID,
 					"meter_name":             device.Name,
 					"host":                   conn.Host,
@@ -168,6 +168,21 @@ func (lc *LoxoneCollector) GetConnectionStatus() map[string]interface{} {
 					"total_reconnects":       conn.TotalReconnects,
 					"last_successful_auth":   lastSuccessfulAuthStr,
 				}
+				// Battery meters expose SoC + charge/discharge direction, mirroring
+				// the E3/DC battery status so the UI can render it the same way.
+				if device.LoxoneMode == "battery_block" {
+					m["value"] = "battery"
+					m["soc"] = device.SocPct
+					m["battery_power_w"] = device.BatteryPowerW
+					if device.BatteryPowerW > 10 {
+						m["battery_charging"] = true
+					} else if device.BatteryPowerW < -10 {
+						m["battery_charging"] = false
+					} else {
+						m["battery_charging"] = nil
+					}
+				}
+				meterStatus[device.ID] = m
 			} else if device.Type == "charger" {
 				// Get live data for charger - with database fallback
 				lc.chargerMu.RLock()
@@ -624,7 +639,9 @@ func (lc *LoxoneCollector) loadMeters(connectionDevices map[string]*loxone.WebSo
 
 		// Default mode based on meter type
 		if loxoneMode == "" {
-			if meterType == "total_meter" || meterType == "solar_meter" {
+			if meterType == "battery_meter" {
+				loxoneMode = "battery_block"
+			} else if meterType == "total_meter" || meterType == "solar_meter" {
 				loxoneMode = "meter_block"
 			} else {
 				loxoneMode = "energy_meter_block"
@@ -647,6 +664,8 @@ func (lc *LoxoneCollector) loadMeters(connectionDevices map[string]*loxone.WebSo
 			log.Printf("   â””â”€ (Meter block: output1=Mrc, output8=Mrd)")
 		} else if loxoneMode == "energy_meter_block" {
 			log.Printf("   â””â”€ (Energy meter block: output1=Mr)")
+		} else if loxoneMode == "battery_block" {
+			log.Printf("   â””â”€ (Battery block: output1=Mrd, output8=Mrc, output15=Slvl/SoC)")
 		} else {
 			log.Printf("   â””â”€ (Virtual output: single value)")
 		}

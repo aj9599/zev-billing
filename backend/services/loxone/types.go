@@ -239,8 +239,17 @@ type Device struct {
 	// - energy_meter_block: For apartment/heating/other (output1=Mr, single value)
 	// - virtual_output_dual: Two UUIDs for import/export (total/solar meters)
 	// - virtual_output_single: One UUID for single value (apartment/heating/other)
-	LoxoneMode     string // "meter_block", "energy_meter_block", "virtual_output_dual", "virtual_output_single"
+	// - battery_block: For battery_meter (output1=Mrd discharge, output8=Mrc charge,
+	//   output15=Slvl SoC%, output0=Pf power flow)
+	LoxoneMode     string // "meter_block", "energy_meter_block", "virtual_output_dual", "virtual_output_single", "battery_block"
 	ExportDeviceID string // For virtual_output_dual mode only
+
+	// FOR BATTERY METERS (battery_block mode) — live state, not persisted to DB.
+	// Mirrors the E3/DC battery status so the UI can show SoC and direction.
+	SocPct        float64 // State of charge %, from output15 (Slvl)
+	BatteryPowerW float64 // Live power flow (W), from output0 (Pf): >0 charging, <0 discharging
+	LastChargeKwh float64 // Last seen charge counter (output8/Mrc), for direction fallback
+	LastDischKwh  float64 // Last seen discharge counter (output1/Mrd), for direction fallback
 
 	// FOR CHARGERS - existing fields:
 	PowerUUID        string

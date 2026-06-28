@@ -76,11 +76,26 @@ export default function MeterConnectionStatus({
     if (meter.connection_type === 'loxone_api') {
         const status = loxoneStatus[meter.id];
         if (status) {
+            // Battery meters (battery_block mode) expose SoC + charge/discharge
+            // direction, rendered the same way as the E3/DC battery.
+            const isBattery = status.value === 'battery' || meter.meter_type === 'battery_meter';
+            let batteryDetail: string | undefined;
+            let batteryIcon = Wifi;
+            if (isBattery && typeof status.soc === 'number') {
+                const dir = status.battery_charging === true
+                    ? t('meters.e3dcCharging')
+                    : status.battery_charging === false
+                        ? t('meters.e3dcDischarging')
+                        : t('meters.e3dcIdle');
+                batteryDetail = `${t('meters.e3dcSoc')}: ${Math.round(status.soc)}% · ${dir}`;
+                batteryIcon = status.battery_charging === true ? BatteryCharging : Battery;
+            }
             if (status.is_connected) {
                 return <ConnectionBadge
-                    icon={Wifi} color="#22c55e" bgColor="rgba(34, 197, 94, 0.1)"
+                    icon={batteryDetail ? batteryIcon : Wifi} color="#22c55e" bgColor="rgba(34, 197, 94, 0.1)"
                     label={t('meters.loxoneConnected')}
-                    detail={`${t('meters.lastUpdate')}: ${formatTime(status.last_update)}`}
+                    detail={batteryDetail || `${t('meters.lastUpdate')}: ${formatTime(status.last_update)}`}
+                    detail2={batteryDetail ? `${t('meters.lastUpdate')}: ${formatTime(status.last_update)}` : undefined}
                 />;
             }
             return <ConnectionBadge

@@ -25,7 +25,7 @@ interface ConnectionConfig {
     loxone_username?: string;
     loxone_password?: string;
     loxone_device_id?: string;
-    loxone_mode?: 'meter_block' | 'energy_meter_block' | 'virtual_output_dual' | 'virtual_output_single';
+    loxone_mode?: 'meter_block' | 'energy_meter_block' | 'virtual_output_dual' | 'virtual_output_single' | 'battery_block';
     loxone_export_device_id?: string;
     mqtt_topic?: string;
     mqtt_broker?: string;

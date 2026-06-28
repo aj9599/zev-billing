@@ -15,7 +15,10 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 	// Determine if this meter type supports export
 	var meterType string
 	db.QueryRow("SELECT meter_type FROM meters WHERE id = ?", device.ID).Scan(&meterType)
-	supportsExport := (meterType == "total_meter" || meterType == "solar_meter")
+	isBatteryMeter := (meterType == "battery_meter")
+	// Battery meters store two cumulative counters too (charge as import, discharge
+	// as export), so they go through the same dual-value persistence path.
+	supportsExport := (meterType == "total_meter" || meterType == "solar_meter" || isBatteryMeter)
 	isSolarMeter := (meterType == "solar_meter")
 
 	// Try to get reading from different response formats based on mode
@@ -107,6 +110,65 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 		}
 
 		reading = importReading
+
+	} else if device.LoxoneMode == "battery_block" {
+		// BATTERY BLOCK MODE - single UUID, all outputs in one /all response:
+		//   output0  (Pf)   = power flow (kW) — sign gives charge/discharge direction
+		//   output1  (Mrd)  = cumulative discharge counter (kWh)
+		//   output8  (Mrc)  = cumulative charge counter (kWh)
+		//   output15 (Slvl) = state of charge (%)
+		parseOut := func(key string) (float64, bool) {
+			if o, ok := response.LL.Outputs[key]; ok {
+				switch v := o.Value.(type) {
+				case float64:
+					return v, true
+				case string:
+					if f, err := strconv.ParseFloat(v, 64); err == nil {
+						return f, true
+					}
+				}
+			}
+			return 0, false
+		}
+
+		chargeReading, _ := parseOut("output8")  // Mrc — charge
+		dischargeReading, _ := parseOut("output1") // Mrd — discharge
+		if soc, ok := parseOut("output15"); ok {   // Slvl — SoC%
+			device.SocPct = soc
+		}
+
+		// Power flow (Pf) is in kW → convert to W. Sign convention here:
+		// Pf > 0 = charging (Mrc grows), Pf < 0 = discharging (Mrd grows).
+		if pf, ok := parseOut("output0"); ok {
+			device.BatteryPowerW = pf * 1000
+		}
+
+		// Fallback direction from which counter advanced since the last read,
+		// in case Pf is unsigned on this Miniserver.
+		if device.BatteryPowerW == 0 {
+			if chargeReading > device.LastChargeKwh {
+				device.BatteryPowerW = 1 // nominal "charging"
+			} else if dischargeReading > device.LastDischKwh {
+				device.BatteryPowerW = -1 // nominal "discharging"
+			}
+		}
+		device.LastChargeKwh = chargeReading
+		device.LastDischKwh = dischargeReading
+
+		// Persist charge as import, discharge as export (cumulative counters).
+		device.LastReading = chargeReading
+		device.LastReadingExport = dischargeReading
+		device.LastUpdate = time.Now()
+		device.ReadingGaps = 0
+		device.LivePowerTime = time.Now()
+
+		if !conn.LivePollActive {
+			log.Printf("   🔋 Battery SoC (output15/Slvl): %.1f%%", device.SocPct)
+			log.Printf("   🔋 Charge (output8/Mrc): %.3f kWh, Discharge (output1/Mrd): %.3f kWh", chargeReading, dischargeReading)
+			log.Printf("   ⚡ Battery power (output0/Pf): %.1f W", device.BatteryPowerW)
+		}
+
+		reading = chargeReading
 
 	} else if device.LoxoneMode == "energy_meter_block" {
 		// ENERGY METER BLOCK MODE - Single value from output1 (Mr)

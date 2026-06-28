@@ -455,8 +455,10 @@ export default function MeterCard({
                         </div>
                     </div>
                 ) : meter.meter_type === 'solar_meter' ? (
-                    /* Solar meters/inverters only produce energy — show production
-                       (stored in the export column); a solar source has no import. */
+                    /* Solar meters/inverters only produce energy — show production.
+                       A bidirectional meter block stores production in the export
+                       column (Mrd); a simple single-value meter (Mr) stores it in
+                       last_reading. Fall back so both kinds show a value. */
                     <div style={{
                         padding: '10px',
                         backgroundColor: '#f0fdf4',
@@ -471,7 +473,10 @@ export default function MeterCard({
                             </span>
                         </div>
                         <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
-                            {meter.last_reading_export ? `${meter.last_reading_export.toFixed(3)} kWh` : '0.000 kWh'}
+                            {(() => {
+                                const production = meter.last_reading_export || meter.last_reading;
+                                return production ? `${production.toFixed(3)} kWh` : '0.000 kWh';
+                            })()}
                         </div>
                     </div>
                 ) : (
