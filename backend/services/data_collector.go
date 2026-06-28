@@ -234,6 +234,47 @@ func (dc *DataCollector) GetSmartMeCollector() *SmartMeCollector {
 	return dc.smartmeCollector
 }
 
+// GetBatterySocByMeter returns the latest live state-of-charge (%) for each
+// battery meter that reports it, keyed by meter ID. Best-effort and live-only
+// (SoC is not persisted), drawn from the Loxone and E3/DC collector status.
+func (dc *DataCollector) GetBatterySocByMeter() map[int]float64 {
+	out := map[int]float64{}
+	if dc.loxoneCollector != nil {
+		st := dc.loxoneCollector.GetConnectionStatus()
+		if conns, ok := st["loxone_connections"].(map[int]map[string]interface{}); ok {
+			for id, m := range conns {
+				if v, ok := m["value"].(string); !ok || v != "battery" {
+					continue
+				}
+				if soc, ok := m["soc"].(float64); ok {
+					out[id] = soc
+				}
+			}
+		}
+	}
+	if dc.e3dcCollector != nil {
+		st := dc.e3dcCollector.GetConnectionStatus()
+		if conns, ok := st["e3dc_meter_connections"].(map[string]interface{}); ok {
+			for idStr, raw := range conns {
+				m, ok := raw.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				if v, _ := m["value"].(string); v != "battery" && v != "bat" {
+					continue
+				}
+				if soc, ok := m["soc"].(float64); ok {
+					var id int
+					if _, err := fmt.Sscanf(idStr, "%d", &id); err == nil {
+						out[id] = soc
+					}
+				}
+			}
+		}
+	}
+	return out
+}
+
 // GetZaptecChargerData returns Zaptec charger data for a specific charger
 func (dc *DataCollector) GetZaptecChargerData(chargerID int) (*zaptec.ZaptecChargerData, bool) {
 	if dc.zaptecCollector == nil {

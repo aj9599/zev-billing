@@ -1560,7 +1560,7 @@ func (h *DashboardHandler) GetEnergyFlow(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Helper to calculate consumption for a set of buildings
-	calcBuildingEnergy := func(bid int) (solar, gridImport, gridExport, evCharging float64, hasSolar, hasGrid bool) {
+	calcBuildingEnergy := func(bid int) (solar, gridImport, gridExport, evCharging, batteryCharged, batteryDischarged float64, hasSolar, hasGrid, hasBattery bool) {
 		// Calculate solar produced (from solar_meter export readings)
 		solarRows, err := h.db.QueryContext(ctx, `SELECT id FROM meters WHERE building_id = ? AND meter_type = 'solar_meter' AND COALESCE(is_active, 1) = 1`, bid)
 		if err == nil {
@@ -1613,7 +1613,22 @@ func (h *DashboardHandler) GetEnergyFlow(w http.ResponseWriter, r *http.Request)
 			chargerRows.Close()
 		}
 
-		return solar, gridImport, gridExport, evCharging, hasSolar, hasGrid
+		// Battery: discharge (power_kwh / main register) feeds the house,
+		// charge (power_kwh_export) stores energy from solar/grid.
+		batRows, err := h.db.QueryContext(ctx, `SELECT id FROM meters WHERE building_id = ? AND meter_type = 'battery_meter' AND COALESCE(is_active, 1) = 1`, bid)
+		if err == nil {
+			for batRows.Next() {
+				var meterID int
+				if batRows.Scan(&meterID) == nil {
+					batteryDischarged += calcMeterConsumption(h.db, ctx, meterID, "power_kwh", startTime, now)
+					batteryCharged += calcMeterConsumption(h.db, ctx, meterID, "power_kwh_export", startTime, now)
+					hasBattery = true
+				}
+			}
+			batRows.Close()
+		}
+
+		return solar, gridImport, gridExport, evCharging, batteryCharged, batteryDischarged, hasSolar, hasGrid, hasBattery
 	}
 
 	// Get all buildings or single building
@@ -1642,21 +1657,27 @@ func (h *DashboardHandler) GetEnergyFlow(w http.ResponseWriter, r *http.Request)
 
 	// Calculate totals across all relevant buildings
 	var totalSolar, totalGridImport, totalGridExport, totalEvCharging float64
-	var hasAnySolar, hasAnyGrid bool
+	var totalBatteryCharged, totalBatteryDischarged float64
+	var hasAnySolar, hasAnyGrid, hasAnyBattery bool
 
 	for _, bid := range buildingIDs {
-		solar, gridImport, gridExport, evCharging, hasSolar, hasGrid := calcBuildingEnergy(bid)
+		solar, gridImport, gridExport, evCharging, batteryCharged, batteryDischarged, hasSolar, hasGrid, hasBattery := calcBuildingEnergy(bid)
 
 		totalSolar += solar
 		totalGridImport += gridImport
 		totalGridExport += gridExport
 		totalEvCharging += evCharging
+		totalBatteryCharged += batteryCharged
+		totalBatteryDischarged += batteryDischarged
 
 		if hasSolar {
 			hasAnySolar = true
 		}
 		if hasGrid {
 			hasAnyGrid = true
+		}
+		if hasBattery {
+			hasAnyBattery = true
 		}
 
 		// Per-building breakdown (only if not filtered to single building)
@@ -1666,6 +1687,9 @@ func (h *DashboardHandler) GetEnergyFlow(w http.ResponseWriter, r *http.Request)
 			bf.BuildingName = buildingNames[bid]
 			bf.SolarProducedKwh = solar
 			bf.EvChargingKwh = evCharging
+			bf.HasBattery = hasBattery
+			bf.BatteryChargedKwh = batteryCharged
+			bf.BatteryDischargedKwh = batteryDischarged
 
 			// Calculate consumption and self-consumption for this building
 			if hasGrid && hasSolar {
@@ -1688,12 +1712,16 @@ func (h *DashboardHandler) GetEnergyFlow(w http.ResponseWriter, r *http.Request)
 				bf.SolarSelfConsumedKwh = solar
 			}
 
+			// A discharging battery supplies the house, a charging battery draws from it.
+			if hasBattery {
+				bf.TotalConsumptionKwh += batteryDischarged - batteryCharged
+			}
 			if bf.TotalConsumptionKwh < 0 {
 				bf.TotalConsumptionKwh = 0
 			}
 
 			// Only add buildings that have data
-			if hasSolar || hasGrid || evCharging > 0 {
+			if hasSolar || hasGrid || evCharging > 0 || hasBattery {
 				flow.PerBuilding = append(flow.PerBuilding, bf)
 			}
 		}
@@ -1702,6 +1730,9 @@ func (h *DashboardHandler) GetEnergyFlow(w http.ResponseWriter, r *http.Request)
 	// Set total values
 	flow.SolarProducedKwh = totalSolar
 	flow.EvChargingKwh = totalEvCharging
+	flow.HasBattery = hasAnyBattery
+	flow.BatteryChargedKwh = totalBatteryCharged
+	flow.BatteryDischargedKwh = totalBatteryDischarged
 
 	// Calculate total consumption and grid values
 	if hasAnyGrid && hasAnySolar {
@@ -1740,6 +1771,14 @@ func (h *DashboardHandler) GetEnergyFlow(w http.ResponseWriter, r *http.Request)
 		flow.TotalConsumptionKwh = totalSolar
 		flow.SolarSelfConsumedKwh = totalSolar
 		flow.SelfConsumptionPct = 100
+	}
+
+	// A discharging battery supplies the house, a charging battery draws from it.
+	if hasAnyBattery {
+		flow.TotalConsumptionKwh += totalBatteryDischarged - totalBatteryCharged
+		if flow.TotalConsumptionKwh < 0 {
+			flow.TotalConsumptionKwh = 0
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -2039,16 +2078,59 @@ func (h *DashboardHandler) getEnergyFlowLiveLegacy(w http.ResponseWriter, r *htt
 }
 
 // getEnergyFlowLiveFromDB is a fallback that uses database readings when live collector data is unavailable
+// latestBatterySoc returns the average live state-of-charge (%) across the
+// battery meters in scope, or 0 if none report it. SoC is live-only (not stored),
+// so it comes from the collectors via the data collector.
+func (h *DashboardHandler) latestBatterySoc(ctx context.Context, buildingID int) float64 {
+	if h.dataCollector == nil {
+		return 0
+	}
+	socByMeter := h.dataCollector.GetBatterySocByMeter()
+	if len(socByMeter) == 0 {
+		return 0
+	}
+	q := `SELECT id FROM meters WHERE is_active = 1 AND meter_type = 'battery_meter'`
+	args := []interface{}{}
+	if buildingID > 0 {
+		q += " AND building_id = ?"
+		args = append(args, buildingID)
+	}
+	rows, err := h.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return 0
+	}
+	defer rows.Close()
+	var sum float64
+	var n int
+	for rows.Next() {
+		var id int
+		if rows.Scan(&id) != nil {
+			continue
+		}
+		if soc, ok := socByMeter[id]; ok && soc > 0 {
+			sum += soc
+			n++
+		}
+	}
+	if n == 0 {
+		return 0
+	}
+	return sum / float64(n)
+}
+
 func (h *DashboardHandler) getEnergyFlowLiveFromDB(w http.ResponseWriter, r *http.Request, ctx context.Context, buildingID int) {
 	type buildingData struct {
-		id            int
-		name          string
-		solarPowerKw  float64
-		gridImportKw  float64
-		gridExportKw  float64
-		hasGridMeter  bool
-		hasSolarMeter bool
-		evChargingKw  float64
+		id                 int
+		name               string
+		solarPowerKw       float64
+		gridImportKw       float64
+		gridExportKw       float64
+		hasGridMeter       bool
+		hasSolarMeter      bool
+		evChargingKw       float64
+		hasBattery         bool
+		batteryChargeKw    float64 // power into the battery
+		batteryDischargeKw float64 // power out of the battery to the house
 	}
 
 	buildingPower := make(map[int]*buildingData)
@@ -2085,7 +2167,7 @@ func (h *DashboardHandler) getEnergyFlowLiveFromDB(w http.ResponseWriter, r *htt
 			)
 		) mr ON m.id = mr.meter_id
 		WHERE m.is_active = 1
-		AND m.meter_type IN ('solar_meter', 'total_meter')
+		AND m.meter_type IN ('solar_meter', 'total_meter', 'battery_meter')
 	`
 	meterArgs := []interface{}{}
 	if buildingID > 0 {
@@ -2130,6 +2212,13 @@ func (h *DashboardHandler) getEnergyFlowLiveFromDB(w http.ResponseWriter, r *htt
 			bp.gridImportKw += consumptionKwh / 0.25
 			bp.gridExportKw += consumptionExport / 0.25
 			bp.hasGridMeter = true
+
+		case "battery_meter":
+			// After the collector fix: main register (consumption_kwh) = discharge
+			// to the house, export register (consumption_export) = charge from the bus.
+			bp.batteryDischargeKw += consumptionKwh / 0.25
+			bp.batteryChargeKw += consumptionExport / 0.25
+			bp.hasBattery = true
 		}
 	}
 
@@ -2197,7 +2286,8 @@ func (h *DashboardHandler) getEnergyFlowLiveFromDB(w http.ResponseWriter, r *htt
 
 	// Calculate totals
 	var totalSolarKw, totalGridImportKw, totalGridExportKw, totalEvKw float64
-	var hasAnyGridMeter, hasAnySolarMeter bool
+	var totalBatteryChargeKw, totalBatteryDischargeKw float64
+	var hasAnyGridMeter, hasAnySolarMeter, hasAnyBattery bool
 
 	for _, bp := range buildingPower {
 		if buildingID > 0 && bp.id != buildingID {
@@ -2207,13 +2297,22 @@ func (h *DashboardHandler) getEnergyFlowLiveFromDB(w http.ResponseWriter, r *htt
 		totalGridImportKw += bp.gridImportKw
 		totalGridExportKw += bp.gridExportKw
 		totalEvKw += bp.evChargingKw
+		totalBatteryChargeKw += bp.batteryChargeKw
+		totalBatteryDischargeKw += bp.batteryDischargeKw
 		if bp.hasGridMeter {
 			hasAnyGridMeter = true
 		}
 		if bp.hasSolarMeter {
 			hasAnySolarMeter = true
 		}
+		if bp.hasBattery {
+			hasAnyBattery = true
+		}
 	}
+
+	// Latest battery state of charge (live-only; averaged across battery meters
+	// in scope). Best-effort — leaves 0 if no collector reports it.
+	batterySocPct := h.latestBatterySoc(ctx, buildingID)
 
 	totalGridKw := totalGridImportKw - totalGridExportKw
 	isExporting := totalGridKw < 0
@@ -2238,15 +2337,28 @@ func (h *DashboardHandler) getEnergyFlowLiveFromDB(w http.ResponseWriter, r *htt
 		selfConsumptionPct = 100
 	}
 
+	// A discharging battery supplies the house; a charging battery draws from it.
+	// Mirror the building-view consumption model so the house figure is accurate.
+	if hasAnyBattery {
+		consumptionKw += totalBatteryDischargeKw - totalBatteryChargeKw
+		if consumptionKw < 0 {
+			consumptionKw = 0
+		}
+	}
+
 	response := models.EnergyFlowLiveData{
-		Period:             "live",
-		SolarPowerKw:       totalSolarKw,
-		ConsumptionPowerKw: consumptionKw,
-		GridPowerKw:        totalGridKw,
-		EvChargingPowerKw:  totalEvKw,
-		SelfConsumptionPct: selfConsumptionPct,
-		IsExporting:        isExporting,
-		Timestamp:          time.Now().Format(time.RFC3339),
+		Period:                  "live",
+		SolarPowerKw:            totalSolarKw,
+		ConsumptionPowerKw:      consumptionKw,
+		GridPowerKw:             totalGridKw,
+		EvChargingPowerKw:       totalEvKw,
+		SelfConsumptionPct:      selfConsumptionPct,
+		IsExporting:             isExporting,
+		Timestamp:               time.Now().Format(time.RFC3339),
+		HasBattery:              hasAnyBattery,
+		BatteryChargePowerKw:    totalBatteryChargeKw,
+		BatteryDischargePowerKw: totalBatteryDischargeKw,
+		BatterySocPct:           batterySocPct,
 	}
 
 	if buildingID == 0 {
@@ -2263,14 +2375,23 @@ func (h *DashboardHandler) getEnergyFlowLiveFromDB(w http.ResponseWriter, r *htt
 			if bpConsumption < 0 {
 				bpConsumption = 0
 			}
-			if bp.hasGridMeter || bp.hasSolarMeter || bp.evChargingKw > 0 {
+			if bp.hasBattery {
+				bpConsumption += bp.batteryDischargeKw - bp.batteryChargeKw
+				if bpConsumption < 0 {
+					bpConsumption = 0
+				}
+			}
+			if bp.hasGridMeter || bp.hasSolarMeter || bp.evChargingKw > 0 || bp.hasBattery {
 				response.PerBuilding = append(response.PerBuilding, models.BuildingEnergyFlowLive{
-					BuildingID:         bp.id,
-					BuildingName:       bp.name,
-					SolarPowerKw:       bp.solarPowerKw,
-					ConsumptionPowerKw: bpConsumption,
-					GridPowerKw:        bpGridKw,
-					EvChargingPowerKw:  bp.evChargingKw,
+					BuildingID:              bp.id,
+					BuildingName:            bp.name,
+					SolarPowerKw:            bp.solarPowerKw,
+					ConsumptionPowerKw:      bpConsumption,
+					GridPowerKw:             bpGridKw,
+					EvChargingPowerKw:       bp.evChargingKw,
+					HasBattery:              bp.hasBattery,
+					BatteryChargePowerKw:    bp.batteryChargeKw,
+					BatteryDischargePowerKw: bp.batteryDischargeKw,
 				})
 			}
 		}

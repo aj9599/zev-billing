@@ -478,6 +478,9 @@ export interface EnergyFlowData {
   grid_import_kwh: number;
   ev_charging_kwh: number;
   self_consumption_pct: number;
+  has_battery?: boolean;
+  battery_charged_kwh?: number;
+  battery_discharged_kwh?: number;
   per_building?: BuildingEnergyFlow[];
 }
 
@@ -489,6 +492,9 @@ export interface BuildingEnergyFlow {
   total_consumption_kwh: number;
   grid_import_kwh: number;
   ev_charging_kwh: number;
+  has_battery?: boolean;
+  battery_charged_kwh?: number;
+  battery_discharged_kwh?: number;
 }
 
 // Live energy flow - real-time power data (kW instead of kWh)
@@ -501,6 +507,10 @@ export interface EnergyFlowLiveData {
   self_consumption_pct: number;
   is_exporting: boolean;
   timestamp: string;
+  has_battery?: boolean;
+  battery_charge_power_kw?: number;
+  battery_discharge_power_kw?: number;
+  battery_soc_pct?: number;
   per_building?: BuildingEnergyFlowLive[];
 }
 
@@ -511,6 +521,9 @@ export interface BuildingEnergyFlowLive {
   consumption_power_kw: number;
   grid_power_kw: number;
   ev_charging_power_kw: number;
+  has_battery?: boolean;
+  battery_charge_power_kw?: number;
+  battery_discharge_power_kw?: number;
 }
 
 export interface MeterData {

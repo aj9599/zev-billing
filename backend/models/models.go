@@ -369,6 +369,9 @@ type EnergyFlowData struct {
 	GridImportKwh        float64              `json:"grid_import_kwh"`
 	EvChargingKwh        float64              `json:"ev_charging_kwh"`
 	SelfConsumptionPct   float64              `json:"self_consumption_pct"`
+	HasBattery           bool                 `json:"has_battery"`
+	BatteryChargedKwh    float64              `json:"battery_charged_kwh"`
+	BatteryDischargedKwh float64              `json:"battery_discharged_kwh"`
 	PerBuilding          []BuildingEnergyFlow `json:"per_building,omitempty"`
 }
 
@@ -380,6 +383,9 @@ type BuildingEnergyFlow struct {
 	TotalConsumptionKwh  float64 `json:"total_consumption_kwh"`
 	GridImportKwh        float64 `json:"grid_import_kwh"`
 	EvChargingKwh        float64 `json:"ev_charging_kwh"`
+	HasBattery           bool    `json:"has_battery"`
+	BatteryChargedKwh    float64 `json:"battery_charged_kwh"`
+	BatteryDischargedKwh float64 `json:"battery_discharged_kwh"`
 }
 
 // EnergyFlowLiveData holds real-time power data (instantaneous, in Watts/kW)
@@ -393,6 +399,10 @@ type EnergyFlowLiveData struct {
 	SelfConsumptionPct float64                  `json:"self_consumption_pct"` // Current self-consumption percentage
 	IsExporting        bool                     `json:"is_exporting"`         // True if exporting to grid
 	Timestamp          string                   `json:"timestamp"`            // ISO timestamp of reading
+	HasBattery         bool                     `json:"has_battery"`
+	BatteryChargePowerKw    float64             `json:"battery_charge_power_kw"`    // Power flowing into the battery (charging)
+	BatteryDischargePowerKw float64             `json:"battery_discharge_power_kw"` // Power flowing out of the battery (discharging to house)
+	BatterySocPct           float64             `json:"battery_soc_pct"`           // Latest state of charge %, 0 if unknown
 	PerBuilding        []BuildingEnergyFlowLive `json:"per_building,omitempty"`
 }
 
@@ -403,6 +413,10 @@ type BuildingEnergyFlowLive struct {
 	ConsumptionPowerKw float64 `json:"consumption_power_kw"`
 	GridPowerKw        float64 `json:"grid_power_kw"`
 	EvChargingPowerKw  float64 `json:"ev_charging_power_kw"`
+	HasBattery              bool    `json:"has_battery"`
+	BatteryChargePowerKw    float64 `json:"battery_charge_power_kw"`
+	BatteryDischargePowerKw float64 `json:"battery_discharge_power_kw"`
+	BatterySocPct           float64 `json:"battery_soc_pct"`
 }
 
 // Device is a controllable device (relay/switch) driven by live solar surplus.

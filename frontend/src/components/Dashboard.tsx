@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import * as React from 'react';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { Users, Building, Zap, Car, Sun, Battery, Flame, LayoutDashboard, Home, Eye, EyeOff, ChevronDown, ChevronRight, Activity, DollarSign, Wifi, WifiOff, AlertTriangle, CheckCircle2, Clock, Gauge } from 'lucide-react';
+import { Users, Building, Zap, Car, Sun, Battery, BatteryCharging, Flame, LayoutDashboard, Home, Eye, EyeOff, ChevronDown, ChevronRight, Activity, DollarSign, Wifi, WifiOff, AlertTriangle, CheckCircle2, Clock, Gauge } from 'lucide-react';
 import { api } from '../api/client';
 import type { DashboardStats, SelfConsumptionData, SystemHealth, CostOverview, EnergyFlowData, EnergyFlowLiveData } from '../types';
 import { useTranslation } from '../i18n';
@@ -692,6 +692,32 @@ export default function Dashboard() {
           const hasEv = evVal > 0.001;
           const hasGrid = gridMainVal > 0.001;
 
+          // Battery: charge = into battery, discharge = out to house. Live mode
+          // reports power (kW) + SoC; historical reports energy (kWh), no SoC.
+          let batteryChargeVal = 0, batteryDischargeVal = 0;
+          let hasBattery = false;
+          let batterySocPct: number | undefined;
+          if (isLiveMode && energyFlowLiveData) {
+            hasBattery = !!energyFlowLiveData.has_battery;
+            batteryChargeVal = energyFlowLiveData.battery_charge_power_kw || 0;
+            batteryDischargeVal = energyFlowLiveData.battery_discharge_power_kw || 0;
+            batterySocPct = energyFlowLiveData.battery_soc_pct;
+          } else if (energyFlowData) {
+            hasBattery = !!energyFlowData.has_battery;
+            batteryChargeVal = energyFlowData.battery_charged_kwh || 0;
+            batteryDischargeVal = energyFlowData.battery_discharged_kwh || 0;
+          }
+          const batteryMainVal = Math.max(batteryChargeVal, batteryDischargeVal);
+          const batteryCharging = batteryChargeVal > batteryDischargeVal + 0.001;
+          const batteryDischarging = batteryDischargeVal > batteryChargeVal + 0.001;
+          const hasBatteryFlow = batteryMainVal > 0.001;
+          const batteryColor = batteryCharging ? '#10b981' : '#14b8a6';
+          const batteryLabel = batteryCharging
+            ? t('dashboard.energyFlowBatteryCharging')
+            : batteryDischarging
+              ? t('dashboard.energyFlowBatteryDischarging')
+              : t('dashboard.energyFlowBatteryIdle');
+
           return (
             <div style={{ position: 'relative' }}>
               {/* Live mode indicator */}
@@ -864,6 +890,47 @@ export default function Dashboard() {
                   </div>
                 </div>
 
+                {/* Battery (below the building hub, mirroring Solar on top).
+                    Charging = flow down into the battery (green, fed by solar);
+                    discharging = flow up to the house (teal). */}
+                {hasBattery && (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div style={{
+                      width: '3px', height: '32px', margin: '0 auto',
+                      background: hasBatteryFlow
+                        ? (batteryCharging ? 'linear-gradient(180deg, #3b82f6, #10b981)' : 'linear-gradient(180deg, #14b8a6, #3b82f6)')
+                        : '#e5e7eb',
+                      position: 'relative', transition: 'background 0.3s'
+                    }}>
+                      {hasBatteryFlow && batteryCharging && (
+                        <div style={{ position: 'absolute', bottom: '-5px', left: '-4px', width: 0, height: 0, borderLeft: '5.5px solid transparent', borderRight: '5.5px solid transparent', borderTop: '8px solid #10b981' }} />
+                      )}
+                      {hasBatteryFlow && batteryDischarging && (
+                        <div style={{ position: 'absolute', top: '-5px', left: '-4px', width: 0, height: 0, borderLeft: '5.5px solid transparent', borderRight: '5.5px solid transparent', borderBottom: '8px solid #14b8a6' }} />
+                      )}
+                    </div>
+                    <div style={{ textAlign: 'center', opacity: hasBatteryFlow ? 1 : 0.45, transition: 'opacity 0.3s' }}>
+                      <div style={{
+                        width: '60px', height: '60px', borderRadius: '50%',
+                        background: hasBatteryFlow
+                          ? (batteryCharging ? 'linear-gradient(135deg, #34d399 0%, #10b981 100%)' : 'linear-gradient(135deg, #2dd4bf 0%, #14b8a6 100%)')
+                          : 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        margin: '0 auto 6px',
+                        boxShadow: hasBatteryFlow ? '0 4px 12px rgba(20,184,166,0.3)' : 'none',
+                        transition: 'all 0.3s'
+                      }}>
+                        {batteryCharging ? <BatteryCharging size={26} color="white" /> : <Battery size={26} color="white" />}
+                      </div>
+                      <div style={{ fontSize: '12px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowBattery')}</div>
+                      <div style={{ fontSize: '14px', fontWeight: '700', color: hasBatteryFlow ? batteryColor : '#9ca3af' }}>{formatValue(batteryMainVal)}</div>
+                      <div style={{ fontSize: '10px', fontWeight: '600', color: '#9ca3af', marginTop: '2px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        {batteryLabel}{typeof batterySocPct === 'number' && batterySocPct > 0 ? ` · ${Math.round(batterySocPct)}%` : ''}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Secondary info: if both import AND export exist */}
                 {gridImportVal > 0.01 && gridExportVal > 0.01 && (
                   <div style={{
@@ -956,6 +1023,36 @@ export default function Dashboard() {
                     <div style={{ fontSize: '13px', fontWeight: '700', color: hasEv ? '#8b5cf6' : '#9ca3af' }}>{formatValue(evVal)}</div>
                   </div>
                 </div>
+
+                {/* Battery (mobile) */}
+                {hasBattery && (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '8px' }}>
+                    <div style={{
+                      width: '3px', height: '20px',
+                      background: hasBatteryFlow ? (batteryCharging ? 'linear-gradient(180deg, #3b82f6, #10b981)' : 'linear-gradient(180deg, #14b8a6, #3b82f6)') : '#e5e7eb',
+                      position: 'relative'
+                    }}>
+                      {hasBatteryFlow && batteryCharging && <div style={{ position: 'absolute', bottom: '-4px', left: '-3.5px', width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '7px solid #10b981' }} />}
+                      {hasBatteryFlow && batteryDischarging && <div style={{ position: 'absolute', top: '-4px', left: '-3.5px', width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderBottom: '7px solid #14b8a6' }} />}
+                    </div>
+                    <div style={{ textAlign: 'center', opacity: hasBatteryFlow ? 1 : 0.45 }}>
+                      <div style={{
+                        width: '50px', height: '50px', borderRadius: '50%',
+                        background: hasBatteryFlow ? (batteryCharging ? 'linear-gradient(135deg, #34d399 0%, #10b981 100%)' : 'linear-gradient(135deg, #2dd4bf 0%, #14b8a6 100%)') : 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        margin: '4px auto 4px',
+                        boxShadow: hasBatteryFlow ? '0 3px 10px rgba(20,184,166,0.3)' : 'none'
+                      }}>
+                        {batteryCharging ? <BatteryCharging size={20} color="white" /> : <Battery size={20} color="white" />}
+                      </div>
+                      <div style={{ fontSize: '11px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowBattery')}</div>
+                      <div style={{ fontSize: '13px', fontWeight: '700', color: hasBatteryFlow ? batteryColor : '#9ca3af' }}>{formatValue(batteryMainVal)}</div>
+                      <div style={{ fontSize: '9px', fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        {batteryLabel}{typeof batterySocPct === 'number' && batterySocPct > 0 ? ` · ${Math.round(batterySocPct)}%` : ''}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Secondary info */}
                 {gridImportVal > 0.01 && gridExportVal > 0.01 && (
