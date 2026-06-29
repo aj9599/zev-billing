@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Power, Edit2, Trash2, X, Zap, RefreshCw, Search, Clock, Wifi, Activity, Target, Plug, Building, HelpCircle } from 'lucide-react';
 import { api } from '../api/client';
 import { useTranslation } from '../i18n';
@@ -179,11 +179,21 @@ export default function Devices() {
   useEffect(() => {
     loadData();
     refreshStatus();
-    const interval = setInterval(refreshStatus, 5000);
+    // Poll live status every 5s, but skip the fetch while the tab is hidden so
+    // the backend isn't polled for a page nobody is looking at; refresh
+    // immediately when the tab becomes visible again so data isn't stale.
+    const interval = setInterval(() => {
+      if (!document.hidden) refreshStatus();
+    }, 5000);
+    const onVisible = () => {
+      if (!document.hidden) refreshStatus();
+    };
+    document.addEventListener('visibilitychange', onVisible);
     const onResize = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener('resize', onResize);
     return () => {
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('resize', onResize);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -204,13 +214,22 @@ export default function Devices() {
       const list = await api.getDeviceLiveStatus();
       const map: Record<number, DeviceLiveStatus> = {};
       for (const s of list) map[s.device_id] = s;
-      setStatus(map);
+      // Status objects are plain JSON and device_id keys are integers (so they
+      // serialise in a stable order). Keep the previous reference when nothing
+      // changed to avoid re-rendering the whole device list every 5 seconds.
+      setStatus((prev) => (JSON.stringify(prev) === JSON.stringify(map) ? prev : map));
     } catch {
       /* ignore transient */
     }
   }
 
-  const buildingName = (id: number) => buildings.find((b) => b.id === id)?.name || `#${id}`;
+  // Map lookup instead of buildings.find() per device row on every render.
+  const buildingNameById = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const b of buildings) m.set(b.id, b.name);
+    return m;
+  }, [buildings]);
+  const buildingName = (id: number) => buildingNameById.get(id) || `#${id}`;
 
   const parseSchedule = (d: Device): ScheduleWindow[] => parseScheduleJson(d.schedule_json);
 
