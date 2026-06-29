@@ -136,6 +136,24 @@ table {
   }
 }
 
+/* ── Phone grid de-squash ────────────────────────────────────────────────
+   Most layouts use inline styles, so the class-based rules above can't reach
+   their grids. These attribute selectors collapse FIXED multi-column inline
+   grids (form rows, stat tiles, etc.) to a single column on phones. An
+   !important declaration in a stylesheet overrides a non-!important inline
+   style, so this works without editing every component. Fluid grids written
+   as repeat(auto-fit/auto-fill, minmax(...)) already reflow on their own and
+   are intentionally NOT matched here. React serialises camelCase style props
+   to kebab-case, hence the "grid-template-columns" attribute values. */
+@media (max-width: 640px) {
+  [style*="grid-template-columns: 1fr 1fr"],
+  [style*="grid-template-columns: repeat(2"],
+  [style*="grid-template-columns: repeat(3"],
+  [style*="grid-template-columns: repeat(4"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 /* Desktop only elements */
 @media (min-width: 769px) {
   .mobile-cards {
