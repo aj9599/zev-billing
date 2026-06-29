@@ -69,6 +69,14 @@ func (b *BackupScheduler) Start() {
 		case <-time.After(wait):
 			if err := b.RunOnce(); err != nil {
 				log.Printf("Backup: scheduled backup failed: %v", err)
+				// Record to admin_logs so the email alerter's failure digest
+				// surfaces it (the action contains "Failed").
+				if _, derr := b.db.Exec(
+					`INSERT INTO admin_logs (action, details, ip_address) VALUES ('Backup Failed', ?, 'system')`,
+					err.Error(),
+				); derr != nil {
+					log.Printf("Backup: could not record failure to admin_logs: %v", derr)
+				}
 			}
 		case <-b.stopChan:
 			log.Println("Backup Scheduler stopped")

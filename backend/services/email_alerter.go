@@ -70,6 +70,10 @@ type EmailAlerter struct {
 	// In-memory rate limit (primary — does NOT depend on DB reads)
 	lastDigestSent time.Time
 
+	// Meter-offline detection state
+	lastMeterCheck time.Time
+	offlineAlerted map[int]time.Time // meter id → last time we raised an offline alert
+
 	// Lifecycle
 	stopChan chan struct{}
 }
@@ -78,14 +82,24 @@ const (
 	maxErrorBuffer      = 1000
 	configCacheDuration = 5 * time.Minute
 	checkInterval       = 60 * time.Second
+
+	// A meter that hasn't reported in this long is treated as offline. The
+	// standard collection cadence is 15 minutes, so 24h is well clear of a few
+	// missed cycles.
+	meterOfflineThreshold = 24 * time.Hour
+	// Don't re-raise the same meter's offline alert more often than this.
+	meterReAlertInterval = 24 * time.Hour
+	// How often to scan for offline meters.
+	meterCheckInterval = time.Hour
 )
 
 func NewEmailAlerter(db *sql.DB) *EmailAlerter {
 	return &EmailAlerter{
-		db:            db,
-		errorBuffer:   make([]ErrorEntry, 0),
-		lastCheckTime: time.Now().UTC(), // Use UTC to match SQLite CURRENT_TIMESTAMP
-		stopChan:      make(chan struct{}),
+		db:             db,
+		errorBuffer:    make([]ErrorEntry, 0),
+		lastCheckTime:  time.Now().UTC(), // Use UTC to match SQLite CURRENT_TIMESTAMP
+		offlineAlerted: make(map[int]time.Time),
+		stopChan:       make(chan struct{}),
 	}
 }
 
@@ -107,6 +121,7 @@ func (ea *EmailAlerter) Start() {
 	for {
 		select {
 		case <-ticker.C:
+			ea.checkMeterOffline()
 			ea.checkForNewErrors()
 			ea.checkAndSendDigest()
 			ea.checkAndSendHealthReport()
@@ -180,14 +195,93 @@ func (ea *EmailAlerter) loadConfig() *EmailAlertConfig {
 	return &cfg
 }
 
-// checkForNewErrors polls admin_logs for new error entries
+// checkMeterOffline scans (hourly) for active meters that have stopped
+// reporting and records a "Meter Offline" entry in admin_logs, which the error
+// digest then picks up and e-mails. State is kept in-memory so a still-offline
+// meter isn't re-logged more than once a day, and a meter that recovers can
+// raise a fresh alert if it goes down again. Silent data gaps are a top cause
+// of billing errors, so surfacing them proactively is high value.
+func (ea *EmailAlerter) checkMeterOffline() {
+	now := time.Now()
+	if !ea.lastMeterCheck.IsZero() && now.Sub(ea.lastMeterCheck) < meterCheckInterval {
+		return
+	}
+	ea.lastMeterCheck = now
+
+	rows, err := ea.db.Query(`
+		SELECT m.id, m.name, COALESCE(b.name, ''),
+		       (SELECT MAX(reading_time) FROM meter_readings WHERE meter_id = m.id)
+		FROM meters m
+		LEFT JOIN buildings b ON m.building_id = b.id
+		WHERE COALESCE(m.is_active, 1) = 1
+	`)
+	if err != nil {
+		log.Printf("[EMAIL-ALERT] meter-offline scan failed: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	type offlineMeter struct {
+		name, building string
+		age            time.Duration
+		hasReading     bool
+	}
+	var newlyOffline []offlineMeter
+
+	for rows.Next() {
+		var id int
+		var name, building string
+		var last sql.NullTime
+		if err := rows.Scan(&id, &name, &building, &last); err != nil {
+			continue
+		}
+		offline := !last.Valid || now.Sub(last.Time) > meterOfflineThreshold
+		if !offline {
+			delete(ea.offlineAlerted, id) // recovered → allow a future alert
+			continue
+		}
+		if t, alerted := ea.offlineAlerted[id]; alerted && now.Sub(t) < meterReAlertInterval {
+			continue // already alerted recently
+		}
+		ea.offlineAlerted[id] = now
+		m := offlineMeter{name: name, building: building, hasReading: last.Valid}
+		if last.Valid {
+			m.age = now.Sub(last.Time)
+		}
+		newlyOffline = append(newlyOffline, m)
+	}
+
+	for _, m := range newlyOffline {
+		loc := ""
+		if m.building != "" {
+			loc = " (" + m.building + ")"
+		}
+		var detail string
+		if m.hasReading {
+			detail = fmt.Sprintf("Meter '%s'%s has not reported a reading for %.0f hours", m.name, loc, m.age.Hours())
+		} else {
+			detail = fmt.Sprintf("Meter '%s'%s has never reported a reading", m.name, loc)
+		}
+		if _, err := ea.db.Exec(
+			`INSERT INTO admin_logs (action, details, ip_address) VALUES ('Meter Offline', ?, 'system')`,
+			detail,
+		); err != nil {
+			log.Printf("[EMAIL-ALERT] could not record meter offline: %v", err)
+		}
+	}
+	if len(newlyOffline) > 0 {
+		log.Printf("[EMAIL-ALERT] %d meter(s) newly offline (no reading > %dh)", len(newlyOffline), int(meterOfflineThreshold.Hours()))
+	}
+}
+
+// checkForNewErrors polls admin_logs for new error/failed/offline entries.
 func (ea *EmailAlerter) checkForNewErrors() {
 	// Use UTC for comparison since SQLite CURRENT_TIMESTAMP stores UTC
 	checkTimeStr := ea.lastCheckTime.UTC().Format("2006-01-02 15:04:05")
 
 	rows, err := ea.db.Query(`
 		SELECT action, details, created_at FROM admin_logs
-		WHERE (LOWER(action) LIKE '%error%' OR LOWER(action) LIKE '%failed%')
+		WHERE (LOWER(action) LIKE '%error%' OR LOWER(action) LIKE '%failed%' OR LOWER(action) LIKE '%offline%')
 		AND created_at > ?
 		ORDER BY created_at ASC
 	`, checkTimeStr)
