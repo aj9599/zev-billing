@@ -69,9 +69,13 @@ func (h *ExportHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 			effectiveChargerIDs = chargerIDsStr
 		}
 		data, err = h.exportChargerData(startDate, endDate, effectiveChargerIDs)
+	case "building-summary":
+		data, err = h.exportBuildingSummary(startDate, endDate)
+	case "vat-summary":
+		data, err = h.exportVATSummary(startDate, endDate)
 	default:
 		log.Printf("Invalid export type: %s", exportType)
-		http.Error(w, "Invalid export type. Must be 'meters' or 'chargers'", http.StatusBadRequest)
+		http.Error(w, "Invalid export type. Must be 'meters', 'chargers', 'building-summary' or 'vat-summary'", http.StatusBadRequest)
 		return
 	}
 
@@ -171,8 +175,8 @@ func (h *ExportHandler) exportMeterData(startDate, endDate, meterIDStr string) (
 
 	data := [][]string{
 		{"Meter ID", "Meter Name", "Meter Type", "Building", "User", "Reading Time",
-		 "Import Energy (kWh)", "Export Energy (kWh)", "Import Consumption (kWh)", "Export Consumption (kWh)",
-		 "Solar Consumption (kWh)", "Grid Consumption (kWh)", "Tariff"},
+			"Import Energy (kWh)", "Export Energy (kWh)", "Import Consumption (kWh)", "Export Consumption (kWh)",
+			"Solar Consumption (kWh)", "Grid Consumption (kWh)", "Tariff"},
 	}
 
 	// Per-building interval aggregates, loaded lazily and cached, so each
@@ -335,4 +339,83 @@ func (h *ExportHandler) exportChargerData(startDate, endDate, chargerIDStr strin
 	}
 
 	return data, nil
+}
+
+// exportBuildingSummary aggregates invoices issued in the date range per building
+// and currency: count, net/VAT/gross totals and paid vs outstanding amounts.
+func (h *ExportHandler) exportBuildingSummary(startDate, endDate string) ([][]string, error) {
+	rows, err := h.db.Query(`
+		SELECT COALESCE(b.name, 'Building #' || i.building_id) AS building,
+		       i.currency,
+		       COUNT(*) AS invoices,
+		       SUM(COALESCE(i.net_amount, 0)) AS net,
+		       SUM(COALESCE(i.vat_amount, 0)) AS vat,
+		       SUM(i.total_amount) AS gross,
+		       SUM(CASE WHEN COALESCE(i.payment_status,'unpaid') = 'paid' THEN i.total_amount ELSE 0 END) AS paid,
+		       SUM(CASE WHEN COALESCE(i.payment_status,'unpaid') = 'paid' THEN 0 ELSE i.total_amount END) AS outstanding
+		FROM invoices i
+		LEFT JOIN buildings b ON b.id = i.building_id
+		WHERE date(i.generated_at) BETWEEN ? AND ?
+		GROUP BY i.building_id, i.currency
+		ORDER BY building, i.currency
+	`, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	data := [][]string{{"Building", "Currency", "Invoices", "Net", "VAT", "Gross", "Paid", "Outstanding"}}
+	for rows.Next() {
+		var building, currency string
+		var count int
+		var net, vat, gross, paid, outstanding float64
+		if err := rows.Scan(&building, &currency, &count, &net, &vat, &gross, &paid, &outstanding); err != nil {
+			return nil, err
+		}
+		data = append(data, []string{
+			building, currency, strconv.Itoa(count),
+			fmt.Sprintf("%.2f", net), fmt.Sprintf("%.2f", vat), fmt.Sprintf("%.2f", gross),
+			fmt.Sprintf("%.2f", paid), fmt.Sprintf("%.2f", outstanding),
+		})
+	}
+	return data, rows.Err()
+}
+
+// exportVATSummary aggregates invoices issued in the date range per building,
+// currency and VAT rate — the breakdown an accountant needs for VAT filing.
+func (h *ExportHandler) exportVATSummary(startDate, endDate string) ([][]string, error) {
+	rows, err := h.db.Query(`
+		SELECT COALESCE(b.name, 'Building #' || i.building_id) AS building,
+		       i.currency,
+		       COALESCE(i.vat_rate, 0) AS vat_rate,
+		       COUNT(*) AS invoices,
+		       SUM(COALESCE(i.net_amount, 0)) AS net,
+		       SUM(COALESCE(i.vat_amount, 0)) AS vat,
+		       SUM(i.total_amount) AS gross
+		FROM invoices i
+		LEFT JOIN buildings b ON b.id = i.building_id
+		WHERE date(i.generated_at) BETWEEN ? AND ?
+		GROUP BY i.building_id, i.currency, i.vat_rate
+		ORDER BY building, i.currency, vat_rate
+	`, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	data := [][]string{{"Building", "Currency", "VAT Rate %", "Invoices", "Net", "VAT", "Gross"}}
+	for rows.Next() {
+		var building, currency string
+		var vatRate float64
+		var count int
+		var net, vat, gross float64
+		if err := rows.Scan(&building, &currency, &vatRate, &count, &net, &vat, &gross); err != nil {
+			return nil, err
+		}
+		data = append(data, []string{
+			building, currency, fmt.Sprintf("%.1f", vatRate), strconv.Itoa(count),
+			fmt.Sprintf("%.2f", net), fmt.Sprintf("%.2f", vat), fmt.Sprintf("%.2f", gross),
+		})
+	}
+	return data, rows.Err()
 }
