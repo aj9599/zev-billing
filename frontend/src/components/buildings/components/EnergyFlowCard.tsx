@@ -1,8 +1,9 @@
-import { Edit2, Trash2, Sun, Zap, Building2, Car, ArrowRight, Layers, Home, Battery, BatteryCharging } from 'lucide-react';
+import { Edit2, Trash2, Sun, Zap, Building2, Car, Layers, Home, Battery } from 'lucide-react';
 import { useTranslation } from '../../../i18n';
 import { api } from '../../../api/client';
 import { useBuildingConsumption } from '../hooks/useBuildingConsumption';
 import { getBuildingMeters, getBuildingChargers, hasSolarMeter, getTotalApartments } from '../utils/buildingUtils';
+import EnergyFlowHub from '../../shared/EnergyFlowHub';
 import type { Building, Meter, Charger, BuildingConsumption, FloorConfig } from '../../../types';
 
 interface EnergyFlowCardProps {
@@ -37,13 +38,8 @@ export default function EnergyFlowCard({
   const buildingMeters = getBuildingMeters(building.id, meters);
   const buildingChargers = getBuildingChargers(building.id, chargers);
   const hasSolar = hasSolarMeter(building.id, meters);
-  const isExporting = consumption.gridPower < 0;
   const hasCharging = consumption.charging > 0;
-  // Battery flow state (net > 0 = charging, < 0 = discharging).
-  const batteryPower = Math.abs(consumption.batteryNet);
-  const batteryCharging = consumption.batteryNet > 0.0001;
-  const batteryDischarging = consumption.batteryNet < -0.0001;
-  const hasData = consumption.actualHouseConsumption > 0 || consumption.solarProduction > 0 || Math.abs(consumption.gridPower) > 0 || (consumption.hasBattery && batteryPower > 0);
+  const hasData = consumption.actualHouseConsumption > 0 || consumption.solarProduction > 0 || Math.abs(consumption.gridPower) > 0 || (consumption.hasBattery && Math.abs(consumption.batteryNet) > 0);
 
   // Calculate solar coverage
   const solarCoverage = consumption.actualHouseConsumption > 0 && consumption.solarProduction > 0
@@ -98,101 +94,24 @@ export default function EnergyFlowCard({
       {/* ─── Energy Flow - compact horizontal layout ─── */}
       {hasData ? (
         <div style={{ marginBottom: '16px' }}>
-          {/* Flow nodes */}
-          <div style={{
-            display: 'flex',
-            alignItems: isMobile ? 'flex-start' : 'center',
-            justifyContent: 'center',
-            gap: isMobile ? '8px' : '16px',
-            flexWrap: isMobile ? 'wrap' : 'nowrap',
-            padding: isMobile ? '8px 0' : '12px 0'
-          }}>
-            {/* Solar node */}
-            {hasSolar && (
-              <>
-                <EnergyNode
-                  icon={Sun}
-                  label={t('buildings.energyFlow.solar')}
-                  value={formatPower(consumption.solarProduction)}
-                  color="#f59e0b"
-                  bgColor="#fef3c7"
-                  active={consumption.solarProduction > 0}
-                  isMobile={isMobile}
-                />
-                <FlowArrow color={consumption.solarProduction > 0 ? '#f59e0b' : '#e5e7eb'} isMobile={isMobile} />
-              </>
-            )}
-
-            {/* Battery node — sits on the bus feeding the house. Arrow points
-                toward the house when discharging, back toward the battery when
-                charging. */}
-            {consumption.hasBattery && (
-              <>
-                <EnergyNode
-                  icon={batteryCharging ? BatteryCharging : Battery}
-                  label={
-                    batteryCharging ? t('buildings.energyFlow.batteryCharging')
-                    : batteryDischarging ? t('buildings.energyFlow.batteryDischarging')
-                    : t('buildings.energyFlow.battery')
-                  }
-                  value={formatPower(batteryPower)}
-                  color={batteryCharging ? '#10b981' : '#14b8a6'}
-                  bgColor={batteryCharging ? '#dcfce7' : '#ccfbf1'}
-                  active={batteryPower > 0.0001}
-                  isMobile={isMobile}
-                />
-                <FlowArrow
-                  color={batteryPower > 0.0001 ? (batteryCharging ? '#10b981' : '#14b8a6') : '#e5e7eb'}
-                  reverse={batteryCharging}
-                  isMobile={isMobile}
-                />
-              </>
-            )}
-
-            {/* Building node (center) */}
-            <EnergyNode
-              icon={Building2}
-              label={t('buildings.energyFlow.consumption')}
-              value={formatPower(consumption.actualHouseConsumption)}
-              color="#3b82f6"
-              bgColor="#dbeafe"
-              active={true}
-              isMobile={isMobile}
-              isCenter
-            />
-
-            {/* Grid arrow + node: points right (Building→Grid) when exporting, left (Grid→Building) when importing */}
-            <FlowArrow
-              color={isExporting ? '#10b981' : '#6b7280'}
-              reverse={!isExporting}
-              isMobile={isMobile}
-            />
-            <EnergyNode
-              icon={Zap}
-              label={isExporting ? t('buildings.energyFlow.feedIn') : t('buildings.energyFlow.grid')}
-              value={formatPower(Math.abs(consumption.gridPower))}
-              color={isExporting ? '#10b981' : '#6b7280'}
-              bgColor={isExporting ? '#dcfce7' : '#f3f4f6'}
-              active={Math.abs(consumption.gridPower) > 0}
-              isMobile={isMobile}
-            />
-
-            {/* EV charging node */}
-            {hasCharging && (
-              <>
-                <FlowArrow color="#8b5cf6" isMobile={isMobile} />
-                <EnergyNode
-                  icon={Car}
-                  label={t('buildings.charging')}
-                  value={formatPower(consumption.charging)}
-                  color="#8b5cf6"
-                  bgColor="#ede9fe"
-                  active={true}
-                  isMobile={isMobile}
-                />
-              </>
-            )}
-          </div>
+          {/* Shared energy-flow hub — same diagram as the dashboard. */}
+          <EnergyFlowHub
+            isMobile={isMobile}
+            formatValue={formatPower}
+            solar={consumption.solarProduction}
+            hasSolar={hasSolar}
+            consumption={consumption.actualHouseConsumption}
+            gridMain={Math.abs(consumption.gridPower)}
+            isImporting={consumption.gridPower >= 0}
+            hasGrid={buildingMeters.some(m => m.meter_type === 'total_meter')}
+            ev={consumption.charging}
+            hasEv={hasCharging}
+            gridImport={consumption.gridPower > 0 ? consumption.gridPower : 0}
+            gridExport={consumption.gridPower < 0 ? -consumption.gridPower : 0}
+            hasBattery={consumption.hasBattery}
+            batteryCharge={consumption.batteryCharge}
+            batteryDischarge={consumption.batteryDischarge}
+          />
 
           {/* Solar coverage bar */}
           {hasSolar && solarCoverage > 0 && (
@@ -284,78 +203,6 @@ export default function EnergyFlowCard({
 }
 
 // ─── Sub-components ────────────────────────────────────────────────
-
-function EnergyNode({ icon: Icon, label, value, color, bgColor, active, isMobile, isCenter }: {
-  icon: any;
-  label: string;
-  value: string;
-  color: string;
-  bgColor: string;
-  active: boolean;
-  isMobile: boolean;
-  isCenter?: boolean;
-}) {
-  return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: '4px',
-      opacity: active ? 1 : 0.35,
-      transition: 'opacity 0.3s',
-      minWidth: isMobile ? '60px' : '72px'
-    }}>
-      <div style={{
-        width: isCenter ? (isMobile ? '44px' : '52px') : (isMobile ? '36px' : '44px'),
-        height: isCenter ? (isMobile ? '44px' : '52px') : (isMobile ? '36px' : '44px'),
-        borderRadius: '50%',
-        backgroundColor: active ? bgColor : '#f3f4f6',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        border: isCenter ? `2px solid ${color}` : 'none',
-        transition: 'all 0.3s'
-      }}>
-        <Icon size={isCenter ? (isMobile ? 20 : 24) : (isMobile ? 16 : 18)} color={active ? color : '#d1d5db'} />
-      </div>
-      <span style={{
-        fontSize: isMobile ? '13px' : '14px',
-        fontWeight: '700',
-        color: active ? color : '#d1d5db'
-      }}>
-        {value}
-      </span>
-      <span style={{
-        fontSize: '10px',
-        color: '#9ca3af',
-        fontWeight: '500',
-        textAlign: 'center',
-        lineHeight: 1.2
-      }}>
-        {label}
-      </span>
-    </div>
-  );
-}
-
-function FlowArrow({ color, reverse, isMobile }: { color: string; reverse?: boolean; isMobile: boolean }) {
-  return (
-    <div style={{
-      display: isMobile ? 'none' : 'flex',
-      alignItems: 'center',
-      color,
-      opacity: 0.6
-    }}>
-      {reverse ? (
-        <div style={{ display: 'flex', alignItems: 'center', transform: 'scaleX(-1)' }}>
-          <ArrowRight size={16} />
-        </div>
-      ) : (
-        <ArrowRight size={16} />
-      )}
-    </div>
-  );
-}
 
 function StatChip({ icon: Icon, label, value, color }: {
   icon: any;

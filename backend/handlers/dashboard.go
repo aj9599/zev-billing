@@ -321,16 +321,18 @@ func calculateTotalSolarExport(db *sql.DB, ctx context.Context, meterTypes []str
 			continue
 		}
 
+		// Simple solar meters store production in the main register, not export.
+		col, _ := solarProductionColumns(db, ctx, meterID)
 		totalExport += cumulativeDeltaInPeriod(db, ctx,
-			`SELECT power_kwh_export FROM meter_readings
+			fmt.Sprintf(`SELECT %s FROM meter_readings
 			 WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
-			 ORDER BY reading_time ASC LIMIT 1`,
-			`SELECT power_kwh_export FROM meter_readings
+			 ORDER BY reading_time ASC LIMIT 1`, col),
+			fmt.Sprintf(`SELECT %s FROM meter_readings
 			 WHERE meter_id = ? AND reading_time >= ? AND reading_time < ?
-			 ORDER BY reading_time DESC LIMIT 1`,
-			`SELECT power_kwh_export FROM meter_readings
+			 ORDER BY reading_time DESC LIMIT 1`, col),
+			fmt.Sprintf(`SELECT %s FROM meter_readings
 			 WHERE meter_id = ? AND reading_time < ?
-			 ORDER BY reading_time DESC LIMIT 1`,
+			 ORDER BY reading_time DESC LIMIT 1`, col),
 			meterID, periodStart, periodEnd)
 	}
 
@@ -585,15 +587,17 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 			// For solar meters, we use export data (negative values for display)
 			var dataRows *sql.Rows
 			if mi.meterType == "solar_meter" {
-				// For solar, get export consumption (will be displayed as negative)
-				dataRows, err = h.db.QueryContext(ctx, `
-					SELECT reading_time, power_kwh_export, consumption_export
+				// For solar, get production. Bidirectional blocks store it in the
+				// export register; a simple single-counter meter uses the main one.
+				cumCol, consCol := solarProductionColumns(h.db, ctx, mi.id)
+				dataRows, err = h.db.QueryContext(ctx, fmt.Sprintf(`
+					SELECT reading_time, %s, %s
 					FROM meter_readings
-					WHERE meter_id = ? 
-					AND reading_time >= ? 
+					WHERE meter_id = ?
+					AND reading_time >= ?
 					AND reading_time <= ?
 					ORDER BY reading_time ASC
-				`, mi.id, startTime, now)
+				`, cumCol, consCol), mi.id, startTime, now)
 			} else {
 				// For other meters, get import consumption
 				dataRows, err = h.db.QueryContext(ctx, `
@@ -1405,7 +1409,8 @@ func (h *DashboardHandler) GetCostOverview(w http.ResponseWriter, r *http.Reques
 				if solarRows.Scan(&meterID) != nil {
 					continue
 				}
-				solarConsumption += calcMeterConsumption(h.db, ctx, meterID, "power_kwh_export", startOfMonth, now)
+				solarCol, _ := solarProductionColumns(h.db, ctx, meterID)
+				solarConsumption += calcMeterConsumption(h.db, ctx, meterID, solarCol, startOfMonth, now)
 			}
 			solarRows.Close()
 		}
@@ -1472,6 +1477,31 @@ func (h *DashboardHandler) GetCostOverview(w http.ResponseWriter, r *http.Reques
 // row got over-counted by a previous code path). This is what made the
 // dashboard's Energy Flow diagram look empty — `latest − corrupt_baseline`
 // went negative and the `> 0` guard zeroed the value out.
+// solarUsesMainRegister reports whether a solar meter records its production in
+// the main register (power_kwh) instead of the export register. A simple Loxone
+// energy meter exposes a single Mr counter that lands in the main register,
+// whereas a bidirectional block puts production in the export register. Decide
+// by which column actually carries data so both kinds report production.
+func solarUsesMainRegister(db *sql.DB, ctx context.Context, meterID int) bool {
+	var maxExport, maxMain sql.NullFloat64
+	if err := db.QueryRowContext(ctx,
+		`SELECT MAX(power_kwh_export), MAX(power_kwh) FROM meter_readings WHERE meter_id = ?`, meterID,
+	).Scan(&maxExport, &maxMain); err != nil {
+		return false
+	}
+	return (!maxExport.Valid || maxExport.Float64 <= 0) && maxMain.Valid && maxMain.Float64 > 0
+}
+
+// solarProductionColumns returns the cumulative and per-interval meter_readings
+// columns that hold a solar meter's production: the export register by default,
+// or the main register for a simple single-counter meter.
+func solarProductionColumns(db *sql.DB, ctx context.Context, meterID int) (cumulative, consumption string) {
+	if solarUsesMainRegister(db, ctx, meterID) {
+		return "power_kwh", "consumption_kwh"
+	}
+	return "power_kwh_export", "consumption_export"
+}
+
 func calcMeterConsumption(db *sql.DB, ctx context.Context, meterID int, column string, periodStart, periodEnd time.Time) float64 {
 	query := fmt.Sprintf(`SELECT %s FROM meter_readings WHERE meter_id = ? AND reading_time >= ? AND reading_time < ? ORDER BY reading_time`, column)
 
@@ -1567,7 +1597,8 @@ func (h *DashboardHandler) GetEnergyFlow(w http.ResponseWriter, r *http.Request)
 			for solarRows.Next() {
 				var meterID int
 				if solarRows.Scan(&meterID) == nil {
-					solar += calcMeterConsumption(h.db, ctx, meterID, "power_kwh_export", startTime, now)
+					solarCol, _ := solarProductionColumns(h.db, ctx, meterID)
+					solar += calcMeterConsumption(h.db, ctx, meterID, solarCol, startTime, now)
 					hasSolar = true
 				}
 			}
@@ -2201,7 +2232,13 @@ func (h *DashboardHandler) getEnergyFlowLiveFromDB(w http.ResponseWriter, r *htt
 		// Convert consumption (kWh over 15 min) to power (kW)
 		switch meterType {
 		case "solar_meter":
-			powerKw := consumptionExport / 0.25
+			// Bidirectional solar stores production in the export interval column;
+			// a simple single-counter meter stores it in the main column.
+			solarCons := consumptionExport
+			if solarUsesMainRegister(h.db, ctx, meterID) {
+				solarCons = consumptionKwh
+			}
+			powerKw := solarCons / 0.25
 			if powerKw < 0 {
 				powerKw = -powerKw
 			}
