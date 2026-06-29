@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { Eye, Download, Trash2 } from 'lucide-react';
 import type { Invoice, User } from '../../../../types';
 import { useTranslation } from '../../../../i18n';
-import { formatDate, getStatusColor } from '../../utils/billingUtils';
+import { formatDate, getStatusColor, paymentBadge } from '../../utils/billingUtils';
+import { api } from '../../../../api/client';
+import { notify } from '../../../../utils/toast';
 
 interface InvoiceTableProps {
   invoices: Invoice[];
@@ -9,6 +12,42 @@ interface InvoiceTableProps {
   onView: (id: number) => void;
   onDownload: (invoice: Invoice) => void;
   onDelete: (id: number) => void;
+}
+
+// PaymentCell shows a clickable payment badge that toggles paid/unpaid in place.
+function PaymentCell({ invoice }: { invoice: Invoice }) {
+  const { t } = useTranslation();
+  const [status, setStatus] = useState(invoice.payment_status || 'unpaid');
+  const [saving, setSaving] = useState(false);
+  const pay = paymentBadge(status, invoice.period_end);
+  const toggle = async () => {
+    const next = status === 'paid' ? 'unpaid' : 'paid';
+    const prev = status;
+    setStatus(next);
+    setSaving(true);
+    try {
+      await api.updateInvoicePayment(invoice.id, next);
+      notify.success(next === 'paid' ? t('billing.markedPaid') : t('billing.markedUnpaid'));
+    } catch {
+      setStatus(prev);
+      notify.error(t('billing.paymentUpdateFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <button
+      onClick={toggle}
+      disabled={saving}
+      title={t('billing.markPaid')}
+      style={{
+        padding: '4px 12px', borderRadius: '20px', border: 'none', cursor: saving ? 'not-allowed' : 'pointer',
+        fontSize: '11px', fontWeight: 700, backgroundColor: pay.bg, color: pay.color,
+      }}
+    >
+      {pay.label}
+    </button>
+  );
 }
 
 export default function InvoiceTable({
@@ -65,6 +104,12 @@ export default function InvoiceTable({
               fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px'
             }}>
               {t('common.status')}
+            </th>
+            <th scope="col" style={{
+              padding: '12px 16px', textAlign: 'left', fontWeight: '600',
+              fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px'
+            }}>
+              {t('billing.payment')}
             </th>
             <th scope="col" style={{
               padding: '12px 16px', textAlign: 'left', fontWeight: '600',
@@ -141,6 +186,9 @@ export default function InvoiceTable({
                   }}>
                     {invoice.status.toUpperCase()}
                   </span>
+                </td>
+                <td style={{ padding: '14px 16px' }}>
+                  <PaymentCell invoice={invoice} />
                 </td>
                 <td style={{
                   padding: '14px 16px',

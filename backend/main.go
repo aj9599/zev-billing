@@ -319,6 +319,7 @@ func main() {
 	api.HandleFunc("/billing/generate", billingHandler.GenerateBills).Methods("POST")
 	api.HandleFunc("/billing/invoices", billingHandler.ListInvoices).Methods("GET")
 	api.HandleFunc("/billing/invoices/{id}", billingHandler.GetInvoice).Methods("GET")
+	api.HandleFunc("/billing/invoices/{id}/payment", billingHandler.UpdateInvoicePayment).Methods("PUT")
 	api.HandleFunc("/billing/invoices/{id}", billingHandler.DeleteInvoice).Methods("DELETE")
 	api.HandleFunc("/billing/backup", billingHandler.BackupDatabase).Methods("GET")
 	api.HandleFunc("/billing/debug/pdfs", billingHandler.DebugListPDFs).Methods("GET")

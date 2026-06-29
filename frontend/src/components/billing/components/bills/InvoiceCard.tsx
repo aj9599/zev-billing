@@ -1,7 +1,10 @@
-import { Eye, Download, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { Eye, Download, Trash2, CheckCircle2, Circle } from 'lucide-react';
 import type { Invoice, User } from '../../../../types';
 import { useTranslation } from '../../../../i18n';
-import { formatDate, getStatusColor } from '../../utils/billingUtils';
+import { formatDate, getStatusColor, paymentBadge } from '../../utils/billingUtils';
+import { api } from '../../../../api/client';
+import { notify } from '../../../../utils/toast';
 
 interface InvoiceCardProps {
   invoice: Invoice;
@@ -22,6 +25,27 @@ export default function InvoiceCard({
   const statusColors = getStatusColor(invoice.status);
   const isArchived = !user?.is_active;
   const userName = user ? `${user.first_name} ${user.last_name}` : '-';
+
+  const [paymentStatus, setPaymentStatus] = useState(invoice.payment_status || 'unpaid');
+  const [savingPayment, setSavingPayment] = useState(false);
+  const pay = paymentBadge(paymentStatus, invoice.period_end);
+  const isPaid = paymentStatus === 'paid';
+
+  const togglePayment = async () => {
+    const next = isPaid ? 'unpaid' : 'paid';
+    setSavingPayment(true);
+    const prev = paymentStatus;
+    setPaymentStatus(next); // optimistic
+    try {
+      await api.updateInvoicePayment(invoice.id, next);
+      notify.success(next === 'paid' ? t('billing.markedPaid') : t('billing.markedUnpaid'));
+    } catch (err: any) {
+      setPaymentStatus(prev);
+      notify.error(t('billing.paymentUpdateFailed') + (err?.message ? ': ' + err.message : ''));
+    } finally {
+      setSavingPayment(false);
+    }
+  };
 
   return (
     <article
@@ -100,6 +124,18 @@ export default function InvoiceCard({
           }}>
             {invoice.status.toUpperCase()}
           </span>
+          <span style={{
+            display: 'inline-block',
+            padding: '3px 10px',
+            borderRadius: '20px',
+            fontSize: '11px',
+            fontWeight: '700',
+            backgroundColor: pay.bg,
+            color: pay.color,
+            marginLeft: '6px'
+          }}>
+            {pay.label}
+          </span>
         </div>
 
         <div style={{ fontSize: '12px', color: '#9ca3af' }}>
@@ -108,6 +144,30 @@ export default function InvoiceCard({
           </time>
         </div>
       </div>
+
+      <button
+        onClick={togglePayment}
+        disabled={savingPayment}
+        style={{
+          width: '100%',
+          marginBottom: '8px',
+          padding: '9px',
+          borderRadius: '8px',
+          border: isPaid ? '1px solid rgba(16,185,129,0.3)' : '1px solid #e5e7eb',
+          backgroundColor: isPaid ? 'rgba(16,185,129,0.1)' : 'white',
+          color: isPaid ? '#059669' : '#6b7280',
+          fontSize: '12px',
+          fontWeight: 600,
+          cursor: savingPayment ? 'not-allowed' : 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '6px'
+        }}
+      >
+        {isPaid ? <CheckCircle2 size={14} /> : <Circle size={14} />}
+        {isPaid ? t('billing.markUnpaid') : t('billing.markPaid')}
+      </button>
 
       <div style={{
         display: 'grid',

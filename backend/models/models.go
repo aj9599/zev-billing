@@ -193,6 +193,9 @@ type Invoice struct {
 	VATIncluded   bool          `json:"vat_included"`
 	Currency      string        `json:"currency"`
 	Status        string        `json:"status"`
+	PaymentStatus string        `json:"payment_status"` // "unpaid" | "partial" | "paid"
+	PaidAmount    float64       `json:"paid_amount"`
+	PaidAt        *string       `json:"paid_at,omitempty"`
 	PDFPath       string        `json:"pdf_path,omitempty"`
 	IsVZEV        bool          `json:"is_vzev"`
 	Items         []InvoiceItem `json:"items,omitempty"`

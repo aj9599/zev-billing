@@ -261,6 +261,9 @@ export interface Invoice {
   total_amount: number;
   currency: string;
   status: string;
+  payment_status?: 'unpaid' | 'partial' | 'paid';
+  paid_amount?: number;
+  paid_at?: string | null;
   pdf_path?: string;
   is_vzev?: boolean;
   items?: InvoiceItem[];

@@ -616,6 +616,13 @@ class ApiClient {
     return this.request(`/billing/invoices/${id}`);
   }
 
+  async updateInvoicePayment(id: number, payment_status: 'unpaid' | 'partial' | 'paid', paid_amount?: number): Promise<Invoice> {
+    return this.request(`/billing/invoices/${id}/payment`, {
+      method: 'PUT',
+      body: JSON.stringify({ payment_status, paid_amount }),
+    });
+  }
+
   async deleteInvoice(id: number) {
     return this.request(`/billing/invoices/${id}`, { method: 'DELETE' });
   }

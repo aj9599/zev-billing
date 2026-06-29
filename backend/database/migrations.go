@@ -320,6 +320,9 @@ func RunMigrations(db *sql.DB) error {
 			total_amount REAL NOT NULL,
 			currency TEXT DEFAULT 'CHF',
 			status TEXT DEFAULT 'draft',
+			payment_status TEXT DEFAULT 'unpaid',
+			paid_amount REAL DEFAULT 0,
+			paid_at DATETIME,
 			is_vzev INTEGER DEFAULT 0,
 			pdf_path TEXT,
 			generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -582,6 +585,10 @@ func RunMigrations(db *sql.DB) error {
 	}
 	// Tenant self-service portal: per-user access token (admin-issued link/code).
 	if err := runVersioned(db, "0017_portal_token", addPortalTokenColumn); err != nil {
+		return err
+	}
+	// Invoice payment tracking: unpaid/partial/paid + amount + timestamp.
+	if err := runVersioned(db, "0018_invoice_payment", addInvoicePaymentColumns); err != nil {
 		return err
 	}
 
@@ -900,6 +907,31 @@ func dedupeAndIndexChargerSessions(db *sql.DB) error {
 		return fmt.Errorf("failed to create unique index on charger_sessions: %v", err)
 	}
 	log.Println("✓ Unique index on charger_sessions(charger_id, session_time) ready")
+	return nil
+}
+
+// addInvoicePaymentColumns adds payment-tracking columns to invoices.
+func addInvoicePaymentColumns(db *sql.DB) error {
+	cols := []struct{ name, ddl string }{
+		{"payment_status", "ALTER TABLE invoices ADD COLUMN payment_status TEXT DEFAULT 'unpaid'"},
+		{"paid_amount", "ALTER TABLE invoices ADD COLUMN paid_amount REAL DEFAULT 0"},
+		{"paid_at", "ALTER TABLE invoices ADD COLUMN paid_at DATETIME"},
+	}
+	var invoicesSQL string
+	if err := db.QueryRow(`SELECT sql FROM sqlite_master WHERE type='table' AND name='invoices'`).Scan(&invoicesSQL); err != nil {
+		return err
+	}
+	for _, c := range cols {
+		if contains(invoicesSQL, c.name) {
+			continue
+		}
+		if _, err := db.Exec(c.ddl); err != nil {
+			if !contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("failed to add invoices.%s: %v", c.name, err)
+			}
+		}
+		log.Printf("✓ invoices.%s column added", c.name)
+	}
 	return nil
 }
 

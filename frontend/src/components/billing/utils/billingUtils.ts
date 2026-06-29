@@ -22,6 +22,21 @@ export const getStatusColor = (status: string): { bg: string; color: string } =>
   }
 };
 
+// paymentBadge maps an invoice payment state to a label + colours. A long-unpaid
+// invoice is shown as "overdue" purely for display (no stored overdue state).
+export const paymentBadge = (
+  status: string | undefined,
+  periodEnd: string
+): { label: string; bg: string; color: string } => {
+  if (status === 'paid') return { label: 'PAID', bg: '#dcfce7', color: '#166534' };
+  if (status === 'partial') return { label: 'PARTIAL', bg: '#fef9c3', color: '#854d0e' };
+  const due = new Date(periodEnd);
+  const overdue = !isNaN(due.getTime()) && Date.now() - due.getTime() > 30 * 24 * 3600 * 1000;
+  return overdue
+    ? { label: 'OVERDUE', bg: '#fee2e2', color: '#991b1b' }
+    : { label: 'UNPAID', bg: '#f3f4f6', color: '#6b7280' };
+};
+
 export const organizeInvoicesByYear = (
   invoices: Invoice[]
 ): Record<string, Invoice[]> => {

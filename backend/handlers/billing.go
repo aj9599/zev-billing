@@ -376,21 +376,27 @@ func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 func (h *BillingHandler) loadFullInvoice(invoiceID int) (models.Invoice, error) {
 	var inv models.Invoice
 
+	var paidAt sql.NullString
 	err := h.db.QueryRow(`
 		SELECT i.id, i.invoice_number, i.user_id, i.building_id,
 		       i.period_start, i.period_end, i.total_amount, i.currency,
 		       i.status, i.generated_at,
-		       i.net_amount, i.vat_amount, i.vat_rate, i.vat_included
+		       i.net_amount, i.vat_amount, i.vat_rate, i.vat_included,
+		       COALESCE(i.payment_status, 'unpaid'), COALESCE(i.paid_amount, 0), i.paid_at
 		FROM invoices i WHERE i.id = ?
 	`, invoiceID).Scan(
 		&inv.ID, &inv.InvoiceNumber, &inv.UserID, &inv.BuildingID,
 		&inv.PeriodStart, &inv.PeriodEnd, &inv.TotalAmount, &inv.Currency,
 		&inv.Status, &inv.GeneratedAt,
 		&inv.NetAmount, &inv.VATAmount, &inv.VATRate, &inv.VATIncluded,
+		&inv.PaymentStatus, &inv.PaidAmount, &paidAt,
 	)
 
 	if err != nil {
 		return inv, err
+	}
+	if paidAt.Valid {
+		inv.PaidAt = &paidAt.String
 	}
 
 	// Load invoice items
@@ -503,7 +509,8 @@ func (h *BillingHandler) ListInvoices(w http.ResponseWriter, r *http.Request) {
 		SELECT i.id, i.invoice_number, i.user_id, i.building_id,
 		       i.period_start, i.period_end, i.total_amount, i.currency,
 		       i.status, i.generated_at, i.pdf_path,
-		       i.net_amount, i.vat_amount, i.vat_rate, i.vat_included
+		       i.net_amount, i.vat_amount, i.vat_rate, i.vat_included,
+		       COALESCE(i.payment_status, 'unpaid'), COALESCE(i.paid_amount, 0), i.paid_at
 		FROM invoices i
 		WHERE 1=1
 	`
@@ -531,16 +538,20 @@ func (h *BillingHandler) ListInvoices(w http.ResponseWriter, r *http.Request) {
 	invoices := []models.Invoice{}
 	for rows.Next() {
 		var inv models.Invoice
-		var pdfPath sql.NullString
+		var pdfPath, paidAt sql.NullString
 		err := rows.Scan(
 			&inv.ID, &inv.InvoiceNumber, &inv.UserID, &inv.BuildingID,
 			&inv.PeriodStart, &inv.PeriodEnd, &inv.TotalAmount, &inv.Currency,
 			&inv.Status, &inv.GeneratedAt, &pdfPath,
 			&inv.NetAmount, &inv.VATAmount, &inv.VATRate, &inv.VATIncluded,
+			&inv.PaymentStatus, &inv.PaidAmount, &paidAt,
 		)
 		if err == nil {
 			if pdfPath.Valid {
 				inv.PDFPath = pdfPath.String
+			}
+			if paidAt.Valid {
+				inv.PaidAt = &paidAt.String
 			}
 			invoices = append(invoices, inv)
 		}
@@ -572,6 +583,80 @@ func (h *BillingHandler) GetInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(inv)
+}
+
+// UpdateInvoicePayment records the payment state of an invoice: unpaid, partial
+// or fully paid (with the paid amount and a timestamp).
+func (h *BillingHandler) UpdateInvoicePayment(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		PaymentStatus string   `json:"payment_status"`
+		PaidAmount    *float64 `json:"paid_amount"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	if req.PaymentStatus != "unpaid" && req.PaymentStatus != "partial" && req.PaymentStatus != "paid" {
+		http.Error(w, "payment_status must be unpaid, partial or paid", http.StatusBadRequest)
+		return
+	}
+
+	var total float64
+	if err := h.db.QueryRow("SELECT total_amount FROM invoices WHERE id = ?", id).Scan(&total); err == sql.ErrNoRows {
+		http.Error(w, "Invoice not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	var paidAmount float64
+	var paidAt interface{}
+	switch req.PaymentStatus {
+	case "paid":
+		paidAmount = total
+		if req.PaidAmount != nil {
+			paidAmount = *req.PaidAmount
+		}
+		paidAt = time.Now().Format("2006-01-02 15:04:05")
+	case "partial":
+		if req.PaidAmount == nil || *req.PaidAmount <= 0 {
+			http.Error(w, "paid_amount is required for a partial payment", http.StatusBadRequest)
+			return
+		}
+		paidAmount = *req.PaidAmount
+		paidAt = time.Now().Format("2006-01-02 15:04:05")
+	default: // unpaid
+		paidAmount = 0
+		paidAt = nil
+	}
+
+	if _, err := h.db.Exec(
+		`UPDATE invoices SET payment_status = ?, paid_amount = ?, paid_at = ? WHERE id = ?`,
+		req.PaymentStatus, paidAmount, paidAt, id,
+	); err != nil {
+		log.Printf("ERROR: Failed to update invoice %d payment: %v", id, err)
+		http.Error(w, "Failed to update payment", http.StatusInternalServerError)
+		return
+	}
+
+	h.logToDatabase("Invoice Payment Updated",
+		fmt.Sprintf("Invoice #%d marked %s (%.2f)", id, req.PaymentStatus, paidAmount), getClientIP(r))
+
+	inv, err := h.loadFullInvoice(id)
+	if err != nil {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(inv)
 }
