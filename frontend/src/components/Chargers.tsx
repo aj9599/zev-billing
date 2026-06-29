@@ -5,6 +5,7 @@ import type { Charger, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
 import CardSortControl from './CardSortControl';
 import { sortCards, loadSortMode, type CardSortMode } from '../utils/cardSort';
+import { pollWhileVisible } from '../utils/polling';
 import { useCardDnd } from '../utils/useCardDnd';
 import { useFlipReorder } from '../utils/useFlipReorder';
 import ExportModal from './ExportModal';
@@ -112,10 +113,8 @@ export default function Chargers() {
     loadData();
     fetchStatusData();
 
-    const interval = setInterval(() => {
-      fetchStatusData();
-    }, 5000);
-    return () => clearInterval(interval);
+    const stop = pollWhileVisible(fetchStatusData, 5000);
+    return () => stop();
   }, []);
 
   const loadData = async () => {

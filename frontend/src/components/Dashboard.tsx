@@ -5,6 +5,7 @@ import { Users, Building, Zap, Car, Sun, Battery, BatteryCharging, Flame, Layout
 import { api } from '../api/client';
 import type { DashboardStats, SelfConsumptionData, SystemHealth, CostOverview, EnergyFlowData, EnergyFlowLiveData } from '../types';
 import { useTranslation } from '../i18n';
+import { pollWhileVisible } from '../utils/polling';
 import DataHealthCard from './DataHealthCard';
 
 // ─── Local interfaces ────────────────────────────────────────────────
@@ -298,8 +299,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 60000);
-    return () => clearInterval(interval);
+    const stop = pollWhileVisible(loadData, 60000);
+    return () => stop();
   }, [loadData]);
 
   // Load energy flow data independently
@@ -336,8 +337,8 @@ export default function Dashboard() {
     loadEnergyFlow();
     // Live mode refreshes every 15s, otherwise every 60s
     const refreshInterval = energyFlowPeriod === 'live' ? 15000 : 60000;
-    const interval = setInterval(loadEnergyFlow, refreshInterval);
-    return () => { cancelled = true; clearInterval(interval); };
+    const stop = pollWhileVisible(loadEnergyFlow, refreshInterval);
+    return () => { cancelled = true; stop(); };
   }, [energyFlowPeriod, energyFlowBuildingId]);
 
   const toggleMeterVisibility = (buildingId: number, meterKey: string) => {

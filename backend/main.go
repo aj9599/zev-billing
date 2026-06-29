@@ -90,6 +90,19 @@ func recoverMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// maxBodyBytes caps request bodies (10 MB) so a malicious or buggy client can't
+// exhaust memory with a huge/streamed payload. Generous enough for CSV imports.
+const maxBodyBytes = 10 << 20
+
+func bodyLimitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Body != nil {
+			r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -158,6 +171,7 @@ func main() {
 	r := mux.NewRouter()
 
 	r.Use(recoverMiddleware)
+	r.Use(bodyLimitMiddleware)
 	r.Use(loggingMiddleware)
 
 	// Public routes (no authentication required)
@@ -360,13 +374,17 @@ func main() {
 	// Export route
 	api.HandleFunc("/export/data", exportHandler.ExportData).Methods("GET")
 
+	// Origins come from config (CORS_ALLOWED_ORIGINS env, default localhost dev
+	// ports). No "*": with AllowCredentials it would let any site issue
+	// authenticated requests. Production is same-origin behind nginx.
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:5173", "http://localhost:4173", "*"},
+		AllowedOrigins:   cfg.CORSAllowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"*"},
 		AllowCredentials: true,
 		Debug:            false,
 	})
+	log.Printf("CORS allowed origins: %v", cfg.CORSAllowedOrigins)
 
 	handler := c.Handler(r)
 

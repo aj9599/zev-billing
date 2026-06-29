@@ -551,32 +551,15 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 			primary.Currency, userPeriod.FirstName, userPeriod.LastName)
 	}
 
-	// Create invoice record
-	result, err := bs.db.Exec(`
-		INSERT INTO invoices (
-			invoice_number, user_id, building_id, period_start, period_end,
-			total_amount, net_amount, vat_amount, vat_rate, vat_included, currency, status, is_vzev
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'issued', 1)
-	`, invoiceNumber, userPeriod.UserID, buildingID, fullStart.Format("2006-01-02"), displayEnd.Format("2006-01-02"),
-		totalAmount, netAmount, vatAmount, primary.VATRate, primary.VATIncluded, primary.Currency)
-
+	// Create invoice record (+ items) atomically; vZEV flag set.
+	invoiceID, err := bs.insertInvoiceWithItems(
+		invoiceNumber, userPeriod.UserID, buildingID,
+		fullStart.Format("2006-01-02"), displayEnd.Format("2006-01-02"),
+		totalAmount, netAmount, vatAmount, primary.VATRate, primary.VATIncluded, primary.Currency,
+		true, items,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create vZEV invoice: %v", err)
-	}
-
-	invoiceID, _ := result.LastInsertId()
-
-	// Insert invoice items
-	for _, item := range items {
-		_, err := bs.db.Exec(`
-			INSERT INTO invoice_items (
-				invoice_id, description, quantity, unit_price, total_price, item_type
-			) VALUES (?, ?, ?, ?, ?, ?)
-		`, invoiceID, item.Description, item.Quantity, item.UnitPrice, item.TotalPrice, item.ItemType)
-
-		if err != nil {
-			log.Printf("WARNING: Failed to insert invoice item: %v", err)
-		}
+		return nil, err
 	}
 
 	invoice := &models.Invoice{

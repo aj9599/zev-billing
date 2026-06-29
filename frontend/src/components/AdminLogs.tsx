@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { api } from '../api/client';
 import type { AdminLog } from '../types';
 import { useTranslation } from '../i18n';
+import { pollWhileVisible } from '../utils/polling';
 import { AdminLogsHeader } from './admin-logs/AdminLogsHeader';
 import { UpdateInfoCard } from './admin-logs/UpdateInfoCard';
 import { SystemHealthCards } from './admin-logs/SystemHealthCards';
@@ -100,12 +101,12 @@ export default function AdminLogs() {
 
   // Live refresh every 5 seconds
   useEffect(() => {
-    const interval = setInterval(() => {
+    const stop = pollWhileVisible(() => {
       loadLogs();
       loadDebugInfo();
     }, 5000);
 
-    return () => clearInterval(interval);
+    return () => stop();
   }, [logMode]);
 
   const loadLogs = async () => {

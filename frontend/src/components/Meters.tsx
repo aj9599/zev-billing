@@ -5,6 +5,7 @@ import type { Meter, Building as BuildingType, User } from '../types';
 import { useTranslation } from '../i18n';
 import CardSortControl from './CardSortControl';
 import { sortCards, loadSortMode, type CardSortMode } from '../utils/cardSort';
+import { pollWhileVisible } from '../utils/polling';
 import { useCardDnd } from '../utils/useCardDnd';
 import { useFlipReorder } from '../utils/useFlipReorder';
 import ExportModal from './ExportModal';
@@ -113,11 +114,11 @@ export default function Meters() {
         loadData();
         fetchConnectionStatus();
 
-        const dataInterval = setInterval(loadData, 10000);
-        const statusInterval = setInterval(fetchConnectionStatus, 30000);
+        const stopData = pollWhileVisible(loadData, 10000);
+        const stopStatus = pollWhileVisible(fetchConnectionStatus, 30000);
         return () => {
-            clearInterval(dataInterval);
-            clearInterval(statusInterval);
+            stopData();
+            stopStatus();
         };
     }, [showArchived]);
 

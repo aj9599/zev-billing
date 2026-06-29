@@ -10,6 +10,8 @@
 *.key
 *.pem
 *.p12
+# Auto-generated persistent JWT signing secret (created next to the DB on first run)
+.jwt_secret
 *.pfx
 
 # Firebase service account files

@@ -1254,6 +1254,52 @@ func (bs *BillingService) countActiveUsers(buildingID int) (int, error) {
 	return count, err
 }
 
+// insertInvoiceWithItems atomically writes an invoice row and all of its line
+// items inside one transaction, returning the new invoice id. If any item fails
+// the whole invoice is rolled back, so a half-written invoice (header with
+// missing line items) can never be persisted — previously items were inserted
+// one-by-one and failures were only logged. Shared by the apartment, vZEV and
+// charger-only invoice paths.
+func (bs *BillingService) insertInvoiceWithItems(
+	invoiceNumber string, userID, buildingID int,
+	periodStart, periodEnd string,
+	totalAmount, netAmount, vatAmount, vatRate float64, vatIncluded bool, currency string,
+	isVZEV bool, items []models.InvoiceItem,
+) (int64, error) {
+	tx, err := bs.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("failed to begin invoice transaction: %v", err)
+	}
+	defer tx.Rollback() // no-op once committed
+
+	result, err := tx.Exec(`
+		INSERT INTO invoices (
+			invoice_number, user_id, building_id, period_start, period_end,
+			total_amount, net_amount, vat_amount, vat_rate, vat_included, currency, status, is_vzev
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'issued', ?)
+	`, invoiceNumber, userID, buildingID, periodStart, periodEnd,
+		totalAmount, netAmount, vatAmount, vatRate, vatIncluded, currency, isVZEV)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create invoice: %v", err)
+	}
+	invoiceID, _ := result.LastInsertId()
+
+	for _, item := range items {
+		if _, err := tx.Exec(`
+			INSERT INTO invoice_items (
+				invoice_id, description, quantity, unit_price, total_price, item_type
+			) VALUES (?, ?, ?, ?, ?, ?)
+		`, invoiceID, item.Description, item.Quantity, item.UnitPrice, item.TotalPrice, item.ItemType); err != nil {
+			return 0, fmt.Errorf("failed to insert invoice item: %v", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("failed to commit invoice: %v", err)
+	}
+	return invoiceID, nil
+}
+
 // generateUserInvoiceForPeriodWithOptions generates invoice with custom item selection (default apartment scope).
 func (bs *BillingService) generateUserInvoiceForPeriodWithOptions(userPeriod UserPeriod, buildingID int, fullStart, fullEnd time.Time, segments []PriceSegment, customItemIDs []int) (*models.Invoice, error) {
 	return bs.generateUserInvoiceForPeriodWithOptionsAndScope(userPeriod, buildingID, fullStart, fullEnd, segments, customItemIDs, BillingScope{})
@@ -1476,30 +1522,14 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 	log.Printf("  INVOICE TOTAL: %s %.3f (net %.3f, VAT %.3f @ %.1f%%)", primary.Currency, totalAmount, netAmount, vatAmount, primary.VATRate)
 	log.Printf("  INVOICE NUMBER: %s (Year: %d)", invoiceNumber, invoiceYear)
 
-	result, err := bs.db.Exec(`
-		INSERT INTO invoices (
-			invoice_number, user_id, building_id, period_start, period_end,
-			total_amount, net_amount, vat_amount, vat_rate, vat_included, currency, status
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'issued')
-	`, invoiceNumber, userPeriod.UserID, buildingID, fullStart.Format("2006-01-02"), displayEnd.Format("2006-01-02"),
-		totalAmount, netAmount, vatAmount, primary.VATRate, primary.VATIncluded, primary.Currency)
-
+	invoiceID, err := bs.insertInvoiceWithItems(
+		invoiceNumber, userPeriod.UserID, buildingID,
+		fullStart.Format("2006-01-02"), displayEnd.Format("2006-01-02"),
+		totalAmount, netAmount, vatAmount, primary.VATRate, primary.VATIncluded, primary.Currency,
+		false, items,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create invoice: %v", err)
-	}
-
-	invoiceID, _ := result.LastInsertId()
-
-	for _, item := range items {
-		_, err := bs.db.Exec(`
-			INSERT INTO invoice_items (
-				invoice_id, description, quantity, unit_price, total_price, item_type
-			) VALUES (?, ?, ?, ?, ?, ?)
-		`, invoiceID, item.Description, item.Quantity, item.UnitPrice, item.TotalPrice, item.ItemType)
-
-		if err != nil {
-			log.Printf("WARNING: Failed to insert invoice item: %v", err)
-		}
+		return nil, err
 	}
 
 	invoice := &models.Invoice{

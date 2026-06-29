@@ -1227,26 +1227,14 @@ func (bs *BillingService) generateChargerOnlyInvoice(userPeriod UserPeriod, buil
 			primary.Currency, userPeriod.FirstName, userPeriod.LastName)
 	}
 
-	result, err := bs.db.Exec(`
-		INSERT INTO invoices (
-			invoice_number, user_id, building_id, period_start, period_end,
-			total_amount, net_amount, vat_amount, vat_rate, vat_included, currency, status
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'issued')
-	`, invoiceNumber, userPeriod.UserID, buildingID, fullStart.Format("2006-01-02"), displayEnd.Format("2006-01-02"),
-		totalAmount, netAmount, vatAmount, primary.VATRate, primary.VATIncluded, primary.Currency)
+	invoiceID, err := bs.insertInvoiceWithItems(
+		invoiceNumber, userPeriod.UserID, buildingID,
+		fullStart.Format("2006-01-02"), displayEnd.Format("2006-01-02"),
+		totalAmount, netAmount, vatAmount, primary.VATRate, primary.VATIncluded, primary.Currency,
+		false, items,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create charger-only invoice: %v", err)
-	}
-	invoiceID, _ := result.LastInsertId()
-	for _, item := range items {
-		_, err := bs.db.Exec(`
-			INSERT INTO invoice_items (
-				invoice_id, description, quantity, unit_price, total_price, item_type
-			) VALUES (?, ?, ?, ?, ?, ?)
-		`, invoiceID, item.Description, item.Quantity, item.UnitPrice, item.TotalPrice, item.ItemType)
-		if err != nil {
-			log.Printf("WARNING: Failed to insert invoice item: %v", err)
-		}
+		return nil, err
 	}
 
 	return &models.Invoice{

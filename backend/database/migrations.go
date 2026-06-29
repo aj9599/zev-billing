@@ -487,6 +487,11 @@ func RunMigrations(db *sql.DB) error {
 	indexes := []string{
 		`CREATE INDEX IF NOT EXISTS idx_meter_readings_meter_time ON meter_readings(meter_id, reading_time)`,
 		`CREATE INDEX IF NOT EXISTS idx_charger_sessions_charger_time ON charger_sessions(charger_id, session_time)`,
+		// Time-only indexes for cross-entity range scans (dashboard totals, data
+		// health) where the leading meter_id/charger_id of the composite indexes
+		// above can't be used.
+		`CREATE INDEX IF NOT EXISTS idx_meter_readings_reading_time ON meter_readings(reading_time)`,
+		`CREATE INDEX IF NOT EXISTS idx_charger_sessions_session_time ON charger_sessions(session_time)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_building ON users(building_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_meters_building ON meters(building_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id)`,

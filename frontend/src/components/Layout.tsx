@@ -4,6 +4,7 @@ import { LayoutDashboard, Users, Building, Car, FileText, Settings as SettingsIc
 import { api } from '../api/client';
 import type { LicenseStatus } from '../types';
 import { useTranslation } from '../i18n';
+import { pollWhileVisible } from '../utils/polling';
 import Logo from './Logo';
 
 interface LayoutProps {
@@ -34,11 +35,11 @@ export default function Layout({ onLogout }: LayoutProps) {
     refreshLicense();
     window.addEventListener('license-changed', refreshLicense);
     window.addEventListener('focus', refreshLicense);
-    const iv = setInterval(refreshLicense, 60000);
+    const stopPolling = pollWhileVisible(refreshLicense, 60000);
     return () => {
       window.removeEventListener('license-changed', refreshLicense);
       window.removeEventListener('focus', refreshLicense);
-      clearInterval(iv);
+      stopPolling();
     };
   }, [refreshLicense]);
 
