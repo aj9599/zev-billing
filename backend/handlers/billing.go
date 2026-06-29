@@ -55,6 +55,10 @@ type GenerateBillsRequest struct {
 	BillingMode string `json:"billing_mode"`
 	ChargerID   *int   `json:"charger_id,omitempty"`
 
+	// Bill content: "" / "both" (meters + chargers), "meters" (skip charging),
+	// or "chargers" (skip meter consumption). Works for every building type.
+	BillContent string `json:"bill_content"`
+
 	// Custom item IDs to include in bills (NEW)
 	CustomItemIDs []int `json:"custom_item_ids"`
 
@@ -277,6 +281,7 @@ func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 		services.BillingScope{
 			Mode:      req.BillingMode,
 			ChargerID: req.ChargerID,
+			Content:   req.BillContent,
 		},
 	)
 

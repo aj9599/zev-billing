@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../../api/client';
-import type { Building, User, Meter, ApartmentWithUser, SharedMeterConfig, CustomLineItem, Charger, BillingMode } from '../../../types';
+import type { Building, User, Meter, ApartmentWithUser, SharedMeterConfig, CustomLineItem, Charger, BillingMode, BillContent } from '../../../types';
 
 export interface AutoBillingFormData {
   name: string;
@@ -14,6 +14,8 @@ export interface AutoBillingFormData {
   // Billing mode (parallels manual flow): 'apartments' | 'building' | 'charger'.
   // 'building' / 'charger' apply to non-apartment buildings only.
   billing_mode: BillingMode;
+  // What to bill (meters / chargers / both) — works for every building type.
+  bill_content: BillContent;
   charger_id?: number;
   auto_send_email: boolean;
   // Shared meters and custom items
@@ -48,6 +50,7 @@ export interface AutoBillingConfig {
   is_active: boolean;
   is_vzev?: boolean;
   billing_mode?: BillingMode;
+  bill_content?: BillContent;
   charger_id?: number;
   auto_send_email?: boolean;
   shared_meter_ids?: number[];
@@ -76,6 +79,7 @@ const DEFAULT_FORM_DATA: AutoBillingFormData = {
   is_active: true,
   is_vzev: false,
   billing_mode: 'apartments',
+  bill_content: 'both',
   charger_id: undefined,
   auto_send_email: false,
   shared_meter_ids: [],
@@ -280,7 +284,7 @@ export function useAutoBillingConfig() {
   // (mirrors the manual BillConfigModal). vZEV complexes always use 'apartments'.
   useEffect(() => {
     if (formData.building_ids.length === 0 || isVZEVMode) {
-      setFormData(prev => ({ ...prev, billing_mode: 'apartments', charger_id: undefined }));
+      setFormData(prev => ({ ...prev, billing_mode: 'apartments', charger_id: undefined, bill_content: 'both' }));
       setChargerOnly(false);
       return;
     }
@@ -510,6 +514,10 @@ export function useAutoBillingConfig() {
     }
   }, []);
 
+  const handleBillContentChange = useCallback((content: BillContent) => {
+    setFormData(prev => ({ ...prev, bill_content: content }));
+  }, []);
+
   // Custom item handlers
   const handleCustomItemToggle = useCallback((itemId: number) => {
     setSelectedCustomItems(prev => {
@@ -572,6 +580,7 @@ export function useAutoBillingConfig() {
       is_active: config.is_active,
       is_vzev: config.is_vzev || false,
       billing_mode: mode,
+      bill_content: (config.bill_content as BillContent) || 'both',
       charger_id: config.charger_id,
       auto_send_email: !!config.auto_send_email,
       shared_meter_ids: config.shared_meter_ids || [],
@@ -740,6 +749,7 @@ export function useAutoBillingConfig() {
     handleRecipientChange,
     handleChargerChange,
     handleChargerOnlyToggle,
+    handleBillContentChange,
     handleSharedMeterToggle,
     handleSelectAllSharedMeters,
     handleDeselectAllSharedMeters,

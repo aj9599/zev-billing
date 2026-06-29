@@ -1,5 +1,5 @@
-import { Home, User as UserIcon, Building, Zap, Plug } from 'lucide-react';
-import type { Building as BuildingType, ApartmentWithUser, BillingMode, Charger, User } from '../../../../types';
+import { Home, User as UserIcon, Building, Zap, Plug, Gauge, Layers } from 'lucide-react';
+import type { Building as BuildingType, ApartmentWithUser, BillingMode, BillContent, Charger, User } from '../../../../types';
 import { useTranslation } from '../../../../i18n';
 
 interface AutoBillingStep1SelectionProps {
@@ -11,6 +11,7 @@ interface AutoBillingStep1SelectionProps {
   apartmentsWithUsers: Map<number, ApartmentWithUser[]>;
   isVZEVMode: boolean;
   billingMode: BillingMode;
+  billContent: BillContent;
   chargerOnly: boolean;
   recipientUserId?: number;
   selectedChargerId?: number;
@@ -21,6 +22,7 @@ interface AutoBillingStep1SelectionProps {
   onRecipientChange: (userId: number | null) => void;
   onChargerChange: (chargerId: number | null) => void;
   onChargerOnlyToggle: (enabled: boolean) => void;
+  onBillContentChange: (content: BillContent) => void;
 }
 
 export default function AutoBillingStep1Selection({
@@ -32,6 +34,7 @@ export default function AutoBillingStep1Selection({
   apartmentsWithUsers,
   isVZEVMode,
   billingMode,
+  billContent,
   chargerOnly,
   recipientUserId,
   selectedChargerId,
@@ -41,11 +44,18 @@ export default function AutoBillingStep1Selection({
   onMixingWarning,
   onRecipientChange,
   onChargerChange,
-  onChargerOnlyToggle
+  onChargerOnlyToggle,
+  onBillContentChange
 }: AutoBillingStep1SelectionProps) {
   const { t } = useTranslation();
 
   const isBuildingScope = billingMode === 'building' || billingMode === 'charger';
+  const showBillContent = !isVZEVMode && selectedBuildingIds.length > 0 && !isBuildingScope;
+  const billContentOptions: { value: BillContent; label: string; icon: typeof Layers }[] = [
+    { value: 'both', label: t('billConfig.step1.contentBoth'), icon: Layers },
+    { value: 'meters', label: t('billConfig.step1.contentMeters'), icon: Gauge },
+    { value: 'chargers', label: t('billConfig.step1.contentChargers'), icon: Plug },
+  ];
   const recipientCandidates = users.filter(
     u => u.user_type === 'regular' && u.is_active && u.building_id != null && selectedBuildingIds.includes(u.building_id)
   );
@@ -181,6 +191,51 @@ export default function AutoBillingStep1Selection({
           )}
         </div>
       </div>
+
+      {/* What to bill: meters / chargers / both — available for every building type */}
+      {showBillContent && (
+        <div style={{ marginBottom: '24px' }}>
+          <label style={{ display: 'block', fontWeight: '600', marginBottom: '8px', fontSize: '15px' }}>
+            {t('billConfig.step1.contentTitle')}
+          </label>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            {billContentOptions.map(opt => {
+              const Icon = opt.icon;
+              const active = billContent === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => onBillContentChange(opt.value)}
+                  style={{
+                    flex: '1 1 0',
+                    minWidth: '120px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    padding: '12px 14px',
+                    borderRadius: '8px',
+                    border: active ? '2px solid #667EEA' : '1px solid #dee2e6',
+                    backgroundColor: active ? '#eef0ff' : 'white',
+                    color: active ? '#3b41a8' : '#495057',
+                    fontWeight: active ? 600 : 500,
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  <Icon size={16} />
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+          <p style={{ fontSize: '12px', color: '#6c757d', margin: '8px 2px 0' }}>
+            {t('billConfig.step1.contentHint')}
+          </p>
+        </div>
+      )}
 
       {/* Building-mode banner (no apartment management) */}
       {isBuildingScope && (

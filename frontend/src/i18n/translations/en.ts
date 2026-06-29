@@ -2149,6 +2149,12 @@ export const en: Translations = {
   'billConfig.validation.selectCharger': 'Please select a charger',
   'billConfig.validation.vzevComplexRequired': 'vZEV mode requires all selected buildings to be complexes',
 
+  // BillConfiguration.tsx - What to bill: meters / chargers / both (English)
+  'billConfig.step1.contentTitle': 'What to bill',
+  'billConfig.step1.contentHint': 'Choose which costs appear on the invoice. Works for any building — bill the apartment meter, EV charging, or both.',
+  'billConfig.step1.contentBoth': 'Meters + Chargers',
+  'billConfig.step1.contentMeters': 'Meters only',
+  'billConfig.step1.contentChargers': 'Chargers only',
   // BillConfiguration.tsx - Building / Charger billing modes (English)
   'billConfig.step1.modeBuilding': 'Mode: Whole building',
   'billConfig.step1.modeBuildingDescription': 'For buildings without apartment management. One invoice is created for the recipient covering everything in the building, including all chargers (no RFID required).',

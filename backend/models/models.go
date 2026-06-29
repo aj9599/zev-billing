@@ -235,6 +235,7 @@ type AutoBillingConfig struct {
 	IsActive           bool       `json:"is_active"`
 	IsVZEV             bool       `json:"is_vzev"`
 	BillingMode        string     `json:"billing_mode,omitempty"` // "apartments" (default), "building", "charger"
+	BillContent        string     `json:"bill_content,omitempty"` // "both" (default), "meters", "chargers"
 	ChargerID          *int       `json:"charger_id,omitempty"`   // required when BillingMode == "charger"
 	AutoSendEmail      bool       `json:"auto_send_email"`        // when true, e-mail the generated PDF to the bill recipient
 	LastRun            *time.Time `json:"last_run,omitempty"`
@@ -391,28 +392,28 @@ type BuildingEnergyFlow struct {
 // EnergyFlowLiveData holds real-time power data (instantaneous, in Watts/kW)
 // This is separate from EnergyFlowData which holds cumulative energy (kWh)
 type EnergyFlowLiveData struct {
-	Period             string                   `json:"period"`               // Always "live"
-	SolarPowerKw       float64                  `json:"solar_power_kw"`       // Current solar production power
-	ConsumptionPowerKw float64                  `json:"consumption_power_kw"` // Current building consumption power
-	GridPowerKw        float64                  `json:"grid_power_kw"`        // Current grid power (positive=import, negative=export)
-	EvChargingPowerKw  float64                  `json:"ev_charging_power_kw"` // Current EV charging power
-	SelfConsumptionPct float64                  `json:"self_consumption_pct"` // Current self-consumption percentage
-	IsExporting        bool                     `json:"is_exporting"`         // True if exporting to grid
-	Timestamp          string                   `json:"timestamp"`            // ISO timestamp of reading
-	HasBattery         bool                     `json:"has_battery"`
-	BatteryChargePowerKw    float64             `json:"battery_charge_power_kw"`    // Power flowing into the battery (charging)
-	BatteryDischargePowerKw float64             `json:"battery_discharge_power_kw"` // Power flowing out of the battery (discharging to house)
-	BatterySocPct           float64             `json:"battery_soc_pct"`           // Latest state of charge %, 0 if unknown
-	PerBuilding        []BuildingEnergyFlowLive `json:"per_building,omitempty"`
+	Period                  string                   `json:"period"`               // Always "live"
+	SolarPowerKw            float64                  `json:"solar_power_kw"`       // Current solar production power
+	ConsumptionPowerKw      float64                  `json:"consumption_power_kw"` // Current building consumption power
+	GridPowerKw             float64                  `json:"grid_power_kw"`        // Current grid power (positive=import, negative=export)
+	EvChargingPowerKw       float64                  `json:"ev_charging_power_kw"` // Current EV charging power
+	SelfConsumptionPct      float64                  `json:"self_consumption_pct"` // Current self-consumption percentage
+	IsExporting             bool                     `json:"is_exporting"`         // True if exporting to grid
+	Timestamp               string                   `json:"timestamp"`            // ISO timestamp of reading
+	HasBattery              bool                     `json:"has_battery"`
+	BatteryChargePowerKw    float64                  `json:"battery_charge_power_kw"`    // Power flowing into the battery (charging)
+	BatteryDischargePowerKw float64                  `json:"battery_discharge_power_kw"` // Power flowing out of the battery (discharging to house)
+	BatterySocPct           float64                  `json:"battery_soc_pct"`            // Latest state of charge %, 0 if unknown
+	PerBuilding             []BuildingEnergyFlowLive `json:"per_building,omitempty"`
 }
 
 type BuildingEnergyFlowLive struct {
-	BuildingID         int     `json:"building_id"`
-	BuildingName       string  `json:"building_name"`
-	SolarPowerKw       float64 `json:"solar_power_kw"`
-	ConsumptionPowerKw float64 `json:"consumption_power_kw"`
-	GridPowerKw        float64 `json:"grid_power_kw"`
-	EvChargingPowerKw  float64 `json:"ev_charging_power_kw"`
+	BuildingID              int     `json:"building_id"`
+	BuildingName            string  `json:"building_name"`
+	SolarPowerKw            float64 `json:"solar_power_kw"`
+	ConsumptionPowerKw      float64 `json:"consumption_power_kw"`
+	GridPowerKw             float64 `json:"grid_power_kw"`
+	EvChargingPowerKw       float64 `json:"ev_charging_power_kw"`
 	HasBattery              bool    `json:"has_battery"`
 	BatteryChargePowerKw    float64 `json:"battery_charge_power_kw"`
 	BatteryDischargePowerKw float64 `json:"battery_discharge_power_kw"`

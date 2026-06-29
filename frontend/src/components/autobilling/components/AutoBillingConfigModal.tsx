@@ -37,6 +37,7 @@ interface AutoBillingConfigModalProps {
   onRecipientChange: (userId: number | null) => void;
   onChargerChange: (chargerId: number | null) => void;
   onChargerOnlyToggle: (enabled: boolean) => void;
+  onBillContentChange: (content: import('../../../types').BillContent) => void;
   onSharedMeterToggle: (meterId: number) => void;
   onSelectAllSharedMeters: () => void;
   onDeselectAllSharedMeters: () => void;
@@ -73,6 +74,7 @@ export default function AutoBillingConfigModal({
   onRecipientChange,
   onChargerChange,
   onChargerOnlyToggle,
+  onBillContentChange,
   onSharedMeterToggle,
   onSelectAllSharedMeters,
   onDeselectAllSharedMeters,
@@ -201,6 +203,7 @@ export default function AutoBillingConfigModal({
                 apartmentsWithUsers={apartmentsWithUsers}
                 isVZEVMode={isVZEVMode}
                 billingMode={formData.billing_mode || 'apartments'}
+                billContent={formData.bill_content || 'both'}
                 chargerOnly={chargerOnly}
                 recipientUserId={formData.apartments[0]?.user_id}
                 selectedChargerId={formData.charger_id}
@@ -211,6 +214,7 @@ export default function AutoBillingConfigModal({
                 onRecipientChange={onRecipientChange}
                 onChargerChange={onChargerChange}
                 onChargerOnlyToggle={onChargerOnlyToggle}
+                onBillContentChange={onBillContentChange}
               />
             )}
             {step === 2 && (

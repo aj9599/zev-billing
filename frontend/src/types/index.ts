@@ -319,6 +319,8 @@ export interface ApartmentWithUser {
 }
 
 export type BillingMode = 'apartments' | 'building' | 'charger';
+// Which cost blocks land on the invoice — works for every building type.
+export type BillContent = 'both' | 'meters' | 'chargers';
 
 export interface GenerateBillsRequest {
   building_ids: number[];
@@ -344,6 +346,9 @@ export interface GenerateBillsRequest {
   // 'building'  bills the whole building to one user (chargers matched by id, no RFID required).
   // 'charger'   bills only one specific charger to one user.
   billing_mode?: BillingMode;
+  // What to put on the invoice — meters only, chargers only, or both.
+  // Independent of building type; defaults to 'both'.
+  bill_content?: BillContent;
   charger_id?: number;
 }
 

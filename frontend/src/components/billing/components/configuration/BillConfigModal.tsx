@@ -83,7 +83,7 @@ export default function BillConfigModal({
   // - Mixed → warn and fall back to 'apartments' until user adjusts
   useEffect(() => {
     if (config.building_ids.length === 0 || isVZEVMode) {
-      updateConfig({ billing_mode: 'apartments', charger_id: undefined });
+      updateConfig({ billing_mode: 'apartments', charger_id: undefined, bill_content: 'both' });
       setChargerOnly(false);
       return;
     }
@@ -496,6 +496,7 @@ export default function BillConfigModal({
               apartmentsWithUsers={buildApartmentsMap()}
               isVZEVMode={isVZEVMode}
               billingMode={config.billing_mode || 'apartments'}
+              billContent={config.bill_content || 'both'}
               chargerOnly={chargerOnly}
               recipientUserId={config.user_ids[0]}
               selectedChargerId={config.charger_id}
@@ -505,6 +506,7 @@ export default function BillConfigModal({
               onRecipientChange={handleRecipientChange}
               onChargerChange={handleChargerChange}
               onChargerOnlyToggle={handleChargerOnlyToggle}
+              onBillContentChange={(content) => updateConfig({ bill_content: content })}
             />
           )}
           {step === 2 && (

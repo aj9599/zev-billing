@@ -24,9 +24,9 @@ func NewAutoBillingHandler(db *sql.DB, scheduler *services.AutoBillingScheduler)
 }
 
 type ApartmentSelection struct {
-	BuildingID    int  `json:"building_id"`
+	BuildingID    int    `json:"building_id"`
 	ApartmentUnit string `json:"apartment_unit"`
-	UserID        *int `json:"user_id,omitempty"`
+	UserID        *int   `json:"user_id,omitempty"`
 }
 
 // Helper function to parse comma-separated IDs
@@ -59,10 +59,20 @@ func idListToString(ids []int) string {
 	return result
 }
 
+// normalizeBillContent validates the meters/chargers/both selector, defaulting to "both".
+func normalizeBillContent(v string) string {
+	switch v {
+	case services.BillContentMeters, services.BillContentChargers, services.BillContentBoth:
+		return v
+	default:
+		return services.BillContentBoth
+	}
+}
+
 func (h *AutoBillingHandler) List(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Query(`
 		SELECT id, name, building_ids, apartments_json, custom_item_ids, frequency, generation_day,
-		       first_execution_date, is_active, is_vzev, billing_mode, charger_id,
+		       first_execution_date, is_active, is_vzev, billing_mode, COALESCE(bill_content, 'both'), charger_id,
 		       COALESCE(auto_send_email, 0), last_run, next_run,
 		       sender_name, sender_address, sender_city, sender_zip, sender_country,
 		       bank_name, bank_iban, bank_account_holder, created_at, updated_at
@@ -85,6 +95,7 @@ func (h *AutoBillingHandler) List(w http.ResponseWriter, r *http.Request) {
 		var firstExecutionDate sql.NullString
 		var isVZEV bool
 		var billingMode sql.NullString
+		var billContent sql.NullString
 		var chargerID sql.NullInt64
 		var autoSendEmail bool
 		var lastRun, nextRun sql.NullTime
@@ -94,7 +105,7 @@ func (h *AutoBillingHandler) List(w http.ResponseWriter, r *http.Request) {
 		err := rows.Scan(
 			&config.ID, &config.Name, &buildingIDsStr, &apartmentsJSON, &customItemIDsStr,
 			&config.Frequency, &config.GenerationDay, &firstExecutionDate,
-			&config.IsActive, &isVZEV, &billingMode, &chargerID, &autoSendEmail, &lastRun, &nextRun,
+			&config.IsActive, &isVZEV, &billingMode, &billContent, &chargerID, &autoSendEmail, &lastRun, &nextRun,
 			&senderName, &senderAddress, &senderCity, &senderZip, &senderCountry,
 			&bankName, &bankIBAN, &bankAccountHolder,
 			&config.CreatedAt, &config.UpdatedAt,
@@ -140,6 +151,11 @@ func (h *AutoBillingHandler) List(w http.ResponseWriter, r *http.Request) {
 			configMap["billing_mode"] = billingMode.String
 		} else {
 			configMap["billing_mode"] = "apartments"
+		}
+		if billContent.Valid && billContent.String != "" {
+			configMap["bill_content"] = billContent.String
+		} else {
+			configMap["bill_content"] = "both"
 		}
 		if chargerID.Valid {
 			configMap["charger_id"] = int(chargerID.Int64)
@@ -202,6 +218,7 @@ func (h *AutoBillingHandler) Get(w http.ResponseWriter, r *http.Request) {
 	var firstExecutionDate sql.NullString
 	var isVZEV bool
 	var billingMode sql.NullString
+	var billContent sql.NullString
 	var chargerID sql.NullInt64
 	var autoSendEmail bool
 	var lastRun, nextRun sql.NullTime
@@ -210,7 +227,7 @@ func (h *AutoBillingHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	err = h.db.QueryRow(`
 		SELECT id, name, building_ids, apartments_json, custom_item_ids, frequency, generation_day,
-		       first_execution_date, is_active, is_vzev, billing_mode, charger_id,
+		       first_execution_date, is_active, is_vzev, billing_mode, COALESCE(bill_content, 'both'), charger_id,
 		       COALESCE(auto_send_email, 0), last_run, next_run,
 		       sender_name, sender_address, sender_city, sender_zip, sender_country,
 		       bank_name, bank_iban, bank_account_holder, created_at, updated_at
@@ -218,7 +235,7 @@ func (h *AutoBillingHandler) Get(w http.ResponseWriter, r *http.Request) {
 	`, id).Scan(
 		&config.ID, &config.Name, &buildingIDsStr, &apartmentsJSON, &customItemIDsStr,
 		&config.Frequency, &config.GenerationDay, &firstExecutionDate,
-		&config.IsActive, &isVZEV, &billingMode, &chargerID, &autoSendEmail, &lastRun, &nextRun,
+		&config.IsActive, &isVZEV, &billingMode, &billContent, &chargerID, &autoSendEmail, &lastRun, &nextRun,
 		&senderName, &senderAddress, &senderCity, &senderZip, &senderCountry,
 		&bankName, &bankIBAN, &bankAccountHolder,
 		&config.CreatedAt, &config.UpdatedAt,
@@ -269,6 +286,11 @@ func (h *AutoBillingHandler) Get(w http.ResponseWriter, r *http.Request) {
 		response["billing_mode"] = billingMode.String
 	} else {
 		response["billing_mode"] = "apartments"
+	}
+	if billContent.Valid && billContent.String != "" {
+		response["bill_content"] = billContent.String
+	} else {
+		response["bill_content"] = "both"
 	}
 	if chargerID.Valid {
 		response["charger_id"] = int(chargerID.Int64)
@@ -325,6 +347,7 @@ func (h *AutoBillingHandler) Create(w http.ResponseWriter, r *http.Request) {
 		IsActive           bool                 `json:"is_active"`
 		IsVZEV             bool                 `json:"is_vzev"`
 		BillingMode        string               `json:"billing_mode"`
+		BillContent        string               `json:"bill_content"`
 		ChargerID          *int                 `json:"charger_id"`
 		AutoSendEmail      bool                 `json:"auto_send_email"`
 		SenderName         string               `json:"sender_name"`
@@ -372,6 +395,7 @@ func (h *AutoBillingHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if billingMode == "" {
 		billingMode = "apartments"
 	}
+	billContent := normalizeBillContent(req.BillContent)
 	var chargerIDValue interface{}
 	if billingMode == "charger" && req.ChargerID != nil {
 		chargerIDValue = *req.ChargerID
@@ -382,12 +406,12 @@ func (h *AutoBillingHandler) Create(w http.ResponseWriter, r *http.Request) {
 	result, err := h.db.Exec(`
 		INSERT INTO auto_billing_configs (
 			name, building_ids, apartments_json, custom_item_ids, frequency, generation_day,
-			first_execution_date, is_active, is_vzev, billing_mode, charger_id, auto_send_email, next_run,
+			first_execution_date, is_active, is_vzev, billing_mode, bill_content, charger_id, auto_send_email, next_run,
 			sender_name, sender_address, sender_city, sender_zip, sender_country,
 			bank_name, bank_iban, bank_account_holder
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, req.Name, buildingIDsStr, string(apartmentsJSON), customItemIDsStr, req.Frequency, req.GenerationDay,
-		firstExecDateValue, req.IsActive, req.IsVZEV, billingMode, chargerIDValue, req.AutoSendEmail, nextRun,
+		firstExecDateValue, req.IsActive, req.IsVZEV, billingMode, billContent, chargerIDValue, req.AutoSendEmail, nextRun,
 		req.SenderName, req.SenderAddress, req.SenderCity,
 		req.SenderZip, req.SenderCountry, req.BankName, req.BankIBAN, req.BankAccountHolder)
 
@@ -412,6 +436,7 @@ func (h *AutoBillingHandler) Create(w http.ResponseWriter, r *http.Request) {
 		"is_active":           req.IsActive,
 		"is_vzev":             req.IsVZEV,
 		"billing_mode":        billingMode,
+		"bill_content":        billContent,
 		"auto_send_email":     req.AutoSendEmail,
 		"next_run":            nextRun.Format(time.RFC3339),
 		"sender_name":         req.SenderName,
@@ -455,6 +480,7 @@ func (h *AutoBillingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		IsActive           bool                 `json:"is_active"`
 		IsVZEV             bool                 `json:"is_vzev"`
 		BillingMode        string               `json:"billing_mode"`
+		BillContent        string               `json:"bill_content"`
 		ChargerID          *int                 `json:"charger_id"`
 		AutoSendEmail      bool                 `json:"auto_send_email"`
 		SenderName         string               `json:"sender_name"`
@@ -502,6 +528,7 @@ func (h *AutoBillingHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if billingMode == "" {
 		billingMode = "apartments"
 	}
+	billContent := normalizeBillContent(req.BillContent)
 	var chargerIDValue interface{}
 	if billingMode == "charger" && req.ChargerID != nil {
 		chargerIDValue = *req.ChargerID
@@ -513,14 +540,14 @@ func (h *AutoBillingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		UPDATE auto_billing_configs SET
 			name = ?, building_ids = ?, apartments_json = ?, custom_item_ids = ?, frequency = ?,
 			generation_day = ?, first_execution_date = ?, is_active = ?, is_vzev = ?,
-			billing_mode = ?, charger_id = ?, auto_send_email = ?, next_run = ?,
+			billing_mode = ?, bill_content = ?, charger_id = ?, auto_send_email = ?, next_run = ?,
 			sender_name = ?, sender_address = ?, sender_city = ?,
 			sender_zip = ?, sender_country = ?, bank_name = ?,
 			bank_iban = ?, bank_account_holder = ?,
 			updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`, req.Name, buildingIDsStr, string(apartmentsJSON), customItemIDsStr, req.Frequency, req.GenerationDay,
-		firstExecDateValue, req.IsActive, req.IsVZEV, billingMode, chargerIDValue, req.AutoSendEmail, nextRun,
+		firstExecDateValue, req.IsActive, req.IsVZEV, billingMode, billContent, chargerIDValue, req.AutoSendEmail, nextRun,
 		req.SenderName, req.SenderAddress, req.SenderCity,
 		req.SenderZip, req.SenderCountry, req.BankName, req.BankIBAN,
 		req.BankAccountHolder, id)
@@ -545,6 +572,7 @@ func (h *AutoBillingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		"is_active":           req.IsActive,
 		"is_vzev":             req.IsVZEV,
 		"billing_mode":        billingMode,
+		"bill_content":        billContent,
 		"auto_send_email":     req.AutoSendEmail,
 		"next_run":            nextRun.Format(time.RFC3339),
 		"sender_name":         req.SenderName,

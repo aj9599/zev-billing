@@ -68,6 +68,7 @@ export default function AutoBilling() {
     handleRecipientChange,
     handleChargerChange,
     handleChargerOnlyToggle,
+    handleBillContentChange,
     handleSharedMeterToggle,
     handleSelectAllSharedMeters,
     handleDeselectAllSharedMeters,
@@ -316,6 +317,7 @@ export default function AutoBilling() {
         onRecipientChange={handleRecipientChange}
         onChargerChange={handleChargerChange}
         onChargerOnlyToggle={handleChargerOnlyToggle}
+        onBillContentChange={handleBillContentChange}
         onSharedMeterToggle={handleSharedMeterToggle}
         onSelectAllSharedMeters={handleSelectAllSharedMeters}
         onDeselectAllSharedMeters={handleDeselectAllSharedMeters}

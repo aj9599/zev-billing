@@ -315,6 +315,7 @@ func RunMigrations(db *sql.DB) error {
 			is_active INTEGER DEFAULT 1,
 			is_vzev INTEGER DEFAULT 0,
 			billing_mode TEXT DEFAULT 'apartments',
+			bill_content TEXT DEFAULT 'both',
 			charger_id INTEGER,
 			auto_send_email INTEGER DEFAULT 0,
 			last_run DATETIME,
@@ -898,6 +899,18 @@ func addAutoBillingScopeColumns(db *sql.DB) error {
 		log.Println("✓ billing_mode column added successfully")
 	} else {
 		log.Println("✓ billing_mode column already exists")
+	}
+
+	if !contains(autoBillingConfigsSql, "bill_content") {
+		log.Println("Adding bill_content column to auto_billing_configs table...")
+		if _, err := db.Exec(`ALTER TABLE auto_billing_configs ADD COLUMN bill_content TEXT DEFAULT 'both'`); err != nil {
+			if !contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("failed to add bill_content column: %v", err)
+			}
+		}
+		log.Println("✓ bill_content column added successfully")
+	} else {
+		log.Println("✓ bill_content column already exists")
 	}
 
 	if !contains(autoBillingConfigsSql, "charger_id") {

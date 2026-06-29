@@ -164,6 +164,7 @@ func (s *AutoBillingScheduler) runConfig(id int, advanceSchedule bool) (*RunConf
 	var firstExecutionDate sql.NullString
 	var isVZEV bool
 	var billingMode sql.NullString
+	var billContent sql.NullString
 	var chargerID sql.NullInt64
 	var autoSendEmail bool
 	var senderName, senderAddress, senderCity, senderZip, senderCountry sql.NullString
@@ -171,14 +172,14 @@ func (s *AutoBillingScheduler) runConfig(id int, advanceSchedule bool) (*RunConf
 
 	err := s.db.QueryRow(`
 		SELECT name, building_ids, apartments_json, custom_item_ids, frequency, generation_day,
-		       first_execution_date, is_vzev, billing_mode, charger_id,
+		       first_execution_date, is_vzev, billing_mode, COALESCE(bill_content, 'both'), charger_id,
 		       COALESCE(auto_send_email, 0), sender_name, sender_address,
 		       sender_city, sender_zip, sender_country, bank_name, bank_iban,
 		       bank_account_holder
 		FROM auto_billing_configs
 		WHERE id = ?
 	`, id).Scan(&name, &buildingIDsStr, &apartmentsJSON, &customItemIDsStr, &frequency,
-		&generationDay, &firstExecutionDate, &isVZEV, &billingMode, &chargerID,
+		&generationDay, &firstExecutionDate, &isVZEV, &billingMode, &billContent, &chargerID,
 		&autoSendEmail, &senderName, &senderAddress,
 		&senderCity, &senderZip, &senderCountry, &bankName, &bankIBAN, &bankAccountHolder)
 
@@ -258,6 +259,10 @@ func (s *AutoBillingScheduler) runConfig(id int, advanceSchedule bool) (*RunConf
 				return nil, fmt.Errorf("charger mode requires charger_id")
 			}
 		}
+	}
+	// Meters / chargers / both selector (defaults to both when unset).
+	if billContent.Valid && (billContent.String == BillContentMeters || billContent.String == BillContentChargers) {
+		scope.Content = billContent.String
 	}
 
 	log.Printf("Generating bills for period: %s to %s (vZEV mode: %v, scope: %q, charger: %v)",
@@ -381,6 +386,7 @@ func (s *AutoBillingScheduler) runConfig(id int, advanceSchedule bool) (*RunConf
 		"period_end":      result.PeriodEnd,
 		"is_vzev":         isVZEV,
 		"billing_mode":    scope.Mode,
+		"bill_content":    scope.Content,
 		"charger_id":      scope.ChargerID,
 		"custom_item_ids": customItemIDs,
 		"manual_test_run": !advanceSchedule,

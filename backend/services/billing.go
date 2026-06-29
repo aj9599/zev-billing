@@ -89,11 +89,26 @@ const (
 	BillingModeCharger    = "charger"    // bill only a specific charger (e.g. company-car at home)
 )
 
+// Bill content selects which cost blocks land on the invoice, independent of
+// building type. It lets any building bill meters only, chargers only, or both.
+const (
+	BillContentBoth     = "both"     // meter consumption + car charging (default, empty == both)
+	BillContentMeters   = "meters"   // apartment/meter consumption only — skip charging
+	BillContentChargers = "chargers" // car charging only — skip meter consumption
+)
+
 // BillingScope controls which billing flow is used.
 type BillingScope struct {
 	Mode      string // "" or BillingModeApartments → existing apartment flow
 	ChargerID *int   // required when Mode == BillingModeCharger
+	Content   string // "" / BillContentBoth, BillContentMeters or BillContentChargers
 }
+
+// includeMeters reports whether apartment/meter consumption should be billed.
+func (s BillingScope) includeMeters() bool { return s.Content != BillContentChargers }
+
+// includeChargers reports whether car charging should be billed.
+func (s BillingScope) includeChargers() bool { return s.Content != BillContentMeters }
 
 // SkippedBill records a tenant whose invoice was deliberately NOT created, so the
 // caller/UI can report it instead of the failure passing silently.
@@ -470,7 +485,9 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 			}
 
 			for _, userPeriod := range userPeriods {
-				invoice, err := bs.generateUserInvoiceForPeriodWithOptions(userPeriod, buildingID, start, end, segments, customItemIDs)
+				// Pass the scope through so the meters/chargers/both content
+				// selector also applies to the standard apartment flow.
+				invoice, err := bs.generateUserInvoiceForPeriodWithOptionsAndScope(userPeriod, buildingID, start, end, segments, customItemIDs, scope)
 				if err != nil {
 					log.Printf("ERROR: Failed to generate invoice for user %d: %v", userPeriod.UserID, err)
 					skipped = append(skipped, newSkippedBill(userPeriod, buildingID, err))
@@ -1295,6 +1312,10 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 		})
 	}
 
+	// Which cost blocks to bill (meters / chargers / both) — see BillingScope.Content.
+	includeMeters := scope.includeMeters()
+	includeChargers := scope.includeChargers()
+
 	// CRITICAL: Get meter readings for THIS USER'S ACTUAL PERIOD
 	meterReadingFrom, meterReadingTo, meterName := bs.getMeterReadings(userPeriod.UserID, start, end)
 
@@ -1326,7 +1347,7 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 	log.Printf("  Calculated ACTUAL consumption for this period: %.3f kWh (Normal: %.3f, Solar: %.3f, segments: %d)",
 		totalConsumption, totalNormal, totalSolar, len(zevSegs))
 
-	if totalConsumption > 0 {
+	if includeMeters && totalConsumption > 0 {
 		items = append(items, models.InvoiceItem{
 			Description: fmt.Sprintf("%s: %s", tr.ApartmentMeter, meterName),
 			Quantity:    0,
@@ -1357,6 +1378,9 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 	}
 
 	for _, zs := range zevSegs {
+		if !includeMeters {
+			break // chargers-only bill: skip apartment/meter energy costs
+		}
 		suffix := segmentSuffix(PriceSegment{Start: zs.segStart, End: zs.segEnd}, multiSeg)
 		s := zs.seg.Settings
 		if zs.solarPower > 0 {
@@ -1390,7 +1414,7 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 	// In default (apartment) mode, only the chargers matching the user's RFIDs are billed.
 	// Solar-split chargers are billed via a proportional solar share; mode-based
 	// chargers by their reported charge mode. computeCharging keeps the two separate.
-	hasChargingSource := scope.Mode == BillingModeBuilding || userPeriod.ChargerIDs != ""
+	hasChargingSource := includeChargers && (scope.Mode == BillingModeBuilding || userPeriod.ChargerIDs != "")
 	if hasChargingSource {
 		log.Printf("  [CHARGING] Calculating for period: %s to %s (mode=%s)", start.Format("2006-01-02"), end.Format("2006-01-02"), scope.Mode)
 		chargingSegs, firstSessionOverall, lastSessionOverall := bs.computeCharging(buildingID, scope.Mode, userPeriod.ChargerIDs, 0, segments, start, end)

@@ -82,6 +82,7 @@ export function useConfigurationState(
     custom_item_ids: [], // NEW: Array of custom item IDs to include
     is_vzev: false,
     billing_mode: 'apartments',
+    bill_content: 'both',
     charger_id: undefined,
     sender_name: '',
     sender_address: '',

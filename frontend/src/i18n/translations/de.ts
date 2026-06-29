@@ -2150,6 +2150,12 @@ export const de: Translations = {
   'billConfig.validation.selectCharger': 'Bitte wählen Sie einen Ladepunkt aus',
   'billConfig.validation.vzevComplexRequired': 'vZEV-Modus erfordert, dass alle ausgewählten Gebäude Komplexe sind',
 
+  // BillConfiguration.tsx - Was abrechnen: Zähler / Ladepunkte / beides (German)
+  'billConfig.step1.contentTitle': 'Was abrechnen',
+  'billConfig.step1.contentHint': 'Wählen Sie, welche Kosten auf der Rechnung erscheinen. Funktioniert für jedes Gebäude — Wohnungszähler, Ladevorgänge oder beides.',
+  'billConfig.step1.contentBoth': 'Zähler + Ladepunkte',
+  'billConfig.step1.contentMeters': 'Nur Zähler',
+  'billConfig.step1.contentChargers': 'Nur Ladepunkte',
   // BillConfiguration.tsx - Building / Charger billing modes (German)
   'billConfig.step1.modeBuilding': 'Modus: Ganzes Gebäude',
   'billConfig.step1.modeBuildingDescription': 'Für Gebäude ohne Wohnungsverwaltung. Es wird eine Rechnung an den Empfänger erstellt — inklusive aller Ladepunkte des Gebäudes (auch ohne RFID).',
