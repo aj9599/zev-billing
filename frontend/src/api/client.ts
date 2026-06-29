@@ -120,18 +120,28 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      throw new Error('Login failed');
+      // Surface the server's message (e.g. throttle / invalid credentials).
+      let msg = 'Login failed';
+      try {
+        const text = (await response.text()).trim();
+        if (text) msg = text;
+      } catch { /* keep default */ }
+      throw new Error(msg);
     }
 
     const data = await response.json();
     this.token = data.token;
     localStorage.setItem('token', data.token);
+    // Flag a still-default password so the app can force a change.
+    if (data.must_change_password) localStorage.setItem('must_change_password', '1');
+    else localStorage.removeItem('must_change_password');
     return data;
   }
 
   logout() {
     this.token = null;
     localStorage.removeItem('token');
+    localStorage.removeItem('must_change_password');
   }
 
   async changePassword(old_password: string, new_password: string) {

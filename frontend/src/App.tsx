@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { I18nProvider } from './i18n';
+import { api } from './api/client';
 import Layout from './components/Layout';
 
 // Page components are code-split so the initial bundle stays small; each route
@@ -21,6 +22,7 @@ const AdminLogs = lazy(() => import('./components/AdminLogs'));
 const CSVUpload = lazy(() => import('./components/CSVUpload'));
 const License = lazy(() => import('./components/License'));
 const TenantPortal = lazy(() => import('./components/TenantPortal'));
+const ForcePasswordChange = lazy(() => import('./components/ForcePasswordChange'));
 
 // Lightweight fallback shown while a route chunk is being fetched.
 function RouteFallback() {
@@ -41,6 +43,10 @@ function RouteFallback() {
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
     !!localStorage.getItem('token')
+  );
+  // True when the logged-in account is still on the default password.
+  const [mustChangePassword, setMustChangePassword] = useState<boolean>(
+    () => localStorage.getItem('must_change_password') === '1'
   );
 
   useEffect(() => {
@@ -71,11 +77,26 @@ function App() {
         <BrowserRouter>
           <Suspense fallback={<RouteFallback />}>
             <Routes>
-              <Route path="/login" element={<Login onLogin={() => setIsAuthenticated(true)} />} />
+              <Route path="/login" element={<Login onLogin={() => { setIsAuthenticated(true); setMustChangePassword(localStorage.getItem('must_change_password') === '1'); }} />} />
               <Route path="*" element={<Navigate to="/login" replace />} />
             </Routes>
           </Suspense>
         </BrowserRouter>
+      </I18nProvider>
+    );
+  }
+
+  // Gate the whole app behind a forced password change while the default
+  // credentials are still in use.
+  if (mustChangePassword) {
+    return (
+      <I18nProvider>
+        <Suspense fallback={<RouteFallback />}>
+          <ForcePasswordChange
+            onDone={() => setMustChangePassword(false)}
+            onLogout={() => { api.logout(); setMustChangePassword(false); setIsAuthenticated(false); }}
+          />
+        </Suspense>
       </I18nProvider>
     );
   }
