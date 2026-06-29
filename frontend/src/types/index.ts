@@ -458,6 +458,30 @@ export interface SystemHealth {
   offline_count: number;
 }
 
+export interface MeterDataHealth {
+  id: number;
+  name: string;
+  building_name: string;
+  last_reading: string | null;
+  age_minutes: number; // -1 when there is no reading at all
+  status: 'fresh' | 'stale' | 'missing';
+  anomaly_count: number;
+  last_anomaly_value?: number;
+  last_anomaly_time?: string | null;
+}
+
+export interface DataHealth {
+  meters: MeterDataHealth[];
+  total_meters: number;
+  stale_count: number;
+  missing_count: number;
+  anomaly_meter_count: number;
+  total_anomalies: number;
+  window_days: number;
+  spike_threshold: number;
+  generated_at: string;
+}
+
 export interface BuildingCostEstimate {
   building_id: number;
   building_name: string;

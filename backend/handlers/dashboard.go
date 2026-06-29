@@ -1330,6 +1330,162 @@ func (h *DashboardHandler) GetSystemHealth(w http.ResponseWriter, r *http.Reques
 	json.NewEncoder(w).Encode(health)
 }
 
+// dataHealthSpikeThreshold is the per-15-min-interval consumption (kWh) above
+// which a reading is treated as an implausible spike. Normal apartment/building
+// intervals sit far below this; the value mirrors the write-side sanity cap.
+const dataHealthSpikeThreshold = 100.0
+
+// dataHealthWindowDays bounds the anomaly scan so it stays cheap on large
+// meter_readings tables.
+const dataHealthWindowDays = 7
+
+// GetDataHealth reports data-quality state per active meter: reading freshness
+// plus a count of implausible per-interval consumption values (spikes or
+// negatives) in the recent window. It complements GetSystemHealth, which covers
+// connectivity rather than the integrity of the data that drives billing.
+func (h *DashboardHandler) GetDataHealth(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("PANIC in GetDataHealth: %v", rec)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	now := time.Now()
+	windowStart := now.AddDate(0, 0, -dataHealthWindowDays)
+
+	out := models.DataHealth{
+		Meters:         []models.MeterDataHealth{},
+		WindowDays:     dataHealthWindowDays,
+		SpikeThreshold: dataHealthSpikeThreshold,
+		GeneratedAt:    now,
+	}
+
+	// Anomalies are rare, so the filtered set is small: pull the matching rows
+	// and aggregate per meter in Go (count + most recent value/time).
+	type anomalyAgg struct {
+		count     int
+		lastValue float64
+		lastTime  time.Time
+	}
+	anomalies := map[int]*anomalyAgg{}
+	anomalyRows, err := h.db.QueryContext(ctx, `
+		SELECT meter_id, reading_time, consumption_kwh, consumption_export
+		FROM meter_readings
+		WHERE reading_time >= ?
+		  AND (consumption_kwh < 0 OR consumption_kwh > ?
+		       OR consumption_export < 0 OR consumption_export > ?)
+		ORDER BY reading_time ASC
+	`, windowStart, dataHealthSpikeThreshold, dataHealthSpikeThreshold)
+	if err != nil {
+		log.Printf("DataHealth: anomaly query failed: %v", err)
+	} else {
+		for anomalyRows.Next() {
+			var meterID int
+			var rt sql.NullTime
+			var cons, exp float64
+			if err := anomalyRows.Scan(&meterID, &rt, &cons, &exp); err != nil {
+				continue
+			}
+			a := anomalies[meterID]
+			if a == nil {
+				a = &anomalyAgg{}
+				anomalies[meterID] = a
+			}
+			a.count++
+			// Rows are ascending, so the last one seen is the most recent. Keep
+			// the value with the larger magnitude between import/export.
+			v := cons
+			if exp < 0 || exp > dataHealthSpikeThreshold {
+				if absf(exp) > absf(cons) {
+					v = exp
+				}
+			}
+			a.lastValue = v
+			if rt.Valid {
+				a.lastTime = rt.Time
+			}
+		}
+		anomalyRows.Close()
+	}
+
+	rows, err := h.db.QueryContext(ctx, `
+		SELECT m.id, m.name, COALESCE(b.name, ''),
+			(SELECT MAX(reading_time) FROM meter_readings WHERE meter_id = m.id)
+		FROM meters m
+		LEFT JOIN buildings b ON m.building_id = b.id
+		WHERE COALESCE(m.is_active, 1) = 1
+		ORDER BY m.name
+	`)
+	if err != nil {
+		log.Printf("DataHealth: meter query failed: %v", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var m models.MeterDataHealth
+		var lastReading sql.NullTime
+		if err := rows.Scan(&m.ID, &m.Name, &m.BuildingName, &lastReading); err != nil {
+			continue
+		}
+
+		if lastReading.Valid {
+			t := lastReading.Time
+			m.LastReading = &t
+			age := now.Sub(t)
+			m.AgeMinutes = int(age.Minutes())
+			switch {
+			case age < time.Hour:
+				m.Status = "fresh"
+			case age < 24*time.Hour:
+				m.Status = "stale"
+			default:
+				m.Status = "missing"
+			}
+		} else {
+			m.AgeMinutes = -1
+			m.Status = "missing"
+		}
+
+		if a := anomalies[m.ID]; a != nil {
+			m.AnomalyCount = a.count
+			m.LastAnomalyValue = a.lastValue
+			if !a.lastTime.IsZero() {
+				lt := a.lastTime
+				m.LastAnomalyTime = &lt
+			}
+			out.AnomalyMeterCount++
+			out.TotalAnomalies += a.count
+		}
+
+		switch m.Status {
+		case "stale":
+			out.StaleCount++
+		case "missing":
+			out.MissingCount++
+		}
+
+		out.Meters = append(out.Meters, m)
+		out.TotalMeters++
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(out)
+}
+
+// absf returns the absolute value of a float64.
+func absf(v float64) float64 {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
 func (h *DashboardHandler) GetCostOverview(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if rec := recover(); rec != nil {

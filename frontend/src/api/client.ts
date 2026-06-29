@@ -3,7 +3,7 @@ import type {
   Invoice, DashboardStats, ConsumptionData, AdminLog,
   BuildingConsumption, SharedMeterConfig, CustomLineItem,
   GenerateBillsRequest, GenerateBillsResult, MeterReplacement, MeterReplacementRequest,
-  SelfConsumptionData, SystemHealth, CostOverview, EnergyFlowData, EnergyFlowLiveData,
+  SelfConsumptionData, SystemHealth, DataHealth, CostOverview, EnergyFlowData, EnergyFlowLiveData,
   EmailAlertSettings, Device, DeviceLiveStatus, DeviceSwitchEvent, LoxoneControl,
   LicenseStatus, SmartMeDevice
 } from '../types';
@@ -785,6 +785,10 @@ class ApiClient {
 
   async getSystemHealth(): Promise<SystemHealth> {
     return this.request('/dashboard/system-health');
+  }
+
+  async getDataHealth(): Promise<DataHealth> {
+    return this.request('/dashboard/data-health');
   }
 
   async getCostOverview(): Promise<CostOverview> {

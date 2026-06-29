@@ -345,6 +345,35 @@ type SystemHealth struct {
 	OfflineCount int            `json:"offline_count"`
 }
 
+// MeterDataHealth describes the data-quality state of a single meter: how fresh
+// its latest reading is and how many implausible per-interval consumption
+// values it has logged in the recent window.
+type MeterDataHealth struct {
+	ID               int        `json:"id"`
+	Name             string     `json:"name"`
+	BuildingName     string     `json:"building_name"`
+	LastReading      *time.Time `json:"last_reading"`
+	AgeMinutes       int        `json:"age_minutes"` // -1 when there is no reading at all
+	Status           string     `json:"status"`      // "fresh" | "stale" | "missing"
+	AnomalyCount     int        `json:"anomaly_count"`
+	LastAnomalyValue float64    `json:"last_anomaly_value,omitempty"`
+	LastAnomalyTime  *time.Time `json:"last_anomaly_time,omitempty"`
+}
+
+// DataHealth is the data-quality overview: per-meter reading freshness plus a
+// count of implausible consumption spikes/negatives detected in the window.
+type DataHealth struct {
+	Meters            []MeterDataHealth `json:"meters"`
+	TotalMeters       int               `json:"total_meters"`
+	StaleCount        int               `json:"stale_count"`
+	MissingCount      int               `json:"missing_count"`
+	AnomalyMeterCount int               `json:"anomaly_meter_count"`
+	TotalAnomalies    int               `json:"total_anomalies"`
+	WindowDays        int               `json:"window_days"`
+	SpikeThreshold    float64           `json:"spike_threshold"`
+	GeneratedAt       time.Time         `json:"generated_at"`
+}
+
 type BuildingCostEstimate struct {
 	BuildingID   int     `json:"building_id"`
 	BuildingName string  `json:"building_name"`

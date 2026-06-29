@@ -499,6 +499,11 @@ export const de: Translations = {
 
   // Systemzustand
   'dashboard.systemHealth': 'Systemzustand',
+  'dashboard.dataHealth.title': 'Datenqualität',
+  'dashboard.dataHealth.allHealthy': 'Alle {count} Zähler aktuell — keine Verbrauchsanomalien in den letzten {days} Tagen.',
+  'dashboard.dataHealth.anomalies': '{count} Ausreißer, zuletzt ≈ {value} kWh/Intervall',
+  'dashboard.dataHealth.noReadings': 'keine Messwerte',
+  'dashboard.dataHealth.windowNote': 'Anomalien = unplausibler Intervallverbrauch (>{threshold} kWh oder negativ) in den letzten {days} Tagen.',
   'dashboard.online': 'Online',
   'dashboard.stale': 'Verzögert',
   'dashboard.offline': 'Offline',

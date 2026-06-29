@@ -352,6 +352,7 @@ func main() {
 	api.HandleFunc("/dashboard/logs", dashboardHandler.GetLogs).Methods("GET")
 	api.HandleFunc("/dashboard/self-consumption", dashboardHandler.GetSelfConsumption).Methods("GET")
 	api.HandleFunc("/dashboard/system-health", dashboardHandler.GetSystemHealth).Methods("GET")
+	api.HandleFunc("/dashboard/data-health", dashboardHandler.GetDataHealth).Methods("GET")
 	api.HandleFunc("/dashboard/cost-overview", dashboardHandler.GetCostOverview).Methods("GET")
 	api.HandleFunc("/dashboard/energy-flow", dashboardHandler.GetEnergyFlow).Methods("GET")
 	api.HandleFunc("/dashboard/energy-flow-live", dashboardHandler.GetEnergyFlowLive).Methods("GET")

@@ -5,6 +5,7 @@ import { Users, Building, Zap, Car, Sun, Battery, BatteryCharging, Flame, Layout
 import { api } from '../api/client';
 import type { DashboardStats, SelfConsumptionData, SystemHealth, CostOverview, EnergyFlowData, EnergyFlowLiveData } from '../types';
 import { useTranslation } from '../i18n';
+import DataHealthCard from './DataHealthCard';
 
 // ─── Local interfaces ────────────────────────────────────────────────
 
@@ -1097,6 +1098,9 @@ export default function Dashboard() {
         gap: '16px',
         marginBottom: '24px'
       }}>
+        {/* Data Health (meter freshness + consumption anomalies) */}
+        <DataHealthCard />
+
         {/* System Health */}
         {systemHealth && (
           <div className="fade-in" style={{

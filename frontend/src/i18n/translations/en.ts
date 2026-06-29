@@ -498,6 +498,11 @@ export const en: Translations = {
 
   // System health
   'dashboard.systemHealth': 'System Health',
+  'dashboard.dataHealth.title': 'Data Health',
+  'dashboard.dataHealth.allHealthy': 'All {count} meters reporting fresh — no consumption anomalies in the last {days} days.',
+  'dashboard.dataHealth.anomalies': '{count} spike(s), last ≈ {value} kWh/interval',
+  'dashboard.dataHealth.noReadings': 'no readings',
+  'dashboard.dataHealth.windowNote': 'Anomalies = implausible per-interval consumption (>{threshold} kWh or negative) in the last {days} days.',
   'dashboard.online': 'Online',
   'dashboard.stale': 'Delayed',
   'dashboard.offline': 'Offline',
