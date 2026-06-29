@@ -69,16 +69,122 @@ func normalizeBillContent(v string) string {
 	}
 }
 
+// autoBillingSelectColumns is the column list shared by List and Get so the two
+// stay in lock-step with scanAutoBillingConfigRow.
+const autoBillingSelectColumns = `id, name, building_ids, apartments_json, custom_item_ids, frequency, generation_day,
+	first_execution_date, is_active, is_vzev, billing_mode, COALESCE(bill_content, 'both'), charger_id,
+	COALESCE(auto_send_email, 0), last_run, next_run,
+	sender_name, sender_address, sender_city, sender_zip, sender_country,
+	bank_name, bank_iban, bank_account_holder, created_at, updated_at`
+
+// rowScanner is satisfied by both *sql.Row and *sql.Rows.
+type rowScanner interface {
+	Scan(dest ...interface{}) error
+}
+
+// scanAutoBillingConfigRow scans one auto-billing config row (selected via
+// autoBillingSelectColumns) into the JSON response map used by List and Get.
+func scanAutoBillingConfigRow(sc rowScanner) (map[string]interface{}, error) {
+	var config models.AutoBillingConfig
+	var buildingIDsStr string
+	var apartmentsJSON, customItemIDsStr, firstExecutionDate sql.NullString
+	var isVZEV bool
+	var billingMode, billContent sql.NullString
+	var chargerID sql.NullInt64
+	var autoSendEmail bool
+	var lastRun, nextRun sql.NullTime
+	var senderName, senderAddress, senderCity, senderZip, senderCountry sql.NullString
+	var bankName, bankIBAN, bankAccountHolder sql.NullString
+
+	if err := sc.Scan(
+		&config.ID, &config.Name, &buildingIDsStr, &apartmentsJSON, &customItemIDsStr,
+		&config.Frequency, &config.GenerationDay, &firstExecutionDate,
+		&config.IsActive, &isVZEV, &billingMode, &billContent, &chargerID, &autoSendEmail, &lastRun, &nextRun,
+		&senderName, &senderAddress, &senderCity, &senderZip, &senderCountry,
+		&bankName, &bankIBAN, &bankAccountHolder,
+		&config.CreatedAt, &config.UpdatedAt,
+	); err != nil {
+		return nil, err
+	}
+
+	buildingIDs := parseIDList(buildingIDsStr)
+	var customItemIDs []int
+	if customItemIDsStr.Valid && customItemIDsStr.String != "" {
+		customItemIDs = parseIDList(customItemIDsStr.String)
+	}
+	var apartments []ApartmentSelection
+	if apartmentsJSON.Valid && apartmentsJSON.String != "" {
+		if err := json.Unmarshal([]byte(apartmentsJSON.String), &apartments); err != nil {
+			log.Printf("WARNING: Failed to parse apartments JSON for config %d: %v", config.ID, err)
+			apartments = []ApartmentSelection{}
+		}
+	}
+
+	m := map[string]interface{}{
+		"id":              config.ID,
+		"name":            config.Name,
+		"building_ids":    buildingIDs,
+		"apartments":      apartments,
+		"custom_item_ids": customItemIDs,
+		"frequency":       config.Frequency,
+		"generation_day":  config.GenerationDay,
+		"is_active":       config.IsActive,
+		"is_vzev":         isVZEV,
+		"created_at":      config.CreatedAt,
+		"updated_at":      config.UpdatedAt,
+		"auto_send_email": autoSendEmail,
+	}
+	if billingMode.Valid && billingMode.String != "" {
+		m["billing_mode"] = billingMode.String
+	} else {
+		m["billing_mode"] = "apartments"
+	}
+	if billContent.Valid && billContent.String != "" {
+		m["bill_content"] = billContent.String
+	} else {
+		m["bill_content"] = "both"
+	}
+	if chargerID.Valid {
+		m["charger_id"] = int(chargerID.Int64)
+	}
+	if firstExecutionDate.Valid {
+		m["first_execution_date"] = firstExecutionDate.String
+	}
+	if lastRun.Valid {
+		m["last_run"] = lastRun.Time.Format(time.RFC3339)
+	}
+	if nextRun.Valid {
+		m["next_run"] = nextRun.Time.Format(time.RFC3339)
+	}
+	if senderName.Valid {
+		m["sender_name"] = senderName.String
+	}
+	if senderAddress.Valid {
+		m["sender_address"] = senderAddress.String
+	}
+	if senderCity.Valid {
+		m["sender_city"] = senderCity.String
+	}
+	if senderZip.Valid {
+		m["sender_zip"] = senderZip.String
+	}
+	if senderCountry.Valid {
+		m["sender_country"] = senderCountry.String
+	}
+	if bankName.Valid {
+		m["bank_name"] = bankName.String
+	}
+	if bankIBAN.Valid {
+		m["bank_iban"] = bankIBAN.String
+	}
+	if bankAccountHolder.Valid {
+		m["bank_account_holder"] = bankAccountHolder.String
+	}
+	return m, nil
+}
+
 func (h *AutoBillingHandler) List(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.db.Query(`
-		SELECT id, name, building_ids, apartments_json, custom_item_ids, frequency, generation_day,
-		       first_execution_date, is_active, is_vzev, billing_mode, COALESCE(bill_content, 'both'), charger_id,
-		       COALESCE(auto_send_email, 0), last_run, next_run,
-		       sender_name, sender_address, sender_city, sender_zip, sender_country,
-		       bank_name, bank_iban, bank_account_holder, created_at, updated_at
-		FROM auto_billing_configs
-		ORDER BY created_at DESC
-	`)
+	rows, err := h.db.Query(`SELECT ` + autoBillingSelectColumns + ` FROM auto_billing_configs ORDER BY created_at DESC`)
 	if err != nil {
 		log.Printf("ERROR: Failed to query auto billing configs: %v", err)
 		http.Error(w, "Database error", http.StatusInternalServerError)
@@ -88,114 +194,11 @@ func (h *AutoBillingHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	configs := []map[string]interface{}{}
 	for rows.Next() {
-		var config models.AutoBillingConfig
-		var buildingIDsStr string
-		var apartmentsJSON sql.NullString
-		var customItemIDsStr sql.NullString
-		var firstExecutionDate sql.NullString
-		var isVZEV bool
-		var billingMode sql.NullString
-		var billContent sql.NullString
-		var chargerID sql.NullInt64
-		var autoSendEmail bool
-		var lastRun, nextRun sql.NullTime
-		var senderName, senderAddress, senderCity, senderZip, senderCountry sql.NullString
-		var bankName, bankIBAN, bankAccountHolder sql.NullString
-
-		err := rows.Scan(
-			&config.ID, &config.Name, &buildingIDsStr, &apartmentsJSON, &customItemIDsStr,
-			&config.Frequency, &config.GenerationDay, &firstExecutionDate,
-			&config.IsActive, &isVZEV, &billingMode, &billContent, &chargerID, &autoSendEmail, &lastRun, &nextRun,
-			&senderName, &senderAddress, &senderCity, &senderZip, &senderCountry,
-			&bankName, &bankIBAN, &bankAccountHolder,
-			&config.CreatedAt, &config.UpdatedAt,
-		)
+		configMap, err := scanAutoBillingConfigRow(rows)
 		if err != nil {
 			log.Printf("ERROR: Failed to scan config: %v", err)
 			continue
 		}
-
-		// Parse building IDs
-		buildingIDs := parseIDList(buildingIDsStr)
-
-		// Parse custom item IDs
-		var customItemIDs []int
-		if customItemIDsStr.Valid && customItemIDsStr.String != "" {
-			customItemIDs = parseIDList(customItemIDsStr.String)
-		}
-
-		// Parse apartments JSON
-		var apartments []ApartmentSelection
-		if apartmentsJSON.Valid && apartmentsJSON.String != "" {
-			if err := json.Unmarshal([]byte(apartmentsJSON.String), &apartments); err != nil {
-				log.Printf("WARNING: Failed to parse apartments JSON for config %d: %v", config.ID, err)
-				apartments = []ApartmentSelection{}
-			}
-		}
-
-		configMap := map[string]interface{}{
-			"id":              config.ID,
-			"name":            config.Name,
-			"building_ids":    buildingIDs,
-			"apartments":      apartments,
-			"custom_item_ids": customItemIDs,
-			"frequency":       config.Frequency,
-			"generation_day":  config.GenerationDay,
-			"is_active":       config.IsActive,
-			"is_vzev":         isVZEV,
-			"created_at":      config.CreatedAt,
-			"updated_at":      config.UpdatedAt,
-		}
-
-		if billingMode.Valid && billingMode.String != "" {
-			configMap["billing_mode"] = billingMode.String
-		} else {
-			configMap["billing_mode"] = "apartments"
-		}
-		if billContent.Valid && billContent.String != "" {
-			configMap["bill_content"] = billContent.String
-		} else {
-			configMap["bill_content"] = "both"
-		}
-		if chargerID.Valid {
-			configMap["charger_id"] = int(chargerID.Int64)
-		}
-		configMap["auto_send_email"] = autoSendEmail
-
-		if firstExecutionDate.Valid {
-			configMap["first_execution_date"] = firstExecutionDate.String
-		}
-		if lastRun.Valid {
-			configMap["last_run"] = lastRun.Time.Format(time.RFC3339)
-		}
-		if nextRun.Valid {
-			configMap["next_run"] = nextRun.Time.Format(time.RFC3339)
-		}
-		if senderName.Valid {
-			configMap["sender_name"] = senderName.String
-		}
-		if senderAddress.Valid {
-			configMap["sender_address"] = senderAddress.String
-		}
-		if senderCity.Valid {
-			configMap["sender_city"] = senderCity.String
-		}
-		if senderZip.Valid {
-			configMap["sender_zip"] = senderZip.String
-		}
-		if senderCountry.Valid {
-			configMap["sender_country"] = senderCountry.String
-		}
-		if bankName.Valid {
-			configMap["bank_name"] = bankName.String
-		}
-		if bankIBAN.Valid {
-			configMap["bank_iban"] = bankIBAN.String
-		}
-		if bankAccountHolder.Valid {
-			configMap["bank_account_holder"] = bankAccountHolder.String
-		}
-
 		configs = append(configs, configMap)
 	}
 
@@ -211,36 +214,9 @@ func (h *AutoBillingHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var config models.AutoBillingConfig
-	var buildingIDsStr string
-	var apartmentsJSON sql.NullString
-	var customItemIDsStr sql.NullString
-	var firstExecutionDate sql.NullString
-	var isVZEV bool
-	var billingMode sql.NullString
-	var billContent sql.NullString
-	var chargerID sql.NullInt64
-	var autoSendEmail bool
-	var lastRun, nextRun sql.NullTime
-	var senderName, senderAddress, senderCity, senderZip, senderCountry sql.NullString
-	var bankName, bankIBAN, bankAccountHolder sql.NullString
-
-	err = h.db.QueryRow(`
-		SELECT id, name, building_ids, apartments_json, custom_item_ids, frequency, generation_day,
-		       first_execution_date, is_active, is_vzev, billing_mode, COALESCE(bill_content, 'both'), charger_id,
-		       COALESCE(auto_send_email, 0), last_run, next_run,
-		       sender_name, sender_address, sender_city, sender_zip, sender_country,
-		       bank_name, bank_iban, bank_account_holder, created_at, updated_at
-		FROM auto_billing_configs WHERE id = ?
-	`, id).Scan(
-		&config.ID, &config.Name, &buildingIDsStr, &apartmentsJSON, &customItemIDsStr,
-		&config.Frequency, &config.GenerationDay, &firstExecutionDate,
-		&config.IsActive, &isVZEV, &billingMode, &billContent, &chargerID, &autoSendEmail, &lastRun, &nextRun,
-		&senderName, &senderAddress, &senderCity, &senderZip, &senderCountry,
-		&bankName, &bankIBAN, &bankAccountHolder,
-		&config.CreatedAt, &config.UpdatedAt,
+	response, err := scanAutoBillingConfigRow(
+		h.db.QueryRow(`SELECT `+autoBillingSelectColumns+` FROM auto_billing_configs WHERE id = ?`, id),
 	)
-
 	if err == sql.ErrNoRows {
 		http.Error(w, "Config not found", http.StatusNotFound)
 		return
@@ -249,86 +225,6 @@ func (h *AutoBillingHandler) Get(w http.ResponseWriter, r *http.Request) {
 		log.Printf("ERROR: Failed to get config: %v", err)
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
-	}
-
-	buildingIDs := parseIDList(buildingIDsStr)
-
-	// Parse custom item IDs
-	var customItemIDs []int
-	if customItemIDsStr.Valid && customItemIDsStr.String != "" {
-		customItemIDs = parseIDList(customItemIDsStr.String)
-	}
-
-	// Parse apartments JSON
-	var apartments []ApartmentSelection
-	if apartmentsJSON.Valid && apartmentsJSON.String != "" {
-		if err := json.Unmarshal([]byte(apartmentsJSON.String), &apartments); err != nil {
-			log.Printf("WARNING: Failed to parse apartments JSON: %v", err)
-			apartments = []ApartmentSelection{}
-		}
-	}
-
-	response := map[string]interface{}{
-		"id":              config.ID,
-		"name":            config.Name,
-		"building_ids":    buildingIDs,
-		"apartments":      apartments,
-		"custom_item_ids": customItemIDs,
-		"frequency":       config.Frequency,
-		"generation_day":  config.GenerationDay,
-		"is_active":       config.IsActive,
-		"is_vzev":         isVZEV,
-		"created_at":      config.CreatedAt,
-		"updated_at":      config.UpdatedAt,
-	}
-
-	if billingMode.Valid && billingMode.String != "" {
-		response["billing_mode"] = billingMode.String
-	} else {
-		response["billing_mode"] = "apartments"
-	}
-	if billContent.Valid && billContent.String != "" {
-		response["bill_content"] = billContent.String
-	} else {
-		response["bill_content"] = "both"
-	}
-	if chargerID.Valid {
-		response["charger_id"] = int(chargerID.Int64)
-	}
-	response["auto_send_email"] = autoSendEmail
-
-	if firstExecutionDate.Valid {
-		response["first_execution_date"] = firstExecutionDate.String
-	}
-	if lastRun.Valid {
-		response["last_run"] = lastRun.Time.Format(time.RFC3339)
-	}
-	if nextRun.Valid {
-		response["next_run"] = nextRun.Time.Format(time.RFC3339)
-	}
-	if senderName.Valid {
-		response["sender_name"] = senderName.String
-	}
-	if senderAddress.Valid {
-		response["sender_address"] = senderAddress.String
-	}
-	if senderCity.Valid {
-		response["sender_city"] = senderCity.String
-	}
-	if senderZip.Valid {
-		response["sender_zip"] = senderZip.String
-	}
-	if senderCountry.Valid {
-		response["sender_country"] = senderCountry.String
-	}
-	if bankName.Valid {
-		response["bank_name"] = bankName.String
-	}
-	if bankIBAN.Valid {
-		response["bank_iban"] = bankIBAN.String
-	}
-	if bankAccountHolder.Valid {
-		response["bank_account_holder"] = bankAccountHolder.String
 	}
 
 	w.Header().Set("Content-Type", "application/json")
