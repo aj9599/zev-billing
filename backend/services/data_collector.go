@@ -1045,6 +1045,16 @@ func (dc *DataCollector) waitForAsyncVirtualSources(virtualMeterIDs []int, at ti
 	}
 }
 
+// maxIntervalConsumptionKwh bounds a single 15-min interval's consumption. A
+// newly added meter whose counter is already large (or a counter reset/swap)
+// would otherwise record one giant delta — e.g. the whole 98'000 kWh counter —
+// which dominates the 24h charts and energy-flow diagram. No realistic ZEV meter
+// moves this much in 15 minutes (1000 kWh = 4 MW average), so anything above it
+// is treated as a counter (re)initialisation and recorded as 0 for that interval.
+// The cumulative power_kwh is still stored, so cumulative/billing reports are
+// unaffected.
+const maxIntervalConsumptionKwh = 1000.0
+
 func (dc *DataCollector) saveMeterReading(meterID int, meterName string, currentTime time.Time, reading float64, readingExport float64) error {
 	// Get last reading for interpolation
 	var lastReading, lastReadingExport float64
@@ -1069,7 +1079,7 @@ func (dc *DataCollector) saveMeterReading(meterID int, meterName string, current
 		
 		for i, point := range interpolated {
 			intervalConsumption := point.value - lastReading
-			if intervalConsumption < 0 {
+			if intervalConsumption < 0 || intervalConsumption > maxIntervalConsumptionKwh {
 				intervalConsumption = 0
 			}
 
@@ -1078,7 +1088,7 @@ func (dc *DataCollector) saveMeterReading(meterID int, meterName string, current
 			if i < len(interpolatedExport) {
 				exportValue = interpolatedExport[i].value
 				intervalExport = exportValue - lastReadingExport
-				if intervalExport < 0 {
+				if intervalExport < 0 || intervalExport > maxIntervalConsumptionKwh {
 					intervalExport = 0
 				}
 			}
@@ -1103,9 +1113,16 @@ func (dc *DataCollector) saveMeterReading(meterID int, meterName string, current
 		if consumption < 0 {
 			consumption = 0
 		}
-		
+		if consumption > maxIntervalConsumptionKwh {
+			log.Printf("Meter '%s': implausible interval consumption %.1f kWh (counter init/reset?) — recording 0", meterName, consumption)
+			consumption = 0
+		}
+
 		consumptionExport = readingExport - lastReadingExport
 		if consumptionExport < 0 {
+			consumptionExport = 0
+		}
+		if consumptionExport > maxIntervalConsumptionKwh {
 			consumptionExport = 0
 		}
 	} else {

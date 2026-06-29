@@ -8,6 +8,13 @@ import (
 	"time"
 )
 
+// maxIntervalConsumptionKwh bounds a single 15-min interval's consumption so a
+// newly added meter with an already-large counter (or a counter reset) can't
+// record one giant delta that flattens the 24h charts. No realistic ZEV meter
+// moves 1000 kWh (4 MW average) in 15 minutes; anything above is treated as a
+// counter (re)initialisation and recorded as 0. Cumulative power_kwh is kept.
+const maxIntervalConsumptionKwh = 1000.0
+
 // processMeterData processes meter readings from Loxone responses
 func (conn *WebSocketConnection) processMeterData(device *Device, response LoxoneResponse, db *sql.DB, isExport bool) {
 	var reading float64
@@ -452,7 +459,7 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 
 		for i, point := range interpolated {
 			intervalConsumption := point.value - lastReading
-			if intervalConsumption < 0 {
+			if intervalConsumption < 0 || intervalConsumption > maxIntervalConsumptionKwh {
 				intervalConsumption = 0
 			}
 
@@ -461,7 +468,7 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 			if supportsExport && i < len(interpolatedExport) {
 				exportValue = interpolatedExport[i].value
 				intervalExport = exportValue - lastReadingExport
-				if intervalExport < 0 {
+				if intervalExport < 0 || intervalExport > maxIntervalConsumptionKwh {
 					intervalExport = 0
 				}
 			}
@@ -489,10 +496,17 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 		if consumption < 0 {
 			consumption = 0
 		}
+		if consumption > maxIntervalConsumptionKwh {
+			log.Printf("   ⚠️ Meter %s: implausible interval consumption %.1f kWh (counter init/reset?) — recording 0", device.Name, consumption)
+			consumption = 0
+		}
 
 		if supportsExport {
 			consumptionExport = device.LastReadingExport - lastReadingExport
 			if consumptionExport < 0 {
+				consumptionExport = 0
+			}
+			if consumptionExport > maxIntervalConsumptionKwh {
 				consumptionExport = 0
 			}
 		}
