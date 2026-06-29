@@ -558,7 +558,50 @@ func RunMigrations(db *sql.DB) error {
 		return err
 	}
 
+	// One-time cleanup of historical per-interval consumption spikes left by
+	// meters added with a large existing counter (before the spike cap existed).
+	if err := clampHistoricalConsumptionSpikes(db); err != nil {
+		return err
+	}
+
 	return createDefaultAdmin(db)
+}
+
+// clampHistoricalConsumptionSpikes zeroes implausibly large per-interval
+// consumption values (> 1000 kWh in a 15-min slot) that were recorded before the
+// write-side spike cap existed — e.g. a meter added with an already-large counter
+// diffed against a zero baseline. It only touches the per-interval columns
+// (consumption_kwh / consumption_export); the cumulative power_kwh is kept, so
+// cumulative and billing reports are unaffected. Runs once, gated on
+// PRAGMA user_version so it doesn't rescan meter_readings on every boot.
+func clampHistoricalConsumptionSpikes(db *sql.DB) error {
+	var ver int
+	if err := db.QueryRow(`PRAGMA user_version`).Scan(&ver); err != nil {
+		// Best-effort: if we can't read the version, skip rather than rescan.
+		return nil
+	}
+	if ver >= 1 {
+		return nil // already cleaned
+	}
+
+	res1, err := db.Exec(`UPDATE meter_readings SET consumption_kwh = 0 WHERE consumption_kwh > 1000`)
+	if err != nil {
+		return err
+	}
+	res2, err := db.Exec(`UPDATE meter_readings SET consumption_export = 0 WHERE consumption_export > 1000`)
+	if err != nil {
+		return err
+	}
+	if _, err := db.Exec(`PRAGMA user_version = 1`); err != nil {
+		return err
+	}
+
+	n1, _ := res1.RowsAffected()
+	n2, _ := res2.RowsAffected()
+	if n1 > 0 || n2 > 0 {
+		log.Printf("Migration: cleared %d import + %d export historical consumption spikes (>1000 kWh/interval)", n1, n2)
+	}
+	return nil
 }
 
 // addPortalTokenColumn adds users.portal_token, the secret an admin issues so a
