@@ -3,6 +3,7 @@ import { useState, useEffect, lazy, Suspense } from 'react';
 import { I18nProvider } from './i18n';
 import { api } from './api/client';
 import Layout from './components/Layout';
+import ToastContainer from './components/ToastContainer';
 
 // Page components are code-split so the initial bundle stays small; each route
 // loads its own chunk on demand behind the <Suspense> fallback below.
@@ -103,6 +104,7 @@ function App() {
 
   return (
     <I18nProvider>
+      <ToastContainer />
       <BrowserRouter>
         <Suspense fallback={<RouteFallback />}>
           <Routes>

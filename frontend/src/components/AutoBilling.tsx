@@ -1,3 +1,4 @@
+import { notify } from '../utils/toast';
 import { useState } from 'react';
 import { Search, Building } from 'lucide-react';
 import { useTranslation } from '../i18n';
@@ -88,9 +89,9 @@ export default function AutoBilling() {
   const handleDelete = async (id: number) => {
     try {
       await deleteConfig(id);
-      alert(t('autoBilling.deleteSuccess'));
+      notify(t('autoBilling.deleteSuccess'));
     } catch (err) {
-      alert(t('autoBilling.deleteFailed') + ' ' + err);
+      notify(t('autoBilling.deleteFailed') + ' ' + err);
     }
   };
 
@@ -98,13 +99,13 @@ export default function AutoBilling() {
     try {
       await toggleActive(config);
     } catch (err) {
-      alert(t('autoBilling.toggleFailed') + ' ' + err);
+      notify(t('autoBilling.toggleFailed') + ' ' + err);
     }
   };
 
   const handleSubmit = async () => {
     await submitForm();
-    alert(editingConfig ? t('autoBilling.updateSuccess') : t('autoBilling.createSuccess'));
+    notify(editingConfig ? t('autoBilling.updateSuccess') : t('autoBilling.createSuccess'));
   };
 
   const handleTestRun = async (config: AutoBillingConfig) => {

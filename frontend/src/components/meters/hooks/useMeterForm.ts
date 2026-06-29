@@ -1,3 +1,4 @@
+import { notify } from '../../../utils/toast';
 import { useState } from 'react';
 import { api } from '../../../api/client';
 import type { Meter } from '../../../types';
@@ -309,14 +310,14 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
 
     const handleTestConnection = async () => {
         if (formData.connection_type !== 'smartme') {
-            alert(t('meters.testConnectionOnlySmartme'));
+            notify(t('meters.testConnectionOnlySmartme'));
             return;
         }
 
         // Validate configuration first
         const validationError = validateSmartMeConfig();
         if (validationError) {
-            alert(validationError);
+            notify(validationError);
             return;
         }
 
@@ -342,11 +343,11 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
             }
 
             await api.testSmartMeConnection(testConfig);
-            alert(t('meters.testConnectionSuccess'));
+            notify(t('meters.testConnectionSuccess'));
         } catch (err: any) {
             console.error('Connection test failed:', err);
             const errorMsg = err?.response?.data?.error || err?.message || t('meters.testConnectionFailed');
-            alert(`${t('meters.testConnectionFailed')}:\n\n${errorMsg}`);
+            notify(`${t('meters.testConnectionFailed')}:\n\n${errorMsg}`);
         } finally {
             setIsTestingConnection(false);
         }
@@ -359,7 +360,7 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
         if (formData.connection_type === 'smartme') {
             const validationError = validateSmartMeConfig();
             if (validationError) {
-                alert(validationError);
+                notify(validationError);
                 return;
             }
         }
@@ -466,7 +467,7 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
                 .filter(s => s.meter_id && s.meter_id > 0)
                 .map(s => ({ meter_id: s.meter_id, op: s.op, field: s.field || 'import' }));
             if (sources.length === 0) {
-                alert(t('meters.errorVirtualSourcesRequired'));
+                notify(t('meters.errorVirtualSourcesRequired'));
                 return;
             }
             config = { sources } as any;
@@ -517,7 +518,7 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
                 }
             }
             
-            alert(errorMessage);
+            notify(errorMessage);
         }
     };
 

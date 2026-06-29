@@ -1,3 +1,4 @@
+import { notify } from '../../../utils/toast';
 import { useState, useCallback } from 'react';
 import { api } from '../../../api/client';
 import type { Charger } from '../../../types';
@@ -73,17 +74,17 @@ export const useChargerDeletion = (onDeleteSuccess: () => void) => {
     if (!chargerToDelete || !deletionImpact) return;
 
     if (deleteConfirmationText !== deletionImpact.charger_name) {
-      alert('The charger name does not match. Please type it exactly as shown.');
+      notify('The charger name does not match. Please type it exactly as shown.');
       return;
     }
 
     if (!deleteUnderstandChecked) {
-      alert('Please check the confirmation box to proceed.');
+      notify('Please check the confirmation box to proceed.');
       return;
     }
 
     if (!captchaValid) {
-      alert('Please solve the security challenge to proceed.');
+      notify('Please solve the security challenge to proceed.');
       return;
     }
 
@@ -92,7 +93,7 @@ export const useChargerDeletion = (onDeleteSuccess: () => void) => {
       handleDeleteCancel();
       onDeleteSuccess();
     } catch (err) {
-      alert('Failed to delete charger. Please try again.');
+      notify('Failed to delete charger. Please try again.');
     }
   };
 

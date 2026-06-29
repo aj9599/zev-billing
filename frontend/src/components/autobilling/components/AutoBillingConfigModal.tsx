@@ -1,3 +1,4 @@
+import { notify } from '../../../utils/toast';
 import { X, ChevronLeft, ChevronRight, Check, Calendar } from 'lucide-react';
 import { useTranslation } from '../../../i18n';
 import AutoBillingStepper from './AutoBillingStepper';
@@ -93,12 +94,12 @@ export default function AutoBillingConfigModal({
       await onSubmit();
     } catch (err: any) {
       console.error('Submit error:', err);
-      alert(t('autoBilling.saveFailed') + '\n' + (err.message || err));
+      notify(t('autoBilling.saveFailed') + '\n' + (err.message || err));
     }
   };
 
   const handleMixingWarning = () => {
-    alert(t('autoBilling.error.cannotMix'));
+    notify(t('autoBilling.error.cannotMix'));
   };
 
   if (!isOpen) return null;

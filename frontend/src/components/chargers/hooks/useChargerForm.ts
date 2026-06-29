@@ -1,3 +1,4 @@
+import { notify } from '../../../utils/toast';
 import { useState, useCallback } from 'react';
 import { api } from '../../../api/client';
 import type { Charger } from '../../../types';
@@ -454,7 +455,7 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
       resetForm();
       onSubmitSuccess();
     } catch (err) {
-      alert('Failed to save charger. Please try again.');
+      notify('Failed to save charger. Please try again.');
     }
   };
 

@@ -1,3 +1,4 @@
+import { notify } from '../utils/toast';
 import { useState, useEffect } from 'react';
 import { Search, Zap, Wifi, WifiOff, Activity } from 'lucide-react';
 import { api } from '../api/client';
@@ -139,7 +140,7 @@ export default function Meters() {
 
     const handleReplaceClick = (meter: Meter) => {
         if (meter.is_archived) {
-            alert(t('meters.cannotReplaceArchived') || 'Cannot replace an archived meter');
+            notify(t('meters.cannotReplaceArchived') || 'Cannot replace an archived meter');
             return;
         }
         setMeterToReplace(meter);
@@ -163,7 +164,7 @@ export default function Meters() {
             fetchConnectionStatus();
         } catch (err) {
             console.error('Failed to archive meter:', err);
-            alert(t('meters.archiveFailed') || 'Failed to archive meter');
+            notify(t('meters.archiveFailed') || 'Failed to archive meter');
         }
     };
 
@@ -174,7 +175,7 @@ export default function Meters() {
             fetchConnectionStatus();
         } catch (err) {
             console.error('Failed to unarchive meter:', err);
-            alert(t('meters.unarchiveFailed') || 'Failed to restore meter');
+            notify(t('meters.unarchiveFailed') || 'Failed to restore meter');
         }
     };
 
@@ -227,7 +228,7 @@ export default function Meters() {
             setShowExportModal(false);
         } catch (error) {
             console.error('Export error:', error);
-            alert(t('meters.exportFailed') || 'Export failed. Please try again.');
+            notify(t('meters.exportFailed') || 'Export failed. Please try again.');
         }
     };
 

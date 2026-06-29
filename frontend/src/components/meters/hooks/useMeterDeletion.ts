@@ -1,3 +1,4 @@
+import { notify } from '../../../utils/toast';
 import { useState, useCallback } from 'react';
 import { api } from '../../../api/client';
 import type { Meter } from '../../../types';
@@ -49,17 +50,17 @@ export function useMeterDeletion(loadData: () => void, fetchConnectionStatus: ()
         if (!meterToDelete || !deletionImpact) return;
 
         if (deleteConfirmationText !== deletionImpact.meter_name) {
-            alert(t('meters.deleteNameMismatch') || 'The meter name does not match. Please type it exactly as shown.');
+            notify(t('meters.deleteNameMismatch') || 'The meter name does not match. Please type it exactly as shown.');
             return;
         }
 
         if (!deleteUnderstandChecked) {
-            alert(t('meters.deleteCheckRequired') || 'Please check the confirmation box to proceed.');
+            notify(t('meters.deleteCheckRequired') || 'Please check the confirmation box to proceed.');
             return;
         }
 
         if (!captchaValid) {
-            alert(t('meters.captchaRequired') || 'Please solve the security challenge to proceed.');
+            notify(t('meters.captchaRequired') || 'Please solve the security challenge to proceed.');
             return;
         }
 
@@ -74,7 +75,7 @@ export function useMeterDeletion(loadData: () => void, fetchConnectionStatus: ()
             loadData();
             fetchConnectionStatus();
         } catch (err) {
-            alert(t('meters.deleteFailed'));
+            notify(t('meters.deleteFailed'));
         }
     };
 

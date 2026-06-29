@@ -1,3 +1,4 @@
+import { notify } from '../utils/toast';
 import { useState, useEffect } from 'react';
 import { Search, Car, Wifi, WifiOff, Zap, PlugZap } from 'lucide-react';
 import { api } from '../api/client';
@@ -172,7 +173,7 @@ export default function Chargers() {
       setShowExportModal(false);
     } catch (error) {
       console.error('Export error:', error);
-      alert(t('chargers.exportFailed') || 'Export failed. Please try again.');
+      notify(t('chargers.exportFailed') || 'Export failed. Please try again.');
     }
   };
 
