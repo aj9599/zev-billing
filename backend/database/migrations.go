@@ -9,8 +9,44 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// runVersioned runs a named migration step once and records it in
+// schema_migrations so later boots skip it. The wrapped step functions are
+// each individually idempotent (they check for the column/table first), so
+// running them on a pre-existing database is safe — the ledger just makes the
+// applied set explicit, ordered and auditable, and saves redundant work on
+// every boot.
+//
+// Discipline: never change what an already-recorded version does. To alter the
+// schema further, append a NEW version entry; modifying an old one would be
+// skipped on databases that already recorded it.
+func runVersioned(db *sql.DB, version string, fn func(*sql.DB) error) error {
+	var applied int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE version = ?`, version).Scan(&applied); err != nil {
+		return fmt.Errorf("schema_migrations lookup for %q: %v", version, err)
+	}
+	if applied > 0 {
+		return nil
+	}
+	if err := fn(db); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`INSERT OR IGNORE INTO schema_migrations (version) VALUES (?)`, version); err != nil {
+		return fmt.Errorf("recording schema_migration %q: %v", version, err)
+	}
+	log.Printf("✓ schema migration recorded: %s", version)
+	return nil
+}
+
 func RunMigrations(db *sql.DB) error {
 	migrations := []string{
+		// Ledger of applied incremental migrations. Additive and auditable: each
+		// named step recorded by runVersioned lands here with its apply time, so
+		// the set of applied migrations is explicit rather than inferred.
+		`CREATE TABLE IF NOT EXISTS schema_migrations (
+			version TEXT PRIMARY KEY,
+			applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
 		`CREATE TABLE IF NOT EXISTS admin_users (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			username TEXT UNIQUE NOT NULL,
@@ -464,83 +500,69 @@ func RunMigrations(db *sql.DB) error {
 		}
 	}
 
-	// Add additional columns that might be missing from older versions
-	if err := addGroupBuildingsColumn(db); err != nil {
+	// Incremental, idempotent column/structure migrations from older versions.
+	// Each is recorded in schema_migrations via runVersioned so it runs once and
+	// is skipped on subsequent boots. Order is preserved; append new versions at
+	// the end rather than editing existing ones.
+	if err := runVersioned(db, "0001_group_buildings", addGroupBuildingsColumn); err != nil {
 		return err
 	}
-
-	if err := addDeviceTypeColumn(db); err != nil {
+	if err := runVersioned(db, "0002_device_type", addDeviceTypeColumn); err != nil {
 		return err
 	}
-
-	if err := addExportColumns(db); err != nil {
+	if err := runVersioned(db, "0003_export_columns", addExportColumns); err != nil {
 		return err
 	}
-
-	if err := addMidCertifiedColumn(db); err != nil {
+	if err := runVersioned(db, "0004_mid_certified", addMidCertifiedColumn); err != nil {
 		return err
 	}
-
-	if err := addVZEVColumns(db); err != nil {
+	if err := runVersioned(db, "0005_vzev_columns", addVZEVColumns); err != nil {
 		return err
 	}
-
-	if err := addVATColumns(db); err != nil {
+	if err := runVersioned(db, "0006_vat_columns", addVATColumns); err != nil {
 		return err
 	}
-
-	if err := addSortOrderColumns(db); err != nil {
+	if err := runVersioned(db, "0007_sort_order", addSortOrderColumns); err != nil {
 		return err
 	}
-
-	if err := addDeviceControlColumns(db); err != nil {
+	if err := runVersioned(db, "0008_device_control", addDeviceControlColumns); err != nil {
 		return err
 	}
-
-	if err := addAutoBillingApartmentsColumn(db); err != nil {
+	if err := runVersioned(db, "0009_auto_billing_apartments", addAutoBillingApartmentsColumn); err != nil {
 		return err
 	}
-
-	// NEW: Add custom_item_ids column for custom item selection in auto billing
-	if err := addCustomItemIdsColumn(db); err != nil {
+	// custom_item_ids column for custom item selection in auto billing.
+	if err := runVersioned(db, "0010_custom_item_ids", addCustomItemIdsColumn); err != nil {
 		return err
 	}
-
-	// Add billing_mode + charger_id columns so auto-billing can target a whole
-	// building or a single charger (matching the manual bill-config flow).
-	if err := addAutoBillingScopeColumns(db); err != nil {
+	// billing_mode + bill_content + charger_id so auto-billing can target a whole
+	// building, a single charger, or pick meters/chargers/both (manual-flow parity).
+	if err := runVersioned(db, "0011_auto_billing_scope", addAutoBillingScopeColumns); err != nil {
 		return err
 	}
-
 	// Deduplicate charger_sessions and enforce one row per (charger, session_time).
-	// Without this, OCMF writes and live snapshots produce overlapping rows that
-	// show up as duplicates in the CSV export.
-	if err := dedupeAndIndexChargerSessions(db); err != nil {
+	if err := runVersioned(db, "0012_dedupe_charger_sessions", dedupeAndIndexChargerSessions); err != nil {
+		return err
+	}
+	if err := runVersioned(db, "0013_zaptec_configs", migrateZaptecConfigs); err != nil {
 		return err
 	}
 
-	if err := migrateZaptecConfigs(db); err != nil {
-		return err
-	}
-
+	// Self-healing singletons/triggers — cheap and run every boot so a deleted
+	// row or trigger is restored; not part of the versioned ledger.
 	if err := createTriggers(db); err != nil {
 		return err
 	}
-
 	if err := ensureEmailAlertSettingsRow(db); err != nil {
 		return err
 	}
 
-	// Add editable invoice e-mail subject/body columns so the auto-billing
-	// e-mail text can be customised from the Email Settings UI.
-	if err := addInvoiceEmailTemplateColumns(db); err != nil {
+	// Editable invoice e-mail subject/body columns (Email Settings UI).
+	if err := runVersioned(db, "0014_invoice_email_templates", addInvoiceEmailTemplateColumns); err != nil {
 		return err
 	}
-
-	// Add per-charger billing_method so chargers without a real charge mode
-	// (e.g. Zaptec cloud) can be billed with a proportional solar split instead
-	// of dumping all energy into the flat "solar mode" car-charging price.
-	if err := addChargerBillingMethodColumn(db); err != nil {
+	// Per-charger billing_method (e.g. Zaptec cloud → proportional solar split).
+	if err := runVersioned(db, "0015_charger_billing_method", addChargerBillingMethodColumn); err != nil {
 		return err
 	}
 
@@ -550,12 +572,11 @@ func RunMigrations(db *sql.DB) error {
 	}
 
 	// Phase 2 online activation: per-device binding columns.
-	if err := addAppLicenseActivationColumns(db); err != nil {
+	if err := runVersioned(db, "0016_app_license_activation", addAppLicenseActivationColumns); err != nil {
 		return err
 	}
-
 	// Tenant self-service portal: per-user access token (admin-issued link/code).
-	if err := addPortalTokenColumn(db); err != nil {
+	if err := runVersioned(db, "0017_portal_token", addPortalTokenColumn); err != nil {
 		return err
 	}
 
