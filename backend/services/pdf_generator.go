@@ -1027,6 +1027,9 @@ func (pg *PDFGenerator) generateItemHTML(item map[string]interface{}, currency s
 
 	vzevIcon := `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/><circle cx="12" cy="12" r="3" fill="#8b5cf6" opacity="0.2"/></svg>`
 
+	// Battery with a charging bolt, matching the dashboard/list battery colour.
+	batteryIcon := `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 7h1a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2"/><path d="M6 7H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h1"/><path d="m11 7-3 5h4l-3 5"/><line x1="22" x2="22" y1="11" y2="13"/></svg>`
+
 	switch itemType {
 	case "meter_info":
 		return fmt.Sprintf(`<tr class="item-header"><td colspan="2"><strong>%s</strong></td></tr>`, description)
@@ -1058,7 +1061,7 @@ func (pg *PDFGenerator) generateItemHTML(item map[string]interface{}, currency s
 
 	case "battery_power":
 		// Battery-supplied energy (stored solar released later). Shares the solar
-		// highlight since it is renewable, with the bolt icon for the battery.
+		// highlight since it is renewable, with a battery icon.
 		return fmt.Sprintf(`<tr class="item-cost solar-highlight">
 			<td style="padding-left: 20px;">
 				<span style="display: inline-flex; align-items: center; gap: 6px;">
@@ -1067,7 +1070,7 @@ func (pg *PDFGenerator) generateItemHTML(item map[string]interface{}, currency s
 				</span>
 			</td>
 			<td class="text-right"><strong>%s %.2f</strong></td>
-		</tr>`, boltIcon, description, currency, totalPrice)
+		</tr>`, batteryIcon, description, currency, totalPrice)
 
 	case "normal_power":
 		return fmt.Sprintf(`<tr class="item-cost normal-highlight">

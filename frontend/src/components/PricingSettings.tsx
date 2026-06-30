@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, DollarSign, Search, Building, HelpCircle, Layers, Check, ChevronDown, ChevronRight, Zap, Sun, Car, Clock, CalendarCheck, CalendarX, Percent } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, DollarSign, Search, Building, HelpCircle, Layers, Check, ChevronDown, ChevronRight, Zap, Sun, Battery, Car, Clock, CalendarCheck, CalendarX, Percent } from 'lucide-react';
 import { api } from '../api/client';
 import type { BillingSettings, Building as BuildingType } from '../types';
 import { useTranslation } from '../i18n';
@@ -600,6 +600,7 @@ export default function PricingSettings() {
                           <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>{t('pricing.form.type')}</th>
                           <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('pricing.normalKwh')}</th>
                           <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('pricing.solarKwh')}</th>
+                          <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('pricing.batteryKwh')}</th>
                           {building.is_group && <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('pricing.vzevExportPrice')}</th>}
                           <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('pricing.chargingNormal')}</th>
                           <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('pricing.chargingPriority')}</th>
@@ -632,6 +633,9 @@ export default function PricingSettings() {
                             </td>
                             <td style={{ padding: '14px 16px', fontWeight: '600', fontSize: '14px', color: '#f59e0b' }}>
                               {setting.currency} {setting.solar_power_price.toFixed(2)}
+                            </td>
+                            <td style={{ padding: '14px 16px', fontWeight: '600', fontSize: '14px', color: '#a855f7' }}>
+                              {setting.currency} {(setting.battery_power_price ?? 0.15).toFixed(2)}
                             </td>
                             {building.is_group && (
                               <td style={{ padding: '14px 16px', fontWeight: '600', fontSize: '14px', color: '#8b5cf6' }}>
@@ -785,6 +789,15 @@ export default function PricingSettings() {
                             </div>
                             <div style={{ fontSize: '15px', fontWeight: '700', color: '#f59e0b' }}>
                               {setting.currency} {setting.solar_power_price.toFixed(2)}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                              <Battery size={12} color="#a855f7" />
+                              <span style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '600' }}>{t('pricing.batteryKwh')}</span>
+                            </div>
+                            <div style={{ fontSize: '15px', fontWeight: '700', color: '#a855f7' }}>
+                              {setting.currency} {(setting.battery_power_price ?? 0.15).toFixed(2)}
                             </div>
                           </div>
                           {building.is_group && (

@@ -2621,6 +2621,7 @@ export const de: Translations = {
   'pricing.noPricing': 'Keine Preiseinstellungen konfiguriert. Fügen Sie Ihre ersten Preise hinzu, um zu beginnen.',
   'pricing.normalKwh': 'Normal (CHF/kWh)',
   'pricing.solarKwh': 'Solar (CHF/kWh)',
+  'pricing.batteryKwh': 'Batterie (CHF/kWh)',
   'pricing.ongoing': 'laufend',
   'pricing.to': 'bis',
   'pricing.deleteConfirm': 'Sind Sie sicher, dass Sie diese Preiseinstellung löschen möchten?',

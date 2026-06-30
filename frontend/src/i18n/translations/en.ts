@@ -2621,6 +2621,7 @@ export const en: Translations = {
   'pricing.noPricing': 'No pricing settings configured. Add your first pricing to get started.',
   'pricing.normalKwh': 'Normal (CHF/kWh)',
   'pricing.solarKwh': 'Solar (CHF/kWh)',
+  'pricing.batteryKwh': 'Battery (CHF/kWh)',
   'pricing.ongoing': 'ongoing',
   'pricing.to': 'to',
   'pricing.deleteConfirm': 'Are you sure you want to delete this pricing setting?',
