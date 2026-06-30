@@ -2610,6 +2610,8 @@ export const en: Translations = {
   'pricing.editPricing': 'Edit Pricing',
   'pricing.normalPower': 'Normal Power (CHF/kWh)',
   'pricing.solarPower': 'Solar Power (CHF/kWh)',
+  'pricing.batteryPower': 'Battery Power (CHF/kWh)',
+  'pricing.batteryPowerDescription': 'Tariff for energy supplied by the building battery (stored solar). Only applied when the building has a battery meter.',
   'pricing.chargingNormal': 'Car Charging Solar (CHF/kWh)',
   'pricing.chargingPriority': 'Car Charging Priority (CHF/kWh)',
   'pricing.validPeriod': 'Valid Period',

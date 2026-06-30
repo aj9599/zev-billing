@@ -2610,6 +2610,8 @@ export const de: Translations = {
   'pricing.editPricing': 'Preise bearbeiten',
   'pricing.normalPower': 'Normaler Strom (CHF/kWh)',
   'pricing.solarPower': 'Solarstrom (CHF/kWh)',
+  'pricing.batteryPower': 'Batteriestrom (CHF/kWh)',
+  'pricing.batteryPowerDescription': 'Tarif für Energie aus der Gebäudebatterie (gespeicherter Solarstrom). Wird nur angewendet, wenn das Gebäude einen Batteriezähler hat.',
   'pricing.chargingNormal': 'Laden Solar (CHF/kWh)',
   'pricing.chargingPriority': 'Laden Priorität (CHF/kWh)',
   'pricing.validPeriod': 'Gültigkeitszeitraum',

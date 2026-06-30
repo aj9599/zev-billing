@@ -238,6 +238,7 @@ export interface BillingSettings {
   is_complex: boolean;
   normal_power_price: number;
   solar_power_price: number;
+  battery_power_price?: number;
   car_charging_normal_price: number;
   car_charging_priority_price: number;
   vzev_export_price?: number;

@@ -18,10 +18,10 @@ func almostEqual(a, b float64) bool {
 
 func TestVATBreakdown(t *testing.T) {
 	cases := []struct {
-		name                   string
-		total                  float64
-		rate                   float64
-		included               bool
+		name                    string
+		total                   float64
+		rate                    float64
+		included                bool
 		wantNet, wantVAT, wantG float64
 	}{
 		{"no vat", 100, 0, false, 100, 0, 100},
@@ -229,4 +229,136 @@ func TestLoadPriceSegments(t *testing.T) {
 			t.Fatal("expected an error for a period with no active pricing")
 		}
 	})
+}
+
+// --- Battery two-tier allocation -------------------------------------------
+
+func insertZEVMeter(t *testing.T, db *sql.DB, id int, name, meterType string, buildingID int, userID interface{}) {
+	t.Helper()
+	if _, err := db.Exec(`
+		INSERT INTO meters (id, name, meter_type, building_id, user_id, connection_type, connection_config)
+		VALUES (?, ?, ?, ?, ?, 'manual', '{}')`,
+		id, name, meterType, buildingID, userID); err != nil {
+		t.Fatalf("insert meter %s: %v", name, err)
+	}
+}
+
+func insertZEVReading(t *testing.T, db *sql.DB, meterID int, ts time.Time, cons, consExport float64) {
+	t.Helper()
+	if _, err := db.Exec(`
+		INSERT INTO meter_readings (meter_id, reading_time, power_kwh, power_kwh_export, consumption_kwh, consumption_export)
+		VALUES (?, ?, 0, 0, ?, ?)`,
+		meterID, ts, cons, consExport); err != nil {
+		t.Fatalf("insert reading: %v", err)
+	}
+}
+
+// TestCalculateZEVConsumptionBattery checks the solar→battery→grid tiering:
+// midday solar (some of it stored in the battery), evening battery discharge,
+// and a night interval with neither.
+func TestCalculateZEVConsumptionBattery(t *testing.T) {
+	db := newTestDB(t)
+	bs := NewBillingService(db)
+	insertBuilding(t, db, 1, "Battery building")
+	if _, err := db.Exec(`INSERT INTO users (id, first_name, last_name, email, building_id) VALUES (10,'A','B','a@b.c',1)`); err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+	insertZEVMeter(t, db, 1, "Apt", "apartment_meter", 1, 10)
+	insertZEVMeter(t, db, 2, "Solar", "solar_meter", 1, nil)
+	insertZEVMeter(t, db, 3, "Battery", "battery_meter", 1, nil)
+
+	base := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+	midday := base.Add(12 * time.Hour)
+	evening := base.Add(19 * time.Hour)
+	night := base.Add(23 * time.Hour)
+
+	// Apartment consumption per interval.
+	insertZEVReading(t, db, 1, midday, 1.0, 0)
+	insertZEVReading(t, db, 1, evening, 2.0, 0)
+	insertZEVReading(t, db, 1, night, 1.0, 0)
+	// Solar production (export column) — only midday.
+	insertZEVReading(t, db, 2, midday, 0, 4.0)
+	// Battery: charge 2.0 kWh midday (export col), discharge 1.5 kWh evening (import col).
+	insertZEVReading(t, db, 3, midday, 0, 2.0)
+	insertZEVReading(t, db, 3, evening, 1.5, 0)
+
+	normal, solar, battery, total := bs.calculateZEVConsumption(10, 1, base, base.Add(24*time.Hour))
+
+	// midday: avail solar = 4-2 = 2 ≥ 1 → 1.0 solar.
+	// evening: no solar; battery 1.5 of 2.0 needed → 1.5 battery + 0.5 grid.
+	// night: 1.0 grid.
+	if !almostEqual(solar, 1.0) {
+		t.Errorf("solar: want 1.0, got %.3f", solar)
+	}
+	if !almostEqual(battery, 1.5) {
+		t.Errorf("battery: want 1.5, got %.3f", battery)
+	}
+	if !almostEqual(normal, 1.5) {
+		t.Errorf("grid: want 1.5, got %.3f", normal)
+	}
+	if !almostEqual(total, 4.0) {
+		t.Errorf("total: want 4.0, got %.3f", total)
+	}
+	if !almostEqual(solar+battery+normal, total) {
+		t.Errorf("tiers must sum to total: %.3f + %.3f + %.3f != %.3f", solar, battery, normal, total)
+	}
+}
+
+// TestCalculateZEVConsumptionNoBattery is a regression guard: a building with no
+// battery meter must bill exactly as before (zero battery, solar/grid unchanged).
+func TestCalculateZEVConsumptionNoBattery(t *testing.T) {
+	db := newTestDB(t)
+	bs := NewBillingService(db)
+	insertBuilding(t, db, 1, "No battery")
+	if _, err := db.Exec(`INSERT INTO users (id, first_name, last_name, email, building_id) VALUES (10,'A','B','a@b.c',1)`); err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+	insertZEVMeter(t, db, 1, "Apt", "apartment_meter", 1, 10)
+	insertZEVMeter(t, db, 2, "Solar", "solar_meter", 1, nil)
+
+	base := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+	midday := base.Add(12 * time.Hour)
+	evening := base.Add(19 * time.Hour)
+
+	insertZEVReading(t, db, 1, midday, 1.0, 0)
+	insertZEVReading(t, db, 1, evening, 2.0, 0)
+	insertZEVReading(t, db, 2, midday, 0, 0.4)
+
+	normal, solar, battery, total := bs.calculateZEVConsumption(10, 1, base, base.Add(24*time.Hour))
+
+	if !almostEqual(battery, 0.0) {
+		t.Errorf("battery: want 0, got %.3f", battery)
+	}
+	if !almostEqual(solar, 0.4) {
+		t.Errorf("solar: want 0.4, got %.3f", solar)
+	}
+	if !almostEqual(normal, 2.6) {
+		t.Errorf("grid: want 2.6, got %.3f", normal)
+	}
+	if !almostEqual(total, 3.0) {
+		t.Errorf("total: want 3.0, got %.3f", total)
+	}
+}
+
+// TestSplitSolarBatteryGrid covers the allocation helper directly.
+func TestSplitSolarBatteryGrid(t *testing.T) {
+	// No battery → identical to SplitSolarGrid.
+	s, b, g := SplitSolarBatteryGrid(2.0, 4.0, 1.0, 0, 0)
+	es, eg := SplitSolarGrid(2.0, 4.0, 1.0)
+	if !almostEqual(s, es) || !almostEqual(g, eg) || !almostEqual(b, 0) {
+		t.Errorf("no-battery mismatch: got (%.3f,%.3f,%.3f) want (%.3f,0,%.3f)", s, b, g, es, eg)
+	}
+
+	// Charge removes solar from the available pool this interval.
+	s, b, g = SplitSolarBatteryGrid(1.0, 2.0, 2.0, 1.0, 0)
+	// avail solar = 2-1 = 1; share 0.5 → solar 0.5, no battery, grid 0.5.
+	if !almostEqual(s, 0.5) || !almostEqual(b, 0) || !almostEqual(g, 0.5) {
+		t.Errorf("charge case: got (%.3f,%.3f,%.3f) want (0.5,0,0.5)", s, b, g)
+	}
+
+	// Pure discharge interval (no solar): battery then grid.
+	s, b, g = SplitSolarBatteryGrid(2.0, 2.0, 0, 0, 1.5)
+	if !almostEqual(s, 0) || !almostEqual(b, 1.5) || !almostEqual(g, 0.5) {
+		t.Errorf("discharge case: got (%.3f,%.3f,%.3f) want (0,1.5,0.5)", s, b, g)
+	}
 }

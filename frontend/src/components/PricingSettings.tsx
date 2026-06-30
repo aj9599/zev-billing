@@ -71,6 +71,7 @@ export default function PricingSettings() {
     is_complex: false,
     normal_power_price: 0.25,
     solar_power_price: 0.15,
+    battery_power_price: 0.15,
     car_charging_normal_price: 0.30,
     car_charging_priority_price: 0.40,
     vzev_export_price: 0.18,
@@ -198,6 +199,7 @@ export default function PricingSettings() {
       is_complex: false,
       normal_power_price: 0.25,
       solar_power_price: 0.15,
+      battery_power_price: 0.15,
       car_charging_normal_price: 0.30,
       car_charging_priority_price: 0.40,
       vzev_export_price: 0.18,
@@ -1081,6 +1083,17 @@ export default function PricingSettings() {
                         style={inputStyle(isMobile)}
                         onFocus={focusHandler} onBlur={blurHandler} />
                     </div>
+                  </div>
+
+                  <div style={{ marginTop: '14px' }}>
+                    <label style={labelStyle}>{t('pricing.batteryPower')}</label>
+                    <input type="number" step="0.01" value={formData.battery_power_price ?? 0.15}
+                      onChange={(e) => setFormData({ ...formData, battery_power_price: parseFloat(e.target.value) })}
+                      style={inputStyle(isMobile)}
+                      onFocus={focusHandler} onBlur={blurHandler} />
+                    <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '4px' }}>
+                      {t('pricing.batteryPowerDescription')}
+                    </p>
                   </div>
 
                   {isComplexSelected && (

@@ -84,7 +84,7 @@ func (h *BillingHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	if buildingID != "" {
 		query = `
 			SELECT id, building_id, is_complex, normal_power_price, solar_power_price,
-			       car_charging_normal_price, car_charging_priority_price,
+			       battery_power_price, car_charging_normal_price, car_charging_priority_price,
 			       vzev_export_price, vat_included, vat_rate, currency, valid_from,
 			       valid_to, is_active, created_at, updated_at
 			FROM billing_settings
@@ -95,7 +95,7 @@ func (h *BillingHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	} else {
 		query = `
     		SELECT id, building_id, is_complex, normal_power_price, solar_power_price,
-           			car_charging_normal_price, car_charging_priority_price,
+           			battery_power_price, car_charging_normal_price, car_charging_priority_price,
            			vzev_export_price, vat_included, vat_rate, currency, valid_from,
            			valid_to, is_active, created_at, updated_at
     		FROM billing_settings
@@ -117,7 +117,7 @@ func (h *BillingHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 		var validTo sql.NullString
 		err := rows.Scan(
 			&s.ID, &s.BuildingID, &s.IsComplex, &s.NormalPowerPrice, &s.SolarPowerPrice,
-			&s.CarChargingNormalPrice, &s.CarChargingPriorityPrice, &s.VZEVExportPrice,
+			&s.BatteryPowerPrice, &s.CarChargingNormalPrice, &s.CarChargingPriorityPrice, &s.VZEVExportPrice,
 			&s.VATIncluded, &s.VATRate,
 			&s.Currency, &s.ValidFrom, &validTo, &s.IsActive, &s.CreatedAt, &s.UpdatedAt,
 		)
@@ -149,11 +149,11 @@ func (h *BillingHandler) CreateSettings(w http.ResponseWriter, r *http.Request) 
 
 	result, err := h.db.Exec(`
     	INSERT INTO billing_settings (
-        	building_id, is_complex, normal_power_price, solar_power_price,
-        	car_charging_normal_price, car_charging_priority_price, 
+        	building_id, is_complex, normal_power_price, solar_power_price, battery_power_price,
+        	car_charging_normal_price, car_charging_priority_price,
         	vzev_export_price, vat_included, vat_rate, currency, valid_from, valid_to, is_active
-    		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, s.BuildingID, s.IsComplex, s.NormalPowerPrice, s.SolarPowerPrice,
+    		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, s.BuildingID, s.IsComplex, s.NormalPowerPrice, s.SolarPowerPrice, s.BatteryPowerPrice,
 		s.CarChargingNormalPrice, s.CarChargingPriorityPrice,
 		s.VZEVExportPrice, s.VATIncluded, s.VATRate, s.Currency, s.ValidFrom, validTo, s.IsActive)
 
@@ -217,12 +217,12 @@ func (h *BillingHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) 
 
 	result, err := h.db.Exec(`
 		UPDATE billing_settings SET
-			building_id = ?, is_complex = ?, normal_power_price = ?, solar_power_price = ?,
+			building_id = ?, is_complex = ?, normal_power_price = ?, solar_power_price = ?, battery_power_price = ?,
 			car_charging_normal_price = ?, car_charging_priority_price = ?,
 			vzev_export_price = ?, vat_included = ?, vat_rate = ?, currency = ?, valid_from = ?, valid_to = ?,
 			is_active = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
-	`, s.BuildingID, s.IsComplex, s.NormalPowerPrice, s.SolarPowerPrice,
+	`, s.BuildingID, s.IsComplex, s.NormalPowerPrice, s.SolarPowerPrice, s.BatteryPowerPrice,
 		s.CarChargingNormalPrice, s.CarChargingPriorityPrice,
 		s.VZEVExportPrice, s.VATIncluded, s.VATRate, s.Currency, s.ValidFrom, validTo,
 		s.IsActive, s.ID)

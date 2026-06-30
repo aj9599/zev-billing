@@ -30,10 +30,55 @@ type TariffBreakdown struct {
 }
 
 // BuildingIntervalAgg holds, for one reading interval, the building-wide totals
-// needed to allocate solar between consumers.
+// needed to allocate solar (and battery) between consumers.
 type BuildingIntervalAgg struct {
 	TotalConsumption float64
 	SolarProduction  float64
+	// BatteryCharge is solar stored into the battery this interval; it is removed
+	// from the solar available to tenants now (it comes back later as discharge).
+	BatteryCharge float64
+	// BatteryDischarge is energy the battery supplied to the building this
+	// interval — the battery pool, allocated after solar and priced at the
+	// battery tariff.
+	BatteryDischarge float64
+}
+
+// SplitSolarBatteryGrid allocates a meter's interval consumption across three
+// tiers — solar, battery, then grid — each proportional to the meter's share of
+// building consumption. Solar available to tenants this interval is the solar
+// production minus what was stored into the battery (clamped at zero). The
+// battery pool covers the consumption solar didn't, and the rest is grid.
+//
+// With no battery (charge and discharge both zero) this reduces exactly to
+// SplitSolarGrid, so buildings without a battery are unaffected.
+func SplitSolarBatteryGrid(meterConsumption, buildingConsumption, solarProduction, batteryCharge, batteryDischarge float64) (solar, battery, grid float64) {
+	if meterConsumption <= 0 {
+		return 0, 0, 0
+	}
+	if buildingConsumption <= 0 {
+		return 0, 0, meterConsumption
+	}
+	availSolar := solarProduction - batteryCharge
+	if availSolar < 0 {
+		availSolar = 0
+	}
+	share := meterConsumption / buildingConsumption
+
+	if availSolar >= buildingConsumption {
+		return meterConsumption, 0, 0
+	}
+	solar = availSolar * share
+	remaining := meterConsumption - solar
+
+	// Battery tier covers the building consumption solar didn't reach.
+	buildingRemaining := buildingConsumption - availSolar // > 0 here
+	if batteryDischarge >= buildingRemaining {
+		battery = remaining
+	} else {
+		battery = remaining * (batteryDischarge / buildingRemaining)
+	}
+	grid = remaining - battery
+	return solar, battery, grid
 }
 
 // SplitSolarGrid allocates a meter's interval consumption into solar and grid,

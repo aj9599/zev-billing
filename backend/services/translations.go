@@ -24,11 +24,12 @@ type InvoiceTranslations struct {
 	ArchivedNotice string
 
 	// Item type translations
-	NormalPower string
-	SolarPower  string
-	CarCharging string
-	SharedMeter string
-	CustomItem  string
+	NormalPower  string
+	SolarPower   string
+	BatteryPower string
+	CarCharging  string
+	SharedMeter  string
+	CustomItem   string
 
 	// NEW: Additional translations for item descriptions
 	ApartmentMeter     string
@@ -112,6 +113,7 @@ func GetTranslations(language string) InvoiceTranslations {
 			ArchivedNotice:             "ARCHIVIERT - Diese Rechnung wurde archiviert und ist nicht mehr gültig",
 			NormalPower:                "Normaler Strom",
 			SolarPower:                 "Solarstrom",
+			BatteryPower:               "Batteriestrom",
 			CarCharging:                "Autoladen",
 			SharedMeter:                "Gemeinsamer Zähler",
 			CustomItem:                 "Benutzerdefinierter Posten",
@@ -183,6 +185,7 @@ func GetTranslations(language string) InvoiceTranslations {
 			ArchivedNotice:             "ARCHIVÉ - Cette facture a été archivée et n'est plus valide",
 			NormalPower:                "Électricité normale",
 			SolarPower:                 "Énergie solaire",
+			BatteryPower:               "Énergie de la batterie",
 			CarCharging:                "Recharge de voiture",
 			SharedMeter:                "Compteur partagé",
 			CustomItem:                 "Article personnalisé",
@@ -254,6 +257,7 @@ func GetTranslations(language string) InvoiceTranslations {
 			ArchivedNotice:             "ARCHIVIATO - Questa fattura è stata archiviata e non è più valida",
 			NormalPower:                "Energia normale",
 			SolarPower:                 "Energia solare",
+			BatteryPower:               "Energia della batteria",
 			CarCharging:                "Ricarica auto",
 			SharedMeter:                "Contatore condiviso",
 			CustomItem:                 "Voce personalizzata",
@@ -325,6 +329,7 @@ func GetTranslations(language string) InvoiceTranslations {
 			ArchivedNotice:             "ARCHIVED - This invoice has been archived and is no longer valid",
 			NormalPower:                "Normal Power",
 			SolarPower:                 "Solar Power",
+			BatteryPower:               "Battery Power",
 			CarCharging:                "Car Charging",
 			SharedMeter:                "Shared Meter",
 			CustomItem:                 "Custom Item",
@@ -382,6 +387,8 @@ func TranslateItemType(itemType string, translations InvoiceTranslations) string
 		return translations.NormalPower
 	case "solar_power":
 		return translations.SolarPower
+	case "battery_power":
+		return translations.BatteryPower
 	case "car_charging":
 		return translations.CarCharging
 	case "shared_meter":

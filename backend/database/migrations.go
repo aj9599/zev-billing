@@ -19,6 +19,31 @@ import (
 // Discipline: never change what an already-recorded version does. To alter the
 // schema further, append a NEW version entry; modifying an old one would be
 // skipped on databases that already recorded it.
+// addBatteryPowerPriceColumn adds the per-building battery tariff used to price
+// energy supplied to tenants by the building battery (discharge).
+func addBatteryPowerPriceColumn(db *sql.DB) error {
+	var ddl string
+	if err := db.QueryRow(
+		`SELECT sql FROM sqlite_master WHERE type='table' AND name='billing_settings'`,
+	).Scan(&ddl); err != nil {
+		return err
+	}
+	if contains(ddl, "battery_power_price") {
+		log.Println("✓ battery_power_price column already exists")
+		return nil
+	}
+	log.Println("Adding battery_power_price column to billing_settings table...")
+	if _, err := db.Exec(`ALTER TABLE billing_settings ADD COLUMN battery_power_price REAL NOT NULL DEFAULT 0.15`); err != nil {
+		if contains(err.Error(), "duplicate column") {
+			log.Println("✓ battery_power_price column already exists")
+			return nil
+		}
+		return fmt.Errorf("failed to add battery_power_price column: %v", err)
+	}
+	log.Println("✓ battery_power_price column added successfully")
+	return nil
+}
+
 func runVersioned(db *sql.DB, version string, fn func(*sql.DB) error) error {
 	var applied int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE version = ?`, version).Scan(&applied); err != nil {
@@ -257,6 +282,7 @@ func RunMigrations(db *sql.DB) error {
 			building_id INTEGER NOT NULL,
 			normal_power_price REAL NOT NULL DEFAULT 0.25,
 			solar_power_price REAL NOT NULL DEFAULT 0.15,
+			battery_power_price REAL NOT NULL DEFAULT 0.15,
 			car_charging_normal_price REAL NOT NULL DEFAULT 0.30,
 			car_charging_priority_price REAL NOT NULL DEFAULT 0.40,
 			is_complex INTEGER DEFAULT 0,
@@ -589,6 +615,10 @@ func RunMigrations(db *sql.DB) error {
 	}
 	// Invoice payment tracking: unpaid/partial/paid + amount + timestamp.
 	if err := runVersioned(db, "0018_invoice_payment", addInvoicePaymentColumns); err != nil {
+		return err
+	}
+	// Separate per-building tariff for energy supplied by the battery.
+	if err := runVersioned(db, "0019_battery_power_price", addBatteryPowerPriceColumn); err != nil {
 		return err
 	}
 

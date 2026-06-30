@@ -217,7 +217,7 @@ func parseStoredDate(s string) (time.Time, error) {
 func (bs *BillingService) loadPriceSegments(buildingID int, start, end time.Time) ([]PriceSegment, error) {
 	rows, err := bs.db.Query(`
 		SELECT id, building_id, is_complex, normal_power_price, solar_power_price,
-		       car_charging_normal_price, car_charging_priority_price,
+		       battery_power_price, car_charging_normal_price, car_charging_priority_price,
 		       vzev_export_price, vat_included, vat_rate, currency, valid_from, valid_to
 		FROM billing_settings
 		WHERE building_id = ? AND is_active = 1
@@ -241,7 +241,7 @@ func (bs *BillingService) loadPriceSegments(buildingID int, start, end time.Time
 		var validToStr sql.NullString
 		if err := rows.Scan(
 			&s.ID, &s.BuildingID, &s.IsComplex,
-			&s.NormalPowerPrice, &s.SolarPowerPrice,
+			&s.NormalPowerPrice, &s.SolarPowerPrice, &s.BatteryPowerPrice,
 			&s.CarChargingNormalPrice, &s.CarChargingPriorityPrice,
 			&s.VZEVExportPrice, &s.VATIncluded, &s.VATRate, &s.Currency,
 			&validFromStr, &validToStr,
@@ -682,7 +682,7 @@ func (bs *BillingService) buildingIntervalAggregates(buildingID int, start, end 
 		FROM meter_readings mr
 		JOIN meters m ON mr.meter_id = m.id
 		WHERE m.building_id = ?
-		  AND m.meter_type IN ('apartment_meter', 'solar_meter')
+		  AND m.meter_type IN ('apartment_meter', 'solar_meter', 'battery_meter')
 		  AND mr.reading_time >= ? AND mr.reading_time <= ?
 	`, buildingID, start, end)
 	if err == nil {
@@ -700,6 +700,11 @@ func (bs *BillingService) buildingIntervalAggregates(buildingID int, start, end 
 				get(ts).TotalConsumption += cons
 			case "solar_meter":
 				get(ts).SolarProduction += exp
+			case "battery_meter":
+				// Import column = discharge (energy supplied to the building),
+				// export column = charge (energy stored from solar).
+				get(ts).BatteryDischarge += cons
+				get(ts).BatteryCharge += exp
 			}
 		}
 	} else {
@@ -824,42 +829,52 @@ func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID i
 		log.Printf("  [SHARED METERS] Config #%d: Meter '%s' (ID %d), split=%s, pricing=%s, price=%.3f",
 			configCount, meterName, meterID, splitType, pricingMode, unitPrice)
 
-		var consumption, totalMeterCost, solarKWh, gridKWh float64
+		var consumption, totalMeterCost, solarKWh, batteryKWh, gridKWh float64
 		var costDetail string
 
 		if pricingMode == "solar_grid_custom" || pricingMode == "solar_grid_pricing" {
-			// Proportional solar/grid split: the meter draws from the building solar
-			// pool each 15-min interval, the rest is grid. Mirrors apartment billing.
+			// Proportional solar/battery/grid split: the meter draws from the
+			// building solar pool, then the battery pool, each 15-min interval; the
+			// rest is grid. Mirrors apartment billing.
 			if poolAgg == nil {
 				poolAgg = bs.buildingIntervalAggregates(buildingID, start, end)
 			}
 			for ts, cons := range bs.splitMeterIntervalConsumption(meterID, start, end) {
-				var bCons, sProd float64
+				var bCons, sProd, batCharge, batDischarge float64
 				if a := poolAgg[ts]; a != nil {
 					bCons = a.TotalConsumption
 					sProd = a.SolarProduction
+					batCharge = a.BatteryCharge
+					batDischarge = a.BatteryDischarge
 				}
-				solar, grid := SplitSolarGrid(cons, bCons, sProd)
+				solar, battery, grid := SplitSolarBatteryGrid(cons, bCons, sProd, batCharge, batDischarge)
 				solarKWh += solar
+				batteryKWh += battery
 				gridKWh += grid
 			}
-			consumption = solarKWh + gridKWh
+			consumption = solarKWh + batteryKWh + gridKWh
 			if consumption <= 0 {
 				log.Printf("  [SHARED METERS] WARNING: Meter '%s' has no interval consumption for solar/grid split - skipping", meterName)
 				continue
 			}
 
 			solarRate, gridRate := solarPrice, gridPrice
+			batteryRate := primary.BatteryPowerPrice
 			if pricingMode == "solar_grid_pricing" {
 				solarRate = primary.SolarPowerPrice
 				gridRate = primary.NormalPowerPrice
 			}
-			totalMeterCost = solarKWh*solarRate + gridKWh*gridRate
-			costDetail = fmt.Sprintf("%.3f kWh (%s %.3f × %.3f + %s %.3f × %.3f) = %.3f %s",
-				consumption, tr.SolarPower, solarKWh, solarRate, tr.NormalPowerGrid, gridKWh, gridRate, totalMeterCost, currency)
+			totalMeterCost = solarKWh*solarRate + batteryKWh*batteryRate + gridKWh*gridRate
+			if batteryKWh > 0.0005 {
+				costDetail = fmt.Sprintf("%.3f kWh (%s %.3f × %.3f + %s %.3f × %.3f + %s %.3f × %.3f) = %.3f %s",
+					consumption, tr.SolarPower, solarKWh, solarRate, tr.BatteryPower, batteryKWh, batteryRate, tr.NormalPowerGrid, gridKWh, gridRate, totalMeterCost, currency)
+			} else {
+				costDetail = fmt.Sprintf("%.3f kWh (%s %.3f × %.3f + %s %.3f × %.3f) = %.3f %s",
+					consumption, tr.SolarPower, solarKWh, solarRate, tr.NormalPowerGrid, gridKWh, gridRate, totalMeterCost, currency)
+			}
 
-			log.Printf("  [SHARED METERS]   Solar/grid split: %.3f kWh solar @ %.3f + %.3f kWh grid @ %.3f = %.3f",
-				solarKWh, solarRate, gridKWh, gridRate, totalMeterCost)
+			log.Printf("  [SHARED METERS]   Solar/battery/grid split: %.3f kWh solar @ %.3f + %.3f kWh battery @ %.3f + %.3f kWh grid @ %.3f = %.3f",
+				solarKWh, solarRate, batteryKWh, batteryRate, gridKWh, gridRate, totalMeterCost)
 		} else {
 			// Flat (single) price from cumulative meter readings.
 			var readingFrom, readingTo float64
@@ -1371,25 +1386,27 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 		segStart, segEnd time.Time
 		normalPower      float64
 		solarPower       float64
+		batteryPower     float64
 	}
 	var zevSegs []zevSegment
-	var totalNormal, totalSolar, totalConsumption float64
+	var totalNormal, totalSolar, totalBattery, totalConsumption float64
 	for _, seg := range segments {
 		segStart, segEnd, ok := clipToSegment(seg, start, end)
 		if !ok {
 			continue
 		}
-		normalPower, solarPower, segConsumption := bs.calculateZEVConsumption(userPeriod.UserID, buildingID, segStart, segEnd)
+		normalPower, solarPower, batteryPower, segConsumption := bs.calculateZEVConsumption(userPeriod.UserID, buildingID, segStart, segEnd)
 		totalNormal += normalPower
 		totalSolar += solarPower
+		totalBattery += batteryPower
 		totalConsumption += segConsumption
-		zevSegs = append(zevSegs, zevSegment{seg: seg, segStart: segStart, segEnd: segEnd, normalPower: normalPower, solarPower: solarPower})
+		zevSegs = append(zevSegs, zevSegment{seg: seg, segStart: segStart, segEnd: segEnd, normalPower: normalPower, solarPower: solarPower, batteryPower: batteryPower})
 	}
 
 	log.Printf("  Meter: %s (Period: %s to %s)", meterName, start.Format("2006-01-02"), end.Format("2006-01-02"))
 	log.Printf("  Reading from: %.3f kWh, Reading to: %.3f kWh", meterReadingFrom, meterReadingTo)
-	log.Printf("  Calculated ACTUAL consumption for this period: %.3f kWh (Normal: %.3f, Solar: %.3f, segments: %d)",
-		totalConsumption, totalNormal, totalSolar, len(zevSegs))
+	log.Printf("  Calculated ACTUAL consumption for this period: %.3f kWh (Normal: %.3f, Solar: %.3f, Battery: %.3f, segments: %d)",
+		totalConsumption, totalNormal, totalSolar, totalBattery, len(zevSegs))
 
 	if includeMeters && totalConsumption > 0 {
 		items = append(items, models.InvoiceItem{
@@ -1438,6 +1455,18 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 				ItemType:    "solar_power",
 			})
 			log.Printf("  Solar Cost%s: %.3f kWh × %.3f = %.3f %s", suffix, zs.solarPower, s.SolarPowerPrice, solarCost, s.Currency)
+		}
+		if zs.batteryPower > 0 {
+			batteryCost := zs.batteryPower * s.BatteryPowerPrice
+			totalAmount += batteryCost
+			items = append(items, models.InvoiceItem{
+				Description: fmt.Sprintf("%s%s: %.3f kWh × %.3f %s/kWh", tr.BatteryPower, suffix, zs.batteryPower, s.BatteryPowerPrice, s.Currency),
+				Quantity:    zs.batteryPower,
+				UnitPrice:   s.BatteryPowerPrice,
+				TotalPrice:  batteryCost,
+				ItemType:    "battery_power",
+			})
+			log.Printf("  Battery Cost%s: %.3f kWh × %.3f = %.3f %s", suffix, zs.batteryPower, s.BatteryPowerPrice, batteryCost, s.Currency)
 		}
 		if zs.normalPower > 0 {
 			normalCost := zs.normalPower * s.NormalPowerPrice
@@ -1624,7 +1653,7 @@ func (bs *BillingService) getMeterReadings(userID int, start, end time.Time) (fl
 
 // ZEV calculation using data at fixed 15-minute intervals
 // FIXED: Now uses ConsumptionExport for solar meters (export energy)
-func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start, end time.Time) (normal, solar, total float64) {
+func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start, end time.Time) (normal, solar, battery, total float64) {
 	log.Printf("    [ZEV] Calculating consumption for user %d in building %d", userID, buildingID)
 	log.Printf("    [ZEV] Period: %s to %s", start.Format("2006-01-02 15:04:05"), end.Format("2006-01-02 15:04:05"))
 
@@ -1643,14 +1672,14 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 		FROM meter_readings mr
 		JOIN meters m ON mr.meter_id = m.id
 		WHERE m.building_id = ?
-		AND m.meter_type IN ('apartment_meter', 'solar_meter')
+		AND m.meter_type IN ('apartment_meter', 'solar_meter', 'battery_meter')
 		AND mr.reading_time >= ? AND mr.reading_time <= ?
 		ORDER BY mr.reading_time, m.id
 	`, buildingID, start, end)
 
 	if err != nil {
 		log.Printf("    [ZEV] ERROR querying readings: %v", err)
-		return 0, 0, 0
+		return 0, 0, 0, 0
 	}
 	defer rows.Close()
 
@@ -1671,13 +1700,15 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 
 	if len(allReadings) == 0 {
 		log.Printf("    [ZEV] ERROR: No readings found")
-		return 0, 0, 0
+		return 0, 0, 0, 0
 	}
 
 	type IntervalData struct {
 		UserConsumption     float64
 		BuildingConsumption float64
 		SolarProduction     float64 // FIXED: Now uses export energy
+		BatteryCharge       float64 // solar stored into the battery this interval
+		BatteryDischarge    float64 // energy the battery supplied this interval
 	}
 
 	intervalData := make(map[time.Time]*IntervalData)
@@ -1699,6 +1730,11 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 		} else if reading.MeterType == "solar_meter" {
 			// FIXED: Use ConsumptionExport for solar production (export energy)
 			intervalData[roundedTime].SolarProduction += reading.ConsumptionExport
+		} else if reading.MeterType == "battery_meter" {
+			// Import column = discharge (supplied to building), export column =
+			// charge (stored from solar).
+			intervalData[roundedTime].BatteryDischarge += reading.ConsumptionKWh
+			intervalData[roundedTime].BatteryCharge += reading.ConsumptionExport
 		}
 	}
 
@@ -1737,6 +1773,7 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 
 	totalNormal := 0.0
 	totalSolar := 0.0
+	totalBattery := 0.0
 	totalConsumption := 0.0
 	intervalCount := 0
 	solarUsed := 0.0
@@ -1764,23 +1801,14 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 		intervalCount++
 		totalConsumption += data.UserConsumption
 
-		var userSolar, userNormal float64
-		if data.BuildingConsumption > 0 {
-			userShare := data.UserConsumption / data.BuildingConsumption
-
-			if data.SolarProduction >= data.BuildingConsumption {
-				userSolar = data.UserConsumption
-				userNormal = 0
-			} else {
-				userSolar = data.SolarProduction * userShare
-				userNormal = data.UserConsumption - userSolar
-			}
-		} else {
-			userNormal = data.UserConsumption
-			userSolar = 0
-		}
+		// Three tiers in priority order: solar → battery → grid, each proportional
+		// to the user's share of building consumption.
+		userSolar, userBattery, userNormal := SplitSolarBatteryGrid(
+			data.UserConsumption, data.BuildingConsumption, data.SolarProduction,
+			data.BatteryCharge, data.BatteryDischarge)
 
 		totalSolar += userSolar
+		totalBattery += userBattery
 		totalNormal += userNormal
 
 		if userSolar > 0 {
@@ -1788,9 +1816,9 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 		}
 
 		if (intervalCount <= 5) || (userSolar > 0 && solarUsed <= userSolar*3) {
-			log.Printf("    [ZEV] %s: User %.3f kWh, Building %.3f kWh, Solar %.3f kWh → %.3f solar + %.3f grid",
+			log.Printf("    [ZEV] %s: User %.3f kWh, Building %.3f kWh, Solar %.3f kWh, Bat d/c %.3f/%.3f → %.3f solar + %.3f battery + %.3f grid",
 				timestamp.Format("15:04"), data.UserConsumption, data.BuildingConsumption,
-				data.SolarProduction, userSolar, userNormal)
+				data.SolarProduction, data.BatteryDischarge, data.BatteryCharge, userSolar, userBattery, userNormal)
 		}
 	}
 
@@ -1799,10 +1827,12 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 	} else {
 		log.Printf("    [ZEV] Processed %d intervals (15-minute fixed intervals)", intervalCount)
 		if totalConsumption > 0 {
-			log.Printf("    [ZEV] RESULT - Total: %.3f kWh, Solar: %.3f kWh (%.1f%%), Grid: %.3f kWh (%.1f%%)",
-				totalConsumption, totalSolar, (totalSolar/totalConsumption)*100, totalNormal, (totalNormal/totalConsumption)*100)
+			log.Printf("    [ZEV] RESULT - Total: %.3f kWh, Solar: %.3f kWh (%.1f%%), Battery: %.3f kWh (%.1f%%), Grid: %.3f kWh (%.1f%%)",
+				totalConsumption, totalSolar, (totalSolar/totalConsumption)*100,
+				totalBattery, (totalBattery/totalConsumption)*100,
+				totalNormal, (totalNormal/totalConsumption)*100)
 		}
 	}
 
-	return totalNormal, totalSolar, totalConsumption
+	return totalNormal, totalSolar, totalBattery, totalConsumption
 }

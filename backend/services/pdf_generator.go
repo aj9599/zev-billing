@@ -1056,6 +1056,19 @@ func (pg *PDFGenerator) generateItemHTML(item map[string]interface{}, currency s
 			<td class="text-right"><strong>%s %.2f</strong></td>
 		</tr>`, sunIcon, description, currency, totalPrice)
 
+	case "battery_power":
+		// Battery-supplied energy (stored solar released later). Shares the solar
+		// highlight since it is renewable, with the bolt icon for the battery.
+		return fmt.Sprintf(`<tr class="item-cost solar-highlight">
+			<td style="padding-left: 20px;">
+				<span style="display: inline-flex; align-items: center; gap: 6px;">
+					%s
+					<strong>%s</strong>
+				</span>
+			</td>
+			<td class="text-right"><strong>%s %.2f</strong></td>
+		</tr>`, boltIcon, description, currency, totalPrice)
+
 	case "normal_power":
 		return fmt.Sprintf(`<tr class="item-cost normal-highlight">
 			<td style="padding-left: 20px;">
