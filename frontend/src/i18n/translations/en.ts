@@ -1494,6 +1494,11 @@ export const en: Translations = {
   'meters.virtualChannel': 'Channel',
   'meters.virtualChannelImport': 'Import (consumption)',
   'meters.virtualChannelExport': 'Export (production / feed-in)',
+  'meters.virtualChannelNet': 'Net power',
+  'meters.virtualModePower': 'Power-based',
+  'meters.virtualModeEnergy': 'Energy (advanced)',
+  'meters.virtualModePowerHint': 'Just add (+) or subtract (−) meters. The meter reads their live power and builds energy (kWh) itself — consumption when the total is positive, feed-in when negative. No need to pick import or export.',
+  'meters.virtualModeEnergyHint': 'Advanced: combine the cumulative counters of each meter and choose the import or export channel per source.',
   // Card sorting (meters & chargers pages)
   'sort.label': 'Sort:',
   'sort.custom': 'Custom (drag to order)',

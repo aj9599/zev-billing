@@ -862,7 +862,16 @@ func (dc *DataCollector) collectAndSaveMeters() {
 			continue
 		}
 
-		importVal, exportVal, err := dc.computeVirtualReadingAt(configJSON, currentTime)
+		var cfg virtualMeterConfig
+		_ = json.Unmarshal([]byte(configJSON), &cfg)
+
+		var importVal, exportVal float64
+		var err error
+		if cfg.Mode == "power" {
+			importVal, exportVal, err = dc.computeVirtualPowerReadingAt(meterID, cfg, currentTime)
+		} else {
+			importVal, exportVal, err = dc.computeVirtualReadingAt(configJSON, currentTime)
+		}
 		if err != nil {
 			log.Printf("ERROR: Failed to compute virtual meter '%s': %v", info.name, err)
 			continue
@@ -891,6 +900,14 @@ type VirtualMeterSource struct {
 
 type virtualMeterConfig struct {
 	Sources []VirtualMeterSource `json:"sources"`
+	// Mode selects how the virtual meter is evaluated:
+	//   "" / "energy" (legacy) — compose the sources' cumulative counters, picking
+	//        an import/export channel per source (see VirtualMeterSource.Field).
+	//   "power" — combine each source's NET energy flow (import − export) per
+	//        interval with the +/- ops and integrate it into the virtual meter's
+	//        own import/export counters; direction follows the sign of the flow,
+	//        so no per-source channel choice is needed.
+	Mode string `json:"mode"`
 }
 
 // computeVirtualReading evaluates a virtual meter's formula against the current
@@ -987,6 +1004,64 @@ func (dc *DataCollector) computeVirtualReadingAt(configJSON string, at time.Time
 		total = 0
 	}
 	return total, 0, nil
+}
+
+// computeVirtualPowerReadingAt evaluates a "power-based" virtual meter for one
+// collection cycle. Instead of composing the sources' cumulative counters, it
+// combines each source's NET energy flow for this interval (its import delta
+// minus its export delta) using the +/- ops, then integrates that net flow into
+// the virtual meter's own cumulative import/export counters: a positive net flow
+// adds to import (consumption), a negative net flow adds to export (feed-in).
+//
+// This is what lets a power-based virtual meter behave like a physical
+// bidirectional meter — the user only picks meters and +/-, and the direction
+// (consumption vs production) follows the sign of the measured flow. No
+// per-source import/export channel choice is required.
+//
+// Returns the virtual meter's new cumulative (import, export) readings, which the
+// caller hands to saveMeterReading exactly like a physical meter reading.
+func (dc *DataCollector) computeVirtualPowerReadingAt(meterID int, cfg virtualMeterConfig, at time.Time) (float64, float64, error) {
+	if len(cfg.Sources) == 0 {
+		return 0, 0, fmt.Errorf("no source meters configured")
+	}
+
+	// Current cumulative counters for this virtual meter (kept in the meters row,
+	// updated each cycle by saveMeterReading — survives restarts).
+	var curImport, curExport float64
+	if err := dc.db.QueryRow(
+		"SELECT COALESCE(last_reading, 0), COALESCE(last_reading_export, 0) FROM meters WHERE id = ?",
+		meterID,
+	).Scan(&curImport, &curExport); err != nil {
+		return 0, 0, fmt.Errorf("virtual meter %d not found: %v", meterID, err)
+	}
+
+	// Net energy flow over this interval, summed across the source meters.
+	var netDelta float64
+	for _, src := range cfg.Sources {
+		var impDelta, expDelta float64
+		err := dc.db.QueryRow(
+			"SELECT COALESCE(consumption_kwh, 0), COALESCE(consumption_export, 0) FROM meter_readings WHERE meter_id = ? AND reading_time = ?",
+			src.MeterID, at,
+		).Scan(&impDelta, &expDelta)
+		if err != nil {
+			// No row for this source at this bucket (didn't report this cycle) →
+			// treat as no movement rather than failing the whole virtual meter.
+			continue
+		}
+		net := impDelta - expDelta
+		if src.Op == "-" {
+			netDelta -= net
+		} else {
+			netDelta += net
+		}
+	}
+
+	if netDelta >= 0 {
+		curImport += netDelta
+	} else {
+		curExport += -netDelta
+	}
+	return curImport, curExport, nil
 }
 
 // waitForAsyncVirtualSources blocks (bounded) until every Loxone source meter
@@ -1550,8 +1625,21 @@ func (dc *DataCollector) GetLiveMeterReadings(buildingID int) ([]MeterLiveReadin
 		case "virtual":
 			// Virtual: computed live from the source meters' last readings.
 			if configJSON.Valid {
-				importVal, exportVal, err := dc.computeVirtualReading(configJSON.String)
-				if err == nil {
+				var vcfg virtualMeterConfig
+				_ = json.Unmarshal([]byte(configJSON.String), &vcfg)
+				if vcfg.Mode == "power" {
+					// Power-based: the collector integrates net flow into this
+					// meter's own counters, so read those directly and estimate
+					// live power in both directions (import = consumption,
+					// export = feed-in) from the most recent interval deltas.
+					dc.db.QueryRow(
+						"SELECT COALESCE(last_reading, 0), COALESCE(last_reading_export, 0) FROM meters WHERE id = ?",
+						meterID,
+					).Scan(&reading.TotalImportKwh, &reading.TotalExportKwh)
+					reading.IsOnline = true
+					reading.CurrentPowerW = dc.estimatePowerFromRecentReadings(meterID, reading.TotalImportKwh)
+					reading.CurrentPowerExpW = dc.estimatePowerFromRecentReadingsExport(meterID, reading.TotalExportKwh)
+				} else if importVal, exportVal, err := dc.computeVirtualReading(configJSON.String); err == nil {
 					reading.TotalImportKwh = importVal
 					reading.TotalExportKwh = exportVal
 					reading.IsOnline = true

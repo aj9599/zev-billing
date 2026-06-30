@@ -1495,6 +1495,11 @@ export const de: Translations = {
   'meters.virtualChannel': 'Kanal',
   'meters.virtualChannelImport': 'Bezug (Verbrauch)',
   'meters.virtualChannelExport': 'Einspeisung (Produktion)',
+  'meters.virtualChannelNet': 'Nettoleistung',
+  'meters.virtualModePower': 'Leistungsbasiert',
+  'meters.virtualModeEnergy': 'Energie (erweitert)',
+  'meters.virtualModePowerHint': 'Einfach Zähler addieren (+) oder subtrahieren (−). Der Zähler liest deren Live-Leistung und bildet die Energie (kWh) selbst — Verbrauch bei positivem, Einspeisung bei negativem Gesamtwert. Kein Auswählen von Bezug oder Einspeisung nötig.',
+  'meters.virtualModeEnergyHint': 'Erweitert: kombiniert die kumulierten Zählerstände jedes Zählers und wählt pro Quelle den Bezugs- oder Einspeisungskanal.',
   // Karten-Sortierung (Zähler & Ladestationen)
   'sort.label': 'Sortieren:',
   'sort.custom': 'Eigene (zum Ordnen ziehen)',

@@ -45,6 +45,10 @@ interface ConnectionConfig {
     serial?: string; // Smart-me serial number (backup identifier when UUID unknown)
     // Virtual (computed) meter: combine other meters with +/- and a chosen channel
     virtual_sources?: { meter_id: number; op: '+' | '-'; field?: 'import' | 'export' }[];
+    // Virtual meter evaluation mode: 'power' integrates net flow and auto-splits
+    // import/export by sign (no channel picker); 'energy' is the legacy channel
+    // composition. New meters default to 'power'.
+    virtual_mode?: 'power' | 'energy';
     // E3/DC EMS metering (Modbus read-only, or RSCP)
     e3dc_protocol?: 'modbus' | 'rscp';
     e3dc_host?: string;
@@ -113,6 +117,7 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
         device_id: '',
         serial: '',
         virtual_sources: [],
+        virtual_mode: 'power',
         e3dc_protocol: 'modbus',
         e3dc_host: '',
         e3dc_port: 502,
@@ -247,6 +252,8 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
                 device_id: config.device_id || '',
                 serial: config.serial || '',
                 virtual_sources: config.sources || [],
+                // Existing virtual meters with no mode are legacy energy-composition.
+                virtual_mode: (config.mode === 'power' ? 'power' : 'energy'),
                 e3dc_protocol: config.e3dc_protocol || 'modbus',
                 e3dc_host: config.e3dc_host || '',
                 e3dc_port: config.e3dc_port || (config.e3dc_protocol === 'rscp' ? 5033 : 502),
@@ -462,15 +469,20 @@ export function useMeterForm(loadData: () => void, fetchConnectionStatus: () => 
                 config.client_secret = connectionConfig.client_secret?.trim();
             }
         } else if (formData.connection_type === 'virtual') {
-            // Virtual (computed) meter: store the source meters and their +/- op.
+            // Virtual (computed) meter: store the source meters, their +/- op and
+            // the evaluation mode. Power mode drops the per-source channel (import/
+            // export) — direction is derived from the sign of the net flow.
+            const mode: 'power' | 'energy' = connectionConfig.virtual_mode || 'power';
             const sources = (connectionConfig.virtual_sources || [])
                 .filter(s => s.meter_id && s.meter_id > 0)
-                .map(s => ({ meter_id: s.meter_id, op: s.op, field: s.field || 'import' }));
+                .map(s => mode === 'power'
+                    ? { meter_id: s.meter_id, op: s.op }
+                    : { meter_id: s.meter_id, op: s.op, field: s.field || 'import' });
             if (sources.length === 0) {
                 notify(t('meters.errorVirtualSourcesRequired'));
                 return;
             }
-            config = { sources } as any;
+            config = { sources, mode } as any;
         }
 
         // Ensure device_type is set, with default fallback

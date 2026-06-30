@@ -45,6 +45,7 @@ interface ConnectionConfig {
     serial?: string; // Smart-me serial number (backup identifier)
     // Virtual (computed) meter: combine other meters with +/- and a chosen channel
     virtual_sources?: { meter_id: number; op: '+' | '-'; field?: 'import' | 'export' }[];
+    virtual_mode?: 'power' | 'energy';
     // E3/DC EMS metering (Modbus read-only, or RSCP)
     e3dc_protocol?: 'modbus' | 'rscp';
     e3dc_host?: string;
@@ -1373,7 +1374,52 @@ export default function MeterFormModal({
                                         </p>
                                     </div>
 
+                                    {/* Mode selector: power-based (recommended) vs legacy energy composition */}
                                     {(() => {
+                                        const mode = connectionConfig.virtual_mode || 'power';
+                                        const setMode = (m: 'power' | 'energy') =>
+                                            onConnectionConfigChange({ ...connectionConfig, virtual_mode: m });
+                                        const tab = (m: 'power' | 'energy', label: string) => (
+                                            <button
+                                                type="button"
+                                                onClick={() => setMode(m)}
+                                                style={{
+                                                    flex: 1,
+                                                    padding: '8px 10px',
+                                                    border: 'none',
+                                                    borderRadius: '8px',
+                                                    cursor: 'pointer',
+                                                    fontSize: '13px',
+                                                    fontWeight: 600,
+                                                    color: mode === m ? 'white' : '#9d174d',
+                                                    backgroundColor: mode === m ? '#db2777' : 'transparent'
+                                                }}
+                                            >
+                                                {label}
+                                            </button>
+                                        );
+                                        return (
+                                            <div style={{ marginBottom: '14px' }}>
+                                                <div style={{
+                                                    display: 'flex',
+                                                    gap: '4px',
+                                                    padding: '4px',
+                                                    backgroundColor: '#fdf2f8',
+                                                    border: '1px solid #fbcfe8',
+                                                    borderRadius: '10px'
+                                                }}>
+                                                    {tab('power', t('meters.virtualModePower'))}
+                                                    {tab('energy', t('meters.virtualModeEnergy'))}
+                                                </div>
+                                                <p style={{ fontSize: '12px', color: '#6b7280', margin: '8px 2px 0' }}>
+                                                    {mode === 'power' ? t('meters.virtualModePowerHint') : t('meters.virtualModeEnergyHint')}
+                                                </p>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {(() => {
+                                        const mode = connectionConfig.virtual_mode || 'power';
                                         const sources = connectionConfig.virtual_sources || [];
                                         // Candidate source meters: any real meter except this one and other virtual meters.
                                         const candidates = meters.filter(m =>
@@ -1456,22 +1502,25 @@ export default function MeterFormModal({
                                                             ))}
                                                         </select>
 
-                                                        {/* Channel: import vs export/production */}
-                                                        <select
-                                                            value={src.field || 'import'}
-                                                            onChange={(e) => {
-                                                                const next = [...sources];
-                                                                next[idx] = { ...src, field: e.target.value as 'import' | 'export' };
-                                                                updateSources(next);
-                                                            }}
-                                                            onFocus={focusHandler}
-                                                            onBlur={blurHandler}
-                                                            title={t('meters.virtualChannel')}
-                                                            style={{ ...inputStyle(isMobile), width: 'auto', minWidth: '130px', flexShrink: 0 }}
-                                                        >
-                                                            <option value="import">{t('meters.virtualChannelImport')}</option>
-                                                            <option value="export">{t('meters.virtualChannelExport')}</option>
-                                                        </select>
+                                                        {/* Channel: import vs export/production — only in legacy energy mode.
+                                                            Power mode derives direction from the sign of the net flow. */}
+                                                        {mode === 'energy' && (
+                                                            <select
+                                                                value={src.field || 'import'}
+                                                                onChange={(e) => {
+                                                                    const next = [...sources];
+                                                                    next[idx] = { ...src, field: e.target.value as 'import' | 'export' };
+                                                                    updateSources(next);
+                                                                }}
+                                                                onFocus={focusHandler}
+                                                                onBlur={blurHandler}
+                                                                title={t('meters.virtualChannel')}
+                                                                style={{ ...inputStyle(isMobile), width: 'auto', minWidth: '130px', flexShrink: 0 }}
+                                                            >
+                                                                <option value="import">{t('meters.virtualChannelImport')}</option>
+                                                                <option value="export">{t('meters.virtualChannelExport')}</option>
+                                                            </select>
+                                                        )}
 
                                                         {/* Remove row */}
                                                         <button
@@ -1529,13 +1578,17 @@ export default function MeterFormModal({
                                                     const terms = picked.map(s => {
                                                         const m = meters.find(mm => mm.id === s.meter_id);
                                                         const field = s.field || 'import';
-                                                        const val = field === 'export'
-                                                            ? (m?.last_reading_export || 0)
-                                                            : (m?.last_reading || 0);
+                                                        const val = mode === 'power'
+                                                            ? (m?.last_reading || 0) - (m?.last_reading_export || 0)
+                                                            : (field === 'export'
+                                                                ? (m?.last_reading_export || 0)
+                                                                : (m?.last_reading || 0));
                                                         return {
                                                             op: s.op,
                                                             name: m?.name || `#${s.meter_id}`,
-                                                            channel: field === 'export' ? t('meters.virtualChannelExport') : t('meters.virtualChannelImport'),
+                                                            channel: mode === 'power'
+                                                                ? t('meters.virtualChannelNet')
+                                                                : (field === 'export' ? t('meters.virtualChannelExport') : t('meters.virtualChannelImport')),
                                                             val
                                                         };
                                                     });
@@ -1588,7 +1641,7 @@ export default function MeterFormModal({
                                                             {/* Current computed result from latest readings */}
                                                             <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
                                                                 <span style={{ fontSize: '20px', fontWeight: 700, color: '#db2777' }}>
-                                                                    = {Math.max(0, sum).toFixed(3)} kWh
+                                                                    = {(mode === 'power' ? sum : Math.max(0, sum)).toFixed(3)} kWh
                                                                 </span>
                                                             </div>
                                                             <p style={{ fontSize: '11px', color: '#9d174d', margin: '8px 0 0 0' }}>
@@ -1608,7 +1661,7 @@ export default function MeterFormModal({
                                                     lineHeight: '1.6'
                                                 }}>
                                                     <strong>{t('meters.virtualHowItWorks')}</strong><br />
-                                                    {t('meters.virtualHowItWorksDesc')}
+                                                    {mode === 'power' ? t('meters.virtualModePowerHint') : t('meters.virtualHowItWorksDesc')}
                                                 </div>
                                             </>
                                         );
