@@ -369,6 +369,7 @@ export const de: Translations = {
   'common.delete': 'Löschen',
   'common.save': 'Speichern',
   'common.saving': 'Speichert…',
+  'common.deleting': 'Löscht…',
   'common.cancel': 'Abbrechen',
   'common.create': 'Erstellen',
   'common.update': 'Aktualisieren',
@@ -1979,6 +1980,9 @@ export const de: Translations = {
   'billing.viewFirstWarning': 'Bitte zeigen Sie die Rechnung zuerst an, um alle Details zu laden',
   'billing.loadFailed': 'Fehler beim Laden der Rechnung',
   'billing.deleteConfirm': 'Möchten Sie diese Rechnung wirklich löschen?',
+  'billing.deleteConfirmTitle': 'Rechnung löschen',
+  'billing.deleteWarning': 'Diese Aktion kann nicht rückgängig gemacht werden',
+  'billing.deleteConfirmButton': 'Rechnung löschen',
   'billing.deleteSuccess': 'Rechnung erfolgreich gelöscht',
   'billing.deleteFailed': 'Fehler beim Löschen der Rechnung',
 

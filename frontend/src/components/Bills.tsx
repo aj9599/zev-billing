@@ -4,6 +4,7 @@ import type { Invoice, Building as BuildingType, User } from '../types';
 import { useInvoiceOperations } from './billing/hooks/useInvoiceOperations';
 import BuildingGroup from './billing/components/bills/BuildingGroup';
 import InvoiceDetailModal from './billing/components/bills/InvoiceDetailModal';
+import InvoiceDeleteModal from './billing/components/bills/InvoiceDeleteModal';
 import { TableSkeleton } from './billing/components/common/LoadingSkeleton';
 import { useTranslation } from '../i18n';
 
@@ -33,9 +34,11 @@ export default function Bills({
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [expandedYears, setExpandedYears] = useState<Set<string>>(new Set());
     const [loading, setLoading] = useState(true);
+    const [deleteTarget, setDeleteTarget] = useState<Invoice | null>(null);
 
     const {
         selectedInvoice,
+        loading: operationLoading,
         viewInvoice,
         deleteInvoice,
         downloadPDF,
@@ -83,11 +86,20 @@ export default function Bills({
         }
     };
 
-    const handleDelete = async (id: number) => {
+    const handleDelete = (id: number) => {
+        const invoice = invoices.find(inv => inv.id === id) || null;
+        setDeleteTarget(invoice);
+    };
+
+    const confirmDelete = async () => {
+        if (!deleteTarget) return;
         const currentExpandedYears = new Set(expandedYears);
-        await deleteInvoice(id);
-        await loadInvoices();
-        setExpandedYears(currentExpandedYears);
+        const ok = await deleteInvoice(deleteTarget.id);
+        if (ok) {
+            await loadInvoices();
+            setExpandedYears(currentExpandedYears);
+            setDeleteTarget(null);
+        }
     };
 
     // Show loading skeleton while data is being fetched
@@ -151,6 +163,21 @@ export default function Bills({
                     invoice={selectedInvoice}
                     onClose={closeModal}
                     onOpenPDF={downloadPDF}
+                />
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {deleteTarget && (
+                <InvoiceDeleteModal
+                    invoice={deleteTarget}
+                    recipientName={(() => {
+                        const u = users.find(user => user.id === deleteTarget.user_id);
+                        return u ? `${u.first_name} ${u.last_name}`.trim() : undefined;
+                    })()}
+                    loading={operationLoading}
+                    onCancel={() => setDeleteTarget(null)}
+                    onConfirm={confirmDelete}
+                    t={t}
                 />
             )}
         </>

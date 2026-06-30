@@ -369,6 +369,7 @@ export const en: Translations = {
   'common.delete': 'Delete',
   'common.save': 'Save',
   'common.saving': 'Saving…',
+  'common.deleting': 'Deleting…',
   'common.cancel': 'Cancel',
   'common.create': 'Create',
   'common.update': 'Update',
@@ -1978,6 +1979,9 @@ export const en: Translations = {
   'billing.viewFirstWarning': 'Please view the invoice first to load all details',
   'billing.loadFailed': 'Failed to load invoice',
   'billing.deleteConfirm': 'Are you sure you want to delete this invoice?',
+  'billing.deleteConfirmTitle': 'Delete Invoice',
+  'billing.deleteWarning': 'This action cannot be undone',
+  'billing.deleteConfirmButton': 'Delete Invoice',
   'billing.deleteSuccess': 'Invoice deleted successfully',
   'billing.deleteFailed': 'Failed to delete invoice',
 

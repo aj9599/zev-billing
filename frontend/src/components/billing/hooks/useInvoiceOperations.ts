@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api } from '../../../api/client';
 import type { Invoice } from '../../../types';
 import { useTranslation } from '../../../i18n';
+import { notify } from '../../../utils/toast';
 
 export function useInvoiceOperations(onRefresh: () => void) {
   const { t } = useTranslation();
@@ -26,17 +27,17 @@ export function useInvoiceOperations(onRefresh: () => void) {
     }
   };
 
-  const deleteInvoice = async (id: number) => {
-    if (!confirm(t('billing.deleteConfirm'))) return;
-    
+  const deleteInvoice = async (id: number): Promise<boolean> => {
     try {
       setLoading(true);
       await api.deleteInvoice(id);
       onRefresh();
-      alert(t('billing.deleteSuccess'));
+      notify.success(t('billing.deleteSuccess'));
+      return true;
     } catch (err) {
       console.error('Failed to delete invoice:', err);
-      alert(t('billing.deleteFailed') + ' ' + err);
+      notify.error(t('billing.deleteFailed'));
+      return false;
     } finally {
       setLoading(false);
     }
