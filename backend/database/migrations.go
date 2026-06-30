@@ -44,6 +44,32 @@ func addBatteryPowerPriceColumn(db *sql.DB) error {
 	return nil
 }
 
+// addBatteryChargingPriceColumn adds the per-building battery tariff used to
+// price battery energy that goes into EV charging (separate from the meter
+// battery tariff so the two can be set independently).
+func addBatteryChargingPriceColumn(db *sql.DB) error {
+	var ddl string
+	if err := db.QueryRow(
+		`SELECT sql FROM sqlite_master WHERE type='table' AND name='billing_settings'`,
+	).Scan(&ddl); err != nil {
+		return err
+	}
+	if contains(ddl, "battery_charging_price") {
+		log.Println("✓ battery_charging_price column already exists")
+		return nil
+	}
+	log.Println("Adding battery_charging_price column to billing_settings table...")
+	if _, err := db.Exec(`ALTER TABLE billing_settings ADD COLUMN battery_charging_price REAL NOT NULL DEFAULT 0.15`); err != nil {
+		if contains(err.Error(), "duplicate column") {
+			log.Println("✓ battery_charging_price column already exists")
+			return nil
+		}
+		return fmt.Errorf("failed to add battery_charging_price column: %v", err)
+	}
+	log.Println("✓ battery_charging_price column added successfully")
+	return nil
+}
+
 func runVersioned(db *sql.DB, version string, fn func(*sql.DB) error) error {
 	var applied int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE version = ?`, version).Scan(&applied); err != nil {
@@ -283,6 +309,7 @@ func RunMigrations(db *sql.DB) error {
 			normal_power_price REAL NOT NULL DEFAULT 0.25,
 			solar_power_price REAL NOT NULL DEFAULT 0.15,
 			battery_power_price REAL NOT NULL DEFAULT 0.15,
+			battery_charging_price REAL NOT NULL DEFAULT 0.15,
 			car_charging_normal_price REAL NOT NULL DEFAULT 0.30,
 			car_charging_priority_price REAL NOT NULL DEFAULT 0.40,
 			is_complex INTEGER DEFAULT 0,
@@ -619,6 +646,10 @@ func RunMigrations(db *sql.DB) error {
 	}
 	// Separate per-building tariff for energy supplied by the battery.
 	if err := runVersioned(db, "0019_battery_power_price", addBatteryPowerPriceColumn); err != nil {
+		return err
+	}
+	// Separate battery tariff for EV charging (distinct from the meter battery tariff).
+	if err := runVersioned(db, "0020_battery_charging_price", addBatteryChargingPriceColumn); err != nil {
 		return err
 	}
 

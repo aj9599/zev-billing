@@ -964,7 +964,7 @@ type chargingSeg struct {
 	modeNormal       float64 // mode-based "solar mode" kWh  (CarChargingNormalPrice)
 	modePriority     float64 // mode-based "priority mode" kWh (CarChargingPriorityPrice)
 	splitSolar       float64 // solar-split solar kWh          (CarChargingNormalPrice)
-	splitBattery     float64 // solar-split battery kWh        (BatteryPowerPrice)
+	splitBattery     float64 // solar-split battery kWh        (BatteryChargingPrice)
 	splitGrid        float64 // solar-split grid kWh           (CarChargingPriorityPrice)
 }
 
@@ -1186,7 +1186,7 @@ func appendChargingItems(items *[]models.InvoiceItem, segs []chargingSeg, firstS
 			add(tr.SolarCharging, suffix, cs.splitSolar, s.CarChargingNormalPrice, s.Currency, "car_charging_normal")
 		}
 		if cs.splitBattery > 0 {
-			add(tr.BatteryCharging, suffix, cs.splitBattery, s.BatteryPowerPrice, s.Currency, "car_charging_battery")
+			add(tr.BatteryCharging, suffix, cs.splitBattery, s.BatteryChargingPrice, s.Currency, "car_charging_battery")
 		}
 		if cs.splitGrid > 0 {
 			add(tr.GridCharging, suffix, cs.splitGrid, s.CarChargingPriorityPrice, s.Currency, "car_charging_priority")

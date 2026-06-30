@@ -217,7 +217,7 @@ func parseStoredDate(s string) (time.Time, error) {
 func (bs *BillingService) loadPriceSegments(buildingID int, start, end time.Time) ([]PriceSegment, error) {
 	rows, err := bs.db.Query(`
 		SELECT id, building_id, is_complex, normal_power_price, solar_power_price,
-		       battery_power_price, car_charging_normal_price, car_charging_priority_price,
+		       battery_power_price, battery_charging_price, car_charging_normal_price, car_charging_priority_price,
 		       vzev_export_price, vat_included, vat_rate, currency, valid_from, valid_to
 		FROM billing_settings
 		WHERE building_id = ? AND is_active = 1
@@ -241,7 +241,7 @@ func (bs *BillingService) loadPriceSegments(buildingID int, start, end time.Time
 		var validToStr sql.NullString
 		if err := rows.Scan(
 			&s.ID, &s.BuildingID, &s.IsComplex,
-			&s.NormalPowerPrice, &s.SolarPowerPrice, &s.BatteryPowerPrice,
+			&s.NormalPowerPrice, &s.SolarPowerPrice, &s.BatteryPowerPrice, &s.BatteryChargingPrice,
 			&s.CarChargingNormalPrice, &s.CarChargingPriorityPrice,
 			&s.VZEVExportPrice, &s.VATIncluded, &s.VATRate, &s.Currency,
 			&validFromStr, &validToStr,

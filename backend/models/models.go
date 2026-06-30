@@ -167,6 +167,7 @@ type BillingSettings struct {
 	NormalPowerPrice         float64   `json:"normal_power_price"`
 	SolarPowerPrice          float64   `json:"solar_power_price"`
 	BatteryPowerPrice        float64   `json:"battery_power_price"`
+	BatteryChargingPrice     float64   `json:"battery_charging_price"`
 	CarChargingNormalPrice   float64   `json:"car_charging_normal_price"`
 	CarChargingPriorityPrice float64   `json:"car_charging_priority_price"`
 	VZEVExportPrice          float64   `json:"vzev_export_price"`

@@ -72,6 +72,7 @@ export default function PricingSettings() {
     normal_power_price: 0.25,
     solar_power_price: 0.15,
     battery_power_price: 0.15,
+    battery_charging_price: 0.15,
     car_charging_normal_price: 0.30,
     car_charging_priority_price: 0.40,
     vzev_export_price: 0.18,
@@ -200,6 +201,7 @@ export default function PricingSettings() {
       normal_power_price: 0.25,
       solar_power_price: 0.15,
       battery_power_price: 0.15,
+      battery_charging_price: 0.15,
       car_charging_normal_price: 0.30,
       car_charging_priority_price: 0.40,
       vzev_export_price: 0.18,
@@ -581,140 +583,8 @@ export default function PricingSettings() {
                   overflow: 'hidden',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
                 }}>
-                  {/* Desktop Table */}
-                  <div className="desktop-table" style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-                      <colgroup>
-                        <col style={{ width: '6%' }} />
-                        <col style={{ width: building.is_group ? '10%' : '12%' }} />
-                        <col style={{ width: building.is_group ? '10%' : '12%' }} />
-                        {building.is_group && <col style={{ width: '10%' }} />}
-                        <col style={{ width: building.is_group ? '11%' : '13%' }} />
-                        <col style={{ width: building.is_group ? '11%' : '13%' }} />
-                        <col style={{ width: '18%' }} />
-                        <col style={{ width: '12%' }} />
-                        <col style={{ width: '8%' }} />
-                      </colgroup>
-                      <thead>
-                        <tr style={{ backgroundColor: '#f9fafb' }}>
-                          <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>{t('pricing.form.type')}</th>
-                          <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('pricing.normalKwh')}</th>
-                          <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('pricing.solarKwh')}</th>
-                          <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('pricing.batteryKwh')}</th>
-                          {building.is_group && <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('pricing.vzevExportPrice')}</th>}
-                          <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('pricing.chargingNormal')}</th>
-                          <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('pricing.chargingPriority')}</th>
-                          <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('pricing.validPeriod')}</th>
-                          <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('common.status')}</th>
-                          <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '600', fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('common.actions')}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {buildingSettings.map((setting, idx) => (
-                          <tr key={setting.id} style={{
-                            borderTop: idx > 0 ? '1px solid #f3f4f6' : 'none',
-                            transition: 'background-color 0.15s'
-                          }}
-                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f9fafb'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'white'; }}
-                          >
-                            <td style={{ padding: '14px 16px' }}>
-                              <span style={{
-                                padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '700',
-                                backgroundColor: setting.is_complex ? '#8b5cf615' : '#f3f4f6',
-                                color: setting.is_complex ? '#7c3aed' : '#6b7280',
-                                textTransform: 'uppercase', letterSpacing: '0.3px'
-                              }}>
-                                {setting.is_complex ? t('pricing.buildingType.vzev') : t('pricing.buildingType.zev')}
-                              </span>
-                            </td>
-                            <td style={{ padding: '14px 16px', fontWeight: '600', fontSize: '14px', color: '#1f2937' }}>
-                              {setting.currency} {setting.normal_power_price.toFixed(2)}
-                            </td>
-                            <td style={{ padding: '14px 16px', fontWeight: '600', fontSize: '14px', color: '#f59e0b' }}>
-                              {setting.currency} {setting.solar_power_price.toFixed(2)}
-                            </td>
-                            <td style={{ padding: '14px 16px', fontWeight: '600', fontSize: '14px', color: '#a855f7' }}>
-                              {setting.currency} {(setting.battery_power_price ?? 0.15).toFixed(2)}
-                            </td>
-                            {building.is_group && (
-                              <td style={{ padding: '14px 16px', fontWeight: '600', fontSize: '14px', color: '#8b5cf6' }}>
-                                {setting.currency} {(setting.vzev_export_price || 0).toFixed(2)}
-                              </td>
-                            )}
-                            <td style={{ padding: '14px 16px', fontWeight: '600', fontSize: '14px', color: '#1f2937' }}>
-                              {setting.currency} {setting.car_charging_normal_price.toFixed(2)}
-                            </td>
-                            <td style={{ padding: '14px 16px', fontWeight: '600', fontSize: '14px', color: '#1f2937' }}>
-                              {setting.currency} {setting.car_charging_priority_price.toFixed(2)}
-                            </td>
-                            <td style={{ padding: '14px 16px', fontSize: '13px', color: '#6b7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {formatDate(setting.valid_from)} – {setting.valid_to ? formatDate(setting.valid_to) : t('pricing.ongoing')}
-                              {(setting.vat_rate || 0) > 0 && (
-                                <span style={{ marginLeft: '8px', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '700', backgroundColor: '#10b98115', color: '#059669' }}>
-                                  {t('pricing.vat')} {setting.vat_rate!.toFixed(1)}% {setting.vat_included ? t('pricing.vatInclShort') : t('pricing.vatExclShort')}
-                                </span>
-                              )}
-                            </td>
-                            <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                              {(() => {
-                                const ts = getTimeStatus(setting);
-                                return (
-                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                                    <span style={{
-                                      padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700',
-                                      backgroundColor: ts.bgColor, color: ts.color,
-                                      display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap'
-                                    }}>
-                                      {ts.icon} {ts.label}
-                                    </span>
-                                    {setting.is_active && (
-                                      <span style={{
-                                        padding: '2px 8px', borderRadius: '20px', fontSize: '10px', fontWeight: '600',
-                                        backgroundColor: 'rgba(102,126,234,0.1)', color: '#667eea',
-                                        display: 'inline-flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap'
-                                      }}>
-                                        <Check size={8} /> {t('pricing.status.billing')}
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              })()}
-                            </td>
-                            <td style={{ padding: '14px 16px' }}>
-                              <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                                <button onClick={() => handleEdit(setting)} title={t('common.edit')} style={{
-                                  width: '32px', height: '32px', borderRadius: '8px', border: 'none',
-                                  backgroundColor: 'rgba(59,130,246,0.08)', color: '#3b82f6',
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  cursor: 'pointer', transition: 'all 0.15s'
-                                }}
-                                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(59,130,246,0.15)'; }}
-                                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'rgba(59,130,246,0.08)'; }}
-                                >
-                                  <Edit2 size={14} />
-                                </button>
-                                <button onClick={() => handleDelete(setting.id)} title={t('common.delete')} style={{
-                                  width: '32px', height: '32px', borderRadius: '8px', border: 'none',
-                                  backgroundColor: 'rgba(239,68,68,0.08)', color: '#ef4444',
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  cursor: 'pointer', transition: 'all 0.15s'
-                                }}
-                                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.15)'; }}
-                                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.08)'; }}
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Mobile Cards */}
-                  <div className="mobile-cards" style={{ padding: '12px' }}>
+                  {/* Pricing cards — one per period; price chips reflow to any width */}
+                  <div style={{ padding: '12px' }}>
                     {buildingSettings.map(setting => (
                       <div key={setting.id} style={{
                         backgroundColor: '#f9fafb',
@@ -772,7 +642,7 @@ export default function PricingSettings() {
                           </div>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px', marginBottom: '12px' }}>
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
                               <Zap size={12} color="#3b82f6" />
@@ -798,6 +668,16 @@ export default function PricingSettings() {
                             </div>
                             <div style={{ fontSize: '15px', fontWeight: '700', color: '#a855f7' }}>
                               {setting.currency} {(setting.battery_power_price ?? 0.15).toFixed(2)}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                              <Battery size={12} color="#9333ea" />
+                              <Car size={12} color="#9333ea" />
+                              <span style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '600' }}>{t('pricing.batteryChargingKwh')}</span>
+                            </div>
+                            <div style={{ fontSize: '15px', fontWeight: '700', color: '#9333ea' }}>
+                              {setting.currency} {(setting.battery_charging_price ?? 0.15).toFixed(2)}
                             </div>
                           </div>
                           {building.is_group && (
@@ -1098,15 +978,27 @@ export default function PricingSettings() {
                     </div>
                   </div>
 
-                  <div style={{ marginTop: '14px' }}>
-                    <label style={labelStyle}>{t('pricing.batteryPower')}</label>
-                    <input type="number" step="0.01" value={formData.battery_power_price ?? 0.15}
-                      onChange={(e) => setFormData({ ...formData, battery_power_price: parseFloat(e.target.value) })}
-                      style={inputStyle(isMobile)}
-                      onFocus={focusHandler} onBlur={blurHandler} />
-                    <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '4px' }}>
-                      {t('pricing.batteryPowerDescription')}
-                    </p>
+                  <div className="form-row" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '14px', marginTop: '14px' }}>
+                    <div>
+                      <label style={labelStyle}>{t('pricing.batteryPower')}</label>
+                      <input type="number" step="0.01" value={formData.battery_power_price ?? 0.15}
+                        onChange={(e) => setFormData({ ...formData, battery_power_price: parseFloat(e.target.value) })}
+                        style={inputStyle(isMobile)}
+                        onFocus={focusHandler} onBlur={blurHandler} />
+                      <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '4px' }}>
+                        {t('pricing.batteryPowerDescription')}
+                      </p>
+                    </div>
+                    <div>
+                      <label style={labelStyle}>{t('pricing.batteryCharging')}</label>
+                      <input type="number" step="0.01" value={formData.battery_charging_price ?? 0.15}
+                        onChange={(e) => setFormData({ ...formData, battery_charging_price: parseFloat(e.target.value) })}
+                        style={inputStyle(isMobile)}
+                        onFocus={focusHandler} onBlur={blurHandler} />
+                      <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '4px' }}>
+                        {t('pricing.batteryChargingDescription')}
+                      </p>
+                    </div>
                   </div>
 
                   {isComplexSelected && (
@@ -1280,34 +1172,7 @@ export default function PricingSettings() {
           transform: translateY(-1px);
         }
 
-        .desktop-table {
-          width: 100%;
-        }
-
-        .desktop-table table {
-          min-width: 100%;
-        }
-
-        .desktop-table td {
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        @media (min-width: 769px) {
-          .mobile-cards {
-            display: none;
-          }
-        }
-
         @media (max-width: 768px) {
-          .desktop-table {
-            display: none;
-          }
-
-          .mobile-cards {
-            display: block;
-          }
-
           .button-group-header {
             width: 100%;
           }
