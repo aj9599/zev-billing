@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { ExternalLink, X, Zap, Sun, Car } from 'lucide-react';
+import { ExternalLink, X, Zap, Sun, Car, Battery, AlertTriangle } from 'lucide-react';
 import type { Invoice } from '../../../../types';
 import { useTranslation } from '../../../../i18n';
 import { formatDate, getStatusColor } from '../../utils/billingUtils';
@@ -213,8 +213,11 @@ export default function InvoiceDetailModal({
                   const isSeparator = item.item_type === 'separator';
                   const isSolar = item.item_type === 'solar_power';
                   const isNormal = item.item_type === 'normal_power';
+                  const isBattery = item.item_type === 'battery_power';
                   const isChargingNormal = item.item_type === 'car_charging_normal';
                   const isChargingPriority = item.item_type === 'car_charging_priority';
+                  const isChargingBattery = item.item_type === 'car_charging_battery';
+                  const isWarning = item.item_type === 'charging_warning';
 
                   if (isSeparator) {
                     return (
@@ -224,9 +227,31 @@ export default function InvoiceDetailModal({
                     );
                   }
 
+                  if (isWarning) {
+                    return (
+                      <tr key={item.id}>
+                        <td colSpan={2} style={{
+                          padding: '10px 16px',
+                          backgroundColor: '#fef3c7',
+                          color: '#92400e',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          borderTop: '1px solid #fde68a',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '8px'
+                        }}>
+                          <AlertTriangle size={14} color="#d97706" style={{ flexShrink: 0, marginTop: '1px' }} />
+                          {item.description}
+                        </td>
+                      </tr>
+                    );
+                  }
+
                   let backgroundColor = 'transparent';
                   if (isSolar) backgroundColor = '#fefce815';
                   else if (isNormal) backgroundColor = '#eff6ff15';
+                  else if (isBattery || isChargingBattery) backgroundColor = '#faf5ff15';
                   else if (isChargingNormal || isChargingPriority) backgroundColor = '#f0fdf415';
 
                   return (
@@ -236,7 +261,7 @@ export default function InvoiceDetailModal({
                     >
                       <td style={{
                         padding: '12px 16px',
-                        fontWeight: isHeader || isSolar || isNormal || isChargingNormal || isChargingPriority ? '600' : 'normal',
+                        fontWeight: isHeader || isSolar || isNormal || isBattery || isChargingNormal || isChargingPriority || isChargingBattery ? '600' : 'normal',
                         color: isInfo ? '#9ca3af' : '#1f2937',
                         fontSize: isInfo ? '13px' : '14px',
                         display: 'flex',
@@ -245,8 +270,10 @@ export default function InvoiceDetailModal({
                       }}>
                         {isSolar && <Sun size={14} color="#f59e0b" />}
                         {isNormal && <Zap size={14} color="#3b82f6" />}
+                        {isBattery && <Battery size={14} color="#a855f7" />}
                         {isChargingNormal && <><Car size={14} color="#10b981" /><Sun size={14} color="#f59e0b" /></>}
                         {isChargingPriority && <><Car size={14} color="#10b981" /><Zap size={14} color="#3b82f6" /></>}
+                        {isChargingBattery && <><Car size={14} color="#10b981" /><Battery size={14} color="#a855f7" /></>}
                         {item.description}
                       </td>
                       <td style={{

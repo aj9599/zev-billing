@@ -999,7 +999,7 @@ func (bs *BillingService) chargingCounterResetDetected(buildingID int, scope Bil
 	args = append(args, start, end)
 
 	rows, err := bs.db.Query(fmt.Sprintf(`
-		SELECT cs.charger_id, cs.power_kwh
+		SELECT cs.charger_id, cs.session_time, cs.power_kwh, cs.state, c.connection_config
 		FROM charger_sessions cs
 		JOIN chargers c ON c.id = cs.charger_id
 		WHERE %s AND cs.session_time >= ? AND cs.session_time <= ?
@@ -1011,20 +1011,61 @@ func (bs *BillingService) chargingCounterResetDetected(buildingID int, scope Bil
 	}
 	defer rows.Close()
 
-	prev := map[int]float64{}
-	seen := map[int]bool{}
+	// Mirror chargerIntervalKwh: skip idle sessions and tolerate transient dips
+	// that recover (sensor glitches → phantom catch-up, no energy lost). Only a
+	// drop that NEVER climbs back to the pre-dip high under-counts billing and is
+	// worth a human review, so that's the only case we flag. This avoids false
+	// alarms from idle/zero snapshots and one-off glitches.
+	type sess struct {
+		power float64
+		state string
+	}
+	byCharger := make(map[int][]sess)
+	idleByCharger := make(map[int]string)
 	for rows.Next() {
 		var cid int
+		var t time.Time
 		var p float64
-		if err := rows.Scan(&cid, &p); err != nil {
+		var state, connConfigJSON string
+		if err := rows.Scan(&cid, &t, &p, &state, &connConfigJSON); err != nil {
 			continue
 		}
-		// A meaningful backward step in a cumulative counter = reset/glitch.
-		if seen[cid] && p < prev[cid]-0.5 {
-			return true
+		if _, ok := idleByCharger[cid]; !ok {
+			idleByCharger[cid] = "50"
+			var cc map[string]interface{}
+			if json.Unmarshal([]byte(connConfigJSON), &cc) == nil {
+				idleByCharger[cid] = getConfigString(cc, "state_idle", "50")
+			}
 		}
-		prev[cid] = p
-		seen[cid] = true
+		byCharger[cid] = append(byCharger[cid], sess{p, state})
+	}
+
+	for cid, sessions := range byCharger {
+		stateIdle := idleByCharger[cid]
+		var prevPower, preDipHigh float64
+		var hasPrev, inDip bool
+		for _, s := range sessions {
+			if s.state == stateIdle {
+				continue
+			}
+			if !hasPrev {
+				prevPower = s.power
+				hasPrev = true
+				continue
+			}
+			if s.power < prevPower-0.5 {
+				if !inDip {
+					preDipHigh = prevPower
+					inDip = true
+				}
+			} else if inDip && s.power >= preDipHigh-0.001 {
+				inDip = false // recovered to the pre-dip track — transient glitch
+			}
+			prevPower = s.power
+		}
+		if inDip {
+			return true // counter dropped and never recovered → genuine reset
+		}
 	}
 	return false
 }
