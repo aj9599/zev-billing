@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, FileText } from 'lucide-react';
 import type { Invoice } from '../../../../types';
 
@@ -25,7 +26,9 @@ const InvoiceDeleteModal = memo(({
   onConfirm,
   t
 }: InvoiceDeleteModalProps) => {
-  return (
+  // Render into document.body so the dim overlay covers the whole page, not just
+  // the billing panel (ancestors on the billing page trap a plain position:fixed).
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -157,7 +160,8 @@ const InvoiceDeleteModal = memo(({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 });
 
