@@ -1455,11 +1455,24 @@ export default function Dashboard() {
                       const meterKey = getMeterUniqueKey(meter);
                       const current = timeMap.get(timestampKey);
 
-                      // Record every meter's reading so each meter gets its own
-                      // line/area — even ones that read 0 W at sample time (e.g. an
-                      // idle heating meter). Previously a 0 reading on a non-charger/
-                      // non-solar meter was dropped, hiding the meter from the chart.
-                      current[meterKey] = reading.power;
+                      // Battery meters emit two series at the same timestamps:
+                      // discharge (source "battery_meter") and charge
+                      // ("battery_meter_charge"). Combine them into one signed
+                      // value so they don't overwrite each other — discharge shows
+                      // negative (supplying the house, like solar generation),
+                      // charge positive (drawing power). Without this the charge
+                      // series (0 W while discharging) hid the discharge entirely.
+                      if (reading.source === 'battery_meter') {
+                        current[meterKey] = (current[meterKey] || 0) - reading.power;
+                      } else if (reading.source === 'battery_meter_charge') {
+                        current[meterKey] = (current[meterKey] || 0) + reading.power;
+                      } else {
+                        // Record every meter's reading so each meter gets its own
+                        // line/area — even ones that read 0 W at sample time (e.g. an
+                        // idle heating meter). Previously a 0 reading on a non-charger/
+                        // non-solar meter was dropped, hiding the meter from the chart.
+                        current[meterKey] = reading.power;
+                      }
                     });
                   });
 
