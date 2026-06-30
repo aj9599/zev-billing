@@ -1666,17 +1666,46 @@ func (dc *DataCollector) GetLiveMeterReadings(buildingID int) ([]MeterLiveReadin
 			}
 		}
 
-		// Derive a single signed power (consumption +, production/feed-in −) from
-		// the most recent interval deltas, so the convention is identical across
-		// every connection type. Battery meters store discharge in the import
-		// column and charge in the export column, so they are inverted to keep
-		// "charging = positive, discharging = negative".
-		impEst := dc.estimatePowerFromRecentReadings(meterID, reading.TotalImportKwh)
-		expEst := dc.estimatePowerFromRecentReadingsExport(meterID, reading.TotalExportKwh)
+		// Derive a single signed power (consumption +, production/feed-in −).
+		// Prefer the collector's TRUE instantaneous power where available; only
+		// fall back to the recent-interval average for devices that expose just a
+		// cumulative counter (Modbus/UDP/Smart-me). The average lags reality (it
+		// drifts toward the real value over the 15-min window after a step change),
+		// so using live power keeps the preview steady and accurate.
+		var impW, expW float64
+		haveLive := false
+		switch connectionType {
+		case "e3dc":
+			if dc.e3dcCollector != nil {
+				if pImp, pExp, ok := dc.e3dcCollector.GetMeterLivePower(meterID); ok {
+					impW, expW, haveLive = pImp, pExp, true
+				}
+			}
+		case "mqtt":
+			if dc.mqttCollector != nil {
+				if lImp, lExp, ok := dc.mqttCollector.GetMeterLivePower(meterID); ok {
+					impW, expW, haveLive = lImp, lExp, true
+				}
+			}
+		case "loxone_api":
+			if dc.loxoneCollector != nil {
+				if device := dc.loxoneCollector.GetDeviceByMeterID(meterID); device != nil {
+					if !device.LivePowerTime.IsZero() && time.Since(device.LivePowerTime) < 45*time.Second {
+						impW, expW, haveLive = device.LivePowerW, device.LivePowerExpW, true
+					}
+				}
+			}
+		}
+		if !haveLive {
+			impW = dc.estimatePowerFromRecentReadings(meterID, reading.TotalImportKwh)
+			expW = dc.estimatePowerFromRecentReadingsExport(meterID, reading.TotalExportKwh)
+		}
+		// Battery meters store discharge in the import column and charge in the
+		// export column, so invert them to keep "charging +, discharging −".
 		if meterType == "battery_meter" {
-			reading.SignedPowerW = expEst - impEst
+			reading.SignedPowerW = expW - impW
 		} else {
-			reading.SignedPowerW = impEst - expEst
+			reading.SignedPowerW = impW - expW
 		}
 
 		readings = append(readings, reading)
