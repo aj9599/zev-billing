@@ -712,6 +712,9 @@ export default function Dashboard() {
           const batteryMainVal = Math.max(batteryChargeVal, batteryDischargeVal);
           const batteryCharging = batteryChargeVal > batteryDischargeVal + 0.001;
           const batteryDischarging = batteryDischargeVal > batteryChargeVal + 0.001;
+          // Signed value for display: charging positive, discharging negative
+          // (mirrors the solar/grid convention so the direction reads at a glance).
+          const batterySignedVal = batteryChargeVal - batteryDischargeVal;
           const hasBatteryFlow = batteryMainVal > 0.001;
           const batteryColor = batteryCharging ? '#10b981' : '#14b8a6';
           const batteryLabel = batteryCharging
@@ -925,7 +928,7 @@ export default function Dashboard() {
                         {batteryCharging ? <BatteryCharging size={26} color="white" /> : <Battery size={26} color="white" />}
                       </div>
                       <div style={{ fontSize: '12px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowBattery')}</div>
-                      <div style={{ fontSize: '14px', fontWeight: '700', color: hasBatteryFlow ? batteryColor : '#9ca3af' }}>{formatValue(batteryMainVal)}</div>
+                      <div style={{ fontSize: '14px', fontWeight: '700', color: hasBatteryFlow ? batteryColor : '#9ca3af' }}>{formatValue(batterySignedVal)}</div>
                       <div style={{ fontSize: '10px', fontWeight: '600', color: '#9ca3af', marginTop: '2px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                         {batteryLabel}{typeof batterySocPct === 'number' && batterySocPct > 0 ? ` · ${Math.round(batterySocPct)}%` : ''}
                       </div>
@@ -1048,7 +1051,7 @@ export default function Dashboard() {
                         {batteryCharging ? <BatteryCharging size={20} color="white" /> : <Battery size={20} color="white" />}
                       </div>
                       <div style={{ fontSize: '11px', fontWeight: '600', color: '#374151' }}>{t('dashboard.energyFlowBattery')}</div>
-                      <div style={{ fontSize: '13px', fontWeight: '700', color: hasBatteryFlow ? batteryColor : '#9ca3af' }}>{formatValue(batteryMainVal)}</div>
+                      <div style={{ fontSize: '13px', fontWeight: '700', color: hasBatteryFlow ? batteryColor : '#9ca3af' }}>{formatValue(batterySignedVal)}</div>
                       <div style={{ fontSize: '9px', fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                         {batteryLabel}{typeof batterySocPct === 'number' && batterySocPct > 0 ? ` · ${Math.round(batterySocPct)}%` : ''}
                       </div>
