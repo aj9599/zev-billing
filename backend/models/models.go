@@ -181,6 +181,21 @@ type BillingSettings struct {
 	UpdatedAt                time.Time `json:"updated_at"`
 }
 
+// BillingProfile is a saved sender + banking detail set, selectable when
+// creating a bill manually so the admin doesn't retype it each time.
+type BillingProfile struct {
+	ID                int    `json:"id"`
+	Name              string `json:"name"`
+	SenderName        string `json:"sender_name"`
+	SenderAddress     string `json:"sender_address"`
+	SenderZip         string `json:"sender_zip"`
+	SenderCity        string `json:"sender_city"`
+	SenderCountry     string `json:"sender_country"`
+	BankName          string `json:"bank_name"`
+	BankIBAN          string `json:"bank_iban"`
+	BankAccountHolder string `json:"bank_account_holder"`
+}
+
 type Invoice struct {
 	ID            int           `json:"id"`
 	InvoiceNumber string        `json:"invoice_number"`

@@ -548,6 +548,20 @@ export interface EnergyFlowLiveData {
   per_building?: BuildingEnergyFlowLive[];
 }
 
+// Saved sender/banking profile for manual bill creation.
+export interface BillingProfile {
+  id: number;
+  name: string;
+  sender_name: string;
+  sender_address: string;
+  sender_zip: string;
+  sender_city: string;
+  sender_country: string;
+  bank_name: string;
+  bank_iban: string;
+  bank_account_holder: string;
+}
+
 // Per-meter live reading used by the virtual-meter config UI.
 export interface MeterLiveReading {
   meter_id: number;

@@ -323,6 +323,23 @@ func RunMigrations(db *sql.DB) error {
 			FOREIGN KEY (building_id) REFERENCES buildings(id)
 		)`,
 
+		// Saved sender/banking profiles for manual bill creation, so an admin can
+		// pick a previously-entered set instead of retyping it each time.
+		`CREATE TABLE IF NOT EXISTS billing_profiles (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			sender_name TEXT DEFAULT '',
+			sender_address TEXT DEFAULT '',
+			sender_zip TEXT DEFAULT '',
+			sender_city TEXT DEFAULT '',
+			sender_country TEXT DEFAULT '',
+			bank_name TEXT DEFAULT '',
+			bank_iban TEXT DEFAULT '',
+			bank_account_holder TEXT DEFAULT '',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
 		// Controllable devices: standalone solar-driven device control (EVCC-style).
 		// No coupling to billing — driven only by live grid-meter surplus.
 		`CREATE TABLE IF NOT EXISTS controllable_devices (

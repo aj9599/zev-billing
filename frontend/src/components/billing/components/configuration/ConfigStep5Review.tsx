@@ -1,4 +1,9 @@
+import { useState, useEffect } from 'react';
+import { Bookmark, Trash2 } from 'lucide-react';
 import { useTranslation } from '../../../../i18n';
+import { api } from '../../../../api/client';
+import { notify } from '../../../../utils/toast';
+import type { BillingProfile } from '../../../../types';
 
 interface ConfigStep5ReviewProps {
   isVZEVMode: boolean;
@@ -50,6 +55,74 @@ export default function ConfigStep5Review({
   onBankAccountHolderChange
 }: ConfigStep5ReviewProps) {
   const { t } = useTranslation();
+  const [profiles, setProfiles] = useState<BillingProfile[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState<string>('');
+  const [newProfileName, setNewProfileName] = useState('');
+
+  const loadProfiles = async () => {
+    try {
+      setProfiles(await api.getBillingProfiles());
+    } catch {
+      // non-fatal; the form still works without saved profiles
+    }
+  };
+
+  useEffect(() => { loadProfiles(); }, []);
+
+  const applyProfile = (id: string) => {
+    setSelectedProfileId(id);
+    const p = profiles.find(pr => String(pr.id) === id);
+    if (!p) return;
+    onSenderNameChange(p.sender_name);
+    onSenderAddressChange(p.sender_address);
+    onSenderZipChange(p.sender_zip);
+    onSenderCityChange(p.sender_city);
+    onBankNameChange(p.bank_name);
+    onBankIbanChange(p.bank_iban);
+    onBankAccountHolderChange(p.bank_account_holder);
+  };
+
+  const handleSaveProfile = async () => {
+    const name = newProfileName.trim();
+    if (!name) return;
+    try {
+      await api.createBillingProfile({
+        name,
+        sender_name: senderName,
+        sender_address: senderAddress,
+        sender_zip: senderZip,
+        sender_city: senderCity,
+        sender_country: '',
+        bank_name: bankName,
+        bank_iban: bankIban,
+        bank_account_holder: bankAccountHolder,
+      });
+      setNewProfileName('');
+      await loadProfiles();
+      notify.success(t('billConfig.step5.profileSaved'));
+    } catch {
+      notify.error(t('billConfig.step5.profileSaveFailed'));
+    }
+  };
+
+  const handleDeleteProfile = async () => {
+    if (!selectedProfileId) return;
+    try {
+      await api.deleteBillingProfile(parseInt(selectedProfileId));
+      setSelectedProfileId('');
+      await loadProfiles();
+      notify.success(t('billConfig.step5.profileDeleted'));
+    } catch {
+      notify.error(t('billConfig.step5.profileDeleteFailed'));
+    }
+  };
+
+  const fieldStyle: React.CSSProperties = {
+    padding: '10px',
+    border: '1px solid #ced4da',
+    borderRadius: '6px',
+    fontSize: '14px'
+  };
 
   return (
     <div>
@@ -94,6 +167,62 @@ export default function ConfigStep5Review({
             <strong>{t('billConfig.step5.estimatedInvoices')}:</strong> {userCount}
           </li>
         </ul>
+      </div>
+
+      {/* Saved sender/banking profiles — pick one to fill the fields below, or save the current set */}
+      <div style={{
+        marginBottom: '20px',
+        padding: '14px 16px',
+        backgroundColor: '#eef2ff',
+        border: '1px solid #c7d2fe',
+        borderRadius: '10px'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: '#4338ca', marginBottom: '10px' }}>
+          <Bookmark size={14} /> {t('billConfig.step5.savedProfiles')}
+        </div>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <select
+            value={selectedProfileId}
+            onChange={(e) => applyProfile(e.target.value)}
+            style={{ ...fieldStyle, flex: '1 1 200px', minWidth: '180px', backgroundColor: 'white' }}
+          >
+            <option value="">{t('billConfig.step5.selectProfile')}</option>
+            {profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          {selectedProfileId && (
+            <button
+              type="button"
+              onClick={handleDeleteProfile}
+              title={t('common.delete')}
+              style={{ ...fieldStyle, border: 'none', cursor: 'pointer', backgroundColor: 'rgba(239,68,68,0.1)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Trash2 size={15} />
+            </button>
+          )}
+          <div style={{ flexBasis: '100%', height: 0 }} />
+          <input
+            type="text"
+            value={newProfileName}
+            onChange={(e) => setNewProfileName(e.target.value)}
+            placeholder={t('billConfig.step5.profileNamePlaceholder')}
+            style={{ ...fieldStyle, flex: '1 1 200px', minWidth: '180px' }}
+          />
+          <button
+            type="button"
+            onClick={handleSaveProfile}
+            disabled={!newProfileName.trim()}
+            style={{
+              ...fieldStyle,
+              border: 'none',
+              cursor: newProfileName.trim() ? 'pointer' : 'not-allowed',
+              backgroundColor: newProfileName.trim() ? '#4f46e5' : '#c7d2fe',
+              color: 'white',
+              fontWeight: 600
+            }}
+          >
+            {t('billConfig.step5.saveProfile')}
+          </button>
+        </div>
       </div>
 
       {/* Sender Information */}

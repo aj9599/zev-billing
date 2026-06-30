@@ -5,7 +5,7 @@ import type {
   GenerateBillsRequest, GenerateBillsResult, MeterReplacement, MeterReplacementRequest,
   SelfConsumptionData, SystemHealth, DataHealth, CostOverview, EnergyFlowData, EnergyFlowLiveData,
   EmailAlertSettings, Device, DeviceLiveStatus, DeviceSwitchEvent, LoxoneControl,
-  LicenseStatus, SmartMeDevice, MeterLiveReading
+  LicenseStatus, SmartMeDevice, MeterLiveReading, BillingProfile
 } from '../types';
 
 const API_BASE = '/api';
@@ -625,6 +625,18 @@ class ApiClient {
 
   async deleteInvoice(id: number) {
     return this.request(`/billing/invoices/${id}`, { method: 'DELETE' });
+  }
+
+  async getBillingProfiles(): Promise<BillingProfile[]> {
+    return this.request('/billing/profiles');
+  }
+
+  async createBillingProfile(profile: Omit<BillingProfile, 'id'>): Promise<BillingProfile> {
+    return this.request('/billing/profiles', { method: 'POST', body: JSON.stringify(profile) });
+  }
+
+  async deleteBillingProfile(id: number) {
+    return this.request(`/billing/profiles/${id}`, { method: 'DELETE' });
   }
 
   async downloadInvoicePDF(id: number): Promise<string> {

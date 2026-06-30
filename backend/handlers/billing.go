@@ -244,6 +244,78 @@ func (h *BillingHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(s)
 }
 
+// ListBillingProfiles returns all saved sender/banking profiles.
+func (h *BillingHandler) ListBillingProfiles(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.db.Query(`
+		SELECT id, name, sender_name, sender_address, sender_zip, sender_city, sender_country,
+		       bank_name, bank_iban, bank_account_holder
+		FROM billing_profiles
+		ORDER BY name COLLATE NOCASE ASC
+	`)
+	if err != nil {
+		log.Printf("ERROR: Failed to query billing profiles: %v", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	profiles := []models.BillingProfile{}
+	for rows.Next() {
+		var p models.BillingProfile
+		if err := rows.Scan(&p.ID, &p.Name, &p.SenderName, &p.SenderAddress, &p.SenderZip,
+			&p.SenderCity, &p.SenderCountry, &p.BankName, &p.BankIBAN, &p.BankAccountHolder); err == nil {
+			profiles = append(profiles, p)
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(profiles)
+}
+
+// CreateBillingProfile saves a new sender/banking profile.
+func (h *BillingHandler) CreateBillingProfile(w http.ResponseWriter, r *http.Request) {
+	var p models.BillingProfile
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(p.Name) == "" {
+		http.Error(w, "Profile name is required", http.StatusBadRequest)
+		return
+	}
+	result, err := h.db.Exec(`
+		INSERT INTO billing_profiles
+			(name, sender_name, sender_address, sender_zip, sender_city, sender_country,
+			 bank_name, bank_iban, bank_account_holder)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, p.Name, p.SenderName, p.SenderAddress, p.SenderZip, p.SenderCity, p.SenderCountry,
+		p.BankName, p.BankIBAN, p.BankAccountHolder)
+	if err != nil {
+		log.Printf("ERROR: Failed to create billing profile: %v", err)
+		http.Error(w, "Failed to save profile", http.StatusInternalServerError)
+		return
+	}
+	id, _ := result.LastInsertId()
+	p.ID = int(id)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(p)
+}
+
+// DeleteBillingProfile removes a saved profile.
+func (h *BillingHandler) DeleteBillingProfile(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(mux.Vars(r)["id"])
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+	if _, err := h.db.Exec("DELETE FROM billing_profiles WHERE id = ?", id); err != nil {
+		log.Printf("ERROR: Failed to delete billing profile %d: %v", id, err)
+		http.Error(w, "Failed to delete profile", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 	var req GenerateBillsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
