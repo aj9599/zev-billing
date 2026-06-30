@@ -546,6 +546,25 @@ export interface EnergyFlowLiveData {
   per_building?: BuildingEnergyFlowLive[];
 }
 
+// Per-meter live reading used by the virtual-meter config UI.
+export interface MeterLiveReading {
+  meter_id: number;
+  meter_name: string;
+  meter_type: string;
+  building_id: number;
+  connection_type: string;
+  current_power_w: number;
+  current_power_exp_w: number;
+  has_live_power: boolean;
+  total_import_kwh: number;
+  total_export_kwh: number;
+  is_online: boolean;
+  last_update: string;
+  // Signed power: + = consumption/import, − = production/feed-in (battery
+  // normalised so charging is + and discharging −).
+  signed_power_w: number;
+}
+
 export interface BuildingEnergyFlowLive {
   building_id: number;
   building_name: string;

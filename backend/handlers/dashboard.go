@@ -2006,6 +2006,43 @@ func (h *DashboardHandler) GetEnergyFlowLive(w http.ResponseWriter, r *http.Requ
 	h.getEnergyFlowLiveFromDB(w, r, ctx, buildingID)
 }
 
+// GetLiveMeters returns per-meter live readings (including a signed power value)
+// without storing anything. Used by the virtual-meter config UI so the user can
+// see each source meter's current power and flow direction while building a
+// formula.
+func (h *DashboardHandler) GetLiveMeters(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("PANIC in GetLiveMeters: %v", rec)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+	}()
+
+	buildingIDStr := r.URL.Query().Get("building_id")
+	var buildingID int
+	if buildingIDStr != "" && buildingIDStr != "0" {
+		fmt.Sscanf(buildingIDStr, "%d", &buildingID)
+	}
+
+	if h.dataCollector == nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]services.MeterLiveReading{})
+		return
+	}
+
+	readings, err := h.dataCollector.GetLiveMeterReadings(buildingID)
+	if err != nil {
+		http.Error(w, "Failed to read live meters", http.StatusInternalServerError)
+		return
+	}
+	if readings == nil {
+		readings = []services.MeterLiveReading{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(readings)
+}
+
 // getEnergyFlowLiveLegacy is the original collector-cache path. Kept around
 // for reference only — wire it back into GetEnergyFlowLive if you ever need
 // a true real-time view that doesn't wait for the next 15-min DB write.

@@ -1500,6 +1500,8 @@ export const de: Translations = {
   'meters.virtualModeEnergy': 'Energie (erweitert)',
   'meters.virtualModePowerHint': 'Einfach Zähler addieren (+) oder subtrahieren (−). Der Zähler liest deren Live-Leistung und bildet die Energie (kWh) selbst — Verbrauch bei positivem, Einspeisung bei negativem Gesamtwert. Kein Auswählen von Bezug oder Einspeisung nötig.',
   'meters.virtualModeEnergyHint': 'Erweitert: kombiniert die kumulierten Zählerstände jedes Zählers und wählt pro Quelle den Bezugs- oder Einspeisungskanal.',
+  'meters.virtualLivePowerHint': 'Aktuelle Leistung dieses Zählers. Positiv = Verbrauch, negativ = Produktion / Einspeisung (Batterie: + Laden, − Entladen).',
+  'meters.virtualLivePowerNote': 'Die Live-Leistung wird laufend aktualisiert; die Energie (kWh) wird alle 15 Minuten integriert und gespeichert.',
   // Karten-Sortierung (Zähler & Ladestationen)
   'sort.label': 'Sortieren:',
   'sort.custom': 'Eigene (zum Ordnen ziehen)',

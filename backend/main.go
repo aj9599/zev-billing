@@ -371,6 +371,7 @@ func main() {
 	api.HandleFunc("/dashboard/cost-overview", dashboardHandler.GetCostOverview).Methods("GET")
 	api.HandleFunc("/dashboard/energy-flow", dashboardHandler.GetEnergyFlow).Methods("GET")
 	api.HandleFunc("/dashboard/energy-flow-live", dashboardHandler.GetEnergyFlowLive).Methods("GET")
+	api.HandleFunc("/dashboard/live-meters", dashboardHandler.GetLiveMeters).Methods("GET")
 
 	// Export route
 	api.HandleFunc("/export/data", exportHandler.ExportData).Methods("GET")

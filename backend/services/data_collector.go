@@ -1035,10 +1035,16 @@ func (dc *DataCollector) computeVirtualPowerReadingAt(meterID int, cfg virtualMe
 		return 0, 0, fmt.Errorf("virtual meter %d not found: %v", meterID, err)
 	}
 
-	// Net energy flow over this interval, summed across the source meters.
+	// Net energy flow over this interval, summed across the source meters. Each
+	// source contributes its signed net flow (consumption +, production/feed-in −)
+	// using the same convention the config UI shows, so what the user sees is what
+	// gets integrated. Battery meters are inverted (charge +, discharge −) because
+	// they store discharge in the import column and charge in the export column.
 	var netDelta float64
 	for _, src := range cfg.Sources {
 		var impDelta, expDelta float64
+		var mtype string
+		_ = dc.db.QueryRow("SELECT COALESCE(meter_type, '') FROM meters WHERE id = ?", src.MeterID).Scan(&mtype)
 		err := dc.db.QueryRow(
 			"SELECT COALESCE(consumption_kwh, 0), COALESCE(consumption_export, 0) FROM meter_readings WHERE meter_id = ? AND reading_time = ?",
 			src.MeterID, at,
@@ -1049,6 +1055,9 @@ func (dc *DataCollector) computeVirtualPowerReadingAt(meterID int, cfg virtualMe
 			continue
 		}
 		net := impDelta - expDelta
+		if mtype == "battery_meter" {
+			net = expDelta - impDelta
+		}
 		if src.Op == "-" {
 			netDelta -= net
 		} else {
@@ -1429,6 +1438,11 @@ type MeterLiveReading struct {
 	ConnectionType   string    `json:"connection_type"`
 	CurrentPowerW    float64   `json:"current_power_w"`     // Instantaneous import power in Watts
 	CurrentPowerExpW float64   `json:"current_power_exp_w"` // Instantaneous export power in Watts (for solar)
+	// SignedPowerW is a single directional power value with a consistent sign:
+	// positive = consumption/import, negative = production/feed-in. Battery meters
+	// are normalised so charging is positive and discharging negative. Used by the
+	// virtual-meter config UI so the user can verify each source's flow direction.
+	SignedPowerW float64 `json:"signed_power_w"`
 	HasLivePower     bool      `json:"has_live_power"`      // True if live power is from direct reading (not estimated)
 	TotalImportKwh   float64   `json:"total_import_kwh"`    // Cumulative import reading
 	TotalExportKwh   float64   `json:"total_export_kwh"`    // Cumulative export reading (solar)
@@ -1650,6 +1664,19 @@ func (dc *DataCollector) GetLiveMeterReadings(buildingID int) ([]MeterLiveReadin
 					}
 				}
 			}
+		}
+
+		// Derive a single signed power (consumption +, production/feed-in −) from
+		// the most recent interval deltas, so the convention is identical across
+		// every connection type. Battery meters store discharge in the import
+		// column and charge in the export column, so they are inverted to keep
+		// "charging = positive, discharging = negative".
+		impEst := dc.estimatePowerFromRecentReadings(meterID, reading.TotalImportKwh)
+		expEst := dc.estimatePowerFromRecentReadingsExport(meterID, reading.TotalExportKwh)
+		if meterType == "battery_meter" {
+			reading.SignedPowerW = expEst - impEst
+		} else {
+			reading.SignedPowerW = impEst - expEst
 		}
 
 		readings = append(readings, reading)

@@ -5,7 +5,7 @@ import type {
   GenerateBillsRequest, GenerateBillsResult, MeterReplacement, MeterReplacementRequest,
   SelfConsumptionData, SystemHealth, DataHealth, CostOverview, EnergyFlowData, EnergyFlowLiveData,
   EmailAlertSettings, Device, DeviceLiveStatus, DeviceSwitchEvent, LoxoneControl,
-  LicenseStatus, SmartMeDevice
+  LicenseStatus, SmartMeDevice, MeterLiveReading
 } from '../types';
 
 const API_BASE = '/api';
@@ -818,6 +818,10 @@ class ApiClient {
 
   async getEnergyFlowLive(buildingId: number = 0): Promise<EnergyFlowLiveData> {
     return this.request(`/dashboard/energy-flow-live?building_id=${buildingId}`);
+  }
+
+  async getLiveMeters(buildingId: number = 0): Promise<MeterLiveReading[]> {
+    return this.request(`/dashboard/live-meters?building_id=${buildingId}`);
   }
 
   async getLogs(limit: number = 100, since?: string): Promise<AdminLog[]> {

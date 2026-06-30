@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { X, Info, AlertCircle, Wifi, Rss, Cloud, Zap, Check, Plus, Trash2, Calculator, Cable, ShieldCheck } from 'lucide-react';
 import { useTranslation } from '../../i18n';
-import type { Meter, Building, User, LoxoneControl, SmartMeDevice } from '../../types';
+import type { Meter, Building, User, LoxoneControl, SmartMeDevice, MeterLiveReading } from '../../types';
+import { api } from '../../api/client';
+import { pollWhileVisible } from '../../utils/polling';
 import LoxoneDiscovery from '../LoxoneDiscovery';
 import SmartMeDiscovery from '../SmartMeDiscovery';
 
@@ -106,6 +108,23 @@ const labelStyle: React.CSSProperties = {
     color: '#374151'
 };
 
+// Format a signed power value (W) for the virtual-meter live preview:
+// + = consumption/import, − = production/feed-in.
+function fmtSignedW(w: number): string {
+    const sign = w > 0 ? '+' : w < 0 ? '−' : '';
+    const a = Math.abs(w);
+    if (a >= 1000) return `${sign}${(a / 1000).toFixed(2)} kW`;
+    return `${sign}${a.toFixed(0)} W`;
+}
+
+// Colour for a signed power value: production/feed-in green, consumption blue,
+// ~zero grey, offline grey.
+function signedPowerColor(w: number, online: boolean): string {
+    if (!online) return '#9ca3af';
+    if (Math.abs(w) < 1) return '#6b7280';
+    return w < 0 ? '#10b981' : '#2563eb';
+}
+
 const helpTextStyle: React.CSSProperties = {
     fontSize: '11px',
     color: '#9ca3af',
@@ -163,12 +182,32 @@ export default function MeterFormModal({
     const [loxoneControls, setLoxoneControls] = useState<LoxoneControl[]>([]);
     // Discovered Smart-me devices (auto-discovery picker). Config-only, never billing.
     const [smartmeDevices, setSmartmeDevices] = useState<SmartMeDevice[]>([]);
+    // Live power per meter (id → signed W), polled while editing a virtual meter so
+    // the user can verify each source's flow direction. Config-only, never billing.
+    const [liveMeters, setLiveMeters] = useState<Record<number, MeterLiveReading>>({});
 
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 768);
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    // Poll live meter readings while configuring a virtual meter.
+    useEffect(() => {
+        if (formData.connection_type !== 'virtual') return;
+        const load = async () => {
+            try {
+                const rows = await api.getLiveMeters(0);
+                const map: Record<number, MeterLiveReading> = {};
+                rows.forEach(r => { map[r.meter_id] = r; });
+                setLiveMeters(map);
+            } catch {
+                // Live preview is best-effort; ignore transient errors.
+            }
+        };
+        load();
+        return pollWhileVisible(load, 10000);
+    }, [formData.connection_type]);
 
     // Helper to check if meter type supports export
     const supportsExport = formData.meter_type === 'total_meter' || formData.meter_type === 'solar_meter';
@@ -1502,6 +1541,25 @@ export default function MeterFormModal({
                                                             ))}
                                                         </select>
 
+                                                        {/* Live power of this source (power mode), so the user can
+                                                            verify the sign before relying on the result. */}
+                                                        {mode === 'power' && src.meter_id > 0 && liveMeters[src.meter_id] && (
+                                                            <span
+                                                                title={t('meters.virtualLivePowerHint')}
+                                                                style={{
+                                                                    flexShrink: 0,
+                                                                    minWidth: '80px',
+                                                                    textAlign: 'right',
+                                                                    fontSize: '13px',
+                                                                    fontWeight: 700,
+                                                                    fontVariantNumeric: 'tabular-nums',
+                                                                    color: signedPowerColor(liveMeters[src.meter_id].signed_power_w, liveMeters[src.meter_id].is_online)
+                                                                }}
+                                                            >
+                                                                {liveMeters[src.meter_id].is_online ? fmtSignedW(liveMeters[src.meter_id].signed_power_w) : '—'}
+                                                            </span>
+                                                        )}
+
                                                         {/* Channel: import vs export/production — only in legacy energy mode.
                                                             Power mode derives direction from the sign of the net flow. */}
                                                         {mode === 'energy' && (
@@ -1596,6 +1654,18 @@ export default function MeterFormModal({
                                                     let sum = 0;
                                                     terms.forEach(tm => { sum += tm.op === '-' ? -tm.val : tm.val; });
 
+                                                    // Live net power of the virtual meter (power mode): sum each
+                                                    // online source's signed power with its +/- op.
+                                                    const liveSources = picked.filter(s => {
+                                                        const lm = liveMeters[s.meter_id];
+                                                        return lm && lm.is_online;
+                                                    });
+                                                    const liveNet = liveSources.reduce((acc, s) => {
+                                                        const w = liveMeters[s.meter_id].signed_power_w;
+                                                        return acc + (s.op === '-' ? -w : w);
+                                                    }, 0);
+                                                    const hasLive = mode === 'power' && liveSources.length > 0;
+
                                                     return (
                                                         <div style={{
                                                             backgroundColor: '#fdf2f8',
@@ -1638,14 +1708,26 @@ export default function MeterFormModal({
                                                                     </span>
                                                                 ))}
                                                             </div>
-                                                            {/* Current computed result from latest readings */}
+                                                            {/* Live net power (power mode) — the headline number the
+                                                                user verifies; consumption +, feed-in −. */}
+                                                            {hasLive && (
+                                                                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                                                                    <span style={{ fontSize: '24px', fontWeight: 800, color: signedPowerColor(liveNet, true) }}>
+                                                                        {fmtSignedW(liveNet)}
+                                                                    </span>
+                                                                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#6b7280' }}>
+                                                                        {liveNet < 0 ? t('meters.virtualChannelExport') : t('meters.virtualChannelImport')}
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                            {/* Cumulative energy result from latest readings */}
                                                             <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
-                                                                <span style={{ fontSize: '20px', fontWeight: 700, color: '#db2777' }}>
+                                                                <span style={{ fontSize: '16px', fontWeight: 700, color: '#db2777' }}>
                                                                     = {(mode === 'power' ? sum : Math.max(0, sum)).toFixed(3)} kWh
                                                                 </span>
                                                             </div>
                                                             <p style={{ fontSize: '11px', color: '#9d174d', margin: '8px 0 0 0' }}>
-                                                                {t('meters.virtualPreviewNote')}
+                                                                {mode === 'power' ? t('meters.virtualLivePowerNote') : t('meters.virtualPreviewNote')}
                                                             </p>
                                                         </div>
                                                     );

@@ -1499,6 +1499,8 @@ export const en: Translations = {
   'meters.virtualModeEnergy': 'Energy (advanced)',
   'meters.virtualModePowerHint': 'Just add (+) or subtract (−) meters. The meter reads their live power and builds energy (kWh) itself — consumption when the total is positive, feed-in when negative. No need to pick import or export.',
   'meters.virtualModeEnergyHint': 'Advanced: combine the cumulative counters of each meter and choose the import or export channel per source.',
+  'meters.virtualLivePowerHint': 'Live power of this meter right now. Positive = consumption, negative = production / feed-in (battery: + charging, − discharging).',
+  'meters.virtualLivePowerNote': 'Live power updates continuously; energy (kWh) is integrated and stored every 15 minutes.',
   // Card sorting (meters & chargers pages)
   'sort.label': 'Sort:',
   'sort.custom': 'Custom (drag to order)',
