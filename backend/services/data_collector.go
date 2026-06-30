@@ -1690,7 +1690,9 @@ func (dc *DataCollector) GetLiveMeterReadings(buildingID int) ([]MeterLiveReadin
 		case "loxone_api":
 			if dc.loxoneCollector != nil {
 				if device := dc.loxoneCollector.GetDeviceByMeterID(meterID); device != nil {
-					if !device.LivePowerTime.IsZero() && time.Since(device.LivePowerTime) < 45*time.Second {
+					recent := !device.LivePowerTime.IsZero() && time.Since(device.LivePowerTime) < 60*time.Second
+					hasVal := device.LivePowerW != 0 || device.LivePowerExpW != 0
+					if recent && hasVal {
 						impW, expW, haveLive = device.LivePowerW, device.LivePowerExpW, true
 					}
 				}

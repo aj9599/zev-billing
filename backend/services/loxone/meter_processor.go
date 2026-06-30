@@ -147,12 +147,46 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 		// Power flow (Pf) is in kW → convert to W. On the Loxone battery block a
 		// POSITIVE Pf means the battery is discharging (delivering power), so we
 		// negate it to keep our convention of BatteryPowerW > 0 = charging.
-		if pf, ok := parseOut("output0"); ok {
+		pf, hasPf := parseOut("output0")
+		if hasPf {
 			device.BatteryPowerW = -pf * 1000
 		}
 
+		// Live power for the dashboard and virtual meters. Prefer the real Pf
+		// channel; if this Miniserver doesn't expose it, derive instantaneous
+		// power from how fast the charge/discharge counters advanced since the
+		// last poll (~15 s) — far more responsive and accurate than the 15-min
+		// DB estimate. LivePowerW carries discharge (the import/main register),
+		// LivePowerExpW carries charge (the export register), matching how the
+		// readings are persisted below.
+		if hasPf {
+			if device.BatteryPowerW >= 0 { // charging
+				device.LivePowerW = 0
+				device.LivePowerExpW = device.BatteryPowerW
+			} else { // discharging
+				device.LivePowerW = -device.BatteryPowerW
+				device.LivePowerExpW = 0
+			}
+			device.LivePowerTime = time.Now()
+		} else if !device.LastUpdate.IsZero() {
+			dtHours := time.Since(device.LastUpdate).Hours()
+			if dtHours > 0 && dtHours < 1 { // ignore long gaps (restart/stall)
+				dDis := dischargeReading - device.LastDischKwh
+				dCha := chargeReading - device.LastChargeKwh
+				device.LivePowerW = 0
+				device.LivePowerExpW = 0
+				if dDis > 0 {
+					device.LivePowerW = dDis / dtHours * 1000
+				}
+				if dCha > 0 {
+					device.LivePowerExpW = dCha / dtHours * 1000
+				}
+				device.LivePowerTime = time.Now()
+			}
+		}
+
 		// Fallback direction from which counter advanced since the last read,
-		// in case Pf is unsigned on this Miniserver.
+		// in case Pf is unsigned/absent on this Miniserver.
 		if device.BatteryPowerW == 0 {
 			if chargeReading > device.LastChargeKwh {
 				device.BatteryPowerW = 1 // nominal "charging"
@@ -172,7 +206,8 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 		device.LastReadingExport = chargeReading
 		device.LastUpdate = time.Now()
 		device.ReadingGaps = 0
-		device.LivePowerTime = time.Now()
+		// LivePowerTime is set above only when an actual live power was computed
+		// (from Pf or a counter delta), so a stale/zero value isn't treated fresh.
 
 		if !conn.LivePollActive {
 			log.Printf("   🔋 Battery SoC (output15/Slvl): %.1f%%", device.SocPct)
