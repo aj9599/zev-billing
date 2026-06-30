@@ -40,6 +40,7 @@ type InvoiceTranslations struct {
 	SolarMode          string
 	PriorityMode       string
 	SolarCharging      string
+	BatteryCharging    string
 	GridCharging       string
 	AdditionalServices string
 	TotalConsumption   string
@@ -125,6 +126,7 @@ func GetTranslations(language string) InvoiceTranslations {
 			SolarMode:                  "Solarmodus",
 			PriorityMode:               "Prioritätsmodus",
 			SolarCharging:              "Solarladen",
+			BatteryCharging:            "Batterieladen",
 			GridCharging:               "Netzladen",
 			AdditionalServices:         "Zusätzliche Dienstleistungen",
 			TotalConsumption:           "Gesamtverbrauch",
@@ -197,6 +199,7 @@ func GetTranslations(language string) InvoiceTranslations {
 			SolarMode:                  "Mode solaire",
 			PriorityMode:               "Mode prioritaire",
 			SolarCharging:              "Recharge solaire",
+			BatteryCharging:            "Recharge batterie",
 			GridCharging:               "Recharge réseau",
 			AdditionalServices:         "Services supplémentaires",
 			TotalConsumption:           "Consommation totale",
@@ -269,6 +272,7 @@ func GetTranslations(language string) InvoiceTranslations {
 			SolarMode:                  "Modalità solare",
 			PriorityMode:               "Modalità prioritaria",
 			SolarCharging:              "Ricarica solare",
+			BatteryCharging:            "Ricarica batteria",
 			GridCharging:               "Ricarica rete",
 			AdditionalServices:         "Servizi aggiuntivi",
 			TotalConsumption:           "Consumo totale",
@@ -341,6 +345,7 @@ func GetTranslations(language string) InvoiceTranslations {
 			SolarMode:                  "Solar Mode",
 			PriorityMode:               "Priority Mode",
 			SolarCharging:              "Solar Charging",
+			BatteryCharging:            "Battery Charging",
 			GridCharging:               "Grid Charging",
 			AdditionalServices:         "Additional Services",
 			TotalConsumption:           "Total consumption",

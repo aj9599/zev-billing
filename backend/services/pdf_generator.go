@@ -1096,6 +1096,18 @@ func (pg *PDFGenerator) generateItemHTML(item map[string]interface{}, currency s
 			<td class="text-right"><strong>%s %.2f</strong></td>
 		</tr>`, carIcon, sunIcon, description, currency, totalPrice)
 
+	case "car_charging_battery":
+		// Battery charging (solar-split battery share): car + battery icon.
+		return fmt.Sprintf(`<tr class="item-cost charging-highlight">
+			<td style="padding-left: 20px;">
+				<span style="display: inline-flex; align-items: center; gap: 6px;">
+					%s%s
+					<strong>%s</strong>
+				</span>
+			</td>
+			<td class="text-right"><strong>%s %.2f</strong></td>
+		</tr>`, carIcon, batteryIcon, description, currency, totalPrice)
+
 	case "car_charging_priority":
 		// Priority / grid charging (mode "Priority Mode" / solar-split grid share):
 		// car + bolt, mirroring the meter grid icon.

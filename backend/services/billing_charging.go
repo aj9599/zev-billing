@@ -820,21 +820,23 @@ func (bs *BillingService) chargerIntervalKwh(buildingID int, filter chargerSessi
 // buildingMeterIntervals returns, per 15-minute interval, the building's total
 // apartment consumption and solar production (export energy). Used as the base for
 // the charger solar split.
-func (bs *BillingService) buildingMeterIntervals(buildingID int, start, end time.Time) (apt, solar map[time.Time]float64) {
+func (bs *BillingService) buildingMeterIntervals(buildingID int, start, end time.Time) (apt, solar, batCharge, batDischarge map[time.Time]float64) {
 	apt = make(map[time.Time]float64)
 	solar = make(map[time.Time]float64)
+	batCharge = make(map[time.Time]float64)
+	batDischarge = make(map[time.Time]float64)
 
 	rows, err := bs.db.Query(`
 		SELECT m.meter_type, mr.reading_time, mr.consumption_kwh, mr.consumption_export
 		FROM meter_readings mr
 		JOIN meters m ON mr.meter_id = m.id
 		WHERE m.building_id = ?
-		AND m.meter_type IN ('apartment_meter', 'solar_meter')
+		AND m.meter_type IN ('apartment_meter', 'solar_meter', 'battery_meter')
 		AND mr.reading_time >= ? AND mr.reading_time <= ?
 	`, buildingID, start, end)
 	if err != nil {
 		log.Printf("  [SOLAR-SPLIT] ERROR querying building meter intervals: %v", err)
-		return apt, solar
+		return apt, solar, batCharge, batDischarge
 	}
 	defer rows.Close()
 
@@ -846,13 +848,18 @@ func (bs *BillingService) buildingMeterIntervals(buildingID int, start, end time
 			continue
 		}
 		ts := floorTo15min(t)
-		if mtype == "apartment_meter" {
+		switch mtype {
+		case "apartment_meter":
 			apt[ts] += cons
-		} else if mtype == "solar_meter" {
+		case "solar_meter":
 			solar[ts] += exportE
+		case "battery_meter":
+			// import column = discharge, export column = charge.
+			batDischarge[ts] += cons
+			batCharge[ts] += exportE
 		}
 	}
-	return apt, solar
+	return apt, solar, batCharge, batDischarge
 }
 
 // calculateChargingSolarSplit bills the selected solar-split chargers by giving them a
@@ -863,14 +870,14 @@ func (bs *BillingService) buildingMeterIntervals(buildingID int, start, end time
 // calculateZEVConsumption uses to dilute apartments, so solar is conserved.
 //
 // Returns the selected chargers' solar and grid kWh plus the first/last session time.
-func (bs *BillingService) calculateChargingSolarSplit(buildingID int, target chargerSessionFilter, start, end time.Time) (solar, grid float64, firstSession, lastSession time.Time) {
+func (bs *BillingService) calculateChargingSolarSplit(buildingID int, target chargerSessionFilter, start, end time.Time) (solar, battery, grid float64, firstSession, lastSession time.Time) {
 	targetIntervals, fS, lS := bs.chargerIntervalKwh(buildingID, target, start, end, true)
 	firstSession, lastSession = fS, lS
 	if len(targetIntervals) == 0 {
-		return 0, 0, firstSession, lastSession
+		return 0, 0, 0, firstSession, lastSession
 	}
 
-	aptIntervals, solarIntervals := bs.buildingMeterIntervals(buildingID, start, end)
+	aptIntervals, solarIntervals, batChargeIntervals, batDischargeIntervals := bs.buildingMeterIntervals(buildingID, start, end)
 	var poolCharger map[time.Time]float64
 	if allSplit := bs.solarSplitChargerIDsForBuilding(buildingID); len(allSplit) > 0 {
 		poolCharger, _, _ = bs.chargerIntervalKwh(buildingID, chargerSessionFilter{
@@ -890,26 +897,18 @@ func (bs *BillingService) calculateChargingSolarSplit(buildingID int, target cha
 			poolCh = tKwh
 		}
 		pool := aptIntervals[ts] + poolCh
-		solarProd := solarIntervals[ts]
 
-		if pool <= 0 {
-			grid += tKwh
-			continue
-		}
-		if solarProd >= pool {
-			solar += tKwh
-			continue
-		}
-		s := solarProd * (tKwh / pool)
-		if s > tKwh {
-			s = tKwh
-		}
+		// Same three-tier split as apartments: solar → battery → grid, with the
+		// charger's consumption competing in the building pool. Reuses the shared
+		// helper so the convention is identical everywhere.
+		s, b, g := SplitSolarBatteryGrid(tKwh, pool, solarIntervals[ts], batChargeIntervals[ts], batDischargeIntervals[ts])
 		solar += s
-		grid += tKwh - s
+		battery += b
+		grid += g
 	}
 
-	log.Printf("  [SOLAR-SPLIT] Building %d: target solar=%.3f kWh, grid=%.3f kWh", buildingID, solar, grid)
-	return solar, grid, firstSession, lastSession
+	log.Printf("  [SOLAR-SPLIT] Building %d: target solar=%.3f kWh, battery=%.3f kWh, grid=%.3f kWh", buildingID, solar, battery, grid)
+	return solar, battery, grid, firstSession, lastSession
 }
 
 // modeBasedChargerIDsForBuilding returns active chargers in the building that are NOT
@@ -965,6 +964,7 @@ type chargingSeg struct {
 	modeNormal       float64 // mode-based "solar mode" kWh  (CarChargingNormalPrice)
 	modePriority     float64 // mode-based "priority mode" kWh (CarChargingPriorityPrice)
 	splitSolar       float64 // solar-split solar kWh          (CarChargingNormalPrice)
+	splitBattery     float64 // solar-split battery kWh        (BatteryPowerPrice)
 	splitGrid        float64 // solar-split grid kWh           (CarChargingPriorityPrice)
 }
 
@@ -1060,15 +1060,15 @@ func (bs *BillingService) computeCharging(buildingID int, scopeMode, rfids strin
 				merge(fS, lS)
 			}
 			if splitIDs := bs.solarSplitChargerIDsForBuilding(buildingID); len(splitIDs) > 0 {
-				sol, grd, fS, lS := bs.calculateChargingSolarSplit(buildingID, chargerSessionFilter{useChargerIDs: true, chargerIDs: splitIDs}, segStart, segEnd)
-				cs.splitSolar, cs.splitGrid = sol, grd
+				sol, bat, grd, fS, lS := bs.calculateChargingSolarSplit(buildingID, chargerSessionFilter{useChargerIDs: true, chargerIDs: splitIDs}, segStart, segEnd)
+				cs.splitSolar, cs.splitBattery, cs.splitGrid = sol, bat, grd
 				merge(fS, lS)
 			}
 
 		case BillingModeCharger:
 			if bs.chargerBillingMethod(singleChargerID) == "solar_split" {
-				sol, grd, fS, lS := bs.calculateChargingSolarSplit(buildingID, chargerSessionFilter{useChargerIDs: true, chargerIDs: []int{singleChargerID}}, segStart, segEnd)
-				cs.splitSolar, cs.splitGrid = sol, grd
+				sol, bat, grd, fS, lS := bs.calculateChargingSolarSplit(buildingID, chargerSessionFilter{useChargerIDs: true, chargerIDs: []int{singleChargerID}}, segStart, segEnd)
+				cs.splitSolar, cs.splitBattery, cs.splitGrid = sol, bat, grd
 				merge(fS, lS)
 			} else {
 				nC, pC, fS, lS := bs.calculateChargingForChargers(buildingID, []int{singleChargerID}, segStart, segEnd)
@@ -1083,8 +1083,8 @@ func (bs *BillingService) computeCharging(buildingID int, scopeMode, rfids strin
 			merge(fS, lS)
 			// Solar-split chargers attributed to this user's RFID cards.
 			if rfidList := cleanRfidList(rfids); len(rfidList) > 0 {
-				sol, grd, fS2, lS2 := bs.calculateChargingSolarSplit(buildingID, chargerSessionFilter{rfidCards: rfidList}, segStart, segEnd)
-				cs.splitSolar, cs.splitGrid = sol, grd
+				sol, bat, grd, fS2, lS2 := bs.calculateChargingSolarSplit(buildingID, chargerSessionFilter{rfidCards: rfidList}, segStart, segEnd)
+				cs.splitSolar, cs.splitBattery, cs.splitGrid = sol, bat, grd
 				merge(fS2, lS2)
 			}
 		}
@@ -1101,7 +1101,7 @@ func (bs *BillingService) computeCharging(buildingID int, scopeMode, rfids strin
 func appendChargingItems(items *[]models.InvoiceItem, segs []chargingSeg, firstSession, lastSession time.Time, multiSeg bool, tr InvoiceTranslations, header string) float64 {
 	var grand float64
 	for _, cs := range segs {
-		grand += cs.modeNormal + cs.modePriority + cs.splitSolar + cs.splitGrid
+		grand += cs.modeNormal + cs.modePriority + cs.splitSolar + cs.splitBattery + cs.splitGrid
 	}
 	if grand <= 0 {
 		return 0
@@ -1143,6 +1143,9 @@ func appendChargingItems(items *[]models.InvoiceItem, segs []chargingSeg, firstS
 		}
 		if cs.splitSolar > 0 {
 			add(tr.SolarCharging, suffix, cs.splitSolar, s.CarChargingNormalPrice, s.Currency, "car_charging_normal")
+		}
+		if cs.splitBattery > 0 {
+			add(tr.BatteryCharging, suffix, cs.splitBattery, s.BatteryPowerPrice, s.Currency, "car_charging_battery")
 		}
 		if cs.splitGrid > 0 {
 			add(tr.GridCharging, suffix, cs.splitGrid, s.CarChargingPriorityPrice, s.Currency, "car_charging_priority")
