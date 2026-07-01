@@ -228,16 +228,23 @@ func (s *AutoBillingScheduler) runConfig(id int, advanceSchedule bool) (*RunConf
 	}
 
 	endDate := now.AddDate(0, 0, -1)
+	// Derive the start from the day AFTER the end date so the period spans
+	// exactly one calendar unit. Subtracting the frequency directly from
+	// endDate leaves the previous period's last day in-range (e.g. a monthly
+	// run on July 1 has endDate June 30; June 30 - 1 month = May 30, which
+	// wrongly bills May 30-31). Using (endDate + 1 day) - frequency yields
+	// July 1 - 1 month = June 1, the correct period start.
+	nextDay := endDate.AddDate(0, 0, 1)
 	var startDate time.Time
 	switch frequency {
 	case "monthly":
-		startDate = endDate.AddDate(0, -1, 0)
+		startDate = nextDay.AddDate(0, -1, 0)
 	case "quarterly":
-		startDate = endDate.AddDate(0, -3, 0)
+		startDate = nextDay.AddDate(0, -3, 0)
 	case "half_yearly":
-		startDate = endDate.AddDate(0, -6, 0)
+		startDate = nextDay.AddDate(0, -6, 0)
 	case "yearly":
-		startDate = endDate.AddDate(-1, 0, 0)
+		startDate = nextDay.AddDate(-1, 0, 0)
 	default:
 		return nil, fmt.Errorf("unknown frequency: %s", frequency)
 	}
