@@ -57,6 +57,107 @@ func (bs *BillingService) calculateChargingForChargers(buildingID int, chargerID
 }
 
 // Charging calculation using data at fixed 15-minute intervals
+// chargeReading is one 15-minute snapshot of a charger's cumulative energy counter.
+type chargeReading struct {
+	SessionTime time.Time
+	PowerKwh    float64
+	Mode        string
+	State       string
+}
+
+// billableCharge sums a single charger's cumulative-counter readings into normal/priority
+// kWh over a billing period. Readings in the idle state are skipped.
+//
+// The stored counter is noisy: it briefly dips (transient glitches, e.g. an API returning a
+// stale value) and occasionally reports a physically-impossible spike that later reverts. A
+// naive delta sum double-counts those excursions, so we bill only the genuine rise ABOVE each
+// pre-dip high:
+//   - a downward step opens a "dip" and remembers the value we dropped from (preDipHigh);
+//   - readings below preDipHigh are treated as the device re-counting energy it already had
+//     (phantom) and are NOT billed;
+//   - when the counter climbs back to (or above) preDipHigh, only the excess above it is billed;
+//   - if the counter never returns to preDipHigh before the period ends, that is a genuine
+//     reset (counter restarted low and stayed low), so the real post-reset climb (last − dip
+//     low) is billed.
+//
+// For reverting glitches this yields exactly the net counter rise (last − first); for genuine
+// resets it bills each segment's real climb. This replaces the earlier "re-baseline and keep
+// billing the climb" approach, which discarded the real charging interval that followed even a
+// tiny noise dip (the counter briefly reads 0.01 kWh low, then the next real interval is thrown
+// away as a phantom recovery) — losing genuine energy across a month of jittery data.
+func billableCharge(readings []chargeReading, idleState, modeNormal, modePriority string) (normal, priority float64, first, last time.Time, billable, skipped int) {
+	addBill := func(delta float64, mode string) {
+		if delta <= 0 {
+			return
+		}
+		if !modeMatches(mode, modePriority) && modeMatches(mode, modeNormal) {
+			normal += delta
+		} else if modeMatches(mode, modePriority) {
+			priority += delta
+		} else {
+			normal += delta // unknown/unset mode → normal
+		}
+		billable++
+	}
+
+	var prevPower, preDipHigh, dipLow, lastPower float64
+	var lastMode string
+	var hasPrev, inDip bool
+
+	for _, r := range readings {
+		if r.State == idleState {
+			skipped++
+			continue
+		}
+		if first.IsZero() || r.SessionTime.Before(first) {
+			first = r.SessionTime
+		}
+		if r.SessionTime.After(last) {
+			last = r.SessionTime
+		}
+		lastMode = r.Mode
+		lastPower = r.PowerKwh
+
+		if !hasPrev {
+			prevPower = r.PowerKwh
+			hasPrev = true
+			continue
+		}
+
+		if !inDip {
+			if r.PowerKwh < prevPower {
+				// Counter dropped — open a dip, remember the high we fell from.
+				inDip = true
+				preDipHigh = prevPower
+				dipLow = r.PowerKwh
+				continue
+			}
+			addBill(r.PowerKwh-prevPower, r.Mode)
+			prevPower = r.PowerKwh
+			continue
+		}
+
+		// Inside a dip.
+		if r.PowerKwh >= preDipHigh-0.001 {
+			// Recovered to the pre-dip track: only the rise above it is genuinely new.
+			addBill(r.PowerKwh-preDipHigh, r.Mode)
+			inDip = false
+			prevPower = r.PowerKwh
+			continue
+		}
+		// Still below the pre-dip high — phantom re-counting or post-reset climb; defer.
+		if r.PowerKwh < dipLow {
+			dipLow = r.PowerKwh
+		}
+	}
+
+	if inDip {
+		// Never recovered → genuine reset; the real post-reset climb is (last − dip low).
+		addBill(lastPower-dipLow, lastMode)
+	}
+	return normal, priority, first, last, billable, skipped
+}
+
 func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards string, start, end time.Time) (normal, priority float64, firstSession, lastSession time.Time) {
 	log.Printf("  [CHARGING] ========================================")
 	log.Printf("  [CHARGING] Starting calculation")
@@ -260,153 +361,18 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 		log.Printf("  [CHARGING] Processing charger %d (%s) with %d sessions",
 			chargerID, config.ChargerName, len(sessions))
 
-		var previousPower float64
-		var hasPreviousPower bool
-		var firstBillablePower, lastBillablePower float64
-		var genuineReset bool
-		var inDip bool
-		var preDipHigh float64
-
-		chargerBillable := 0
-		chargerSkipped := 0
-		chargerNormal := 0.0
-		chargerPriority := 0.0
-
-		for sessionIdx, session := range sessions {
-			sessionNum := sessionIdx + 1
-
-			isBillable := true
-			if session.State == config.StateIdle {
-				isBillable = false
-			}
-
-			shouldLog := (chargerID == chargerConfigs[0].ChargerID && sessionNum <= 20) || sessionNum <= 10
-
-			if shouldLog {
-				if isBillable {
-					log.Printf("  [CHARGING]     [%d] %s: %.3f kWh, mode=%s, state=%s → BILLABLE",
-						sessionNum, session.SessionTime.Format("15:04"), session.PowerKwh, session.Mode, session.State)
-				} else {
-					log.Printf("  [CHARGING]     [%d] %s: %.3f kWh, mode=%s, state=%s → SKIP (idle)",
-						sessionNum, session.SessionTime.Format("15:04"), session.PowerKwh, session.Mode, session.State)
-				}
-			}
-
-			if !isBillable {
-				chargerSkipped++
-				continue
-			}
-
-			if firstSession.IsZero() || session.SessionTime.Before(firstSession) {
-				firstSession = session.SessionTime
-			}
-			if session.SessionTime.After(lastSession) {
-				lastSession = session.SessionTime
-			}
-
-			if !hasPreviousPower {
-				previousPower = session.PowerKwh
-				firstBillablePower = session.PowerKwh
-				lastBillablePower = session.PowerKwh
-				hasPreviousPower = true
-				if shouldLog {
-					log.Printf("  [CHARGING]     [%d] Established baseline at %.3f kWh", sessionNum, session.PowerKwh)
-				}
-				continue
-			}
-
-			lastBillablePower = session.PowerKwh
-
-			consumption := session.PowerKwh - previousPower
-
-			if consumption < 0 {
-				// Cumulative counter dropped — a reset or a transient glitch (e.g. an
-				// E3/DC wallbox briefly reporting a low value during a reboot). Remember
-				// the high we dropped from, re-baseline at the low value, and KEEP
-				// billing the climb from here. This way energy charged DURING the glitch
-				// is still split solar/grid by each 15-min slot's own mode, instead of
-				// being lumped onto a single mode at the recovery moment.
-				if !inDip {
-					preDipHigh = previousPower
-					inDip = true
-				}
-				genuineReset = true
-				previousPower = session.PowerKwh
-				if shouldLog {
-					log.Printf("  [CHARGING]     [%d] NEGATIVE consumption %.3f kWh - counter dip/reset, re-baselining at %.3f (pre-dip high %.3f)",
-						sessionNum, consumption, session.PowerKwh, preDipHigh)
-				}
-				continue
-			}
-
-			// Recovery from a transient glitch: the counter jumps back up to (at least)
-			// the value it dropped from. That jump is the device catching up to its true
-			// total, NOT real energy — re-baseline without billing it. For a genuine
-			// reset to ~0 the counter never returns to preDipHigh, so its climb keeps
-			// being billed normally above.
-			if inDip && session.PowerKwh >= preDipHigh-0.001 {
-				if shouldLog {
-					log.Printf("  [CHARGING]     [%d] Counter recovered to %.3f (≥ pre-dip high %.3f) - phantom jump, not billed",
-						sessionNum, session.PowerKwh, preDipHigh)
-				}
-				inDip = false
-				previousPower = session.PowerKwh
-				continue
-			}
-
-			if consumption > 0 {
-				chargerBillable++
-
-				isPriority := modeMatches(session.Mode, config.ModePriority)
-				isNormal := !isPriority && modeMatches(session.Mode, config.ModeNormal)
-
-				if isNormal {
-					chargerNormal += consumption
-					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh NORMAL (%.3f → %.3f)",
-							sessionNum, consumption, previousPower, session.PowerKwh)
-					}
-				} else if isPriority {
-					chargerPriority += consumption
-					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh PRIORITY (%.3f → %.3f)",
-							sessionNum, consumption, previousPower, session.PowerKwh)
-					}
-				} else {
-					chargerNormal += consumption
-					if shouldLog {
-						log.Printf("  [CHARGING]     [%d] ✓ %.3f kWh UNKNOWN mode '%s' → NORMAL",
-							sessionNum, consumption, session.Mode)
-					}
-				}
-			} else if shouldLog {
-				log.Printf("  [CHARGING]     [%d] Zero consumption (%.3f → %.3f)",
-					sessionNum, previousPower, session.PowerKwh)
-			}
-
-			previousPower = session.PowerKwh
+		readings := make([]chargeReading, len(sessions))
+		for i, s := range sessions {
+			readings[i] = chargeReading{SessionTime: s.SessionTime, PowerKwh: s.PowerKwh, Mode: s.Mode, State: s.State}
 		}
-
-		// Sanity cap: for a cumulative counter, total consumption cannot exceed
-		// (last reading − first reading). If upstream data corruption introduced
-		// a phantom spike that later settled back, the delta sum will overshoot
-		// this bound — scale modes proportionally to recover the correct total.
-		// Skipped when a genuine reset happened mid-period (bound is invalid).
-		if hasPreviousPower && !genuineReset {
-			chargerTotal := chargerNormal + chargerPriority
-			bound := lastBillablePower - firstBillablePower
-			// A negative bound means the counter ended lower than it started — an
-			// unflagged mid-period reset. (last − first) is meaningless then, so trust
-			// the per-interval delta sum instead of scaling the charge to zero.
-			if bound >= 0 && chargerTotal > bound+0.001 {
-				factor := 0.0
-				if chargerTotal > 0 {
-					factor = bound / chargerTotal
-				}
-				log.Printf("  [CHARGING] Charger %d (%s): SANITY CAP — sum %.3f kWh > bound %.3f kWh (last %.3f − first %.3f); scaling by %.4f",
-					chargerID, config.ChargerName, chargerTotal, bound, lastBillablePower, firstBillablePower, factor)
-				chargerNormal *= factor
-				chargerPriority *= factor
+		chargerNormal, chargerPriority, cFirst, cLast, chargerBillable, chargerSkipped :=
+			billableCharge(readings, config.StateIdle, config.ModeNormal, config.ModePriority)
+		if !cFirst.IsZero() {
+			if firstSession.IsZero() || cFirst.Before(firstSession) {
+				firstSession = cFirst
+			}
+			if cLast.After(lastSession) {
+				lastSession = cLast
 			}
 		}
 
@@ -542,80 +508,18 @@ func (bs *BillingService) calculateChargingFiltered(buildingID int, filter charg
 			continue
 		}
 
-		var prevPower float64
-		var hasPrev bool
-		var firstBillablePower, lastBillablePower float64
-		var genuineReset bool
-		var inDip bool
-		var preDipHigh float64
-		var chargerNormal, chargerPriority float64
-		for _, s := range sessions {
-			if s.State == cfg.StateIdle {
-				continue
-			}
-			if firstSession.IsZero() || s.SessionTime.Before(firstSession) {
-				firstSession = s.SessionTime
-			}
-			if s.SessionTime.After(lastSession) {
-				lastSession = s.SessionTime
-			}
-			if !hasPrev {
-				prevPower = s.PowerKwh
-				firstBillablePower = s.PowerKwh
-				lastBillablePower = s.PowerKwh
-				hasPrev = true
-				continue
-			}
-			lastBillablePower = s.PowerKwh
-			delta := s.PowerKwh - prevPower
-			if delta < 0 {
-				// Counter dropped (reset or transient glitch). Re-baseline at the low
-				// value and keep billing the climb so glitch-window energy is still
-				// split by each slot's mode. Remember the high we dropped from.
-				if !inDip {
-					preDipHigh = prevPower
-					inDip = true
-				}
-				genuineReset = true
-				prevPower = s.PowerKwh
-				continue
-			}
-			// Recovery: counter jumps back to its pre-dip track — phantom catch-up,
-			// not real energy, so don't bill it.
-			if inDip && s.PowerKwh >= preDipHigh-0.001 {
-				inDip = false
-				prevPower = s.PowerKwh
-				continue
-			}
-			if delta > 0 {
-				if modeMatches(s.Mode, cfg.ModePriority) {
-					chargerPriority += delta
-				} else {
-					chargerNormal += delta
-				}
-			}
-			prevPower = s.PowerKwh
+		readings := make([]chargeReading, len(sessions))
+		for i, s := range sessions {
+			readings[i] = chargeReading{SessionTime: s.SessionTime, PowerKwh: s.PowerKwh, Mode: s.Mode, State: s.State}
 		}
-
-		// Sanity cap: for a cumulative counter, total consumption cannot exceed
-		// (last reading − first reading). If upstream data corruption introduced
-		// a phantom spike that later settled back, the delta sum will overshoot
-		// this bound — scale modes proportionally to recover the correct total.
-		// Skipped when a genuine reset happened mid-period (bound is invalid).
-		chargerTotal := chargerNormal + chargerPriority
-		if hasPrev && !genuineReset {
-			bound := lastBillablePower - firstBillablePower
-			// Negative bound = unflagged mid-period reset; (last − first) is
-			// meaningless, so trust the delta sum rather than scaling to zero.
-			if bound >= 0 && chargerTotal > bound+0.001 {
-				factor := 0.0
-				if chargerTotal > 0 {
-					factor = bound / chargerTotal
-				}
-				log.Printf("  [CHARGING-CID] Charger %d (%s): SANITY CAP — sum %.3f kWh > bound %.3f kWh (last %.3f − first %.3f); scaling by %.4f",
-					cfg.ChargerID, cfg.ChargerName, chargerTotal, bound, lastBillablePower, firstBillablePower, factor)
-				chargerNormal *= factor
-				chargerPriority *= factor
+		chargerNormal, chargerPriority, cFirst, cLast, _, _ :=
+			billableCharge(readings, cfg.StateIdle, cfg.ModeNormal, cfg.ModePriority)
+		if !cFirst.IsZero() {
+			if firstSession.IsZero() || cFirst.Before(firstSession) {
+				firstSession = cFirst
+			}
+			if cLast.After(lastSession) {
+				lastSession = cLast
 			}
 		}
 
