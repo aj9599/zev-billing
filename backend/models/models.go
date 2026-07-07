@@ -171,6 +171,11 @@ type BillingSettings struct {
 	CarChargingNormalPrice   float64   `json:"car_charging_normal_price"`
 	CarChargingPriorityPrice float64   `json:"car_charging_priority_price"`
 	VZEVExportPrice          float64   `json:"vzev_export_price"`
+	// SolarSplitMode selects how solar is allocated across consumers:
+	//   "metered" — share solar only among metered participants (default, legacy).
+	//   "total"   — split solar across the building's true total consumption so
+	//               every consumed Watt (metered or not) draws the same solar share.
+	SolarSplitMode           string    `json:"solar_split_mode"`
 	VATIncluded              bool      `json:"vat_included"`
 	VATRate                  float64   `json:"vat_rate"`
 	Currency                 string    `json:"currency"`

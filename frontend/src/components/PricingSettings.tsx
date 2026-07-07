@@ -76,6 +76,7 @@ export default function PricingSettings() {
     car_charging_normal_price: 0.30,
     car_charging_priority_price: 0.40,
     vzev_export_price: 0.18,
+    solar_split_mode: 'metered',
     vat_included: false,
     vat_rate: 0,
     currency: 'CHF',
@@ -205,6 +206,7 @@ export default function PricingSettings() {
       car_charging_normal_price: 0.30,
       car_charging_priority_price: 0.40,
       vzev_export_price: 0.18,
+      solar_split_mode: 'metered',
       vat_included: false,
       vat_rate: 0,
       currency: 'CHF',
@@ -999,6 +1001,23 @@ export default function PricingSettings() {
                         {t('pricing.batteryChargingDescription')}
                       </p>
                     </div>
+                  </div>
+
+                  <div style={{ marginTop: '14px' }}>
+                    <label style={labelStyle}>{t('pricing.solarSplitMode')}</label>
+                    <select
+                      value={formData.solar_split_mode ?? 'metered'}
+                      onChange={(e) => setFormData({ ...formData, solar_split_mode: e.target.value as 'metered' | 'total' })}
+                      style={inputStyle(isMobile)}
+                      onFocus={focusHandler} onBlur={blurHandler}>
+                      <option value="metered">{t('pricing.solarSplitModeMetered')}</option>
+                      <option value="total">{t('pricing.solarSplitModeTotal')}</option>
+                    </select>
+                    <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '4px' }}>
+                      {(formData.solar_split_mode ?? 'metered') === 'total'
+                        ? t('pricing.solarSplitModeTotalDescription')
+                        : t('pricing.solarSplitModeMeteredDescription')}
+                    </p>
                   </div>
 
                   {isComplexSelected && (

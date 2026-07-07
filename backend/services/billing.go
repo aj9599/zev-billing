@@ -663,6 +663,127 @@ func formatDateOrEmpty(t time.Time) string {
 	return t.Format("2006-01-02")
 }
 
+// solarUsesMainRegister reports whether a solar meter records its production in
+// the main (consumption) register rather than the export register. Some meters
+// (e.g. single-counter solar meters) store production in the main column and
+// leave export at 0. Mirrors the dashboard/collector helpers of the same name so
+// billing sees solar production the same way the Live view and virtual meters do.
+func (bs *BillingService) solarUsesMainRegister(meterID int) bool {
+	var maxExport, maxMain sql.NullFloat64
+	if err := bs.db.QueryRow(
+		`SELECT MAX(consumption_export), MAX(consumption_kwh) FROM meter_readings WHERE meter_id = ?`, meterID,
+	).Scan(&maxExport, &maxMain); err != nil {
+		return false
+	}
+	return (!maxExport.Valid || maxExport.Float64 <= 0) && maxMain.Valid && maxMain.Float64 > 0
+}
+
+// mainRegisterSolarMeters returns the set of solar meters in a building whose
+// production is recorded in the main (consumption) register instead of export.
+// For those meters, callers must read production from consumption_kwh, not
+// consumption_export.
+func (bs *BillingService) mainRegisterSolarMeters(buildingID int) map[int]bool {
+	out := make(map[int]bool)
+	rows, err := bs.db.Query(
+		`SELECT id FROM meters WHERE building_id = ? AND meter_type = 'solar_meter'`, buildingID)
+	if err != nil {
+		return out
+	}
+	var ids []int
+	for rows.Next() {
+		var id int
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	rows.Close()
+	for _, id := range ids {
+		if bs.solarUsesMainRegister(id) {
+			out[id] = true
+		}
+	}
+	return out
+}
+
+// solarSplitMode returns how solar is allocated for a building: "total" (fair
+// per-Watt share of the building's true total consumption) or "metered" (share
+// only among metered participants — the default and legacy behaviour).
+func (bs *BillingService) solarSplitMode(buildingID int) string {
+	var mode string
+	err := bs.db.QueryRow(
+		`SELECT COALESCE(solar_split_mode, 'metered') FROM billing_settings
+		 WHERE building_id = ? AND is_active = 1 ORDER BY valid_from DESC LIMIT 1`,
+		buildingID,
+	).Scan(&mode)
+	if err != nil || mode != "total" {
+		return "metered"
+	}
+	return "total"
+}
+
+// buildingTotalConsumptionIntervals returns, per 15-minute interval, the
+// building's TRUE total consumption (all loads, including ones without their own
+// meter), derived from the physical meters:
+//
+//	grid_import − grid_export + solar_production + battery_discharge − battery_charge
+//
+// This is the denominator for "total" solar-split mode. It requires a total/grid
+// meter; without one the true consumption is unknowable, so an empty map is
+// returned and callers fall back to the metered pool.
+func (bs *BillingService) buildingTotalConsumptionIntervals(buildingID int, start, end time.Time) map[time.Time]float64 {
+	out := make(map[time.Time]float64)
+	mainRegSolar := bs.mainRegisterSolarMeters(buildingID)
+
+	rows, err := bs.db.Query(`
+		SELECT m.id, m.meter_type, mr.reading_time,
+		       COALESCE(mr.consumption_kwh, 0), COALESCE(mr.consumption_export, 0)
+		FROM meter_readings mr
+		JOIN meters m ON mr.meter_id = m.id
+		WHERE m.building_id = ?
+		  AND m.meter_type IN ('total_meter', 'solar_meter', 'battery_meter')
+		  AND mr.reading_time >= ? AND mr.reading_time <= ?
+	`, buildingID, start, end)
+	if err != nil {
+		log.Printf("    [TOTAL-SPLIT] ERROR querying building total consumption: %v", err)
+		return out
+	}
+	defer rows.Close()
+
+	hasGrid := false
+	for rows.Next() {
+		var mid int
+		var mt string
+		var t time.Time
+		var cons, exp float64
+		if rows.Scan(&mid, &mt, &t, &cons, &exp) != nil {
+			continue
+		}
+		ts := floorTo15min(t)
+		switch mt {
+		case "total_meter":
+			// Grid: import (consumption) minus export (feed-in).
+			out[ts] += cons - exp
+			hasGrid = true
+		case "solar_meter":
+			solar := exp
+			if mainRegSolar[mid] {
+				solar = cons
+			}
+			out[ts] += solar
+		case "battery_meter":
+			// Discharge supplies the house (+), charge stores from it (−).
+			out[ts] += cons - exp
+		}
+	}
+
+	if !hasGrid {
+		// No grid meter → cannot know true total consumption. Signal "unavailable"
+		// so callers keep the metered pool.
+		return map[time.Time]float64{}
+	}
+	return out
+}
+
 // buildingIntervalAggregates returns, per fixed 15-minute interval, the building's
 // pooled consumption and solar production used for solar allocation. The pool
 // mirrors calculateZEVConsumption exactly: apartment meters + solar-split chargers
@@ -677,8 +798,10 @@ func (bs *BillingService) buildingIntervalAggregates(buildingID int, start, end 
 		return agg[ts]
 	}
 
+	mainRegSolar := bs.mainRegisterSolarMeters(buildingID)
+
 	rows, err := bs.db.Query(`
-		SELECT m.meter_type, mr.reading_time, COALESCE(mr.consumption_kwh, 0), COALESCE(mr.consumption_export, 0)
+		SELECT m.id, m.meter_type, mr.reading_time, COALESCE(mr.consumption_kwh, 0), COALESCE(mr.consumption_export, 0)
 		FROM meter_readings mr
 		JOIN meters m ON mr.meter_id = m.id
 		WHERE m.building_id = ?
@@ -688,10 +811,11 @@ func (bs *BillingService) buildingIntervalAggregates(buildingID int, start, end 
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
+			var mid int
 			var mt string
 			var t time.Time
 			var cons, exp float64
-			if err := rows.Scan(&mt, &t, &cons, &exp); err != nil {
+			if err := rows.Scan(&mid, &mt, &t, &cons, &exp); err != nil {
 				continue
 			}
 			ts := floorTo15min(t)
@@ -699,7 +823,13 @@ func (bs *BillingService) buildingIntervalAggregates(buildingID int, start, end 
 			case "apartment_meter":
 				get(ts).TotalConsumption += cons
 			case "solar_meter":
-				get(ts).SolarProduction += exp
+				// Production is normally in the export column, but some meters
+				// record it in the main register instead (export stays 0).
+				solar := exp
+				if mainRegSolar[mid] {
+					solar = cons
+				}
+				get(ts).SolarProduction += solar
 			case "battery_meter":
 				// Import column = discharge (energy supplied to the building),
 				// export column = charge (energy stored from solar).
@@ -725,6 +855,17 @@ func (bs *BillingService) buildingIntervalAggregates(buildingID int, start, end 
 	// Solar-priced split meters participate in the building consumption pool.
 	for ts, kwh := range bs.solarModeSplitMeterIntervals(buildingID, start, end) {
 		get(ts).TotalConsumption += kwh
+	}
+
+	// "total" solar-split mode: raise the denominator to the building's true total
+	// consumption so shared meters get the same per-Watt solar share as apartments.
+	if bs.solarSplitMode(buildingID) == "total" {
+		totals := bs.buildingTotalConsumptionIntervals(buildingID, start, end)
+		for ts, a := range agg {
+			if tot, ok := totals[ts]; ok && tot > a.TotalConsumption {
+				a.TotalConsumption = tot
+			}
+		}
 	}
 
 	return agg
@@ -1698,6 +1839,9 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 
 	log.Printf("    [ZEV] Fetched %d readings (%d solar)", len(allReadings), solarReadingsFound)
 
+	// Solar meters that store production in the main register instead of export.
+	mainRegSolar := bs.mainRegisterSolarMeters(buildingID)
+
 	if len(allReadings) == 0 {
 		log.Printf("    [ZEV] ERROR: No readings found")
 		return 0, 0, 0, 0
@@ -1728,8 +1872,13 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 			}
 			intervalData[roundedTime].BuildingConsumption += reading.ConsumptionKWh
 		} else if reading.MeterType == "solar_meter" {
-			// FIXED: Use ConsumptionExport for solar production (export energy)
-			intervalData[roundedTime].SolarProduction += reading.ConsumptionExport
+			// Production is normally in the export column, but some meters record
+			// it in the main register instead (export stays 0).
+			solar := reading.ConsumptionExport
+			if mainRegSolar[reading.MeterID] {
+				solar = reading.ConsumptionKWh
+			}
+			intervalData[roundedTime].SolarProduction += solar
 		} else if reading.MeterType == "battery_meter" {
 			// Import column = discharge (supplied to building), export column =
 			// charge (stored from solar).
@@ -1769,6 +1918,23 @@ func (bs *BillingService) calculateZEVConsumption(userID, buildingID int, start,
 			intervalData[ts].BuildingConsumption += kwh
 		}
 		log.Printf("    [ZEV] Added %d solar-mode split-meter interval(s) to building pool", len(splitMeterIntervals))
+	}
+
+	// "total" solar-split mode: replace the metered consumption pool with the
+	// building's true total consumption (incl. unmetered loads) so every consumed
+	// Watt draws the same solar share. Per interval, only ever raise the
+	// denominator (never below the metered pool) so missing/degraded grid data
+	// falls back safely to the legacy behaviour.
+	if bs.solarSplitMode(buildingID) == "total" {
+		totals := bs.buildingTotalConsumptionIntervals(buildingID, start, end)
+		overridden := 0
+		for ts, data := range intervalData {
+			if tot, ok := totals[ts]; ok && tot > data.BuildingConsumption {
+				data.BuildingConsumption = tot
+				overridden++
+			}
+		}
+		log.Printf("    [ZEV] Solar split mode=total: raised denominator on %d/%d interval(s)", overridden, len(intervalData))
 	}
 
 	totalNormal := 0.0

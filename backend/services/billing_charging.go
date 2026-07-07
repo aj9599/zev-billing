@@ -730,8 +730,10 @@ func (bs *BillingService) buildingMeterIntervals(buildingID int, start, end time
 	batCharge = make(map[time.Time]float64)
 	batDischarge = make(map[time.Time]float64)
 
+	mainRegSolar := bs.mainRegisterSolarMeters(buildingID)
+
 	rows, err := bs.db.Query(`
-		SELECT m.meter_type, mr.reading_time, mr.consumption_kwh, mr.consumption_export
+		SELECT m.id, m.meter_type, mr.reading_time, mr.consumption_kwh, mr.consumption_export
 		FROM meter_readings mr
 		JOIN meters m ON mr.meter_id = m.id
 		WHERE m.building_id = ?
@@ -745,10 +747,11 @@ func (bs *BillingService) buildingMeterIntervals(buildingID int, start, end time
 	defer rows.Close()
 
 	for rows.Next() {
+		var mid int
 		var mtype string
 		var t time.Time
 		var cons, exportE float64
-		if err := rows.Scan(&mtype, &t, &cons, &exportE); err != nil {
+		if err := rows.Scan(&mid, &mtype, &t, &cons, &exportE); err != nil {
 			continue
 		}
 		ts := floorTo15min(t)
@@ -756,7 +759,12 @@ func (bs *BillingService) buildingMeterIntervals(buildingID int, start, end time
 		case "apartment_meter":
 			apt[ts] += cons
 		case "solar_meter":
-			solar[ts] += exportE
+			// Production is normally in export, but some meters use the main register.
+			if mainRegSolar[mid] {
+				solar[ts] += cons
+			} else {
+				solar[ts] += exportE
+			}
 		case "battery_meter":
 			// import column = discharge, export column = charge.
 			batDischarge[ts] += cons
@@ -790,6 +798,13 @@ func (bs *BillingService) calculateChargingSolarSplit(buildingID int, target cha
 		}, start, end, true)
 	}
 
+	// "total" solar-split mode uses the building's true total consumption as the
+	// pool denominator instead of (apartments + chargers).
+	var totalIntervals map[time.Time]float64
+	if bs.solarSplitMode(buildingID) == "total" {
+		totalIntervals = bs.buildingTotalConsumptionIntervals(buildingID, start, end)
+	}
+
 	for ts, tKwh := range targetIntervals {
 		if tKwh <= 0 {
 			continue
@@ -801,6 +816,14 @@ func (bs *BillingService) calculateChargingSolarSplit(buildingID int, target cha
 			poolCh = tKwh
 		}
 		pool := aptIntervals[ts] + poolCh
+		// In total mode, raise the denominator to true building consumption (never
+		// below the metered pool, and never below this charger's own draw).
+		if tot, ok := totalIntervals[ts]; ok && tot > pool {
+			pool = tot
+		}
+		if pool < tKwh {
+			pool = tKwh
+		}
 
 		// Same three-tier split as apartments: solar → battery → grid, with the
 		// charger's consumption competing in the building pool. Reuses the shared

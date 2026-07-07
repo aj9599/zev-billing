@@ -47,6 +47,34 @@ func addBatteryPowerPriceColumn(db *sql.DB) error {
 // addBatteryChargingPriceColumn adds the per-building battery tariff used to
 // price battery energy that goes into EV charging (separate from the meter
 // battery tariff so the two can be set independently).
+// addSolarSplitModeColumn adds the solar_split_mode selector to billing_settings.
+// 'metered' keeps the historical behaviour (solar shared only among metered
+// participants); 'total' splits solar across the building's true total
+// consumption so every consumed Watt — metered or not — draws the same solar
+// share (requires a total/grid meter to measure building consumption).
+func addSolarSplitModeColumn(db *sql.DB) error {
+	var ddl string
+	if err := db.QueryRow(
+		`SELECT sql FROM sqlite_master WHERE type='table' AND name='billing_settings'`,
+	).Scan(&ddl); err != nil {
+		return err
+	}
+	if contains(ddl, "solar_split_mode") {
+		log.Println("✓ solar_split_mode column already exists")
+		return nil
+	}
+	log.Println("Adding solar_split_mode column to billing_settings table...")
+	if _, err := db.Exec(`ALTER TABLE billing_settings ADD COLUMN solar_split_mode TEXT NOT NULL DEFAULT 'metered'`); err != nil {
+		if contains(err.Error(), "duplicate column") {
+			log.Println("✓ solar_split_mode column already exists")
+			return nil
+		}
+		return fmt.Errorf("failed to add solar_split_mode column: %v", err)
+	}
+	log.Println("✓ solar_split_mode column added successfully")
+	return nil
+}
+
 func addBatteryChargingPriceColumn(db *sql.DB) error {
 	var ddl string
 	if err := db.QueryRow(
@@ -314,6 +342,7 @@ func RunMigrations(db *sql.DB) error {
 			car_charging_priority_price REAL NOT NULL DEFAULT 0.40,
 			is_complex INTEGER DEFAULT 0,
 			vzev_export_price REAL DEFAULT 0.18,
+			solar_split_mode TEXT NOT NULL DEFAULT 'metered',
 			currency TEXT DEFAULT 'CHF',
 			valid_from DATE NOT NULL,
 			valid_to DATE,
@@ -667,6 +696,11 @@ func RunMigrations(db *sql.DB) error {
 	}
 	// Separate battery tariff for EV charging (distinct from the meter battery tariff).
 	if err := runVersioned(db, "0020_battery_charging_price", addBatteryChargingPriceColumn); err != nil {
+		return err
+	}
+	// How solar is split across consumers: 'metered' (default, share among metered
+	// participants) or 'total' (fair per-Watt share of true building consumption).
+	if err := runVersioned(db, "0021_solar_split_mode", addSolarSplitModeColumn); err != nil {
 		return err
 	}
 

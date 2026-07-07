@@ -85,7 +85,7 @@ func (h *BillingHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 		query = `
 			SELECT id, building_id, is_complex, normal_power_price, solar_power_price,
 			       battery_power_price, battery_charging_price, car_charging_normal_price, car_charging_priority_price,
-			       vzev_export_price, vat_included, vat_rate, currency, valid_from,
+			       vzev_export_price, COALESCE(solar_split_mode, 'metered'), vat_included, vat_rate, currency, valid_from,
 			       valid_to, is_active, created_at, updated_at
 			FROM billing_settings
 			WHERE building_id = ?
@@ -96,7 +96,7 @@ func (h *BillingHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 		query = `
     		SELECT id, building_id, is_complex, normal_power_price, solar_power_price,
            			battery_power_price, battery_charging_price, car_charging_normal_price, car_charging_priority_price,
-           			vzev_export_price, vat_included, vat_rate, currency, valid_from,
+           			vzev_export_price, COALESCE(solar_split_mode, 'metered'), vat_included, vat_rate, currency, valid_from,
            			valid_to, is_active, created_at, updated_at
     		FROM billing_settings
     		ORDER BY building_id, valid_from DESC
@@ -118,7 +118,7 @@ func (h *BillingHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 		err := rows.Scan(
 			&s.ID, &s.BuildingID, &s.IsComplex, &s.NormalPowerPrice, &s.SolarPowerPrice,
 			&s.BatteryPowerPrice, &s.BatteryChargingPrice, &s.CarChargingNormalPrice, &s.CarChargingPriorityPrice, &s.VZEVExportPrice,
-			&s.VATIncluded, &s.VATRate,
+			&s.SolarSplitMode, &s.VATIncluded, &s.VATRate,
 			&s.Currency, &s.ValidFrom, &validTo, &s.IsActive, &s.CreatedAt, &s.UpdatedAt,
 		)
 		if err == nil {
@@ -147,15 +147,19 @@ func (h *BillingHandler) CreateSettings(w http.ResponseWriter, r *http.Request) 
 		validTo.String = s.ValidTo
 	}
 
+	if s.SolarSplitMode != "total" {
+		s.SolarSplitMode = "metered"
+	}
+
 	result, err := h.db.Exec(`
     	INSERT INTO billing_settings (
         	building_id, is_complex, normal_power_price, solar_power_price, battery_power_price, battery_charging_price,
         	car_charging_normal_price, car_charging_priority_price,
-        	vzev_export_price, vat_included, vat_rate, currency, valid_from, valid_to, is_active
-    		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        	vzev_export_price, solar_split_mode, vat_included, vat_rate, currency, valid_from, valid_to, is_active
+    		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, s.BuildingID, s.IsComplex, s.NormalPowerPrice, s.SolarPowerPrice, s.BatteryPowerPrice, s.BatteryChargingPrice,
 		s.CarChargingNormalPrice, s.CarChargingPriorityPrice,
-		s.VZEVExportPrice, s.VATIncluded, s.VATRate, s.Currency, s.ValidFrom, validTo, s.IsActive)
+		s.VZEVExportPrice, s.SolarSplitMode, s.VATIncluded, s.VATRate, s.Currency, s.ValidFrom, validTo, s.IsActive)
 
 	if err != nil {
 		log.Printf("ERROR: Failed to create billing settings: %v", err)
@@ -215,16 +219,20 @@ func (h *BillingHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) 
 		validTo.String = s.ValidTo
 	}
 
+	if s.SolarSplitMode != "total" {
+		s.SolarSplitMode = "metered"
+	}
+
 	result, err := h.db.Exec(`
 		UPDATE billing_settings SET
 			building_id = ?, is_complex = ?, normal_power_price = ?, solar_power_price = ?, battery_power_price = ?, battery_charging_price = ?,
 			car_charging_normal_price = ?, car_charging_priority_price = ?,
-			vzev_export_price = ?, vat_included = ?, vat_rate = ?, currency = ?, valid_from = ?, valid_to = ?,
+			vzev_export_price = ?, solar_split_mode = ?, vat_included = ?, vat_rate = ?, currency = ?, valid_from = ?, valid_to = ?,
 			is_active = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`, s.BuildingID, s.IsComplex, s.NormalPowerPrice, s.SolarPowerPrice, s.BatteryPowerPrice, s.BatteryChargingPrice,
 		s.CarChargingNormalPrice, s.CarChargingPriorityPrice,
-		s.VZEVExportPrice, s.VATIncluded, s.VATRate, s.Currency, s.ValidFrom, validTo,
+		s.VZEVExportPrice, s.SolarSplitMode, s.VATIncluded, s.VATRate, s.Currency, s.ValidFrom, validTo,
 		s.IsActive, s.ID)
 
 	if err != nil {

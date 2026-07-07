@@ -173,6 +173,16 @@ func (bs *BillingService) calculateVZEVEnergyForUser(userID, userBuildingID int,
 
 	log.Printf("    [vZEV] Fetched %d readings across %d buildings", len(allReadings), len(allBuildingsInComplex))
 
+	// Cache which solar meters store production in the main register (export 0).
+	mainRegSolar := make(map[int]bool)
+	for _, r := range allReadings {
+		if r.MeterType == "solar_meter" {
+			if _, seen := mainRegSolar[r.MeterID]; !seen {
+				mainRegSolar[r.MeterID] = bs.solarUsesMainRegister(r.MeterID)
+			}
+		}
+	}
+
 	// Organize readings by timestamp and process interval-by-interval
 	type IntervalData struct {
 		Timestamp           time.Time
@@ -206,8 +216,13 @@ func (bs *BillingService) calculateVZEVEnergyForUser(userID, userBuildingID int,
 			}
 			interval.BuildingConsumption[reading.BuildingID] += reading.ConsumptionKWh
 		} else if reading.MeterType == "solar_meter" {
-			// For solar meters, ConsumptionExport represents the export energy (production)
-			interval.BuildingSolarProd[reading.BuildingID] += reading.ConsumptionExport
+			// Production is normally the export energy, but some meters record it
+			// in the main register instead (export stays 0).
+			if mainRegSolar[reading.MeterID] {
+				interval.BuildingSolarProd[reading.BuildingID] += reading.ConsumptionKWh
+			} else {
+				interval.BuildingSolarProd[reading.BuildingID] += reading.ConsumptionExport
+			}
 		}
 	}
 

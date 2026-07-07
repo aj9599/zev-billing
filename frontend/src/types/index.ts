@@ -243,6 +243,7 @@ export interface BillingSettings {
   car_charging_normal_price: number;
   car_charging_priority_price: number;
   vzev_export_price?: number;
+  solar_split_mode?: 'metered' | 'total';
   vat_included?: boolean;
   vat_rate?: number;
   currency: string;
