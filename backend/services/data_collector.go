@@ -1056,6 +1056,14 @@ func (dc *DataCollector) computeVirtualPowerReadingAt(meterID int, cfg virtualMe
 		}
 		net := impDelta - expDelta
 		if mtype == "battery_meter" {
+			// Battery stores discharge in the main register and charge in the
+			// export register, so invert: charge +, discharge −.
+			net = expDelta - impDelta
+		} else if mtype == "solar_meter" && dc.solarUsesMainRegister(src.MeterID) {
+			// Some solar meters record production in the main (import) register
+			// instead of the export register. Left as-is, production would read
+			// as positive (consumption); invert so it counts as feed-in (−),
+			// matching how the Live energy-flow view treats these meters.
 			net = expDelta - impDelta
 		}
 		if src.Op == "-" {
@@ -1071,6 +1079,20 @@ func (dc *DataCollector) computeVirtualPowerReadingAt(meterID int, cfg virtualMe
 		curExport += -netDelta
 	}
 	return curImport, curExport, nil
+}
+
+// solarUsesMainRegister reports whether a solar meter records its production in
+// the main (import) register rather than the export register. Mirrors the
+// dashboard handler's helper of the same name so virtual meters sign solar
+// production the same way the Live energy-flow view does.
+func (dc *DataCollector) solarUsesMainRegister(meterID int) bool {
+	var maxExport, maxMain sql.NullFloat64
+	if err := dc.db.QueryRow(
+		`SELECT MAX(power_kwh_export), MAX(power_kwh) FROM meter_readings WHERE meter_id = ?`, meterID,
+	).Scan(&maxExport, &maxMain); err != nil {
+		return false
+	}
+	return (!maxExport.Valid || maxExport.Float64 <= 0) && maxMain.Valid && maxMain.Float64 > 0
 }
 
 // waitForAsyncVirtualSources blocks (bounded) until every Loxone source meter
