@@ -590,6 +590,14 @@ func (ec *E3DCCollector) RescanBackfill(chargerID int, from, to time.Time) (dele
 	if err != nil {
 		return deleted, 0, err
 	}
+
+	// Repair device rows whose start_time is implausible (a garbage wallbox
+	// timestamp persisted before the plausibility guard existed): re-anchor the
+	// start from the matching reconstructed run so the date shows and the
+	// [start,end) assignment window is valid again. Uses end_time (which is
+	// reliable) to place the row in the window; never touches energy or rfid.
+	repaired := ec.repairDeviceStarts(chargerID, from, to, sessions)
+
 	for _, s := range sessions {
 		if s.start.Before(from) || !s.start.Before(to) {
 			continue // outside the requested window
@@ -608,9 +616,103 @@ func (ec *E3DCCollector) RescanBackfill(chargerID int, from, to time.Time) (dele
 			inserted++
 		}
 	}
-	log.Printf("E3/DC: rescan backfill charger %d [%s..%s): deleted=%d inserted=%d",
-		chargerID, from.Format("2006-01-02"), to.Format("2006-01-02"), deleted, inserted)
-	return deleted, inserted, nil
+	log.Printf("E3/DC: rescan backfill charger %d [%s..%s): deleted=%d inserted=%d repaired=%d",
+		chargerID, from.Format("2006-01-02"), to.Format("2006-01-02"), deleted, inserted, repaired)
+	// Repaired starts count as changes so the caller reports work was done.
+	return deleted, inserted + repaired, nil
+}
+
+// parseDBTime parses a timestamp string as stored by the SQLite driver, trying
+// the RFC3339 and space-separated layouts. Returns ok=false when unparseable
+// (e.g. a mis-scaled epoch stored with an astronomically large year).
+func parseDBTime(s string) (time.Time, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}, false
+	}
+	for _, layout := range []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02 15:04:05.999999999-07:00",
+		"2006-01-02 15:04:05-07:00",
+		"2006-01-02 15:04:05",
+	} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
+// repairDeviceStarts fixes device-captured history rows whose start_time is
+// implausible, using end_time (reliable) to select rows in [from, to) and the
+// reconstructed runs to recover the real start. A row is matched to the run
+// whose end is closest to it (within 30 min) and, when both have one, whose RFID
+// agrees. If no run matches, start_time falls back to end_time so the date at
+// least renders and the assignment window is empty rather than inverted. Returns
+// the number of rows repaired.
+func (ec *E3DCCollector) repairDeviceStarts(chargerID int, from, to time.Time, runs []e3dcReconstructed) int {
+	rows, err := ec.db.Query(`
+		SELECT id, COALESCE(start_time,''), end_time, COALESCE(rfid,'')
+		FROM e3dc_session_history
+		WHERE charger_id = ? AND source = 'device'
+	`, chargerID)
+	if err != nil {
+		log.Printf("E3/DC: repair query failed for charger %d: %v", chargerID, err)
+		return 0
+	}
+	type broken struct {
+		id   int
+		end  time.Time
+		rfid string
+	}
+	var todo []broken
+	for rows.Next() {
+		var id int
+		var startStr, rfid string
+		var end time.Time
+		if rows.Scan(&id, &startStr, &end, &rfid) != nil {
+			continue
+		}
+		if end.Before(from) || !end.Before(to) {
+			continue // out of window (placed by its reliable end)
+		}
+		start, ok := parseDBTime(startStr)
+		plausible := ok && start.Year() >= 2000 && start.Before(end)
+		if plausible {
+			continue // start is fine
+		}
+		todo = append(todo, broken{id: id, end: end, rfid: rfid})
+	}
+	rows.Close()
+
+	repaired := 0
+	for _, b := range todo {
+		best := time.Time{}
+		bestDiff := 31 * time.Minute
+		for _, r := range runs {
+			if b.rfid != "" && r.rfid != "" && b.rfid != r.rfid {
+				continue
+			}
+			diff := r.end.Sub(b.end)
+			if diff < 0 {
+				diff = -diff
+			}
+			if diff < bestDiff {
+				bestDiff = diff
+				best = r.start
+			}
+		}
+		if best.IsZero() {
+			best = b.end // fallback: at least a valid, in-window date
+		}
+		if _, err := ec.db.Exec(`UPDATE e3dc_session_history SET start_time = ? WHERE id = ?`, best, b.id); err != nil {
+			log.Printf("E3/DC: repair update failed for session %d: %v", b.id, err)
+			continue
+		}
+		repaired++
+	}
+	return repaired
 }
 
 // writeSessionHistory upserts one device session. start_time is set only on

@@ -216,25 +216,61 @@ func (r *rscpClient) readWallboxSession(snap *Snapshot) {
 }
 
 // asTime converts an RSCP message value to a time.Time. The device usually sends
-// a Timestamp (decoded to time.Time); a numeric value is treated as Unix seconds.
-// Returns ok=false for zero/empty values.
+// a Timestamp (decoded to time.Time); a numeric value is a Unix epoch whose unit
+// varies by firmware. Returns ok=false for zero/empty/implausible values.
+//
+// IMPORTANT: some wallbox firmware reports the session start/end epoch in ms/µs/ns
+// (or as a mis-scaled/relative counter) rather than seconds; read as seconds that
+// lands centuries in the future and used to be stored verbatim (rendered as "—" in
+// the history and broke the session's [start,end) billing-assignment window). The
+// numeric branch now auto-detects the unit by picking the scale that yields a
+// plausible instant, and any value that can't be made plausible is rejected so the
+// caller falls back to the observed time.
 func asTime(v interface{}) (time.Time, bool) {
-	switch t := v.(type) {
+	switch x := v.(type) {
 	case time.Time:
-		if t.IsZero() {
-			return time.Time{}, false
+		if plausibleWallboxTime(x) {
+			return x, true
 		}
-		return t, true
+		// A mis-scaled epoch that the RSCP layer already turned into a (garbage)
+		// time.Time: recover the raw count via Unix() (overflow-safe, unlike
+		// UnixNano() for far-future times) and re-scale it.
+		return epochToTime(float64(x.Unix()))
 	case *time.Time:
-		if t == nil || t.IsZero() {
+		if x == nil {
 			return time.Time{}, false
 		}
-		return *t, true
+		return asTime(*x)
 	}
 	if f, ok := asFloat64(v); ok && f > 0 {
-		return time.Unix(int64(f), 0), true
+		return epochToTime(f)
 	}
 	return time.Time{}, false
+}
+
+// epochToTime interprets a numeric Unix epoch of unknown unit. It tries seconds,
+// then milliseconds, microseconds and nanoseconds, returning the first scale that
+// yields a plausible wallbox timestamp. ok=false when none do.
+func epochToTime(f float64) (time.Time, bool) {
+	for _, div := range []float64{1, 1e3, 1e6, 1e9} {
+		secs := f / div
+		t := time.Unix(int64(secs), int64((secs-float64(int64(secs)))*1e9))
+		if plausibleWallboxTime(t) {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
+// plausibleWallboxTime reports whether t is a believable absolute wallbox
+// timestamp: non-zero, this millennium, and not meaningfully in the future.
+// It guards against zero values, epoch-ish garbage, and mis-scaled epochs
+// (ms/ns read as seconds) that would otherwise be stored verbatim.
+func plausibleWallboxTime(t time.Time) bool {
+	if t.IsZero() || t.Year() < 2000 {
+		return false
+	}
+	return t.Before(time.Now().Add(48 * time.Hour))
 }
 
 // findTag recursively searches a (possibly nested) slice of RSCP messages for
