@@ -290,7 +290,7 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 	// Solar-split chargers are billed separately (proportional solar share), so the
 	// classic mode-based RFID path must ignore them to avoid double-counting.
 	chargerRows, err := bs.db.Query(`
-		SELECT id, name, connection_config FROM chargers
+		SELECT id, name, COALESCE(connection_type, ''), connection_config FROM chargers
 		WHERE building_id = ? AND is_active = 1 AND COALESCE(billing_method, 'mode_based') != 'solar_split'
 	`, buildingID)
 
@@ -303,6 +303,7 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 	type ChargerConfig struct {
 		ChargerID        int
 		ChargerName      string
+		ConnectionType   string
 		StateCableLocked string
 		StateWaitingAuth string
 		StateCharging    string
@@ -316,16 +317,16 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 
 	for chargerRows.Next() {
 		var chargerID int
-		var chargerName string
+		var chargerName, connectionType string
 		var connConfigJSON string
 
-		if err := chargerRows.Scan(&chargerID, &chargerName, &connConfigJSON); err != nil {
+		if err := chargerRows.Scan(&chargerID, &chargerName, &connectionType, &connConfigJSON); err != nil {
 			log.Printf("  [CHARGING] ERROR: Failed to scan charger row: %v", err)
 			continue
 		}
 
 		chargerCount++
-		log.Printf("  [CHARGING] Found charger: ID=%d, Name='%s'", chargerID, chargerName)
+		log.Printf("  [CHARGING] Found charger: ID=%d, Name='%s', type='%s'", chargerID, chargerName, connectionType)
 
 		var connConfig map[string]interface{}
 		if err := json.Unmarshal([]byte(connConfigJSON), &connConfig); err != nil {
@@ -336,6 +337,7 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 		config := ChargerConfig{
 			ChargerID:        chargerID,
 			ChargerName:      chargerName,
+			ConnectionType:   connectionType,
 			StateCableLocked: getConfigString(connConfig, "state_cable_locked", "65"),
 			StateWaitingAuth: getConfigString(connConfig, "state_waiting_auth", "66"),
 			StateCharging:    getConfigString(connConfig, "state_charging", "67"),
@@ -358,100 +360,111 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 
 	log.Printf("  [CHARGING] Loaded %d active chargers in building", len(chargerConfigs))
 
-	// Load EVERY reading for these chargers in the period — all cards, not just this
-	// tenant's. A charger's cumulative counter is shared by every RFID that charged
-	// on it, so to bill one tenant we walk the whole counter and attribute each
-	// interval to the card active in it (billableChargeByUser). Filtering to the
-	// tenant's own rows here would bridge the counter across the gaps where OTHER
-	// tenants charged, billing this tenant for their energy — the reported bug where
-	// two tenants sharing one E3/DC wallbox were each billed its full monthly rise.
 	targetCards := map[string]bool{}
 	for _, c := range cleanedRfids {
 		targetCards[c] = true
 	}
 
-	cfgByID := map[int]ChargerConfig{}
-	placeholders := make([]string, len(chargerConfigs))
-	args := []interface{}{}
-	for i, cfg := range chargerConfigs {
-		cfgByID[cfg.ChargerID] = cfg
-		placeholders[i] = "?"
-		args = append(args, cfg.ChargerID)
-	}
-	args = append(args, start, end)
-
-	query := fmt.Sprintf(`
-		SELECT charger_id, COALESCE(user_id,''), session_time, power_kwh, mode, state
-		FROM charger_sessions
-		WHERE charger_id IN (%s)
-		AND session_time >= ? AND session_time <= ?
-		ORDER BY charger_id, session_time ASC
-	`, strings.Join(placeholders, ","))
-
-	log.Printf("  [CHARGING] Querying full shared counter for %d charger(s); billing cards %v", len(chargerConfigs), cleanedRfids)
-
-	rows, err := bs.db.Query(query, args...)
-	if err != nil {
-		log.Printf("  [CHARGING] ERROR querying sessions: %v", err)
-		return 0, 0, time.Time{}, time.Time{}
-	}
-	defer rows.Close()
-
-	perCharger := make(map[int][]chargeReading)
-	totalRows := 0
-	for rows.Next() {
-		var chargerID int
-		var uid string
-		var sessionTime time.Time
-		var power float64
-		var mode, state string
-		if err := rows.Scan(&chargerID, &uid, &sessionTime, &power, &mode, &state); err != nil {
-			log.Printf("  [CHARGING] ERROR scanning session row: %v", err)
-			continue
+	// Partition chargers by how their solar/grid split is obtained:
+	//   - E3/DC wallboxes → the device's OWN per-session solar/grid counters
+	//     (e3dc_session_history). The 15-min "mode" is an all-or-nothing ≥50%-solar
+	//     tag per slot, which erases the minor grid share inside mostly-solar slots
+	//     (grid collapsed to ~0); the wallbox's session counters carry the true split.
+	//   - everything else → split the shared 15-min counter with billableChargeByUser.
+	var e3dcConfigs, meterConfigs []ChargerConfig
+	for _, cfg := range chargerConfigs {
+		if cfg.ConnectionType == "e3dc_api" {
+			e3dcConfigs = append(e3dcConfigs, cfg)
+		} else {
+			meterConfigs = append(meterConfigs, cfg)
 		}
-		perCharger[chargerID] = append(perCharger[chargerID], chargeReading{
-			SessionTime: sessionTime, PowerKwh: power, Mode: mode, State: state, UserID: uid,
-		})
-		totalRows++
-	}
-
-	log.Printf("  [CHARGING] Loaded %d reading(s) across %d charger(s)", totalRows, len(perCharger))
-	if totalRows == 0 {
-		log.Printf("  [CHARGING] No charger readings in period for building %d", buildingID)
-		return 0, 0, time.Time{}, time.Time{}
 	}
 
 	normalTotal := 0.0
 	priorityTotal := 0.0
-
-	for chargerID, readings := range perCharger {
-		config, ok := cfgByID[chargerID]
-		if !ok {
-			continue // not a mode-based charger we bill here
+	updateSpan := func(f, l time.Time) {
+		if !f.IsZero() && (firstSession.IsZero() || f.Before(firstSession)) {
+			firstSession = f
 		}
+		if l.After(lastSession) {
+			lastSession = l
+		}
+	}
 
-		// Split this charger's shared counter across all cards, then take this
-		// tenant's share.
-		byCard := billableChargeByUser(readings, config.StateIdle, config.ModeNormal, config.ModePriority)
-		var cNormal, cPriority float64
-		for card, cc := range byCard {
-			if !targetCards[card] {
+	// --- E3/DC: bill from the wallbox's real per-session solar/grid split ---
+	for _, cfg := range e3dcConfigs {
+		n, p, f, l := bs.e3dcSessionChargeForCards(cfg.ChargerID, targetCards, start, end)
+		if n > 0 || p > 0 {
+			log.Printf("  [CHARGING] E3/DC charger %d (%s): device split %.3f kWh solar (normal), %.3f kWh grid (priority)",
+				cfg.ChargerID, cfg.ChargerName, n, p)
+		}
+		normalTotal += n
+		priorityTotal += p
+		updateSpan(f, l)
+	}
+
+	// --- Other mode-based chargers: split the shared 15-min counter per card ---
+	if len(meterConfigs) > 0 {
+		cfgByID := map[int]ChargerConfig{}
+		placeholders := make([]string, len(meterConfigs))
+		args := []interface{}{}
+		for i, cfg := range meterConfigs {
+			cfgByID[cfg.ChargerID] = cfg
+			placeholders[i] = "?"
+			args = append(args, cfg.ChargerID)
+		}
+		args = append(args, start, end)
+
+		query := fmt.Sprintf(`
+			SELECT charger_id, COALESCE(user_id,''), session_time, power_kwh, mode, state
+			FROM charger_sessions
+			WHERE charger_id IN (%s)
+			AND session_time >= ? AND session_time <= ?
+			ORDER BY charger_id, session_time ASC
+		`, strings.Join(placeholders, ","))
+
+		rows, err := bs.db.Query(query, args...)
+		if err != nil {
+			log.Printf("  [CHARGING] ERROR querying sessions: %v", err)
+			return normalTotal, priorityTotal, firstSession, lastSession
+		}
+		defer rows.Close()
+
+		perCharger := make(map[int][]chargeReading)
+		for rows.Next() {
+			var chargerID int
+			var uid string
+			var sessionTime time.Time
+			var power float64
+			var mode, state string
+			if err := rows.Scan(&chargerID, &uid, &sessionTime, &power, &mode, &state); err != nil {
+				log.Printf("  [CHARGING] ERROR scanning session row: %v", err)
 				continue
 			}
-			cNormal += cc.normal
-			cPriority += cc.priority
-			if !cc.first.IsZero() && (firstSession.IsZero() || cc.first.Before(firstSession)) {
-				firstSession = cc.first
-			}
-			if cc.last.After(lastSession) {
-				lastSession = cc.last
-			}
+			perCharger[chargerID] = append(perCharger[chargerID], chargeReading{
+				SessionTime: sessionTime, PowerKwh: power, Mode: mode, State: state, UserID: uid,
+			})
 		}
 
-		log.Printf("  [CHARGING] Charger %d (%s): tenant share %.3f kWh normal, %.3f kWh priority",
-			chargerID, config.ChargerName, cNormal, cPriority)
-		normalTotal += cNormal
-		priorityTotal += cPriority
+		for chargerID, readings := range perCharger {
+			config := cfgByID[chargerID]
+			// Split this charger's shared counter across all cards, then take this
+			// tenant's share.
+			byCard := billableChargeByUser(readings, config.StateIdle, config.ModeNormal, config.ModePriority)
+			var cNormal, cPriority float64
+			for card, cc := range byCard {
+				if !targetCards[card] {
+					continue
+				}
+				cNormal += cc.normal
+				cPriority += cc.priority
+				updateSpan(cc.first, cc.last)
+			}
+			log.Printf("  [CHARGING] Charger %d (%s): tenant share %.3f kWh normal, %.3f kWh priority",
+				chargerID, config.ChargerName, cNormal, cPriority)
+			normalTotal += cNormal
+			priorityTotal += cPriority
+		}
 	}
 
 	log.Printf("  [CHARGING] ========================================")
@@ -464,6 +477,66 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 	log.Printf("  [CHARGING] ========================================")
 
 	return normalTotal, priorityTotal, firstSession, lastSession
+}
+
+// e3dcSessionChargeForCards sums an E3/DC wallbox's per-session solar/grid energy
+// for the given RFID cards over [start, end), from e3dc_session_history — the
+// device's OWN split, which matches the charger's session-history cards. Solar
+// bills at the normal (Solarmodus) rate, grid at the priority (Prioritätsmodus)
+// rate. Sessions are placed by start_time; a session is attributed wholly to the
+// segment containing its start (price segments are rare and sessions are short).
+func (bs *BillingService) e3dcSessionChargeForCards(chargerID int, cards map[string]bool, start, end time.Time) (normal, priority float64, first, last time.Time) {
+	if len(cards) == 0 {
+		return
+	}
+	ph := make([]string, 0, len(cards))
+	args := []interface{}{chargerID}
+	for c := range cards {
+		ph = append(ph, "?")
+		args = append(args, c)
+	}
+	args = append(args, start, end)
+
+	// Scan start_time/end_time as bare columns (they keep their DATETIME affinity
+	// so the driver hands back time.Time). Do NOT wrap end_time in COALESCE here —
+	// an expression loses the type and the driver returns a string, which fails the
+	// time.Time scan and silently drops every row (→ zero E3/DC energy). end_time is
+	// nullable, so read it via NullTime and fall back to start_time.
+	q := fmt.Sprintf(`
+		SELECT COALESCE(solar_kwh,0), COALESCE(grid_kwh,0), start_time, end_time
+		FROM e3dc_session_history
+		WHERE charger_id = ? AND COALESCE(rfid,'') IN (%s)
+		AND start_time >= ? AND start_time < ?
+	`, strings.Join(ph, ","))
+
+	rows, err := bs.db.Query(q, args...)
+	if err != nil {
+		log.Printf("  [CHARGING] ERROR querying e3dc_session_history for charger %d: %v", chargerID, err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var solar, grid float64
+		var st time.Time
+		var et sql.NullTime
+		if err := rows.Scan(&solar, &grid, &st, &et); err != nil {
+			log.Printf("  [CHARGING] WARN: skipping e3dc session row (charger %d): %v", chargerID, err)
+			continue
+		}
+		normal += solar
+		priority += grid
+		if first.IsZero() || st.Before(first) {
+			first = st
+		}
+		end := st
+		if et.Valid {
+			end = et.Time
+		}
+		if end.After(last) {
+			last = end
+		}
+	}
+	return
 }
 
 // calculateChargingFiltered runs the same accounting logic as calculateChargingConsumption,

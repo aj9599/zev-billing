@@ -142,6 +142,73 @@ func TestBillableChargeByUser_SingleTenantMatchesWholeCounter(t *testing.T) {
 	}
 }
 
+// TestE3DCSessionChargeForCards checks that an E3/DC wallbox is billed from its
+// own per-session solar/grid counters (e3dc_session_history), split per RFID card
+// — so the minor grid share inside mostly-solar slots is preserved (the reported
+// "grid shows ~0" bug), and each tenant gets only their own sessions.
+func TestE3DCSessionChargeForCards(t *testing.T) {
+	db := newTestDB(t)
+	defer db.Close()
+	bs := NewBillingService(db)
+
+	if _, err := db.Exec(`INSERT INTO buildings (id, name) VALUES (1, 'Test Building')`); err != nil {
+		t.Fatalf("insert building: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO chargers (id, name, brand, preset, building_id, connection_type, connection_config, billing_method)
+		VALUES (1, 'Ladestation', 'e3dc', 'e3dc', 1, 'e3dc_api', '{"mode_normal":"solar","mode_priority":"grid"}', 'mode_based')`); err != nil {
+		t.Fatalf("insert charger: %v", err)
+	}
+
+	// Two cards, interleaved sessions. Card A: solar 27.6 + 26.2, grid 0.5 + 1.4.
+	// Card B: solar 33.8, grid 0.2. One session sits outside the billing window.
+	// Insert start/end as time.Time so the stored format matches the query args
+	// (production writes them as time.Time too).
+	day := func(mon, d, h, mi int) time.Time { return time.Date(2026, time.Month(mon), d, h, mi, 0, 0, time.UTC) }
+	rows := []struct {
+		key         string
+		start, end  time.Time
+		total, s, g float64
+		rfid        string
+	}{
+		{"a1", day(7, 3, 15, 15), day(7, 3, 18, 15), 28.1, 27.6, 0.5, "A"},
+		{"b1", day(7, 4, 16, 0), day(7, 4, 20, 0), 34.0, 33.8, 0.2, "B"},
+		{"a2", day(7, 16, 9, 30), day(7, 16, 13, 15), 27.6, 26.2, 1.4, "A"},
+		{"a3", day(8, 2, 9, 30), day(8, 2, 13, 15), 10.0, 9.0, 1.0, "A"}, // out of window
+	}
+	for _, r := range rows {
+		if _, err := db.Exec(`INSERT INTO e3dc_session_history
+			(charger_id, session_key, start_time, end_time, total_kwh, solar_kwh, grid_kwh, rfid, source)
+			VALUES (1, ?, ?, ?, ?, ?, ?, ?, 'device')`,
+			r.key, r.start, r.end, r.total, r.s, r.g, r.rfid); err != nil {
+			t.Fatalf("insert session %s: %v", r.key, err)
+		}
+	}
+
+	start := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+
+	// Card A only: solar 27.6+26.2 = 53.8 (normal), grid 0.5+1.4 = 1.9 (priority).
+	n, p, first, _ := bs.e3dcSessionChargeForCards(1, map[string]bool{"A": true}, start, end)
+	if !approx(n, 53.8) || !approx(p, 1.9) {
+		t.Fatalf("card A = (normal %.3f, priority %.3f), want (53.8, 1.9)", n, p)
+	}
+	if first.IsZero() {
+		t.Fatalf("expected a session start time for card A")
+	}
+
+	// Full end-to-end through calculateChargingConsumption for card A.
+	cn, cp, _, _ := bs.calculateChargingConsumption(1, "A", start, end)
+	if !approx(cn, 53.8) || !approx(cp, 1.9) {
+		t.Fatalf("calculateChargingConsumption(A) = (%.3f, %.3f), want (53.8, 1.9)", cn, cp)
+	}
+
+	// Card B only: solar 33.8 (normal), grid 0.2 (priority) — no bleed from A.
+	bn, bp, _, _ := bs.e3dcSessionChargeForCards(1, map[string]bool{"B": true}, start, end)
+	if !approx(bn, 33.8) || !approx(bp, 0.2) {
+		t.Fatalf("card B = (normal %.3f, priority %.3f), want (33.8, 0.2)", bn, bp)
+	}
+}
+
 // TestBillableChargeAgainstZaptecExport validates the accounting against a real
 // exported Zaptec counter file when it is present locally. The file lives outside
 // the repo (a developer download), so the test skips cleanly in CI.

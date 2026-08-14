@@ -344,6 +344,9 @@ export interface GenerateBillsRequest {
   bank_account_holder?: string;
   include_shared_meters?: boolean;
   shared_meter_configs?: SharedMeterConfig[];
+  // Shared meter config IDs to bill. Omitted = bill all (legacy); an array
+  // (including []) = bill exactly these, so an empty selection bills none.
+  shared_meter_ids?: number[];
   custom_line_items?: CustomLineItemSelection[];  // Legacy - kept for backward compatibility
   custom_item_ids?: number[];  // NEW: Array of custom line item IDs to include
   is_vzev?: boolean;

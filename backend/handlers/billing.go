@@ -62,6 +62,12 @@ type GenerateBillsRequest struct {
 	// Custom item IDs to include in bills (NEW)
 	CustomItemIDs []int `json:"custom_item_ids"`
 
+	// Shared meter config IDs to include. A nil pointer (field omitted) means
+	// "bill every configured shared meter" (legacy / auto-billing). A non-nil
+	// slice — including an empty one — means "bill exactly these" (so an empty
+	// selection bills none). The manual bill modal always sends this.
+	SharedMeterIDs *[]int `json:"shared_meter_ids,omitempty"`
+
 	// Sender information
 	SenderName    string `json:"sender_name"`
 	SenderAddress string `json:"sender_address"`
@@ -359,9 +365,10 @@ func (h *BillingHandler) GenerateBills(w http.ResponseWriter, r *http.Request) {
 		req.IsVZEV,
 		customItemIDs,
 		services.BillingScope{
-			Mode:      req.BillingMode,
-			ChargerID: req.ChargerID,
-			Content:   req.BillContent,
+			Mode:           req.BillingMode,
+			ChargerID:      req.ChargerID,
+			Content:        req.BillContent,
+			SharedMeterIDs: req.SharedMeterIDs,
 		},
 	)
 

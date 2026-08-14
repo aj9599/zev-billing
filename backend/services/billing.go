@@ -100,6 +100,11 @@ type BillingScope struct {
 	Mode      string // "" or BillingModeApartments → existing apartment flow
 	ChargerID *int   // required when Mode == BillingModeCharger
 	Content   string // "" / BillContentBoth, BillContentMeters or BillContentChargers
+
+	// SharedMeterIDs restricts which shared meters are billed. nil = bill every
+	// configured shared meter (legacy). Non-nil (incl. empty) = bill exactly
+	// these shared_meter_configs ids, so an empty selection bills none.
+	SharedMeterIDs *[]int
 }
 
 // includeMeters reports whether apartment/meter consumption should be billed.
@@ -425,7 +430,7 @@ func (bs *BillingService) GenerateBillsWithOptions(buildingIDs, userIDs []int, s
 		case isVZEV && isComplex:
 			// vZEV: Virtual allocation between buildings in complex
 			log.Printf("Using vZEV billing logic for complex %d", buildingID)
-			complexInvoices, complexSkipped, err := bs.generateVZEVBillsWithOptions(buildingID, groupBuildings, userIDs, start, end, segments, customItemIDs)
+			complexInvoices, complexSkipped, err := bs.generateVZEVBillsWithOptions(buildingID, groupBuildings, userIDs, start, end, segments, customItemIDs, scope.SharedMeterIDs)
 			if err != nil {
 				log.Printf("ERROR: vZEV billing failed: %v", err)
 				continue
@@ -930,15 +935,32 @@ func (bs *BillingService) getCustomLineItems(buildingID int) ([]models.InvoiceIt
 	return bs.getCustomLineItemsWithTranslations(buildingID, tr, 1.0, time.Now(), time.Now(), nil)
 }
 
-func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID int, start, end time.Time, userID int, totalActiveUsers int, tr InvoiceTranslations, currency string, prorationFactor float64, primary models.BillingSettings) ([]models.InvoiceItem, float64, error) {
+func (bs *BillingService) calculateSharedMeterCostsWithTranslations(buildingID int, start, end time.Time, userID int, totalActiveUsers int, tr InvoiceTranslations, currency string, prorationFactor float64, primary models.BillingSettings, onlyIDs *[]int) ([]models.InvoiceItem, float64, error) {
 	log.Printf("  [SHARED METERS] Calculating shared meter costs for building %d, user %d (%d active users, proration: %.3f)", buildingID, userID, totalActiveUsers, prorationFactor)
 
-	rows, err := bs.db.Query(`
+	// onlyIDs restricts which shared meters are billed: nil = all configured;
+	// non-nil (incl. empty) = only these config ids. An empty selection bills none.
+	query := `
 		SELECT id, meter_id, meter_name, split_type, unit_price,
 		       COALESCE(pricing_mode, 'single'), COALESCE(solar_price, 0), COALESCE(grid_price, 0)
 		FROM shared_meter_configs
-		WHERE building_id = ?
-	`, buildingID)
+		WHERE building_id = ?`
+	args := []interface{}{buildingID}
+	if onlyIDs != nil {
+		if len(*onlyIDs) == 0 {
+			log.Printf("  [SHARED METERS] Selection is empty — billing no shared meters for building %d", buildingID)
+			return nil, 0, nil
+		}
+		ph := make([]string, len(*onlyIDs))
+		for i, id := range *onlyIDs {
+			ph[i] = "?"
+			args = append(args, id)
+		}
+		query += " AND id IN (" + strings.Join(ph, ",") + ")"
+		log.Printf("  [SHARED METERS] Restricted to %d selected shared meter(s): %v", len(*onlyIDs), *onlyIDs)
+	}
+
+	rows, err := bs.db.Query(query, args...)
 	if err != nil {
 		log.Printf("  [SHARED METERS] ERROR: Failed to query shared meter configs: %v", err)
 		return nil, 0, err
@@ -1655,7 +1677,7 @@ func (bs *BillingService) generateUserInvoiceForPeriodWithOptionsAndScope(userPe
 
 	log.Printf("  Checking for shared meters (pro-rated by %.1f%% of period)...", userPeriod.ProrationFactor*100)
 	sharedMeterItems, sharedMeterCost, err := bs.calculateSharedMeterCostsWithTranslations(
-		buildingID, start, end, userPeriod.UserID, totalActiveUsers, tr, primary.Currency, userPeriod.ProrationFactor, primary,
+		buildingID, start, end, userPeriod.UserID, totalActiveUsers, tr, primary.Currency, userPeriod.ProrationFactor, primary, scope.SharedMeterIDs,
 	)
 	if err != nil {
 		log.Printf("  WARNING: Failed to calculate shared meter costs: %v", err)

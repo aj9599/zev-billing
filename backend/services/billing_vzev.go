@@ -13,7 +13,7 @@ import (
 )
 
 // generateVZEVBillsWithOptions handles virtual energy allocation with custom item selection
-func (bs *BillingService) generateVZEVBillsWithOptions(complexID int, groupBuildingsJSON string, userIDs []int, start, end time.Time, segments []PriceSegment, customItemIDs []int) ([]models.Invoice, []SkippedBill, error) {
+func (bs *BillingService) generateVZEVBillsWithOptions(complexID int, groupBuildingsJSON string, userIDs []int, start, end time.Time, segments []PriceSegment, customItemIDs []int, sharedMeterIDs *[]int) ([]models.Invoice, []SkippedBill, error) {
 	log.Printf("\n=== vZEV BILLING START ===")
 	log.Printf("Complex ID: %d, Period: %s to %s", complexID, start.Format("2006-01-02"), end.Format("2006-01-02"))
 
@@ -108,6 +108,7 @@ func (bs *BillingService) generateVZEVBillsWithOptions(complexID int, groupBuild
 			end,
 			segResults,
 			customItemIDs,
+			sharedMeterIDs,
 		)
 
 		if err != nil {
@@ -360,7 +361,7 @@ func sortTimestamps(timestamps []time.Time) {
 // Shared meters, custom items, proration and the meter-reading summary line
 // are computed once on the full user period; segResults[0].Segment.Settings
 // provides the invoice currency.
-func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, buildingID int, fullStart, fullEnd time.Time, segResults []vzevSegmentResult, customItemIDs []int) (*models.Invoice, error) {
+func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, buildingID int, fullStart, fullEnd time.Time, segResults []vzevSegmentResult, customItemIDs []int, sharedMeterIDs *[]int) (*models.Invoice, error) {
 	if len(segResults) == 0 {
 		return nil, fmt.Errorf("no vZEV segment results supplied")
 	}
@@ -542,7 +543,7 @@ func (bs *BillingService) generateVZEVInvoiceWithOptions(userPeriod UserPeriod, 
 	}
 
 	sharedMeterItems, sharedMeterCost, _ := bs.calculateSharedMeterCostsWithTranslations(
-		buildingID, start, end, userPeriod.UserID, totalActiveUsers, tr, primary.Currency, userPeriod.ProrationFactor, primary,
+		buildingID, start, end, userPeriod.UserID, totalActiveUsers, tr, primary.Currency, userPeriod.ProrationFactor, primary, sharedMeterIDs,
 	)
 	if len(sharedMeterItems) > 0 {
 		items = append(items, sharedMeterItems...)

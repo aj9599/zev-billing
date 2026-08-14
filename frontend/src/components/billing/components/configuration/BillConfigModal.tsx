@@ -380,11 +380,15 @@ export default function BillConfigModal({
         return meter!;
       });
 
-      // UPDATED: Pass custom_item_ids as array of IDs instead of full objects
+      // UPDATED: Pass custom_item_ids as array of IDs instead of full objects.
+      // shared_meter_ids carries the actual selection to the backend (which now
+      // bills only the ticked meters); the older include_shared_meters /
+      // shared_meter_configs fields are kept but no longer drive inclusion.
       const finalConfig = {
         ...config,
         include_shared_meters: selectedSharedMeters.length > 0,
         shared_meter_configs: sharedMeterConfigs,
+        shared_meter_ids: selectedSharedMeters,
         custom_item_ids: selectedCustomItems // Just pass the array of IDs
       };
 
