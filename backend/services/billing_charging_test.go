@@ -82,6 +82,66 @@ func TestBillableCharge(t *testing.T) {
 	}
 }
 
+// ru is like r() but also tags the interval's RFID card, for the shared-counter split.
+func ru(minute int, kwh float64, mode, state, user string) chargeReading {
+	rr := r(minute, kwh, mode, state)
+	rr.UserID = user
+	return rr
+}
+
+// TestBillableChargeByUser covers the reported bug: two tenants share one E3/DC
+// wallbox (one cumulative counter) and charge in interleaved runs. Each must be
+// billed only their own runs — not the whole counter's rise.
+func TestBillableChargeByUser(t *testing.T) {
+	const idle, normal, priority = "1", "solar", "grid"
+
+	// Shared counter: A charges 0->10, B charges 10->30, A again 30->45.
+	// Idle rows (state "1") carry the tail of the run that just finished.
+	readings := []chargeReading{
+		ru(0, 0, normal, "3", "A"),
+		ru(15, 6, normal, "3", "A"),
+		ru(30, 10, normal, "1", ""), // A's tail (charging stopped mid-interval)
+		ru(45, 20, priority, "3", "B"),
+		ru(60, 30, normal, "3", "B"),
+		ru(75, 32, normal, "1", ""), // B's tail
+		ru(90, 40, normal, "3", "A"),
+		ru(105, 45, normal, "3", "A"),
+	}
+
+	byCard := billableChargeByUser(readings, idle, normal, priority)
+
+	// A: 0->10 (incl. tail) + 32->45 = 10 + 13 = 23, all normal.
+	if a := byCard["A"]; a == nil || !approx(a.normal, 23) || !approx(a.priority, 0) {
+		t.Fatalf("A = %+v, want normal 23, priority 0", byCard["A"])
+	}
+	// B: 10->20 priority + 20->32 (incl. tail) normal = 10 priority + 12 normal.
+	if b := byCard["B"]; b == nil || !approx(b.normal, 12) || !approx(b.priority, 10) {
+		t.Fatalf("B = %+v, want normal 12, priority 10", byCard["B"])
+	}
+	// Sanity: the split conserves the counter's total rise (45 kWh), no double-count.
+	total := byCard["A"].normal + byCard["A"].priority + byCard["B"].normal + byCard["B"].priority
+	if !approx(total, 45) {
+		t.Fatalf("split total = %.3f, want 45 (the counter rise)", total)
+	}
+}
+
+// TestBillableChargeByUser_SingleTenantMatchesWholeCounter guards that a charger
+// used by one tenant still bills the full net rise (parity with billableCharge).
+func TestBillableChargeByUser_SingleTenantMatchesWholeCounter(t *testing.T) {
+	const idle, normal, priority = "1", "solar", "grid"
+	readings := []chargeReading{
+		ru(0, 100, normal, "3", "A"),
+		ru(15, 118, normal, "3", "A"), // spike
+		ru(30, 100, normal, "3", "A"), // reverts
+		ru(45, 105, normal, "3", "A"),
+		ru(60, 118.20, normal, "3", "A"),
+	}
+	byCard := billableChargeByUser(readings, idle, normal, priority)
+	if a := byCard["A"]; a == nil || !approx(a.normal, 18.20) {
+		t.Fatalf("A.normal = %v, want 18.20 (net rise, spike collapsed)", byCard["A"])
+	}
+}
+
 // TestBillableChargeAgainstZaptecExport validates the accounting against a real
 // exported Zaptec counter file when it is present locally. The file lives outside
 // the repo (a developer download), so the test skips cleanly in CI.

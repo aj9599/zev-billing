@@ -58,11 +58,14 @@ func (bs *BillingService) calculateChargingForChargers(buildingID int, chargerID
 
 // Charging calculation using data at fixed 15-minute intervals
 // chargeReading is one 15-minute snapshot of a charger's cumulative energy counter.
+// UserID is the RFID card active in that interval (empty when idle / no card); it
+// is only used by billableChargeByUser to split a shared counter between tenants.
 type chargeReading struct {
 	SessionTime time.Time
 	PowerKwh    float64
 	Mode        string
 	State       string
+	UserID      string
 }
 
 // billableCharge sums a single charger's cumulative-counter readings into normal/priority
@@ -156,6 +159,104 @@ func billableCharge(readings []chargeReading, idleState, modeNormal, modePriorit
 		addBill(lastPower-dipLow, lastMode)
 	}
 	return normal, priority, first, last, billable, skipped
+}
+
+// cardCharge is one RFID card's share of a charger's counter over a period.
+type cardCharge struct {
+	normal, priority float64
+	first, last      time.Time
+}
+
+// billableChargeByUser splits ONE charger's shared cumulative counter across the
+// RFID cards that charged on it. Unlike billableCharge (which assumes the whole
+// counter belongs to a single tenant), it walks the charger's FULL reading
+// sequence — every card's rows, in time order — and attributes each interval's
+// energy to the card active in that interval.
+//
+// This is required when several tenants share one physical counter (e.g. an E3/DC
+// wallbox read by RFID). Billing a tenant from only their own rows bridges the
+// counter across the gaps where OTHER tenants charged, so each tenant is billed
+// the charger's entire rise for the period — the reported bug where two tenants on
+// one wallbox were each charged the full monthly energy.
+//
+// The counter is shared, so glitch handling (dips/spikes/resets) runs once on the
+// global counter, exactly like billableCharge. Energy in a non-charging (idle)
+// interval is the tail of the run that just finished, so it is attributed to the
+// last charging card. Intervals with no card (unassigned charging) advance the
+// counter but are billed to no one, matching the manual-assignment model.
+func billableChargeByUser(readings []chargeReading, idleState, modeNormal, modePriority string) map[string]*cardCharge {
+	out := map[string]*cardCharge{}
+	cc := func(card string) *cardCharge {
+		if out[card] == nil {
+			out[card] = &cardCharge{}
+		}
+		return out[card]
+	}
+	addBill := func(owner string, delta float64, mode string) {
+		if delta <= 0 || owner == "" {
+			return
+		}
+		if modeMatches(mode, modePriority) {
+			cc(owner).priority += delta
+		} else {
+			cc(owner).normal += delta // normal, or unknown/unset mode
+		}
+	}
+
+	var prevPower, preDipHigh, dipLow, lastPower float64
+	var hasPrev, inDip bool
+	var lastOwner, lastMode string // last charging card + its mode (owns idle tails)
+
+	for _, r := range readings {
+		// The owner/mode of this interval: the card charging now, else the last
+		// card that charged (an idle slot carries the previous run's tail energy).
+		owner, mode := lastOwner, lastMode
+		if r.State != idleState {
+			owner, mode = r.UserID, r.Mode
+			lastOwner, lastMode = r.UserID, r.Mode
+			if owner != "" {
+				c := cc(owner)
+				if c.first.IsZero() || r.SessionTime.Before(c.first) {
+					c.first = r.SessionTime
+				}
+				if r.SessionTime.After(c.last) {
+					c.last = r.SessionTime
+				}
+			}
+		}
+		lastPower = r.PowerKwh
+
+		if !hasPrev {
+			prevPower = r.PowerKwh
+			hasPrev = true
+			continue
+		}
+		if !inDip {
+			if r.PowerKwh < prevPower {
+				inDip = true
+				preDipHigh = prevPower
+				dipLow = r.PowerKwh
+				continue
+			}
+			addBill(owner, r.PowerKwh-prevPower, mode)
+			prevPower = r.PowerKwh
+			continue
+		}
+		// Inside a dip (shared counter glitch or reset).
+		if r.PowerKwh >= preDipHigh-0.001 {
+			addBill(owner, r.PowerKwh-preDipHigh, mode)
+			inDip = false
+			prevPower = r.PowerKwh
+			continue
+		}
+		if r.PowerKwh < dipLow {
+			dipLow = r.PowerKwh
+		}
+	}
+	if inDip {
+		addBill(lastOwner, lastPower-dipLow, lastMode) // genuine reset → post-reset climb
+	}
+	return out
 }
 
 func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards string, start, end time.Time) (normal, priority float64, firstSession, lastSession time.Time) {
@@ -257,26 +358,37 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 
 	log.Printf("  [CHARGING] Loaded %d active chargers in building", len(chargerConfigs))
 
-	placeholders := make([]string, len(cleanedRfids))
-	args := []interface{}{}
-
-	for i, rfid := range cleanedRfids {
-		placeholders[i] = "?"
-		args = append(args, rfid)
+	// Load EVERY reading for these chargers in the period — all cards, not just this
+	// tenant's. A charger's cumulative counter is shared by every RFID that charged
+	// on it, so to bill one tenant we walk the whole counter and attribute each
+	// interval to the card active in it (billableChargeByUser). Filtering to the
+	// tenant's own rows here would bridge the counter across the gaps where OTHER
+	// tenants charged, billing this tenant for their energy — the reported bug where
+	// two tenants sharing one E3/DC wallbox were each billed its full monthly rise.
+	targetCards := map[string]bool{}
+	for _, c := range cleanedRfids {
+		targetCards[c] = true
 	}
 
-	inClause := strings.Join(placeholders, ",")
+	cfgByID := map[int]ChargerConfig{}
+	placeholders := make([]string, len(chargerConfigs))
+	args := []interface{}{}
+	for i, cfg := range chargerConfigs {
+		cfgByID[cfg.ChargerID] = cfg
+		placeholders[i] = "?"
+		args = append(args, cfg.ChargerID)
+	}
 	args = append(args, start, end)
 
 	query := fmt.Sprintf(`
-    	SELECT charger_id, user_id, session_time, power_kwh, mode, state
-    	FROM charger_sessions
-    	WHERE user_id IN (%s)
-    	AND session_time >= ? AND session_time <= ?
-    	ORDER BY charger_id, session_time ASC
-	`, inClause)
+		SELECT charger_id, COALESCE(user_id,''), session_time, power_kwh, mode, state
+		FROM charger_sessions
+		WHERE charger_id IN (%s)
+		AND session_time >= ? AND session_time <= ?
+		ORDER BY charger_id, session_time ASC
+	`, strings.Join(placeholders, ","))
 
-	log.Printf("  [CHARGING] Querying sessions with IN clause for %d RFID cards", len(cleanedRfids))
+	log.Printf("  [CHARGING] Querying full shared counter for %d charger(s); billing cards %v", len(chargerConfigs), cleanedRfids)
 
 	rows, err := bs.db.Query(query, args...)
 	if err != nil {
@@ -285,117 +397,69 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 	}
 	defer rows.Close()
 
-	type SessionData struct {
-		SessionTime time.Time
-		PowerKwh    float64
-		Mode        string
-		State       string
-		UserID      string
-	}
-
-	chargerSessions := make(map[int][]SessionData)
-	totalSessionsFound := 0
-
+	perCharger := make(map[int][]chargeReading)
+	totalRows := 0
 	for rows.Next() {
 		var chargerID int
-		var sessionUserID string
+		var uid string
 		var sessionTime time.Time
 		var power float64
 		var mode, state string
-
-		if err := rows.Scan(&chargerID, &sessionUserID, &sessionTime, &power, &mode, &state); err != nil {
+		if err := rows.Scan(&chargerID, &uid, &sessionTime, &power, &mode, &state); err != nil {
 			log.Printf("  [CHARGING] ERROR scanning session row: %v", err)
 			continue
 		}
-
-		totalSessionsFound++
-
-		if totalSessionsFound <= 10 {
-			log.Printf("  [CHARGING] Session #%d: charger=%d, user='%s', time=%s, power=%.3f, mode='%s', state='%s'",
-				totalSessionsFound, chargerID, sessionUserID, sessionTime.Format("2006-01-02 15:04"),
-				power, mode, state)
-		}
-
-		if _, exists := chargerSessions[chargerID]; !exists {
-			chargerSessions[chargerID] = []SessionData{}
-		}
-
-		chargerSessions[chargerID] = append(chargerSessions[chargerID], SessionData{
-			SessionTime: sessionTime,
-			PowerKwh:    power,
-			Mode:        mode,
-			State:       state,
-			UserID:      sessionUserID,
+		perCharger[chargerID] = append(perCharger[chargerID], chargeReading{
+			SessionTime: sessionTime, PowerKwh: power, Mode: mode, State: state, UserID: uid,
 		})
+		totalRows++
 	}
 
-	log.Printf("  [CHARGING] Found %d total sessions across %d chargers (at 15-min intervals)", totalSessionsFound, len(chargerSessions))
-
-	if totalSessionsFound == 0 {
-		log.Printf("  [CHARGING] ERROR: No sessions found for RFID cards %v in period", cleanedRfids)
+	log.Printf("  [CHARGING] Loaded %d reading(s) across %d charger(s)", totalRows, len(perCharger))
+	if totalRows == 0 {
+		log.Printf("  [CHARGING] No charger readings in period for building %d", buildingID)
 		return 0, 0, time.Time{}, time.Time{}
 	}
 
 	normalTotal := 0.0
 	priorityTotal := 0.0
-	totalBillableSessions := 0
-	totalSkippedSessions := 0
 
-	for chargerID, sessions := range chargerSessions {
-		var config *ChargerConfig
-		for i := range chargerConfigs {
-			if chargerConfigs[i].ChargerID == chargerID {
-				config = &chargerConfigs[i]
-				break
+	for chargerID, readings := range perCharger {
+		config, ok := cfgByID[chargerID]
+		if !ok {
+			continue // not a mode-based charger we bill here
+		}
+
+		// Split this charger's shared counter across all cards, then take this
+		// tenant's share.
+		byCard := billableChargeByUser(readings, config.StateIdle, config.ModeNormal, config.ModePriority)
+		var cNormal, cPriority float64
+		for card, cc := range byCard {
+			if !targetCards[card] {
+				continue
+			}
+			cNormal += cc.normal
+			cPriority += cc.priority
+			if !cc.first.IsZero() && (firstSession.IsZero() || cc.first.Before(firstSession)) {
+				firstSession = cc.first
+			}
+			if cc.last.After(lastSession) {
+				lastSession = cc.last
 			}
 		}
 
-		if config == nil {
-			log.Printf("  [CHARGING] WARNING: No config found for charger %d - skipping %d sessions",
-				chargerID, len(sessions))
-			totalSkippedSessions += len(sessions)
-			continue
-		}
-
-		log.Printf("  [CHARGING] ----------------------------------------")
-		log.Printf("  [CHARGING] Processing charger %d (%s) with %d sessions",
-			chargerID, config.ChargerName, len(sessions))
-
-		readings := make([]chargeReading, len(sessions))
-		for i, s := range sessions {
-			readings[i] = chargeReading{SessionTime: s.SessionTime, PowerKwh: s.PowerKwh, Mode: s.Mode, State: s.State}
-		}
-		chargerNormal, chargerPriority, cFirst, cLast, chargerBillable, chargerSkipped :=
-			billableCharge(readings, config.StateIdle, config.ModeNormal, config.ModePriority)
-		if !cFirst.IsZero() {
-			if firstSession.IsZero() || cFirst.Before(firstSession) {
-				firstSession = cFirst
-			}
-			if cLast.After(lastSession) {
-				lastSession = cLast
-			}
-		}
-
-		log.Printf("  [CHARGING] Charger %d summary: %d billable, %d skipped, %.3f kWh normal, %.3f kWh priority",
-			chargerID, chargerBillable, chargerSkipped, chargerNormal, chargerPriority)
-
-		normalTotal += chargerNormal
-		priorityTotal += chargerPriority
-		totalBillableSessions += chargerBillable
-		totalSkippedSessions += chargerSkipped
+		log.Printf("  [CHARGING] Charger %d (%s): tenant share %.3f kWh normal, %.3f kWh priority",
+			chargerID, config.ChargerName, cNormal, cPriority)
+		normalTotal += cNormal
+		priorityTotal += cPriority
 	}
 
 	log.Printf("  [CHARGING] ========================================")
-	log.Printf("  [CHARGING] FINAL RESULTS:")
-	log.Printf("  [CHARGING] Total sessions found: %d (at 15-min intervals)", totalSessionsFound)
-	log.Printf("  [CHARGING] Billable sessions: %d", totalBillableSessions)
-	log.Printf("  [CHARGING] Skipped sessions: %d", totalSkippedSessions)
-	log.Printf("  [CHARGING] Normal charging: %.3f kWh", normalTotal)
-	log.Printf("  [CHARGING] Priority charging: %.3f kWh", priorityTotal)
-	log.Printf("  [CHARGING] Total charging: %.3f kWh", normalTotal+priorityTotal)
+	log.Printf("  [CHARGING] FINAL: normal=%.3f kWh, priority=%.3f kWh, total=%.3f kWh",
+		normalTotal, priorityTotal, normalTotal+priorityTotal)
 	if !firstSession.IsZero() {
-		log.Printf("  [CHARGING] First session: %s", firstSession.Format("2006-01-02 15:04"))
-		log.Printf("  [CHARGING] Last session: %s", lastSession.Format("2006-01-02 15:04"))
+		log.Printf("  [CHARGING] First session: %s, Last session: %s",
+			firstSession.Format("2006-01-02 15:04"), lastSession.Format("2006-01-02 15:04"))
 	}
 	log.Printf("  [CHARGING] ========================================")
 
