@@ -91,7 +91,7 @@ export default function ChargerDetailModal({
         ? (zaptecStatus?.live_session ?? liveData?.live_session)
         : liveData?.live_session;
 
-    const modeValue = liveData?.mode ?? '1';
+    const modeValue = liveData?.mode;
     const modeDisplay = getModeDisplay(charger, modeValue, t);
     const stateDisplay = getStateDisplay(charger, stateValue, t);
 

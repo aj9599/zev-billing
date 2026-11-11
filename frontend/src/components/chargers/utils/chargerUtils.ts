@@ -1,3 +1,4 @@
+import { getPreset } from '../../chargerPresets';
 import type { Charger } from '../../../types';
 
 export const getStateDisplay = (charger: Charger, stateValue?: string, t?: (key: string) => string): string => {
@@ -72,52 +73,46 @@ export const getStateDisplay = (charger: Charger, stateValue?: string, t?: (key:
   return t?.('chargers.state.unknown') || 'Unknown';
 };
 
+const parseModeList = (value?: unknown): string[] =>
+  String(value ?? '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+// Mirrors the backend (resolveModeMapping + billableCharge): an explicit
+// mode_normal / mode_priority in the config wins; otherwise the preset default
+// (Weidmüller/Loxone: normal = "2,3", priority = "1,99"). The Loxone Wallbox
+// block reports M = 1-5 (user-defined modes) or 99 (manual) — their meaning
+// is installation-specific, so never hard-code "1-5 = Solar" here.
 export const getModeDisplay = (charger: Charger, modeValue?: string, t?: (key: string) => string): string => {
-  if (!modeValue) return t?.('chargers.mode.normal') || 'Normal';
+  const modeStr = modeValue === undefined || modeValue === null ? '' : String(modeValue).trim();
+  if (!modeStr) return t?.('chargers.mode.unknown') || 'Unknown';
 
-  const modeStr = String(modeValue).trim();
-
-  // 🔧 FIX: Add Loxone mode handling (M values: 1-5=Solar, 99=Priority)
-  if (charger.connection_type === 'loxone_api') {
-    const modeNum = parseInt(modeStr);
-    if (modeNum >= 1 && modeNum <= 5) {
-      return t?.('chargers.mode.solar') || `Solar Mode ${modeNum}`;
-    }
-    if (modeNum === 99) {
-      return t?.('chargers.mode.priority') || 'Priority Charging';
-    }
-    return t?.('chargers.mode.normal') || 'Normal';
-  }
-
-  // For Weidmüller chargers, check the UUID mode from config
+  let config: Record<string, unknown> = {};
   try {
-    const config = JSON.parse(charger.connection_config);
-    
-    // For single-block mode (M values: 1-5=Solar, 99=Priority, other=Normal)
-    if (config.loxone_uuid_mode === 'single') {
-      const modeNum = parseInt(modeStr);
-      if (modeNum >= 1 && modeNum <= 5) {
-        return t?.('chargers.mode.solar') || 'Solar';
-      }
-      if (modeNum === 99) {
-        return t?.('chargers.mode.priority') || 'Priority';
-      }
-      return t?.('chargers.mode.normal') || 'Normal';
-    }
-
-    // For multi-UUID mode, use config-based mapping
-    if (modeStr === String(config.mode_normal).trim()) {
-      return t?.('chargers.mode.normal') || 'Normal';
-    }
-    if (modeStr === String(config.mode_priority).trim()) {
-      return t?.('chargers.mode.priority') || 'Priority';
-    }
+    config = JSON.parse(charger.connection_config || '{}');
   } catch (e) {
     console.error('Failed to parse charger config:', e);
   }
 
-  // Default to Normal mode
-  return t?.('chargers.mode.normal') || 'Normal';
+  const preset = getPreset(charger.preset || 'weidmuller');
+  const normalList = parseModeList(config.mode_normal ?? preset.defaultModeMappings.normal);
+  const priorityList = parseModeList(config.mode_priority ?? preset.defaultModeMappings.priority);
+
+  const isNormal = normalList.includes(modeStr);
+  const isPriority = priorityList.includes(modeStr);
+  const showRaw = charger.connection_type === 'loxone_api';
+  const suffix = showRaw ? ` (${modeStr})` : '';
+
+  if (isPriority && !isNormal) {
+    return (t?.('chargers.mode.priority') || 'Priority') + suffix;
+  }
+  if (isNormal) {
+    return (t?.('chargers.mode.normal') || 'Normal') + suffix;
+  }
+  // Not mapped: billing treats it as normal, but show it as unmapped so a new
+  // Loxone mode is noticed instead of silently looking like "Solar".
+  return `${t?.('chargers.mode.unknown') || 'Unknown'} (${modeStr})`;
 };
 
 export const groupChargersByBuilding = (chargers: Charger[]): Record<number, Charger[]> => {

@@ -1772,7 +1772,7 @@ export const de: Translations = {
   'chargers.stateCharging': 'Lädt',
   'chargers.stateIdle': 'Inaktiv',
   'chargers.modeValueMappings': 'Modus-Wert-Zuordnungen',
-  'chargers.configureModeValues': 'Konfigurieren Sie die numerischen Werte, die Ihre Ladestation für jeden Lademodus sendet:',
+  'chargers.configureModeValues': 'Werte, die die Ladestation (Loxone Ausgang M) pro Lademodus sendet. Mehrere Werte mit Komma trennen, z.B. Solar = 2,3 / Priorität = 1,99:',
   'chargers.modeNormal': 'Solarmodus',
   'chargers.modePriority': 'Prioritätsmodus',
 

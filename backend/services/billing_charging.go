@@ -334,6 +334,7 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 			continue
 		}
 
+		modeNormal, modePriority := resolveModeMapping(connectionType, connConfig)
 		config := ChargerConfig{
 			ChargerID:        chargerID,
 			ChargerName:      chargerName,
@@ -342,8 +343,8 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 			StateWaitingAuth: getConfigString(connConfig, "state_waiting_auth", "66"),
 			StateCharging:    getConfigString(connConfig, "state_charging", "67"),
 			StateIdle:        getConfigString(connConfig, "state_idle", "50"),
-			ModeNormal:       getConfigString(connConfig, "mode_normal", "1"),
-			ModePriority:     getConfigString(connConfig, "mode_priority", "2"),
+			ModeNormal:       modeNormal,
+			ModePriority:     modePriority,
 		}
 
 		log.Printf("  [CHARGING] Charger %d config: States[locked=%s, auth=%s, charging=%s, idle=%s], Modes[normal=%s, priority=%s]",
@@ -561,7 +562,7 @@ func (bs *BillingService) calculateChargingFiltered(buildingID int, filter charg
 	chargerIn := strings.Join(chargerPlaceholders, ",")
 
 	chargerRows, err := bs.db.Query(fmt.Sprintf(`
-		SELECT id, name, connection_config FROM chargers
+		SELECT id, name, COALESCE(connection_type, ''), connection_config FROM chargers
 		WHERE building_id = ? AND id IN (%s) AND is_active = 1
 	`, chargerIn), append([]interface{}{buildingID}, chargerArgs...)...)
 	if err != nil {
@@ -581,8 +582,8 @@ func (bs *BillingService) calculateChargingFiltered(buildingID int, filter charg
 	configs := []chargerCfg{}
 	for chargerRows.Next() {
 		var id int
-		var name, connConfigJSON string
-		if err := chargerRows.Scan(&id, &name, &connConfigJSON); err != nil {
+		var name, connType, connConfigJSON string
+		if err := chargerRows.Scan(&id, &name, &connType, &connConfigJSON); err != nil {
 			continue
 		}
 		var connConfig map[string]interface{}
@@ -590,12 +591,13 @@ func (bs *BillingService) calculateChargingFiltered(buildingID int, filter charg
 			log.Printf("  [CHARGING-CID] WARN: bad config for charger %d: %v", id, err)
 			continue
 		}
+		modeNormal, modePriority := resolveModeMapping(connType, connConfig)
 		configs = append(configs, chargerCfg{
 			ChargerID:    id,
 			ChargerName:  name,
 			StateIdle:    getConfigString(connConfig, "state_idle", "50"),
-			ModeNormal:   getConfigString(connConfig, "mode_normal", "1"),
-			ModePriority: getConfigString(connConfig, "mode_priority", "2"),
+			ModeNormal:   modeNormal,
+			ModePriority: modePriority,
 		})
 	}
 	if len(configs) == 0 {

@@ -1771,7 +1771,7 @@ export const en: Translations = {
   'chargers.stateCharging': 'Charging',
   'chargers.stateIdle': 'Idle',
   'chargers.modeValueMappings': 'Mode Value Mappings',
-  'chargers.configureModeValues': 'Configure the numeric values your charger sends for each charging mode:',
+  'chargers.configureModeValues': 'Values the charger (Loxone output M) sends per charging mode. Separate several values with commas, e.g. Solar = 2,3 / Priority = 1,99:',
   'chargers.modeNormal': 'Solar Mode',
   'chargers.modePriority': 'Priority Mode',
 

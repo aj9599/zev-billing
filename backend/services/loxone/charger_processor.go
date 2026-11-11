@@ -779,11 +779,15 @@ func ParseLclString(lcl string) (userID string, energy float64, endTime time.Tim
 
 // GetModeDescription returns a human-readable description of the charging mode
 func GetModeDescription(mode string) string {
+	// Loxone Wallbox block output M: 1-5 are user-defined modes whose meaning
+	// depends on the installation (billing category comes from the charger's
+	// mode_normal / mode_priority mapping), 99 = manual mode (app only).
+	// Do not hard-code "1-5 = Solar" here: in this installation 1 = Priority.
 	switch mode {
-	case "1", "2", "3", "4", "5":
-		return fmt.Sprintf("Solar Mode %s", mode)
+	case "":
+		return "Unknown"
 	case "99":
-		return "Priority Charging"
+		return "Mode 99 (manual / set power)"
 	default:
 		return fmt.Sprintf("Mode %s", mode)
 	}

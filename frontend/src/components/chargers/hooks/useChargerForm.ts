@@ -87,8 +87,8 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
     state_waiting_auth: '66',
     state_charging: '67',
     state_idle: '50',
-    mode_normal: '1',
-    mode_priority: '2',
+    mode_normal: '2,3',
+    mode_priority: '1,99',
     loxone_host: '',
     loxone_mac_address: '',
     loxone_connection_mode: 'local',
@@ -350,15 +350,17 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
         config.loxone_host = connectionConfig.loxone_host;
       }
 
-      // Always save state and mode mappings (except for single-block mode)
+      // State mappings are only used in multi-UUID mode (single-block derives
+      // state from Vc/Cac). Mode mappings drive billing in BOTH modes, so
+      // always save them — otherwise the backend falls back to defaults.
       if (!isSingleBlock) {
         config.state_cable_locked = connectionConfig.state_cable_locked;
         config.state_waiting_auth = connectionConfig.state_waiting_auth;
         config.state_charging = connectionConfig.state_charging;
         config.state_idle = connectionConfig.state_idle;
-        config.mode_normal = connectionConfig.mode_normal;
-        config.mode_priority = connectionConfig.mode_priority;
       }
+      config.mode_normal = connectionConfig.mode_normal;
+      config.mode_priority = connectionConfig.mode_priority;
       
       // ðŸ” DEBUG: Log the final config being saved
       console.log('  Final config object:', config);

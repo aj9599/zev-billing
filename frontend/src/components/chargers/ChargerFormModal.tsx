@@ -1117,8 +1117,9 @@ export default function ChargerFormModal({
 
               {/* State & Mode Mappings (hide for single-block, Zaptec & E3/DC —
                   their states/modes are fixed on the device side) */}
-              {formData.preset !== 'zaptec' && formData.preset !== 'e3dc' && !isSingleBlockMode && (
+              {formData.preset !== 'zaptec' && formData.preset !== 'e3dc' && (
                 <>
+                  {!isSingleBlockMode && (
                   <div style={{
                     marginTop: '16px',
                     padding: '16px',
@@ -1171,6 +1172,7 @@ export default function ChargerFormModal({
                       </div>
                     </div>
                   </div>
+                  )}
 
                   <div style={{
                     marginTop: '12px',
@@ -1194,7 +1196,7 @@ export default function ChargerFormModal({
                         <label style={smallLabelStyle}>{t('chargers.modeNormal')}</label>
                         <input type="text" required value={connectionConfig.mode_normal}
                           onChange={(e) => onConnectionConfigChange({ ...connectionConfig, mode_normal: e.target.value })}
-                          placeholder="1" onFocus={focusHandler} onBlur={blurHandler}
+                          placeholder="2,3" onFocus={focusHandler} onBlur={blurHandler}
                           style={{ ...inputStyle(isMobile), padding: '8px 12px' }}
                         />
                       </div>
@@ -1202,7 +1204,7 @@ export default function ChargerFormModal({
                         <label style={smallLabelStyle}>{t('chargers.modePriority')}</label>
                         <input type="text" required value={connectionConfig.mode_priority}
                           onChange={(e) => onConnectionConfigChange({ ...connectionConfig, mode_priority: e.target.value })}
-                          placeholder="2" onFocus={focusHandler} onBlur={blurHandler}
+                          placeholder="1,99" onFocus={focusHandler} onBlur={blurHandler}
                           style={{ ...inputStyle(isMobile), padding: '8px 12px' }}
                         />
                       </div>

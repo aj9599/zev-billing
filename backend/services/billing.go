@@ -35,6 +35,35 @@ func getConfigString(config map[string]interface{}, key string, defaultValue str
 	return defaultValue
 }
 
+// Default billing-mode mappings.
+//
+// Loxone Wallbox block (Weidmüller), output M: 1-5 = user-defined charging
+// modes, 99 = manual mode (app only). Installation scheme:
+//   1 = Priority, 2 = Solar, 3 = Solar priority, 99 = Priority w/ set power.
+// Generic chargers (HTTP/UDP/MQTT/multi-UUID legacy) keep the historic 1/2.
+const (
+	loxoneDefaultModeNormal    = "2,3"
+	loxoneDefaultModePriority  = "1,99"
+	genericDefaultModeNormal   = "1"
+	genericDefaultModePriority = "2"
+)
+
+// resolveModeMapping returns the normal/priority mode lists for a charger.
+// An explicit mode_normal / mode_priority in the connection config always
+// wins. Without one (single-block Loxone chargers never stored a mapping),
+// Loxone chargers fall back to the Weidmüller scheme instead of 1/2, which
+// would bill mode 1 (Priority) at the solar price and mode 2 (Solar) at the
+// priority price.
+func resolveModeMapping(connectionType string, connConfig map[string]interface{}) (normal, priority string) {
+	defNormal, defPriority := genericDefaultModeNormal, genericDefaultModePriority
+	if connectionType == "loxone_api" {
+		defNormal, defPriority = loxoneDefaultModeNormal, loxoneDefaultModePriority
+	}
+	normal = getConfigString(connConfig, "mode_normal", defNormal)
+	priority = getConfigString(connConfig, "mode_priority", defPriority)
+	return normal, priority
+}
+
 // modeMatches reports whether a charger session's reported mode value matches a
 // configured billing-mode setting. The configured value may be a single value
 // ("1") or a comma-separated list of values ("1,99") so that several physical
