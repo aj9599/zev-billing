@@ -584,31 +584,31 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				}
 			}
 
-			// Get data at 15-minute intervals and convert consumption to power
-			// For solar meters, we use export data (negative values for display)
+			// Cumulative counters (import + export register). The window starts
+			// early so the first slot has a baseline, and so rows whose stored
+			// string carries a different UTC offset are not cut off.
+			queryFrom := startTime.Add(-2 * time.Hour)
+			queryTo := now.Add(2 * time.Hour)
 			var dataRows *sql.Rows
 			if mi.meterType == "solar_meter" {
 				// For solar, get production. Bidirectional blocks store it in the
 				// export register; a simple single-counter meter uses the main one.
-				cumCol, consCol := solarProductionColumns(h.db, ctx, mi.id)
+				cumCol, _ := solarProductionColumns(h.db, ctx, mi.id)
 				dataRows, err = h.db.QueryContext(ctx, fmt.Sprintf(`
-					SELECT reading_time, %s, %s
+					SELECT reading_time, %s, COALESCE(power_kwh_export, 0)
 					FROM meter_readings
 					WHERE meter_id = ?
 					AND reading_time >= ?
 					AND reading_time <= ?
-					ORDER BY reading_time ASC
-				`, cumCol, consCol), mi.id, startTime, now)
+				`, cumCol), mi.id, queryFrom, queryTo)
 			} else {
-				// For other meters, get import consumption
 				dataRows, err = h.db.QueryContext(ctx, `
-					SELECT reading_time, power_kwh, consumption_kwh
+					SELECT reading_time, power_kwh, COALESCE(power_kwh_export, 0)
 					FROM meter_readings
-					WHERE meter_id = ? 
-					AND reading_time >= ? 
+					WHERE meter_id = ?
+					AND reading_time >= ?
 					AND reading_time <= ?
-					ORDER BY reading_time ASC
-				`, mi.id, startTime, now)
+				`, mi.id, queryFrom, queryTo)
 			}
 
 			meterData := MeterData{
@@ -625,51 +625,32 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				continue
 			}
 
-			// Sum the stored interval energy per 15-min slot, then convert to
-			// average power. Summing (instead of taking each row as exactly
-			// 15 min) keeps duplicate rows in one quarter from showing as dips.
+			// Energy per 15-min slot from the cumulative counter (see
+			// meterCounterSeries). The stored per-row consumption is not used:
+			// it is wrong wherever duplicate or out-of-order rows exist.
 			sign := 1.0
 			if mi.meterType == "solar_meter" {
 				sign = -1 // generation shown below zero
 			}
-			slots := slotEnergy{}
+			var importRows, exportRows []counterRow
 			for dataRows.Next() {
 				var timestamp time.Time
-				var powerKwh, consumptionKwh float64
-				if err := dataRows.Scan(&timestamp, &powerKwh, &consumptionKwh); err != nil {
+				var counter, exportCounter float64
+				if err := dataRows.Scan(&timestamp, &counter, &exportCounter); err != nil {
 					continue
 				}
-				slots.add(quarterSlotEnd(timestamp), consumptionKwh)
+				importRows = append(importRows, counterRow{timestamp, counter})
+				exportRows = append(exportRows, counterRow{timestamp, exportCounter})
 			}
 			dataRows.Close()
-			meterData.Data = slots.toSeries(startTime, now, mi.meterType, sign)
+			meterData.Data = meterCounterSeries(importRows).toSeries(startTime, now, mi.meterType, sign)
 
-			// Battery meters also report charging energy in the export column
+			// Battery meters also report charging energy in the export register
 			// (convention: import = discharge → house, export = charge ← bus).
 			// Emit charging as a second series so the energy-flow view can show
 			// charge vs discharge and balance house consumption correctly.
 			if mi.meterType == "battery_meter" {
-				chargeRows, cErr := h.db.QueryContext(ctx, `
-					SELECT reading_time, consumption_export
-					FROM meter_readings
-					WHERE meter_id = ?
-					AND reading_time >= ?
-					AND reading_time <= ?
-					ORDER BY reading_time ASC
-				`, mi.id, startTime, now)
-				if cErr == nil {
-					chargeSlots := slotEnergy{}
-					for chargeRows.Next() {
-						var ts time.Time
-						var consExport float64
-						if err := chargeRows.Scan(&ts, &consExport); err != nil {
-							continue
-						}
-						chargeSlots.add(quarterSlotEnd(ts), consExport)
-					}
-					chargeRows.Close()
-					meterData.Data = append(meterData.Data, chargeSlots.toSeries(startTime, now, "battery_meter_charge", 1)...)
-				}
+				meterData.Data = append(meterData.Data, meterCounterSeries(exportRows).toSeries(startTime, now, "battery_meter_charge", 1)...)
 			}
 
 			building.Meters = append(building.Meters, meterData)
@@ -713,7 +694,7 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					AND session_time >= ?
 					AND session_time <= ?
 					ORDER BY session_time ASC
-				`, ci.id, startTime.Add(-chartSlot), now)
+				`, ci.id, startTime.Add(-2*time.Hour), now)
 				if err != nil {
 					log.Printf("    Error querying sessions for charger %d: %v", ci.id, err)
 					continue

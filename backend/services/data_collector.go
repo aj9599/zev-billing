@@ -1165,11 +1165,24 @@ func (dc *DataCollector) saveMeterReading(meterID int, meterName string, current
 	// Get last reading for interpolation
 	var lastReading, lastReadingExport float64
 	var lastTime time.Time
+	// Latest by real instant: reading_time strings carry their UTC offset,
+	// so rows written before a DST change (+02:00) sort after newer +01:00
+	// rows as text. Picking the wrong "latest" row made the interpolation
+	// below write a duplicate row with the old offset every quarter.
 	err := dc.db.QueryRow(`
-		SELECT power_kwh, power_kwh_export, reading_time FROM meter_readings 
-		WHERE meter_id = ? 
-		ORDER BY reading_time DESC LIMIT 1
+		SELECT power_kwh, power_kwh_export, reading_time FROM meter_readings
+		WHERE meter_id = ? AND reading_time >= date('now', '-30 days')
+		ORDER BY datetime(reading_time) DESC, rowid DESC LIMIT 1
 	`, meterID).Scan(&lastReading, &lastReadingExport, &lastTime)
+	if err == nil {
+		lastTime = lastTime.In(time.Local)
+		if !currentTime.After(lastTime) {
+			// This quarter is already stored (second collection in the same
+			// slot): don't add a duplicate row. The next quarter picks up
+			// the energy from the counter.
+			return nil
+		}
+	}
 
 	var consumption, consumptionExport float64
 	isFirstReading := false

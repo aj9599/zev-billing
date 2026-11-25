@@ -205,3 +205,51 @@ func (h *DashboardHandler) chargerUserName(ctx context.Context, rfid, chargerNam
 	}
 	return fmt.Sprintf("Unknown User (RFID %s)", rfid)
 }
+
+// counterRow is one cumulative meter reading.
+type counterRow struct {
+	Time    time.Time
+	Counter float64 // cumulative kWh
+}
+
+// counterResetRatio: a drop below this share of the previous value is a
+// counter reset / meter replacement (rebase). Smaller drops are noise from
+// duplicate or interpolated rows at the same instant and are ignored.
+const counterResetRatio = 0.5
+
+// meterCounterSeries derives energy per slot from a cumulative counter,
+// ordered by real instant (not by the stored string, whose UTC offset can
+// differ between rows written before and after a DST change). Duplicate and
+// interpolated rows only move the counter along the same curve, so taking
+// deltas of the running maximum counts every kWh once.
+func meterCounterSeries(rows []counterRow) slotEnergy {
+	out := slotEnergy{}
+	if len(rows) < 2 {
+		return out
+	}
+	sort.SliceStable(rows, func(i, j int) bool { return rows[i].Time.Before(rows[j].Time) })
+	// Explicit 0 for every slot the readings cover, so idle periods draw
+	// as 0 W instead of a gap.
+	for slot := quarterSlotEnd(rows[0].Time); !slot.After(quarterSlotEnd(rows[len(rows)-1].Time)); slot = slot.Add(chartSlot) {
+		out[slot.Unix()] += 0
+	}
+	prev := rows[0]
+	for _, cur := range rows[1:] {
+		if cur.Counter < prev.Counter {
+			if cur.Counter < prev.Counter*counterResetRatio {
+				prev = cur // reset: rebase
+			}
+			continue // noise: keep the higher baseline
+		}
+		delta := cur.Counter - prev.Counter
+		if delta > 0 {
+			if cur.Time.After(prev.Time) {
+				out.spread(prev.Time, cur.Time, delta)
+			} else {
+				out.add(quarterSlotEnd(cur.Time), delta)
+			}
+		}
+		prev = cur
+	}
+	return out
+}

@@ -313,9 +313,9 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 				// For solar meters, allow zero import and try to load last value from DB
 				var lastImportFromDB float64
 				err := db.QueryRow(`
-						SELECT power_kwh FROM meter_readings 
-						WHERE meter_id = ? 
-						ORDER BY reading_time DESC LIMIT 1
+						SELECT power_kwh FROM meter_readings
+						WHERE meter_id = ? AND reading_time >= date('now', '-30 days')
+						ORDER BY datetime(reading_time) DESC, rowid DESC LIMIT 1
 					`, device.ID).Scan(&lastImportFromDB)
 
 				if err == nil && lastImportFromDB > 0 {
@@ -472,11 +472,19 @@ func (conn *WebSocketConnection) processMeterData(device *Device, response Loxon
 
 	var lastReading, lastReadingExport float64
 	var lastTime time.Time
+	// Latest by real instant, not by text: see data_collector.saveMeterReading.
 	err := db.QueryRow(`
-        SELECT power_kwh, power_kwh_export, reading_time FROM meter_readings 
-        WHERE meter_id = ? 
-        ORDER BY reading_time DESC LIMIT 1
+        SELECT power_kwh, power_kwh_export, reading_time FROM meter_readings
+        WHERE meter_id = ? AND reading_time >= date('now', '-30 days')
+        ORDER BY datetime(reading_time) DESC, rowid DESC LIMIT 1
     `, device.ID).Scan(&lastReading, &lastReadingExport, &lastTime)
+	if err == nil {
+		lastTime = lastTime.In(time.Local)
+		if !currentTime.After(lastTime) {
+			// Quarter already stored: skip the duplicate row.
+			return
+		}
+	}
 
 	var consumption, consumptionExport float64
 	isFirstReading := false

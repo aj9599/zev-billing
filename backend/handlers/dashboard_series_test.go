@@ -106,3 +106,27 @@ func TestMeterSlotsSumDuplicates(t *testing.T) {
 		t.Fatalf("got %+v, want one point at 2000 W", series)
 	}
 }
+
+// Interpolated rows written with the summer offset after the DST change sit
+// on the same curve; they must not double the energy.
+func TestMeterCounterSeriesInterleavedRows(t *testing.T) {
+	rows := []counterRow{
+		{at(13, 0, 0), 4586.604},
+		{at(13, 15, 0), 4586.8588}, // interpolated duplicate, same instant
+		{at(13, 15, 0), 4586.923},
+		{at(13, 30, 0), 4587.136},
+		{at(13, 30, 0), 4587.10}, // lower duplicate: ignored
+		{at(13, 45, 0), 4587.295},
+	}
+	s := meterCounterSeries(rows)
+	var total float64
+	for _, v := range s {
+		total += v
+	}
+	if math.Abs(total-(4587.295-4586.604)) > 1e-9 {
+		t.Errorf("total = %.4f, want %.4f", total, 4587.295-4586.604)
+	}
+	if v := s[at(13, 15, 0).Unix()]; math.Abs(v-0.319) > 1e-9 {
+		t.Errorf("13:15 slot = %.4f, want 0.319", v)
+	}
+}
