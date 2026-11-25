@@ -178,8 +178,6 @@ func main() {
 	r.HandleFunc("/api/auth/login", authHandler.Login).Methods("POST")
 	r.HandleFunc("/api/health", healthCheck).Methods("GET")
 
-	// Public PDF access (no authentication needed for direct PDF links)
-	r.HandleFunc("/api/billing/invoices/{id}/pdf", billingHandler.DownloadPDF).Methods("GET")
 
 	// Webhook routes for receiving data from devices (NO AUTHENTICATION)
 	r.HandleFunc("/webhook/meter", webhookHandler.ReceiveMeterReading).Methods("GET", "POST")
@@ -322,6 +320,8 @@ func main() {
 	api.HandleFunc("/billing/generate", billingHandler.GenerateBills).Methods("POST")
 	api.HandleFunc("/billing/invoices", billingHandler.ListInvoices).Methods("GET")
 	api.HandleFunc("/billing/invoices/{id}", billingHandler.GetInvoice).Methods("GET")
+	// Invoice PDFs need an admin token (were public with guessable ids).
+	api.HandleFunc("/billing/invoices/{id}/pdf", billingHandler.DownloadPDF).Methods("GET")
 	api.HandleFunc("/billing/invoices/{id}/payment", billingHandler.UpdateInvoicePayment).Methods("PUT")
 	api.HandleFunc("/billing/invoices/{id}", billingHandler.DeleteInvoice).Methods("DELETE")
 	api.HandleFunc("/billing/backup", billingHandler.BackupDatabase).Methods("GET")

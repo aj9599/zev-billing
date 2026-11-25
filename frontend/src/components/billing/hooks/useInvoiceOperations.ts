@@ -45,8 +45,7 @@ export function useInvoiceOperations(onRefresh: () => void) {
 
   const downloadPDF = async (invoice: Invoice) => {
     try {
-      const pdfUrl = await api.downloadInvoicePDF(invoice.id);
-      window.open(pdfUrl, '_blank');
+      await api.openInvoicePDF(invoice.id);
     } catch (err) {
       console.error('Failed to download PDF:', err);
       alert('Failed to download PDF');

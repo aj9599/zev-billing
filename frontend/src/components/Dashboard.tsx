@@ -192,8 +192,13 @@ function timeAgo(dateStr: string | null): string {
 
 // ─── Custom tooltip ──────────────────────────────────────────────────
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+// Each point is the average power of the 15 minutes ENDING at its time.
+const CustomTooltip = ({ active, payload, label, period }: any) => {
   if (active && payload && payload.length) {
+    const end = typeof label === 'number' ? new Date(label) : null;
+    const labelText = end
+      ? `${formatTimeForPeriod(new Date(end.getTime() - 15 * 60 * 1000), period || '24h')} – ${end.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })}`
+      : label;
     return (
       <div style={{
         backgroundColor: 'rgba(255,255,255,0.96)',
@@ -204,7 +209,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
         backdropFilter: 'blur(8px)'
       }}>
-        <p style={{ fontWeight: '600', marginBottom: '6px', color: '#374151' }}>{label}</p>
+        <p style={{ fontWeight: '600', marginBottom: '6px', color: '#374151' }}>{labelText}</p>
         {payload.map((entry: any, index: number) => {
           const value = Math.abs(entry.value);
           const displayValue = value >= 1000
@@ -1654,7 +1659,9 @@ export default function Dashboard() {
                                         })}
                                       </defs>
                                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                                      <XAxis dataKey="time" style={{ fontSize: '11px' }} stroke="#9ca3af"
+                                      <XAxis dataKey="sortKey" type="number" scale="time" domain={['dataMin', 'dataMax']}
+                                        tickFormatter={(v: number) => formatTimeForPeriod(new Date(v), period)}
+                                        style={{ fontSize: '11px' }} stroke="#9ca3af"
                                         angle={period !== '1h' ? -45 : 0}
                                         textAnchor={period !== '1h' ? 'end' : 'middle'}
                                         height={period !== '1h' ? 70 : 30}
@@ -1664,7 +1671,7 @@ export default function Dashboard() {
                                         style={{ fontSize: '11px' }} stroke="#9ca3af"
                                       />
                                       <ReferenceLine y={0} stroke="#d1d5db" strokeDasharray="3 3" />
-                                      <Tooltip content={<CustomTooltip />} />
+                                      <Tooltip content={<CustomTooltip period={period} />} />
                                       <Legend wrapperStyle={{ fontSize: '11px' }} />
                                       {areaMeters.map(meter => {
                                         const uniqueKey = getMeterUniqueKey(meter);
@@ -1674,7 +1681,7 @@ export default function Dashboard() {
                                         return (
                                           <Area
                                             key={uniqueKey}
-                                            type="monotone"
+                                            type="stepBefore"
                                             dataKey={uniqueKey}
                                             stroke={color}
                                             strokeWidth={2}
@@ -1682,7 +1689,7 @@ export default function Dashboard() {
                                             name={getMeterDisplayName(meter, t)}
                                             dot={false}
                                             activeDot={{ r: 4, strokeWidth: 2 }}
-                                            connectNulls
+                                            isAnimationActive={false}
                                           />
                                         );
                                       })}
@@ -1690,7 +1697,9 @@ export default function Dashboard() {
                                   ) : (
                                     <LineChart data={chartData}>
                                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                                      <XAxis dataKey="time" style={{ fontSize: '11px' }} stroke="#9ca3af"
+                                      <XAxis dataKey="sortKey" type="number" scale="time" domain={['dataMin', 'dataMax']}
+                                        tickFormatter={(v: number) => formatTimeForPeriod(new Date(v), period)}
+                                        style={{ fontSize: '11px' }} stroke="#9ca3af"
                                         angle={period !== '1h' ? -45 : 0}
                                         textAnchor={period !== '1h' ? 'end' : 'middle'}
                                         height={period !== '1h' ? 70 : 30}
@@ -1700,20 +1709,19 @@ export default function Dashboard() {
                                         style={{ fontSize: '11px' }} stroke="#9ca3af"
                                       />
                                       <ReferenceLine y={0} stroke="#d1d5db" strokeDasharray="3 3" />
-                                      <Tooltip content={<CustomTooltip />} />
+                                      <Tooltip content={<CustomTooltip period={period} />} />
                                       <Legend wrapperStyle={{ fontSize: '11px' }} />
                                       {meters.map(meter => {
                                         const uniqueKey = getMeterUniqueKey(meter);
                                         const isCharger = meter.meter_type === 'charger';
                                         const isSolar = meter.meter_type === 'solar_meter';
-                                        const isBaseline = meter.user_name?.includes('(Baseline)');
                                         const color = getMeterColor(meter.meter_type, meter.meter_id, meter.user_name);
                                         const isVisible = isMeterVisible(building.building_id, uniqueKey);
                                         if (!isVisible) return null;
                                         return (
                                           <Line
                                             key={uniqueKey}
-                                            type="monotone"
+                                            type="stepBefore"
                                             dataKey={uniqueKey}
                                             stroke={color}
                                             strokeWidth={(isCharger || isSolar) ? 3 : 2}
@@ -1721,7 +1729,7 @@ export default function Dashboard() {
                                             name={getMeterDisplayName(meter, t)}
                                             dot={false}
                                             activeDot={{ r: (isCharger || isSolar) ? 6 : 4 }}
-                                            connectNulls={isBaseline ? false : true}
+                                            isAnimationActive={false}
                                           />
                                         );
                                       })}

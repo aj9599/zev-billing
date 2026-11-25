@@ -1,5 +1,6 @@
 import { CheckCircle, AlertTriangle, FileText, Mail, X, Loader2, FlaskConical, ExternalLink } from 'lucide-react';
 import { useTranslation } from '../../../i18n';
+import { api } from '../../../api/client';
 
 export interface TestRunResult {
   config_id: number;
@@ -215,11 +216,11 @@ export default function AutoBillingTestRunModal({ isOpen, running, result, error
 
               {/* Action buttons */}
               {result.first_invoice_id > 0 && (
-                <a
-                  href={`/api/billing/invoices/${result.first_invoice_id}/pdf`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
+                  onClick={() => api.openInvoicePDF(result.first_invoice_id).catch(err => console.error('Failed to open PDF:', err))}
                   style={{
+                    border: 'none', cursor: 'pointer', width: '100%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                     padding: '10px',
                     background: '#667eea',
@@ -230,7 +231,7 @@ export default function AutoBillingTestRunModal({ isOpen, running, result, error
                 >
                   <ExternalLink size={14} />
                   {t('autoBilling.testRunOpenPDF')}
-                </a>
+                </button>
               )}
             </>
           )}

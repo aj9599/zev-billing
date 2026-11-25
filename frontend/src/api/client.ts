@@ -639,8 +639,33 @@ class ApiClient {
     return this.request(`/billing/profiles/${id}`, { method: 'DELETE' });
   }
 
-  async downloadInvoicePDF(id: number): Promise<string> {
-    return `${API_BASE}/billing/invoices/${id}/pdf`;
+  // Invoice PDFs require auth, so fetch with the token and open a blob URL.
+  // The window is opened before the await so popup blockers allow it.
+  async openInvoicePDF(id: number): Promise<void> {
+    const win = window.open('', '_blank');
+    try {
+      await this.ensureFreshToken();
+      const response = await fetch(`${API_BASE}/billing/invoices/${id}/pdf`, {
+        headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
+      });
+      if (response.status === 401) {
+        win?.close();
+        this.logout();
+        window.location.href = '/login';
+        return;
+      }
+      if (!response.ok) throw new Error(`PDF download failed (${response.status})`);
+      const url = URL.createObjectURL(await response.blob());
+      if (win) {
+        win.location.href = url;
+      } else {
+        window.location.href = url;
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      win?.close();
+      throw err;
+    }
   }
 
   // Shared Meters

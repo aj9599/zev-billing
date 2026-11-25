@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -624,30 +625,24 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				continue
 			}
 
+			// Sum the stored interval energy per 15-min slot, then convert to
+			// average power. Summing (instead of taking each row as exactly
+			// 15 min) keeps duplicate rows in one quarter from showing as dips.
+			sign := 1.0
+			if mi.meterType == "solar_meter" {
+				sign = -1 // generation shown below zero
+			}
+			slots := slotEnergy{}
 			for dataRows.Next() {
 				var timestamp time.Time
 				var powerKwh, consumptionKwh float64
 				if err := dataRows.Scan(&timestamp, &powerKwh, &consumptionKwh); err != nil {
 					continue
 				}
-
-				// Convert consumption (kWh over 15 min) to power (W)
-				// Power (W) = Energy (kWh) / Time (h) * 1000
-				// Time = 15 min = 0.25 h
-				powerW := (consumptionKwh / 0.25) * 1000
-
-				// For solar meters, make power negative to show as generation/export
-				if mi.meterType == "solar_meter" {
-					powerW = -powerW
-				}
-
-				meterData.Data = append(meterData.Data, models.ConsumptionData{
-					Timestamp: timestamp,
-					Power:     powerW,
-					Source:    mi.meterType,
-				})
+				slots.add(quarterSlotEnd(timestamp), consumptionKwh)
 			}
 			dataRows.Close()
+			meterData.Data = slots.toSeries(startTime, now, mi.meterType, sign)
 
 			// Battery meters also report charging energy in the export column
 			// (convention: import = discharge → house, export = charge ← bus).
@@ -663,33 +658,29 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 					ORDER BY reading_time ASC
 				`, mi.id, startTime, now)
 				if cErr == nil {
+					chargeSlots := slotEnergy{}
 					for chargeRows.Next() {
 						var ts time.Time
 						var consExport float64
 						if err := chargeRows.Scan(&ts, &consExport); err != nil {
 							continue
 						}
-						meterData.Data = append(meterData.Data, models.ConsumptionData{
-							Timestamp: ts,
-							Power:     (consExport / 0.25) * 1000, // kWh/15min → W
-							Source:    "battery_meter_charge",
-						})
+						chargeSlots.add(quarterSlotEnd(ts), consExport)
 					}
 					chargeRows.Close()
+					meterData.Data = append(meterData.Data, chargeSlots.toSeries(startTime, now, "battery_meter_charge", 1)...)
 				}
 			}
-
-			log.Printf("    Meter ID: %d has %d data points at 15-min intervals", mi.id, len(meterData.Data))
 
 			building.Meters = append(building.Meters, meterData)
 		}
 
-		// Process chargers with fixed 15-minute intervals
-		log.Printf("  Querying chargers for building %d...", bi.id)
+		// Chargers: one series per user, built from the charger's shared
+		// cumulative counter (see chargerUserSeries).
 		chargerRows, err := h.db.QueryContext(ctx, `
 			SELECT c.id, c.name
 			FROM chargers c
-			WHERE c.building_id = ? 
+			WHERE c.building_id = ?
 			AND COALESCE(c.is_active, 1) = 1
 			ORDER BY c.name
 		`, bi.id)
@@ -702,319 +693,76 @@ func (h *DashboardHandler) GetConsumptionByBuilding(w http.ResponseWriter, r *ht
 				name string
 			}
 			chargerInfos := []chargerInfo{}
-
 			for chargerRows.Next() {
 				var ci chargerInfo
 				if err := chargerRows.Scan(&ci.id, &ci.name); err != nil {
-					log.Printf("  Error scanning charger row: %v", err)
 					continue
 				}
 				chargerInfos = append(chargerInfos, ci)
 			}
 			chargerRows.Close()
 
-			log.Printf("  Found %d chargers for building %d", len(chargerInfos), bi.id)
-
 			for _, ci := range chargerInfos {
-				log.Printf("    Processing charger ID: %d, Name: %s", ci.id, ci.name)
-
-				// First, collect all session times for this charger to know when to break the baseline
-				// Use STRING keys to avoid timezone comparison issues
-				sessionTimes := make(map[string]bool)
-				var allSessionRows *sql.Rows
-				allSessionRows, err = h.db.QueryContext(ctx, `
-					SELECT DISTINCT session_time
+				// All rows (idle ones too: they carry the counter between
+				// sessions), starting one slot early so the first delta in the
+				// window has a baseline.
+				sessRows, err := h.db.QueryContext(ctx, `
+					SELECT session_time, power_kwh, COALESCE(user_id, ''), COALESCE(state, '')
 					FROM charger_sessions
-					WHERE charger_id = ? 
+					WHERE charger_id = ?
 					AND session_time >= ?
 					AND session_time <= ?
-					AND state != '1'
 					ORDER BY session_time ASC
-				`, ci.id, startTime, now)
+				`, ci.id, startTime.Add(-chartSlot), now)
+				if err != nil {
+					log.Printf("    Error querying sessions for charger %d: %v", ci.id, err)
+					continue
+				}
+				var rows []chargerRow
+				for sessRows.Next() {
+					var r chargerRow
+					if err := sessRows.Scan(&r.Time, &r.Energy, &r.UserID, &r.State); err != nil {
+						continue
+					}
+					rows = append(rows, r)
+				}
+				sessRows.Close()
 
-				if err == nil {
-					sessionCount := 0
-					for allSessionRows.Next() {
-						var sessionTime time.Time
-						if allSessionRows.Scan(&sessionTime) == nil {
-							// Round to 15-minute interval
-							rounded := roundTo15Min(sessionTime)
-							// Use formatted string as key to avoid timezone issues
-							timeKey := rounded.Format("2006-01-02T15:04:05")
-							sessionTimes[timeKey] = true
-							sessionCount++
-							if sessionCount <= 5 {
-								log.Printf("      ðŸ” Session at %s rounds to %s (key: %s)",
-									sessionTime.Format("15:04:05"),
-									rounded.Format("15:04:05"),
-									timeKey)
-							}
+				perUser := chargerUserSeries(rows)
+				allSlots := chargerSlotsWithData(rows, startTime, now)
+
+				userIDs := make([]string, 0, len(perUser))
+				for u := range perUser {
+					userIDs = append(userIDs, u)
+				}
+				sort.Strings(userIDs)
+
+				for _, uid := range userIDs {
+					energy := perUser[uid]
+					// Explicit 0 W where this user was not charging.
+					for _, s := range allSlots {
+						if _, ok := energy[s.Unix()]; !ok {
+							energy[s.Unix()] = 0
 						}
 					}
-					allSessionRows.Close()
-					log.Printf("      Found %d session times, %d unique 15-min intervals to exclude", sessionCount, len(sessionTimes))
-				}
-
-				// Generate 0W baseline at 15-minute intervals, but SKIP times where sessions exist
-				baselineData := []models.ConsumptionData{}
-				currentTime := roundTo15Min(startTime)
-				roundedNow := roundTo15Min(now)
-				excludedCount := 0
-				for currentTime.Before(roundedNow) {
-					// Create time key for lookup (without timezone)
-					timeKey := currentTime.Format("2006-01-02T15:04:05")
-
-					// Only add baseline point if NO session at this time
-					if !sessionTimes[timeKey] {
-						baselineData = append(baselineData, models.ConsumptionData{
-							Timestamp: currentTime,
-							Power:     0,
-							Source:    "charger",
-						})
-					} else {
-						excludedCount++
-						if excludedCount <= 5 {
-							log.Printf("      â­ï¸  Skipping baseline at %s (key: %s - session exists)",
-								currentTime.Format("15:04:05"),
-								timeKey)
+					series := energy.toSeries(startTime, now, "charger", 1)
+					hasEnergy := false
+					for _, p := range series {
+						if p.Power > 0 {
+							hasEnergy = true
+							break
 						}
 					}
-					currentTime = currentTime.Add(15 * time.Minute)
-				}
-
-				// Only add baseline if there are any 0W points
-				if len(baselineData) > 0 {
-					baselineMeter := MeterData{
+					if !hasEnergy {
+						continue
+					}
+					building.Meters = append(building.Meters, MeterData{
 						MeterID:   ci.id,
 						MeterName: ci.name,
 						MeterType: "charger",
-						UserName:  ci.name + " (Baseline)",
-						Data:      baselineData,
-					}
-					log.Printf("    ðŸ“Š Added 0W baseline with %d points (excluded %d intervals with sessions)", len(baselineData), len(sessionTimes))
-					building.Meters = append(building.Meters, baselineMeter)
-				}
-
-				var userRows *sql.Rows
-				// Exclude disconnected states (state=1) to avoid post-session spikes
-				// Allow empty user_ids for Zaptec chargers
-				userRows, err = h.db.QueryContext(ctx, `
-					SELECT DISTINCT COALESCE(user_id, '') as user_id
-					FROM charger_sessions
-					WHERE charger_id = ? 
-					AND session_time >= ?
-					AND session_time <= ?
-					AND state != '1'
-					ORDER BY user_id
-				`, ci.id, startTime, now)
-
-				if err != nil {
-					log.Printf("    Error querying users for charger %d: %v", ci.id, err)
-					continue
-				}
-
-				type userInfo struct {
-					userID     string
-					actualUser int
-					userName   string
-				}
-				userInfos := []userInfo{}
-
-				for userRows.Next() {
-					var rfidOrUserID string
-					if err := userRows.Scan(&rfidOrUserID); err != nil {
-						continue
-					}
-
-					// Try to map RFID tag to actual user
-					var actualUserID int
-					var actualUserName string
-					var found bool
-
-					// If user_id is empty (Zaptec), use charger name as display name
-					if rfidOrUserID == "" {
-						actualUserName = ci.name
-						actualUserID = 0
-						found = true
-						log.Printf("      Empty user_id (Zaptec charger) - using charger name: '%s'", actualUserName)
-					} else {
-						log.Printf("      Looking up RFID/UserID: '%s'", rfidOrUserID)
-
-						// Try multiple patterns for charger_ids field
-						patterns := []string{
-							rfidOrUserID,                 // Exact: "2"
-							"%" + rfidOrUserID + ",%",    // Start: "2,3"
-							"%," + rfidOrUserID + ",%",   // Middle: "1,2,3"
-							"%," + rfidOrUserID,          // End: "1,2"
-							"%\"" + rfidOrUserID + "\"%", // JSON: ["2"]
-						}
-
-						for _, pattern := range patterns {
-							err := h.db.QueryRowContext(ctx, `
-								SELECT id, first_name || ' ' || last_name 
-								FROM users 
-								WHERE charger_ids = ? OR charger_ids LIKE ?
-								LIMIT 1
-							`, rfidOrUserID, pattern).Scan(&actualUserID, &actualUserName)
-
-							if err == nil {
-								found = true
-								log.Printf("      âœ… Mapped RFID '%s' to user %d (%s)", rfidOrUserID, actualUserID, actualUserName)
-								break
-							}
-						}
-
-						// If not found in charger_ids, show as Unknown User
-						if !found {
-							actualUserName = fmt.Sprintf("Unknown User (RFID %s)", rfidOrUserID)
-							actualUserID = 0 // No actual user
-							log.Printf("      âš ï¸  RFID '%s' not found in any user's charger_ids - showing as Unknown User", rfidOrUserID)
-
-							// DEBUG: Show what charger_ids exist in database to help diagnose
-							debugRows, debugErr := h.db.QueryContext(ctx, `
-								SELECT id, first_name || ' ' || last_name, charger_ids 
-								FROM users 
-								WHERE charger_ids IS NOT NULL AND charger_ids != ''
-							`)
-							if debugErr == nil && debugRows != nil {
-								log.Printf("      ðŸ” DEBUG: All users with charger_ids:")
-								count := 0
-								for debugRows.Next() {
-									var debugID int
-									var debugName, debugChargerIDs string
-									if debugRows.Scan(&debugID, &debugName, &debugChargerIDs) == nil {
-										log.Printf("         User %d (%s): charger_ids='%s'", debugID, debugName, debugChargerIDs)
-										count++
-									}
-									if count >= 10 {
-										log.Printf("         ... (showing first 10)")
-										break
-									}
-								}
-								debugRows.Close()
-							}
-						}
-					}
-
-					userInfos = append(userInfos, userInfo{
-						userID:     rfidOrUserID,
-						actualUser: actualUserID,
-						userName:   actualUserName,
+						UserName:  h.chargerUserName(ctx, uid, ci.name),
+						Data:      series,
 					})
-				}
-				userRows.Close()
-
-				log.Printf("    Found %d users with sessions for charger %d", len(userInfos), ci.id)
-
-				// Process each user's sessions
-				for _, ui := range userInfos {
-					log.Printf("      Processing RFID/User: %s (Actual user: %d - %s)", ui.userID, ui.actualUser, ui.userName)
-
-					// Get charger data at 15-minute intervals
-					// Filter out maintenance readings (state=1) that create spikes after sessions
-					var sessionRows *sql.Rows
-					sessionRows, err = h.db.QueryContext(ctx, `
-						SELECT session_time, power_kwh, state
-						FROM charger_sessions
-						WHERE charger_id = ? 
-						AND user_id = ?
-						AND session_time >= ?
-						AND session_time <= ?
-						AND state != '1'
-						ORDER BY session_time ASC
-					`, ci.id, ui.userID, startTime, now)
-
-					if err != nil {
-						log.Printf("      Error querying sessions for charger %d, RFID/user %s: %v", ci.id, ui.userID, err)
-						continue
-					}
-
-					consumptionData := []models.ConsumptionData{}
-					var previousPower float64
-					var hasPrevious bool
-
-					for sessionRows.Next() {
-						var timestamp time.Time
-						var powerKwh float64
-						var state string
-
-						if err := sessionRows.Scan(&timestamp, &powerKwh, &state); err != nil {
-							continue
-						}
-
-						if !hasPrevious {
-							previousPower = powerKwh
-							hasPrevious = true
-							// First point with zero power
-							consumptionData = append(consumptionData, models.ConsumptionData{
-								Timestamp: timestamp,
-								Power:     0,
-								Source:    "charger",
-							})
-							continue
-						}
-
-						// Calculate consumption
-						consumptionKwh := powerKwh - previousPower
-
-						// Check for unrealistic jumps that indicate post-session accumulation
-						// If the consumption is more than 10 kWh in 15 minutes (40 kW average), it's likely a spike
-						if consumptionKwh > 10.0 {
-							log.Printf("      Detected unrealistic consumption spike: %.2f kWh at %s, skipping", consumptionKwh, timestamp.Format("15:04"))
-							// Don't update previousPower, so next reading will be calculated from last valid point
-							continue
-						}
-
-						if consumptionKwh < 0 {
-							// Meter reset
-							log.Printf("      Meter reset detected at %s", timestamp.Format("15:04"))
-							previousPower = powerKwh
-							continue
-						}
-
-						// Convert consumption (kWh over 15 min) to power (W)
-						powerW := (consumptionKwh / 0.25) * 1000
-
-						// Cap unrealistic values
-						if powerW > 50000 {
-							powerW = 50000
-						}
-
-						consumptionData = append(consumptionData, models.ConsumptionData{
-							Timestamp: timestamp,
-							Power:     powerW,
-							Source:    "charger",
-						})
-
-						previousPower = powerKwh
-					}
-					sessionRows.Close()
-
-					// Add trailing 0W point after last charging data to bring line back to zero
-					if len(consumptionData) > 1 {
-						lastPoint := consumptionData[len(consumptionData)-1]
-						if lastPoint.Power > 0 {
-							consumptionData = append(consumptionData, models.ConsumptionData{
-								Timestamp: lastPoint.Timestamp.Add(15 * time.Minute),
-								Power:     0,
-								Source:    "charger",
-							})
-						}
-					}
-
-					// Only add this user's data if they actually have charging data
-					if len(consumptionData) > 0 {
-						chargerData := MeterData{
-							MeterID:   ci.id,
-							MeterName: ci.name,
-							MeterType: "charger",
-							UserName:  ui.userName,
-							Data:      consumptionData,
-						}
-
-						log.Printf("      Ã¢Å“â€¦ Charger ID: %d has %d data points for user %s", ci.id, len(consumptionData), ui.userName)
-						building.Meters = append(building.Meters, chargerData)
-					}
 				}
 			}
 		}
