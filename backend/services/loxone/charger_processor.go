@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"regexp"
 	"strconv"
 	"time"
 )
@@ -366,6 +365,31 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 		log.Printf("      ÃƒÂ¢Ã¢â‚¬ÂÃ¢â‚¬ÂÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ output21 (Uid - User ID): '%s'", userID)
 	}
 
+	// Record every new Lcl event and remember the user from "user set" events
+	// (e.g. "Benutzer einstellen;user:2"): the end event of Gen 2 blocks
+	// carries "user:-", so this is where the session's user comes from.
+	if lastSessionLog != "" && lastSessionLog != device.LastLclRaw {
+		device.LastLclRaw = lastSessionLog
+		if ev, ok := ParseLcl(lastSessionLog); ok {
+			RecordLclEvent(db, device.ID, ev)
+			if ev.UserID != "" && !ev.IsEnd {
+				device.LclUserID, device.LclUserTime = ev.UserID, ev.Time
+			}
+		}
+	}
+	// lclUserFor returns the LCL user if it was set at most 15 minutes before
+	// t (session detection lags the plug-in by up to one poll), so a user set
+	// for an earlier session is not carried over to an unidentified one.
+	lclUserFor := func(t time.Time) string {
+		if device.LclUserID != "" && !device.LclUserTime.Before(t.Add(-15*time.Minute)) {
+			return device.LclUserID
+		}
+		return ""
+	}
+	if userID == "" {
+		userID = lclUserFor(time.Now())
+	}
+
 	// Determine state based on vehicle connection and charging status
 	// State mapping matches Zaptec for consistency:
 	// State 1 = Disconnected (Vc=0)
@@ -446,6 +470,11 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 
 		// SESSION LOGIC - Enhanced with proper start/end detection
 		sessionActive := vehicleConnected == 1 || chargingPowerKW > 0
+		if sessionActive || activeSession == nil {
+			device.DisconnectedSince = time.Time{}
+		} else if device.DisconnectedSince.IsZero() {
+			device.DisconnectedSince = time.Now()
+		}
 
 		if sessionActive {
 			if activeSession == nil {
@@ -459,6 +488,7 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 					UserID:          userID,
 					Mode:            modeValue,
 					LastLclValue:    lastSessionLog,
+					StartLclValue:   lastSessionLog,
 					Readings:        []ChargerSessionReading{},
 				}
 
@@ -510,16 +540,38 @@ func (conn *WebSocketConnection) processChargerSingleBlock(device *Device, respo
 		} else {
 			// No session active - vehicle disconnected and no power
 			if activeSession != nil {
-				// Session ended - check if Lcl changed
-				lclChanged := lastSessionLog != activeSession.LastLclValue && lastSessionLog != ""
+				// Session ended. Finalize when Lcl shows an end event (duration or
+				// energy) belonging to this session — also if that event already
+				// arrived while the car was still reported connected, which the
+				// old "Lcl changed since last poll" check missed and left the
+				// session hanging. If no end event ever comes (Miniserver restart,
+				// older Config), finalize from the Mr counter after 30 minutes.
+				endEv, endOK := ParseLcl(lastSessionLog)
+				// The end event must be newer than what Lcl showed when this
+				// session started (else it is the previous session's end).
+				lclEnded := endOK && endEv.IsEnd && lastSessionLog != activeSession.StartLclValue &&
+					!endEv.Time.Before(activeSession.StartTime.Add(-15*time.Minute))
+				timedOut := !lclEnded && !device.DisconnectedSince.IsZero() && time.Since(device.DisconnectedSince) > 30*time.Minute
+				lclChanged := lclEnded || timedOut
 
 				if lclChanged {
 					log.Printf("   ÃƒÂ°Ã…Â¸Ã‚ÂÃ‚Â [%s] SESSION ENDED - Lcl changed, processing completed session", device.Name)
 
 					// Parse Lcl to get exact session details
 					parsedUserID, parsedEnergy, parsedEndTime, parsedDuration := ParseLclString(lastSessionLog)
+					if timedOut {
+						// No end event: end = when the car was first seen
+						// disconnected; energy comes from the Mr readings.
+						parsedUserID, parsedEnergy = "", 0
+						parsedEndTime = device.DisconnectedSince
+						parsedDuration = parsedEndTime.Sub(activeSession.StartTime).Seconds()
+						log.Printf("   [%s] No Lcl end event after 30 min - closing session from Mr counter", device.Name)
+					}
 					if parsedUserID == "" {
 						parsedUserID = activeSession.UserID
+					}
+					if parsedUserID == "" {
+						parsedUserID = lclUserFor(activeSession.StartTime)
 					}
 					if parsedUserID == "" {
 						parsedUserID = "unknown"
@@ -736,45 +788,6 @@ func (conn *WebSocketConnection) saveChargerDataLegacy(device *Device, collectio
 		`, fmt.Sprintf("ÃƒÂ°Ã…Â¸Ã…Â¸Ã‚Â¢ Last update: %s", time.Now().Format("2006-01-02 15:04:05")),
 			device.ID)
 	}
-}
-
-// ParseLclString parses the Lcl (Last Session Log) string to extract session details
-func ParseLclString(lcl string) (userID string, energy float64, endTime time.Time, duration float64) {
-	if lcl == "" {
-		return "", 0, time.Time{}, 0
-	}
-
-	// Parse end time from beginning (format: "2025-11-29 12:17:16")
-	if len(lcl) >= 19 {
-		timeStr := lcl[:19]
-		if t, err := time.ParseInLocation("2006-01-02 15:04:05", timeStr, time.Local); err == nil {
-			endTime = t
-		}
-	}
-
-	// Parse user ID (format: "user:1")
-	userRegex := regexp.MustCompile(`user:(\d+)`)
-	if matches := userRegex.FindStringSubmatch(lcl); len(matches) > 1 {
-		userID = matches[1]
-	}
-
-	// Parse energy (format: "Geladene Energie:37.2kWh")
-	energyRegex := regexp.MustCompile(`Geladene Energie:(\d+\.?\d*)kWh`)
-	if matches := energyRegex.FindStringSubmatch(lcl); len(matches) > 1 {
-		if e, err := strconv.ParseFloat(matches[1], 64); err == nil {
-			energy = e
-		}
-	}
-
-	// Parse duration (format: "Dauer:65357 s")
-	durationRegex := regexp.MustCompile(`Dauer:(\d+)\s*s`)
-	if matches := durationRegex.FindStringSubmatch(lcl); len(matches) > 1 {
-		if d, err := strconv.ParseFloat(matches[1], 64); err == nil {
-			duration = d
-		}
-	}
-
-	return userID, energy, endTime, duration
 }
 
 // GetModeDescription returns a human-readable description of the charging mode

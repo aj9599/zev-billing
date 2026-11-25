@@ -131,6 +131,7 @@ type ActiveChargerSession struct {
 	Mode            string
 	Readings        []ChargerSessionReading // Buffered readings during session
 	LastLclValue    string                  // Track Lcl changes to detect session end
+	StartLclValue   string                  // Lcl at session start (in memory; empty after restart)
 }
 
 // CompletedChargerSession holds all data needed to write a completed session to database
@@ -262,6 +263,12 @@ type Device struct {
 	LastReadingExport float64
 	LastUpdate        time.Time
 	ReadingGaps       int
+
+	// FOR CHARGERS - Lcl tracking (in memory)
+	LastLclRaw        string    // last Lcl value seen, to log each event once
+	LclUserID         string    // user from the latest "user set" Lcl event
+	LclUserTime       time.Time // when that event happened
+	DisconnectedSince time.Time // first poll with Vc=0 while a session is open
 
 	// Live power data (instantaneous, in Watts)
 	// For meters with meter_block mode, this comes from Pf (Power Flow) output

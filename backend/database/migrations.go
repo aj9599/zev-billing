@@ -704,6 +704,11 @@ func RunMigrations(db *sql.DB) error {
 		return err
 	}
 
+	// Loxone Wallbox Lcl event log (audit trail for charger sessions).
+	if err := runVersioned(db, "0022_charger_lcl_events", createChargerLclEvents); err != nil {
+		return err
+	}
+
 	// One-time cleanup of historical per-interval consumption spikes left by
 	// meters added with a large existing counter (before the spike cap existed).
 	if err := clampHistoricalConsumptionSpikes(db); err != nil {
@@ -1850,4 +1855,27 @@ func migrateZaptecConfigs(db *sql.DB) error {
 	}
 
 	return nil
+}
+
+// createChargerLclEvents creates the table that keeps every Loxone Wallbox
+// Lcl ("Last Charge Log") event once, so sessions can be checked against the
+// Wallbox's own log.
+func createChargerLclEvents(db *sql.DB) error {
+	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS charger_lcl_events (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			charger_id INTEGER NOT NULL,
+			event_time TEXT NOT NULL,
+			event TEXT,
+			user_id TEXT,
+			energy_kwh REAL,
+			duration_sec REAL,
+			is_end INTEGER NOT NULL DEFAULT 0,
+			raw TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(charger_id, raw)
+		);
+		CREATE INDEX IF NOT EXISTS idx_charger_lcl_events_charger_time ON charger_lcl_events(charger_id, event_time);
+	`)
+	return err
 }
