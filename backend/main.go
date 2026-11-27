@@ -182,6 +182,7 @@ func main() {
 	// Webhook routes for receiving data from devices (NO AUTHENTICATION)
 	r.HandleFunc("/webhook/meter", webhookHandler.ReceiveMeterReading).Methods("GET", "POST")
 	r.HandleFunc("/webhook/charger", webhookHandler.ReceiveChargerData).Methods("GET", "POST")
+	r.HandleFunc("/webhook/charger-release", webhookHandler.ChargerRelease).Methods("GET", "POST")
 
 	// Tenant portal: public login (access code → tenant JWT), then a tenant-only
 	// subrouter. Registered BEFORE the /api admin subrouter so portal requests
@@ -450,6 +451,7 @@ func main() {
 	log.Println("Webhook endpoints available:")
 	log.Println("  - POST/GET /webhook/meter?meter_id=X")
 	log.Println("  - POST/GET /webhook/charger?charger_id=X")
+	log.Println("  - GET /webhook/charger-release?charger_id=X&key=K[&user=1|2|9]")
 	log.Printf("Invoice PDFs will be served from: %s", invoicesDir)
 	log.Println("Default credentials: admin / admin123")
 	log.Println("IMPORTANT: Change default password after first login!")

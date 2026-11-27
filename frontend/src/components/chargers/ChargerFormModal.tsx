@@ -843,6 +843,89 @@ export default function ChargerFormModal({
                       style={inputStyle(isMobile, true)}
                     />
                   </div>
+
+                  {/* Release gate: Loxone (or Solhus) releases each charge for a user */}
+                  <div style={{
+                    marginTop: '8px',
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    border: '1px solid #e5e7eb',
+                    backgroundColor: '#f9fafb'
+                  }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={!!connectionConfig.zaptec_release_required}
+                        onChange={(e) => onConnectionConfigChange({
+                          ...connectionConfig,
+                          zaptec_release_required: e.target.checked,
+                          zaptec_release_key: connectionConfig.zaptec_release_key ||
+                            (e.target.checked ? Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10) : '')
+                        })}
+                      />
+                      {t('chargers.release.required')}
+                    </label>
+                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '6px 0 0 0' }}>
+                      {t('chargers.release.requiredHelp')}
+                    </p>
+
+                    {connectionConfig.zaptec_release_required && (
+                      <div style={{ marginTop: '12px', display: 'grid', gap: '12px' }}>
+                        <div>
+                          <label style={labelStyle}>{t('chargers.release.token1')} *</label>
+                          <input
+                            type="text"
+                            value={connectionConfig.zaptec_release_token_1 || ''}
+                            onChange={(e) => onConnectionConfigChange({ ...connectionConfig, zaptec_release_token_1: e.target.value })}
+                            placeholder="lox-privat"
+                            onFocus={focusHandler}
+                            onBlur={blurHandler}
+                            style={inputStyle(isMobile, true)}
+                          />
+                        </div>
+                        <div>
+                          <label style={labelStyle}>{t('chargers.release.token2')}</label>
+                          <input
+                            type="text"
+                            value={connectionConfig.zaptec_release_token_2 || ''}
+                            onChange={(e) => onConnectionConfigChange({ ...connectionConfig, zaptec_release_token_2: e.target.value })}
+                            placeholder="lox-geschaeft"
+                            onFocus={focusHandler}
+                            onBlur={blurHandler}
+                            style={inputStyle(isMobile, true)}
+                          />
+                        </div>
+                        <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>{t('chargers.release.tokenHelp')}</p>
+                        <div>
+                          <label style={labelStyle}>{t('chargers.release.reminder')}</label>
+                          <input
+                            type="number"
+                            min={5}
+                            value={connectionConfig.zaptec_release_reminder_min || 30}
+                            onChange={(e) => onConnectionConfigChange({ ...connectionConfig, zaptec_release_reminder_min: parseInt(e.target.value) || 30 })}
+                            onFocus={focusHandler}
+                            onBlur={blurHandler}
+                            style={inputStyle(isMobile, true)}
+                          />
+                        </div>
+                        <div>
+                          <label style={labelStyle}>{t('chargers.release.key')}</label>
+                          <input
+                            type="text"
+                            value={connectionConfig.zaptec_release_key || ''}
+                            onChange={(e) => onConnectionConfigChange({ ...connectionConfig, zaptec_release_key: e.target.value })}
+                            onFocus={focusHandler}
+                            onBlur={blurHandler}
+                            style={inputStyle(isMobile, true)}
+                          />
+                        </div>
+                        <p style={{ fontSize: '12px', color: '#6b7280', margin: 0, wordBreak: 'break-all' }}>
+                          {t('chargers.release.urlHelp')}<br />
+                          <code>/webhook/charger-release?charger_id=ID&amp;key={connectionConfig.zaptec_release_key || 'KEY'}&amp;user=1|2|9</code>
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
 

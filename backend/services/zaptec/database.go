@@ -116,11 +116,12 @@ func (dh *DatabaseHandler) WriteSessionToDatabase(session *CompletedSession) ([]
 	defer stmt.Close()
 
 	insertCount := 0
+	spanStart, spanEnd := sessionSpan(session)
 	for _, b := range dense {
 		key := b.Timestamp.Format("2006-01-02 15:04:05-07:00")
 		result, err := stmt.Exec(
 			session.ChargerID,
-			session.UserID,
+			dh.ResolveSessionUser(session.ChargerID, b.Timestamp, spanStart, spanEnd, session.UserID),
 			key,
 			b.Energy_kWh,
 			"1", // mode = normal
@@ -199,7 +200,8 @@ func (dh *DatabaseHandler) WriteSessionBoundaries(session *CompletedSession) err
 	wrote := 0
 	for _, r := range []*SessionMeterReading{begin, end} {
 		key := r.Timestamp.Format("2006-01-02 15:04:05-07:00")
-		if _, err := stmt.Exec(session.ChargerID, session.UserID, key, r.Energy_kWh, "1", "3"); err != nil {
+		userID := dh.ResolveSessionUser(session.ChargerID, r.Timestamp, begin.Timestamp, end.Timestamp, session.UserID)
+		if _, err := stmt.Exec(session.ChargerID, userID, key, r.Energy_kWh, "1", "3"); err != nil {
 			log.Printf("WARNING: Failed to insert OCMF boundary at %s: %v", key, err)
 			continue
 		}
@@ -328,7 +330,7 @@ func (dh *DatabaseHandler) WriteSessionFallback(history *ChargeHistory, chargerI
 		return fmt.Errorf("invalid timestamps")
 	}
 	
-	userID := history.UserID
+	userID := dh.ResolveSessionUser(chargerID, endTime, startTime, endTime, history.UserID)
 	if userID == "" {
 		userID = "unknown"
 	}
@@ -410,6 +412,10 @@ func (dh *DatabaseHandler) WriteIdleReading(chargerID int, userID string, interv
 // GetGapUserID determines the user_id for gap filling based on OCMF session state
 func (dh *DatabaseHandler) GetGapUserID(chargerID int, activeSessionID string) string {
 	if activeSessionID != "" {
+		// A user released via Loxone / the release webhook wins.
+		if tok := dh.ReleaseTokenAt(chargerID, time.Now()); tok != "" {
+			return tok
+		}
 		// Inside active session - get user from most recent session data
 		var gapUserID string
 		err := dh.db.QueryRow(`

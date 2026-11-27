@@ -276,3 +276,29 @@ func (ac *APIClient) GetAllAvailableChargers(token string) ([]map[string]interfa
 	
 	return chargers, nil
 }
+// Zaptec charger command IDs (POST /api/chargers/{id}/sendCommand/{commandId}).
+const (
+	CommandStopChargingFinal = 506 // stop / pause charging
+	CommandResumeCharging    = 507
+)
+
+// SendCommand sends a charger command (e.g. pause/resume).
+func (ac *APIClient) SendCommand(token, chargerID string, commandID int) error {
+	cmdURL := fmt.Sprintf("%s/api/chargers/%s/sendCommand/%d", ac.apiBaseURL, chargerID, commandID)
+	req, err := http.NewRequest("POST", cmdURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	req.Header.Set("Accept", "application/json")
+	resp, err := ac.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("command %d failed with status %d: %s", commandID, resp.StatusCode, string(body))
+	}
+	return nil
+}

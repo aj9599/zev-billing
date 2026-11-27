@@ -42,6 +42,12 @@ export interface ChargerConnectionConfig {
   zaptec_password?: string;
   zaptec_charger_id?: string;
   zaptec_installation_id?: string;
+  // Release gate (Loxone decides who charges)
+  zaptec_release_required?: boolean;
+  zaptec_release_key?: string;
+  zaptec_release_token_1?: string;
+  zaptec_release_token_2?: string;
+  zaptec_release_reminder_min?: number;
   // E3/DC integrated wallbox (RSCP, read+write control)
   e3dc_protocol?: string;
   e3dc_host?: string;
@@ -104,6 +110,11 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
     zaptec_password: '',
     zaptec_charger_id: '',
     zaptec_installation_id: '',
+    zaptec_release_required: false,
+    zaptec_release_key: '',
+    zaptec_release_token_1: '',
+    zaptec_release_token_2: '',
+    zaptec_release_reminder_min: 30,
     e3dc_host: '',
     e3dc_port: 5033,
     e3dc_user: '',
@@ -180,7 +191,12 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
       zaptec_username: '',
       zaptec_password: '',
       zaptec_charger_id: '',
-      zaptec_installation_id: ''
+      zaptec_installation_id: '',
+      zaptec_release_required: false,
+      zaptec_release_key: '',
+      zaptec_release_token_1: '',
+      zaptec_release_token_2: '',
+      zaptec_release_reminder_min: 30
     });
   }, []);
 
@@ -265,6 +281,11 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
         zaptec_password: config.zaptec_password || '',
         zaptec_charger_id: config.zaptec_charger_id || '',
         zaptec_installation_id: config.zaptec_installation_id || '',
+        zaptec_release_required: !!config.zaptec_release_required,
+        zaptec_release_key: config.zaptec_release_key || '',
+        zaptec_release_token_1: config.zaptec_release_token_1 || '',
+        zaptec_release_token_2: config.zaptec_release_token_2 || '',
+        zaptec_release_reminder_min: config.zaptec_release_reminder_min || 30,
         e3dc_host: config.e3dc_host || '',
         e3dc_port: config.e3dc_port || 5033,
         e3dc_user: config.e3dc_user || '',
@@ -371,7 +392,12 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
         zaptec_username: connectionConfig.zaptec_username,
         zaptec_password: connectionConfig.zaptec_password,
         zaptec_charger_id: connectionConfig.zaptec_charger_id,
-        zaptec_installation_id: connectionConfig.zaptec_installation_id
+        zaptec_installation_id: connectionConfig.zaptec_installation_id,
+        zaptec_release_required: !!connectionConfig.zaptec_release_required,
+        zaptec_release_key: connectionConfig.zaptec_release_key || '',
+        zaptec_release_token_1: connectionConfig.zaptec_release_token_1 || '',
+        zaptec_release_token_2: connectionConfig.zaptec_release_token_2 || '',
+        zaptec_release_reminder_min: Number(connectionConfig.zaptec_release_reminder_min) || 30
       };
     } else if (formData.connection_type === 'e3dc_api') {
       // The integrated E3/DC wallbox requires RSCP (the only protocol that can

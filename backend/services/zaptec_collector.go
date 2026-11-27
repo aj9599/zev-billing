@@ -287,6 +287,9 @@ func (zc *ZaptecCollector) pollCharger(chargerID int, chargerName, configJSON st
 	zc.mu.RUnlock()
 	
 	currentState := chargerDetails.OperatingMode
+
+	// Release gate (Loxone decides who charges: private / business)
+	zc.applyReleaseGate(chargerID, chargerName, config, token, chargerDetails)
 	
 	// Get state values for additional info
 	stateData, _ := zc.apiClient.GetChargerStateValues(token, config.ChargerID)

@@ -1907,6 +1907,14 @@ export const de: Translations = {
   'chargers.zaptecPassword': 'Zaptec Passwort',
   'chargers.zaptecChargerId': 'Ladestations-ID',
   'chargers.zaptecInstallationId': 'Installations-ID (Optional)',
+  'chargers.release.required': 'Freigabe erforderlich (z.B. über Loxone)',
+  'chargers.release.requiredHelp': 'Nach dem Anstecken bleibt das Laden pausiert, bis es für einen Benutzer freigegeben wird. Danach regelt das Energiemanagement wie gewohnt.',
+  'chargers.release.token1': 'Benutzer 1 (z.B. Privat) – RFID/Kennung',
+  'chargers.release.token2': 'Benutzer 2 (z.B. Geschäftlich) – RFID/Kennung',
+  'chargers.release.tokenHelp': 'Die Kennung muss bei einem Benutzer als RFID/Karte eingetragen sein – darauf wird die Ladung verrechnet.',
+  'chargers.release.reminder': 'Erinnerung alle … Minuten',
+  'chargers.release.key': 'Schlüssel für die Freigabe-URL',
+  'chargers.release.urlHelp': 'Status (ohne user) und Freigabe für Loxone: user=1 / user=2 gibt frei, user=9 quittiert die Erinnerung.',
 
   // Zaptec Verbindungsstatus
   'chargers.zaptecConnected': 'Zaptec Verbunden',

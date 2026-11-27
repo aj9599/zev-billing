@@ -174,6 +174,25 @@ type ConnectionConfig struct {
 	Password       string `json:"zaptec_password"`
 	ChargerID      string `json:"zaptec_charger_id"`
 	InstallationID string `json:"zaptec_installation_id,omitempty"`
+
+	// Release gate: charging stays paused after plug-in until it is released
+	// for a user via /webhook/charger-release (e.g. from Loxone).
+	ReleaseRequired bool   `json:"zaptec_release_required,omitempty"`
+	ReleaseKey      string `json:"zaptec_release_key,omitempty"`
+	ReleaseToken1   string `json:"zaptec_release_token_1,omitempty"` // user value 1 (e.g. private)
+	ReleaseToken2   string `json:"zaptec_release_token_2,omitempty"` // user value 2 (e.g. business)
+	ReminderMinutes int    `json:"zaptec_release_reminder_min,omitempty"`
+}
+
+// ReleaseTokenFor maps a release user value (1, 2) to the configured token.
+func (c ConnectionConfig) ReleaseTokenFor(value int) string {
+	switch value {
+	case 1:
+		return c.ReleaseToken1
+	case 2:
+		return c.ReleaseToken2
+	}
+	return ""
 }
 
 // ========== LEGACY COMPATIBILITY ==========

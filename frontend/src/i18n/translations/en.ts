@@ -1906,6 +1906,14 @@ export const en: Translations = {
   'chargers.zaptecPassword': 'Zaptec Password',
   'chargers.zaptecChargerId': 'Charger ID',
   'chargers.zaptecInstallationId': 'Installation ID (Optional)',
+  'chargers.release.required': 'Release required (e.g. via Loxone)',
+  'chargers.release.requiredHelp': 'After plug-in, charging stays paused until it is released for a user. The energy manager then regulates as usual.',
+  'chargers.release.token1': 'User 1 (e.g. private) – RFID/token',
+  'chargers.release.token2': 'User 2 (e.g. business) – RFID/token',
+  'chargers.release.tokenHelp': 'The token must be set as an RFID/card on a user – the charge is billed to that user.',
+  'chargers.release.reminder': 'Reminder every … minutes',
+  'chargers.release.key': 'Key for the release URL',
+  'chargers.release.urlHelp': 'Status (without user) and release for Loxone: user=1 / user=2 releases, user=9 acknowledges the reminder.',
 
   // Zaptec Connection Status
   'chargers.zaptecConnected': 'Zaptec Connected',

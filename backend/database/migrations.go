@@ -709,6 +709,11 @@ func RunMigrations(db *sql.DB) error {
 		return err
 	}
 
+	// Charger release gate (Loxone/Solhus decides who charges: private/business).
+	if err := runVersioned(db, "0023_charger_release", createChargerRelease); err != nil {
+		return err
+	}
+
 	// One-time cleanup of historical per-interval consumption spikes left by
 	// meters added with a large existing counter (before the spike cap existed).
 	if err := clampHistoricalConsumptionSpikes(db); err != nil {
@@ -1876,6 +1881,43 @@ func createChargerLclEvents(db *sql.DB) error {
 			UNIQUE(charger_id, raw)
 		);
 		CREATE INDEX IF NOT EXISTS idx_charger_lcl_events_charger_time ON charger_lcl_events(charger_id, event_time);
+	`)
+	return err
+}
+
+// createChargerRelease adds the tables for the charger release gate: a charger
+// with "release required" stays paused after plug-in until Loxone (or another
+// client) releases it for a user. charger_release_state holds the live gate
+// per charger, charger_release_log the user assignment over time (UTC
+// RFC3339 timestamps) so billing rows can be attributed to the chosen user.
+func createChargerRelease(db *sql.DB) error {
+	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS charger_release_state (
+			charger_id INTEGER PRIMARY KEY,
+			connected INTEGER NOT NULL DEFAULT 0,
+			waiting INTEGER NOT NULL DEFAULT 0,
+			released INTEGER NOT NULL DEFAULT 0,
+			user_value INTEGER NOT NULL DEFAULT 0,
+			token TEXT NOT NULL DEFAULT '',
+			acked INTEGER NOT NULL DEFAULT 0,
+			resume_pending INTEGER NOT NULL DEFAULT 0,
+			waiting_since TEXT NOT NULL DEFAULT '',
+			last_reminder TEXT NOT NULL DEFAULT '',
+			reminder_seq INTEGER NOT NULL DEFAULT 0,
+			last_pause_cmd TEXT NOT NULL DEFAULT '',
+			operating_mode INTEGER NOT NULL DEFAULT 0,
+			updated_at TEXT NOT NULL DEFAULT ''
+		);
+		CREATE TABLE IF NOT EXISTS charger_release_log (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			charger_id INTEGER NOT NULL,
+			user_value INTEGER NOT NULL,
+			token TEXT NOT NULL,
+			source TEXT NOT NULL DEFAULT '',
+			started_at TEXT NOT NULL,
+			ended_at TEXT
+		);
+		CREATE INDEX IF NOT EXISTS idx_charger_release_log_charger ON charger_release_log(charger_id, started_at);
 	`)
 	return err
 }

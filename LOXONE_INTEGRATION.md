@@ -326,3 +326,34 @@ If you continue to have issues:
 3. Test connectivity with curl/netcat
 4. Ensure meter is marked as "Active" in ZEV system
 5. Wait for at least one 15-minute collection cycle (HTTP)
+## Ladefreigabe über Loxone (Zaptec)
+
+Für Zaptec-Ladestationen kann ZEV-Billing das Laden sperren, bis Loxone es für einen Benutzer freigibt
+(z.B. Privat / Geschäftlich). Das Energiemanagement (PVision/Solhus) regelt danach wie gewohnt.
+
+**Einrichten in ZEV-Billing**
+1. Zwei Benutzer anlegen (z.B. „Privat“, „Geschäftlich“) und je eine Kennung als RFID/Karte eintragen, z.B. `lox-privat` und `lox-geschaeft`.
+2. Ladestation bearbeiten → *Freigabe erforderlich* einschalten, Benutzer 1/2 = diese Kennungen, Erinnerung (Standard 30 min). Der Schlüssel wird automatisch erzeugt.
+
+**Ablauf**
+- Auto angesteckt → Laden wird pausiert (Zaptec-Befehl 506), `waiting=1`.
+- Sofort und danach alle N Minuten `remind=1` (für 90 s), bis freigegeben oder quittiert.
+- `user=1|2` → Benutzer wird gesetzt, Laden fortgesetzt (507). Wechsel während dem Laden ist möglich.
+- `user=9` → Erinnerung quittiert (bleibt gesperrt).
+- Abstecken → Zuordnung beendet, wieder gesperrt.
+
+**Endpunkt** (ohne Login, nur mit Schlüssel – nur im lokalen Netz verwenden)
+
+```
+GET http://<zev-billing>/webhook/charger-release?charger_id=<ID>&key=<KEY>            → Status (JSON)
+GET http://<zev-billing>/webhook/charger-release?charger_id=<ID>&key=<KEY>&user=<v>   → v=1/2 freigeben, 9 quittieren, 0 nichts
+```
+
+Antwort z.B. `{"charger_id":1,"enabled":1,"connected":1,"waiting":1,"remind":0,"reminder_seq":2,"released":0,"user":0,...}`
+
+**Loxone**
+- Virtueller HTTP-Eingang (URL ohne `user`, Abfragezyklus 10 s) mit Befehlen
+  `\i"waiting":\i\v` (Eingang 1: Auto wartet auf Freigabe) und `\i"remind":\i\v` (Eingang 2: Erinnerung, Flanke → Push).
+- Virtueller Ausgang mit Befehl bei EIN `/webhook/charger-release?charger_id=<ID>&key=<KEY>&user=<v>` (Ausgang 1: Benutzer, analog).
+
+Ladevorgänge werden über die 15-Minuten-Werte auf die freigegebene Kennung gebucht (vor RFID aus den OCMF-Daten).
