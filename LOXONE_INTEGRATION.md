@@ -342,11 +342,11 @@ Für Zaptec-Ladestationen kann ZEV-Billing das Laden sperren, bis Loxone es für
 - `user=9` → Erinnerung quittiert (bleibt gesperrt).
 - Abstecken → Zuordnung beendet, wieder gesperrt.
 
-**Endpunkt** (ohne Login, nur mit Schlüssel – nur im lokalen Netz verwenden)
+**Endpunkt** (ohne Login, nur mit Schlüssel – nur im lokalen Netz verwenden). Über nginx (Port der Weboberfläche) mit `/api/webhook/...`, direkt am Backend auch `/webhook/...`.
 
 ```
-GET http://<zev-billing>/webhook/charger-release?charger_id=<ID>&key=<KEY>            → Status (JSON)
-GET http://<zev-billing>/webhook/charger-release?charger_id=<ID>&key=<KEY>&user=<v>   → v=1/2 freigeben, 9 quittieren, 0 nichts
+GET http://<zev-billing>/api/webhook/charger-release?charger_id=<ID>&key=<KEY>            → Status (JSON)
+GET http://<zev-billing>/api/webhook/charger-release?charger_id=<ID>&key=<KEY>&user=<v>   → v=1/2 freigeben, 9 quittieren, 0 nichts
 ```
 
 Antwort z.B. `{"charger_id":1,"enabled":1,"connected":1,"waiting":1,"remind":0,"reminder_seq":2,"released":0,"user":0,...}`

@@ -945,7 +945,7 @@ export default function ChargerFormModal({
                         </div>
                         <p style={{ fontSize: '12px', color: '#6b7280', margin: 0, wordBreak: 'break-all' }}>
                           {t('chargers.release.urlHelp')}<br />
-                          <code>{window.location.origin}/webhook/charger-release?charger_id={editingCharger?.id ?? 'ID'}&amp;key={connectionConfig.zaptec_release_key || 'KEY'}</code>
+                          <code>{window.location.origin}/api/webhook/charger-release?charger_id={editingCharger?.id ?? 'ID'}&amp;key={connectionConfig.zaptec_release_key || 'KEY'}</code>
                         </p>
                       </div>
                     )}

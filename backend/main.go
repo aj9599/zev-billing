@@ -183,6 +183,9 @@ func main() {
 	r.HandleFunc("/webhook/meter", webhookHandler.ReceiveMeterReading).Methods("GET", "POST")
 	r.HandleFunc("/webhook/charger", webhookHandler.ReceiveChargerData).Methods("GET", "POST")
 	r.HandleFunc("/webhook/charger-release", webhookHandler.ChargerRelease).Methods("GET", "POST")
+	// Same endpoint under /api/ so it is reachable through nginx (which only proxies /api/).
+	// Registered on the root router before the protected /api subrouter: key-protected, no JWT.
+	r.HandleFunc("/api/webhook/charger-release", webhookHandler.ChargerRelease).Methods("GET", "POST")
 
 	// Tenant portal: public login (access code → tenant JWT), then a tenant-only
 	// subrouter. Registered BEFORE the /api admin subrouter so portal requests
