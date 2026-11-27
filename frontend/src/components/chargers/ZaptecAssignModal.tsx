@@ -159,6 +159,9 @@ export default function ZaptecAssignModal({ charger, onClose, t }: Props) {
               {options.map((o) => <option key={o.token} value={o.token}>{o.label}</option>)}
             </select>
           </label>
+          {options.length === 0 && (
+            <div style={{ fontSize: 12, color: '#b45309', marginTop: -6 }}>{t('chargers.assign.noCards')}</div>
+          )}
 
           <button onClick={doPreview} disabled={busy || !from || !to} style={btn('#eef2ff', '#4338ca')}>
             <Search size={15} /> {t('chargers.assign.preview')}

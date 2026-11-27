@@ -1922,6 +1922,7 @@ export const en: Translations = {
   'chargers.assign.user': 'User / card',
   'chargers.assign.chooseUser': 'Choose user …',
   'chargers.assign.preview': 'Preview',
+  'chargers.assign.noCards': 'No user in this building has an RFID card/token. Add the token under the user\'s RFID cards (e.g. lox-geschaeft) and it will show up here.',
   'chargers.assign.nothing': 'No charges without a card in this period.',
   'chargers.assign.found': '{sessions} charge(s) without a card, approx. {kwh} kWh',
   'chargers.assign.span': 'First {first} – last {last}',

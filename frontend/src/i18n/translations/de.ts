@@ -1923,6 +1923,7 @@ export const de: Translations = {
   'chargers.assign.user': 'Benutzer / Karte',
   'chargers.assign.chooseUser': 'Benutzer wählen …',
   'chargers.assign.preview': 'Vorschau',
+  'chargers.assign.noCards': 'Kein Benutzer in diesem Gebäude hat eine RFID-Karte/Kennung. Trag beim Benutzer unter «RFID-Karten» die Kennung ein (z.B. lox-geschaeft), dann erscheint er hier.',
   'chargers.assign.nothing': 'In diesem Zeitraum gibt es keine Ladungen ohne Kennung.',
   'chargers.assign.found': '{sessions} Ladung(en) ohne Kennung, ca. {kwh} kWh',
   'chargers.assign.span': 'Erste {first} – letzte {last}',
