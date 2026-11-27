@@ -531,6 +531,34 @@ class ApiClient {
     });
   }
 
+  // Charges recorded without a card (e.g. before the Loxone release existed):
+  // preview a date range, assign it to a card, list / undo past assignments.
+  async previewUnassignedCharges(chargerId: number, from: string, to: string): Promise<{
+    from: string; to: string; rows: number; sessions: number; kwh: number; first?: string; last?: string;
+  }> {
+    return this.request(`/chargers/${chargerId}/unassigned?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+  }
+
+  async assignUnassignedCharges(chargerId: number, from: string, to: string, token: string): Promise<{
+    status: string; batch_id: number; rows: number; sessions: number; kwh: number;
+  }> {
+    return this.request(`/chargers/${chargerId}/unassigned/assign`, {
+      method: 'POST',
+      body: JSON.stringify({ from, to, token }),
+    });
+  }
+
+  async getAssignBatches(chargerId: number): Promise<Array<{
+    id: number; token: string; from: string; to: string; rows: number; kwh: number; sessions: number;
+    created_at: string; undone_at: string;
+  }>> {
+    return this.request(`/chargers/${chargerId}/assign-batches`);
+  }
+
+  async undoAssignBatch(chargerId: number, batchId: number): Promise<{ status: string; rows: number }> {
+    return this.request(`/chargers/${chargerId}/assign-batches/${batchId}/undo`, { method: 'POST' });
+  }
+
   // Assign (or clear) the RFID/user for one E3/DC history session. Also updates
   // the underlying 15-min rows so billing attributes the energy. rfid='' clears.
   async assignE3dcSession(chargerId: number, sessionId: number, rfid: string): Promise<{

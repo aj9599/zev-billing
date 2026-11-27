@@ -714,6 +714,11 @@ func RunMigrations(db *sql.DB) error {
 		return err
 	}
 
+	// Manual assignment of charges without a card (with undo).
+	if err := runVersioned(db, "0024_charger_assign_batches", createChargerAssignBatches); err != nil {
+		return err
+	}
+
 	// One-time cleanup of historical per-interval consumption spikes left by
 	// meters added with a large existing counter (before the spike cap existed).
 	if err := clampHistoricalConsumptionSpikes(db); err != nil {
@@ -1918,6 +1923,33 @@ func createChargerRelease(db *sql.DB) error {
 			ended_at TEXT
 		);
 		CREATE INDEX IF NOT EXISTS idx_charger_release_log_charger ON charger_release_log(charger_id, started_at);
+	`)
+	return err
+}
+
+// createChargerAssignBatches records manual "assign charges without a card"
+// actions so each one can be undone exactly (the affected charger_sessions
+// row ids are kept per batch).
+func createChargerAssignBatches(db *sql.DB) error {
+	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS charger_assign_batches (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			charger_id INTEGER NOT NULL,
+			token TEXT NOT NULL,
+			from_date TEXT NOT NULL,
+			to_date TEXT NOT NULL,
+			row_count INTEGER NOT NULL DEFAULT 0,
+			kwh REAL NOT NULL DEFAULT 0,
+			sessions INTEGER NOT NULL DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			undone_at DATETIME
+		);
+		CREATE TABLE IF NOT EXISTS charger_assign_rows (
+			batch_id INTEGER NOT NULL,
+			session_row_id INTEGER NOT NULL,
+			PRIMARY KEY (batch_id, session_row_id)
+		);
+		CREATE INDEX IF NOT EXISTS idx_charger_assign_batches_charger ON charger_assign_batches(charger_id, created_at);
 	`)
 	return err
 }

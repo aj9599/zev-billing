@@ -18,6 +18,7 @@ import DeleteConfirmationModal from './chargers/DeleteConfirmationModal';
 import ChargerFormModal from './chargers/ChargerFormModal';
 import ZaptecHistorySyncModal from './chargers/ZaptecHistorySyncModal';
 import E3dcHistoryModal from './chargers/E3dcHistoryModal';
+import ZaptecAssignModal from './chargers/ZaptecAssignModal';
 import { useChargerStatus } from './chargers/hooks/useChargerStatus';
 import { useChargerDeletion } from './chargers/hooks/useChargerDeletion';
 import { useChargerForm } from './chargers/hooks/useChargerForm';
@@ -629,7 +630,15 @@ export default function Chargers() {
         />
       )}
 
-      {historyCharger && (
+      {historyCharger && historyCharger.connection_type === 'zaptec_api' && (
+        <ZaptecAssignModal
+          charger={historyCharger}
+          onClose={() => { setHistoryCharger(null); fetchStatusData(); }}
+          t={t}
+        />
+      )}
+
+      {historyCharger && historyCharger.connection_type !== 'zaptec_api' && (
         <E3dcHistoryModal
           charger={historyCharger}
           onClose={() => setHistoryCharger(null)}

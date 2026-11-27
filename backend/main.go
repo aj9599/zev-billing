@@ -288,6 +288,10 @@ func main() {
 	api.HandleFunc("/chargers/{id}/import-sessions", chargerHandler.ImportChargerSessionsFromCSV).Methods("POST")              // NEW: CSV Import
 	api.HandleFunc("/chargers/{id}/import-e3dc-csv", chargerHandler.ImportE3DCSessionsCSV).Methods("POST")                     // E3/DC session export backfill
 	api.HandleFunc("/chargers/{id}/sync-zaptec-history", chargerHandler.SyncZaptecHistory).Methods("POST")                     // NEW: Zaptec API range sync
+	api.HandleFunc("/chargers/{id}/unassigned", chargerHandler.PreviewUnassigned).Methods("GET")                               // Charges without a card: preview
+	api.HandleFunc("/chargers/{id}/unassigned/assign", chargerHandler.AssignUnassigned).Methods("POST")                       // ... assign to a card
+	api.HandleFunc("/chargers/{id}/assign-batches", chargerHandler.ListAssignBatches).Methods("GET")                          // ... list assignments
+	api.HandleFunc("/chargers/{id}/assign-batches/{batchId}/undo", chargerHandler.UndoAssignBatch).Methods("POST")            // ... undo one
 	api.HandleFunc("/chargers/{id}/sessions", chargerHandler.GetChargerSessions).Methods("GET")                                // NEW: Get sessions
 	api.HandleFunc("/chargers/{id}/sessions", chargerHandler.DeleteChargerSessions).Methods("DELETE")                          // NEW: Delete sessions
 	api.HandleFunc("/chargers/{id}/e3dc-session-history", chargerHandler.GetE3DCSessionHistory).Methods("GET")                 // E3/DC per-session history

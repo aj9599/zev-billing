@@ -834,6 +834,29 @@ func (zc *ZaptecCollector) GetConnectionStatus() map[string]interface{} {
 			}
 		}
 		
+		// Release gate (Loxone Privat/Geschäftlich): who is charging / waiting.
+		if rel, err := zaptec.LoadReleaseState(zc.db, id); err == nil && (config.ReleaseRequired || rel.Token != "") {
+			info := map[string]interface{}{
+				"enabled":   config.ReleaseRequired,
+				"connected": rel.Connected == 1,
+				"waiting":   rel.Waiting == 1,
+				"released":  rel.Released == 1,
+				"user":      rel.User,
+				"token":     rel.Token,
+			}
+			if rel.Token != "" {
+				var userName string
+				zc.db.QueryRow(`
+					SELECT TRIM(COALESCE(first_name,'') || ' ' || COALESCE(last_name,''))
+					FROM users
+					WHERE ',' || REPLACE(COALESCE(charger_ids,''), ' ', '') || ',' LIKE '%,' || ? || ',%'
+					LIMIT 1
+				`, rel.Token).Scan(&userName)
+				info["user_name"] = userName
+			}
+			status["release"] = info
+		}
+
 		if _, hasToken := zc.accessTokens[id]; hasToken {
 			status["token_expires"] = zc.tokenExpiries[id].Format("2006-01-02 15:04:05")
 		}

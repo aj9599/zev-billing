@@ -64,6 +64,16 @@ export interface ZaptecConnectionStatus {
     state_description?: string;
     token_expires?: string;
     live_session?: LiveSessionData;
+    // Release gate (Loxone Privat/Geschäftlich)
+    release?: {
+      enabled: boolean;
+      connected: boolean;
+      waiting: boolean;
+      released: boolean;
+      user: number;
+      token: string;
+      user_name?: string;
+    };
   };
 }
 

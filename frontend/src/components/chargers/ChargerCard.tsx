@@ -1,4 +1,4 @@
-import { Edit2, Trash2, Wifi, WifiOff, Battery, TrendingUp, Info, History, CreditCard, Sun, Zap } from 'lucide-react';
+import { Edit2, Trash2, Wifi, WifiOff, Battery, TrendingUp, Info, History, CreditCard, Sun, Zap, UserCheck, Lock } from 'lucide-react';
 import type { Charger } from '../../types';
 import type { LiveChargerData, LoxoneConnectionStatus, ZaptecConnectionStatus, GenericChargerConnectionStatus } from './hooks/useChargerStatus';
 import { getPreset } from '../chargerPresets';
@@ -139,6 +139,11 @@ export default function ChargerCard({
                 : isDisconnected ? t('chargers.status.noCarConnected')
                     : t('chargers.status.ready');
 
+    // Release gate (Loxone Privat/Geschäftlich) for Zaptec: who is charging / waiting.
+    const release = charger.connection_type === 'zaptec_api' ? zaptecStatus?.release : undefined;
+    const releaseUser = release?.released ? (release.user_name || release.token) : '';
+    const releaseWaiting = !!(release?.enabled && release?.waiting);
+
     // Last session energy for display
     const lastSessionEnergy = liveData?.last_session_energy;
     const displaySessionEnergy = sessionEnergy > 0 ? sessionEnergy : (lastSessionEnergy ?? 0);
@@ -216,6 +221,19 @@ export default function ChargerCard({
                                 onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'rgba(168,85,247,0.08)'; }}
                             >
                                 <History size={13} />
+                            </button>
+                        )}
+                        {charger.connection_type === 'zaptec_api' && onShowHistory && (
+                            <button onClick={onShowHistory} title={t('chargers.assign.title')} style={{
+                                width: '28px', height: '28px', borderRadius: '8px', border: 'none',
+                                backgroundColor: 'rgba(124,58,237,0.08)', color: '#7c3aed',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                cursor: 'pointer', transition: 'all 0.15s', flexShrink: 0
+                            }}
+                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(124,58,237,0.15)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'rgba(124,58,237,0.08)'; }}
+                            >
+                                <UserCheck size={13} />
                             </button>
                         )}
                         {charger.connection_type === 'e3dc_api' && onShowHistory && (
@@ -370,7 +388,33 @@ export default function ChargerCard({
                             </div>
                         )}
 
-                        {isAwaitingStart && sessionEnergy === 0 && !rfid && (
+                        {releaseUser && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', minWidth: 0 }}>
+                                <UserCheck size={13} color="#7c3aed" style={{ flexShrink: 0 }} />
+                                <span style={{ fontSize: '11px', color: '#7c3aed', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px', flexShrink: 0 }}>
+                                    {t('chargers.release.activeUser')}:
+                                </span>
+                                <span style={{
+                                    fontSize: '12px', fontWeight: '700', color: '#5b21b6',
+                                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                                }} title={release?.token}>
+                                    {releaseUser}
+                                </span>
+                            </div>
+                        )}
+
+                        {releaseWaiting && (
+                            <div style={{
+                                display: 'flex', alignItems: 'center', gap: '6px',
+                                padding: '6px 10px', backgroundColor: 'rgba(251,191,36,0.1)',
+                                borderRadius: '8px', border: '1px solid rgba(251,191,36,0.25)',
+                                fontSize: '11px', fontWeight: '600', color: '#d97706'
+                            }}>
+                                <Lock size={12} /> {t('chargers.release.waiting')}
+                            </div>
+                        )}
+
+                        {isAwaitingStart && sessionEnergy === 0 && !rfid && !release?.enabled && (
                             <div style={{
                                 padding: '6px 10px', backgroundColor: 'rgba(251,191,36,0.1)',
                                 borderRadius: '8px', border: '1px solid rgba(251,191,36,0.25)',
