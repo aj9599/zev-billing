@@ -1676,6 +1676,13 @@ export const de: Translations = {
   // Billing Method
   'chargers.billingMethod': 'Abrechnungsart',
   'chargers.billingModeBased': 'Lademodus (Solar / Priorität)',
+  'chargers.billingPVisionMode': 'Nach PVision-Lademodus',
+  'chargers.billingPVisionModeHint': 'Der Lademodus von PVision/Solhus bestimmt den Preis pro 15 Minuten: «Jetzt laden» = Prioritätspreis, «Nur Sonne» = Solarpreis, «Sonne + Akku» = Batteriepreis – unabhängig davon, woher der Strom tatsächlich kam. Braucht die Freigabe-URL (Schlüssel) in PVision.',
+  'chargers.pvisionFallback': 'Ohne PVision-Modus abrechnen als',
+  'chargers.pvisionFallbackHint': 'Für Zeiten ohne gemeldeten Modus (z.B. vor der Einrichtung oder wenn PVision nicht erreichbar war).',
+  'chargers.pvisionModeSolar': 'Nur Sonne (Solarpreis)',
+  'chargers.pvisionModeSoft': 'Sonne + Akku (Batteriepreis)',
+  'chargers.pvisionModeFull': 'Jetzt laden (Prioritätspreis)',
   'chargers.billingSolarSplit': 'Anteilige Solaraufteilung (wie ein Zähler)',
   'chargers.billingModeBasedHint': 'Die Energie wird nach dem gemeldeten Lademodus abgerechnet: Prioritätsladungen zum Prioritätspreis, alles andere zum Solarpreis.',
   'chargers.billingSolarSplitHint': 'Die Ladestation wird Teil des Gebäudeverbrauchs: Die Solarproduktion wird anhand des Verbrauchs auf alle Zähler und Ladestationen verteilt. Der Solaranteil wird zum Solar-Ladepreis abgerechnet, der Rest zum Netz-Ladepreis. Empfohlen für Zaptec (kein Lademodus).',

@@ -130,3 +130,30 @@ func ResetReleaseOnUnplug(db *sql.DB, st *ReleaseState, t time.Time) error {
 	st.Acked, st.ResumePending, st.WaitingSince, st.LastReminder, st.LastPauseCmd = 0, 0, "", "", ""
 	return nil
 }
+
+// PVisionModeFresh is how long a reported PVision mode stays valid.
+const PVisionModeFresh = 3 * time.Minute
+
+// ReportPVisionMode stores the charge mode the energy manager runs right now
+// (full / solar / soft / off) for this charger.
+func ReportPVisionMode(db *sql.DB, chargerID int, mode string) error {
+	now := ReleaseTime(time.Now())
+	_, err := db.Exec(`
+		INSERT INTO charger_release_state (charger_id, pv_mode, pv_mode_at, updated_at) VALUES (?, ?, ?, ?)
+		ON CONFLICT(charger_id) DO UPDATE SET pv_mode = excluded.pv_mode, pv_mode_at = excluded.pv_mode_at
+	`, chargerID, mode, now, now)
+	return err
+}
+
+// CurrentPVisionMode returns the last reported mode if it is fresh, else "".
+func CurrentPVisionMode(db *sql.DB, chargerID int) string {
+	var mode, at string
+	if err := db.QueryRow(`SELECT pv_mode, pv_mode_at FROM charger_release_state WHERE charger_id = ?`, chargerID).Scan(&mode, &at); err != nil {
+		return ""
+	}
+	t, err := time.Parse(ReleaseTimeFormat, at)
+	if err != nil || time.Since(t) > PVisionModeFresh {
+		return ""
+	}
+	return mode
+}

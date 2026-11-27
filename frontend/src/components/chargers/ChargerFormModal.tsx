@@ -338,14 +338,34 @@ export default function ChargerFormModal({
                 >
                   <option value="mode_based">{t('chargers.billingModeBased')}</option>
                   <option value="solar_split">{t('chargers.billingSolarSplit')}</option>
+                  <option value="pvision_mode">{t('chargers.billingPVisionMode')}</option>
                 </select>
                 <p style={{ fontSize: '12px', color: '#6b7280', margin: '6px 2px 0' }}>
-                  {(formData.billing_method || 'mode_based') === 'solar_split'
+                  {(formData.billing_method || 'mode_based') === 'pvision_mode'
+                    ? t('chargers.billingPVisionModeHint')
+                    : (formData.billing_method || 'mode_based') === 'solar_split'
                     ? t('chargers.billingSolarSplitHint')
                     : formData.preset === 'e3dc'
                       ? t('chargers.billingE3dcModeHint')
                       : t('chargers.billingModeBasedHint')}
                 </p>
+                {formData.billing_method === 'pvision_mode' && (
+                  <div style={{ marginTop: '10px' }}>
+                    <label style={labelStyle}>{t('chargers.pvisionFallback')}</label>
+                    <select
+                      value={connectionConfig.pvision_fallback || 'solar'}
+                      onChange={(e) => onConnectionConfigChange({ ...connectionConfig, pvision_fallback: e.target.value })}
+                      onFocus={focusHandler}
+                      onBlur={blurHandler}
+                      style={inputStyle(isMobile)}
+                    >
+                      <option value="solar">{t('chargers.pvisionModeSolar')}</option>
+                      <option value="soft">{t('chargers.pvisionModeSoft')}</option>
+                      <option value="full">{t('chargers.pvisionModeFull')}</option>
+                    </select>
+                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '6px 2px 0' }}>{t('chargers.pvisionFallbackHint')}</p>
+                  </div>
+                )}
               </div>
 
               {/* Connection Type (not for Zaptec or E3/DC, which force their own) */}

@@ -201,7 +201,7 @@ func (dh *DatabaseHandler) WriteSessionBoundaries(session *CompletedSession) err
 	for _, r := range []*SessionMeterReading{begin, end} {
 		key := r.Timestamp.Format("2006-01-02 15:04:05-07:00")
 		userID := dh.ResolveSessionUser(session.ChargerID, r.Timestamp, begin.Timestamp, end.Timestamp, session.UserID)
-		if _, err := stmt.Exec(session.ChargerID, userID, key, r.Energy_kWh, "1", "3"); err != nil {
+		if _, err := stmt.Exec(session.ChargerID, userID, key, r.Energy_kWh, dh.rowMode(session.ChargerID), "3"); err != nil {
 			log.Printf("WARNING: Failed to insert OCMF boundary at %s: %v", key, err)
 			continue
 		}
@@ -398,7 +398,7 @@ func (dh *DatabaseHandler) WriteIdleReading(chargerID int, userID string, interv
 	result, err := dh.db.Exec(`
 		INSERT OR IGNORE INTO charger_sessions (charger_id, user_id, session_time, power_kwh, mode, state)
 		VALUES (?, ?, ?, ?, ?, ?)
-	`, chargerID, userID, timestamp, totalEnergy, "1", state)
+	`, chargerID, userID, timestamp, totalEnergy, dh.rowMode(chargerID), state)
 	
 	if err != nil {
 		log.Printf("Zaptec: Could not write idle reading: %v", err)
@@ -432,4 +432,12 @@ func (dh *DatabaseHandler) GetGapUserID(chargerID int, activeSessionID string) s
 	
 	// No active session - charger available
 	return ""
+}
+// rowMode is the mode stored on live rows: the charge mode PVision reports
+// right now (full / solar / soft) when fresh, else "1" as before.
+func (dh *DatabaseHandler) rowMode(chargerID int) string {
+	if m := CurrentPVisionMode(dh.db, chargerID); m == "full" || m == "solar" || m == "soft" {
+		return m
+	}
+	return "1"
 }

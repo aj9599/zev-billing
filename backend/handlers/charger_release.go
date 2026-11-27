@@ -69,6 +69,17 @@ func (h *WebhookHandler) ChargerRelease(w http.ResponseWriter, r *http.Request) 
 		source = "loxone"
 	}
 
+	// The energy manager (PVision) reports its current charge mode with each
+	// status poll; it is stored on the 15-min rows for "pvision_mode" billing.
+	if m := strings.ToLower(strings.TrimSpace(q.Get("mode"))); m != "" {
+		switch m {
+		case "full", "solar", "soft", "off":
+			if err := zaptec.ReportPVisionMode(h.db, chargerID, m); err != nil {
+				log.Printf("Release: [%s] storing PVision mode failed: %v", name, err)
+			}
+		}
+	}
+
 	status := http.StatusOK
 	var st *zaptec.ReleaseState
 	userStr := strings.TrimSpace(q.Get("user"))

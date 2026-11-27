@@ -291,7 +291,7 @@ func (bs *BillingService) calculateChargingConsumption(buildingID int, rfidCards
 	// classic mode-based RFID path must ignore them to avoid double-counting.
 	chargerRows, err := bs.db.Query(`
 		SELECT id, name, COALESCE(connection_type, ''), connection_config FROM chargers
-		WHERE building_id = ? AND is_active = 1 AND COALESCE(billing_method, 'mode_based') != 'solar_split'
+		WHERE building_id = ? AND is_active = 1 AND COALESCE(billing_method, 'mode_based') NOT IN ('solar_split', 'pvision_mode')
 	`, buildingID)
 
 	if err != nil {
@@ -982,7 +982,7 @@ func (bs *BillingService) calculateChargingSolarSplit(buildingID int, target cha
 func (bs *BillingService) modeBasedChargerIDsForBuilding(buildingID int) []int {
 	rows, err := bs.db.Query(`
 		SELECT id FROM chargers
-		WHERE building_id = ? AND is_active = 1 AND COALESCE(billing_method, 'mode_based') != 'solar_split'
+		WHERE building_id = ? AND is_active = 1 AND COALESCE(billing_method, 'mode_based') NOT IN ('solar_split', 'pvision_mode')
 	`, buildingID)
 	if err != nil {
 		log.Printf("  [CHARGING] ERROR querying mode-based chargers for building %d: %v", buildingID, err)
@@ -1006,8 +1006,8 @@ func (bs *BillingService) chargerBillingMethod(chargerID int) string {
 	if err := bs.db.QueryRow(`SELECT billing_method FROM chargers WHERE id = ?`, chargerID).Scan(&method); err != nil {
 		return "mode_based"
 	}
-	if method.Valid && method.String == "solar_split" {
-		return "solar_split"
+	if method.Valid && (method.String == "solar_split" || method.String == BillingMethodPVisionMode) {
+		return method.String
 	}
 	return "mode_based"
 }
@@ -1032,6 +1032,9 @@ type chargingSeg struct {
 	splitSolar       float64 // solar-split solar kWh          (CarChargingNormalPrice)
 	splitBattery     float64 // solar-split battery kWh        (BatteryChargingPrice)
 	splitGrid        float64 // solar-split grid kWh           (CarChargingPriorityPrice)
+	pvSolar          float64 // pvision_mode "Nur Sonne" kWh   (CarChargingNormalPrice)
+	pvBattery        float64 // pvision_mode "Sonne + Akku" kWh (BatteryChargingPrice)
+	pvPriority       float64 // pvision_mode "Jetzt laden" kWh (CarChargingPriorityPrice)
 }
 
 // chargingCounterResetDetected reports whether any charger counter relevant to this
@@ -1171,9 +1174,18 @@ func (bs *BillingService) computeCharging(buildingID int, scopeMode, rfids strin
 				cs.splitSolar, cs.splitBattery, cs.splitGrid = sol, bat, grd
 				merge(fS, lS)
 			}
+			if pvIDs := bs.pvisionModeChargerIDsForBuilding(buildingID); len(pvIDs) > 0 {
+				sol, bat, pri, fS, lS := bs.calculateChargingPVisionMode(buildingID, chargerSessionFilter{useChargerIDs: true, chargerIDs: pvIDs}, segStart, segEnd)
+				cs.pvSolar, cs.pvBattery, cs.pvPriority = sol, bat, pri
+				merge(fS, lS)
+			}
 
 		case BillingModeCharger:
-			if bs.chargerBillingMethod(singleChargerID) == "solar_split" {
+			if bs.chargerBillingMethod(singleChargerID) == BillingMethodPVisionMode {
+				sol, bat, pri, fS, lS := bs.calculateChargingPVisionMode(buildingID, chargerSessionFilter{useChargerIDs: true, chargerIDs: []int{singleChargerID}}, segStart, segEnd)
+				cs.pvSolar, cs.pvBattery, cs.pvPriority = sol, bat, pri
+				merge(fS, lS)
+			} else if bs.chargerBillingMethod(singleChargerID) == "solar_split" {
 				sol, bat, grd, fS, lS := bs.calculateChargingSolarSplit(buildingID, chargerSessionFilter{useChargerIDs: true, chargerIDs: []int{singleChargerID}}, segStart, segEnd)
 				cs.splitSolar, cs.splitBattery, cs.splitGrid = sol, bat, grd
 				merge(fS, lS)
@@ -1193,6 +1205,9 @@ func (bs *BillingService) computeCharging(buildingID int, scopeMode, rfids strin
 				sol, bat, grd, fS2, lS2 := bs.calculateChargingSolarSplit(buildingID, chargerSessionFilter{rfidCards: rfidList}, segStart, segEnd)
 				cs.splitSolar, cs.splitBattery, cs.splitGrid = sol, bat, grd
 				merge(fS2, lS2)
+				psol, pbat, ppri, fS3, lS3 := bs.calculateChargingPVisionMode(buildingID, chargerSessionFilter{rfidCards: rfidList}, segStart, segEnd)
+				cs.pvSolar, cs.pvBattery, cs.pvPriority = psol, pbat, ppri
+				merge(fS3, lS3)
 			}
 		}
 
@@ -1208,7 +1223,7 @@ func (bs *BillingService) computeCharging(buildingID int, scopeMode, rfids strin
 func appendChargingItems(items *[]models.InvoiceItem, segs []chargingSeg, firstSession, lastSession time.Time, multiSeg bool, tr InvoiceTranslations, header string) float64 {
 	var grand float64
 	for _, cs := range segs {
-		grand += cs.modeNormal + cs.modePriority + cs.splitSolar + cs.splitBattery + cs.splitGrid
+		grand += cs.modeNormal + cs.modePriority + cs.splitSolar + cs.splitBattery + cs.splitGrid + cs.pvSolar + cs.pvBattery + cs.pvPriority
 	}
 	if grand <= 0 {
 		return 0
@@ -1256,6 +1271,15 @@ func appendChargingItems(items *[]models.InvoiceItem, segs []chargingSeg, firstS
 		}
 		if cs.splitGrid > 0 {
 			add(tr.GridCharging, suffix, cs.splitGrid, s.CarChargingPriorityPrice, s.Currency, "car_charging_priority")
+		}
+		if cs.pvSolar > 0 {
+			add(tr.SolarMode, suffix, cs.pvSolar, s.CarChargingNormalPrice, s.Currency, "car_charging_normal")
+		}
+		if cs.pvBattery > 0 {
+			add(tr.BatteryCharging, suffix, cs.pvBattery, s.BatteryChargingPrice, s.Currency, "car_charging_battery")
+		}
+		if cs.pvPriority > 0 {
+			add(tr.PriorityMode, suffix, cs.pvPriority, s.CarChargingPriorityPrice, s.Currency, "car_charging_priority")
 		}
 	}
 	return cost

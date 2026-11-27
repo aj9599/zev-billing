@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -716,6 +717,11 @@ func RunMigrations(db *sql.DB) error {
 
 	// Manual assignment of charges without a card (with undo).
 	if err := runVersioned(db, "0024_charger_assign_batches", createChargerAssignBatches); err != nil {
+		return err
+	}
+
+	// Charge mode reported by the energy manager (PVision) for "pvision_mode" billing.
+	if err := runVersioned(db, "0025_charger_pvision_mode", addChargerPVisionMode); err != nil {
 		return err
 	}
 
@@ -1952,4 +1958,18 @@ func createChargerAssignBatches(db *sql.DB) error {
 		CREATE INDEX IF NOT EXISTS idx_charger_assign_batches_charger ON charger_assign_batches(charger_id, created_at);
 	`)
 	return err
+}
+
+// addChargerPVisionMode stores the charge mode the energy manager (PVision)
+// last reported for a charger, so the 15-min rows can carry it.
+func addChargerPVisionMode(db *sql.DB) error {
+	for _, stmt := range []string{
+		`ALTER TABLE charger_release_state ADD COLUMN pv_mode TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE charger_release_state ADD COLUMN pv_mode_at TEXT NOT NULL DEFAULT ''`,
+	} {
+		if _, err := db.Exec(stmt); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			return err
+		}
+	}
+	return nil
 }
