@@ -336,9 +336,9 @@ Für Zaptec-Ladestationen kann ZEV-Billing das Laden sperren, bis Loxone es für
 2. Ladestation bearbeiten → *Freigabe erforderlich* einschalten, Benutzer 1/2 = diese Kennungen, Erinnerung (Standard 30 min). Der Schlüssel wird automatisch erzeugt.
 
 **Ablauf**
-- Auto angesteckt → Laden wird pausiert (Zaptec-Befehl 506), `waiting=1`.
+- Auto angesteckt → `waiting=1`. Das Energiemanagement (PVision) liest den Status und hält 0 A, bis freigegeben ist. Ohne Energiemanagement: *Sperre durch ZEV-Billing (0 A)* einschalten (MaxChargeCurrent 0, nach Freigabe der eingestellte Ladestrom). Nie StopChargingFinal (506) – das beendet die Sitzung, die Station lädt dann erst nach Neu-Einstecken wieder.
 - Sofort und danach alle N Minuten `remind=1` (für 90 s), bis freigegeben oder quittiert.
-- `user=1|2` → Benutzer wird gesetzt, Laden fortgesetzt (507). Wechsel während dem Laden ist möglich.
+- `user=1|2` → Benutzer wird gesetzt, das Energiemanagement lädt danach wie gewohnt. Wechsel während dem Laden ist möglich.
 - `user=9` → Erinnerung quittiert (bleibt gesperrt).
 - Abstecken → Zuordnung beendet, wieder gesperrt.
 

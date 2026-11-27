@@ -48,6 +48,8 @@ export interface ChargerConnectionConfig {
   zaptec_release_token_1?: string;
   zaptec_release_token_2?: string;
   zaptec_release_reminder_min?: number;
+  zaptec_release_enforce?: boolean;
+  zaptec_release_restore_a?: number;
   // E3/DC integrated wallbox (RSCP, read+write control)
   e3dc_protocol?: string;
   e3dc_host?: string;
@@ -286,6 +288,8 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
         zaptec_release_token_1: config.zaptec_release_token_1 || '',
         zaptec_release_token_2: config.zaptec_release_token_2 || '',
         zaptec_release_reminder_min: config.zaptec_release_reminder_min || 30,
+        zaptec_release_enforce: !!config.zaptec_release_enforce,
+        zaptec_release_restore_a: config.zaptec_release_restore_a || 16,
         e3dc_host: config.e3dc_host || '',
         e3dc_port: config.e3dc_port || 5033,
         e3dc_user: config.e3dc_user || '',
@@ -397,7 +401,9 @@ export const useChargerForm = (onSubmitSuccess: () => void) => {
         zaptec_release_key: connectionConfig.zaptec_release_key || '',
         zaptec_release_token_1: connectionConfig.zaptec_release_token_1 || '',
         zaptec_release_token_2: connectionConfig.zaptec_release_token_2 || '',
-        zaptec_release_reminder_min: Number(connectionConfig.zaptec_release_reminder_min) || 30
+        zaptec_release_reminder_min: Number(connectionConfig.zaptec_release_reminder_min) || 30,
+        zaptec_release_enforce: !!connectionConfig.zaptec_release_enforce,
+        zaptec_release_restore_a: Number(connectionConfig.zaptec_release_restore_a) || 16
       };
     } else if (formData.connection_type === 'e3dc_api') {
       // The integrated E3/DC wallbox requires RSCP (the only protocol that can

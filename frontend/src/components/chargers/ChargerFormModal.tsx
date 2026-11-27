@@ -908,6 +908,30 @@ export default function ChargerFormModal({
                             style={inputStyle(isMobile, true)}
                           />
                         </div>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={!!connectionConfig.zaptec_release_enforce}
+                            onChange={(e) => onConnectionConfigChange({ ...connectionConfig, zaptec_release_enforce: e.target.checked })}
+                          />
+                          {t('chargers.release.enforce')}
+                        </label>
+                        <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>{t('chargers.release.enforceHelp')}</p>
+                        {connectionConfig.zaptec_release_enforce && (
+                          <div>
+                            <label style={labelStyle}>{t('chargers.release.restoreA')}</label>
+                            <input
+                              type="number"
+                              min={6}
+                              max={32}
+                              value={connectionConfig.zaptec_release_restore_a || 16}
+                              onChange={(e) => onConnectionConfigChange({ ...connectionConfig, zaptec_release_restore_a: parseInt(e.target.value) || 16 })}
+                              onFocus={focusHandler}
+                              onBlur={blurHandler}
+                              style={inputStyle(isMobile, true)}
+                            />
+                          </div>
+                        )}
                         <div>
                           <label style={labelStyle}>{t('chargers.release.key')}</label>
                           <input

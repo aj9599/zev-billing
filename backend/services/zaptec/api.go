@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -299,6 +300,30 @@ func (ac *APIClient) SendCommand(token, chargerID string, commandID int) error {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("command %d failed with status %d: %s", commandID, resp.StatusCode, string(body))
+	}
+	return nil
+}
+
+// SetMaxChargeCurrent sets the charger's MaxChargeCurrent (A). 0 A holds an open
+// session paused without ending it (unlike StopChargingFinal, after which the
+// charger only resumes after a replug); raising it later resumes charging.
+func (ac *APIClient) SetMaxChargeCurrent(token, chargerID string, amps float64) error {
+	u := fmt.Sprintf("%s/api/chargers/%s/update", ac.apiBaseURL, chargerID)
+	body := strings.NewReader(fmt.Sprintf(`{"MaxChargeCurrent":%.1f}`, amps))
+	req, err := http.NewRequest("POST", u, body)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := ac.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		b, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("set current failed with status %d: %s", resp.StatusCode, string(b))
 	}
 	return nil
 }

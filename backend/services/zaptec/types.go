@@ -182,6 +182,11 @@ type ConnectionConfig struct {
 	ReleaseToken1   string `json:"zaptec_release_token_1,omitempty"` // user value 1 (e.g. private)
 	ReleaseToken2   string `json:"zaptec_release_token_2,omitempty"` // user value 2 (e.g. business)
 	ReminderMinutes int    `json:"zaptec_release_reminder_min,omitempty"`
+	// Enforce the gate from ZEV-Billing itself (0 A while waiting, RestoreAmps on
+	// release). Leave off when an energy manager (PVision/Solhus) controls the
+	// current and honours the gate itself.
+	ReleaseEnforce bool `json:"zaptec_release_enforce,omitempty"`
+	RestoreAmps    int  `json:"zaptec_release_restore_a,omitempty"`
 }
 
 // ReleaseTokenFor maps a release user value (1, 2) to the configured token.
